@@ -1,0 +1,24 @@
+# local-only design docs — tracked on the dev-local branch via scripts/commit-draft.sh, never on main
+/draft/
+
+# deps & build output
+node_modules/
+dist/
+build/
+target/
+coverage/
+*.tsbuildinfo
+.turbo/
+
+# env & secrets
+.env
+.env.*
+
+# editors & OS
+.idea/
+.vscode/
+.DS_Store
+
+# logs
+*.log
+logs/

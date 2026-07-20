@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = ["packages/field-native"]
+
+# EL8 — version lockstep: exactly one truffle-core revision across the workspace.
+# The [patch] pin lands when field-native gains its truffle dependency (design-02 §2.1).

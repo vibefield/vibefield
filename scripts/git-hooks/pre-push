@@ -1,0 +1,11 @@
+#!/bin/sh
+# dev-local is the local-only design-docs branch — it must never reach a remote.
+while read local_ref local_sha remote_ref remote_sha; do
+  case "$local_ref" in
+    refs/heads/dev-local)
+      echo "refused: 'dev-local' is a local-only branch (draft design docs). It is never pushed." >&2
+      exit 1
+      ;;
+  esac
+done
+exit 0
