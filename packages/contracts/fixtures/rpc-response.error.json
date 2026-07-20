@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 42,
+  "error": {
+    "code": -32006,
+    "message": "index is rebuilding",
+    "data": {
+      "kind": "UNAVAILABLE",
+      "retryable": true,
+      "details": { "service": "index", "state": "rebuilding", "progress": 0.42 }
+    }
+  }
+}

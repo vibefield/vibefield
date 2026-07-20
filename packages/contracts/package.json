@@ -3,8 +3,23 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "gen:schema": "tsx scripts/gen-jsonschema.ts",
+    "gen:rust": "pnpm gen:schema && cargo typify gen/jsonschema/bundle.json -o ../field-native/src/contracts.rs"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0",
+    "zod-to-json-schema": "^3.24.0"
   }
 }

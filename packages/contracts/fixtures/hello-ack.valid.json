@@ -1,0 +1,5 @@
+{
+  "contractsVersion": "0.1.0",
+  "serverKind": "fieldd",
+  "grantedScopes": ["canvas.read", "canvas.write", "terminal.attach", "agent.spawn"]
+}

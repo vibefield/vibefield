@@ -1,0 +1,152 @@
+{
+  "$ref": "#/definitions/UnavailableDetails",
+  "definitions": {
+    "SemverString": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
+    },
+    "ClientKind": {
+      "type": "string",
+      "enum": [
+        "shell-main",
+        "renderer",
+        "plugin-worker",
+        "ios",
+        "peer-fieldd",
+        "mcp-agent",
+        "field-native",
+        "debug"
+      ]
+    },
+    "ServerKind": {
+      "type": "string",
+      "enum": [
+        "fieldd",
+        "field-native"
+      ]
+    },
+    "PairingMac": {
+      "type": "object",
+      "properties": {
+        "bootId": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "mac": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bootId",
+        "ts",
+        "mac"
+      ],
+      "additionalProperties": true
+    },
+    "ErrorKind": {
+      "type": "string",
+      "enum": [
+        "UNAUTHORIZED",
+        "FORBIDDEN_SCOPE",
+        "NOT_FOUND",
+        "CONFLICT",
+        "PRECONDITION_FAILED",
+        "UNAVAILABLE",
+        "TIMEOUT",
+        "INCOMPATIBLE",
+        "INTERNAL"
+      ]
+    },
+    "UnavailableDetails": {
+      "$ref": "#/definitions/UnavailableDetails"
+    },
+    "ErrorData": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/ErrorKind"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {}
+      },
+      "required": [
+        "kind",
+        "retryable"
+      ],
+      "additionalProperties": true
+    },
+    "RpcError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/definitions/ErrorData"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": true
+    },
+    "RpcId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        }
+      ]
+    },
+    "RpcFailure": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/definitions/RpcId"
+        },
+        "error": {
+          "$ref": "#/definitions/RpcError"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id",
+        "error"
+      ],
+      "additionalProperties": true
+    },
+    "RpcSuccess": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/definitions/RpcId"
+        },
+        "result": {}
+      },
+      "required": [
+        "jsonrpc",
+        "id"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

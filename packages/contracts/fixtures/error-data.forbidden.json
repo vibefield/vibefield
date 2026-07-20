@@ -1,0 +1,5 @@
+{
+  "kind": "FORBIDDEN_SCOPE",
+  "retryable": false,
+  "details": { "required": "terminal.attach" }
+}

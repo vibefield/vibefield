@@ -1,0 +1,10 @@
+{
+  "contractsVersion": "0.1.0",
+  "minCompatible": "0.1.0",
+  "clientKind": "field-native",
+  "credential": {
+    "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+    "ts": 1784930400,
+    "mac": "9c4f0d2ab77e5d1c3f6a8b90e2d4c6a8b0d2f4e6a8c0b2d4f6e8a0c2b4d6f8e0"
+  }
+}

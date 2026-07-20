@@ -1,0 +1,7 @@
+{
+  "contractsVersion": "0.2.0",
+  "minCompatible": "0.1.0",
+  "clientKind": "ios",
+  "credential": "tok_2b8d4f6a",
+  "futureField": { "carried": true, "note": "P3 tolerant reader — additions are free" }
+}

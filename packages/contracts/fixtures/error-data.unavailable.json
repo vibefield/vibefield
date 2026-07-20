@@ -1,0 +1,5 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": true,
+  "details": { "service": "index", "state": "rebuilding", "progress": 0.42 }
+}
