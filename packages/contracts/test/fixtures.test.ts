@@ -27,8 +27,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "serve-entry": ServeEntry,
 };
 
+// *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.
+const isWireFixture = (f: string) => f.endsWith(".json") && !f.endsWith(".vector.json");
+
 describe("golden fixtures parse (the fixture is the contract)", () => {
-  const files = readdirSync(FIXTURES).filter((f) => f.endsWith(".json"));
+  const files = readdirSync(FIXTURES).filter(isWireFixture);
   it("covers every fixture with a schema", () => {
     for (const f of files) {
       const prefix = f.split(".")[0]!;
@@ -37,7 +40,7 @@ describe("golden fixtures parse (the fixture is the contract)", () => {
     expect(files.length).toBeGreaterThanOrEqual(16);
   });
 
-  for (const f of readdirSync(FIXTURES).filter((x) => x.endsWith(".json"))) {
+  for (const f of readdirSync(FIXTURES).filter(isWireFixture)) {
     it(`parses ${f}`, () => {
       const prefix = f.split(".")[0]!;
       const schema = SCHEMA_BY_PREFIX[prefix]!;

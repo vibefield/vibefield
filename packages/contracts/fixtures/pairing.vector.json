@@ -1,0 +1,7 @@
+{
+  "note": "D8 cross-language crypto vector — mac = hex(HMAC-SHA256(secret, 'fn-boot' 0x00 bootId 0x00 decimal(ts)))",
+  "secretHex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+  "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+  "ts": 1784930400,
+  "mac": "6353dfab14461f4f21c9847382adf96bcec8c9512af23b3c9859ff0630a2b17e"
+}

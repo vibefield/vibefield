@@ -21,8 +21,10 @@ export type ClientKind = z.infer<typeof ClientKind>;
 export const ServerKind = z.enum(["fieldd", "field-native"]);
 export type ServerKind = z.infer<typeof ServerKind>;
 
-/** D8 — per-boot pairing credential (mgmt-channel hello):
- * mac = HMAC-SHA256(pairing_secret, "fn-boot" ‖ bootId ‖ ts), hex; verifier window ±5min, bootId cached per boot. */
+/** D8 — per-boot pairing credential (mgmt-channel hello).
+ * Canonical MAC message (pinned by fixtures/pairing.vector.json — NUL separators, ts as base-10 string):
+ *   mac = hex(HMAC-SHA256(pairing_secret, "fn-boot" 0x00 bootId 0x00 String(ts)))
+ * Verifier: |now − ts| ≤ 300s; a hello with a new bootId supersedes the paired client. */
 export const PairingMac = z
   .object({
     bootId: z.string(),
