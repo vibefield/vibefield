@@ -1,5 +1,5 @@
 {
-  "$ref": "#/definitions/HelloAck",
+  "$ref": "#/definitions/ServeEntry",
   "definitions": {
     "SemverString": {
       "type": "string",
@@ -492,53 +492,7 @@
       "additionalProperties": true
     },
     "ServeEntry": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "target": {
-          "$ref": "#/definitions/ServeTarget"
-        },
-        "url": {
-          "type": "string"
-        },
-        "allow": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "name",
-        "target",
-        "url"
-      ],
-      "additionalProperties": true
-    },
-    "HelloAck": {
-      "type": "object",
-      "properties": {
-        "contractsVersion": {
-          "$ref": "#/definitions/SemverString"
-        },
-        "serverKind": {
-          "$ref": "#/definitions/ServerKind"
-        },
-        "grantedScopes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "contractsVersion",
-        "serverKind",
-        "grantedScopes"
-      ],
-      "additionalProperties": true
+      "$ref": "#/definitions/ServeEntry"
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#"

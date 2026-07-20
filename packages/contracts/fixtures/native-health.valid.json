@@ -1,0 +1,14 @@
+{
+  "state": "degraded",
+  "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+  "units": [
+    { "unit": "mgmt", "state": "up" },
+    { "unit": "terminal", "state": "up" },
+    {
+      "unit": "mesh-gateway",
+      "state": "starting",
+      "detail": "auth-required",
+      "authUrl": "https://login.tailscale.com/a/1a2b3c4d5e"
+    }
+  ]
+}

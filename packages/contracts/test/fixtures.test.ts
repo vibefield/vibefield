@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 import type { ZodTypeAny } from "zod";
 import { Hello, HelloAck, RpcRequest, RpcResponse } from "../src/envelope";
 import { ErrorData } from "../src/errors";
+import {
+  NativeHealth, DesiredState, ObservedState, PeerInfo, StoreSnapshot, ServeConfig, ServeEntry,
+} from "../src/mgmt";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 
@@ -15,6 +18,13 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "rpc-request": RpcRequest,
   "rpc-response": RpcResponse,
   "error-data": ErrorData,
+  "native-health": NativeHealth,
+  "desired-state": DesiredState,
+  "observed-state": ObservedState,
+  "peer-info": PeerInfo,
+  "store-snapshot": StoreSnapshot,
+  "serve-config": ServeConfig,
+  "serve-entry": ServeEntry,
 };
 
 describe("golden fixtures parse (the fixture is the contract)", () => {
@@ -24,7 +34,7 @@ describe("golden fixtures parse (the fixture is the contract)", () => {
       const prefix = f.split(".")[0]!;
       expect(SCHEMA_BY_PREFIX[prefix], `no schema mapped for fixture ${f}`).toBeDefined();
     }
-    expect(files.length).toBeGreaterThanOrEqual(8);
+    expect(files.length).toBeGreaterThanOrEqual(16);
   });
 
   for (const f of readdirSync(FIXTURES).filter((x) => x.endsWith(".json"))) {

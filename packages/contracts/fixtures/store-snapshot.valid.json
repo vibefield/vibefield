@@ -1,0 +1,7 @@
+{
+  "storeId": "field.devices.v1",
+  "slices": {
+    "device-mac": { "deviceId": "device-mac", "name": "James's Mac", "platform": "darwin", "headless": false },
+    "device-linux": { "deviceId": "device-linux", "name": "linux-box", "platform": "linux", "headless": true }
+  }
+}

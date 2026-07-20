@@ -3,7 +3,10 @@
 // echoes must re-serialize byte-equivalently (Value equality). Fixtures carrying
 // deliberate unknown fields are parse-tolerance checks only — serde's default
 // ignore-unknown IS the tolerant reader; field-native never echoes those shapes.
-use field_native::contracts::{ErrorData, Hello, HelloAck, RpcRequest, RpcResponse};
+use field_native::contracts::{
+    DesiredState, ErrorData, Hello, HelloAck, NativeHealth, ObservedState, PeerInfo, RpcRequest,
+    RpcResponse, ServeConfig, ServeEntry, StoreSnapshot,
+};
 use serde_json::Value;
 use std::{fs, path::PathBuf};
 
@@ -51,6 +54,23 @@ fn rpc_fixtures() {
 fn error_fixtures() {
     roundtrip::<ErrorData>("error-data.unavailable.json", true);
     roundtrip::<ErrorData>("error-data.forbidden.json", true);
+}
+
+#[test]
+fn mgmt_lifecycle_fixtures() {
+    // field-native ECHOES these shapes (health + observed are its own outputs) — strict.
+    roundtrip::<NativeHealth>("native-health.valid.json", true);
+    roundtrip::<DesiredState>("desired-state.valid.json", true);
+    roundtrip::<ObservedState>("observed-state.valid.json", true);
+    roundtrip::<ObservedState>("observed-state.unknown-field.json", false); // tolerant reader (P3)
+}
+
+#[test]
+fn mgmt_mesh_fixtures() {
+    roundtrip::<PeerInfo>("peer-info.valid.json", true);
+    roundtrip::<StoreSnapshot>("store-snapshot.valid.json", true);
+    roundtrip::<ServeConfig>("serve-config.valid.json", true);
+    roundtrip::<ServeEntry>("serve-entry.valid.json", true);
 }
 
 #[test]

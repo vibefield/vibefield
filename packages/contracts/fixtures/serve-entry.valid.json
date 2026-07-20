@@ -1,0 +1,6 @@
+{
+  "name": "artifacts",
+  "target": { "kind": "dir", "path": "/Users/james/Library/Application Support/VibeField/blobs" },
+  "url": "https://mac.tail1234.ts.net/artifacts/",
+  "allow": ["me@jamesyong42.com"]
+}

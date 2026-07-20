@@ -131,6 +131,129 @@ impl ::std::convert::TryFrom<::std::string::String> for ClientKind {
         value.parse()
     }
 }
+#[doc = "`DesiredState`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"generation\","]
+#[doc = "    \"terminals\","]
+#[doc = "    \"workers\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"generation\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"meshConfig\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshConfig\""]
+#[doc = "    },"]
+#[doc = "    \"terminals\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/DesiredTerminal\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"workers\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/DesiredWorker\""]
+#[doc = "      }"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct DesiredState {
+    pub generation: i64,
+    #[serde(
+        rename = "meshConfig",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub mesh_config: ::std::option::Option<MeshConfig>,
+    pub terminals: ::std::vec::Vec<DesiredTerminal>,
+    pub workers: ::std::vec::Vec<DesiredWorker>,
+}
+impl DesiredState {
+    pub fn builder() -> builder::DesiredState {
+        Default::default()
+    }
+}
+#[doc = "`DesiredTerminal`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"sessionId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"persistence\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"sessionId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct DesiredTerminal {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub persistence: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "sessionId")]
+    pub session_id: ::std::string::String,
+}
+impl DesiredTerminal {
+    pub fn builder() -> builder::DesiredTerminal {
+        Default::default()
+    }
+}
+#[doc = "`DesiredWorker`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"id\","]
+#[doc = "    \"kind\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"config\": {},"]
+#[doc = "    \"id\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"kind\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct DesiredWorker {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub config: ::std::option::Option<::serde_json::Value>,
+    pub id: ::std::string::String,
+    pub kind: ::std::string::String,
+}
+impl DesiredWorker {
+    pub fn builder() -> builder::DesiredWorker {
+        Default::default()
+    }
+}
 #[doc = "`ErrorData`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -399,6 +522,305 @@ impl ::std::convert::From<PairingMac> for HelloCredential {
         Self::PairingMac(value)
     }
 }
+#[doc = "`MeshConfig`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct MeshConfig(pub ::serde_json::Map<::std::string::String, ::serde_json::Value>);
+impl ::std::ops::Deref for MeshConfig {
+    type Target = ::serde_json::Map<::std::string::String, ::serde_json::Value>;
+    fn deref(&self) -> &::serde_json::Map<::std::string::String, ::serde_json::Value> {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshConfig>
+    for ::serde_json::Map<::std::string::String, ::serde_json::Value>
+{
+    fn from(value: MeshConfig) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json::Value>>
+    for MeshConfig
+{
+    fn from(value: ::serde_json::Map<::std::string::String, ::serde_json::Value>) -> Self {
+        Self(value)
+    }
+}
+#[doc = "`NativeHealth`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"bootId\","]
+#[doc = "    \"state\","]
+#[doc = "    \"units\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"state\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"enum\": ["]
+#[doc = "        \"starting\","]
+#[doc = "        \"up\","]
+#[doc = "        \"degraded\""]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"units\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/UnitHealth\""]
+#[doc = "      }"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeHealth {
+    #[serde(rename = "bootId")]
+    pub boot_id: ::std::string::String,
+    pub state: NativeHealthState,
+    pub units: ::std::vec::Vec<UnitHealth>,
+}
+impl NativeHealth {
+    pub fn builder() -> builder::NativeHealth {
+        Default::default()
+    }
+}
+#[doc = "`NativeHealthState`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"starting\","]
+#[doc = "    \"up\","]
+#[doc = "    \"degraded\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum NativeHealthState {
+    #[serde(rename = "starting")]
+    Starting,
+    #[serde(rename = "up")]
+    Up,
+    #[serde(rename = "degraded")]
+    Degraded,
+}
+impl ::std::fmt::Display for NativeHealthState {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Starting => f.write_str("starting"),
+            Self::Up => f.write_str("up"),
+            Self::Degraded => f.write_str("degraded"),
+        }
+    }
+}
+impl ::std::str::FromStr for NativeHealthState {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "starting" => Ok(Self::Starting),
+            "up" => Ok(Self::Up),
+            "degraded" => Ok(Self::Degraded),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeHealthState {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeHealthState {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeHealthState {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`ObservedState`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"bootId\","]
+#[doc = "    \"generation\","]
+#[doc = "    \"terminals\","]
+#[doc = "    \"workers\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"generation\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"terminals\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/ObservedTerminal\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"workers\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/ObservedWorker\""]
+#[doc = "      }"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ObservedState {
+    #[serde(rename = "bootId")]
+    pub boot_id: ::std::string::String,
+    pub generation: i64,
+    pub terminals: ::std::vec::Vec<ObservedTerminal>,
+    pub workers: ::std::vec::Vec<ObservedWorker>,
+}
+impl ObservedState {
+    pub fn builder() -> builder::ObservedState {
+        Default::default()
+    }
+}
+#[doc = "`ObservedTerminal`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"sessionId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"createdAt\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"cwd\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"persistence\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"pid\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"sessionId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"title\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ObservedTerminal {
+    #[serde(
+        rename = "createdAt",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub created_at: ::std::option::Option<i64>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub cwd: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub persistence: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub pid: ::std::option::Option<i64>,
+    #[serde(rename = "sessionId")]
+    pub session_id: ::std::string::String,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub title: ::std::option::Option<::std::string::String>,
+}
+impl ObservedTerminal {
+    pub fn builder() -> builder::ObservedTerminal {
+        Default::default()
+    }
+}
+#[doc = "`ObservedWorker`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"id\","]
+#[doc = "    \"state\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"id\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"state\": {"]
+#[doc = "      \"$ref\": \"#/definitions/UnitState\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ObservedWorker {
+    pub id: ::std::string::String,
+    pub state: UnitState,
+}
+impl ObservedWorker {
+    pub fn builder() -> builder::ObservedWorker {
+        Default::default()
+    }
+}
 #[doc = "`PairingMac`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -435,6 +857,57 @@ pub struct PairingMac {
 }
 impl PairingMac {
     pub fn builder() -> builder::PairingMac {
+        Default::default()
+    }
+}
+#[doc = "`PeerInfo`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"id\","]
+#[doc = "    \"online\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"addresses\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"type\": \"string\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"id\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"name\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"online\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
+#[doc = "    \"whois\": {"]
+#[doc = "      \"$ref\": \"#/definitions/WhoIsIdentity\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct PeerInfo {
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub addresses: ::std::vec::Vec<::std::string::String>,
+    pub id: ::std::string::String,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub name: ::std::option::Option<::std::string::String>,
+    pub online: bool,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub whois: ::std::option::Option<WhoIsIdentity>,
+}
+impl PeerInfo {
+    pub fn builder() -> builder::PeerInfo {
         Default::default()
     }
 }
@@ -772,6 +1245,152 @@ impl<'de> ::serde::Deserialize<'de> for SemverString {
             })
     }
 }
+#[doc = "`ServeConfig`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"name\","]
+#[doc = "    \"target\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"allow\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"type\": \"string\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"name\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"target\": {"]
+#[doc = "      \"$ref\": \"#/definitions/ServeTarget\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ServeConfig {
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub allow: ::std::vec::Vec<::std::string::String>,
+    pub name: ::std::string::String,
+    pub target: ServeTarget,
+}
+impl ServeConfig {
+    pub fn builder() -> builder::ServeConfig {
+        Default::default()
+    }
+}
+#[doc = "`ServeEntry`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"name\","]
+#[doc = "    \"target\","]
+#[doc = "    \"url\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"allow\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"type\": \"string\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"name\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"target\": {"]
+#[doc = "      \"$ref\": \"#/definitions/ServeTarget\""]
+#[doc = "    },"]
+#[doc = "    \"url\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ServeEntry {
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub allow: ::std::vec::Vec<::std::string::String>,
+    pub name: ::std::string::String,
+    pub target: ServeTarget,
+    pub url: ::std::string::String,
+}
+impl ServeEntry {
+    pub fn builder() -> builder::ServeEntry {
+        Default::default()
+    }
+}
+#[doc = "`ServeTarget`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"anyOf\": ["]
+#[doc = "    {"]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"required\": ["]
+#[doc = "        \"kind\","]
+#[doc = "        \"port\""]
+#[doc = "      ],"]
+#[doc = "      \"properties\": {"]
+#[doc = "        \"kind\": {"]
+#[doc = "          \"type\": \"string\","]
+#[doc = "          \"const\": \"port\""]
+#[doc = "        },"]
+#[doc = "        \"port\": {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"maximum\": 65535.0,"]
+#[doc = "          \"minimum\": 1.0"]
+#[doc = "        }"]
+#[doc = "      },"]
+#[doc = "      \"additionalProperties\": true"]
+#[doc = "    },"]
+#[doc = "    {"]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"required\": ["]
+#[doc = "        \"kind\","]
+#[doc = "        \"path\""]
+#[doc = "      ],"]
+#[doc = "      \"properties\": {"]
+#[doc = "        \"kind\": {"]
+#[doc = "          \"type\": \"string\","]
+#[doc = "          \"const\": \"dir\""]
+#[doc = "        },"]
+#[doc = "        \"path\": {"]
+#[doc = "          \"type\": \"string\""]
+#[doc = "        }"]
+#[doc = "      },"]
+#[doc = "      \"additionalProperties\": true"]
+#[doc = "    }"]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum ServeTarget {
+    Variant0 {
+        kind: ::std::string::String,
+        port: ::std::num::NonZeroU64,
+    },
+    Variant1 {
+        kind: ::std::string::String,
+        path: ::std::string::String,
+    },
+}
 #[doc = "`ServerKind`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -844,6 +1463,41 @@ impl ::std::convert::TryFrom<::std::string::String> for ServerKind {
         value.parse()
     }
 }
+#[doc = "`StoreSnapshot`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"slices\","]
+#[doc = "    \"storeId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"slices\": {"]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"additionalProperties\": {}"]
+#[doc = "    },"]
+#[doc = "    \"storeId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct StoreSnapshot {
+    pub slices: ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+    #[serde(rename = "storeId")]
+    pub store_id: ::std::string::String,
+}
+impl StoreSnapshot {
+    pub fn builder() -> builder::StoreSnapshot {
+        Default::default()
+    }
+}
 #[doc = "`UnavailableDetails`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -889,8 +1543,396 @@ impl UnavailableDetails {
         Default::default()
     }
 }
+#[doc = "`UnitHealth`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"state\","]
+#[doc = "    \"unit\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"authUrl\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"detail\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"state\": {"]
+#[doc = "      \"$ref\": \"#/definitions/UnitState\""]
+#[doc = "    },"]
+#[doc = "    \"unit\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct UnitHealth {
+    #[serde(
+        rename = "authUrl",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub auth_url: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub detail: ::std::option::Option<::std::string::String>,
+    pub state: UnitState,
+    pub unit: ::std::string::String,
+}
+impl UnitHealth {
+    pub fn builder() -> builder::UnitHealth {
+        Default::default()
+    }
+}
+#[doc = "`UnitState`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"starting\","]
+#[doc = "    \"up\","]
+#[doc = "    \"degraded\","]
+#[doc = "    \"crashed\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum UnitState {
+    #[serde(rename = "starting")]
+    Starting,
+    #[serde(rename = "up")]
+    Up,
+    #[serde(rename = "degraded")]
+    Degraded,
+    #[serde(rename = "crashed")]
+    Crashed,
+}
+impl ::std::fmt::Display for UnitState {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Starting => f.write_str("starting"),
+            Self::Up => f.write_str("up"),
+            Self::Degraded => f.write_str("degraded"),
+            Self::Crashed => f.write_str("crashed"),
+        }
+    }
+}
+impl ::std::str::FromStr for UnitState {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "starting" => Ok(Self::Starting),
+            "up" => Ok(Self::Up),
+            "degraded" => Ok(Self::Degraded),
+            "crashed" => Ok(Self::Crashed),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for UnitState {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for UnitState {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for UnitState {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`WhoIsIdentity`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"login\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"deviceName\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"login\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"tailscaleId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct WhoIsIdentity {
+    #[serde(
+        rename = "deviceName",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub device_name: ::std::option::Option<::std::string::String>,
+    pub login: ::std::string::String,
+    #[serde(
+        rename = "tailscaleId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub tailscale_id: ::std::option::Option<::std::string::String>,
+}
+impl WhoIsIdentity {
+    pub fn builder() -> builder::WhoIsIdentity {
+        Default::default()
+    }
+}
 #[doc = r" Types for composing complex structures."]
 pub mod builder {
+    #[derive(Clone, Debug)]
+    pub struct DesiredState {
+        generation: ::std::result::Result<i64, ::std::string::String>,
+        mesh_config:
+            ::std::result::Result<::std::option::Option<super::MeshConfig>, ::std::string::String>,
+        terminals:
+            ::std::result::Result<::std::vec::Vec<super::DesiredTerminal>, ::std::string::String>,
+        workers:
+            ::std::result::Result<::std::vec::Vec<super::DesiredWorker>, ::std::string::String>,
+    }
+    impl ::std::default::Default for DesiredState {
+        fn default() -> Self {
+            Self {
+                generation: Err("no value supplied for generation".to_string()),
+                mesh_config: Ok(Default::default()),
+                terminals: Err("no value supplied for terminals".to_string()),
+                workers: Err("no value supplied for workers".to_string()),
+            }
+        }
+    }
+    impl DesiredState {
+        pub fn generation<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.generation = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for generation: {e}"));
+            self
+        }
+        pub fn mesh_config<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::MeshConfig>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.mesh_config = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for mesh_config: {e}"));
+            self
+        }
+        pub fn terminals<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::DesiredTerminal>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.terminals = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for terminals: {e}"));
+            self
+        }
+        pub fn workers<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::DesiredWorker>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.workers = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for workers: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<DesiredState> for super::DesiredState {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: DesiredState,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                generation: value.generation?,
+                mesh_config: value.mesh_config?,
+                terminals: value.terminals?,
+                workers: value.workers?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::DesiredState> for DesiredState {
+        fn from(value: super::DesiredState) -> Self {
+            Self {
+                generation: Ok(value.generation),
+                mesh_config: Ok(value.mesh_config),
+                terminals: Ok(value.terminals),
+                workers: Ok(value.workers),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct DesiredTerminal {
+        persistence: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        session_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for DesiredTerminal {
+        fn default() -> Self {
+            Self {
+                persistence: Ok(Default::default()),
+                session_id: Err("no value supplied for session_id".to_string()),
+            }
+        }
+    }
+    impl DesiredTerminal {
+        pub fn persistence<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.persistence = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for persistence: {e}"));
+            self
+        }
+        pub fn session_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.session_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for session_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<DesiredTerminal> for super::DesiredTerminal {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: DesiredTerminal,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                persistence: value.persistence?,
+                session_id: value.session_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::DesiredTerminal> for DesiredTerminal {
+        fn from(value: super::DesiredTerminal) -> Self {
+            Self {
+                persistence: Ok(value.persistence),
+                session_id: Ok(value.session_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct DesiredWorker {
+        config: ::std::result::Result<
+            ::std::option::Option<::serde_json::Value>,
+            ::std::string::String,
+        >,
+        id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        kind: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for DesiredWorker {
+        fn default() -> Self {
+            Self {
+                config: Ok(Default::default()),
+                id: Err("no value supplied for id".to_string()),
+                kind: Err("no value supplied for kind".to_string()),
+            }
+        }
+    }
+    impl DesiredWorker {
+        pub fn config<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::serde_json::Value>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.config = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for config: {e}"));
+            self
+        }
+        pub fn id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for id: {e}"));
+            self
+        }
+        pub fn kind<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.kind = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for kind: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<DesiredWorker> for super::DesiredWorker {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: DesiredWorker,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                config: value.config?,
+                id: value.id?,
+                kind: value.kind?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::DesiredWorker> for DesiredWorker {
+        fn from(value: super::DesiredWorker) -> Self {
+            Self {
+                config: Ok(value.config),
+                id: Ok(value.id),
+                kind: Ok(value.kind),
+            }
+        }
+    }
     #[derive(Clone, Debug)]
     pub struct ErrorData {
         details: ::std::result::Result<
@@ -1113,6 +2155,331 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct NativeHealth {
+        boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        state: ::std::result::Result<super::NativeHealthState, ::std::string::String>,
+        units: ::std::result::Result<::std::vec::Vec<super::UnitHealth>, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeHealth {
+        fn default() -> Self {
+            Self {
+                boot_id: Err("no value supplied for boot_id".to_string()),
+                state: Err("no value supplied for state".to_string()),
+                units: Err("no value supplied for units".to_string()),
+            }
+        }
+    }
+    impl NativeHealth {
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
+        pub fn state<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeHealthState>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.state = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for state: {e}"));
+            self
+        }
+        pub fn units<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::UnitHealth>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.units = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for units: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeHealth> for super::NativeHealth {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeHealth,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                boot_id: value.boot_id?,
+                state: value.state?,
+                units: value.units?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeHealth> for NativeHealth {
+        fn from(value: super::NativeHealth) -> Self {
+            Self {
+                boot_id: Ok(value.boot_id),
+                state: Ok(value.state),
+                units: Ok(value.units),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct ObservedState {
+        boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        generation: ::std::result::Result<i64, ::std::string::String>,
+        terminals:
+            ::std::result::Result<::std::vec::Vec<super::ObservedTerminal>, ::std::string::String>,
+        workers:
+            ::std::result::Result<::std::vec::Vec<super::ObservedWorker>, ::std::string::String>,
+    }
+    impl ::std::default::Default for ObservedState {
+        fn default() -> Self {
+            Self {
+                boot_id: Err("no value supplied for boot_id".to_string()),
+                generation: Err("no value supplied for generation".to_string()),
+                terminals: Err("no value supplied for terminals".to_string()),
+                workers: Err("no value supplied for workers".to_string()),
+            }
+        }
+    }
+    impl ObservedState {
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
+        pub fn generation<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.generation = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for generation: {e}"));
+            self
+        }
+        pub fn terminals<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::ObservedTerminal>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.terminals = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for terminals: {e}"));
+            self
+        }
+        pub fn workers<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::ObservedWorker>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.workers = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for workers: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ObservedState> for super::ObservedState {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ObservedState,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                boot_id: value.boot_id?,
+                generation: value.generation?,
+                terminals: value.terminals?,
+                workers: value.workers?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::ObservedState> for ObservedState {
+        fn from(value: super::ObservedState) -> Self {
+            Self {
+                boot_id: Ok(value.boot_id),
+                generation: Ok(value.generation),
+                terminals: Ok(value.terminals),
+                workers: Ok(value.workers),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct ObservedTerminal {
+        created_at: ::std::result::Result<::std::option::Option<i64>, ::std::string::String>,
+        cwd: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        persistence: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        pid: ::std::result::Result<::std::option::Option<i64>, ::std::string::String>,
+        session_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        title: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for ObservedTerminal {
+        fn default() -> Self {
+            Self {
+                created_at: Ok(Default::default()),
+                cwd: Ok(Default::default()),
+                persistence: Ok(Default::default()),
+                pid: Ok(Default::default()),
+                session_id: Err("no value supplied for session_id".to_string()),
+                title: Ok(Default::default()),
+            }
+        }
+    }
+    impl ObservedTerminal {
+        pub fn created_at<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<i64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.created_at = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for created_at: {e}"));
+            self
+        }
+        pub fn cwd<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cwd = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cwd: {e}"));
+            self
+        }
+        pub fn persistence<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.persistence = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for persistence: {e}"));
+            self
+        }
+        pub fn pid<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<i64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pid = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pid: {e}"));
+            self
+        }
+        pub fn session_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.session_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for session_id: {e}"));
+            self
+        }
+        pub fn title<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.title = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for title: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ObservedTerminal> for super::ObservedTerminal {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ObservedTerminal,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                created_at: value.created_at?,
+                cwd: value.cwd?,
+                persistence: value.persistence?,
+                pid: value.pid?,
+                session_id: value.session_id?,
+                title: value.title?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::ObservedTerminal> for ObservedTerminal {
+        fn from(value: super::ObservedTerminal) -> Self {
+            Self {
+                created_at: Ok(value.created_at),
+                cwd: Ok(value.cwd),
+                persistence: Ok(value.persistence),
+                pid: Ok(value.pid),
+                session_id: Ok(value.session_id),
+                title: Ok(value.title),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct ObservedWorker {
+        id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        state: ::std::result::Result<super::UnitState, ::std::string::String>,
+    }
+    impl ::std::default::Default for ObservedWorker {
+        fn default() -> Self {
+            Self {
+                id: Err("no value supplied for id".to_string()),
+                state: Err("no value supplied for state".to_string()),
+            }
+        }
+    }
+    impl ObservedWorker {
+        pub fn id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for id: {e}"));
+            self
+        }
+        pub fn state<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::UnitState>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.state = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for state: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ObservedWorker> for super::ObservedWorker {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ObservedWorker,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                id: value.id?,
+                state: value.state?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::ObservedWorker> for ObservedWorker {
+        fn from(value: super::ObservedWorker) -> Self {
+            Self {
+                id: Ok(value.id),
+                state: Ok(value.state),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct PairingMac {
         boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         mac: ::std::result::Result<::std::string::String, ::std::string::String>,
@@ -1177,6 +2544,107 @@ pub mod builder {
                 boot_id: Ok(value.boot_id),
                 mac: Ok(value.mac),
                 ts: Ok(value.ts),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct PeerInfo {
+        addresses:
+            ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        name: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        online: ::std::result::Result<bool, ::std::string::String>,
+        whois: ::std::result::Result<
+            ::std::option::Option<super::WhoIsIdentity>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for PeerInfo {
+        fn default() -> Self {
+            Self {
+                addresses: Ok(Default::default()),
+                id: Err("no value supplied for id".to_string()),
+                name: Ok(Default::default()),
+                online: Err("no value supplied for online".to_string()),
+                whois: Ok(Default::default()),
+            }
+        }
+    }
+    impl PeerInfo {
+        pub fn addresses<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.addresses = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for addresses: {e}"));
+            self
+        }
+        pub fn id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for id: {e}"));
+            self
+        }
+        pub fn name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for name: {e}"));
+            self
+        }
+        pub fn online<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.online = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for online: {e}"));
+            self
+        }
+        pub fn whois<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::WhoIsIdentity>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.whois = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for whois: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<PeerInfo> for super::PeerInfo {
+        type Error = super::error::ConversionError;
+        fn try_from(value: PeerInfo) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                addresses: value.addresses?,
+                id: value.id?,
+                name: value.name?,
+                online: value.online?,
+                whois: value.whois?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::PeerInfo> for PeerInfo {
+        fn from(value: super::PeerInfo) -> Self {
+            Self {
+                addresses: Ok(value.addresses),
+                id: Ok(value.id),
+                name: Ok(value.name),
+                online: Ok(value.online),
+                whois: Ok(value.whois),
             }
         }
     }
@@ -1542,6 +3010,215 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct ServeConfig {
+        allow: ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        name: ::std::result::Result<::std::string::String, ::std::string::String>,
+        target: ::std::result::Result<super::ServeTarget, ::std::string::String>,
+    }
+    impl ::std::default::Default for ServeConfig {
+        fn default() -> Self {
+            Self {
+                allow: Ok(Default::default()),
+                name: Err("no value supplied for name".to_string()),
+                target: Err("no value supplied for target".to_string()),
+            }
+        }
+    }
+    impl ServeConfig {
+        pub fn allow<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.allow = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for allow: {e}"));
+            self
+        }
+        pub fn name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for name: {e}"));
+            self
+        }
+        pub fn target<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::ServeTarget>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.target = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for target: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ServeConfig> for super::ServeConfig {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ServeConfig,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                allow: value.allow?,
+                name: value.name?,
+                target: value.target?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::ServeConfig> for ServeConfig {
+        fn from(value: super::ServeConfig) -> Self {
+            Self {
+                allow: Ok(value.allow),
+                name: Ok(value.name),
+                target: Ok(value.target),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct ServeEntry {
+        allow: ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        name: ::std::result::Result<::std::string::String, ::std::string::String>,
+        target: ::std::result::Result<super::ServeTarget, ::std::string::String>,
+        url: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for ServeEntry {
+        fn default() -> Self {
+            Self {
+                allow: Ok(Default::default()),
+                name: Err("no value supplied for name".to_string()),
+                target: Err("no value supplied for target".to_string()),
+                url: Err("no value supplied for url".to_string()),
+            }
+        }
+    }
+    impl ServeEntry {
+        pub fn allow<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.allow = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for allow: {e}"));
+            self
+        }
+        pub fn name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for name: {e}"));
+            self
+        }
+        pub fn target<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::ServeTarget>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.target = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for target: {e}"));
+            self
+        }
+        pub fn url<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.url = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for url: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ServeEntry> for super::ServeEntry {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ServeEntry,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                allow: value.allow?,
+                name: value.name?,
+                target: value.target?,
+                url: value.url?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::ServeEntry> for ServeEntry {
+        fn from(value: super::ServeEntry) -> Self {
+            Self {
+                allow: Ok(value.allow),
+                name: Ok(value.name),
+                target: Ok(value.target),
+                url: Ok(value.url),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct StoreSnapshot {
+        slices: ::std::result::Result<
+            ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+            ::std::string::String,
+        >,
+        store_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for StoreSnapshot {
+        fn default() -> Self {
+            Self {
+                slices: Err("no value supplied for slices".to_string()),
+                store_id: Err("no value supplied for store_id".to_string()),
+            }
+        }
+    }
+    impl StoreSnapshot {
+        pub fn slices<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<
+                ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+            >,
+            T::Error: ::std::fmt::Display,
+        {
+            self.slices = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for slices: {e}"));
+            self
+        }
+        pub fn store_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.store_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for store_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<StoreSnapshot> for super::StoreSnapshot {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: StoreSnapshot,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                slices: value.slices?,
+                store_id: value.store_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::StoreSnapshot> for StoreSnapshot {
+        fn from(value: super::StoreSnapshot) -> Self {
+            Self {
+                slices: Ok(value.slices),
+                store_id: Ok(value.store_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct UnavailableDetails {
         device: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
@@ -1623,6 +3300,168 @@ pub mod builder {
                 progress: Ok(value.progress),
                 service: Ok(value.service),
                 state: Ok(value.state),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct UnitHealth {
+        auth_url: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        detail: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        state: ::std::result::Result<super::UnitState, ::std::string::String>,
+        unit: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for UnitHealth {
+        fn default() -> Self {
+            Self {
+                auth_url: Ok(Default::default()),
+                detail: Ok(Default::default()),
+                state: Err("no value supplied for state".to_string()),
+                unit: Err("no value supplied for unit".to_string()),
+            }
+        }
+    }
+    impl UnitHealth {
+        pub fn auth_url<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.auth_url = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for auth_url: {e}"));
+            self
+        }
+        pub fn detail<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.detail = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for detail: {e}"));
+            self
+        }
+        pub fn state<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::UnitState>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.state = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for state: {e}"));
+            self
+        }
+        pub fn unit<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.unit = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for unit: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<UnitHealth> for super::UnitHealth {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: UnitHealth,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                auth_url: value.auth_url?,
+                detail: value.detail?,
+                state: value.state?,
+                unit: value.unit?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::UnitHealth> for UnitHealth {
+        fn from(value: super::UnitHealth) -> Self {
+            Self {
+                auth_url: Ok(value.auth_url),
+                detail: Ok(value.detail),
+                state: Ok(value.state),
+                unit: Ok(value.unit),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct WhoIsIdentity {
+        device_name: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        login: ::std::result::Result<::std::string::String, ::std::string::String>,
+        tailscale_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for WhoIsIdentity {
+        fn default() -> Self {
+            Self {
+                device_name: Ok(Default::default()),
+                login: Err("no value supplied for login".to_string()),
+                tailscale_id: Ok(Default::default()),
+            }
+        }
+    }
+    impl WhoIsIdentity {
+        pub fn device_name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_name: {e}"));
+            self
+        }
+        pub fn login<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.login = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for login: {e}"));
+            self
+        }
+        pub fn tailscale_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.tailscale_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for tailscale_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<WhoIsIdentity> for super::WhoIsIdentity {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: WhoIsIdentity,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                device_name: value.device_name?,
+                login: value.login?,
+                tailscale_id: value.tailscale_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::WhoIsIdentity> for WhoIsIdentity {
+        fn from(value: super::WhoIsIdentity) -> Self {
+            Self {
+                device_name: Ok(value.device_name),
+                login: Ok(value.login),
+                tailscale_id: Ok(value.tailscale_id),
             }
         }
     }

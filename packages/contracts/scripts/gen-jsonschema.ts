@@ -10,6 +10,11 @@ import {
   RpcRequest, RpcNotification, RpcResponse, RpcError, RpcId, RpcFailure, RpcSuccess,
 } from "../src/envelope";
 import { ErrorData, ErrorKind, UnavailableDetails } from "../src/errors";
+import {
+  UnitState, UnitHealth, NativeHealth, DesiredTerminal, DesiredWorker, MeshConfig,
+  DesiredState, ObservedTerminal, ObservedWorker, ObservedState,
+  WhoIsIdentity, PeerInfo, StoreSnapshot, ServeTarget, ServeConfig, ServeEntry,
+} from "../src/mgmt";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "gen", "jsonschema");
 mkdirSync(OUT, { recursive: true });
@@ -28,6 +33,24 @@ const SHARED = {
   RpcId,
   RpcFailure,
   RpcSuccess,
+  // mgmt (M2) — EVERY shared/reused sub-schema must be named here, or
+  // zod-to-json-schema dedupes it into a nested $ref typify cannot resolve.
+  UnitState,
+  UnitHealth,
+  NativeHealth,
+  DesiredTerminal,
+  DesiredWorker,
+  MeshConfig,
+  DesiredState,
+  ObservedTerminal,
+  ObservedWorker,
+  ObservedState,
+  WhoIsIdentity,
+  PeerInfo,
+  StoreSnapshot,
+  ServeTarget,
+  ServeConfig,
+  ServeEntry,
 } as const;
 
 const ENTRIES: Record<string, ZodTypeAny> = {
@@ -39,6 +62,13 @@ const ENTRIES: Record<string, ZodTypeAny> = {
   "rpc-response": RpcResponse,
   "error-data": ErrorData,
   "unavailable-details": UnavailableDetails,
+  "native-health": NativeHealth,
+  "desired-state": DesiredState,
+  "observed-state": ObservedState,
+  "peer-info": PeerInfo,
+  "store-snapshot": StoreSnapshot,
+  "serve-config": ServeConfig,
+  "serve-entry": ServeEntry,
 };
 
 for (const [name, schema] of Object.entries(ENTRIES)) {

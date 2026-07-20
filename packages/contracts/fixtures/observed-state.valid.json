@@ -1,0 +1,15 @@
+{
+  "generation": 7,
+  "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+  "terminals": [
+    {
+      "sessionId": "0d9f1c2b-3a4e-5d6c-7b8a-9e0f1a2b3c4d",
+      "pid": 48213,
+      "createdAt": 1784930400,
+      "persistence": "keep-until-exit",
+      "title": "claude — vibe-field",
+      "cwd": "/Users/james/Projects/vibe-field"
+    }
+  ],
+  "workers": [{ "id": "w1", "state": "up" }]
+}

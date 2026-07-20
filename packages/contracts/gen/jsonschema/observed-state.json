@@ -1,5 +1,5 @@
 {
-  "$ref": "#/definitions/HelloAck",
+  "$ref": "#/definitions/ObservedState",
   "definitions": {
     "SemverString": {
       "type": "string",
@@ -337,34 +337,7 @@
       "additionalProperties": true
     },
     "ObservedState": {
-      "type": "object",
-      "properties": {
-        "generation": {
-          "type": "integer"
-        },
-        "bootId": {
-          "type": "string"
-        },
-        "terminals": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ObservedTerminal"
-          }
-        },
-        "workers": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ObservedWorker"
-          }
-        }
-      },
-      "required": [
-        "generation",
-        "bootId",
-        "terminals",
-        "workers"
-      ],
-      "additionalProperties": true
+      "$ref": "#/definitions/ObservedState"
     },
     "WhoIsIdentity": {
       "type": "object",
@@ -514,29 +487,6 @@
         "name",
         "target",
         "url"
-      ],
-      "additionalProperties": true
-    },
-    "HelloAck": {
-      "type": "object",
-      "properties": {
-        "contractsVersion": {
-          "$ref": "#/definitions/SemverString"
-        },
-        "serverKind": {
-          "$ref": "#/definitions/ServerKind"
-        },
-        "grantedScopes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "contractsVersion",
-        "serverKind",
-        "grantedScopes"
       ],
       "additionalProperties": true
     }

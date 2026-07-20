@@ -1,0 +1,5 @@
+{
+  "name": "dev-server",
+  "target": { "kind": "port", "port": 5173 },
+  "allow": ["me@jamesyong42.com"]
+}

@@ -1,0 +1,9 @@
+{
+  "generation": 7,
+  "terminals": [
+    { "sessionId": "0d9f1c2b-3a4e-5d6c-7b8a-9e0f1a2b3c4d", "persistence": "keep-until-exit" },
+    { "sessionId": "1e8a2d3c-4b5f-6e7d-8c9b-0f1a2b3c4d5e" }
+  ],
+  "workers": [],
+  "meshConfig": {}
+}

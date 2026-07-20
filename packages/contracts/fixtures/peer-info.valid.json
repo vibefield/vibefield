@@ -1,0 +1,11 @@
+{
+  "id": "nodeid:8f3a1c",
+  "name": "linux-box",
+  "online": true,
+  "addresses": ["100.101.102.103"],
+  "whois": {
+    "login": "me@jamesyong42.com",
+    "deviceName": "linux-box",
+    "tailscaleId": "8f3a1c"
+  }
+}

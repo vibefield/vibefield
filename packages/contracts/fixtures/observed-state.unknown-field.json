@@ -1,0 +1,7 @@
+{
+  "generation": 8,
+  "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+  "terminals": [],
+  "workers": [],
+  "reconcilerDebug": { "carried": true, "note": "P3 tolerant reader on the mgmt channel" }
+}

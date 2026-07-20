@@ -168,6 +168,355 @@
       ],
       "additionalProperties": true
     },
+    "UnitState": {
+      "type": "string",
+      "enum": [
+        "starting",
+        "up",
+        "degraded",
+        "crashed"
+      ]
+    },
+    "UnitHealth": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/UnitState"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "authUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit",
+        "state"
+      ],
+      "additionalProperties": true
+    },
+    "NativeHealth": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "up",
+            "degraded"
+          ]
+        },
+        "bootId": {
+          "type": "string"
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UnitHealth"
+          }
+        }
+      },
+      "required": [
+        "state",
+        "bootId",
+        "units"
+      ],
+      "additionalProperties": true
+    },
+    "DesiredTerminal": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "persistence": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": true
+    },
+    "DesiredWorker": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "config": {}
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "additionalProperties": true
+    },
+    "MeshConfig": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "DesiredState": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer"
+        },
+        "terminals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DesiredTerminal"
+          }
+        },
+        "workers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DesiredWorker"
+          }
+        },
+        "meshConfig": {
+          "$ref": "#/definitions/MeshConfig"
+        }
+      },
+      "required": [
+        "generation",
+        "terminals",
+        "workers"
+      ],
+      "additionalProperties": true
+    },
+    "ObservedTerminal": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "pid": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "integer"
+        },
+        "persistence": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": true
+    },
+    "ObservedWorker": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/UnitState"
+        }
+      },
+      "required": [
+        "id",
+        "state"
+      ],
+      "additionalProperties": true
+    },
+    "ObservedState": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer"
+        },
+        "bootId": {
+          "type": "string"
+        },
+        "terminals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ObservedTerminal"
+          }
+        },
+        "workers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ObservedWorker"
+          }
+        }
+      },
+      "required": [
+        "generation",
+        "bootId",
+        "terminals",
+        "workers"
+      ],
+      "additionalProperties": true
+    },
+    "WhoIsIdentity": {
+      "type": "object",
+      "properties": {
+        "login": {
+          "type": "string"
+        },
+        "deviceName": {
+          "type": "string"
+        },
+        "tailscaleId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "login"
+      ],
+      "additionalProperties": true
+    },
+    "PeerInfo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "online": {
+          "type": "boolean"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "whois": {
+          "$ref": "#/definitions/WhoIsIdentity"
+        }
+      },
+      "required": [
+        "id",
+        "online"
+      ],
+      "additionalProperties": true
+    },
+    "StoreSnapshot": {
+      "type": "object",
+      "properties": {
+        "storeId": {
+          "type": "string"
+        },
+        "slices": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "storeId",
+        "slices"
+      ],
+      "additionalProperties": true
+    },
+    "ServeTarget": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "port"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          },
+          "required": [
+            "kind",
+            "port"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "dir"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ],
+          "additionalProperties": true
+        }
+      ]
+    },
+    "ServeConfig": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/definitions/ServeTarget"
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "target"
+      ],
+      "additionalProperties": true
+    },
+    "ServeEntry": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/definitions/ServeTarget"
+        },
+        "url": {
+          "type": "string"
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "target",
+        "url"
+      ],
+      "additionalProperties": true
+    },
     "RpcNotification": {
       "type": "object",
       "properties": {

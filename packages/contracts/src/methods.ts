@@ -38,9 +38,25 @@ export function defineMethod(def: MethodDef): MethodDef {
   return def;
 }
 
-/** Seed entries — the catalog grows with M2 (mgmt channel) and M3 (product core). */
+/** The catalog grows per milestone: M1 seeds → M2 mgmt channel → M3 product core. */
 export const METHODS: MethodDef[] = [
+  // M1 — product seeds
   defineMethod({ surface: "product", method: "system.hello", scope: null, idempotent: true, locality: "local" }),
   defineMethod({ surface: "product", method: "system.health", scope: null, idempotent: true, locality: "local" }),
   defineMethod({ surface: "product", method: "system.capabilities", scope: null, idempotent: true, locality: "local" }),
+
+  // M2 — management channel (auth = D8 pairing hello; no scope system on this surface)
+  defineMethod({ surface: "mgmt", method: "native.lifecycle.hello", scope: null, idempotent: true, locality: "local" }),
+  defineMethod({ surface: "mgmt", method: "native.lifecycle.health.subscribe", scope: null, idempotent: true, locality: "local", subscription: true }),
+  defineMethod({ surface: "mgmt", method: "native.lifecycle.desired.set", scope: null, idempotent: true, locality: "local" }),
+  defineMethod({ surface: "mgmt", method: "native.lifecycle.observed.subscribe", scope: null, idempotent: true, locality: "local", subscription: true }),
+  defineMethod({ surface: "mgmt", method: "native.mesh.peers.list", scope: null, idempotent: true, locality: "local" }),
+  defineMethod({ surface: "mgmt", method: "native.mesh.peers.subscribe", scope: null, idempotent: true, locality: "local", subscription: true }),
+  defineMethod({ surface: "mgmt", method: "native.mesh.store.open", scope: null, idempotent: true, locality: "local" }),
+  defineMethod({ surface: "mgmt", method: "native.mesh.store.get", scope: null, idempotent: true, locality: "local" }),
+  defineMethod({ surface: "mgmt", method: "native.mesh.store.set", scope: null, idempotent: true, locality: "local" }),
+  defineMethod({ surface: "mgmt", method: "native.mesh.store.subscribe", scope: null, idempotent: true, locality: "local", subscription: true }),
+  defineMethod({ surface: "mgmt", method: "native.mesh.serve.add", scope: null, idempotent: true, locality: "local" }),
+  defineMethod({ surface: "mgmt", method: "native.mesh.serve.remove", scope: null, idempotent: true, locality: "local" }),
+  defineMethod({ surface: "mgmt", method: "native.mesh.serve.list", scope: null, idempotent: true, locality: "local" }),
 ];

@@ -1,5 +1,5 @@
 {
-  "$ref": "#/definitions/HelloAck",
+  "$ref": "#/definitions/ServeConfig",
   "definitions": {
     "SemverString": {
       "type": "string",
@@ -470,26 +470,7 @@
       ]
     },
     "ServeConfig": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "target": {
-          "$ref": "#/definitions/ServeTarget"
-        },
-        "allow": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "name",
-        "target"
-      ],
-      "additionalProperties": true
+      "$ref": "#/definitions/ServeConfig"
     },
     "ServeEntry": {
       "type": "object",
@@ -514,29 +495,6 @@
         "name",
         "target",
         "url"
-      ],
-      "additionalProperties": true
-    },
-    "HelloAck": {
-      "type": "object",
-      "properties": {
-        "contractsVersion": {
-          "$ref": "#/definitions/SemverString"
-        },
-        "serverKind": {
-          "$ref": "#/definitions/ServerKind"
-        },
-        "grantedScopes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "contractsVersion",
-        "serverKind",
-        "grantedScopes"
       ],
       "additionalProperties": true
     }
