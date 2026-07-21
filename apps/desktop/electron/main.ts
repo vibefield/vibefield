@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { FielddClient } from "@vibefield/fieldd-client";
-import { app, BrowserWindow, ipcMain, session } from "electron";
+import { app, BrowserWindow, ipcMain, screen, session } from "electron";
 
 // VibeField shell main (Track A walking skeleton, design-03 §2):
 // adopt-or-spawn fieldd (which ensures field-native), hello as shell-main with
@@ -167,6 +167,8 @@ async function loadRenderer(win: BrowserWindow): Promise<void> {
 
 async function createWindow(shell: Shell, show = true): Promise<BrowserWindow> {
   const win = new BrowserWindow({
+    titleBarStyle: shouldFillPrimaryWorkArea ? "hiddenInset" : "default",
+    trafficLightPosition: shouldFillPrimaryWorkArea ? { x: 18, y: 22 } : undefined,
     width: 1180,
     height: 780,
     show,
@@ -221,6 +223,8 @@ async function smoke(shell: Shell, root: string): Promise<void> {
 /// report the renderer's own verdict. No daemons involved.
 async function spikeLoro(): Promise<void> {
   const win = new BrowserWindow({
+    titleBarStyle: shouldFillPrimaryWorkArea ? "hiddenInset" : "default",
+    trafficLightPosition: shouldFillPrimaryWorkArea ? { x: 18, y: 22 } : undefined,
     show: false,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
@@ -329,5 +333,15 @@ if (!app.requestSingleInstanceLock()) {
   main().catch((e: unknown) => {
     console.error("[shell] fatal:", e);
     app.exit(1);
+  });
+}
+
+const shouldFillPrimaryWorkArea =
+  process.platform === "darwin" &&
+  !process.argv.some((arg) => arg.startsWith("--smoke") || arg === "--spike-loro");
+
+if (shouldFillPrimaryWorkArea) {
+  app.on("browser-window-created", (_event, win) => {
+    win.setBounds(screen.getPrimaryDisplay().workArea);
   });
 }

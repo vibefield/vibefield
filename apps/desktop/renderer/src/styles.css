@@ -296,3 +296,16 @@ tr:last-child td {
 .ticker li.good {
   color: var(--good);
 }
+
+/* Invisible macOS titlebar: native traffic lights remain while this strip moves the window. */
+.app-drag {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 40;
+  height: 52px;
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}

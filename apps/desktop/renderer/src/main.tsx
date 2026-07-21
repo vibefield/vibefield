@@ -16,3 +16,8 @@ async function boot(): Promise<void> {
 }
 
 void boot();
+
+const dragRegion = document.createElement("div");
+dragRegion.className = "app-drag";
+dragRegion.setAttribute("aria-hidden", "true");
+document.body.prepend(dragRegion);
