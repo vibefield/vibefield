@@ -1,0 +1,34 @@
+{
+  "name": "@vibefield/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build:shell": "esbuild electron/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/main.cjs && esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload.cjs",
+    "build:renderer": "vite build",
+    "build": "pnpm build:shell && pnpm build:renderer",
+    "dev": "pnpm build:shell && concurrently -k -s first \"vite\" \"electron . --dev\"",
+    "start": "pnpm build && electron .",
+    "smoke": "pnpm build:shell && electron . --smoke",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p renderer/tsconfig.json"
+  },
+  "dependencies": {
+    "@vibefield/contracts": "workspace:*",
+    "@vibefield/fieldd-client": "workspace:*",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vibefield/fieldd": "workspace:*",
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^10.0.3",
+    "electron": "^43.1.1",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.6.0",
+    "vite": "^8.1.5"
+  }
+}

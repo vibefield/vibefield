@@ -5,3 +5,4 @@ packages:
   - "services/*"
 allowBuilds:
   esbuild: true
+  electron: true

@@ -8,42 +8,75 @@ import {
   RPC_ERROR_CODES,
   type CallerContext,
   type ErrorKind,
+  type MethodDef,
   type Scope,
 } from "@vibefield/contracts";
 import { RpcCallError } from "./native-link";
-import type { TokenService } from "./token-service";
 
 // ProductAPI — the fabric's control binding (design-02 §3.3, D27): loopback WS
 // :9410, JSON text frames, hello-gated with scoped bearer tokens, per-method
-// scope checks from the generated method registry. The :9411 binary data-lane
-// socket lands with DocumentService (nothing mints doc tickets yet).
+// scope checks from the generated method registry. Subscriptions follow the
+// mgmt-channel convention (P5): subscribe → {subId, snapshot}, then
+// `<base>.delta {subId, payload}` notifications until system.unsubscribe or
+// connection close. The :9411 binary data-lane socket lands with
+// DocumentService (nothing mints doc tickets yet).
+
+const WS_OPEN = 1;
 
 export type Handler = (ctx: CallerContext, params: unknown) => Promise<unknown> | unknown;
 
+/** Returns the snapshot plus a dispose; `emit` pushes deltas until dispose. */
+export type SubscriptionHandler = (
+  ctx: CallerContext,
+  params: unknown,
+  emit: (payload: unknown) => void,
+) => { snapshot: unknown; dispose: () => void };
+
 export interface ProductApiOptions {
   port: number; // 0 = ephemeral (tests)
-  tokens: TokenService;
+  tokens: TokenServiceLike;
   /** Origin allowlist for browser clients. Non-browser clients send no Origin — allowed. */
   allowedOrigins?: string[];
+}
+
+/** The slice of TokenService the API needs (keeps the dependency one-way). */
+export interface TokenServiceLike {
+  verify(token: string): { tokenId: string; scopes: Scope[]; label: string } | null;
 }
 
 interface ConnState {
   authed: boolean;
   ctx: CallerContext | null;
+  /** live subscriptions on this connection: subId → dispose */
+  subs: Map<string, () => void>;
 }
 
 export class ProductApi extends EventEmitter {
   private wss: WebSocketServer | null = null;
   private handlers = new Map<string, Handler>();
+  private subHandlers = new Map<string, SubscriptionHandler>();
+  private nextSubId = 1;
 
   constructor(private readonly opts: ProductApiOptions) {
     super();
   }
 
   register(method: string, handler: Handler): void {
+    const def = this.lookup(method);
+    if (def.subscription) throw new Error(`subscription method needs registerSubscription: ${method}`);
+    this.handlers.set(method, handler);
+  }
+
+  registerSubscription(method: string, handler: SubscriptionHandler): void {
+    const def = this.lookup(method);
+    if (!def.subscription) throw new Error(`not a subscription method in the registry: ${method}`);
+    this.subHandlers.set(method, handler);
+  }
+
+  private lookup(method: string): MethodDef {
     const def = METHODS.find((m) => m.method === method && m.surface === "product");
     if (!def) throw new Error(`method not in the registry (D36 — unregistered doesn't ship): ${method}`);
-    this.handlers.set(method, handler);
+    return def;
   }
 
   async listen(): Promise<number> {
@@ -64,9 +97,13 @@ export class ProductApi extends EventEmitter {
       ws.close(1008, "origin not allowed");
       return;
     }
-    const state: ConnState = { authed: false, ctx: null };
+    const state: ConnState = { authed: false, ctx: null, subs: new Map() };
     ws.on("message", (raw) => {
       void this.onMessage(ws, state, raw.toString());
+    });
+    ws.on("close", () => {
+      for (const dispose of state.subs.values()) dispose();
+      state.subs.clear();
     });
   }
 
@@ -130,9 +167,22 @@ export class ProductApi extends EventEmitter {
       return;
     }
 
+    // built-in: dropping a subscription needs the connection's own sub table
+    if (method === "system.unsubscribe") {
+      const subId = (params as { subId?: unknown } | undefined)?.subId;
+      const dispose = typeof subId === "string" ? state.subs.get(subId) : undefined;
+      if (dispose) {
+        dispose();
+        state.subs.delete(subId as string);
+      }
+      reply({ jsonrpc: "2.0", id, result: { removed: dispose !== undefined } });
+      return;
+    }
+
     const def = METHODS.find((m) => m.method === method && m.surface === "product");
     const handler = this.handlers.get(method);
-    if (!def || !handler) {
+    const subHandler = this.subHandlers.get(method);
+    if (!def || (!handler && !subHandler)) {
       reply(this.err(id, "NOT_FOUND", "method not found", false, undefined, -32601));
       return;
     }
@@ -144,7 +194,23 @@ export class ProductApi extends EventEmitter {
       }
     }
     try {
-      const result = await handler(state.ctx, params);
+      if (subHandler) {
+        const subId = `ps-${this.nextSubId++}`;
+        const base = method.replace(/\.subscribe$/, "");
+        let active = true;
+        const emit = (payload: unknown) => {
+          if (active && ws.readyState === WS_OPEN)
+            ws.send(JSON.stringify({ jsonrpc: "2.0", method: `${base}.delta`, params: { subId, payload } }));
+        };
+        const { snapshot, dispose } = subHandler(state.ctx, params, emit);
+        state.subs.set(subId, () => {
+          active = false;
+          dispose();
+        });
+        reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
+        return;
+      }
+      const result = await handler!(state.ctx, params);
       reply({ jsonrpc: "2.0", id, result });
     } catch (e) {
       if (e instanceof RpcCallError) {
@@ -167,6 +233,11 @@ export class ProductApi extends EventEmitter {
     const data: Record<string, unknown> = { kind, retryable };
     if (details !== undefined) data["details"] = details;
     return { jsonrpc: "2.0", id: id ?? null, error: { code, message, data } };
+  }
+
+  /** Sever every live client but keep listening (reconnect drills, ops kick). */
+  dropConnections(): void {
+    for (const client of this.wss?.clients ?? []) client.terminate();
   }
 
   close(): void {

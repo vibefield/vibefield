@@ -9,7 +9,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, NativeLink } from "../src/index";
+import { bootstrap, NativeLink, type FielddHealth } from "../src/index";
+import { WsRpc, helloAs, until } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = join(ROOT, "target/debug/field-native");
@@ -205,6 +206,41 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     expect((mismatch["error"] as { data: { kind: string } }).data.kind).toBe("INCOMPATIBLE");
     await daemon.stop();
   }, 20_000);
+
+  it("kill matrix: native death flips the live health stream; respawn restores it", async () => {
+    const dir = await spawnNative();
+    const nativeChild = children[children.length - 1]!;
+    const daemon = await bootstrap({ dataDir: dir, controlPort: 0 });
+    const grant = daemon.tokens.mint([], "watcher");
+
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((r) => ws.once("open", () => r()));
+    const rpc = new WsRpc(ws);
+    await helloAs(rpc, grant.token);
+
+    const sub = (await rpc.call("system.health.subscribe", {})) as { subId: string; snapshot: FielddHealth };
+    expect(sub.snapshot.nativeConnected).toBe(true);
+    const payloads = (): FielddHealth[] =>
+      rpc.notifications
+        .filter((n) => n.method === "system.health.delta")
+        .map((n) => n.params.payload as FielddHealth);
+
+    // the Rust daemon dies → the renderer-facing stream says so, honestly
+    nativeChild.kill("SIGKILL");
+    await until(() => payloads().some((p) => p.nativeConnected === false), 8000);
+
+    // same data dir, fresh boot: pairing secret persists → fieldd re-pairs by itself
+    const revived = spawn(BIN, [], { env: { ...process.env, FIELD_NATIVE_DATA_DIR: dir }, stdio: "ignore" });
+    children.push(revived);
+    await until(() => {
+      const ps = payloads();
+      const lastDown = ps.map((p) => p.nativeConnected).lastIndexOf(false);
+      return ps.slice(lastDown + 1).some((p) => p.nativeConnected === true && p.native !== null);
+    }, 20_000);
+
+    ws.close();
+    await daemon.stop();
+  }, 40_000);
 
   it("bad token and disallowed Origin are rejected", async () => {
     const dir = await spawnNative();

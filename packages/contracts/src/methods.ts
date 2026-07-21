@@ -45,6 +45,11 @@ export const METHODS: MethodDef[] = [
   defineMethod({ surface: "product", method: "system.health", scope: null, idempotent: true, locality: "local" }),
   defineMethod({ surface: "product", method: "system.capabilities", scope: null, idempotent: true, locality: "local" }),
 
+  // Track A — walking skeleton (shell bootstrap + live health)
+  defineMethod({ surface: "product", method: "system.health.subscribe", scope: null, idempotent: true, locality: "local", subscription: true }),
+  defineMethod({ surface: "product", method: "system.unsubscribe", scope: null, idempotent: true, locality: "local" }),
+  defineMethod({ surface: "product", method: "system.mintWindowToken", scope: "tokens.mint", idempotent: false, locality: "local" }),
+
   // M2 — management channel (auth = D8 pairing hello; no scope system on this surface)
   defineMethod({ surface: "mgmt", method: "native.lifecycle.hello", scope: null, idempotent: true, locality: "local" }),
   defineMethod({ surface: "mgmt", method: "native.lifecycle.health.subscribe", scope: null, idempotent: true, locality: "local", subscription: true }),

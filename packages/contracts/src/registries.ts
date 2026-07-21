@@ -73,6 +73,7 @@ export const SCOPES = [
   "shell.open",
   "shell.webcontents",
   "plugins.manage",
+  "tokens.mint", // shell-main only: mint per-window renderer tokens (Track A bootstrap)
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 
