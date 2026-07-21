@@ -71,6 +71,7 @@ function applyPending(manager: DocManager): ReturnType<typeof createFieldEngine>
   if (pending.initialBytes !== null) {
     const res = ce.docs.open(pending.initialBytes);
     if (!res.ok) throw new Error(`open failed: ${res.reason}`);
+    for (const update of pending.initialUpdates) res.session.applyRemote(update);
     ce.world.sync();
   } else {
     const session = ce.docs.create();

@@ -281,6 +281,8 @@ export class DocManager {
   }
 
   async shutdown(): Promise<void> {
+    this.stage(0, "saving document");
+    await this.waitForSwitchCover();
     const persistence = this.activePersistence;
     if (persistence !== null) await persistence.lease.close();
 

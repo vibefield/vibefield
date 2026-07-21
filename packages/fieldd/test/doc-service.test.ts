@@ -175,6 +175,28 @@ async function putEnvelope(
   return LanePutOk.parse(decodeJsonPayload(reply.payload));
 }
 
+async function putUpdate(
+  probe: LaneProbe,
+  update: Uint8Array,
+  baseRevisionId: string,
+  engineSchema = 7,
+): Promise<LanePutOk> {
+  probe.send(
+    encodeJsonFrame(LANE_FRAME.PUT_META, 0, {
+      kind: "update",
+      baseRevisionId,
+      engineSchema,
+      revisionId: randomUUID(),
+      savedAt: Date.now(),
+      byteLength: update.byteLength,
+    }),
+  );
+  probe.send(encodeLaneFrame(LANE_FRAME.PUT, 0, update));
+  const reply = await probe.next();
+  expect(reply.kind).toBe(LANE_FRAME.PUT_OK);
+  return LanePutOk.parse(decodeJsonPayload(reply.payload));
+}
+
 describe("doc.* catalog (product WS)", () => {
   it("create → list → open returns a valid entry, ticket, and the real bound laneUrl", async () => {
     const { daemon } = await setup();
@@ -332,6 +354,43 @@ describe("lane PUT / GET", () => {
     expect(current.revisionId).toBe(putOk.revisionId);
     expect(current.byteLength).toBe(env.byteLength);
     expect(existsSync(join(dataDir, "docs", made.docId, "revisions", current.file))).toBe(true);
+  });
+
+  it("replays ordered updates and a later checkpoint atomically compacts them", async () => {
+    const { dataDir, daemon } = await setup();
+    const rpc = await productRpc(daemon);
+    const made = (await rpc.call("doc.create", { name: "Journal" })) as DocRegistryEntry;
+    const base = ice1Envelope(128);
+    const update = new Uint8Array(randomBytes(48));
+    const writer = await attach(rpc, made.docId);
+    const checkpoint = await putEnvelope(writer.probe, base, 11);
+    const appended = await putUpdate(writer.probe, update, checkpoint.revisionId, 11);
+    writer.probe.close();
+
+    const reader = await attach(rpc, made.docId);
+    expect(reader.ok.meta?.revisionId).toBe(appended.revisionId);
+    expect(reader.ok.meta?.journalEntries).toBe(1);
+    reader.probe.send(encodeLaneFrame(LANE_FRAME.GET, 0, new Uint8Array()));
+    const doc = await reader.probe.next();
+    const journal = await reader.probe.next();
+    expect(doc.kind).toBe(LANE_FRAME.DOC);
+    expect(Buffer.from(doc.payload).equals(Buffer.from(base))).toBe(true);
+    expect(journal.kind).toBe(LANE_FRAME.DOC_UPDATE);
+    expect(Buffer.from(journal.payload).equals(Buffer.from(update))).toBe(true);
+
+    const listed = (await rpc.call("doc.list", {})) as { docs: DocRegistryEntry[] };
+    expect(listed.docs.find((entry) => entry.docId === made.docId)?.sizeBytes).toBe(
+      base.byteLength + update.byteLength,
+    );
+
+    const compacted = ice1Envelope(192);
+    const compactedRevision = await putEnvelope(reader.probe, compacted, 11);
+    const current = JSON.parse(
+      readFileSync(join(dataDir, "docs", made.docId, "current.json"), "utf8"),
+    ) as { revisionId: string; file: string; updates: unknown[] };
+    expect(current.revisionId).toBe(compactedRevision.revisionId);
+    expect(current.file).toBe(`${compactedRevision.revisionId}.ice1`);
+    expect(current.updates).toEqual([]);
   });
 
   it("RESTART: put → stop → re-bootstrap same dataDir → list + GET survive", async () => {

@@ -76,20 +76,57 @@ class FakeLaneWs implements LaneWsLike {
   }
 }
 
-/** The well-behaved server script: HELLO→HELLO_OK, GET→DOC|NOT_FOUND, PUT→PUT_OK. */
-function happyServer(store: { bytes: Uint8Array | null }): Handler {
-  let pendingPut: { byteLength: number; revisionId: string } | null = null;
+interface MemoryDoc {
+  bytes: Uint8Array | null;
+  updates?: Uint8Array[];
+  revisionId?: string;
+}
+
+/** The well-behaved server script: HELLO→HELLO_OK, GET→DOC+updates, PUT→PUT_OK. */
+function happyServer(store: MemoryDoc): Handler {
+  let pendingPut: {
+    byteLength: number;
+    revisionId: string;
+    kind?: "checkpoint" | "update";
+    baseRevisionId?: string;
+  } | null = null;
   return (ws, frame) => {
     if (frame.kind === LANE_FRAME.HELLO) {
       ws.receive(
-        encodeJsonFrame(LANE_FRAME.HELLO_OK, 0, { docId: DOC_ID, hasDoc: store.bytes !== null }),
+        encodeJsonFrame(LANE_FRAME.HELLO_OK, 0, {
+          docId: DOC_ID,
+          hasDoc: store.bytes !== null,
+          ...(store.bytes !== null && store.revisionId !== undefined
+            ? {
+                meta: {
+                  engineSchema: 2,
+                  savedAt: 1,
+                  byteLength: store.bytes.byteLength,
+                  baseEpoch: 0,
+                  revisionId: store.revisionId,
+                  journalEntries: store.updates?.length ?? 0,
+                },
+              }
+            : {}),
+        }),
       );
     } else if (frame.kind === LANE_FRAME.GET) {
       if (store.bytes === null)
         ws.receive(encodeJsonFrame(LANE_FRAME.ERR, 0, { kind: "NOT_FOUND", message: "no doc" }));
-      else ws.receive(encodeLaneFrame(LANE_FRAME.DOC, 0, store.bytes));
+      else {
+        ws.receive(encodeLaneFrame(LANE_FRAME.DOC, 0, store.bytes));
+        const sendUpdate = (index: number): void => {
+          const update = store.updates?.[index];
+          if (update === undefined) return;
+          queueMicrotask(() => {
+            ws.receive(encodeLaneFrame(LANE_FRAME.DOC_UPDATE, 0, update));
+            sendUpdate(index + 1);
+          });
+        };
+        sendUpdate(0);
+      }
     } else if (frame.kind === LANE_FRAME.PUT_META) {
-      pendingPut = decodeJsonPayload(frame.payload) as { byteLength: number; revisionId: string };
+      pendingPut = decodeJsonPayload(frame.payload) as typeof pendingPut;
     } else if (frame.kind === LANE_FRAME.PUT) {
       if (pendingPut === null || pendingPut.byteLength !== frame.payload.byteLength) {
         ws.receive(
@@ -99,7 +136,23 @@ function happyServer(store: { bytes: Uint8Array | null }): Handler {
           }),
         );
       } else {
-        store.bytes = frame.payload;
+        if ((pendingPut.kind ?? "checkpoint") === "update") {
+          if (pendingPut.baseRevisionId !== store.revisionId) {
+            ws.receive(
+              encodeJsonFrame(LANE_FRAME.ERR, 0, {
+                kind: "PRECONDITION_FAILED",
+                message: "stale update base",
+              }),
+            );
+            pendingPut = null;
+            return;
+          }
+          store.updates = [...(store.updates ?? []), frame.payload];
+        } else {
+          store.bytes = frame.payload;
+          store.updates = [];
+        }
+        store.revisionId = pendingPut.revisionId;
         ws.receive(
           encodeJsonFrame(LANE_FRAME.PUT_OK, 0, {
             revisionId: pendingPut.revisionId,
@@ -179,6 +232,30 @@ describe("DocLaneClient", () => {
     const { client } = makeClient();
     await client.attach();
     await expect(client.get()).rejects.toMatchObject({ kind: "UNAVAILABLE" });
+    client.close();
+  });
+
+  it("transactionally attaches a checkpoint and its ordered update journal", async () => {
+    const base = envelope(3);
+    const updates = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5])];
+    const store: MemoryDoc = {
+      bytes: base,
+      updates,
+      revisionId: "120d7a2e-3c44-4b8a-9e51-6d2f8c0a7b19",
+    };
+    FakeLaneWs.handler = happyServer(store);
+    const { client } = makeClient();
+
+    const snapshot = await client.attachSnapshot();
+    expect(Array.from(snapshot.initialBytes ?? [])).toEqual(Array.from(base));
+    expect(snapshot.initialUpdates.map((update) => Array.from(update))).toEqual(
+      updates.map((update) => Array.from(update)),
+    );
+
+    const next = new Uint8Array([6, 7, 8]);
+    const receipt = await client.putUpdate(next, { engineSchema: 2, savedAt: 5 });
+    expect(store.revisionId).toBe(receipt.revisionId);
+    expect(Array.from(store.updates?.at(-1) ?? [])).toEqual(Array.from(next));
     client.close();
   });
 

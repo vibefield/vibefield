@@ -159,7 +159,7 @@ interface Docs {
 }
 
 describe("PeerLink e2e — two real daemons over the tailnet door", () => {
-  it("forwards a read to B and a mutation lands under B's peer principal", async () => {
+  it("refuses renderer document persistence at B's remote boundary", async () => {
     const { A, B } = await bootPair();
 
     // seed a doc on B directly (B's own product WS, its shell token)
@@ -167,14 +167,18 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
     await helloAs(rpcB, B.shellToken, "shell-main");
     await rpcB.call("doc.create", { name: "b-doc" });
 
-    // A → B read forward (post-routing: no device key, so B serves locally)
-    const listed = (await A.peers.request("dev-b", "doc.list", {})) as Docs;
-    expect(listed.docs.some((d) => d.name === "b-doc")).toBe(true);
+    const rpcA = await openRpc(A.controlPort);
+    await helloAs(rpcA, A.shellToken, "shell-main");
+    const readDenied = await rpcA.callErr("doc.list", { device: "dev-b" });
+    const writeDenied = await rpcA.callErr("doc.create", {
+      device: "dev-b",
+      name: "from-a",
+    });
+    expect(readDenied.data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(writeDenied.data?.kind).toBe("FORBIDDEN_SCOPE");
 
-    // A → B mutation forward: doc.write is in the peer preset, so it lands on B
-    await A.peers.request("dev-b", "doc.create", { name: "from-a" });
     const afterB = (await rpcB.call("doc.list", {})) as Docs;
-    expect(afterB.docs.some((d) => d.name === "from-a")).toBe(true);
+    expect(afterB.docs.map((doc) => doc.name)).toEqual(["b-doc"]);
   }, 30_000);
 
   it("the REMOTE end enforces the peer preset: mintWindowToken is refused at B", async () => {

@@ -367,6 +367,17 @@ export class DocumentService {
       if (last?.revisionId !== putMeta.revisionId || last.byteLength !== bytes.byteLength) {
         throw new RpcCallError("PRECONDITION_FAILED", "revision id was reused", false);
       }
+      this.registry.set(docId, {
+        ...entry,
+        updatedAt: current.committedAt,
+        engineSchema: current.engineSchema,
+        sizeBytes: storedSize(current),
+      });
+      try {
+        await this.persistRegistry();
+      } catch (err) {
+        throw this.storageError("registry refresh", err);
+      }
       return currentMeta(current);
     }
     if (current.revisionId !== putMeta.baseRevisionId) {

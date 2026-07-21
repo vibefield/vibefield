@@ -29,6 +29,7 @@ async function api(): Promise<{ api: ProductApi; port: number }> {
   });
   // probe handlers on real registry methods: echo the caller's principal kind
   a.register("doc.list", (ctx) => ({ principal: ctx.principal, transport: ctx.transport }));
+  a.register("device.list", (ctx) => ({ principal: ctx.principal, transport: ctx.transport }));
   a.register("system.mintWindowToken", () => ({ never: true }));
   const port = await a.listen();
   cleanup.push(() => a.close());
@@ -90,14 +91,19 @@ describe("the tailnet door (C3 provenance auth)", () => {
     };
     expect(ack.result.grantedScopes).toEqual([...TAILNET_SCOPES]);
 
-    const probe = (await call(ws, 2, "doc.list", {})) as {
+    const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; login: string }; transport: string };
     };
     expect(probe.result.principal).toEqual({ kind: "tailnet", login: "me@jamesyong42.com" });
     expect(probe.result.transport).toBe("ws-tailnet");
 
+    const docDenied = (await call(ws, 3, "doc.list", {})) as {
+      error: { data: { kind: string } };
+    };
+    expect(docDenied.error.data.kind).toBe("FORBIDDEN_SCOPE");
+
     // D32: tokens.mint never federates — the preset excludes it
-    const denied = (await call(ws, 3, "system.mintWindowToken", {})) as {
+    const denied = (await call(ws, 4, "system.mintWindowToken", {})) as {
       error: { data: { kind: string } };
     };
     expect(denied.error.data.kind).toBe("FORBIDDEN_SCOPE");

@@ -28,7 +28,7 @@ async function api(forwarder = vi.fn()) {
     tailnetPathSecret: SECRET,
   });
   a.setDeviceRouting(() => OWN_ID, forwarder);
-  a.register("doc.list", (ctx, params) => ({ principal: ctx.principal, params }));
+  a.register("device.list", (ctx, params) => ({ principal: ctx.principal, params }));
   a.registerSubscription("device.subscribe", () => ({ snapshot: [], dispose: () => {} }));
   const port = await a.listen();
   cleanup.push(() => a.close());
@@ -76,7 +76,7 @@ describe("the peer-fieldd door branch (C5)", () => {
       result: { grantedScopes: string[] };
     };
     expect(ack.result.grantedScopes).toEqual([...TAILNET_SCOPES]); // a label, never an escalation
-    const probe = (await call(ws, 2, "doc.list", {})) as {
+    const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; deviceId: string } };
     };
     expect(probe.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-peer-a" });
@@ -91,7 +91,7 @@ describe("the peer-fieldd door branch (C5)", () => {
       "system.hello",
       hello({ deviceId: "dev-imposter", credential: "good-token" }),
     );
-    const probe = (await call(ws, 2, "doc.list", {})) as {
+    const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string } };
     };
     expect(probe.result.principal.kind).toBe("local-token"); // no identity theater locally
@@ -101,7 +101,7 @@ describe("the peer-fieldd door branch (C5)", () => {
     const { port } = await api();
     const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": "me@jamesyong42.com" });
     await call(ws, 1, "system.hello", hello({ clientKind: "ios", deviceId: "dev-sneaky" }));
-    const probe = (await call(ws, 2, "doc.list", {})) as {
+    const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string } };
     };
     expect(probe.result.principal.kind).toBe("tailnet");
@@ -114,13 +114,13 @@ describe("the device? routing hook (C5/D35)", () => {
     const { port } = await api(forwarder);
     const ws = await dial(port, "/");
     await call(ws, 1, "system.hello", hello({ credential: "good-token" }));
-    const res = (await call(ws, 2, "doc.list", { device: "dev-b" })) as {
+    const res = (await call(ws, 2, "device.list", { device: "dev-b" })) as {
       result: { docs: string[] };
     };
     expect(res.result.docs).toEqual(["remote-doc"]);
     expect(forwarder).toHaveBeenCalledWith(
       "dev-b",
-      "doc.list",
+      "device.list",
       { device: "dev-b" },
       expect.anything(),
     );
@@ -131,7 +131,7 @@ describe("the device? routing hook (C5/D35)", () => {
     const { port } = await api(forwarder);
     const ws = await dial(port, "/");
     await call(ws, 1, "system.hello", hello({ credential: "good-token" }));
-    const res = (await call(ws, 2, "doc.list", { device: OWN_ID, extra: 1 })) as {
+    const res = (await call(ws, 2, "device.list", { device: OWN_ID, extra: 1 })) as {
       result: { params: Record<string, unknown> };
     };
     expect(res.result.params).toEqual({ extra: 1 }); // device stripped, rest intact
@@ -145,12 +145,12 @@ describe("the device? routing hook (C5/D35)", () => {
       tokens: { verify: () => ({ tokenId: "t", scopes: [], label: "noscope" }) },
     });
     a.setDeviceRouting(() => OWN_ID, forwarder);
-    a.register("doc.list", () => ({}));
+    a.register("device.list", () => ({}));
     const port = await a.listen();
     cleanup.push(() => a.close());
     const ws = await dial(port, "/");
     await call(ws, 1, "system.hello", hello({ credential: "any" }));
-    const res = (await call(ws, 2, "doc.list", { device: "dev-b" })) as {
+    const res = (await call(ws, 2, "device.list", { device: "dev-b" })) as {
       error: { data: { kind: string } };
     };
     expect(res.error.data.kind).toBe("FORBIDDEN_SCOPE");
@@ -178,7 +178,7 @@ describe("the device? routing hook (C5/D35)", () => {
     const { port } = await api(forwarder);
     const ws = await dial(port, "/");
     await call(ws, 1, "system.hello", hello({ credential: "good-token" }));
-    const res = (await call(ws, 2, "doc.list", { device: "dev-b" })) as {
+    const res = (await call(ws, 2, "device.list", { device: "dev-b" })) as {
       error: { data: { kind: string; details: { device: string; state: string } } };
     };
     expect(res.error.data.kind).toBe("UNAVAILABLE");
