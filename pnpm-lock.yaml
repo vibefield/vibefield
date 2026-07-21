@@ -25,6 +25,12 @@ importers:
       '@vibefield/fieldd-client':
         specifier: workspace:*
         version: link:../../packages/fieldd-client
+      '@vibefield/plugin-note':
+        specifier: workspace:*
+        version: link:../../packages/plugins/note
+      '@vibefield/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../packages/plugin-runtime
       loro-crdt:
         specifier: ^1.13.6
         version: 1.13.7
@@ -140,6 +146,50 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)(lightningcss@1.32.0)(tsx@4.23.1)
+
+  packages/plugin-runtime:
+    dependencies:
+      '@vibefield/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@vibefield/fieldd-client':
+        specifier: workspace:*
+        version: link:../fieldd-client
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(lightningcss@1.32.0)(tsx@4.23.1)
+
+  packages/plugins/note:
+    dependencies:
+      '@vibecook/ice':
+        specifier: file:../../../../infinite-canvas-engine/packages/ice
+        version: file:../infinite-canvas-engine/packages/ice(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@vibefield/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../plugin-runtime
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
 
 packages:
 

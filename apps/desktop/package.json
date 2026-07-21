@@ -12,6 +12,7 @@
     "start": "pnpm build && electron .",
     "smoke": "pnpm build:shell && electron . --smoke",
     "spike:loro": "pnpm build && electron . --spike-loro",
+    "smoke:canvas": "pnpm build && electron . --smoke-canvas",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p renderer/tsconfig.json"
   },
   "dependencies": {
@@ -19,6 +20,8 @@
     "@vibecook/ice": "file:../../../infinite-canvas-engine/packages/ice",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/fieldd-client": "workspace:*",
+    "@vibefield/plugin-note": "workspace:*",
+    "@vibefield/plugin-runtime": "workspace:*",
     "loro-crdt": "^1.13.6",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

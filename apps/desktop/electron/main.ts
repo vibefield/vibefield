@@ -15,6 +15,7 @@ import { FielddClient } from "@vibefield/fieldd-client";
 const DEV = process.argv.includes("--dev");
 const SMOKE = process.argv.includes("--smoke");
 const SPIKE_LORO = process.argv.includes("--spike-loro");
+const SMOKE_CANVAS = process.argv.includes("--smoke-canvas");
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 
 // dist/main.cjs → apps/desktop; repo root two levels up (dev layout)
@@ -40,8 +41,26 @@ let mainWin: BrowserWindow | null = null;
 
 function dataRoot(): string {
   if (process.env["FIELDD_DATA_DIR"]) return process.env["FIELDD_DATA_DIR"];
-  if (SMOKE) return mkdtempSync(join(tmpdir(), "vf-smoke-"));
+  if (SMOKE || SMOKE_CANVAS) return mkdtempSync(join(tmpdir(), "vf-smoke-"));
   return join(app.getPath("appData"), "VibeField");
+}
+
+/** Resolve when a renderer console line starting with `prefix` arrives. */
+function waitForConsole(win: BrowserWindow, prefix: string, timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`no "${prefix}" within ${timeoutMs}ms`)), timeoutMs);
+    win.webContents.on("console-message", (...args: unknown[]) => {
+      for (const a of args) {
+        const text =
+          typeof a === "string" ? a : a && typeof a === "object" && "message" in a ? String((a as { message: unknown }).message) : "";
+        if (text.startsWith(prefix)) {
+          clearTimeout(t);
+          resolve(text.slice(prefix.length));
+          return;
+        }
+      }
+    });
+  });
 }
 
 /** A live fieldd answers on the port recorded in product.json with the token
@@ -133,10 +152,11 @@ async function loadRenderer(win: BrowserWindow): Promise<void> {
   throw new Error("vite dev server never came up");
 }
 
-async function createWindow(shell: Shell): Promise<void> {
+async function createWindow(shell: Shell, show = true): Promise<BrowserWindow> {
   const win = new BrowserWindow({
     width: 1180,
     height: 780,
+    show,
     title: "VibeField",
     backgroundColor: "#0b0d10",
     webPreferences: {
@@ -155,6 +175,7 @@ async function createWindow(shell: Shell): Promise<void> {
   });
   await loadRenderer(win);
   void shell; // window count is the shell's only per-window state so far
+  return win;
 }
 
 async function smoke(shell: Shell, root: string): Promise<void> {
@@ -244,6 +265,31 @@ async function main(): Promise<void> {
   shell.client.onStatusChange(() => {
     console.log(`[shell] fieldd link: ${shell.client.status}`);
   });
+
+  if (SMOKE_CANVAS) {
+    // full spine + real renderer, hidden: pass iff the canvas reports in
+    const win = await createWindow(shell, false);
+    try {
+      const raw = await waitForConsole(win, "CANVAS_READY ", 45_000);
+      console.log(`SMOKE_CANVAS ${raw}`);
+      shell.client.close();
+      fielddChild?.kill("SIGTERM");
+      if (shell.info.nativePid) {
+        try {
+          process.kill(shell.info.nativePid, "SIGTERM");
+        } catch {
+          /* already gone */
+        }
+      }
+      await sleep(300);
+      rmSync(root, { recursive: true, force: true });
+      app.exit(0);
+    } catch (e) {
+      console.error(`SMOKE_CANVAS failed: ${e instanceof Error ? e.message : e}`);
+      app.exit(2);
+    }
+    return;
+  }
 
   await createWindow(shell);
 }

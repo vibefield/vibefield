@@ -1,0 +1,27 @@
+{
+  "name": "@vibefield/plugin-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibefield/contracts": "workspace:*",
+    "@vibefield/fieldd-client": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.17",
+    "react": "^19.2.7",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
