@@ -142,6 +142,9 @@ export function MeshSection(): ReactElement {
                 <span className="flex flex-none items-center gap-1.5">
                   {d.capabilities.docHost && <span className={labelCls}>docs</span>}
                   <span className={labelCls}>{d.platform}</span>
+                  {/* C5 (D32): our link verdict to a peer — a muted text fact
+                      (mono lowercase), separate from the online dot. */}
+                  {!d.self && d.link !== undefined && <span className={labelCls}>{d.link}</span>}
                 </span>
               </div>
             ))

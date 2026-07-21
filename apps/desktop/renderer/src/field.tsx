@@ -501,8 +501,7 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
               ? "scale(0.992)"
               : "scale(1)",
           opacity: docState.phase === "loading" ? 0.72 : 1,
-          transition:
-            "transform 600ms var(--vf-ease-island), opacity 420ms var(--vf-ease-island)",
+          transition: "transform 600ms var(--vf-ease-island), opacity 420ms var(--vf-ease-island)",
         }}
       >
         <InfiniteCanvas

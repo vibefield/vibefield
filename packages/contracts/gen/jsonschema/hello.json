@@ -558,6 +558,9 @@
               "$ref": "#/definitions/PairingMac"
             }
           ]
+        },
+        "deviceId": {
+          "type": "string"
         }
       },
       "required": [

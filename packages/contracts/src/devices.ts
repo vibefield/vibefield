@@ -49,11 +49,13 @@ export type DeviceSlice = z.infer<typeof DeviceSlice>;
 
 /** The roster row: a slice fused with liveness. `online` derives from tailnet
  * peer state (self is always online); `lastSeenAt` = max(publishedAt, peer
- * last-seen) — honest without heartbeats. */
+ * last-seen) — honest without heartbeats. `link` is PeerLink's live verdict
+ * about OUR connection to the device (C5/D32) — absent when never dialed. */
 export const DeviceInfo = DeviceSlice.extend({
   self: z.boolean(),
   online: z.boolean(),
   lastSeenAt: z.number().int(),
+  link: z.enum(["connected", "dialing", "incompatible"]).optional(),
 }).passthrough();
 export type DeviceInfo = z.infer<typeof DeviceInfo>;
 

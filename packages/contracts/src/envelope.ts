@@ -42,6 +42,11 @@ export const Hello = z
     minCompatible: SemverString,
     clientKind: ClientKind,
     credential: z.union([z.string(), PairingMac]).optional(),
+    /** C5/D32 — the peer-fieldd identity CLAIM: honored ONLY on the tailnet
+     * door (provenance + WhoIs-verified same-user domain) and only as a LABEL —
+     * the grant stays the D32 preset either way, so the claim cannot escalate.
+     * Retires when the sidecar injects the node id (truffle petition). */
+    deviceId: z.string().optional(),
   })
   .passthrough();
 export type Hello = z.infer<typeof Hello>;

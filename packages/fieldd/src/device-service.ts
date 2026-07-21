@@ -38,17 +38,26 @@ interface PeerLiveness {
   lastSeen?: number;
 }
 
+/** The PeerLink surface DeviceService folds into the roster (C5/D32): the live
+ * per-device link verdict plus a change signal to re-emit on. Kept structural
+ * so DeviceService never imports PeerLink (the daemon owns that wiring). */
+interface PeerLinkView {
+  linkState(deviceId: string): "connected" | "dialing" | "incompatible" | undefined;
+  on(event: "link-changed", fn: (ev: unknown) => void): unknown;
+}
+
 export class DeviceService extends EventEmitter {
   private readonly now: () => number;
   /** the mesh identity once known (D30); the persisted local id until then */
   private deviceId: string;
-  private meshIdentity = false;
   private slices = new Map<string, DeviceSlice>();
   private peerLiveness = new Map<string, PeerLiveness>();
   private storeSubscribed = false;
   private lastRosterSig = "";
   /** syncs SERIALIZE (the MeshClient chain law): each pass sees its trigger's state */
   private chain: Promise<void> = Promise.resolve();
+  /** C5/D32 — wired post-construction (PeerLink is built after DeviceService) */
+  private peers?: PeerLinkView;
   private disposed = false;
 
   constructor(private readonly opts: DeviceServiceOptions) {
@@ -68,6 +77,22 @@ export class DeviceService extends EventEmitter {
     const run = this.chain.then(() => this.doSync());
     this.chain = run.catch(() => {});
     return run;
+  }
+
+  /** The current identity — the mesh device id once known, the persisted local
+   * fallback until then (C5: PeerLink's own-id + the `device?` self check). */
+  currentDeviceId(): string {
+    return this.deviceId;
+  }
+
+  /** C5/D32 — fold PeerLink's live link verdict into the roster. The daemon
+   * wires this after construction (PeerLink is built later, and owns the
+   * own-id + endpoint sources). Each "link-changed" re-emits the roster so a
+   * link transition wakes device.subscribe — the roster tells the truth about
+   * reachability. */
+  attachPeerLink(peers: PeerLinkView): void {
+    this.peers = peers;
+    peers.on("link-changed", () => this.emitRoster());
   }
 
   list(): DeviceInfo[] {
@@ -91,8 +116,7 @@ export class DeviceService extends EventEmitter {
       // Identity first (D30): the store's own device id IS the mesh identity.
       const self = (await this.opts.mesh.getSlice(STORES.DEVICES)) as { deviceId?: unknown };
       if (typeof self.deviceId === "string" && self.deviceId.length > 0) {
-        this.deviceId = self.deviceId;
-        this.meshIdentity = true;
+        this.deviceId = self.deviceId; // the mesh identity supersedes the local fallback (D30)
       }
       if (!this.storeSubscribed) {
         const snapshot = await this.opts.mesh.subscribeStore(STORES.DEVICES, (payload, kind) =>
@@ -185,11 +209,14 @@ export class DeviceService extends EventEmitter {
     for (const [deviceId, slice] of this.slices) {
       const self = deviceId === this.deviceId;
       const live = this.peerLiveness.get(deviceId);
+      // link is OUR verdict about the connection to a peer — never self (C5/D32)
+      const link = self ? undefined : this.peers?.linkState(deviceId);
       out.push({
         ...slice,
         self,
         online: self ? true : (live?.online ?? false),
         lastSeenAt: Math.max(slice.publishedAt, live?.lastSeen ?? 0),
+        ...(link !== undefined ? { link } : {}),
       });
       seen.add(deviceId);
     }
@@ -206,7 +233,14 @@ export class DeviceService extends EventEmitter {
     // publishedAt/lastSeenAt churn on every self-slice rebuild — signature the
     // stable facts so subscribers only wake on real roster changes.
     const sig = JSON.stringify(
-      roster.map((d) => [d.deviceId, d.name, d.online, d.self, d.productEndpoint?.url ?? null]),
+      roster.map((d) => [
+        d.deviceId,
+        d.name,
+        d.online,
+        d.self,
+        d.productEndpoint?.url ?? null,
+        d.link ?? null,
+      ]),
     );
     if (sig === this.lastRosterSig) return;
     this.lastRosterSig = sig;

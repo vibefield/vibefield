@@ -45,8 +45,13 @@ export type FielddClientStatus =
 
 export interface FielddClientOptions {
   url: string; // e.g. ws://127.0.0.1:9410
+  /** empty string = no credential in hello (C5: peer dials ride the tailnet
+   * door's WhoIs grant — a token would be wrong there, not just absent) */
   token: string;
   clientKind?: ClientKind;
+  /** C5/D32 — the peer-fieldd identity claim, sent in hello (label only;
+   * honored solely on a tailnet door — see contracts Hello.deviceId) */
+  deviceId?: string;
   webSocket?: WsCtor; // override for tests / exotic hosts
   maxBackoffMs?: number;
 }
@@ -194,7 +199,8 @@ export class FielddClient {
         contractsVersion: CONTRACTS_VERSION,
         minCompatible: CONTRACTS_VERSION,
         clientKind: this.opts.clientKind ?? "renderer",
-        credential: this.opts.token,
+        ...(this.opts.token !== "" ? { credential: this.opts.token } : {}),
+        ...(this.opts.deviceId !== undefined ? { deviceId: this.opts.deviceId } : {}),
       })) as { grantedScopes?: string[] };
       if (this.ws !== ws) return; // superseded by a newer dial while awaiting
       this.grantedScopes = ack.grantedScopes ?? [];

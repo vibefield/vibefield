@@ -15,11 +15,13 @@ import {
   SCOPES,
   type Scope,
 } from "@vibefield/contracts";
+import type { WsCtor } from "@vibefield/fieldd-client";
 import { DeviceService } from "./device-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
 import { MeshClient } from "./mesh-client";
 import { NativeLink, RpcCallError } from "./native-link";
+import { PeerLink } from "./peer-link";
 import { ProductApi } from "./product-api";
 import { TokenService } from "./token-service";
 
@@ -44,6 +46,9 @@ export interface FielddConfig {
   allowedOrigins?: string[];
   /** invoked when this fieldd must die (e.g. superseded by a newer boot) */
   onFatal?: (reason: string) => void;
+  /** C5 test seam: the ws-ctor PeerLink dials peers with (tests inject a
+   * sidecar-simulating wrapper — secret path + identity headers). */
+  peerWebSocket?: WsCtor;
   /** pid of a field-native the caller spawned (recorded in product.json for cleanup tooling) */
   nativePid?: number;
 }
@@ -69,6 +74,7 @@ export interface FielddDaemon {
   mesh: MeshClient;
   docs: DocumentService;
   devices: DeviceService;
+  peers: PeerLink;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
   health(): FielddHealth;
@@ -266,6 +272,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return { snapshot: devices.list(), dispose: () => devices.off("changed", fn) };
     });
 
+    // -- PeerLink (C5, design-04 D32): the device?-routing substrate --
+    const peers = new PeerLink({
+      ownDeviceId: () => devices.currentDeviceId(),
+      // endpoint truth = the peer's slice (the store, via the parsed roster)
+      endpointFor: (deviceId) => devices.get(deviceId)?.productEndpoint?.url,
+      ...(config.peerWebSocket !== undefined ? { webSocket: config.peerWebSocket } : {}),
+    });
+    api.setDeviceRouting(
+      () => devices.currentDeviceId(),
+      (device, method, params) => peers.request(device, method, params),
+    );
+    devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
+
     // SUPERSEDED = another fieldd owns the native plane now; this one is done.
     // The flag also closes the small gap where takeover happens before this
     // listener is attached or while ProductApi is still binding its port.
@@ -276,6 +295,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       api.close();
       docLane.close();
       docs.dispose();
+      peers.dispose();
       devices.dispose();
       native.close();
       config.onFatal?.(fatalReason);
@@ -349,6 +369,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       mesh,
       docs,
       devices,
+      peers,
       shellToken: shellGrant.token,
       health,
       nativeHealth: () => latestHealth,
@@ -356,6 +377,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         api.close();
         docLane.close();
         docs.dispose();
+        peers.dispose();
         devices.dispose();
         native.close();
         // a superseding fieldd rewrites these for the same dataDir — never

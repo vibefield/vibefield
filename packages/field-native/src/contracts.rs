@@ -431,6 +431,9 @@ impl ::std::convert::TryFrom<::std::string::String> for ErrorKind {
 #[doc = "        }"]
 #[doc = "      ]"]
 #[doc = "    },"]
+#[doc = "    \"deviceId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"minCompatible\": {"]
 #[doc = "      \"$ref\": \"#/definitions/SemverString\""]
 #[doc = "    }"]
@@ -447,6 +450,12 @@ pub struct Hello {
     pub contracts_version: SemverString,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub credential: ::std::option::Option<HelloCredential>,
+    #[serde(
+        rename = "deviceId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub device_id: ::std::option::Option<::std::string::String>,
     #[serde(rename = "minCompatible")]
     pub min_compatible: SemverString,
 }
@@ -2134,6 +2143,10 @@ pub mod builder {
             ::std::option::Option<super::HelloCredential>,
             ::std::string::String,
         >,
+        device_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         min_compatible: ::std::result::Result<super::SemverString, ::std::string::String>,
     }
     impl ::std::default::Default for Hello {
@@ -2142,6 +2155,7 @@ pub mod builder {
                 client_kind: Err("no value supplied for client_kind".to_string()),
                 contracts_version: Err("no value supplied for contracts_version".to_string()),
                 credential: Ok(Default::default()),
+                device_id: Ok(Default::default()),
                 min_compatible: Err("no value supplied for min_compatible".to_string()),
             }
         }
@@ -2177,6 +2191,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for credential: {e}"));
             self
         }
+        pub fn device_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_id: {e}"));
+            self
+        }
         pub fn min_compatible<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<super::SemverString>,
@@ -2195,6 +2219,7 @@ pub mod builder {
                 client_kind: value.client_kind?,
                 contracts_version: value.contracts_version?,
                 credential: value.credential?,
+                device_id: value.device_id?,
                 min_compatible: value.min_compatible?,
             })
         }
@@ -2205,6 +2230,7 @@ pub mod builder {
                 client_kind: Ok(value.client_kind),
                 contracts_version: Ok(value.contracts_version),
                 credential: Ok(value.credential),
+                device_id: Ok(value.device_id),
                 min_compatible: Ok(value.min_compatible),
             }
         }

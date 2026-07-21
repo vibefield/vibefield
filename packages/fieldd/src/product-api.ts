@@ -55,6 +55,13 @@ export interface ProductApiOptions {
   tailnetPathSecret?: string;
 }
 
+export type DeviceForwarder = (
+  device: string,
+  method: string,
+  params: unknown,
+  ctx: CallerContext,
+) => Promise<unknown>;
+
 /** The slice of TokenService the API needs (keeps the dependency one-way). */
 export interface TokenServiceLike {
   verify(token: string): { tokenId: string; scopes: Scope[]; label: string } | null;
@@ -78,9 +85,22 @@ export class ProductApi extends EventEmitter {
   private handlers = new Map<string, Handler>();
   private subHandlers = new Map<string, SubscriptionHandler>();
   private nextSubId = 1;
+  private ownDeviceId: (() => string) | null = null;
+  private forwarder: DeviceForwarder | null = null;
 
   constructor(private readonly opts: ProductApiOptions) {
     super();
+  }
+
+  /** C5/D35 — arm the `device?` routing pair (set post-construction: PeerLink
+   * and DeviceService are built after the api). A call whose params carry a
+   * foreign `device` forwards WHOLE over PeerLink — the LOCAL scope check runs
+   * first, so local restrictions never launder through a peer; the remote end
+   * enforces its own. `device` = own id strips and serves locally. Un-armed ⇒
+   * `device` is inert extra params (tolerant reader). */
+  setDeviceRouting(ownDeviceId: () => string, forwarder: DeviceForwarder): void {
+    this.ownDeviceId = ownDeviceId;
+    this.forwarder = forwarder;
   }
 
   register(method: string, handler: Handler): void {
@@ -239,11 +259,20 @@ export class ProductApi extends EventEmitter {
       } else if (state.tailnetLogin !== null) {
         // the sidecar-proxied door: identity is the WhoIs-verified login; the
         // grant is the D32 tailnet preset (design-04 — tokens.mint/native.*/
-        // push.manage/plugins.manage never federate)
+        // push.manage/plugins.manage never federate). A peer fieldd may CLAIM
+        // its deviceId (C5) — a label inside the same-user trust domain, same
+        // grant either way, so it cannot escalate; honored ONLY here (the
+        // provenance-proven door), never on the local path. Retires when the
+        // sidecar injects the node id (truffle petition).
+        const claim = parsed.data.deviceId;
+        const peer =
+          parsed.data.clientKind === "peer-fieldd" && typeof claim === "string" && claim.length > 0;
         state.authed = true;
         state.scopes = [...TAILNET_SCOPES];
         state.ctx = {
-          principal: { kind: "tailnet", login: state.tailnetLogin },
+          principal: peer
+            ? { kind: "peer-fieldd", deviceId: claim as string }
+            : { kind: "tailnet", login: state.tailnetLogin },
           transport: "ws-tailnet",
           receivedAt: Date.now(),
         };
@@ -299,30 +328,32 @@ export class ProductApi extends EventEmitter {
       }
     }
     try {
-      if (subHandler) {
-        const subId = `ps-${this.nextSubId++}`;
-        const base = method.replace(/\.subscribe$/, "");
-        let active = true;
-        const emit = (payload: unknown) => {
-          if (active && ws.readyState === WS_OPEN)
-            ws.send(
-              JSON.stringify({
-                jsonrpc: "2.0",
-                method: `${base}.delta`,
-                params: { subId, payload },
+      // C5/D35 — the `device?` convention: route AFTER the local scope check
+      // (above), BEFORE execution. Own id strips and serves locally; a foreign
+      // id forwards whole; a device on a subscription refuses (federated
+      // subscriptions are P2).
+      const device = (params as { device?: unknown } | null | undefined)?.device;
+      const forwarder = this.forwarder;
+      if (typeof device === "string" && forwarder !== null) {
+        if (device !== this.ownDeviceId?.()) {
+          if (def.subscription) {
+            reply(
+              this.err(id, "PRECONDITION_FAILED", "federated subscriptions are P2", false, {
+                device,
               }),
             );
-        };
-        const { snapshot, dispose } = subHandler(state.ctx, params, emit);
-        state.subs.set(subId, () => {
-          active = false;
-          dispose();
-        });
-        reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
+            return;
+          }
+          const result = await forwarder(device, method, params, state.ctx);
+          reply({ jsonrpc: "2.0", id, result });
+          return;
+        }
+        // device === self: strip the routing key, serve locally
+        const { device: _self, ...rest } = params as Record<string, unknown>;
+        await this.execute(ws, state, id, method, rest, handler, subHandler, reply);
         return;
       }
-      const result = await handler!(state.ctx, params);
-      reply({ jsonrpc: "2.0", id, result });
+      await this.execute(ws, state, id, method, params, handler, subHandler, reply);
     } catch (e) {
       if (e instanceof RpcCallError) {
         reply(this.err(id, e.kind as ErrorKind, e.message, e.retryable, e.details));
@@ -330,6 +361,47 @@ export class ProductApi extends EventEmitter {
         reply(this.err(id, "INTERNAL", e instanceof Error ? e.message : "internal error", false));
       }
     }
+  }
+
+  /** The execution tail (subscription install / handler call), shared by the
+   * direct path and the device-stripped self path. Throws propagate to
+   * onMessage's error mapping. */
+  private async execute(
+    ws: WebSocket,
+    state: ConnState,
+    id: unknown,
+    method: string,
+    params: unknown,
+    handler: Handler | undefined,
+    subHandler: SubscriptionHandler | undefined,
+    reply: (v: unknown) => void,
+  ): Promise<void> {
+    const ctx = state.ctx;
+    if (!ctx) return; // unreachable past the authed gate; keeps the type honest
+    if (subHandler) {
+      const subId = `ps-${this.nextSubId++}`;
+      const base = method.replace(/\.subscribe$/, "");
+      let active = true;
+      const emit = (payload: unknown) => {
+        if (active && ws.readyState === WS_OPEN)
+          ws.send(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              method: `${base}.delta`,
+              params: { subId, payload },
+            }),
+          );
+      };
+      const { snapshot, dispose } = subHandler(ctx, params, emit);
+      state.subs.set(subId, () => {
+        active = false;
+        dispose();
+      });
+      reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
+      return;
+    }
+    const result = await handler!(ctx, params);
+    reply({ jsonrpc: "2.0", id, result });
   }
 
   private err(
