@@ -22,8 +22,9 @@ import { RpcCallError } from "./native-link";
 // an unauthenticated socket is not held past HELLO_TIMEOUT_MS. Frames are the
 // shared D5 codec (contracts/doclane); the tolerant reader ignores unknown kinds.
 //
-// Per socket the protocol is strictly one doc: HELLO → HELLO_OK, then GET → DOC,
-// and PUT_META+PUT → PUT_OK cycles (autosave). The single-writer lock lives in
+// Per socket the protocol is strictly one doc: HELLO → HELLO_OK, then GET → DOC
+// plus the advertised number of DOC_UPDATE frames, and PUT_META+PUT → PUT_OK
+// cycles (autosave). The single-writer lock lives in
 // DocumentService — the lane only reports it (LaneErr PRECONDITION_FAILED).
 
 const WS_OPEN = 1;
@@ -176,11 +177,11 @@ export class DocLane {
     conn.docId = redeemed.docId;
     this.opts.docs.writerAttached(redeemed.docId);
 
-    const read = await this.opts.docs.readDoc(redeemed.docId);
+    const meta = await this.opts.docs.readDocMeta(redeemed.docId);
     const helloOk: LaneHelloOk = {
       docId: redeemed.docId,
-      hasDoc: read !== null,
-      ...(read ? { meta: read.meta } : {}),
+      hasDoc: meta !== null,
+      ...(meta ? { meta } : {}),
     };
     this.sendFrame(ws, encodeJsonFrame(LANE_FRAME.HELLO_OK, 0, helloOk));
   }
@@ -192,6 +193,9 @@ export class DocLane {
       return;
     }
     this.sendFrame(ws, encodeLaneFrame(LANE_FRAME.DOC, 0, read.bytes));
+    for (const update of read.updates) {
+      this.sendFrame(ws, encodeLaneFrame(LANE_FRAME.DOC_UPDATE, 0, update));
+    }
   }
 
   private onPutMeta(ws: WebSocket, conn: LaneConn, payload: Uint8Array): void {
@@ -219,8 +223,8 @@ export class DocLane {
     }
     try {
       // conn.docId is non-null here: dispatch only reaches PUT once authenticated
-      const written = await this.opts.docs.writeDoc(conn.docId as string, payload, meta);
-      const ok: LanePutOk = { revisionId: meta.revisionId, byteLength: written.byteLength };
+      await this.opts.docs.writeDoc(conn.docId as string, payload, meta);
+      const ok: LanePutOk = { revisionId: meta.revisionId, byteLength: meta.byteLength };
       this.sendFrame(ws, encodeJsonFrame(LANE_FRAME.PUT_OK, 0, ok));
     } catch (e) {
       if (e instanceof RpcCallError) this.sendErr(ws, e.kind as ErrorKind, e.message);

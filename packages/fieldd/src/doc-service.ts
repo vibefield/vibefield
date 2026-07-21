@@ -5,7 +5,7 @@ import {
   readFileSync,
   renameSync,
 } from "node:fs";
-import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
   DocMeta,
@@ -17,10 +17,10 @@ import {
 import { RpcCallError } from "./native-link";
 
 // DocumentService (design-02 §3.5, B3 shape A): fieldd owns the board's at-rest
-// bytes and NOTHING about their meaning. A doc is an OPAQUE ICE1 envelope stored
-// as docs/{docId}/snapshot.ice1 + meta.json; the field.docs.v1 registry is the
-// catalog. fieldd never decodes the envelope (the renderer is the live truth) —
-// the only inspection is the cheap ICE1 magic gate. Bytes ride the :9411 lane,
+// bytes and NOTHING about their meaning. A doc is an OPAQUE ICE1 checkpoint plus
+// zero or more opaque Loro update records; the field.docs.v1 registry is the
+// catalog. fieldd never decodes either payload (the renderer is the live truth) —
+// the only inspection is the cheap ICE1 checkpoint magic gate. Bytes ride the :9411 lane,
 // never JSON-RPC (EL2); doc.open mints the one-shot ticket that gates it.
 //
 // Durability is the whole point (P0 exit criterion — the board survives restarts):
@@ -66,6 +66,15 @@ interface CurrentRevision extends DocMeta {
   revisionId: string;
   file: string;
   committedAt: number;
+  updates: JournalRevision[];
+}
+
+interface JournalRevision {
+  revisionId: string;
+  file: string;
+  committedAt: number;
+  savedAt: number;
+  byteLength: number;
 }
 
 export class DocumentService {
@@ -186,7 +195,23 @@ export class DocumentService {
 
   // ---- payload ----
 
-  async readDoc(docId: string): Promise<{ bytes: Uint8Array; meta: DocMeta } | null> {
+  async readDocMeta(docId: string): Promise<DocMeta | null> {
+    try {
+      const current = await this.readCurrent(docId);
+      if (current !== null) return currentMeta(current);
+      const legacy = this.snapshotPath(docId);
+      if (!existsSync(legacy)) return null;
+      const info = await stat(legacy);
+      return { ...this.readMeta(docId, info.size), journalEntries: 0 };
+    } catch (err) {
+      if (err instanceof RpcCallError) throw err;
+      throw this.storageError("inspect", err);
+    }
+  }
+
+  async readDoc(
+    docId: string,
+  ): Promise<{ bytes: Uint8Array; updates: Uint8Array[]; meta: DocMeta } | null> {
     try {
       const current = await this.readCurrent(docId);
       if (current !== null) {
@@ -198,12 +223,29 @@ export class DocumentService {
             false,
           );
         }
-        return { bytes, meta: current };
+        const updates = await Promise.all(
+          current.updates.map(async (update) => {
+            const updateBytes = await readFile(join(this.revisionsDir(docId), update.file));
+            if (updateBytes.byteLength !== update.byteLength) {
+              throw new RpcCallError(
+                "INTERNAL",
+                `journal revision ${update.revisionId} length ${updateBytes.byteLength} does not match manifest ${update.byteLength}`,
+                false,
+              );
+            }
+            return new Uint8Array(updateBytes);
+          }),
+        );
+        return { bytes, updates, meta: currentMeta(current) };
       }
       const legacy = this.snapshotPath(docId);
       if (!existsSync(legacy)) return null;
       const bytes = await readFile(legacy);
-      return { bytes, meta: this.readMeta(docId, bytes.byteLength) };
+      return {
+        bytes,
+        updates: [],
+        meta: { ...this.readMeta(docId, bytes.byteLength), journalEntries: 0 },
+      };
     } catch (err) {
       if (err instanceof RpcCallError) throw err;
       throw this.storageError("read", err);
@@ -240,6 +282,9 @@ export class DocumentService {
         `doc payload ${bytes.byteLength} exceeds lane ceiling ${LANE_MAX_FRAME_BYTES}`,
         false,
       );
+    if ((putMeta.kind ?? "checkpoint") === "update") {
+      return this.writeUpdateNow(entry, bytes, putMeta);
+    }
     if (!hasIce1Magic(bytes))
       throw new RpcCallError("PRECONDITION_FAILED", "payload is not an ICE1 envelope", false);
 
@@ -252,6 +297,7 @@ export class DocumentService {
       savedAt: putMeta.savedAt,
       byteLength: bytes.byteLength,
       baseEpoch: entry.baseEpoch,
+      updates: [],
     };
     const dir = join(this.docsDir, docId);
     const revisions = this.revisionsDir(docId);
@@ -285,15 +331,89 @@ export class DocumentService {
       // derived registry; report failure now so the writer retries its ACK.
       throw this.storageError("registry refresh", err);
     }
-    if (previous !== null && previous.revisionId !== revisionId) {
-      void rm(join(revisions, previous.file), { force: true }).catch((err) =>
-        console.warn(`[doc-service] old revision cleanup failed for ${docId}: ${errMsg(err)}`),
-      );
+    if (previous !== null) {
+      const obsolete = [previous.file, ...previous.updates.map((update) => update.file)];
+      for (const file of obsolete) {
+        if (file === meta.file) continue;
+        void rm(join(revisions, file), { force: true }).catch((err) =>
+          console.warn(`[doc-service] old revision cleanup failed for ${docId}: ${errMsg(err)}`),
+        );
+      }
     }
     // Legacy files are no longer authoritative after current.json commits.
     void rm(this.snapshotPath(docId), { force: true }).catch(() => {});
     void rm(join(dir, "meta.json"), { force: true }).catch(() => {});
     return meta;
+  }
+
+  private async writeUpdateNow(
+    entry: DocRegistryEntry,
+    bytes: Uint8Array,
+    putMeta: LanePutMeta,
+  ): Promise<DocMeta> {
+    const docId = entry.docId;
+    if (bytes.byteLength === 0) {
+      throw new RpcCallError("PRECONDITION_FAILED", "journal update must not be empty", false);
+    }
+    if (putMeta.baseRevisionId === undefined) {
+      throw new RpcCallError("PRECONDITION_FAILED", "journal update needs baseRevisionId", false);
+    }
+    const current = await this.readCurrent(docId);
+    if (current === null) {
+      throw new RpcCallError("PRECONDITION_FAILED", "journal update needs a checkpoint", false);
+    }
+    if (current.revisionId === putMeta.revisionId) {
+      const last = current.updates.at(-1);
+      if (last?.revisionId !== putMeta.revisionId || last.byteLength !== bytes.byteLength) {
+        throw new RpcCallError("PRECONDITION_FAILED", "revision id was reused", false);
+      }
+      return currentMeta(current);
+    }
+    if (current.revisionId !== putMeta.baseRevisionId) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `journal base ${putMeta.baseRevisionId} is not current revision ${current.revisionId}`,
+        false,
+      );
+    }
+
+    const committedAt = this.now();
+    const update: JournalRevision = {
+      revisionId: putMeta.revisionId,
+      file: `${putMeta.revisionId}.loro`,
+      committedAt,
+      savedAt: putMeta.savedAt,
+      byteLength: bytes.byteLength,
+    };
+    const next: CurrentRevision = {
+      ...current,
+      revisionId: putMeta.revisionId,
+      committedAt,
+      engineSchema: putMeta.engineSchema,
+      savedAt: putMeta.savedAt,
+      updates: [...current.updates, update],
+    };
+    const dir = join(this.docsDir, docId);
+    const revisions = this.revisionsDir(docId);
+    try {
+      await atomicWrite(revisions, update.file, bytes);
+      await atomicWrite(dir, "current.json", `${JSON.stringify(next, null, 2)}\n`);
+    } catch (err) {
+      throw this.storageError("append", err);
+    }
+
+    this.registry.set(docId, {
+      ...entry,
+      updatedAt: committedAt,
+      engineSchema: putMeta.engineSchema,
+      sizeBytes: storedSize(next),
+    });
+    try {
+      await this.persistRegistry();
+    } catch (err) {
+      throw this.storageError("registry refresh", err);
+    }
+    return currentMeta(next);
   }
 
   // ---- health / lifecycle ----
@@ -378,13 +498,13 @@ export class DocumentService {
         if (
           entry.updatedAt !== current.committedAt ||
           entry.engineSchema !== current.engineSchema ||
-          entry.sizeBytes !== current.byteLength
+          entry.sizeBytes !== storedSize(current)
         ) {
           this.registry.set(docId, {
             ...entry,
             updatedAt: current.committedAt,
             engineSchema: current.engineSchema,
-            sizeBytes: current.byteLength,
+            sizeBytes: storedSize(current),
           });
           changed = true;
         }
@@ -484,13 +604,70 @@ function parseCurrentRevision(value: unknown, docId: string): CurrentRevision {
     !meta.success ||
     typeof revisionId !== "string" ||
     !/^[0-9a-f-]{36}$/i.test(revisionId) ||
-    file !== `${revisionId}.ice1` ||
+    typeof file !== "string" ||
+    !/^[0-9a-f-]{36}\.ice1$/i.test(file) ||
     !Number.isSafeInteger(committedAt) ||
     (committedAt as number) < 0
   ) {
     throw new Error(`current revision for ${docId} is malformed`);
   }
-  return { ...meta.data, revisionId, file, committedAt: committedAt as number };
+  const rawUpdates = record["updates"] ?? [];
+  if (!Array.isArray(rawUpdates)) {
+    throw new Error(`current revision journal for ${docId} is malformed`);
+  }
+  const updates: JournalRevision[] = rawUpdates.map((value) => {
+    if (value === null || typeof value !== "object") {
+      throw new Error(`current revision journal for ${docId} is malformed`);
+    }
+    const item = value as Record<string, unknown>;
+    const updateRevisionId = item["revisionId"];
+    const updateFile = item["file"];
+    const updateCommittedAt = item["committedAt"];
+    const savedAt = item["savedAt"];
+    const byteLength = item["byteLength"];
+    if (
+      typeof updateRevisionId !== "string" ||
+      !/^[0-9a-f-]{36}$/i.test(updateRevisionId) ||
+      updateFile !== `${updateRevisionId}.loro` ||
+      !Number.isSafeInteger(updateCommittedAt) ||
+      !Number.isSafeInteger(savedAt) ||
+      !Number.isSafeInteger(byteLength) ||
+      (updateCommittedAt as number) < 0 ||
+      (savedAt as number) < 0 ||
+      (byteLength as number) <= 0
+    ) {
+      throw new Error(`current revision journal for ${docId} is malformed`);
+    }
+    return {
+      revisionId: updateRevisionId,
+      file: updateFile as string,
+      committedAt: updateCommittedAt as number,
+      savedAt: savedAt as number,
+      byteLength: byteLength as number,
+    };
+  });
+  return {
+    ...meta.data,
+    revisionId,
+    file,
+    committedAt: committedAt as number,
+    updates,
+  };
+}
+
+function currentMeta(current: CurrentRevision): DocMeta {
+  return {
+    revisionId: current.revisionId,
+    engineSchema: current.engineSchema,
+    savedAt: current.savedAt,
+    byteLength: current.byteLength,
+    baseEpoch: current.baseEpoch,
+    journalEntries: current.updates.length,
+  };
+}
+
+function storedSize(current: CurrentRevision): number {
+  return current.byteLength + current.updates.reduce((total, update) => total + update.byteLength, 0);
 }
 
 function errMsg(e: unknown): string {

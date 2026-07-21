@@ -7,7 +7,8 @@
 // laneId is 0 throughout B3 (single doc per socket); multiplexing arrives with the
 // DocumentHost upgrade. Control payloads (HELLO/HELLO_OK/PUT_META/PUT_OK/ERR) are
 // UTF-8 JSON validated by the zod shapes in docs.ts; DOC/PUT payloads are raw ICE1
-// envelope bytes fieldd never decodes. Single-frame envelopes in P0 — the 256KB
+// envelopes and DOC_UPDATE/PUT update payloads are opaque Loro bytes fieldd never
+// decodes. Single-frame records in P0 — the 256KB
 // chunker lands with new frame kinds when a board outgrows LANE_MAX_FRAME_BYTES.
 
 export const LANE_FRAME = {
@@ -19,6 +20,7 @@ export const LANE_FRAME = {
   PUT: 6,
   PUT_OK: 7,
   ERR: 8,
+  DOC_UPDATE: 9,
 } as const;
 export type LaneFrameKind = (typeof LANE_FRAME)[keyof typeof LANE_FRAME];
 

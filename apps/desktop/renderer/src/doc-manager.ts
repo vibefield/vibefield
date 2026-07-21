@@ -30,6 +30,7 @@ export interface DocSessionPending {
   /** null ⇒ persistence detached (degraded boot) — in-memory board. */
   lane: DocLaneClient | null;
   initialBytes: Uint8Array | null;
+  initialUpdates: Uint8Array[];
   /** true only for the bootstrap default doc: seed the demo scene. */
   seed: boolean;
 }
@@ -331,6 +332,7 @@ export class DocManager {
     await Promise.allSettled(this.drains.splice(0));
     let lane: DocLaneClient | null = null;
     let initialBytes: Uint8Array | null = null;
+    let initialUpdates: Uint8Array[] = [];
     this.stage(0.25, "fetching board");
     for (let attempt = 0; ; attempt++) {
       const candidate = new DocLaneClient({
@@ -339,7 +341,7 @@ export class DocManager {
         opTimeoutMs: timeoutMs,
       });
       try {
-        ({ initialBytes } = await candidate.attachSnapshot());
+        ({ initialBytes, initialUpdates } = await candidate.attachSnapshot());
         lane = candidate;
         break;
       } catch (e) {
@@ -357,6 +359,7 @@ export class DocManager {
       name: entry.name,
       lane,
       initialBytes,
+      initialUpdates,
       // a doc that already has bytes never re-seeds, whatever the caller thinks
       seed: seed && initialBytes === null,
     });
@@ -379,6 +382,7 @@ export class DocManager {
       name: DEFAULT_DOC_NAME,
       lane: null,
       initialBytes: null,
+      initialUpdates: [],
       seed: true,
     });
     setBoardStatus({ state: "detached", detail });

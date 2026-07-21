@@ -191,6 +191,18 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
         manager.contentApplied(pending.generation);
         return () => ce.docs.close();
       }
+      try {
+        for (const update of pending.initialUpdates) res.session.applyRemote(update);
+      } catch (error) {
+        ce.docs.close();
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error(`[board] journal quarantined: ${detail}`);
+        setBoardStatus({ state: "quarantined", detail });
+        ce.docs.create();
+        ce.world.sync();
+        manager.contentApplied(pending.generation);
+        return () => ce.docs.close();
+      }
       ce.world.sync();
     } else {
       const session = ce.docs.create();
@@ -207,24 +219,28 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
     // Autosave starts DIRTY (ice law): a seeded first-run board reaches fieldd
     // after the first debounce, no user edit required. Lane status → board row
     // wiring lives in the manager now (it owns lane lifecycles).
-    const autosave = ce.docs.autosave({
-      put: async (bytes) => {
+    const persist = async (
+      kind: "checkpoint" | "update",
+      bytes: Uint8Array,
+    ): Promise<void> => {
         const savedAt = Date.now();
         // Capture only durable structural state, synchronously, while this
         // engine is still alive. Rendering/encoding happens later in a worker.
         const thumbnailScene = captureDocThumbnailScene(ce);
         setBoardStatus({ state: "saving", lastSavedAt: lane.lastPutAt });
-        const receipt = await lane.put(bytes, {
-          engineSchema: ENGINE_SCHEMA_VERSION,
-          savedAt,
-        });
+        const receipt = await (kind === "checkpoint"
+          ? lane.put(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt })
+          : lane.putUpdate(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt }));
         manager.thumbnailCheckpoint(
           pending.docId,
           receipt.revisionId,
           thumbnailScene,
         );
         setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
-      },
+    };
+    const autosave = ce.docs.autosave({
+      put: (bytes) => persist("checkpoint", bytes),
+      append: (bytes) => persist("update", bytes),
     });
     const unregisterPersistence = manager.registerPersistence(pending.generation, {
       flush: () => autosave.flush(),

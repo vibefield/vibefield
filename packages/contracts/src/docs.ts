@@ -64,6 +64,8 @@ export const DocMeta = z
       baseEpoch: z.number().int(),
       /** Exact durable revision acknowledged by fieldd; absent on legacy snapshots. */
       revisionId: z.string().uuid().optional(),
+      /** Opaque incremental records following the checkpoint on GET. */
+      journalEntries: z.number().int().nonnegative().optional(),
   })
   .passthrough();
 export type DocMeta = z.infer<typeof DocMeta>;
@@ -88,6 +90,9 @@ export type LaneHelloOk = z.infer<typeof LaneHelloOk>;
 export const LanePutMeta = z
   .object({
     revisionId: z.string().uuid(),
+    kind: z.enum(["checkpoint", "update"]).optional(),
+    /** Required for updates: exact current revision the update extends. */
+    baseRevisionId: z.string().uuid().optional(),
     engineSchema: z.number().int().nonnegative().nullable(),
     savedAt: z.number().int().nonnegative(),
     byteLength: z.number().int().nonnegative(),

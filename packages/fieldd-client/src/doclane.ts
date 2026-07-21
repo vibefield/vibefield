@@ -55,8 +55,15 @@ export interface DocSaveReceipt {
   byteLength: number;
 }
 
+export interface DocInitialSnapshot {
+  initialBytes: Uint8Array | null;
+  initialUpdates: Uint8Array[];
+}
+
 interface PendingPut extends DocPutMeta {
   revisionId: string;
+  kind: "checkpoint" | "update";
+  baseRevisionId?: string;
 }
 
 interface FrameWaiter {
@@ -83,6 +90,8 @@ export class DocLaneClient {
   private recoveryEnabled = false;
   private dialingWs: LaneWsLike | null = null;
   private chainError: Error | null = null;
+  private initialUpdateCount = 0;
+  private lastRevisionId: string | null = null;
 
   constructor(private readonly opts: DocLaneClientOptions) {}
 
@@ -102,16 +111,18 @@ export class DocLaneClient {
 
   /** Transactional initial acquisition: no reconnect ownership exists until
    * HELLO and the optional initial GET both succeed. Any failure is terminal. */
-  attachSnapshot(signal?: AbortSignal): Promise<{ initialBytes: Uint8Array | null }> {
+  attachSnapshot(signal?: AbortSignal): Promise<DocInitialSnapshot> {
     return this.enqueue(async () => {
       const abort = (): void => this.close();
       if (signal?.aborted) abort();
       signal?.addEventListener("abort", abort, { once: true });
       try {
         const { hasDoc } = await this.doAttach();
-        const initialBytes = hasDoc ? await this.doGet() : null;
+        const snapshot = hasDoc
+          ? await this.doGetSnapshot()
+          : { initialBytes: null, initialUpdates: [] };
         this.recoveryEnabled = true;
-        return { initialBytes };
+        return snapshot;
       } catch (err) {
         this.close();
         throw err;
@@ -126,11 +137,38 @@ export class DocLaneClient {
     return this.enqueue(() => this.doGet());
   }
 
+  getSnapshot(): Promise<DocInitialSnapshot> {
+    return this.enqueue(() => this.doGetSnapshot());
+  }
+
   /** Persist one envelope (PUT_META + PUT → PUT_OK). Retained for re-sync after drops. */
   put(bytes: Uint8Array, meta: DocPutMeta): Promise<DocSaveReceipt> {
-    const pending: PendingPut = { ...meta, revisionId: globalThis.crypto.randomUUID() };
+    const pending: PendingPut = {
+      ...meta,
+      revisionId: globalThis.crypto.randomUUID(),
+      kind: "checkpoint",
+    };
     this.lastPut = { bytes, meta: pending }; // before the attempt — a failed put still re-syncs later
     return this.enqueue(() => this.doPut(bytes, pending));
+  }
+
+  /** Append one opaque Loro update to the current durable revision. */
+  putUpdate(bytes: Uint8Array, meta: DocPutMeta): Promise<DocSaveReceipt> {
+    const revisionId = globalThis.crypto.randomUUID();
+    return this.enqueue(() => {
+      const baseRevisionId = this.lastRevisionId;
+      if (baseRevisionId === null) {
+        throw new FielddRpcError("PRECONDITION_FAILED", "update has no durable checkpoint", false);
+      }
+      const pending: PendingPut = {
+        ...meta,
+        revisionId,
+        kind: "update",
+        baseRevisionId,
+      };
+      this.lastPut = { bytes, meta: pending };
+      return this.doPut(bytes, pending);
+    });
   }
 
   close(): void {
@@ -193,6 +231,8 @@ export class DocLaneClient {
     if (reply.kind === LANE_FRAME.ERR) throw this.toError(reply.payload);
     if (reply.kind !== LANE_FRAME.HELLO_OK) throw this.protocolError(reply.kind);
     const ok = LaneHelloOk.parse(decodeJsonPayload(reply.payload));
+    this.initialUpdateCount = ok.meta?.journalEntries ?? 0;
+    this.lastRevisionId = ok.meta?.revisionId ?? null;
     this.attempts = 0;
     this.attachedOnce = true;
     this.setStatus("attached");
@@ -200,13 +240,34 @@ export class DocLaneClient {
   }
 
   private async doGet(): Promise<Uint8Array | null> {
+    const snapshot = await this.doGetSnapshot();
+    if (snapshot.initialUpdates.length > 0) {
+      throw new FielddRpcError(
+        "PRECONDITION_FAILED",
+        "document has journal updates; use getSnapshot()",
+        false,
+      );
+    }
+    return snapshot.initialBytes;
+  }
+
+  private async doGetSnapshot(): Promise<DocInitialSnapshot> {
     this.requireAttached();
     this.send(encodeLaneFrame(LANE_FRAME.GET, 0, new Uint8Array()));
     const reply = await this.nextFrame();
-    if (reply.kind === LANE_FRAME.DOC) return reply.payload;
+    if (reply.kind === LANE_FRAME.DOC) {
+      const initialUpdates: Uint8Array[] = [];
+      for (let i = 0; i < this.initialUpdateCount; i += 1) {
+        const update = await this.nextFrame();
+        if (update.kind === LANE_FRAME.ERR) throw this.toError(update.payload);
+        if (update.kind !== LANE_FRAME.DOC_UPDATE) throw this.protocolError(update.kind);
+        initialUpdates.push(update.payload);
+      }
+      return { initialBytes: reply.payload, initialUpdates };
+    }
     if (reply.kind === LANE_FRAME.ERR) {
       const err = this.toError(reply.payload);
-      if (err.kind === "NOT_FOUND") return null;
+      if (err.kind === "NOT_FOUND") return { initialBytes: null, initialUpdates: [] };
       throw err;
     }
     throw this.protocolError(reply.kind);
@@ -217,6 +278,8 @@ export class DocLaneClient {
     this.send(
       encodeJsonFrame(LANE_FRAME.PUT_META, 0, {
         revisionId: meta.revisionId,
+        kind: meta.kind,
+        ...(meta.baseRevisionId !== undefined ? { baseRevisionId: meta.baseRevisionId } : {}),
         engineSchema: meta.engineSchema,
         savedAt: meta.savedAt,
         byteLength: bytes.byteLength,
@@ -231,6 +294,7 @@ export class DocLaneClient {
       this.ws?.close();
       throw new FielddRpcError("INTERNAL", "doc lane acknowledged the wrong revision", true);
     }
+    this.lastRevisionId = ok.revisionId;
     this.lastPutAt = (this.opts.now ?? Date.now)();
     return { revisionId: ok.revisionId, byteLength: ok.byteLength };
   }
@@ -319,7 +383,9 @@ export class DocLaneClient {
         if (this.closedByUser || this.ws) return;
         await this.doAttach();
         const last = this.lastPut;
-        if (last) await this.doPut(last.bytes, last.meta);
+        if (last && this.lastRevisionId !== last.meta.revisionId) {
+          await this.doPut(last.bytes, last.meta);
+        }
       }).catch((e) => {
         this.lastError =
           e instanceof FielddRpcError ? e : new FielddRpcError("INTERNAL", String(e));
