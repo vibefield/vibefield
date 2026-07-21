@@ -78,7 +78,7 @@ class FakeLaneWs implements LaneWsLike {
 
 /** The well-behaved server script: HELLO→HELLO_OK, GET→DOC|NOT_FOUND, PUT→PUT_OK. */
 function happyServer(store: { bytes: Uint8Array | null }): Handler {
-  let pendingPut: { byteLength: number } | null = null;
+  let pendingPut: { byteLength: number; revisionId: string } | null = null;
   return (ws, frame) => {
     if (frame.kind === LANE_FRAME.HELLO) {
       ws.receive(
@@ -89,7 +89,7 @@ function happyServer(store: { bytes: Uint8Array | null }): Handler {
         ws.receive(encodeJsonFrame(LANE_FRAME.ERR, 0, { kind: "NOT_FOUND", message: "no doc" }));
       else ws.receive(encodeLaneFrame(LANE_FRAME.DOC, 0, store.bytes));
     } else if (frame.kind === LANE_FRAME.PUT_META) {
-      pendingPut = decodeJsonPayload(frame.payload) as { byteLength: number };
+      pendingPut = decodeJsonPayload(frame.payload) as { byteLength: number; revisionId: string };
     } else if (frame.kind === LANE_FRAME.PUT) {
       if (pendingPut === null || pendingPut.byteLength !== frame.payload.byteLength) {
         ws.receive(
@@ -100,7 +100,12 @@ function happyServer(store: { bytes: Uint8Array | null }): Handler {
         );
       } else {
         store.bytes = frame.payload;
-        ws.receive(encodeJsonFrame(LANE_FRAME.PUT_OK, 0, { byteLength: frame.payload.byteLength }));
+        ws.receive(
+          encodeJsonFrame(LANE_FRAME.PUT_OK, 0, {
+            revisionId: pendingPut.revisionId,
+            byteLength: frame.payload.byteLength,
+          }),
+        );
       }
       pendingPut = null;
     }
@@ -153,7 +158,9 @@ describe("DocLaneClient", () => {
     expect(await client.get()).toBeNull();
 
     const bytes = envelope(7);
-    await client.put(bytes, { engineSchema: 2, savedAt: 123 });
+    const receipt = await client.put(bytes, { engineSchema: 2, savedAt: 123 });
+    expect(receipt.byteLength).toBe(bytes.byteLength);
+    expect(receipt.revisionId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(client.lastPutAt).not.toBeNull();
     expect(Array.from(store.bytes ?? [])).toEqual(Array.from(bytes));
     expect(Array.from((await client.get()) ?? [])).toEqual(Array.from(bytes));
@@ -190,6 +197,23 @@ describe("DocLaneClient", () => {
     await expect(get).rejects.toMatchObject({ kind: "TIMEOUT" });
     expect(FakeLaneWs.instances[0]?.readyState).toBe(3);
     client.close();
+  });
+
+  it("a failed transactional attach leaves no reconnecting provisional lane", async () => {
+    FakeLaneWs.handler = (ws, frame) => {
+      if (frame.kind === LANE_FRAME.HELLO) {
+        ws.receive(encodeJsonFrame(LANE_FRAME.HELLO_OK, 0, { docId: DOC_ID, hasDoc: true }));
+      }
+      // Initial GET is deliberately unanswered.
+    };
+    const { client, openLane } = makeClient({ opTimeoutMs: 1_000 });
+    const opening = client.attachSnapshot();
+    const failed = expect(opening).rejects.toMatchObject({ kind: "TIMEOUT" });
+    await vi.advanceTimersByTimeAsync(1_100);
+    await failed;
+    expect(client.status).toBe("closed");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(openLane).toHaveBeenCalledTimes(1);
   });
 
   it("re-attaches after a drop with a FRESH ticket and re-puts the last envelope", async () => {

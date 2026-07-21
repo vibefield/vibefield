@@ -15,8 +15,8 @@ export const DocRegistryEntry = z
     /** epoch ms of the last accepted PUT (or creation). */
     updatedAt: z.number().int(),
     /** bumped only by doc.compact (deferred) — 0 throughout B3. */
-    baseEpoch: z.number().int(),
-    /** from the last PUT's meta; null until the first PUT lands (fieldd never decodes the envelope). */
+      baseEpoch: z.number().int(),
+      /** from the last PUT's meta; null until the first PUT lands (fieldd never decodes the envelope). */
     engineSchema: z.number().int().nullable(),
     /** at-rest envelope size; 0 until the first PUT. */
     sizeBytes: z.number().int(),
@@ -60,8 +60,10 @@ export const DocMeta = z
     engineSchema: z.number().int().nullable(),
     /** epoch ms stamped by the writer (the renderer's autosave savedAt). */
     savedAt: z.number().int(),
-    byteLength: z.number().int(),
-    baseEpoch: z.number().int(),
+      byteLength: z.number().int(),
+      baseEpoch: z.number().int(),
+      /** Exact durable revision acknowledged by fieldd; absent on legacy snapshots. */
+      revisionId: z.string().uuid().optional(),
   })
   .passthrough();
 export type DocMeta = z.infer<typeof DocMeta>;
@@ -85,14 +87,17 @@ export type LaneHelloOk = z.infer<typeof LaneHelloOk>;
  * a mismatched PUT is rejected whole (no partial file ever lands). */
 export const LanePutMeta = z
   .object({
-    engineSchema: z.number().int().nullable(),
-    savedAt: z.number().int(),
-    byteLength: z.number().int(),
+    revisionId: z.string().uuid(),
+    engineSchema: z.number().int().nonnegative().nullable(),
+    savedAt: z.number().int().nonnegative(),
+    byteLength: z.number().int().nonnegative(),
   })
   .passthrough();
 export type LanePutMeta = z.infer<typeof LanePutMeta>;
 
-export const LanePutOk = z.object({ byteLength: z.number().int() }).passthrough();
+export const LanePutOk = z
+  .object({ revisionId: z.string().uuid(), byteLength: z.number().int().nonnegative() })
+  .passthrough();
 export type LanePutOk = z.infer<typeof LanePutOk>;
 
 export const LaneErr = z.object({ kind: ErrorKind, message: z.string() }).passthrough();

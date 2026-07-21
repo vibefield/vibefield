@@ -50,6 +50,15 @@ export interface DocPutMeta {
   savedAt: number;
 }
 
+export interface DocSaveReceipt {
+  revisionId: string;
+  byteLength: number;
+}
+
+interface PendingPut extends DocPutMeta {
+  revisionId: string;
+}
+
 interface FrameWaiter {
   resolve: (frame: { kind: number; payload: Uint8Array }) => void;
   reject: (e: Error) => void;
@@ -65,12 +74,15 @@ export class DocLaneClient {
   private ws: LaneWsLike | null = null;
   private waiter: FrameWaiter | null = null;
   private chain: Promise<unknown> = Promise.resolve();
-  private lastPut: { bytes: Uint8Array; meta: DocPutMeta } | null = null;
+  private lastPut: { bytes: Uint8Array; meta: PendingPut } | null = null;
   private attempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private statusListeners = new Set<() => void>();
   private closedByUser = false;
   private attachedOnce = false;
+  private recoveryEnabled = false;
+  private dialingWs: LaneWsLike | null = null;
+  private chainError: Error | null = null;
 
   constructor(private readonly opts: DocLaneClientOptions) {}
 
@@ -81,29 +93,44 @@ export class DocLaneClient {
 
   /** Dial + HELLO. Resolves once the daemon acknowledged the lane. */
   attach(): Promise<{ hasDoc: boolean }> {
-    return this.enqueue(() => this.doAttach());
+    return this.enqueue(async () => {
+      const result = await this.doAttach();
+      this.recoveryEnabled = true;
+      return result;
+    });
+  }
+
+  /** Transactional initial acquisition: no reconnect ownership exists until
+   * HELLO and the optional initial GET both succeed. Any failure is terminal. */
+  attachSnapshot(signal?: AbortSignal): Promise<{ initialBytes: Uint8Array | null }> {
+    return this.enqueue(async () => {
+      const abort = (): void => this.close();
+      if (signal?.aborted) abort();
+      signal?.addEventListener("abort", abort, { once: true });
+      try {
+        const { hasDoc } = await this.doAttach();
+        const initialBytes = hasDoc ? await this.doGet() : null;
+        this.recoveryEnabled = true;
+        return { initialBytes };
+      } catch (err) {
+        this.close();
+        throw err;
+      } finally {
+        signal?.removeEventListener("abort", abort);
+      }
+    });
   }
 
   /** Fetch the at-rest envelope, or null when the daemon has none yet. */
   get(): Promise<Uint8Array | null> {
-    return this.enqueue(async () => {
-      this.requireAttached();
-      this.send(encodeLaneFrame(LANE_FRAME.GET, 0, new Uint8Array()));
-      const reply = await this.nextFrame();
-      if (reply.kind === LANE_FRAME.DOC) return reply.payload;
-      if (reply.kind === LANE_FRAME.ERR) {
-        const err = this.toError(reply.payload);
-        if (err.kind === "NOT_FOUND") return null;
-        throw err;
-      }
-      throw this.protocolError(reply.kind);
-    });
+    return this.enqueue(() => this.doGet());
   }
 
   /** Persist one envelope (PUT_META + PUT → PUT_OK). Retained for re-sync after drops. */
-  put(bytes: Uint8Array, meta: DocPutMeta): Promise<void> {
-    this.lastPut = { bytes, meta }; // before the attempt — a failed put still re-syncs later
-    return this.enqueue(() => this.doPut(bytes, meta));
+  put(bytes: Uint8Array, meta: DocPutMeta): Promise<DocSaveReceipt> {
+    const pending: PendingPut = { ...meta, revisionId: globalThis.crypto.randomUUID() };
+    this.lastPut = { bytes, meta: pending }; // before the attempt — a failed put still re-syncs later
+    return this.enqueue(() => this.doPut(bytes, pending));
   }
 
   close(): void {
@@ -115,6 +142,9 @@ export class DocLaneClient {
     const ws = this.ws;
     this.ws = null;
     ws?.close();
+    const dialing = this.dialingWs;
+    this.dialingWs = null;
+    dialing?.close();
     this.failWaiter(new FielddRpcError("UNAVAILABLE", "doc lane closed"));
     this.setStatus("closed");
   }
@@ -122,8 +152,10 @@ export class DocLaneClient {
   /** Retire the lane: settle every queued op (a doc switch's final flush PUT
    * included), THEN close — so retiring can never truncate the last save. */
   async drain(): Promise<void> {
-    await this.chain.catch(() => {});
+    await this.chain;
+    const error = this.chainError;
     this.close();
+    if (error !== null) throw error;
   }
 
   // ---- internals ----
@@ -131,7 +163,14 @@ export class DocLaneClient {
   /** Ops are FIFO and never overlap; a failed op never poisons the chain. */
   private enqueue<T>(op: () => Promise<T>): Promise<T> {
     const run = this.chain.then(op);
-    this.chain = run.catch(() => {});
+    this.chain = run.then(
+      () => {
+        this.chainError = null;
+      },
+      (err: unknown) => {
+        this.chainError = err instanceof Error ? err : new Error(String(err));
+      },
+    );
     return run;
   }
 
@@ -141,7 +180,13 @@ export class DocLaneClient {
       throw new FielddRpcError("CONFLICT", "already attached");
     this.setStatus(this.attachedOnce ? "reconnecting" : "connecting");
     const open = await this.opts.openLane(); // fresh one-shot ticket every dial
+    if (this.closedByUser) throw new FielddRpcError("UNAVAILABLE", "doc lane closed");
     const ws = await this.dial(open.laneUrl);
+    if (this.closedByUser) {
+      ws.close();
+      throw new FielddRpcError("UNAVAILABLE", "doc lane closed");
+    }
+    this.dialingWs = null;
     this.ws = ws;
     this.send(encodeJsonFrame(LANE_FRAME.HELLO, 0, { ticket: open.ticket }));
     const reply = await this.nextFrame();
@@ -154,10 +199,24 @@ export class DocLaneClient {
     return { hasDoc: ok.hasDoc };
   }
 
-  private async doPut(bytes: Uint8Array, meta: DocPutMeta): Promise<void> {
+  private async doGet(): Promise<Uint8Array | null> {
+    this.requireAttached();
+    this.send(encodeLaneFrame(LANE_FRAME.GET, 0, new Uint8Array()));
+    const reply = await this.nextFrame();
+    if (reply.kind === LANE_FRAME.DOC) return reply.payload;
+    if (reply.kind === LANE_FRAME.ERR) {
+      const err = this.toError(reply.payload);
+      if (err.kind === "NOT_FOUND") return null;
+      throw err;
+    }
+    throw this.protocolError(reply.kind);
+  }
+
+  private async doPut(bytes: Uint8Array, meta: PendingPut): Promise<DocSaveReceipt> {
     this.requireAttached();
     this.send(
       encodeJsonFrame(LANE_FRAME.PUT_META, 0, {
+        revisionId: meta.revisionId,
         engineSchema: meta.engineSchema,
         savedAt: meta.savedAt,
         byteLength: bytes.byteLength,
@@ -167,14 +226,20 @@ export class DocLaneClient {
     const reply = await this.nextFrame();
     if (reply.kind === LANE_FRAME.ERR) throw this.toError(reply.payload);
     if (reply.kind !== LANE_FRAME.PUT_OK) throw this.protocolError(reply.kind);
-    LanePutOk.parse(decodeJsonPayload(reply.payload));
+    const ok = LanePutOk.parse(decodeJsonPayload(reply.payload));
+    if (ok.revisionId !== meta.revisionId || ok.byteLength !== bytes.byteLength) {
+      this.ws?.close();
+      throw new FielddRpcError("INTERNAL", "doc lane acknowledged the wrong revision", true);
+    }
     this.lastPutAt = (this.opts.now ?? Date.now)();
+    return { revisionId: ok.revisionId, byteLength: ok.byteLength };
   }
 
   private dial(url: string): Promise<LaneWsLike> {
     const WS = this.opts.webSocket ?? (globalThis as { WebSocket?: LaneWsCtor }).WebSocket;
     if (!WS) throw new FielddRpcError("UNAVAILABLE", "no WebSocket implementation in this host");
     const ws = new WS(url);
+    this.dialingWs = ws;
     ws.binaryType = "arraybuffer";
     ws.addEventListener("message", (ev) => {
       if (this.ws === ws) this.onFrame((ev as { data: unknown }).data);
@@ -183,11 +248,23 @@ export class DocLaneClient {
     return new Promise((resolve, reject) => {
       let settled = false;
       ws.addEventListener("open", () => {
+        if (settled) return;
         settled = true;
         resolve(ws);
       });
       ws.addEventListener("error", () => {
-        if (!settled) reject(new FielddRpcError("UNAVAILABLE", "doc lane dial failed", true));
+        if (!settled) {
+          settled = true;
+          this.dialingWs = null;
+          reject(new FielddRpcError("UNAVAILABLE", "doc lane dial failed", true));
+        }
+      });
+      ws.addEventListener("close", () => {
+        if (!settled) {
+          settled = true;
+          this.dialingWs = null;
+          reject(new FielddRpcError("UNAVAILABLE", "doc lane closed before open", true));
+        }
       });
     });
   }
@@ -226,7 +303,7 @@ export class DocLaneClient {
     if (ws !== this.ws) return; // stale socket
     this.ws = null;
     this.failWaiter(new FielddRpcError("UNAVAILABLE", "doc lane dropped", true));
-    if (this.closedByUser) return;
+    if (this.closedByUser || !this.recoveryEnabled) return;
     this.scheduleReattach();
   }
 

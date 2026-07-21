@@ -164,6 +164,7 @@ async function putEnvelope(
   probe.send(
     encodeJsonFrame(LANE_FRAME.PUT_META, 0, {
       engineSchema,
+      revisionId: randomUUID(),
       savedAt: Date.now(),
       byteLength: env.byteLength,
     }),
@@ -328,6 +329,7 @@ describe("lane PUT / GET", () => {
       byteLength: number;
     };
     expect(current.file).toBe(`${current.revisionId}.ice1`);
+    expect(current.revisionId).toBe(putOk.revisionId);
     expect(current.byteLength).toBe(env.byteLength);
     expect(existsSync(join(dataDir, "docs", made.docId, "revisions", current.file))).toBe(true);
   });
@@ -391,8 +393,9 @@ describe("lane write validation (leaves prior bytes untouched)", () => {
     // PUT_META claims one length; the PUT body is a different length → rejected
     w.probe.send(
       encodeJsonFrame(LANE_FRAME.PUT_META, 0, {
-        engineSchema: 1,
-        savedAt: Date.now(),
+          engineSchema: 1,
+          revisionId: randomUUID(),
+          savedAt: Date.now(),
         byteLength: good.byteLength,
       }),
     );
@@ -423,6 +426,7 @@ describe("lane write validation (leaves prior bytes untouched)", () => {
     w.probe.send(
       encodeJsonFrame(LANE_FRAME.PUT_META, 0, {
         engineSchema: null,
+        revisionId: randomUUID(),
         savedAt: Date.now(),
         byteLength: notIce1.byteLength,
       }),

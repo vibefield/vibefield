@@ -220,7 +220,7 @@ export class DocLane {
     try {
       // conn.docId is non-null here: dispatch only reaches PUT once authenticated
       const written = await this.opts.docs.writeDoc(conn.docId as string, payload, meta);
-      const ok: LanePutOk = { byteLength: written.byteLength };
+      const ok: LanePutOk = { revisionId: meta.revisionId, byteLength: written.byteLength };
       this.sendFrame(ws, encodeJsonFrame(LANE_FRAME.PUT_OK, 0, ok));
     } catch (e) {
       if (e instanceof RpcCallError) this.sendErr(ws, e.kind as ErrorKind, e.message);

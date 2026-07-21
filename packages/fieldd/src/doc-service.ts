@@ -243,7 +243,7 @@ export class DocumentService {
     if (!hasIce1Magic(bytes))
       throw new RpcCallError("PRECONDITION_FAILED", "payload is not an ICE1 envelope", false);
 
-    const revisionId = randomUUID();
+    const revisionId = putMeta.revisionId;
     const meta: CurrentRevision = {
       revisionId,
       file: `${revisionId}.ice1`,
