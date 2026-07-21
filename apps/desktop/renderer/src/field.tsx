@@ -1,58 +1,16 @@
-import { type CanvasEngine, createCanvasEngine, type WidgetType } from "@vibecook/ice";
 import { ground } from "@vibecook/ice/ground";
 import { InfiniteCanvas } from "@vibecook/ice/react";
-import { noteManifest, noteWidgets } from "@vibefield/plugin-note";
-import { PluginRegistry } from "@vibefield/plugin-runtime";
+import { spawnCommentAroundSelection } from "@vibefield/plugin-field-tools";
 import { type ReactElement, useEffect, useMemo, useState } from "react";
+import { buildRegistry, createFieldEngine } from "./field-engine";
 import { NavigationBreadcrumbs } from "./hud/NavigationBreadcrumbs";
 import { WidgetTray } from "./hud/WidgetTray";
 import { ZoomPill } from "./hud/ZoomPill";
 
-// The Field (B2 + Track D1/D2): plugins' widgets → one canvas engine →
+// The Field (B2 + Track D1–D3): plugins' widgets → one canvas engine →
 // InfiniteCanvas over the widgetlab ground (dot grid + snap guides, themed via
-// --vf-canvas-*), with the morphing island (WidgetTray) as the spawn door —
-// the old "+ Note" toolbar retired with it. P0: one in-memory doc per app run
-// (DocumentService persistence lands in B3).
-
-function buildRegistry(): PluginRegistry<WidgetType> {
-  const registry = new PluginRegistry<WidgetType>();
-  registry.register(noteManifest, noteWidgets);
-  return registry;
-}
-
-function createFieldEngine(registry: PluginRegistry<WidgetType>): CanvasEngine {
-  const ce = createCanvasEngine({
-    widgets: [...registry.allWidgets().values()],
-    settings: {
-      zoom: { min: 0.25, max: 3 },
-      snap: { enabled: true, thresholdPx: 5 },
-      // chrome.liftScale mirrors CardShell's lift transform (1.05) so the
-      // multi-select union box keeps wrapping a lifted member (widgetlab law).
-      chrome: { liftScale: 1.05 },
-    },
-  });
-  ce.docs.create(); // a doc is mandatory before any spawn/edit
-  ce.ops.spawnWidget("note.card", {
-    x: -300,
-    y: -140,
-    w: 280,
-    h: 190,
-    props: {
-      text: "Welcome to your field.\n\nDouble-click to edit · drag to move · scroll to pan · ⌘/ctrl+wheel to zoom · B opens the tray.",
-    },
-    undoable: false,
-  });
-  ce.ops.spawnWidget("note.card", {
-    x: 40,
-    y: -60,
-    w: 240,
-    h: 150,
-    props: { text: "Drag widgets out of the tray below.", color: "#cfe8d6" },
-    undoable: false,
-  });
-  ce.world.sync(); // project the seeds before the first frame
-  return ce;
-}
+// --vf-canvas-*), the morphing island (WidgetTray) as the spawn door, and the
+// widgetlab demo scene as the boot board (field-engine.ts).
 
 export function FieldView(): ReactElement {
   const registry = useMemo(buildRegistry, []);
@@ -81,6 +39,26 @@ export function FieldView(): ReactElement {
       if (ce.ops.frameContent() || tries > 40) clearInterval(id);
     }, 50);
     return () => clearInterval(id);
+  }, [ce]);
+
+  // C wraps the selection in a comment (widgetlab UE-Blueprint gesture).
+  // Capture phase + spawn-only interception: with nothing selected the press
+  // falls through to the engine keymap (C = the Wire tool) — the widgetlab
+  // C/connect collision resolved by "selection decides".
+  useEffect(() => {
+    const isEditable = (t: EventTarget | null): boolean =>
+      t instanceof HTMLElement &&
+      (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.key !== "c" && e.key !== "C") || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isEditable(e.target)) return;
+      if (spawnCommentAroundSelection(ce)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [ce]);
 
   return (
