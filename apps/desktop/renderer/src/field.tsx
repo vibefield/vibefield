@@ -391,14 +391,31 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   // (B4): a switched-in doc gets its own arrival framing.
   useEffect(() => {
     if (generation === 0) return; // no doc landed yet — the veil is up
-    if (ce.ops.frameContent()) return;
+    let presentFrame: number | null = null;
+    const present = (): void => {
+      presentFrame = requestAnimationFrame(() => manager.canvasPresented(generation));
+    };
+    // An empty field has nothing to frame, but still needs one painted frame
+    // before the cover reveals it.
+    if (captureDocThumbnailScene(ce).widgets.length === 0 || ce.ops.frameContent()) {
+      present();
+      return () => {
+        if (presentFrame !== null) cancelAnimationFrame(presentFrame);
+      };
+    }
     let tries = 0;
     const id = setInterval(() => {
       tries += 1;
-      if (ce.ops.frameContent() || tries > 40) clearInterval(id);
+      if (ce.ops.frameContent() || tries > 40) {
+        clearInterval(id);
+        present();
+      }
     }, 50);
-    return () => clearInterval(id);
-  }, [ce, generation]);
+    return () => {
+      clearInterval(id);
+      if (presentFrame !== null) cancelAnimationFrame(presentFrame);
+    };
+  }, [ce, generation, manager]);
 
   // Keyboard shortcuts. <InfiniteCanvas> already installs the engine default
   // keymap (⌘Z undo, ⇧⌘Z redo, ⌫ delete, Esc cancel, v/h/c tools — all
@@ -478,8 +495,14 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
         style={{
           position: "absolute",
           inset: 0,
-          transform: sheetOpen ? "scale(0.98)" : "scale(1)",
-          transition: "transform 600ms var(--vf-ease-island)",
+          transform: sheetOpen
+            ? "scale(0.98)"
+            : docState.phase === "loading"
+              ? "scale(0.992)"
+              : "scale(1)",
+          opacity: docState.phase === "loading" ? 0.72 : 1,
+          transition:
+            "transform 600ms var(--vf-ease-island), opacity 420ms var(--vf-ease-island)",
         }}
       >
         <InfiniteCanvas

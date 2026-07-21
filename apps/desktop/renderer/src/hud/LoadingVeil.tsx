@@ -1,11 +1,12 @@
 import { type ReactElement, useEffect, useRef, useState } from "react";
 
 // The loading veil (thinking-b4 §2, DESIGN.md §8): a chrome-material frost over
-// the ENTIRE window while a doc loads — a thin colorless bar (loading is not a
-// §2.5 state, so no hue) + an honest lowercase stage label. LATE-VEIL RULE:
-// invisible until 120ms of loading elapse, so a cached doc switch never
-// flashes; fades out 240ms before unmounting. M6: it is already only opacity
-// and width — reduced motion needs no special case.
+// the ENTIRE window while a doc loads. The cover itself is immediate and
+// opaque: a keyed engine may never tear down in front of the user. Progress
+// details remain late (500ms), so a normal local switch reads as one soft
+// dissolve rather than a loading screen; slow I/O stays honest. Reveal waits
+// for FieldView's framed-canvas presentation signal, then fades over the new
+// fully composed scene.
 
 const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
 
@@ -22,6 +23,7 @@ export function LoadingVeil({
   const active = loading !== null;
   const [mounted, setMounted] = useState(active);
   const [shown, setShown] = useState(false);
+  const [details, setDetails] = useState(false);
   // The fade-out keeps rendering after `loading` goes null — show the last frame.
   const last = useRef<LoadingVeilState>({ progress: 0, stage: "opening doc" });
   if (loading !== null) last.current = loading;
@@ -29,11 +31,16 @@ export function LoadingVeil({
   useEffect(() => {
     if (active) {
       setMounted(true);
-      const t = setTimeout(() => setShown(true), 120);
-      return () => clearTimeout(t);
+      const frame = requestAnimationFrame(() => setShown(true));
+      const detailTimer = setTimeout(() => setDetails(true), 500);
+      return () => {
+        cancelAnimationFrame(frame);
+        clearTimeout(detailTimer);
+      };
     }
     setShown(false);
-    const t = setTimeout(() => setMounted(false), 260);
+    setDetails(false);
+    const t = setTimeout(() => setMounted(false), 400);
     return () => clearTimeout(t);
   }, [active]);
 
@@ -41,13 +48,23 @@ export function LoadingVeil({
   const view = loading ?? last.current;
   return (
     <div
-      className={`absolute inset-0 z-[80] flex items-center justify-center bg-white/60 backdrop-blur-xl transition-opacity dark:bg-[#171717]/60 ${
+      className={`absolute inset-0 z-[80] flex items-center justify-center transition-opacity ${
         shown ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
       }`}
-      style={{ transitionDuration: "240ms" }}
+      style={{
+        background:
+          "radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--vf-canvas-bg), white 3%) 0%, var(--vf-canvas-bg) 68%)",
+        transitionDuration: shown ? "220ms" : "380ms",
+        transitionTimingFunction: EASE,
+      }}
       aria-hidden={!shown}
     >
-      <div className="flex flex-col items-center gap-3">
+      <div
+        className={`flex translate-y-0 flex-col items-center gap-3 transition-[opacity,transform] duration-300 ${
+          details ? "opacity-100" : "translate-y-1 opacity-0"
+        }`}
+        aria-hidden={!details}
+      >
         <div
           role="progressbar"
           aria-valuemin={0}

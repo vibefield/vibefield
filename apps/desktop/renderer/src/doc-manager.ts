@@ -19,6 +19,8 @@ import { DocThumbnailCache } from "./doc-thumbnails";
 
 const LAST_DOC_KEY = "vf-last-doc";
 export const DEFAULT_DOC_NAME = "Field";
+const SWITCH_COVER_MS = 220;
+const CANVAS_PRESENT_TIMEOUT_MS = 2_500;
 
 /** One engine-attachable doc session; FieldView's attach effect keys on generation. */
 export interface DocSessionPending {
@@ -73,6 +75,10 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   });
 }
 
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function readLastDocId(): string | null {
   try {
     return typeof localStorage === "undefined" ? null : localStorage.getItem(LAST_DOC_KEY);
@@ -111,6 +117,8 @@ export class DocManager {
    * the daemon's single-writer lock while the old socket is still closing. */
   private drains: Promise<void>[] = [];
   private offLane: (() => void) | null = null;
+  private readonly presentedGenerations = new Set<number>();
+  private readonly presentationWaiters = new Map<number, () => void>();
   private readonly thumbnails = new DocThumbnailCache((docId, url) => {
     if (this.state.thumbnailUrls[docId] === url) return;
     this.patch({ thumbnailUrls: { ...this.state.thumbnailUrls, [docId]: url } });
@@ -182,6 +190,9 @@ export class DocManager {
     }
     this.stage(0, "opening doc");
     try {
+      // Let the opaque cover reach full opacity before the keyed engine swap.
+      // This small, fixed handoff is cheaper than exposing teardown/rebuild.
+      await this.waitForSwitchCover();
       await this.openSession(entry, false);
     } catch (e) {
       this.recoverToCurrent("switch", e);
@@ -192,6 +203,7 @@ export class DocManager {
   async createDoc(): Promise<void> {
     this.stage(0, "opening doc");
     try {
+      await this.waitForSwitchCover();
       const entry = DocRegistryEntry.parse(await this.request("doc.create", { name: "Untitled" }));
       await this.refreshDocs();
       await this.openSession(entry, false);
@@ -246,6 +258,19 @@ export class DocManager {
   thumbnailCheckpoint(docId: string, revision: string, scene: DocThumbnailScene): void {
     if (docId.length === 0) return;
     this.thumbnails.schedule(docId, revision, scene);
+  }
+
+  /** FieldView reports presentation only after the arrival camera has framed
+   * the restored world. Bytes-applied is not visual-ready: widgets/GL mount on
+   * the following frames, which is exactly what the veil must conceal. */
+  canvasPresented(generation: number): void {
+    if (generation !== this.generation) return;
+    this.presentedGenerations.add(generation);
+    this.presentationWaiters.get(generation)?.();
+    this.presentationWaiters.delete(generation);
+    for (const seen of this.presentedGenerations) {
+      if (seen < generation - 1) this.presentedGenerations.delete(seen);
+    }
   }
 
   /** FieldView calls this at the end of its attach effect: the doc is on the
@@ -356,7 +381,26 @@ export class DocManager {
         console.warn("[doc-manager] preview capture failed", e);
       }
     }
+    await this.waitForCanvasPresentation(generation);
     if (generation !== this.generation) return;
     this.patch({ phase: "ready", loading: null });
+  }
+
+  private waitForSwitchCover(): Promise<void> {
+    return this.appliedGeneration === 0 ? Promise.resolve() : waitMs(SWITCH_COVER_MS);
+  }
+
+  private waitForCanvasPresentation(generation: number): Promise<void> {
+    if (this.presentedGenerations.has(generation)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.presentationWaiters.delete(generation);
+        resolve();
+      }, CANVAS_PRESENT_TIMEOUT_MS);
+      this.presentationWaiters.set(generation, () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 }
