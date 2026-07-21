@@ -14,40 +14,12 @@
  *    lifted members, so CSS and chrome math cannot drift. Previously
  *    hardcoded 1.05 in CardShell AND GlLiftGroup.
  *
- * Chrome-grade 60ms poll, no ECS writes (CardShell's pattern, hoisted).
+ * Change-driven projection, no ECS writes. DOM and GL consumers for the same
+ * entity share one stable snapshot through chrome-projection.ts.
  */
-import {
-  Captures,
-  ChromeSettings,
-  Drag,
-  type Entity,
-  GesturePhases,
-  Grab,
-  HadSequence,
-  type World,
-} from "@vibecook/ice";
-import { useEffect, useState } from "react";
-
-function armedByHold(world: World, entity: Entity): boolean {
-  for (const rec of world.getReverse(entity, Captures)) {
-    if (!world.has(rec, Drag) || !world.hasTag(rec, HadSequence)) continue;
-    if (
-      world.hasTag(rec, GesturePhases.tags.Possible) ||
-      world.hasTag(rec, GesturePhases.tags.Active)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
+import type { Entity, World } from "@vibecook/ice";
+import { useProjectedDragLift } from "./chrome-projection";
 
 export function useDragLift(world: World, entity: Entity): { lifted: boolean; scale: number } {
-  const [lifted, setLifted] = useState(false);
-  useEffect(() => {
-    const id = setInterval(() => {
-      setLifted(world.has(entity, Grab) || armedByHold(world, entity));
-    }, 60); // snappy — the lift must read as an immediate response to the hold
-    return () => clearInterval(id);
-  }, [world, entity]);
-  return { lifted, scale: world.getResource(ChromeSettings)?.liftScale ?? 1.05 };
+  return useProjectedDragLift(world, entity);
 }

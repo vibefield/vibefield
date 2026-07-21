@@ -12,24 +12,15 @@
  *    border ring), both restored 2026-07-13 (James: "add the same hover card
  *    edge glow effect like v1"). The hot point is v1's derivation verbatim
  *    (interaction.ts:423): the CENTROID of dragged-rect ∩ this card,
- *    normalized to card-local [0,1] — derived here in the poll from the live
+ *    normalized to card-local [0,1] — derived from the live
  *    `Grab`bed widget's rect (no new ECS state). CSS-var knobs (--ic-glow-*,
  *    --ic-rim-*) stay live for the settings panel.
- * All signals are chrome-grade: a ~60 ms poll, no ECS writes.
+ * Signals are change-driven; only the active overlap hot point samples at
+ * 60 ms. No ECS writes.
  */
-import {
-  defineQuery,
-  type Entity,
-  Grab,
-  OverlapCandidate,
-  OverlapRejected,
-  Position,
-  Selected,
-  Size,
-  type World,
-} from "@vibecook/ice";
-import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
-import { useDragLift } from "./use-drag-lift";
+import type { Entity, World } from "@vibecook/ice";
+import type { CSSProperties, ReactNode } from "react";
+import { useCardChromeProjection } from "./chrome-projection";
 
 /** Card corner radius — exported so folder minis can scale the same silhouette. */
 export const CARD_RADIUS = 22;
@@ -56,39 +47,6 @@ export const RING_COLOR = "#4A90D9";
  */
 export const LIFT_OPACITY = 0.75;
 
-const grabQuery = defineQuery([Grab]);
-const selectedQuery = defineQuery([Selected]);
-
-/**
- * v1's hot point: the centroid of the dragged widget's rect ∩ this card's
- * rect, in card-local [0,1] (clamped). Falls back to center when no grabbed
- * widget exists (e.g. the tag lingers a frame past release).
- */
-function hotPoint(world: World, entity: Entity): { x: number; y: number } {
-  let dragged: Entity | undefined;
-  world.query(grabQuery).each((b) => {
-    for (const r of b) {
-      dragged = b.entity(r);
-      return;
-    }
-  });
-  if (dragged === undefined) return { x: 0.5, y: 0.5 };
-  const dp = world.get(dragged, Position);
-  const ds = world.get(dragged, Size);
-  const cp = world.get(entity, Position);
-  const cs = world.get(entity, Size);
-  if (dp === undefined || ds === undefined || cp === undefined || cs === undefined)
-    return { x: 0.5, y: 0.5 };
-  const ix = (Math.max(dp.x, cp.x) + Math.min(dp.x + ds.w, cp.x + cs.w)) / 2;
-  const iy = (Math.max(dp.y, cp.y) + Math.min(dp.y + ds.h, cp.y + cs.h)) / 2;
-  const hx = cs.w > 0 ? (ix - cp.x) / cs.w : 0.5;
-  const hy = cs.h > 0 ? (iy - cp.y) / cs.h : 0.5;
-  return {
-    x: Math.round(Math.min(1, Math.max(0, hx)) * 1000) / 1000,
-    y: Math.round(Math.min(1, Math.max(0, hy)) * 1000) / 1000,
-  };
-}
-
 export function CardShell({
   world,
   entity,
@@ -103,36 +61,8 @@ export function CardShell({
 }) {
   // Lift signal + scale: the shared hook (use-drag-lift.ts, 2026-07-18) —
   // Grab-or-armed-hold truth, ChromeSettings.liftScale for the number.
-  const { lifted, scale } = useDragLift(world, entity);
-  const [soleSelected, setSoleSelected] = useState(false);
-  // v1's two glow tiers: "target" (accepting container — strong, -t vars) and
-  // "candidate" (rejecting overlap hover — weak, -c vars).
-  const [overlap, setOverlap] = useState<"none" | "accept" | "reject">("none");
-  const [hot, setHot] = useState<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      // Sole selection → the in-card ring; ≥2 → the engine's P4 union box.
-      let selCount = 0;
-      world.query(selectedQuery).each((b) => {
-        selCount += b.count;
-      });
-      setSoleSelected(selCount === 1 && world.hasTag(entity, Selected));
-      const tier = world.hasTag(entity, OverlapCandidate)
-        ? "accept"
-        : world.hasTag(entity, OverlapRejected)
-          ? "reject"
-          : "none";
-      setOverlap(tier);
-      // Hot point only matters while glowing; the state object is value-stable
-      // (rounded) so React skips re-renders when the dragged card is still.
-      if (tier !== "none") {
-        const h = hotPoint(world, entity);
-        setHot((prev) => (prev.x === h.x && prev.y === h.y ? prev : h));
-      }
-    }, 60); // snappy — the lift must read as an immediate response to the hold
-    return () => clearInterval(id);
-  }, [world, entity]);
+  const { lift, soleSelected, overlap, hot } = useCardChromeProjection(world, entity);
+  const { lifted, scale } = lift;
 
   const baseShadow = lifted
     ? "0 30px 60px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06)"
