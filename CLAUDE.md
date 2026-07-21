@@ -17,6 +17,10 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   `foundations-and-architecture.md` is the decision record; `predesign-*` are evidence.
 - The current build plan and landed-track log live in the header note of
   `draft/predesign-00-index.md`. Update it when a track milestone lands.
+- **`DESIGN.md` (repo root) governs art direction** — read it before writing ANY UI
+  (tokens, motion easings, card chrome, materials, voice). Mechanics defer to design-03;
+  look and feel defer to DESIGN.md. UI reviews cite its sections; token/easing deviations
+  change the doc first.
 
 ## Machine setup (this repo does NOT build standalone)
 
@@ -58,8 +62,9 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
 
 ## Style & tests
 
-- TS: biome (`biome.json` — double quotes, 2-space, width 100). Rust: rustfmt defaults,
-  clippy clean at `-D warnings`.
+- TS: biome (`biome.jsonc` — double quotes, 2-space, width 100). Rust: rustfmt defaults,
+  clippy clean at `-D warnings`. UI code additionally follows `DESIGN.md` (no hex literals
+  outside tokens; the named easings; the shadow recipes).
 - Every daemon seam ships contract fixtures parsed on both sides (EL9); kill-matrix
   integration tests live in `packages/fieldd/test`. New plugins get at least a
   manifest/registry test (`packages/plugins/note/test` is the template).
