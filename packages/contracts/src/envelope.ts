@@ -111,7 +111,10 @@ export type Unsubscribe = z.infer<typeof Unsubscribe>;
 // ---- CallerContext (P6 — server-side ONLY; identity is transport-derived, never on the wire) ----
 export type Principal =
   | { kind: "local-token"; tokenId: string; scopes: string[] }
-  | { kind: "tailnet"; login: string; deviceName: string; tailscaleId: string }
+  // deviceName/tailscaleId optional (C3): the sidecar proxy injects only
+  // login/name/pic — absent transport facts stay absent, never empty-string
+  // (node-id header injection is an upstream truffle petition).
+  | { kind: "tailnet"; login: string; deviceName?: string; tailscaleId?: string }
   | { kind: "mcp-agent"; sessionId: string; scopes: string[] }
   | { kind: "peer-fieldd"; deviceId: string }
   | { kind: "plugin"; id: string; scopes: string[] }; // design-03 D20

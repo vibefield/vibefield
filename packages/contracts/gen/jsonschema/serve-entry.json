@@ -485,6 +485,12 @@
           "items": {
             "type": "string"
           }
+        },
+        "tls": {
+          "type": "boolean"
+        },
+        "pathSecret": {
+          "type": "string"
         }
       },
       "required": [

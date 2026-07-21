@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { MeshClient } from "../src/mesh-client";
+import { MeshClient, type ServeState } from "../src/mesh-client";
 import { NativeLink } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 
@@ -91,5 +91,91 @@ describe("MeshClient", () => {
     };
     expect(snap.storeId).toBe("field.docs.v1");
     expect(Object.keys(snap.slices)).toEqual(["dev-self"]);
+  });
+
+  // ---- C3: runtime status stream fused into serves() ----
+
+  const productSpec = { name: "product", target: { kind: "port" as const, port: 9410 } };
+  const runtimeEntry = (over: Partial<Record<string, unknown>> = {}) => ({
+    name: "product",
+    target: { kind: "port", port: 9410 },
+    url: "https://dev.ts.net/product",
+    status: "running",
+    ...over,
+  });
+
+  it("a fresh serve snapshot marks a declared serve active with its url and replaces stale state", async () => {
+    const { mock, mesh } = await setup();
+    await mesh.setServes([productSpec]);
+
+    // the node first reports a runtime failure (delta)
+    mock.pushServeDelta(runtimeEntry({ status: "error", error: "CONNECTION_REFUSED" }));
+    await until(() => mesh.serves()[0]?.status === "error");
+
+    // then it recovers; a reconnect replays the subscription with a fresh
+    // snapshot that must replace the stale error wholesale (P5)
+    mock.serveSnapshot = [runtimeEntry({ status: "running" })];
+    mock.killClients();
+    await until(() => mesh.serves()[0]?.status === "active", 6000);
+    const st = mesh.serves().find((s) => s.name === "product");
+    expect(st?.status).toBe("active");
+    expect(st?.url).toBe("https://dev.ts.net/product");
+    expect(st?.error).toBeUndefined();
+  });
+
+  it("a runtime error delta flips a serve to error; a later running delta restores active", async () => {
+    const { mock, mesh } = await setup();
+    await mesh.setServes([productSpec]);
+    await until(() => mesh.serves()[0]?.status === "active"); // reconcile verdict
+
+    mock.pushServeDelta(runtimeEntry({ status: "error", error: "SERVE_ERROR" }));
+    await until(() => mesh.serves()[0]?.status === "error");
+    expect(mesh.serves()[0]?.error).toBe("SERVE_ERROR");
+
+    mock.pushServeDelta(runtimeEntry({ status: "running" }));
+    await until(() => mesh.serves()[0]?.status === "active");
+    expect(mesh.serves()[0]?.url).toBe("https://dev.ts.net/product");
+  });
+
+  it("mesh UNAVAILABLE keeps declared serves pending and fires serves-changed on transition", async () => {
+    const { mock, mesh } = await setup();
+    mock.meshUnavailable = true;
+    const seen: ServeState[][] = [];
+    mesh.on("serves-changed", (s: ServeState[]) => seen.push(s));
+
+    await mesh.setServes([productSpec]);
+    expect(mesh.serves().find((s) => s.name === "product")?.status).toBe("pending");
+    // the pending transition emitted at least once; the latest view is pending
+    expect(seen.length).toBeGreaterThanOrEqual(1);
+    expect(seen.at(-1)?.find((s) => s.name === "product")?.status).toBe("pending");
+  });
+
+  it("partial deltas merge by name: stopped→pending keeps the last-known url", async () => {
+    const { mock, mesh } = await setup();
+    await mesh.setServes([productSpec]);
+    mock.pushServeDelta(runtimeEntry({ status: "running" })); // runtime url supersedes the add url
+    await until(() => mesh.serves()[0]?.url === "https://dev.ts.net/product");
+    expect(mesh.serves()[0]?.status).toBe("active");
+
+    // a Stopped delta is PARTIAL — {name, status} only, no url. The merge keeps
+    // the last-known url; a stopped-but-desired serve is pending (reconcile
+    // re-adds it), never a hard error.
+    mock.pushServeDelta({ name: "product", status: "stopped" });
+    await until(() => mesh.serves()[0]?.status === "pending");
+    expect(mesh.serves()[0]?.url).toBe("https://dev.ts.net/product");
+    expect(mesh.serves()[0]?.error).toBeUndefined();
+  });
+
+  it("a serve.snapshot notification replaces runtime state wholesale (broadcast-lag re-snapshot)", async () => {
+    const { mock, mesh } = await setup();
+    await mesh.setServes([productSpec]);
+    mock.pushServeDelta(runtimeEntry({ status: "error", error: "[X] transient" }));
+    await until(() => mesh.serves()[0]?.status === "error");
+
+    // a full re-snapshot supersedes the missed-delta state, without a reconnect
+    mock.pushServeSnapshot([runtimeEntry({ status: "running" })]);
+    await until(() => mesh.serves()[0]?.status === "active");
+    expect(mesh.serves()[0]?.url).toBe("https://dev.ts.net/product");
+    expect(mesh.serves()[0]?.error).toBeUndefined();
   });
 });

@@ -8,10 +8,10 @@ import {
   PrefabId,
   Size,
   StackZ,
-  widgets,
   WireFrom,
   WirePorts,
   WireTo,
+  widgets,
 } from "@vibecook/ice";
 import { previewBackground } from "@vibefield/shell-ui";
 
@@ -56,7 +56,12 @@ export function captureDocThumbnailScene(ce: CanvasEngine): DocThumbnailScene {
       // A folder is the root-level visual representative of its descendants.
       // Drawing children again at their parent-local coordinates corrupts the
       // overview and leaks detail that the closed folder intentionally hides.
-      if (ce.world.getRelation(entity, ChildOf) !== undefined) continue;
+      // Root-level ≠ parentless (fix 2026-07-21): EVERY widget is ChildOf
+      // something — the canvas ANCHOR at root, its folder inside one (probe:
+      // 21/21 seeds parent to the anchor) — so "no parent" read the whole
+      // board as empty. Root-level = the parent is not itself a widget.
+      const parent = ce.world.getRelation(entity, ChildOf);
+      if (parent !== undefined && ce.world.get(parent, PrefabId) !== undefined) continue;
       const position = ce.world.get(entity, Position);
       const measured = ce.world.get(entity, MeasuredSize);
       const declared = ce.world.get(entity, Size);

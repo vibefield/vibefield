@@ -252,6 +252,23 @@ async fn mesh_answers_honest_unavailable_with_real_unit_state() {
 }
 
 #[tokio::test]
+async fn serve_subscribe_refused_honestly_when_mesh_down() {
+    // No tailnet in CI: the node is absent, so serve.subscribe must be refused with
+    // the unit's REAL state (mirror of the peers.list unavailable path) — never a
+    // half-open subscription. (C3: serve.subscribe forwarder.)
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    c.hello(&daemon, 1).await;
+    c.send(json!({"jsonrpc":"2.0","id":2,"method":"native.mesh.serve.subscribe","params":{}}))
+        .await;
+    let resp = c.recv().await;
+    assert_eq!(resp["error"]["data"]["kind"], "UNAVAILABLE");
+    assert_eq!(resp["error"]["data"]["details"]["service"], "mesh-gateway");
+    assert_eq!(resp["error"]["data"]["details"]["state"], "disabled");
+    assert_eq!(resp["error"]["data"]["retryable"], true);
+}
+
+#[tokio::test]
 async fn tolerant_reader_on_hello() {
     let (_dir, daemon) = boot().await;
     let mut c = TestClient::connect(&daemon).await;

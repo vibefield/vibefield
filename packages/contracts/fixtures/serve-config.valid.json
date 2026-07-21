@@ -1,5 +1,7 @@
 {
-  "name": "dev-server",
-  "target": { "kind": "port", "port": 5173 },
-  "allow": ["me@jamesyong42.com"]
+  "name": "product",
+  "target": { "kind": "port", "port": 9410 },
+  "allow": ["me@jamesyong42.com"],
+  "tls": false,
+  "pathSecret": "3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM"
 }

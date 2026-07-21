@@ -131,7 +131,8 @@ export class DocThumbnailCache {
     if (typeof URL.createObjectURL !== "function") return;
     const next = URL.createObjectURL(blob);
     const prior = this.urls.get(docId);
-    if (prior !== undefined && typeof URL.revokeObjectURL === "function") URL.revokeObjectURL(prior);
+    if (prior !== undefined && typeof URL.revokeObjectURL === "function")
+      URL.revokeObjectURL(prior);
     this.urls.set(docId, next);
     this.publish(docId, next);
   }
@@ -143,7 +144,8 @@ export class DocThumbnailCache {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onupgradeneeded = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "docId" });
+        if (!db.objectStoreNames.contains(STORE_NAME))
+          db.createObjectStore(STORE_NAME, { keyPath: "docId" });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error ?? new Error("thumbnail cache open failed"));

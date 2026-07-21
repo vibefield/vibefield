@@ -310,9 +310,24 @@ export class NativeLink extends EventEmitter {
   private async replaySubscriptions(): Promise<void> {
     for (const [key, sub] of this.subs) {
       this.prepareSubscription(sub);
-      const res = (await this.rawRequest(sub.method, sub.params, key)) as { snapshot: unknown };
-      sub.onEvent(res.snapshot, "snapshot"); // P5: reconnect = fresh snapshot
-      this.activateSubscription(sub);
+      try {
+        const res = (await this.rawRequest(sub.method, sub.params, key)) as { snapshot: unknown };
+        sub.onEvent(res.snapshot, "snapshot"); // P5: reconnect = fresh snapshot
+        this.activateSubscription(sub);
+      } catch (e) {
+        // C3 review finding: one refused replay must never fail the whole dial
+        // (a serve.subscribe replayed while the mesh node is down answers
+        // UNAVAILABLE — pre-fix that cycled the ENTIRE link forever, health
+        // stream included). The sub entry STAYS in the map: the next reconnect
+        // retries it; until then its stream is honestly silent (its backend is
+        // down anyway). Transport-dead errors still abort: with no socket the
+        // remaining replays can't succeed either.
+        if (this.closed || this.superseded || this.sock === null) throw e;
+        console.warn(
+          `[native-link] subscription replay refused, kept for next reconnect: ${sub.method}`,
+          e instanceof Error ? e.message : e,
+        );
+      }
     }
   }
 

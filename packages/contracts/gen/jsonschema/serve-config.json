@@ -491,6 +491,18 @@
           "items": {
             "type": "string"
           }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "running",
+            "stopped",
+            "error"
+          ]
+        },
+        "error": {
+          "type": "string"
         }
       },
       "required": [

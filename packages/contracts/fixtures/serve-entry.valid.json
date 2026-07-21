@@ -1,6 +1,7 @@
 {
-  "name": "artifacts",
-  "target": { "kind": "dir", "path": "/Users/james/Library/Application Support/VibeField/blobs" },
-  "url": "https://mac.tail1234.ts.net/artifacts/",
-  "allow": ["me@jamesyong42.com"]
+  "name": "product",
+  "target": { "kind": "port", "port": 9410 },
+  "url": "http://mac.tail1234.ts.net:443",
+  "allow": ["me@jamesyong42.com"],
+  "status": "running"
 }

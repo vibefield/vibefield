@@ -77,6 +77,28 @@ export const SCOPES = [
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 
+/** The D32 tailnet-caller preset (C3): the scopes a WhoIs-authenticated tailnet
+ * principal is granted on a served product surface. Broad product access MINUS
+ * D32's local-only-forever set (tokens.mint, native.admin, push.manage,
+ * plugins.manage) and MINUS plugin-runtime/shell powers — those are capability
+ * grants for local plugin workers, meaningless (and dangerous) as remote-caller
+ * scopes; recorded deviation in thinking-c3 §1. */
+export const TAILNET_SCOPES: readonly Scope[] = [
+  "canvas.read",
+  "canvas.write",
+  "doc.read",
+  "doc.write",
+  "agent.spawn",
+  "agent.control",
+  "agent.observe",
+  "terminal.attach",
+  "artifact.publish",
+  "index.read",
+  "approval.respond",
+  "workspace.read",
+  "mcp.consume",
+] as const;
+
 /** Socket file names under the daemon run dirs; paths are stable across restarts (external-mode law). */
 export const SOCKETS = {
   FIELDD: "fieldd.sock",

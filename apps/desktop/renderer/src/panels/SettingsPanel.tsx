@@ -32,6 +32,7 @@ import {
   writeRuntimeResource,
 } from "@vibecook/ice";
 import { useState } from "react";
+import { MeshSection } from "./MeshSection";
 import { SystemSection } from "./SystemSection";
 import type { OverlapGlowConfig, OverlapGlowThemeColors, ThemeColors } from "./types";
 
@@ -682,6 +683,8 @@ export function SettingsPanel({
 
         {/* System diagnostics — sections, never pages (2026-07-21). */}
         <SystemSection />
+        {/* Mesh diagnostics — the tailnet section, sibling to System (C3). */}
+        <MeshSection />
       </div>
     </div>
   );

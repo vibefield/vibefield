@@ -84,7 +84,12 @@ function drawGround(ctx: OffscreenCanvasRenderingContext2D): void {
   }
 }
 
-function resolveView(widgets: DocThumbnailWidget[]): { x: number; y: number; w: number; h: number } {
+function resolveView(widgets: DocThumbnailWidget[]): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+} {
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
@@ -157,9 +162,9 @@ function resolveFill(
   const colors = css.match(/#[0-9a-fA-F]{3,8}/g) ?? [];
   if (colors.length >= 2) {
     const gradient = ctx.createLinearGradient(x, y, x + w, y + h);
-    colors.slice(0, 4).forEach((color, index, picked) =>
-      gradient.addColorStop(index / Math.max(1, picked.length - 1), color),
-    );
+    colors.slice(0, 4).forEach((color, index, picked) => {
+      gradient.addColorStop(index / Math.max(1, picked.length - 1), color);
+    });
     return gradient;
   }
   if (colors.length === 1) return colors[0]!;

@@ -138,11 +138,25 @@ export const ServeConfig = z
   .object({
     name: z.string(),
     target: ServeTarget,
-    /** per-route allow-globs (WhoIs-gated at the proxy) */
+    /** per-route allow-globs (WhoIs-gated at the proxy, pre-injection, fails
+     * closed on empty caller login — tagged nodes never reach the backend) */
     allow: z.array(z.string()).optional(),
+    /** false = plain HTTP inside WireGuard (no MagicDNS-cert dependency —
+     * the product-API serve's choice). Default true upstream. v2-sidecar. */
+    tls: z.boolean().optional(),
+    /** C3 provenance proof: when set, the serve is a single route
+     * `/t/<pathSecret>` → the target with strip_prefix OFF, so the backend
+     * sees the secret on every proxied request. Only the sidecar's route
+     * config and the declaring daemon hold it — a same-uid local caller
+     * (EL7's adversary) cannot mint tailnet identity without it. */
+    pathSecret: z.string().optional(),
   })
   .passthrough();
 export type ServeConfig = z.infer<typeof ServeConfig>;
+
+/** ProxyStatus/ProxyEvent mirror — the serve's live runtime state. */
+export const ServeStatus = z.enum(["starting", "running", "stopped", "error"]);
+export type ServeStatus = z.infer<typeof ServeStatus>;
 
 export const ServeEntry = z
   .object({
@@ -150,6 +164,9 @@ export const ServeEntry = z
     target: ServeTarget,
     url: z.string(),
     allow: z.array(z.string()).optional(),
+    status: ServeStatus.optional(),
+    /** ProxyEvent::Error passthrough (SERVE_ERROR / CONNECTION_REFUSED / …) */
+    error: z.string().optional(),
   })
   .passthrough();
 export type ServeEntry = z.infer<typeof ServeEntry>;

@@ -51,6 +51,10 @@ export interface FielddHealth {
   nativeConnected: boolean;
   native: NativeHealth | null;
   docs: { state: string; docCount: number };
+  /** C3: the declared serves with their fused reconcile+runtime state. `url`
+   * is the full CAPABILITY URL (base serve URL + the secret route path) —
+   * the Settings mesh section is where the user reads it; never log it. */
+  mesh: { serves: Array<{ name: string; status: string; url?: string; error?: string }> };
 }
 
 export interface FielddDaemon {
@@ -85,6 +89,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   try {
     const mesh = new MeshClient(native);
     const docs = new DocumentService({ dataDir: config.dataDir });
+    // C3 — the serve route secret (thinking-c3 §1): the provenance proof
+    // shared by exactly two parties, this process and the sidecar's route
+    // config. 192-bit; base64url is path-safe. Never logged, never in
+    // serve.list responses (the Rust side redacts); rotation = restart.
+    const servePathSecret = randomBytes(24).toString("base64url");
+    const capabilityUrl = (base: string | undefined): string | undefined =>
+      base === undefined ? undefined : `${base.replace(/\/+$/, "")}/t/${servePathSecret}`;
     // -- health aggregation: native deltas + link liveness, one stream out --
     let latestHealth: NativeHealth | null = null;
     const healthListeners = new Set<(h: FielddHealth) => void>();
@@ -99,6 +110,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       nativeConnected: native.connected,
       native: latestHealth,
       docs: docs.health(),
+      mesh: {
+        // serves() is the FUSED view (reconcile ∘ runtime — mesh-client C3)
+        serves: mesh.serves().map((s) => {
+          const url = capabilityUrl(s.url);
+          return {
+            name: s.name,
+            status: s.status,
+            ...(url !== undefined ? { url } : {}),
+            ...(s.error !== undefined ? { error: s.error } : {}),
+          };
+        }),
+      },
     });
     const emitHealth = () => {
       const h = health();
@@ -122,6 +145,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       port: config.controlPort ?? PORTS.FIELDD_WS_CONTROL,
       tokens,
       ...(config.allowedOrigins ? { allowedOrigins: config.allowedOrigins } : {}),
+      tailnetPathSecret: servePathSecret,
     });
 
     api.register("system.health", () => health());
@@ -233,6 +257,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs.dispose();
       throw e;
     }
+
+    // C3 — the first real serve (design-00 §4.1 / foundations §2.9): fieldd's
+    // own product API over the tailnet, plain-HTTP-in-WireGuard, gated by the
+    // secret route the ProductApi's tailnet door verifies. Fire-and-forget:
+    // with mesh disabled the entry sits `pending` honestly (never a stall);
+    // the declarative set replays on every native (re)connect.
+    void mesh.setServes([
+      {
+        name: "product",
+        target: { kind: "port", port: controlPort },
+        tls: false,
+        pathSecret: servePathSecret,
+      },
+    ]);
+    mesh.on("reconciled", emitHealth);
+    mesh.on("serves-changed", emitHealth);
 
     // -- run files (shell bootstrap contract) --
     const runDir = join(config.dataDir, "fieldd", "run");

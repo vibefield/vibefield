@@ -119,4 +119,31 @@ describe("NativeLink concurrency", () => {
     expect(link.connected).toBe(false);
     expect(mock.sockets.size).toBe(0);
   });
+
+  it("a refused REPLAY keeps the link alive; the kept sub retries next cycle (C3)", async () => {
+    // The mesh case: serve.subscribe replays UNAVAILABLE while the node is
+    // down — pre-fix that failed the whole dial and cycled the link forever,
+    // health stream included.
+    const { mock, link } = await setup();
+    await link.connect();
+    const events: string[] = [];
+    await link.subscribe("x.keep.subscribe", {}, (_p, kind) => events.push(`keep:${kind}`));
+    await link.subscribe("x.flaky.subscribe", {}, (_p, kind) => events.push(`flaky:${kind}`));
+    expect(mock.connections).toBe(1);
+
+    mock.rejectedSubscriptions.add("x.flaky.subscribe"); // its backend went down
+    mock.killClients();
+    await sleep(900); // first backoff is 500ms
+    expect(link.connected).toBe(true); // the dial survived the refused replay
+    expect(mock.connections).toBe(2);
+    expect(events).toContain("keep:snapshot"); // the healthy sub replayed fine
+
+    mock.rejectedSubscriptions.delete("x.flaky.subscribe"); // backend recovered
+    mock.killClients();
+    await sleep(900);
+    expect(link.connected).toBe(true);
+    expect(mock.connections).toBe(3);
+    // the KEPT entry retried on the next cycle and recovered its stream
+    expect(events.filter((e) => e === "flaky:snapshot").length).toBeGreaterThanOrEqual(1);
+  });
 });

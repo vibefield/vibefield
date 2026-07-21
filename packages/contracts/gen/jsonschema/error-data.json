@@ -471,6 +471,12 @@
           "items": {
             "type": "string"
           }
+        },
+        "tls": {
+          "type": "boolean"
+        },
+        "pathSecret": {
+          "type": "string"
         }
       },
       "required": [
@@ -496,6 +502,18 @@
           "items": {
             "type": "string"
           }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "running",
+            "stopped",
+            "error"
+          ]
+        },
+        "error": {
+          "type": "string"
         }
       },
       "required": [

@@ -22,6 +22,9 @@ export class MockMgmtServer {
   meshServes = new Map<string, { name: string; url: string }>();
   meshAddCalls = 0;
   meshRemoveCalls = 0;
+  /** scripted serve RUNTIME snapshot (C3): the ServeEntry[] answered by
+   * native.mesh.serve.subscribe; deltas are pushed with pushServeDelta */
+  serveSnapshot: unknown[] = [];
   /** simulate serves living in the node: a dropped daemon loses them */
   clearServesOnDisconnect = false;
   private nextSub = 1;
@@ -178,6 +181,16 @@ export class MockMgmtServer {
         reply({ result: { removed: true } });
         return;
       }
+      case "native.mesh.serve.subscribe": {
+        // C3 runtime stream: snapshot is `{serves: FullEntry[]}` (the shape the
+        // Rust forwarder sends). The sub is recorded in `issued` so pushServeDelta
+        // / pushServeSnapshot can target it (as the generic *.subscribe handler
+        // does for the lifecycle stream).
+        const subId = `s${this.nextSub++}`;
+        this.issued.push({ sock, subId, method: msg.method });
+        reply({ result: { subId, snapshot: { serves: [...this.serveSnapshot] } } });
+        return;
+      }
       case "native.mesh.store.open":
         reply({
           result: {
@@ -200,6 +213,28 @@ export class MockMgmtServer {
           jsonrpc: "2.0",
           method: e.method.replace(/\.subscribe$/, ".delta"),
           params: { subId: e.subId, payload },
+        }) + "\n",
+      );
+    }
+  }
+
+  /** Push a serve runtime delta — a PARTIAL entry {name, status, url?, error?}
+   * (native.mesh.serve.subscribe → native.mesh.serve.delta). */
+  pushServeDelta(entry: unknown): void {
+    this.pushDelta("mesh.serve.subscribe", entry);
+  }
+
+  /** Push a FULL serve re-snapshot (the broadcast-lag path) as a
+   * native.mesh.serve.snapshot notification — NativeLink routes `.snapshot`
+   * notifications to the subscription callback with kind "snapshot". */
+  pushServeSnapshot(serves: unknown[]): void {
+    for (const e of this.issued) {
+      if (!e.method.endsWith("mesh.serve.subscribe") || e.sock.destroyed) continue;
+      e.sock.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          method: "native.mesh.serve.snapshot",
+          params: { subId: e.subId, payload: { serves } },
         }) + "\n",
       );
     }

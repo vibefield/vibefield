@@ -1271,8 +1271,14 @@ impl<'de> ::serde::Deserialize<'de> for SemverString {
 #[doc = "    \"name\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
+#[doc = "    \"pathSecret\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"target\": {"]
 #[doc = "      \"$ref\": \"#/definitions/ServeTarget\""]
+#[doc = "    },"]
+#[doc = "    \"tls\": {"]
+#[doc = "      \"type\": \"boolean\""]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": true"]
@@ -1284,7 +1290,15 @@ pub struct ServeConfig {
     #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
     pub allow: ::std::vec::Vec<::std::string::String>,
     pub name: ::std::string::String,
+    #[serde(
+        rename = "pathSecret",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub path_secret: ::std::option::Option<::std::string::String>,
     pub target: ServeTarget,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub tls: ::std::option::Option<bool>,
 }
 impl ServeConfig {
     pub fn builder() -> builder::ServeConfig {
@@ -1310,8 +1324,20 @@ impl ServeConfig {
 #[doc = "        \"type\": \"string\""]
 #[doc = "      }"]
 #[doc = "    },"]
+#[doc = "    \"error\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"name\": {"]
 #[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"status\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"enum\": ["]
+#[doc = "        \"starting\","]
+#[doc = "        \"running\","]
+#[doc = "        \"stopped\","]
+#[doc = "        \"error\""]
+#[doc = "      ]"]
 #[doc = "    },"]
 #[doc = "    \"target\": {"]
 #[doc = "      \"$ref\": \"#/definitions/ServeTarget\""]
@@ -1328,13 +1354,99 @@ impl ServeConfig {
 pub struct ServeEntry {
     #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
     pub allow: ::std::vec::Vec<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub error: ::std::option::Option<::std::string::String>,
     pub name: ::std::string::String,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub status: ::std::option::Option<ServeEntryStatus>,
     pub target: ServeTarget,
     pub url: ::std::string::String,
 }
 impl ServeEntry {
     pub fn builder() -> builder::ServeEntry {
         Default::default()
+    }
+}
+#[doc = "`ServeEntryStatus`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"starting\","]
+#[doc = "    \"running\","]
+#[doc = "    \"stopped\","]
+#[doc = "    \"error\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ServeEntryStatus {
+    #[serde(rename = "starting")]
+    Starting,
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "stopped")]
+    Stopped,
+    #[serde(rename = "error")]
+    Error,
+}
+impl ::std::fmt::Display for ServeEntryStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Starting => f.write_str("starting"),
+            Self::Running => f.write_str("running"),
+            Self::Stopped => f.write_str("stopped"),
+            Self::Error => f.write_str("error"),
+        }
+    }
+}
+impl ::std::str::FromStr for ServeEntryStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "starting" => Ok(Self::Starting),
+            "running" => Ok(Self::Running),
+            "stopped" => Ok(Self::Stopped),
+            "error" => Ok(Self::Error),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ServeEntryStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ServeEntryStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ServeEntryStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
     }
 }
 #[doc = "`ServeTarget`"]
@@ -3023,14 +3135,21 @@ pub mod builder {
     pub struct ServeConfig {
         allow: ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
         name: ::std::result::Result<::std::string::String, ::std::string::String>,
+        path_secret: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         target: ::std::result::Result<super::ServeTarget, ::std::string::String>,
+        tls: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
     }
     impl ::std::default::Default for ServeConfig {
         fn default() -> Self {
             Self {
                 allow: Ok(Default::default()),
                 name: Err("no value supplied for name".to_string()),
+                path_secret: Ok(Default::default()),
                 target: Err("no value supplied for target".to_string()),
+                tls: Ok(Default::default()),
             }
         }
     }
@@ -3055,6 +3174,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for name: {e}"));
             self
         }
+        pub fn path_secret<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.path_secret = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for path_secret: {e}"));
+            self
+        }
         pub fn target<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<super::ServeTarget>,
@@ -3063,6 +3192,16 @@ pub mod builder {
             self.target = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for target: {e}"));
+            self
+        }
+        pub fn tls<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.tls = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for tls: {e}"));
             self
         }
     }
@@ -3074,7 +3213,9 @@ pub mod builder {
             Ok(Self {
                 allow: value.allow?,
                 name: value.name?,
+                path_secret: value.path_secret?,
                 target: value.target?,
+                tls: value.tls?,
             })
         }
     }
@@ -3083,14 +3224,24 @@ pub mod builder {
             Self {
                 allow: Ok(value.allow),
                 name: Ok(value.name),
+                path_secret: Ok(value.path_secret),
                 target: Ok(value.target),
+                tls: Ok(value.tls),
             }
         }
     }
     #[derive(Clone, Debug)]
     pub struct ServeEntry {
         allow: ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        error: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         name: ::std::result::Result<::std::string::String, ::std::string::String>,
+        status: ::std::result::Result<
+            ::std::option::Option<super::ServeEntryStatus>,
+            ::std::string::String,
+        >,
         target: ::std::result::Result<super::ServeTarget, ::std::string::String>,
         url: ::std::result::Result<::std::string::String, ::std::string::String>,
     }
@@ -3098,7 +3249,9 @@ pub mod builder {
         fn default() -> Self {
             Self {
                 allow: Ok(Default::default()),
+                error: Ok(Default::default()),
                 name: Err("no value supplied for name".to_string()),
+                status: Ok(Default::default()),
                 target: Err("no value supplied for target".to_string()),
                 url: Err("no value supplied for url".to_string()),
             }
@@ -3115,6 +3268,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for allow: {e}"));
             self
         }
+        pub fn error<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.error = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for error: {e}"));
+            self
+        }
         pub fn name<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::string::String>,
@@ -3123,6 +3286,16 @@ pub mod builder {
             self.name = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for name: {e}"));
+            self
+        }
+        pub fn status<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::ServeEntryStatus>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.status = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for status: {e}"));
             self
         }
         pub fn target<T>(mut self, value: T) -> Self
@@ -3153,7 +3326,9 @@ pub mod builder {
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 allow: value.allow?,
+                error: value.error?,
                 name: value.name?,
+                status: value.status?,
                 target: value.target?,
                 url: value.url?,
             })
@@ -3163,7 +3338,9 @@ pub mod builder {
         fn from(value: super::ServeEntry) -> Self {
             Self {
                 allow: Ok(value.allow),
+                error: Ok(value.error),
                 name: Ok(value.name),
+                status: Ok(value.status),
                 target: Ok(value.target),
                 url: Ok(value.url),
             }

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
 import {
@@ -9,6 +10,7 @@ import {
   type MethodDef,
   RPC_ERROR_CODES,
   type Scope,
+  TAILNET_SCOPES,
 } from "@vibefield/contracts";
 import { type WebSocket, WebSocketServer } from "ws";
 import { RpcCallError } from "./native-link";
@@ -20,6 +22,18 @@ import { RpcCallError } from "./native-link";
 // `<base>.delta {subId, payload}` notifications until system.unsubscribe or
 // connection close. The :9411 binary data-lane socket is served separately by
 // DocLane + DocumentService (doc.open mints the one-shot tickets that gate it).
+//
+// C3 — ONE stack, two doors (thinking-c3 §1): the same listener also backs the
+// tailnet serve. Provenance, not headers, decides trust: only upgrades on the
+// secret route path `/t/<tailnetPathSecret>` — a path known solely to fieldd
+// and the sidecar's route config — may mint a tailnet principal from the
+// sidecar-injected Tailscale-User-* headers. Headers on ANY other path are
+// ignored outright: EL7's same-uid adversary can dial 127.0.0.1 and type
+// headers, but cannot know the secret. On the secret path a non-empty login
+// header is REQUIRED (the serve's allow-glob is the proxy-side belt; this is
+// the suspenders), and the hello credential becomes optional — a verified
+// token still wins (its scopes are a real local grant), else the caller gets
+// the D32 TAILNET_SCOPES preset.
 
 const WS_OPEN = 1;
 
@@ -37,6 +51,8 @@ export interface ProductApiOptions {
   tokens: TokenServiceLike;
   /** Origin allowlist for browser clients. Non-browser clients send no Origin — allowed. */
   allowedOrigins?: string[];
+  /** C3: the serve route secret. Unset ⇒ the tailnet door is closed entirely. */
+  tailnetPathSecret?: string;
 }
 
 /** The slice of TokenService the API needs (keeps the dependency one-way). */
@@ -47,6 +63,12 @@ export interface TokenServiceLike {
 interface ConnState {
   authed: boolean;
   ctx: CallerContext | null;
+  /** effective grant for THIS connection (a tailnet principal carries no
+   * scopes field — the grant is connection state, not identity) */
+  scopes: Scope[];
+  /** non-null ⇒ the upgrade arrived on the secret route path with a verified
+   * login header — the sidecar-proxied door */
+  tailnetLogin: string | null;
   /** live subscriptions on this connection: subId → dispose */
   subs: Map<string, () => void>;
 }
@@ -118,7 +140,20 @@ export class ProductApi extends EventEmitter {
       ws.close(1008, "origin not allowed");
       return;
     }
-    const state: ConnState = { authed: false, ctx: null, subs: new Map() };
+    const door = this.classifyDoor(req);
+    if (door === "reject") {
+      // a wrong/partial secret path, or the secret path without an identity
+      // header — probing or a misconfigured proxy; nothing to negotiate
+      ws.close(1008, "unauthorized");
+      return;
+    }
+    const state: ConnState = {
+      authed: false,
+      ctx: null,
+      scopes: [],
+      tailnetLogin: door,
+      subs: new Map(),
+    };
     ws.on("message", (raw) => {
       void this.onMessage(ws, state, raw.toString());
     });
@@ -126,6 +161,28 @@ export class ProductApi extends EventEmitter {
       for (const dispose of state.subs.values()) dispose();
       state.subs.clear();
     });
+  }
+
+  /** Which door did this upgrade come through? null = the ordinary local door
+   * (token-gated; any Tailscale-User-* headers are IGNORED — a same-uid local
+   * caller can type headers but cannot know the route secret). A login string
+   * = the sidecar-proxied door. "reject" = drop the socket. */
+  private classifyDoor(req: IncomingMessage): string | null | "reject" {
+    const secret = this.opts.tailnetPathSecret;
+    const path = req.url ?? "/";
+    if (secret === undefined || secret.length === 0) return null;
+    if (!path.startsWith("/t/")) return null;
+    const candidate = path.slice(3).split(/[/?#]/, 1)[0] ?? "";
+    const a = Buffer.from(candidate);
+    const b = Buffer.from(secret);
+    const match = a.length === b.length && timingSafeEqual(a, b);
+    if (!match) return "reject";
+    const login = req.headers["tailscale-user-login"];
+    // The sidecar strips inbound Tailscale-* then injects verified values, so
+    // on the secret path this header is trustworthy — and REQUIRED (a tagged
+    // node / WhoIs miss arrives headerless and has no identity to grant).
+    if (typeof login !== "string" || login.length === 0) return "reject";
+    return login;
   }
 
   private async onMessage(ws: WebSocket, state: ConnState, raw: string): Promise<void> {
@@ -170,24 +227,38 @@ export class ProductApi extends EventEmitter {
       }
       const token = parsed.data.credential;
       const grant = typeof token === "string" ? this.opts.tokens.verify(token) : null;
-      if (!grant) {
+      if (grant) {
+        // a verified token is a real local grant — it wins on either door
+        state.authed = true;
+        state.scopes = grant.scopes;
+        state.ctx = {
+          principal: { kind: "local-token", tokenId: grant.tokenId, scopes: grant.scopes },
+          transport: state.tailnetLogin !== null ? "ws-tailnet" : "ws-loopback",
+          receivedAt: Date.now(),
+        };
+      } else if (state.tailnetLogin !== null) {
+        // the sidecar-proxied door: identity is the WhoIs-verified login; the
+        // grant is the D32 tailnet preset (design-04 — tokens.mint/native.*/
+        // push.manage/plugins.manage never federate)
+        state.authed = true;
+        state.scopes = [...TAILNET_SCOPES];
+        state.ctx = {
+          principal: { kind: "tailnet", login: state.tailnetLogin },
+          transport: "ws-tailnet",
+          receivedAt: Date.now(),
+        };
+      } else {
         reply(this.err(id, "UNAUTHORIZED", "invalid token", false));
         ws.close(1008, "unauthorized");
         return;
       }
-      state.authed = true;
-      state.ctx = {
-        principal: { kind: "local-token", tokenId: grant.tokenId, scopes: grant.scopes },
-        transport: "ws-loopback",
-        receivedAt: Date.now(),
-      };
       reply({
         jsonrpc: "2.0",
         id,
         result: {
           contractsVersion: CONTRACTS_VERSION,
           serverKind: "fieldd",
-          grantedScopes: grant.scopes,
+          grantedScopes: state.scopes,
         },
       });
       return;
@@ -218,8 +289,9 @@ export class ProductApi extends EventEmitter {
       return;
     }
     if (def.scope !== null) {
-      const scopes = (state.ctx.principal as { scopes?: Scope[] }).scopes ?? [];
-      if (!scopes.includes(def.scope)) {
+      // the grant lives on the CONNECTION (a tailnet principal has no scopes
+      // field — its preset was fixed at hello)
+      if (!state.scopes.includes(def.scope)) {
         reply(
           this.err(id, "FORBIDDEN_SCOPE", `requires ${def.scope}`, false, { required: def.scope }),
         );

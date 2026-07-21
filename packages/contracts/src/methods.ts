@@ -183,6 +183,16 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // C3 — serve runtime stream (ProxyEvent: started/stopped/error). Without it
+  // a serve that dies at runtime is invisible to fieldd (honest-state law).
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.serve.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
 
   // B3 — DocumentService, P0 local-only subset (design-01 §5.1, M4; design-02 §5 fence).
   // The rest of the doc.* catalog (subscribeRegistry/close/delete/compact/export/import)

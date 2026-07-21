@@ -34,8 +34,8 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { setBoardStatus } from "./board-status";
 import { installCursorHalo } from "./cursor";
 import type { DocManager } from "./doc-manager";
-import { buildRegistry, createFieldEngine, seedField } from "./field-engine";
 import { captureDocThumbnailScene } from "./doc-thumbnail-scene";
+import { buildRegistry, createFieldEngine, seedField } from "./field-engine";
 import { FilePill } from "./hud/FilePill";
 import { LoadingVeil } from "./hud/LoadingVeil";
 import { NavigationBreadcrumbs } from "./hud/NavigationBreadcrumbs";
