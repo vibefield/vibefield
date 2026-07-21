@@ -8,5 +8,20 @@ allowBuilds:
   electron: true
 # EL8 — exactly ONE loro-crdt resolution across the whole tree (strata/ICE/app;
 # CRDT docs are only interoperable within a single wasm instance).
+# @vibecook/ice: the machine-coupled sibling checkout, declared ONCE here
+# (packages specify "*"; catalogs don't support file: yet). Verified by
+# scripts/preflight.mjs — see CLAUDE.md "Machine setup". Swap this line for a
+# registry version once @vibecook/* publishing is real.
 overrides:
   loro-crdt: ^1.13.6
+  "@vibecook/ice": file:../infinite-canvas-engine/packages/ice
+# Shared dependency versions, declared ONCE — packages reference "catalog:".
+catalog:
+  "@types/node": ^24.0.0
+  "@types/react": ^19.2.17
+  "@types/react-dom": ^19.2.3
+  esbuild: ^0.28.1
+  react: ^19.2.7
+  react-dom: ^19.2.7
+  typescript: ^5.6.0
+  vitest: ^3.0.0

@@ -46,6 +46,7 @@ export class MockMgmtServer {
     sock.on("data", (d) => {
       buf += d.toString("utf8");
       let i: number;
+      // biome-ignore lint/suspicious/noAssignInExpressions: canonical newline-split loop
       while ((i = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, i);
         buf = buf.slice(i + 1);

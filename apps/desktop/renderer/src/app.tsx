@@ -30,10 +30,18 @@ export function App(): ReactElement {
           <span className="mark" />
           VibeField
           <nav className="tabs">
-            <button className={view === "field" ? "active" : ""} onClick={() => setView("field")}>
+            <button
+              type="button"
+              className={view === "field" ? "active" : ""}
+              onClick={() => setView("field")}
+            >
               Field
             </button>
-            <button className={view === "system" ? "active" : ""} onClick={() => setView("system")}>
+            <button
+              type="button"
+              className={view === "system" ? "active" : ""}
+              onClick={() => setView("system")}
+            >
               System
             </button>
           </nav>

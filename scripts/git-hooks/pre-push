@@ -1,5 +1,6 @@
 #!/bin/sh
-# dev-local is the local-only design-docs branch — it must never reach a remote.
+# 1) dev-local is the local-only design-docs branch — it must never reach a remote.
+# 2) every push runs the full verify gate (SKIP_VERIFY=1 git push to bypass).
 while read local_ref local_sha remote_ref remote_sha; do
   case "$local_ref" in
     refs/heads/dev-local)
@@ -8,4 +9,9 @@ while read local_ref local_sha remote_ref remote_sha; do
       ;;
   esac
 done
+
+if [ -z "$SKIP_VERIFY" ]; then
+  echo "pre-push: running 'pnpm verify' (SKIP_VERIFY=1 to bypass)..." >&2
+  pnpm verify || exit 1
+fi
 exit 0

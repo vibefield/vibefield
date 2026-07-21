@@ -44,6 +44,7 @@ export function useSubscription<T = unknown>(method: string, params?: unknown): 
   const [state, setState] = useState<SubscriptionState<T>>({ status: "loading", data: null, error: null });
   const paramsKey = JSON.stringify(params ?? null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: params is deliberately keyed by its JSON (paramsKey) so object-identity churn never resubscribes
   useEffect(() => {
     let cancelled = false;
     let unsub: (() => void) | null = null;

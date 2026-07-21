@@ -67,7 +67,9 @@ export function FieldView(): ReactElement {
     <div className="field-wrap">
       <InfiniteCanvas engine={ce} className="field-canvas" />
       <div className="field-toolbar">
-        <button onClick={spawnNote}>+ Note</button>
+        <button type="button" onClick={spawnNote}>
+          + Note
+        </button>
       </div>
     </div>
   );

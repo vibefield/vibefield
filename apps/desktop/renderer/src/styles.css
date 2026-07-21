@@ -149,6 +149,7 @@ header {
   letter-spacing: 0.08em;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: element defaults grouped after component classes on purpose */
 main {
   display: flex;
   flex-direction: column;

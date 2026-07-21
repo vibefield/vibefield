@@ -7,9 +7,24 @@
     "node": ">=22"
   },
   "scripts": {
+    "dev": "pnpm --filter @vibefield/desktop dev",
+    "smoke": "pnpm --filter @vibefield/desktop smoke",
+    "smoke:canvas": "pnpm --filter @vibefield/desktop smoke:canvas",
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:rust": "cargo test --workspace",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "lint:rust": "cargo clippy --workspace --all-targets -- -D warnings",
+    "format": "biome format --write . && cargo fmt",
+    "gen": "pnpm --filter @vibefield/contracts gen:rust",
+    "gen:check": "pnpm gen && git diff --exit-code -- packages/contracts/gen packages/field-native/src/contracts.rs",
+    "preflight": "node scripts/preflight.mjs",
+    "verify": "pnpm preflight && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm test && pnpm test:rust && pnpm gen:check",
     "commit-draft": "sh scripts/commit-draft.sh"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.4"
   }
 }

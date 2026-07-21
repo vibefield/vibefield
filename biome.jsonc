@@ -1,0 +1,51 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": ["**", "!packages/contracts/gen"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        // bracket access on parsed/passthrough JSON records is idiomatic here
+        "useLiteralKeys": "off"
+      },
+      "style": {
+        // under exactOptionalPropertyTypes + noUncheckedIndexedAccess, `!` is a
+        // deliberate, visible escape hatch (mostly fixtures/tests)
+        "noNonNullAssertion": "off"
+      },
+      "a11y": {
+        // canvas widgets: ICE's input contract owns focus/interaction semantics
+        "noAutofocus": "off",
+        "noStaticElementInteractions": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
+}

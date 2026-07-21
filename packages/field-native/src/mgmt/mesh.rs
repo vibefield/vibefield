@@ -5,6 +5,7 @@
 //! - store ops work the moment the node exists (offline-tolerant by design —
 //!   local slice writes sync when peers appear);
 //! - serve requires Running: truffle's NotRunning maps to UNAVAILABLE.
+//!
 //! Handlers send their own responses (subscribe paths must order the response
 //! line before any forwarded event).
 

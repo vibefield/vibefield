@@ -10,9 +10,10 @@ coverage/
 *.tsbuildinfo
 .turbo/
 
-# env & secrets
+# env & secrets (the committed template is the one exception)
 .env
 .env.*
+!.env.example
 
 # editors & OS
 .idea/

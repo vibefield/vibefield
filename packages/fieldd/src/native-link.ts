@@ -131,6 +131,7 @@ export class NativeLink extends EventEmitter {
   private onData(chunk: string): void {
     this.buf += chunk;
     let idx: number;
+    // biome-ignore lint/suspicious/noAssignInExpressions: canonical newline-split loop
     while ((idx = this.buf.indexOf("\n")) >= 0) {
       const line = this.buf.slice(0, idx);
       this.buf = this.buf.slice(idx + 1);
