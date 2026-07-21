@@ -72,8 +72,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
 
   return (
     <>
-      {/* Dimming backdrop — click closes; same tier as the tray's. */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: Escape is the keyboard close; the backdrop click is a redundant pointer affordance */}
+      {/* Dimming backdrop — click closes (Escape is the keyboard close); same tier as the tray's. */}
       <div
         className={`absolute inset-0 z-40 bg-black/10 transition-opacity duration-500 dark:bg-black/40 ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
@@ -126,7 +125,6 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
               {editing ? (
                 <input
                   ref={inputRef}
-                  // biome-ignore lint/a11y/noAutofocus: the input replaces the clicked name in place — focus IS the interaction
                   autoFocus
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}

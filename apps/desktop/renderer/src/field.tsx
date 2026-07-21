@@ -130,9 +130,19 @@ const fabCls = (active: boolean) =>
 export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
   const registry = useMemo(buildRegistry, []);
-  const ce = useMemo(() => createFieldEngine(registry), [registry]);
   const docState = useSyncExternalStore(manager.subscribe, manager.getState);
   const pending = docState.pending;
+  // ONE ENGINE PER DOC (B4 fix, 2026-07-21): a doc switch REMOUNTS the engine
+  // and the whole canvas stack (key below). The store layer supports in-place
+  // close→open (doc-swap.test pins it), but our composition stacks six
+  // stateful layers on the engine (GL bridge/router/plane, halo, ground,
+  // devtools) and the retained GL + WebGPU frames survive a world reset —
+  // field report: stale 3D cards + wires after "new field". Remounting lands
+  // every switch on the exact path boot/restart already prove, behind the
+  // veil. The extra virgin engine at first boot (generation 0 → 1) is the
+  // accepted cost of uniformity.
+  const generation = pending?.generation ?? 0;
+  const ce = useMemo(() => createFieldEngine(registry), [registry, generation]);
 
   // B4 launch: register the previews stage (chunks of 3 — each capture call
   // owns one WebGL context, and 7 rapid context cycles flirts with the browser
@@ -218,8 +228,9 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
     };
   }, [ce, manager, pending]);
   // The P0 ground layer (grid + wires + snap guides, one WebGPU canvas) —
-  // memoized: a new factory identity re-boots the canvas mount effect.
-  const groundFactory = useMemo(() => ground(), []);
+  // memoized per doc generation: the ground remounts WITH the engine (a
+  // factory is one canvas-mount's state; reuse across remounts is undefined).
+  const groundFactory = useMemo(() => ground(), [generation]);
   const [trayOpen, setTrayOpenRaw] = useState(false);
   const [docsOpen, setDocsOpenRaw] = useState(false);
   // One sheet at a time: the tray and the docs explorer are mutually exclusive
@@ -320,6 +331,19 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   useEffect(() => disposeGl, [disposeGl]);
   useEffect(() => disposeHalo, [disposeHalo]);
 
+  // Engine lifecycle (one per doc): when the generation re-keys `ce`, tear the
+  // PRIOR engine's wiring down and dispose it. Ordering is safe by React's
+  // rules: the attach layout-effect's cleanup (final flush → stop → close)
+  // runs in the commit phase, BEFORE this passive cleanup disposes the engine.
+  useEffect(() => {
+    return () => {
+      disposeGl();
+      disposeHalo();
+      setGl(null);
+      ce.dispose();
+    };
+  }, [ce, disposeGl, disposeHalo]);
+
   // (B4: the GL preview capture moved OFF the idle path into the loading
   // pipeline's previews stage — registered with the manager above. The
   // environment stays a factory built ON the capture renderer: PMREM textures
@@ -355,7 +379,6 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   // upper and bottom cap"): frame the content once the viewport is measured
   // and membership has stamped the first tick. Re-keyed per doc generation
   // (B4): a switched-in doc gets its own arrival framing.
-  const generation = pending?.generation ?? 0;
   useEffect(() => {
     if (generation === 0) return; // no doc landed yet — the veil is up
     if (ce.ops.frameContent()) return;
@@ -437,8 +460,11 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
     <div className="field-wrap" style={{ background: "var(--vf-canvas-bg)" }}>
       {/* The recede (reference design): the canvas eases to 0.98 while the
           sheet is up. Only the wrapper transforms — the tray handoff
-          ratio-corrects, so the transient scale never skews engine picks. */}
+          ratio-corrects, so the transient scale never skews engine picks.
+          KEYED by doc generation: a switch remounts the whole canvas stack
+          (engine + InfiniteCanvas + GL Canvas + ground) — see the ce memo. */}
       <div
+        key={generation}
         style={{
           position: "absolute",
           inset: 0,

@@ -1,5 +1,5 @@
 import { DocListResult, DocOpenResult, DocRegistryEntry } from "@vibefield/contracts";
-import type { FielddClient } from "@vibefield/fieldd-client";
+import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { setBoardStatus } from "./board-status";
 
@@ -102,6 +102,9 @@ export class DocManager {
    * SUCCESSOR session's content is applied, i.e. after React cleanup queued the
    * old autosave's final flush PUT onto them. */
   private retiring: DocLaneClient[] = [];
+  /** in-flight drains — the NEXT open awaits these, or a fast switch-back hits
+   * the daemon's single-writer lock while the old socket is still closing. */
+  private drains: Promise<void>[] = [];
   private offLane: (() => void) | null = null;
 
   constructor(
@@ -172,7 +175,7 @@ export class DocManager {
     try {
       await this.openSession(entry, false);
     } catch (e) {
-      this.degradedSession(e);
+      this.recoverToCurrent("switch", e);
     }
   }
 
@@ -184,8 +187,20 @@ export class DocManager {
       await this.refreshDocs();
       await this.openSession(entry, false);
     } catch (e) {
-      this.degradedSession(e);
+      this.recoverToCurrent("create", e);
     }
+  }
+
+  /** A failed SWITCH must never demote the running board — the current doc
+   * stays on screen and stays live; only a failed BOOT degrades (no board
+   * exists yet to keep). */
+  private recoverToCurrent(what: string, e: unknown): void {
+    if (this.appliedGeneration === 0) {
+      this.degradedSession(e);
+      return;
+    }
+    console.warn(`[doc-manager] ${what} failed — keeping the current doc:`, e);
+    this.patch({ phase: "ready", loading: null });
   }
 
   /** Rename the current doc (label only — recency is content's, per doc.rename). */
@@ -221,7 +236,7 @@ export class DocManager {
     if (generation !== this.generation) return; // a newer session superseded this apply
     const firstApply = this.appliedGeneration !== generation;
     this.appliedGeneration = generation;
-    for (const lane of this.retiring.splice(0)) void lane.drain();
+    for (const lane of this.retiring.splice(0)) this.drains.push(lane.drain());
     const pending = this.state.pending;
     if (pending !== null && pending.lane !== null && firstApply) writeLastDocId(pending.docId);
     void this.runPreviewsStage(generation);
@@ -235,11 +250,26 @@ export class DocManager {
 
   private async openSession(entry: DocRegistryEntry, seed: boolean): Promise<void> {
     const timeoutMs = this.opts.timeoutMs ?? 8_000;
+    // A predecessor lane may still be closing. drain() settles when the CLIENT
+    // initiates close, but the daemon's writer lock clears only when the SERVER
+    // observes the socket close — so a fast switch-back can still read
+    // writer-busy for a few ms. Await our drains, then retry busy briefly.
+    await Promise.allSettled(this.drains.splice(0));
     const lane = new DocLaneClient({
       openLane: async () =>
         DocOpenResult.parse(await this.client.request("doc.open", { docId: entry.docId })),
     });
-    const { hasDoc } = await withTimeout(lane.attach(), timeoutMs, "doc lane attach");
+    let hasDoc = false;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        ({ hasDoc } = await withTimeout(lane.attach(), timeoutMs, "doc lane attach"));
+        break;
+      } catch (e) {
+        const busy = e instanceof FielddRpcError && e.kind === "PRECONDITION_FAILED";
+        if (!busy || attempt >= 20) throw e;
+        await new Promise((r) => setTimeout(r, 75));
+      }
+    }
     this.stage(0.25, "fetching board");
     const initialBytes = hasDoc ? await withTimeout(lane.get(), timeoutMs, "doc fetch") : null;
     this.stage(0.45, "restoring board");

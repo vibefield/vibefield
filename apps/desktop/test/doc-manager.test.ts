@@ -10,7 +10,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ENGINE_SCHEMA_VERSION } from "@vibecook/ice";
+import { defineQuery, ENGINE_SCHEMA_VERSION, Position, PrefabId } from "@vibecook/ice";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
@@ -146,6 +146,42 @@ describe("DocManager launch pipeline (B4)", () => {
     await until(() => first?.lane?.status === "closed");
     expect(daemon.docs.list()).toHaveLength(2);
     expect(localStorage.getItem("vf-last-doc")).toBe(second?.docId);
+  });
+
+  it("the field-report flow: seed → new field is EMPTY → switch back restores", async () => {
+    // James, 2026-07-21: "created new field, all the r3f 3d element and wires
+    // are still showing, and when open original doc, nothing recovers." Each
+    // applyPending builds a FRESH engine — exactly the app's remount-per-doc
+    // design — so this pins the whole switch cycle headlessly.
+    const { daemon } = await stack();
+    const manager = managerFor(daemon);
+    await manager.boot();
+    const original = manager.getState().pending;
+    const ce1 = applyPending(manager);
+    await until(() => manager.getState().phase === "ready");
+    const originalBytes = await putCurrent(manager, ce1);
+
+    await manager.createDoc();
+    const ce2 = applyPending(manager);
+    await until(() => manager.getState().phase === "ready");
+    let widgets = 0;
+    ce2.world.query(defineQuery([Position, PrefabId])).each((b) => {
+      for (const _ of b) widgets += 1;
+    });
+    expect(widgets).toBe(0); // the new field is EMPTY — no leftover 3D cards/wires
+    await putCurrent(manager, ce2);
+
+    await manager.switchTo(original?.docId ?? "");
+    const restored = manager.getState().pending;
+    expect(restored?.docId).toBe(original?.docId);
+    expect(Array.from(restored?.initialBytes ?? [])).toEqual(Array.from(originalBytes));
+    const ce3 = applyPending(manager);
+    await until(() => manager.getState().phase === "ready");
+    let restoredWidgets = 0;
+    ce3.world.query(defineQuery([Position, PrefabId])).each((b) => {
+      for (const _ of b) restoredWidgets += 1;
+    });
+    expect(restoredWidgets).toBe(21); // everything recovers
   });
 
   it("restart honors vf-last-doc and restores byte-identical content", async () => {
