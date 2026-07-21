@@ -107,7 +107,7 @@ export class DocLane {
       ws.close(1009, "oversize frame");
       return;
     }
-    let frame: { kind: number; payload: Uint8Array };
+    let frame: { kind: number; laneId: number; payload: Uint8Array };
     try {
       frame = decodeLaneFrame(buf);
     } catch {

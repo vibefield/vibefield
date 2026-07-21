@@ -230,15 +230,15 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
 
   it("one outbound connection per peer: two forwards reuse a single socket", async () => {
     const { A, dials } = await bootPair();
-    await A.peers.request("dev-b", "doc.list", {});
-    await A.peers.request("dev-b", "doc.list", {});
+    await A.peers.request("dev-b", "device.list", {});
+    await A.peers.request("dev-b", "device.list", {});
     expect(A.peers.linkState("dev-b")).toBe("connected");
     expect(dials()).toBe(1);
   }, 30_000);
 
   it("the roster folds link:'connected' for a dialed peer, never for self", async () => {
     const { A } = await bootPair();
-    await A.peers.request("dev-b", "doc.list", {}); // establish the link
+    await A.peers.request("dev-b", "device.list", {}); // establish the link
 
     const rpcA = await openRpc(A.controlPort);
     await helloAs(rpcA, A.shellToken, "shell-main");
@@ -258,14 +258,14 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
     });
     cleanup.push(() => link.dispose());
 
-    await link.request("dev-b", "doc.list", {});
+    await link.request("dev-b", "device.list", {});
     expect(dials()).toBe(1);
     expect(link.linkState("dev-b")).toBe("connected");
 
     // the sweeper closes the idle link; linkState goes undefined
     await until(() => link.linkState("dev-b") === undefined, 3000);
 
-    await link.request("dev-b", "doc.list", {});
+    await link.request("dev-b", "device.list", {});
     expect(dials()).toBe(2); // re-dialed a fresh socket
   }, 30_000);
 });

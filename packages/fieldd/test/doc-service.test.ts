@@ -298,7 +298,7 @@ describe("lane ticket security", () => {
     await until(() => b.closed);
   });
 
-  it("expired and replayed tickets fail at the service (injected clock)", () => {
+  it("expired and replayed tickets fail at the service (injected clock)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vf-doc-unit-"));
     cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
     let clock = 1_000_000;
