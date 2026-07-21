@@ -11,13 +11,18 @@
     "dev": "pnpm build:shell && concurrently -k -s first \"vite\" \"electron . --dev\"",
     "start": "pnpm build && electron .",
     "smoke": "pnpm build:shell && electron . --smoke",
+    "spike:loro": "pnpm build && electron . --spike-loro",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p renderer/tsconfig.json"
   },
   "dependencies": {
+    "@react-three/fiber": "^9.6.1",
+    "@vibecook/ice": "file:../../../infinite-canvas-engine/packages/ice",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/fieldd-client": "workspace:*",
+    "loro-crdt": "^1.13.6",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "three": "^0.185.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -14,6 +14,7 @@ import { FielddClient } from "@vibefield/fieldd-client";
 
 const DEV = process.argv.includes("--dev");
 const SMOKE = process.argv.includes("--smoke");
+const SPIKE_LORO = process.argv.includes("--spike-loro");
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 
 // dist/main.cjs → apps/desktop; repo root two levels up (dev layout)
@@ -106,8 +107,10 @@ async function ensureFieldd(root: string): Promise<Shell> {
 
 function installCsp(): void {
   // prod only — the Vite dev server needs its HMR inline preamble
+  // 'wasm-unsafe-eval' admits WebAssembly compilation ONLY (loro's inlined
+  // wasm build) — plain 'unsafe-eval' stays banned. B1 spike finding.
   const CSP =
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data:; connect-src ws://127.0.0.1:*; base-uri 'none'; object-src 'none'";
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
     cb({ responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [CSP] } });
@@ -141,6 +144,9 @@ async function createWindow(shell: Shell): Promise<void> {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
+      // covered/occluded windows must keep ticking: engine rAF + Loro sync
+      // (predesign-02 packaging kit verify item)
+      backgroundThrottling: false,
     },
   });
   mainWin = win;
@@ -177,9 +183,47 @@ async function smoke(shell: Shell, root: string): Promise<void> {
   app.exit(summary.ok ? 0 : 2); // exit is queued; the caller returns without opening a window
 }
 
+/// B1 spike: load the PROD spike page over file:// in a sandboxed window and
+/// report the renderer's own verdict. No daemons involved.
+async function spikeLoro(): Promise<void> {
+  const win = new BrowserWindow({
+    show: false,
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+  });
+  const verdict = new Promise<string>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("spike timed out (30s)")), 30_000);
+    win.webContents.on("console-message", (...args: unknown[]) => {
+      for (const a of args) {
+        const text =
+          typeof a === "string" ? a : a && typeof a === "object" && "message" in a ? String((a as { message: unknown }).message) : "";
+        if (text.startsWith("SPIKE_LORO ")) {
+          clearTimeout(t);
+          resolve(text.slice("SPIKE_LORO ".length));
+          return;
+        }
+      }
+    });
+  });
+  await win.loadFile(join(appRoot, "dist", "renderer", "spike-loro.html"));
+  try {
+    const raw = await verdict;
+    const result = JSON.parse(raw) as { ok: boolean };
+    console.log(`SPIKE_LORO ${raw}`);
+    app.exit(result.ok ? 0 : 2);
+  } catch (e) {
+    console.error(`SPIKE_LORO failed: ${e instanceof Error ? e.message : e}`);
+    app.exit(2);
+  }
+}
+
 async function main(): Promise<void> {
   await app.whenReady();
   if (!DEV) installCsp();
+
+  if (SPIKE_LORO) {
+    await spikeLoro();
+    return;
+  }
 
   const root = dataRoot();
   const shell = await ensureFieldd(root);

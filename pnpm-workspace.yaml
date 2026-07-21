@@ -6,3 +6,7 @@ packages:
 allowBuilds:
   esbuild: true
   electron: true
+# EL8 — exactly ONE loro-crdt resolution across the whole tree (strata/ICE/app;
+# CRDT docs are only interoperable within a single wasm instance).
+overrides:
+  loro-crdt: ^1.13.6
