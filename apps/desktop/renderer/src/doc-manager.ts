@@ -59,6 +59,11 @@ export interface DocManagerApi {
   switchTo(docId: string): Promise<void>;
 }
 
+export interface DocPersistenceLease {
+  flush(): Promise<void>;
+  close(): Promise<void>;
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms);
@@ -117,6 +122,10 @@ export class DocManager {
    * the daemon's single-writer lock while the old socket is still closing. */
   private drains: Promise<void>[] = [];
   private offLane: (() => void) | null = null;
+  private activePersistence: {
+    generation: number;
+    lease: DocPersistenceLease;
+  } | null = null;
   private readonly presentedGenerations = new Set<number>();
   private readonly presentationWaiters = new Map<number, () => void>();
   private readonly thumbnails = new DocThumbnailCache((docId, url) => {
@@ -193,6 +202,7 @@ export class DocManager {
       // Let the opaque cover reach full opacity before the keyed engine swap.
       // This small, fixed handoff is cheaper than exposing teardown/rebuild.
       await this.waitForSwitchCover();
+      await this.flushActivePersistence();
       await this.openSession(entry, false);
     } catch (e) {
       this.recoverToCurrent("switch", e);
@@ -204,6 +214,7 @@ export class DocManager {
     this.stage(0, "opening doc");
     try {
       await this.waitForSwitchCover();
+      await this.flushActivePersistence();
       const entry = DocRegistryEntry.parse(await this.request("doc.create", { name: "Untitled" }));
       await this.refreshDocs();
       await this.openSession(entry, false);
@@ -260,6 +271,26 @@ export class DocManager {
     this.thumbnails.schedule(docId, revision, scene);
   }
 
+  registerPersistence(generation: number, lease: DocPersistenceLease): () => void {
+    const registration = { generation, lease };
+    this.activePersistence = registration;
+    return () => {
+      if (this.activePersistence === registration) this.activePersistence = null;
+    };
+  }
+
+  async shutdown(): Promise<void> {
+    const persistence = this.activePersistence;
+    if (persistence !== null) await persistence.lease.close();
+
+    const lanes = new Set(this.retiring.splice(0));
+    if (this.state.pending?.lane !== null && this.state.pending?.lane !== undefined) {
+      lanes.add(this.state.pending.lane);
+    }
+    await Promise.all([...lanes].map((lane) => lane.drain()));
+    await Promise.all(this.drains.splice(0));
+  }
+
   /** FieldView reports presentation only after the arrival camera has framed
    * the restored world. Bytes-applied is not visual-ready: widgets/GL mount on
    * the following frames, which is exactly what the veil must conceal. */
@@ -298,23 +329,27 @@ export class DocManager {
     // observes the socket close — so a fast switch-back can still read
     // writer-busy for a few ms. Await our drains, then retry busy briefly.
     await Promise.allSettled(this.drains.splice(0));
-    const lane = new DocLaneClient({
-      openLane: async () =>
-        DocOpenResult.parse(await this.client.request("doc.open", { docId: entry.docId })),
-    });
-    let hasDoc = false;
+    let lane: DocLaneClient | null = null;
+    let initialBytes: Uint8Array | null = null;
+    this.stage(0.25, "fetching board");
     for (let attempt = 0; ; attempt++) {
+      const candidate = new DocLaneClient({
+        openLane: async () =>
+          DocOpenResult.parse(await this.client.request("doc.open", { docId: entry.docId })),
+        opTimeoutMs: timeoutMs,
+      });
       try {
-        ({ hasDoc } = await withTimeout(lane.attach(), timeoutMs, "doc lane attach"));
+        ({ initialBytes } = await candidate.attachSnapshot());
+        lane = candidate;
         break;
       } catch (e) {
+        candidate.close();
         const busy = e instanceof FielddRpcError && e.kind === "PRECONDITION_FAILED";
         if (!busy || attempt >= 20) throw e;
         await new Promise((r) => setTimeout(r, 75));
       }
     }
-    this.stage(0.25, "fetching board");
-    const initialBytes = hasDoc ? await withTimeout(lane.get(), timeoutMs, "doc fetch") : null;
+    if (lane === null) throw new Error("document lane attach completed without a lane");
     this.stage(0.45, "restoring board");
     this.installSession({
       generation: ++this.generation,
@@ -325,6 +360,12 @@ export class DocManager {
       // a doc that already has bytes never re-seeds, whatever the caller thinks
       seed: seed && initialBytes === null,
     });
+  }
+
+  private async flushActivePersistence(): Promise<void> {
+    const persistence = this.activePersistence;
+    if (persistence === null || persistence.generation !== this.appliedGeneration) return;
+    await persistence.lease.flush();
   }
 
   /** Honest degraded launch (B3 law): the field still opens, in memory, with

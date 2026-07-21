@@ -174,8 +174,8 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   // B3 law carried into B4 — the doc attaches to the COMMITTED engine only,
   // never in the memo factory (the StrictMode twin must never stream to the
   // daemon). Keyed on the manager's pending session: a doc switch tears the
-  // old session down (flush → stop → close; the manager drains the retired
-  // lane after this effect re-applies) and lands the new one before paint.
+  // old session down only after the manager has durably flushed it, then lands
+  // the new one before paint.
   useLayoutEffect(() => {
     if (pending === null) return;
     const lane = pending.lane;
@@ -214,24 +214,25 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
         // engine is still alive. Rendering/encoding happens later in a worker.
         const thumbnailScene = captureDocThumbnailScene(ce);
         setBoardStatus({ state: "saving", lastSavedAt: lane.lastPutAt });
-        await lane.put(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt });
+        const receipt = await lane.put(bytes, {
+          engineSchema: ENGINE_SCHEMA_VERSION,
+          savedAt,
+        });
         manager.thumbnailCheckpoint(
           pending.docId,
-          `${savedAt}:${bytes.byteLength}`,
+          receipt.revisionId,
           thumbnailScene,
         );
         setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
       },
     });
+    const unregisterPersistence = manager.registerPersistence(pending.generation, {
+      flush: () => autosave.flush(),
+      close: () => autosave.close(),
+    });
     manager.contentApplied(pending.generation);
-    const flush = () => void autosave.flush();
-    window.addEventListener("beforeunload", flush);
     return () => {
-      window.removeEventListener("beforeunload", flush);
-      // Order is load-bearing: flush exports SYNCHRONOUSLY at entry (final
-      // save), stop() then bars any later export — so close()'s world reset
-      // can never be persisted as an empty board.
-      void autosave.flush();
+      unregisterPersistence();
       autosave.stop();
       ce.docs.close();
     };
