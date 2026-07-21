@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Smoke test for the three ported chrome panels. Each mounts against a REAL
+ * Smoke tests for the remaining canvas chrome. Each mounts against a REAL
  * `createCanvasEngine()`, survives engine steps, and unmounts cleanly.
  * `createElement` (not JSX) keeps this a `.ts` file. No `EngineProvider`: the
  * panels take the engine as a prop and read it directly (no `@ice/react` hooks).
@@ -21,7 +21,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { NavigationBreadcrumbs } from "../renderer/src/hud/NavigationBreadcrumbs";
 import {
-  InspectorPanel,
   type OverlapGlowConfig,
   type OverlapGlowThemeColors,
   SettingsPanel,
@@ -128,26 +127,6 @@ describe("widgetlab panels", () => {
     const buttons = Array.from(container?.querySelectorAll("button") ?? []);
     const stress = buttons.find((b) => b.textContent === "+50");
     expect(stress?.disabled).toBe(true);
-  });
-
-  it("InspectorPanel mounts, reads metrics, and survives engine steps", () => {
-    const engine = makeEngine();
-    mount(createElement(InspectorPanel, { engine, onClose: () => {} }));
-
-    expect(container?.textContent).toContain("Inspector");
-    expect(container?.textContent).toContain("ECS");
-    expect(container?.textContent).toContain("entities");
-    expect(container?.textContent).toContain("world tick");
-
-    // Stepping the engine with the panel mounted must not throw.
-    act(() => {
-      let now = 0;
-      for (let i = 0; i < 4; i++) {
-        now += 16;
-        engine.step(now);
-      }
-    });
-    expect(container?.textContent).toContain("Navigation");
   });
 
   it("NavigationBreadcrumbs renders the root state at depth 0", () => {

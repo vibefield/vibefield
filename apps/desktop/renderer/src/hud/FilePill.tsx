@@ -167,10 +167,22 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
                   type="button"
                   onClick={beginEdit}
                   disabled={busy || state.doc === null}
-                  className="max-w-full truncate rounded-md px-2 py-0.5 text-[13px] font-medium text-black/80 transition-colors hover:bg-black/5 hover:text-black disabled:pointer-events-none dark:text-white/80 dark:hover:bg-white/10 dark:hover:text-white"
+                  className="inline-flex h-7 max-w-full items-center gap-1 rounded-md px-2 text-[13px] font-medium text-black/80 transition-colors hover:bg-black/5 hover:text-black disabled:pointer-events-none dark:text-white/80 dark:hover:bg-white/10 dark:hover:text-white"
                   title="Rename this field"
                 >
-                  {docName}
+                  <svg
+                    aria-hidden="true"
+                    className="h-[13px] w-[13px] shrink-0 opacity-45"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m15 5 4 4M4 20l1-4L16.5 4.5a2.12 2.12 0 0 1 3 3L8 19Z" />
+                  </svg>
+                  <span className="block min-w-0 truncate leading-4">{docName}</span>
                 </button>
               )}
             </div>
