@@ -13,11 +13,30 @@ import "./styles.css";
 // and FieldView applies sessions to the engine. A failed launch degrades to
 // an in-memory board with persistence honestly detached.
 
+let manager: DocManager | null = null;
+let client: FielddClient | null = null;
+
+window.vibefield.onPrepareClose((requestId) => {
+  void (async () => {
+    try {
+      await manager?.shutdown();
+      client?.close();
+      window.vibefield.completeClose({ requestId, ok: true });
+    } catch (error) {
+      window.vibefield.completeClose({
+        requestId,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  })();
+});
+
 async function boot(): Promise<void> {
   const conn = await window.vibefield.getConnection();
-  const client = new FielddClient({ url: `ws://127.0.0.1:${conn.port}`, token: conn.token });
+  client = new FielddClient({ url: `ws://127.0.0.1:${conn.port}`, token: conn.token });
   client.connect();
-  const manager = new DocManager(client);
+  manager = new DocManager(client);
   createRoot(document.getElementById("root")!).render(
     <FielddProvider client={client}>
       <FieldView manager={manager} />
