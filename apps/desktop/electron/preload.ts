@@ -4,5 +4,6 @@ import { contextBridge, ipcRenderer } from "electron";
 // port + a per-window scoped token — and NOTHING else. All product traffic
 // then flows over the loopback WS (D27), never over IPC.
 contextBridge.exposeInMainWorld("vibefield", {
-  getConnection: (): Promise<{ port: number; token: string }> => ipcRenderer.invoke("vibefield:connection"),
+  getConnection: (): Promise<{ port: number; token: string }> =>
+    ipcRenderer.invoke("vibefield:connection"),
 });

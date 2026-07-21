@@ -1,6 +1,11 @@
 import { defineWidget, p } from "@vibecook/ice";
-import { useOps, useSelected, useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
-import { useRef, useState, type ReactElement } from "react";
+import {
+  useOps,
+  useSelected,
+  useWidgetProps,
+  type WidgetComponentProps,
+} from "@vibecook/ice/react";
+import { type ReactElement, useRef, useState } from "react";
 
 // The note card (B2's proof widget). Input contract (predesign-03 §2.3 interim
 // rules, matching ICE's real boundaries):
@@ -66,7 +71,8 @@ function NoteView({ entity, world }: WidgetComponentProps): ReactElement {
               cancelled.current = true;
               (e.target as HTMLTextAreaElement).blur();
             }
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) (e.target as HTMLTextAreaElement).blur();
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey))
+              (e.target as HTMLTextAreaElement).blur();
           }}
           onWheel={(e) => e.stopPropagation()}
           autoFocus
@@ -91,7 +97,13 @@ function NoteView({ entity, world }: WidgetComponentProps): ReactElement {
             setEditing(true);
           }}
           onWheel={(e) => e.stopPropagation()}
-          style={{ flex: 1, padding: 10, overflowY: "auto", whiteSpace: "pre-wrap", cursor: "text" }}
+          style={{
+            flex: 1,
+            padding: 10,
+            overflowY: "auto",
+            whiteSpace: "pre-wrap",
+            cursor: "text",
+          }}
         >
           {text.length > 0 ? text : <span style={{ opacity: 0.45 }}>Double-click to edit</span>}
         </div>

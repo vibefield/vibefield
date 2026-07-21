@@ -23,10 +23,12 @@ export class PluginRegistry<W = unknown> {
     const declared = new Set(manifest.widgets.map((w) => w.type));
     const provided = new Set(Object.keys(widgets));
     for (const t of declared) {
-      if (!provided.has(t)) throw new Error(`plugin ${manifest.id} declares ${t} but provides no implementation`);
+      if (!provided.has(t))
+        throw new Error(`plugin ${manifest.id} declares ${t} but provides no implementation`);
     }
     for (const t of provided) {
-      if (!declared.has(t)) throw new Error(`plugin ${manifest.id} provides undeclared widget ${t}`);
+      if (!declared.has(t))
+        throw new Error(`plugin ${manifest.id} provides undeclared widget ${t}`);
     }
     this.plugins.set(manifest.id, { manifest, widgets: new Map(Object.entries(widgets)) });
   }

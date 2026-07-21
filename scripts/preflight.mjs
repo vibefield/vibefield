@@ -14,7 +14,9 @@ const warnings = [];
 const ICE = resolve(root, "../infinite-canvas-engine/packages/ice");
 const TRUFFLE = resolve(root, "../p008/truffle/crates/truffle-core");
 if (!existsSync(ICE)) {
-  problems.push(`@vibecook/ice checkout missing at ${ICE} (file: dep in pnpm-workspace.yaml catalog)`);
+  problems.push(
+    `@vibecook/ice checkout missing at ${ICE} (file: dep in pnpm-workspace.yaml catalog)`,
+  );
 }
 if (!existsSync(TRUFFLE)) {
   problems.push(`truffle-core checkout missing at ${TRUFFLE} (Cargo.toml [patch.crates-io])`);
@@ -37,7 +39,9 @@ if (existsSync(ICE)) {
   if (!existsSync(dist)) {
     problems.push(`ice has no dist/ — build it: cd ${ICE} && pnpm build`);
   } else if (existsSync(src) && newestMtime(src) > newestMtime(dist)) {
-    warnings.push("ice dist/ is older than its src/ — rebuild ice or you'll consume stale-dist bugs");
+    warnings.push(
+      "ice dist/ is older than its src/ — rebuild ice or you'll consume stale-dist bugs",
+    );
   }
 }
 

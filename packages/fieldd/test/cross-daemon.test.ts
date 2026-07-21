@@ -1,16 +1,16 @@
 // THE handshake test: fieldd (TypeScript) pairs with the REAL field-native
 // (Rust binary) over the mgmt UDS — D8 end to end, then the full spine:
 // WS client → ProductAPI → NativeLink → field-native and back.
-import { execSync, spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, execSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, NativeLink, type FielddHealth } from "../src/index";
-import { WsRpc, helloAs, until } from "./ws-rpc";
+import { bootstrap, type FielddHealth, NativeLink } from "../src/index";
+import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = join(ROOT, "target/debug/field-native");
@@ -32,7 +32,10 @@ afterEach(() => {
 async function spawnNative(): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), "vf-"));
   dirs.push(dir);
-  const child = spawn(BIN, [], { env: { ...process.env, FIELD_NATIVE_DATA_DIR: dir }, stdio: "ignore" });
+  const child = spawn(BIN, [], {
+    env: { ...process.env, FIELD_NATIVE_DATA_DIR: dir },
+    stdio: "ignore",
+  });
   children.push(child);
   const socket = join(dir, "native/run/mgmt.sock");
   const deadline = Date.now() + 10_000;
@@ -88,7 +91,9 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
       });
     const first = mk("fieldd-boot-A");
     await first.connect();
-    const supersededEvent = new Promise<void>((resolve) => first.once("superseded", () => resolve()));
+    const supersededEvent = new Promise<void>((resolve) =>
+      first.once("superseded", () => resolve()),
+    );
 
     const second = mk("fieldd-boot-B");
     await second.connect();
@@ -111,20 +116,42 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     });
 
     // pre-hello call is refused
-    const early = await wsRequest(ws, { jsonrpc: "2.0", id: 1, method: "system.health", params: {} });
+    const early = await wsRequest(ws, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "system.health",
+      params: {},
+    });
     expect((early["error"] as { data: { kind: string } }).data.kind).toBe("UNAUTHORIZED");
 
     const hello = await wsRequest(ws, {
-      jsonrpc: "2.0", id: 2, method: "system.hello",
-      params: { contractsVersion: "0.1.0", minCompatible: "0.1.0", clientKind: "renderer", credential: grant.token },
+      jsonrpc: "2.0",
+      id: 2,
+      method: "system.hello",
+      params: {
+        contractsVersion: "0.1.0",
+        minCompatible: "0.1.0",
+        clientKind: "renderer",
+        credential: grant.token,
+      },
     });
     expect((hello["result"] as { serverKind: string }).serverKind).toBe("fieldd");
 
-    const health = await wsRequest(ws, { jsonrpc: "2.0", id: 3, method: "system.health", params: {} });
+    const health = await wsRequest(ws, {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "system.health",
+      params: {},
+    });
     const native = (health["result"] as { native: { units: { unit: string }[] } }).native;
     expect(native.units.map((u) => u.unit)).toContain("terminal"); // Rust truth, seen through two daemons
 
-    const caps = await wsRequest(ws, { jsonrpc: "2.0", id: 4, method: "system.capabilities", params: {} });
+    const caps = await wsRequest(ws, {
+      jsonrpc: "2.0",
+      id: 4,
+      method: "system.capabilities",
+      params: {},
+    });
     expect((caps["result"] as { methods: string[] }).methods).toContain("system.health");
 
     const missing = await wsRequest(ws, { jsonrpc: "2.0", id: 5, method: "nope.nope", params: {} });
@@ -143,8 +170,15 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
     await new Promise<void>((r) => ws.once("open", () => r()));
     const hello = await wsRequest(ws, {
-      jsonrpc: "2.0", id: 1, method: "system.hello",
-      params: { contractsVersion: "0.1.0", minCompatible: "0.1.0", clientKind: "renderer", credential: grant.token },
+      jsonrpc: "2.0",
+      id: 1,
+      method: "system.hello",
+      params: {
+        contractsVersion: "0.1.0",
+        minCompatible: "0.1.0",
+        clientKind: "renderer",
+        credential: grant.token,
+      },
     });
     expect((hello["result"] as { serverKind: string }).serverKind).toBe("fieldd");
 
@@ -194,14 +228,28 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
 
     const ws1 = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
     await new Promise<void>((r) => ws1.once("open", () => r()));
-    const malformed = await wsRequest(ws1, { jsonrpc: "2.0", id: 1, method: "system.hello", params: { nope: true } });
-    expect((malformed["error"] as { data: { kind: string } }).data.kind).toBe("PRECONDITION_FAILED");
+    const malformed = await wsRequest(ws1, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "system.hello",
+      params: { nope: true },
+    });
+    expect((malformed["error"] as { data: { kind: string } }).data.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
 
     const ws2 = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
     await new Promise<void>((r) => ws2.once("open", () => r()));
     const mismatch = await wsRequest(ws2, {
-      jsonrpc: "2.0", id: 1, method: "system.hello",
-      params: { contractsVersion: "1.0.0", minCompatible: "1.0.0", clientKind: "renderer", credential: grant.token },
+      jsonrpc: "2.0",
+      id: 1,
+      method: "system.hello",
+      params: {
+        contractsVersion: "1.0.0",
+        minCompatible: "1.0.0",
+        clientKind: "renderer",
+        credential: grant.token,
+      },
     });
     expect((mismatch["error"] as { data: { kind: string } }).data.kind).toBe("INCOMPATIBLE");
     await daemon.stop();
@@ -218,7 +266,10 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     const rpc = new WsRpc(ws);
     await helloAs(rpc, grant.token);
 
-    const sub = (await rpc.call("system.health.subscribe", {})) as { subId: string; snapshot: FielddHealth };
+    const sub = (await rpc.call("system.health.subscribe", {})) as {
+      subId: string;
+      snapshot: FielddHealth;
+    };
     expect(sub.snapshot.nativeConnected).toBe(true);
     const payloads = (): FielddHealth[] =>
       rpc.notifications
@@ -230,7 +281,10 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     await until(() => payloads().some((p) => p.nativeConnected === false), 8000);
 
     // same data dir, fresh boot: pairing secret persists → fieldd re-pairs by itself
-    const revived = spawn(BIN, [], { env: { ...process.env, FIELD_NATIVE_DATA_DIR: dir }, stdio: "ignore" });
+    const revived = spawn(BIN, [], {
+      env: { ...process.env, FIELD_NATIVE_DATA_DIR: dir },
+      stdio: "ignore",
+    });
     children.push(revived);
     await until(() => {
       const ps = payloads();
@@ -249,8 +303,15 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
     await new Promise<void>((r) => ws.once("open", () => r()));
     const resp = await wsRequest(ws, {
-      jsonrpc: "2.0", id: 1, method: "system.hello",
-      params: { contractsVersion: "0.1.0", minCompatible: "0.1.0", clientKind: "renderer", credential: "tok_forged" },
+      jsonrpc: "2.0",
+      id: 1,
+      method: "system.hello",
+      params: {
+        contractsVersion: "0.1.0",
+        minCompatible: "0.1.0",
+        clientKind: "renderer",
+        credential: "tok_forged",
+      },
     });
     expect((resp["error"] as { data: { kind: string } }).data.kind).toBe("UNAUTHORIZED");
 

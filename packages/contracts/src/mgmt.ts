@@ -81,9 +81,7 @@ export const ObservedTerminal = z
   .passthrough();
 export type ObservedTerminal = z.infer<typeof ObservedTerminal>;
 
-export const ObservedWorker = z
-  .object({ id: z.string(), state: UnitState })
-  .passthrough();
+export const ObservedWorker = z.object({ id: z.string(), state: UnitState }).passthrough();
 export type ObservedWorker = z.infer<typeof ObservedWorker>;
 
 export const ObservedState = z

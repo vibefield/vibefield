@@ -22,7 +22,13 @@ use super::{err, ok, send};
 
 type Tx = mpsc::UnboundedSender<OutMsg>;
 
-pub async fn handle(state: &Arc<DaemonState>, tx: &Tx, method: &str, params: &Value, id: Option<Value>) {
+pub async fn handle(
+    state: &Arc<DaemonState>,
+    tx: &Tx,
+    method: &str,
+    params: &Value,
+    id: Option<Value>,
+) {
     let Some(node) = state.mesh.node().await else {
         send(tx, unavailable(state, id));
         return;
@@ -38,24 +44,51 @@ pub async fn handle(state: &Arc<DaemonState>, tx: &Tx, method: &str, params: &Va
         }
         "native.mesh.store.open" | "native.mesh.store.get" | "native.mesh.store.set" => {
             let Some(store_id) = params.get("storeId").and_then(Value::as_str) else {
-                send(tx, err(id, "PRECONDITION_FAILED", -32005, "storeId required", false, None));
+                send(
+                    tx,
+                    err(
+                        id,
+                        "PRECONDITION_FAILED",
+                        -32005,
+                        "storeId required",
+                        false,
+                        None,
+                    ),
+                );
                 return;
             };
             let store = state.mesh.open_store(&node, store_id).await;
             match method {
                 "native.mesh.store.open" => ok(id, store_snapshot(&store).await),
-                "native.mesh.store.get" => {
-                    match params.get("deviceId").and_then(Value::as_str) {
-                        Some(dev) => {
-                            let slice = store.get(dev).await.map(|s| serde_json::to_value(s).unwrap());
-                            ok(id, json!({"storeId": store_id, "deviceId": dev, "slice": slice}))
-                        }
-                        None => ok(id, json!({"storeId": store_id, "deviceId": store.device_id(), "data": store.local().await})),
+                "native.mesh.store.get" => match params.get("deviceId").and_then(Value::as_str) {
+                    Some(dev) => {
+                        let slice = store
+                            .get(dev)
+                            .await
+                            .map(|s| serde_json::to_value(s).unwrap());
+                        ok(
+                            id,
+                            json!({"storeId": store_id, "deviceId": dev, "slice": slice}),
+                        )
                     }
-                }
+                    None => ok(
+                        id,
+                        json!({"storeId": store_id, "deviceId": store.device_id(), "data": store.local().await}),
+                    ),
+                },
                 _ => {
                     let Some(data) = params.get("data") else {
-                        send(tx, err(id, "PRECONDITION_FAILED", -32005, "data required", false, None));
+                        send(
+                            tx,
+                            err(
+                                id,
+                                "PRECONDITION_FAILED",
+                                -32005,
+                                "data required",
+                                false,
+                                None,
+                            ),
+                        );
                         return;
                     };
                     store.set(data.clone()).await;
@@ -65,19 +98,45 @@ pub async fn handle(state: &Arc<DaemonState>, tx: &Tx, method: &str, params: &Va
         }
         "native.mesh.store.subscribe" => {
             let Some(store_id) = params.get("storeId").and_then(Value::as_str) else {
-                send(tx, err(id, "PRECONDITION_FAILED", -32005, "storeId required", false, None));
+                send(
+                    tx,
+                    err(
+                        id,
+                        "PRECONDITION_FAILED",
+                        -32005,
+                        "storeId required",
+                        false,
+                        None,
+                    ),
+                );
                 return;
             };
             let store = state.mesh.open_store(&node, store_id).await;
             let sub_id = state.sub_id();
-            send(tx, ok(id, json!({"subId": sub_id, "snapshot": store_snapshot(&store).await})));
+            send(
+                tx,
+                ok(
+                    id,
+                    json!({"subId": sub_id, "snapshot": store_snapshot(&store).await}),
+                ),
+            );
             spawn_store_forwarder(tx.clone(), store, sub_id);
             return;
         }
         "native.mesh.serve.add" => serve_add(state, &node, params, id).await,
         "native.mesh.serve.remove" => {
             let Some(name) = params.get("name").and_then(Value::as_str) else {
-                send(tx, err(id, "PRECONDITION_FAILED", -32005, "name required", false, None));
+                send(
+                    tx,
+                    err(
+                        id,
+                        "PRECONDITION_FAILED",
+                        -32005,
+                        "name required",
+                        false,
+                        None,
+                    ),
+                );
                 return;
             };
             match node.proxy().remove(name).await {
@@ -120,7 +179,14 @@ fn unavailable(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
     if let Some(url) = auth_url {
         details["authUrl"] = json!(url);
     }
-    err(id, "UNAVAILABLE", -32006, "mesh node not up", true, Some(details))
+    err(
+        id,
+        "UNAVAILABLE",
+        -32006,
+        "mesh node not up",
+        true,
+        Some(details),
+    )
 }
 
 /// truffle errors → wire errors. NotRunning is transient (auth/network) → UNAVAILABLE.
@@ -162,16 +228,35 @@ async fn store_snapshot(store: &Arc<JsonStore>) -> Value {
     json!({"storeId": store.store_id(), "slices": slices})
 }
 
-async fn serve_add(state: &Arc<DaemonState>, node: &Arc<MeshNode>, params: &Value, id: Option<Value>) -> Value {
+async fn serve_add(
+    state: &Arc<DaemonState>,
+    node: &Arc<MeshNode>,
+    params: &Value,
+    id: Option<Value>,
+) -> Value {
     let Some(name) = params.get("name").and_then(Value::as_str) else {
-        return err(id, "PRECONDITION_FAILED", -32005, "name required", false, None);
+        return err(
+            id,
+            "PRECONDITION_FAILED",
+            -32005,
+            "name required",
+            false,
+            None,
+        );
     };
     let target = params.get("target").cloned().unwrap_or(Value::Null);
     let allow = params.get("allow").cloned().unwrap_or_else(|| json!([]));
     let cfg_json = match target.get("kind").and_then(Value::as_str) {
         Some("port") => {
             let Some(port) = target.get("port").and_then(Value::as_u64) else {
-                return err(id, "PRECONDITION_FAILED", -32005, "target.port required", false, None);
+                return err(
+                    id,
+                    "PRECONDITION_FAILED",
+                    -32005,
+                    "target.port required",
+                    false,
+                    None,
+                );
             };
             json!({
                 "id": name, "name": name, "listen_port": port,
@@ -181,7 +266,14 @@ async fn serve_add(state: &Arc<DaemonState>, node: &Arc<MeshNode>, params: &Valu
         }
         Some("dir") => {
             let Some(path) = target.get("path").and_then(Value::as_str) else {
-                return err(id, "PRECONDITION_FAILED", -32005, "target.path required", false, None);
+                return err(
+                    id,
+                    "PRECONDITION_FAILED",
+                    -32005,
+                    "target.path required",
+                    false,
+                    None,
+                );
             };
             json!({
                 "id": name, "name": name, "listen_port": 0,
@@ -189,11 +281,29 @@ async fn serve_add(state: &Arc<DaemonState>, node: &Arc<MeshNode>, params: &Valu
                 "routes": [{"prefix": "/", "dir": path}],
             })
         }
-        _ => return err(id, "PRECONDITION_FAILED", -32005, "target.kind must be port|dir", false, None),
+        _ => {
+            return err(
+                id,
+                "PRECONDITION_FAILED",
+                -32005,
+                "target.kind must be port|dir",
+                false,
+                None,
+            )
+        }
     };
     let cfg: ProxyConfig = match serde_json::from_value(cfg_json) {
         Ok(c) => c,
-        Err(e) => return err(id, "INTERNAL", -32000, &format!("proxy config: {e}"), false, None),
+        Err(e) => {
+            return err(
+                id,
+                "INTERNAL",
+                -32000,
+                &format!("proxy config: {e}"),
+                false,
+                None,
+            )
+        }
     };
     match node.proxy().add(cfg).await {
         Ok(info) => {
@@ -201,7 +311,10 @@ async fn serve_add(state: &Arc<DaemonState>, node: &Arc<MeshNode>, params: &Valu
                 .mesh
                 .record_serve(name, json!({"target": target, "allow": allow}))
                 .await;
-            ok(id, json!({"name": name, "target": target, "url": info.url, "allow": allow}))
+            ok(
+                id,
+                json!({"name": name, "target": target, "url": info.url, "allow": allow}),
+            )
         }
         Err(e) => map_node_err(state, id, &e.to_string()),
     }
@@ -241,13 +354,19 @@ fn spawn_store_forwarder(tx: Tx, store: Arc<JsonStore>, sub_id: String) {
                         StoreEvent::LocalChanged(data) => {
                             json!({"kind": "localChanged", "deviceId": store.device_id(), "data": data})
                         }
-                        StoreEvent::PeerUpdated { device_id, data, version } => {
+                        StoreEvent::PeerUpdated {
+                            device_id,
+                            data,
+                            version,
+                        } => {
                             json!({"kind": "peerUpdated", "deviceId": device_id, "data": data, "version": version})
                         }
                         StoreEvent::PeerRemoved { device_id } => {
                             json!({"kind": "peerRemoved", "deviceId": device_id})
                         }
-                        _ => continue, // tolerant: future event kinds don't break the stream
+                        // tolerant: future upstream event kinds must not break the stream
+                        #[allow(unreachable_patterns)]
+                        _ => continue,
                     };
                     let note = json!({"jsonrpc":"2.0","method":"native.mesh.store.delta","params":{"subId": sub_id, "payload": payload}});
                     if tx.send(OutMsg::Line(note.to_string())).is_err() {

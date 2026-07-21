@@ -1,16 +1,16 @@
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
-import { WebSocketServer, type WebSocket } from "ws";
 import {
+  type CallerContext,
   CONTRACTS_VERSION,
+  type ErrorKind,
   Hello,
   METHODS,
-  RPC_ERROR_CODES,
-  type CallerContext,
-  type ErrorKind,
   type MethodDef,
+  RPC_ERROR_CODES,
   type Scope,
 } from "@vibefield/contracts";
+import { type WebSocket, WebSocketServer } from "ws";
 import { RpcCallError } from "./native-link";
 
 // ProductAPI — the fabric's control binding (design-02 §3.3, D27): loopback WS
@@ -63,7 +63,8 @@ export class ProductApi extends EventEmitter {
 
   register(method: string, handler: Handler): void {
     const def = this.lookup(method);
-    if (def.subscription) throw new Error(`subscription method needs registerSubscription: ${method}`);
+    if (def.subscription)
+      throw new Error(`subscription method needs registerSubscription: ${method}`);
     this.handlers.set(method, handler);
   }
 
@@ -75,7 +76,8 @@ export class ProductApi extends EventEmitter {
 
   private lookup(method: string): MethodDef {
     const def = METHODS.find((m) => m.method === method && m.surface === "product");
-    if (!def) throw new Error(`method not in the registry (D36 — unregistered doesn't ship): ${method}`);
+    if (!def)
+      throw new Error(`method not in the registry (D36 — unregistered doesn't ship): ${method}`);
     return def;
   }
 
@@ -112,7 +114,13 @@ export class ProductApi extends EventEmitter {
     try {
       msg = JSON.parse(raw);
     } catch {
-      ws.send(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }));
+      ws.send(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32700, message: "parse error" },
+        }),
+      );
       return;
     }
     const id = msg["id"];
@@ -157,7 +165,11 @@ export class ProductApi extends EventEmitter {
       reply({
         jsonrpc: "2.0",
         id,
-        result: { contractsVersion: CONTRACTS_VERSION, serverKind: "fieldd", grantedScopes: grant.scopes },
+        result: {
+          contractsVersion: CONTRACTS_VERSION,
+          serverKind: "fieldd",
+          grantedScopes: grant.scopes,
+        },
       });
       return;
     }
@@ -189,7 +201,9 @@ export class ProductApi extends EventEmitter {
     if (def.scope !== null) {
       const scopes = (state.ctx.principal as { scopes?: Scope[] }).scopes ?? [];
       if (!scopes.includes(def.scope)) {
-        reply(this.err(id, "FORBIDDEN_SCOPE", `requires ${def.scope}`, false, { required: def.scope }));
+        reply(
+          this.err(id, "FORBIDDEN_SCOPE", `requires ${def.scope}`, false, { required: def.scope }),
+        );
         return;
       }
     }
@@ -200,7 +214,13 @@ export class ProductApi extends EventEmitter {
         let active = true;
         const emit = (payload: unknown) => {
           if (active && ws.readyState === WS_OPEN)
-            ws.send(JSON.stringify({ jsonrpc: "2.0", method: `${base}.delta`, params: { subId, payload } }));
+            ws.send(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                method: `${base}.delta`,
+                params: { subId, payload },
+              }),
+            );
         };
         const { snapshot, dispose } = subHandler(state.ctx, params, emit);
         state.subs.set(subId, () => {

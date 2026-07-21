@@ -56,7 +56,10 @@ export class MockMgmtServer {
     sock.on("error", () => {});
   }
 
-  private onLine(sock: Socket, msg: { id: number; method: string; params?: Record<string, unknown> }): void {
+  private onLine(
+    sock: Socket,
+    msg: { id: number; method: string; params?: Record<string, unknown> },
+  ): void {
     if (msg.method.startsWith("native.mesh.")) {
       this.onMesh(sock, msg);
       return;
@@ -68,7 +71,11 @@ export class MockMgmtServer {
           JSON.stringify({
             jsonrpc: "2.0",
             id: msg.id,
-            error: { code: -32001, message: "nope", data: { kind: "UNAUTHORIZED", retryable: false } },
+            error: {
+              code: -32001,
+              message: "nope",
+              data: { kind: "UNAUTHORIZED", retryable: false },
+            },
           }) + "\n",
         );
         sock.end();
@@ -106,14 +113,22 @@ export class MockMgmtServer {
     sock.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} }) + "\n");
   }
 
-  private onMesh(sock: Socket, msg: { id: number; method: string; params?: Record<string, unknown> }): void {
-    const reply = (body: object) => sock.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body }) + "\n");
+  private onMesh(
+    sock: Socket,
+    msg: { id: number; method: string; params?: Record<string, unknown> },
+  ): void {
+    const reply = (body: object) =>
+      sock.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body }) + "\n");
     if (this.meshUnavailable) {
       reply({
         error: {
           code: -32006,
           message: "mesh node not up",
-          data: { kind: "UNAVAILABLE", retryable: true, details: { service: "mesh-gateway", state: "starting" } },
+          data: {
+            kind: "UNAVAILABLE",
+            retryable: true,
+            details: { service: "mesh-gateway", state: "starting" },
+          },
         },
       });
       return;
@@ -138,7 +153,12 @@ export class MockMgmtServer {
         return;
       }
       case "native.mesh.store.open":
-        reply({ result: { storeId: p["storeId"], slices: { "dev-self": { data: { hello: 1 }, version: 1 } } } });
+        reply({
+          result: {
+            storeId: p["storeId"],
+            slices: { "dev-self": { data: { hello: 1 }, version: 1 } },
+          },
+        });
         return;
       default:
         reply({ result: {} });

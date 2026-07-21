@@ -41,7 +41,10 @@ impl NativeServiceManager {
             }
             seen.push(s.id());
         }
-        Ok(Self { services, failed: Mutex::new(Vec::new()) })
+        Ok(Self {
+            services,
+            failed: Mutex::new(Vec::new()),
+        })
     }
 
     pub async fn start_all(&self) {

@@ -4,9 +4,9 @@ import { join } from "node:path";
 import {
   CONTRACTS_VERSION,
   METHODS,
+  type NativeHealth,
   PORTS,
   SCOPES,
-  type NativeHealth,
   type Scope,
 } from "@vibefield/contracts";
 import { MeshClient } from "./mesh-client";
@@ -73,7 +73,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     let latestHealth: NativeHealth | null = null;
     const healthListeners = new Set<(h: FielddHealth) => void>();
     const health = (): FielddHealth => ({
-      fieldd: { state: "up", bootId, contractsVersion: CONTRACTS_VERSION, startedAt, pid: process.pid },
+      fieldd: {
+        state: "up",
+        bootId,
+        contractsVersion: CONTRACTS_VERSION,
+        startedAt,
+        pid: process.pid,
+      },
       nativeConnected: native.connected,
       native: latestHealth,
     });
@@ -82,10 +88,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       for (const fn of healthListeners) fn(h);
     };
 
-    const { snapshot } = await native.subscribe("native.lifecycle.health.subscribe", {}, (payload) => {
-      latestHealth = payload as NativeHealth; // deltas + reconnect re-snapshots (P5)
-      emitHealth();
-    });
+    const { snapshot } = await native.subscribe(
+      "native.lifecycle.health.subscribe",
+      {},
+      (payload) => {
+        latestHealth = payload as NativeHealth; // deltas + reconnect re-snapshots (P5)
+        emitHealth();
+      },
+    );
     latestHealth = snapshot as NativeHealth;
     // link down/up flips stream immediately (each backoff attempt re-emits; cheap and honest)
     native.on("reconnecting", emitHealth);
@@ -110,17 +120,29 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const p = params as { scopes?: unknown; label?: unknown } | undefined;
       const scopes = p?.scopes;
       const label = p?.label;
-      if (!Array.isArray(scopes) || !scopes.every((s) => typeof s === "string") || typeof label !== "string")
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { scopes: string[], label: string }");
+      if (
+        !Array.isArray(scopes) ||
+        !scopes.every((s) => typeof s === "string") ||
+        typeof label !== "string"
+      )
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { scopes: string[], label: string }",
+        );
       if (scopes.some((s) => !(SCOPES as readonly string[]).includes(s)))
         throw new RpcCallError("PRECONDITION_FAILED", "unknown scope requested");
       // no privilege escalation: minted ⊆ caller's own grant
       const callerScopes = (ctx.principal as { scopes?: string[] }).scopes ?? [];
       const outside = scopes.filter((s) => !callerScopes.includes(s));
       if (outside.length > 0)
-        throw new RpcCallError("FORBIDDEN_SCOPE", `cannot mint beyond own grant: ${outside.join(",")}`, false, {
-          outside,
-        });
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          `cannot mint beyond own grant: ${outside.join(",")}`,
+          false,
+          {
+            outside,
+          },
+        );
       const grant = tokens.mint(scopes as Scope[], label);
       return { token: grant.token, tokenId: grant.tokenId, scopes: grant.scopes };
     });

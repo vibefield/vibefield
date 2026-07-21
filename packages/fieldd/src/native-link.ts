@@ -75,7 +75,8 @@ export class NativeLink extends EventEmitter {
   async connect(): Promise<void> {
     const deadline = Date.now() + (this.opts.waitForDaemonMs ?? 10_000);
     while (!existsSync(this.opts.pairingFile) || !existsSync(this.opts.socketPath)) {
-      if (Date.now() > deadline) throw new Error("field-native did not come up (pairing/socket missing)");
+      if (Date.now() > deadline)
+        throw new Error("field-native did not come up (pairing/socket missing)");
       await sleep(100);
     }
     await this.dial();
@@ -151,11 +152,21 @@ export class NativeLink extends EventEmitter {
       if (!p) return;
       this.pending.delete(msg["id"] as number);
       const err = msg["error"] as
-        | { code?: number; message?: string; data?: { kind?: string; retryable?: boolean; details?: unknown } }
+        | {
+            code?: number;
+            message?: string;
+            data?: { kind?: string; retryable?: boolean; details?: unknown };
+          }
         | undefined;
       if (err) {
         p.reject(
-          new RpcCallError(err.data?.kind ?? "INTERNAL", err.message ?? "rpc error", err.data?.retryable ?? false, err.data?.details, err.code),
+          new RpcCallError(
+            err.data?.kind ?? "INTERNAL",
+            err.message ?? "rpc error",
+            err.data?.retryable ?? false,
+            err.data?.details,
+            err.code,
+          ),
         );
         return;
       }

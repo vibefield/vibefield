@@ -2,6 +2,6 @@
 export { bootstrap, type FielddConfig, type FielddDaemon, type FielddHealth } from "./daemon";
 export { MeshClient, type ServeSpec, type ServeState } from "./mesh-client";
 export { NativeLink, RpcCallError } from "./native-link";
-export { TokenService, type TokenGrant } from "./token-service";
-export { ProductApi } from "./product-api";
 export { computePairingMac } from "./pairing";
+export { ProductApi } from "./product-api";
+export { type TokenGrant, TokenService } from "./token-service";

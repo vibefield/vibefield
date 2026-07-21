@@ -1,14 +1,22 @@
 // Track A product surface, against the mock mgmt server (no cargo): run files
 // (shell bootstrap contract), window-token minting rules, product-side
 // subscriptions, and the health aggregator's honest link-down/up stream.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, type FielddHealth } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
-import { WsRpc, helloAs, until } from "./ws-rpc";
+import { helloAs, until, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -91,10 +99,16 @@ describe("system.mintWindowToken", () => {
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, narrow.token, "shell-main");
 
-    const escalate = await rpc.callErr("system.mintWindowToken", { scopes: ["canvas.read"], label: "w" });
+    const escalate = await rpc.callErr("system.mintWindowToken", {
+      scopes: ["canvas.read"],
+      label: "w",
+    });
     expect(escalate.data?.kind).toBe("FORBIDDEN_SCOPE");
 
-    const junk = await rpc.callErr("system.mintWindowToken", { scopes: ["not.a.scope"], label: "w" });
+    const junk = await rpc.callErr("system.mintWindowToken", {
+      scopes: ["not.a.scope"],
+      label: "w",
+    });
     expect(junk.data?.kind).toBe("PRECONDITION_FAILED");
 
     const malformed = await rpc.callErr("system.mintWindowToken", { label: 42 });
@@ -108,7 +122,10 @@ describe("system.health.subscribe (aggregated stream)", () => {
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, daemon.shellToken, "shell-main");
 
-    const sub = (await rpc.call("system.health.subscribe", {})) as { subId: string; snapshot: FielddHealth };
+    const sub = (await rpc.call("system.health.subscribe", {})) as {
+      subId: string;
+      snapshot: FielddHealth;
+    };
     expect(sub.snapshot.nativeConnected).toBe(true);
     expect(sub.snapshot.native).toEqual({ n: 0 });
 
@@ -133,14 +150,18 @@ describe("system.health.subscribe (aggregated stream)", () => {
     }, 6000);
 
     // unsubscribe stops the stream
-    const removed = (await rpc.call("system.unsubscribe", { subId: sub.subId })) as { removed: boolean };
+    const removed = (await rpc.call("system.unsubscribe", { subId: sub.subId })) as {
+      removed: boolean;
+    };
     expect(removed.removed).toBe(true);
     const countAfter = payloads().length;
     mock.pushDelta("health.subscribe", { n: 99 });
     await new Promise((r) => setTimeout(r, 200));
     expect(payloads().length).toBe(countAfter);
 
-    const again = (await rpc.call("system.unsubscribe", { subId: sub.subId })) as { removed: boolean };
+    const again = (await rpc.call("system.unsubscribe", { subId: sub.subId })) as {
+      removed: boolean;
+    };
     expect(again.removed).toBe(false);
   });
 });

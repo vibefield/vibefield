@@ -24,7 +24,10 @@ async fn mesh_disabled_by_default_and_daemon_stays_up() {
     let h = health_json(&daemon);
     let mesh = unit(&h, "mesh-gateway");
     assert_eq!(mesh["state"], "disabled");
-    assert!(mesh["detail"].as_str().unwrap().contains("FIELD_NATIVE_MESH"));
+    assert!(mesh["detail"]
+        .as_str()
+        .unwrap()
+        .contains("FIELD_NATIVE_MESH"));
     // disabled-by-config is not degradation: the daemon reports up
     assert_eq!(h["state"], "up");
     daemon.shutdown().await;
@@ -75,7 +78,10 @@ async fn mesh_live_bring_up_reaches_auth_or_up() {
         let mesh = unit(&h, "mesh-gateway").clone();
         let state = mesh["state"].as_str().unwrap().to_string();
         let has_auth = mesh.get("authUrl").is_some_and(|u| u.is_string());
-        eprintln!("mesh: {state} auth_url={has_auth} detail={:?}", mesh["detail"]);
+        eprintln!(
+            "mesh: {state} auth_url={has_auth} detail={:?}",
+            mesh["detail"]
+        );
         if state == "up" || has_auth || state == "degraded" {
             assert_ne!(state, "degraded", "bring-up failed: {:?}", mesh["detail"]);
             break;

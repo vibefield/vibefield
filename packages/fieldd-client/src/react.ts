@@ -1,11 +1,11 @@
 import {
   createContext,
   createElement,
+  type ReactNode,
   useContext,
   useEffect,
   useState,
   useSyncExternalStore,
-  type ReactNode,
 } from "react";
 import type { FielddClient, FielddClientStatus } from "./client";
 
@@ -39,9 +39,16 @@ export interface SubscriptionState<T> {
 }
 
 /** Subscribe for the lifetime of the component; every event replaces `data`. */
-export function useSubscription<T = unknown>(method: string, params?: unknown): SubscriptionState<T> {
+export function useSubscription<T = unknown>(
+  method: string,
+  params?: unknown,
+): SubscriptionState<T> {
   const client = useFielddClient();
-  const [state, setState] = useState<SubscriptionState<T>>({ status: "loading", data: null, error: null });
+  const [state, setState] = useState<SubscriptionState<T>>({
+    status: "loading",
+    data: null,
+    error: null,
+  });
   const paramsKey = JSON.stringify(params ?? null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: params is deliberately keyed by its JSON (paramsKey) so object-identity churn never resubscribes

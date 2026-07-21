@@ -1,5 +1,5 @@
 import type { FielddHealth } from "@vibefield/fieldd";
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 
 // System view: the Track A health page (two daemon cards, native units,
 // transition ticker) — now one tab of the shell.
@@ -19,7 +19,13 @@ export function pillClass(v: string | undefined): string {
   return "pill bad";
 }
 
-export function SystemView({ h, subError }: { h: FielddHealth | null; subError: Error | null }): ReactElement {
+export function SystemView({
+  h,
+  subError,
+}: {
+  h: FielddHealth | null;
+  subError: Error | null;
+}): ReactElement {
   const units: UnitRow[] = (h?.native as { units?: UnitRow[] } | null)?.units ?? [];
 
   // transition ticker — makes the kill matrix visible
@@ -95,7 +101,9 @@ export function SystemView({ h, subError }: { h: FielddHealth | null; subError: 
                 <tr key={u.unit}>
                   <td className="mono">{u.unit}</td>
                   <td>
-                    <span className={pillClass(u.state ?? u.health)}>{u.state ?? u.health ?? "?"}</span>
+                    <span className={pillClass(u.state ?? u.health)}>
+                      {u.state ?? u.health ?? "?"}
+                    </span>
                   </td>
                   <td className="muted">
                     {u.detail ?? ""}
@@ -113,7 +121,9 @@ export function SystemView({ h, subError }: { h: FielddHealth | null; subError: 
             </tbody>
           </table>
         ) : (
-          <p className="muted">{h && !h.nativeConnected ? "native plane unreachable" : "no units reported"}</p>
+          <p className="muted">
+            {h && !h.nativeConnected ? "native plane unreachable" : "no units reported"}
+          </p>
         )}
       </section>
 

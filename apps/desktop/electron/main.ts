@@ -1,9 +1,9 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { app, BrowserWindow, ipcMain, session } from "electron";
 import { FielddClient } from "@vibefield/fieldd-client";
+import { app, BrowserWindow, ipcMain, session } from "electron";
 
 // VibeField shell main (Track A walking skeleton, design-03 §2):
 // adopt-or-spawn fieldd (which ensures field-native), hello as shell-main with
@@ -48,11 +48,18 @@ function dataRoot(): string {
 /** Resolve when a renderer console line starting with `prefix` arrives. */
 function waitForConsole(win: BrowserWindow, prefix: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error(`no "${prefix}" within ${timeoutMs}ms`)), timeoutMs);
+    const t = setTimeout(
+      () => reject(new Error(`no "${prefix}" within ${timeoutMs}ms`)),
+      timeoutMs,
+    );
     win.webContents.on("console-message", (...args: unknown[]) => {
       for (const a of args) {
         const text =
-          typeof a === "string" ? a : a && typeof a === "object" && "message" in a ? String((a as { message: unknown }).message) : "";
+          typeof a === "string"
+            ? a
+            : a && typeof a === "object" && "message" in a
+              ? String((a as { message: unknown }).message)
+              : "";
         if (text.startsWith(prefix)) {
           clearTimeout(t);
           resolve(text.slice(prefix.length));
@@ -75,7 +82,11 @@ async function tryAdopt(root: string, probeMs: number): Promise<Shell | null> {
   try {
     const info = JSON.parse(readFileSync(productPath, "utf8")) as ProductInfo;
     const token = readFileSync(tokenPath, "utf8").trim();
-    client = new FielddClient({ url: `ws://127.0.0.1:${info.port}`, token, clientKind: "shell-main" });
+    client = new FielddClient({
+      url: `ws://127.0.0.1:${info.port}`,
+      token,
+      clientKind: "shell-main",
+    });
     client.connect();
     await Promise.race([
       client.ready(),
@@ -95,8 +106,10 @@ async function ensureFieldd(root: string): Promise<Shell> {
     return adopted;
   }
 
-  const fielddBin = process.env["FIELDD_BIN"] ?? join(repoRoot, "packages", "fieldd", "dist", "bin.cjs");
-  const nativeBin = process.env["FIELDD_NATIVE_BIN"] ?? join(repoRoot, "target", "debug", "field-native");
+  const fielddBin =
+    process.env["FIELDD_BIN"] ?? join(repoRoot, "packages", "fieldd", "dist", "bin.cjs");
+  const nativeBin =
+    process.env["FIELDD_NATIVE_BIN"] ?? join(repoRoot, "target", "debug", "field-native");
   if (!existsSync(fielddBin)) throw new Error(`fieldd bin missing (build it): ${fielddBin}`);
 
   const env: NodeJS.ProcessEnv = {
@@ -216,7 +229,11 @@ async function spikeLoro(): Promise<void> {
     win.webContents.on("console-message", (...args: unknown[]) => {
       for (const a of args) {
         const text =
-          typeof a === "string" ? a : a && typeof a === "object" && "message" in a ? String((a as { message: unknown }).message) : "";
+          typeof a === "string"
+            ? a
+            : a && typeof a === "object" && "message" in a
+              ? String((a as { message: unknown }).message)
+              : "";
         if (text.startsWith("SPIKE_LORO ")) {
           clearTimeout(t);
           resolve(text.slice("SPIKE_LORO ".length));

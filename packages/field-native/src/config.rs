@@ -24,12 +24,20 @@ impl NativeConfig {
         let sidecar_override = std::env::var_os("FIELD_NATIVE_SIDECAR_PATH")
             .or_else(|| std::env::var_os("TRUFFLE_SIDECAR_PATH"))
             .map(PathBuf::from);
-        Self { data_dir, mesh_enabled, sidecar_override }
+        Self {
+            data_dir,
+            mesh_enabled,
+            sidecar_override,
+        }
     }
 
     /// Test/dev constructor: mesh off, no overrides.
     pub fn for_data_dir(data_dir: PathBuf) -> Self {
-        Self { data_dir, mesh_enabled: false, sidecar_override: None }
+        Self {
+            data_dir,
+            mesh_enabled: false,
+            sidecar_override: None,
+        }
     }
 
     pub fn native_dir(&self) -> PathBuf {

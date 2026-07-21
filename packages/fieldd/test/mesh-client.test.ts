@@ -31,7 +31,11 @@ async function setup(): Promise<{ mock: MockMgmtServer; link: NativeLink; mesh: 
   const mock = new MockMgmtServer(join(dir, "mgmt.sock"));
   await mock.start();
   cleanup.push(() => mock.stop());
-  const link = new NativeLink({ socketPath: join(dir, "mgmt.sock"), pairingFile: join(dir, "pairing"), bootId: "b" });
+  const link = new NativeLink({
+    socketPath: join(dir, "mgmt.sock"),
+    pairingFile: join(dir, "pairing"),
+    bootId: "b",
+  });
   cleanup.push(() => link.close());
   const mesh = new MeshClient(link);
   await link.connect();
@@ -72,14 +76,19 @@ describe("MeshClient", () => {
     mock.meshUnavailable = true;
     let details: unknown = null;
     mesh.on("unavailable", (d) => (details = d));
-    const states = await mesh.setServes([{ name: "site", target: { kind: "dir", path: "/tmp/site" } }]);
+    const states = await mesh.setServes([
+      { name: "site", target: { kind: "dir", path: "/tmp/site" } },
+    ]);
     expect(states[0]!.status).toBe("pending");
     expect((details as { state?: string } | null)?.state).toBe("starting");
   });
 
   it("store passthrough returns the slice snapshot", async () => {
     const { mesh } = await setup();
-    const snap = (await mesh.openStore("field.docs.v1")) as { storeId: string; slices: Record<string, unknown> };
+    const snap = (await mesh.openStore("field.docs.v1")) as {
+      storeId: string;
+      slices: Record<string, unknown>;
+    };
     expect(snap.storeId).toBe("field.docs.v1");
     expect(Object.keys(snap.slices)).toEqual(["dev-self"]);
   });

@@ -63,14 +63,28 @@ export class MeshClient extends EventEmitter {
       for (const [name, spec] of this.desired) {
         const existing = live.get(name);
         if (existing) {
-          this.states.set(name, { ...spec, status: "active", ...(existing.url ? { url: existing.url } : {}) });
+          this.states.set(name, {
+            ...spec,
+            status: "active",
+            ...(existing.url ? { url: existing.url } : {}),
+          });
           continue;
         }
         try {
-          const added = (await this.link.request("native.mesh.serve.add", spec)) as { url?: string };
-          this.states.set(name, { ...spec, status: "active", ...(added.url ? { url: added.url } : {}) });
+          const added = (await this.link.request("native.mesh.serve.add", spec)) as {
+            url?: string;
+          };
+          this.states.set(name, {
+            ...spec,
+            status: "active",
+            ...(added.url ? { url: added.url } : {}),
+          });
         } catch (e) {
-          this.states.set(name, { ...spec, status: "error", error: e instanceof Error ? e.message : String(e) });
+          this.states.set(name, {
+            ...spec,
+            status: "error",
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
       }
       // strays: live entries we once declared but no longer desire
@@ -106,7 +120,9 @@ export class MeshClient extends EventEmitter {
     return r.peers;
   }
 
-  async subscribePeers(onEvent: (payload: unknown, kind: "snapshot" | "delta") => void): Promise<unknown> {
+  async subscribePeers(
+    onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+  ): Promise<unknown> {
     const { snapshot } = await this.link.subscribe("native.mesh.peers.subscribe", {}, onEvent);
     return snapshot;
   }
@@ -120,14 +136,21 @@ export class MeshClient extends EventEmitter {
   }
 
   async getSlice(storeId: string, deviceId?: string): Promise<unknown> {
-    return await this.link.request("native.mesh.store.get", { storeId, ...(deviceId ? { deviceId } : {}) });
+    return await this.link.request("native.mesh.store.get", {
+      storeId,
+      ...(deviceId ? { deviceId } : {}),
+    });
   }
 
   async subscribeStore(
     storeId: string,
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
   ): Promise<unknown> {
-    const { snapshot } = await this.link.subscribe("native.mesh.store.subscribe", { storeId }, onEvent);
+    const { snapshot } = await this.link.subscribe(
+      "native.mesh.store.subscribe",
+      { storeId },
+      onEvent,
+    );
     return snapshot;
   }
 }

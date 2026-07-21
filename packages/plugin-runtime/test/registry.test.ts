@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PluginRegistry, type PluginManifest } from "../src/index";
+import { type PluginManifest, PluginRegistry } from "../src/index";
 
 const manifest = (over: Partial<PluginManifest> = {}): PluginManifest => ({
   id: "note",
@@ -23,18 +23,21 @@ describe("PluginRegistry", () => {
   it("rejects widgets outside the plugin namespace", () => {
     const r = new PluginRegistry();
     expect(() =>
-      r.register(manifest({ widgets: [{ type: "other.card", title: "x", defaultSize: { w: 1, h: 1 } }] }), {
-        "other.card": {},
-      }),
+      r.register(
+        manifest({ widgets: [{ type: "other.card", title: "x", defaultSize: { w: 1, h: 1 } }] }),
+        {
+          "other.card": {},
+        },
+      ),
     ).toThrow(/namespace/);
   });
 
   it("rejects declared-but-missing and provided-but-undeclared implementations", () => {
     const r = new PluginRegistry();
     expect(() => r.register(manifest(), {})).toThrow(/no implementation/);
-    expect(() =>
-      r.register(manifest(), { "note.card": {}, "note.extra": {} }),
-    ).toThrow(/undeclared/);
+    expect(() => r.register(manifest(), { "note.card": {}, "note.extra": {} })).toThrow(
+      /undeclared/,
+    );
   });
 
   it("rejects duplicate plugin ids and bad ids", () => {

@@ -1,19 +1,43 @@
 // zod → JSON Schema artifacts (design-01 §3). Committed under gen/jsonschema/;
 // field-native's typify-generated Rust is produced from these files.
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import type { ZodTypeAny } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import {
-  Hello, HelloAck, PairingMac, SemverString, ClientKind, ServerKind,
-  RpcRequest, RpcNotification, RpcResponse, RpcError, RpcId, RpcFailure, RpcSuccess,
+  ClientKind,
+  Hello,
+  HelloAck,
+  PairingMac,
+  RpcError,
+  RpcFailure,
+  RpcId,
+  RpcNotification,
+  RpcRequest,
+  RpcResponse,
+  RpcSuccess,
+  SemverString,
+  ServerKind,
 } from "../src/envelope";
 import { ErrorData, ErrorKind, UnavailableDetails } from "../src/errors";
 import {
-  UnitState, UnitHealth, NativeHealth, DesiredTerminal, DesiredWorker, MeshConfig,
-  DesiredState, ObservedTerminal, ObservedWorker, ObservedState,
-  WhoIsIdentity, PeerInfo, StoreSnapshot, ServeTarget, ServeConfig, ServeEntry,
+  DesiredState,
+  DesiredTerminal,
+  DesiredWorker,
+  MeshConfig,
+  NativeHealth,
+  ObservedState,
+  ObservedTerminal,
+  ObservedWorker,
+  PeerInfo,
+  ServeConfig,
+  ServeEntry,
+  ServeTarget,
+  StoreSnapshot,
+  UnitHealth,
+  UnitState,
+  WhoIsIdentity,
 } from "../src/mgmt";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "gen", "jsonschema");
@@ -54,7 +78,7 @@ const SHARED = {
 } as const;
 
 const ENTRIES: Record<string, ZodTypeAny> = {
-  "hello": Hello,
+  hello: Hello,
   "hello-ack": HelloAck,
   "pairing-mac": PairingMac,
   "rpc-request": RpcRequest,

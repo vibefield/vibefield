@@ -70,7 +70,11 @@ impl MeshHandle {
     }
 
     pub async fn record_serve(&self, name: &str, config: Value) {
-        self.shared.serves.lock().await.insert(name.to_string(), config);
+        self.shared
+            .serves
+            .lock()
+            .await
+            .insert(name.to_string(), config);
     }
     pub async fn forget_serve(&self, name: &str) {
         self.shared.serves.lock().await.remove(name);
@@ -128,7 +132,9 @@ impl MeshUnit {
 
     /// The mgmt server's door to the mesh (C2 facade).
     pub fn handle(&self) -> MeshHandle {
-        MeshHandle { shared: self.shared.clone() }
+        MeshHandle {
+            shared: self.shared.clone(),
+        }
     }
 
     /// The live node, once up (C2 facade calls go through this).
@@ -164,8 +170,11 @@ impl NativeService for MeshUnit {
             return Ok(()); // degraded, not fatal — the daemon keeps serving
         };
         std::fs::create_dir_all(&self.state_dir)?;
-        self.shared
-            .set(UnitState::Starting, Some("bringing up tailnet node".into()), None);
+        self.shared.set(
+            UnitState::Starting,
+            Some("bringing up tailnet node".into()),
+            None,
+        );
 
         let shared = self.shared.clone();
         let state_dir = self.state_dir.to_string_lossy().into_owned();
@@ -203,7 +212,11 @@ impl NativeService for MeshUnit {
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "mesh bring-up failed");
-                    shared.set(UnitState::Degraded, Some(format!("bring-up failed: {e}")), None);
+                    shared.set(
+                        UnitState::Degraded,
+                        Some(format!("bring-up failed: {e}")),
+                        None,
+                    );
                 }
             }
         });
@@ -243,7 +256,10 @@ fn resolve_sidecar(override_path: Option<PathBuf>, searched: &mut Vec<String>) -
     if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
         #[cfg(target_os = "macos")]
         for name in SIDECAR_NAMES {
-            candidates.push(home.join("Library/Application Support/truffle/bin").join(name));
+            candidates.push(
+                home.join("Library/Application Support/truffle/bin")
+                    .join(name),
+            );
         }
         for name in SIDECAR_NAMES {
             candidates.push(home.join(".config/truffle/bin").join(name));

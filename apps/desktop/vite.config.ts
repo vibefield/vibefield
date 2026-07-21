@@ -16,7 +16,14 @@ export default defineConfig({
   resolve: {
     alias: [{ find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],
     // one copy each of the stateful libs (ICE marks them external in its dist)
-    dedupe: ["react", "react-dom", "three", "@react-three/fiber", "loro-crdt", "@vibecook/strata-ecs"],
+    dedupe: [
+      "react",
+      "react-dom",
+      "three",
+      "@react-three/fiber",
+      "loro-crdt",
+      "@vibecook/strata-ecs",
+    ],
   },
   build: {
     outDir: join(import.meta.dirname, "dist", "renderer"),

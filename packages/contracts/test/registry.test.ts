@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { METHODS, LOCALITIES, SURFACES } from "../src/methods";
-import { SCOPES } from "../src/registries";
-import { PORTS } from "../src/registries";
+import { LOCALITIES, METHODS, SURFACES } from "../src/methods";
+import { PORTS, SCOPES } from "../src/registries";
 
 describe("method registry lint (design-01 §9.2 + D36)", () => {
   it("every method is fully declared", () => {

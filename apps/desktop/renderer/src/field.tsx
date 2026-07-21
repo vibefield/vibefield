@@ -1,8 +1,8 @@
-import { createCanvasEngine, type CanvasEngine } from "@vibecook/ice";
+import { type CanvasEngine, createCanvasEngine } from "@vibecook/ice";
 import { InfiniteCanvas } from "@vibecook/ice/react";
 import { noteManifest, noteWidgets } from "@vibefield/plugin-note";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
-import { useEffect, useMemo, useRef, type ReactElement } from "react";
+import { type ReactElement, useEffect, useMemo, useRef } from "react";
 
 // The Field (B2): plugins' widgets → one canvas engine → InfiniteCanvas.
 // P0: one in-memory doc per app run (DocumentService persistence lands in B3).
@@ -29,7 +29,9 @@ function createFieldEngine(registry: PluginRegistry<{ type: string }>): CanvasEn
     y: -140,
     w: 280,
     h: 190,
-    props: { text: "Welcome to your field.\n\nDouble-click to edit · drag to move · scroll to pan · ⌘/ctrl+wheel to zoom." },
+    props: {
+      text: "Welcome to your field.\n\nDouble-click to edit · drag to move · scroll to pan · ⌘/ctrl+wheel to zoom.",
+    },
     undoable: false,
   });
   ce.ops.spawnWidget("note.card", {
@@ -51,7 +53,9 @@ export function FieldView(): ReactElement {
 
   useEffect(() => {
     // after mount commit — the smoke's pass condition covers InfiniteCanvas itself
-    console.log(`CANVAS_READY {"widgetTypes":${registry.allWidgets().size},"plugins":${registry.all().length}}`);
+    console.log(
+      `CANVAS_READY {"widgetTypes":${registry.allWidgets().size},"plugins":${registry.all().length}}`,
+    );
   }, [registry]);
 
   const spawnNote = (): void => {

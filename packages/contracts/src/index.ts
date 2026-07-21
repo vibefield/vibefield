@@ -3,8 +3,8 @@
 
 export const CONTRACTS_VERSION = "0.1.0";
 
-export * from "./registries";
-export * from "./errors";
 export * from "./envelope";
+export * from "./errors";
 export * from "./methods";
 export * from "./mgmt";
+export * from "./registries";

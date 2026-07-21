@@ -17,7 +17,13 @@ interface SpikeResult {
 }
 
 async function run(): Promise<SpikeResult> {
-  const r: SpikeResult = { ok: false, loroImportMs: -1, iceImportMs: -1, roundtripOk: false, iceApiOk: false };
+  const r: SpikeResult = {
+    ok: false,
+    loroImportMs: -1,
+    iceImportMs: -1,
+    roundtripOk: false,
+    iceApiOk: false,
+  };
   try {
     const t0 = performance.now();
     const loro = await import("loro-crdt"); // aliased to loro-crdt/base64 at build time
@@ -33,7 +39,8 @@ async function run(): Promise<SpikeResult> {
     const t1 = performance.now();
     const ice = await import("@vibecook/ice");
     r.iceImportMs = Math.round((performance.now() - t1) * 10) / 10;
-    r.iceApiOk = typeof ice.createCanvasEngine === "function" && typeof ice.defineWidget === "function";
+    r.iceApiOk =
+      typeof ice.createCanvasEngine === "function" && typeof ice.defineWidget === "function";
 
     r.ok = r.roundtripOk && r.iceApiOk;
   } catch (e) {

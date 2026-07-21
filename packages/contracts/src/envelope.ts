@@ -99,14 +99,10 @@ export const RpcResponse = z.union([RpcFailure, RpcSuccess]);
 export type RpcResponse = z.infer<typeof RpcResponse>;
 
 // ---- Subscriptions (P5 — snapshot-then-delta; server may re-snapshot at will) ----
-export const SubscribeResult = z
-  .object({ subId: z.string(), snapshot: z.unknown() })
-  .passthrough();
+export const SubscribeResult = z.object({ subId: z.string(), snapshot: z.unknown() }).passthrough();
 export type SubscribeResult = z.infer<typeof SubscribeResult>;
 
-export const SubEvent = z
-  .object({ subId: z.string(), payload: z.unknown() })
-  .passthrough();
+export const SubEvent = z.object({ subId: z.string(), payload: z.unknown() }).passthrough();
 export type SubEvent = z.infer<typeof SubEvent>;
 
 export const Unsubscribe = z.object({ subId: z.string() }).passthrough();

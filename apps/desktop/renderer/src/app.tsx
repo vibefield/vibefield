@@ -1,6 +1,6 @@
 import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
-import { useState, type ReactElement } from "react";
+import { type ReactElement, useState } from "react";
 import { FieldView } from "./field";
 import { SystemView } from "./system";
 

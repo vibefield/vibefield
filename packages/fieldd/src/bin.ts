@@ -22,7 +22,8 @@ function nativeAlive(socketPath: string): Promise<boolean> {
 
 async function main(): Promise<void> {
   const dataDir =
-    process.env["FIELDD_DATA_DIR"] ?? join(homedir(), "Library", "Application Support", "VibeField");
+    process.env["FIELDD_DATA_DIR"] ??
+    join(homedir(), "Library", "Application Support", "VibeField");
   const portEnv = process.env["FIELDD_CONTROL_PORT"];
   const nativeBin = process.env["FIELDD_NATIVE_BIN"];
   const allowedOrigins = [
@@ -54,7 +55,9 @@ async function main(): Promise<void> {
       process.exit(1);
     },
   });
-  process.stdout.write(JSON.stringify({ ready: true, port: daemon.controlPort, bootId: daemon.bootId }) + "\n");
+  process.stdout.write(
+    JSON.stringify({ ready: true, port: daemon.controlPort, bootId: daemon.bootId }) + "\n",
+  );
 
   const shutdown = () => {
     void daemon.stop().finally(() => process.exit(0));

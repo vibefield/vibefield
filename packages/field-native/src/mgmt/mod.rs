@@ -61,11 +61,18 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
             continue;
         }
         let Ok(req) = serde_json::from_str::<Value>(&line) else {
-            send(&tx, json!({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"parse error"}}));
+            send(
+                &tx,
+                json!({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"parse error"}}),
+            );
             continue;
         };
         let id = req.get("id").cloned();
-        let method = req.get("method").and_then(Value::as_str).unwrap_or_default().to_string();
+        let method = req
+            .get("method")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
         let params = req.get("params").cloned().unwrap_or(Value::Null);
 
         match method.as_str() {
@@ -80,19 +87,39 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
                 }
             }
             _ if !authed => {
-                send(&tx, err(id, "UNAUTHORIZED", -32001, "hello required first", false, None));
+                send(
+                    &tx,
+                    err(
+                        id,
+                        "UNAUTHORIZED",
+                        -32001,
+                        "hello required first",
+                        false,
+                        None,
+                    ),
+                );
             }
             "native.lifecycle.health.subscribe" => {
                 let sub_id = state.sub_id();
                 let snapshot = serde_json::to_value(&*state.health_tx.borrow()).unwrap();
                 send(&tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
-                spawn_forwarder(tx.clone(), state.health_tx.subscribe(), "native.lifecycle.health.delta", sub_id);
+                spawn_forwarder(
+                    tx.clone(),
+                    state.health_tx.subscribe(),
+                    "native.lifecycle.health.delta",
+                    sub_id,
+                );
             }
             "native.lifecycle.observed.subscribe" => {
                 let sub_id = state.sub_id();
                 let snapshot = serde_json::to_value(&*state.observed_tx.borrow()).unwrap();
                 send(&tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
-                spawn_forwarder(tx.clone(), state.observed_tx.subscribe(), "native.lifecycle.observed.delta", sub_id);
+                spawn_forwarder(
+                    tx.clone(),
+                    state.observed_tx.subscribe(),
+                    "native.lifecycle.observed.delta",
+                    sub_id,
+                );
             }
             "native.lifecycle.desired.set" => {
                 send(&tx, handle_desired_set(&state, &params, id).await);
@@ -101,11 +128,25 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
                 mesh::handle(&state, &tx, m, &params, id).await;
             }
             m if m.starts_with("native.process.") || m.starts_with("native.sidecar.") => {
-                send(&tx, err(id, "UNAVAILABLE", -32006, "unit not embedded yet",
-                    true, Some(json!({"service": m.split('.').nth(1).unwrap_or("native"), "state":"stub"}))));
+                send(
+                    &tx,
+                    err(
+                        id,
+                        "UNAVAILABLE",
+                        -32006,
+                        "unit not embedded yet",
+                        true,
+                        Some(
+                            json!({"service": m.split('.').nth(1).unwrap_or("native"), "state":"stub"}),
+                        ),
+                    ),
+                );
             }
             _ => {
-                send(&tx, err(id, "NOT_FOUND", -32601, "method not found", false, None));
+                send(
+                    &tx,
+                    err(id, "NOT_FOUND", -32601, "method not found", false, None),
+                );
             }
         }
     }
@@ -131,7 +172,17 @@ async fn handle_hello(
     let hello: Hello = match serde_json::from_value(params.clone()) {
         Ok(h) => h,
         Err(e) => {
-            return (err(id, "PRECONDITION_FAILED", -32005, &format!("bad hello: {e}"), false, None), false)
+            return (
+                err(
+                    id,
+                    "PRECONDITION_FAILED",
+                    -32005,
+                    &format!("bad hello: {e}"),
+                    false,
+                    None,
+                ),
+                false,
+            )
         }
     };
 
@@ -139,8 +190,17 @@ async fn handle_hello(
     let ours_major = CONTRACTS_VERSION.split('.').next().unwrap_or("0");
     let theirs = hello.contracts_version.to_string();
     if theirs.split('.').next().unwrap_or("") != ours_major {
-        return (err(id, "INCOMPATIBLE", -32008, "contracts major mismatch", false,
-            Some(json!({"server": CONTRACTS_VERSION, "client": theirs}))), false);
+        return (
+            err(
+                id,
+                "INCOMPATIBLE",
+                -32008,
+                "contracts major mismatch",
+                false,
+                Some(json!({"server": CONTRACTS_VERSION, "client": theirs})),
+            ),
+            false,
+        );
     }
 
     // D8 pairing credential (read from raw params — variant-name independent)
@@ -150,10 +210,30 @@ async fn handle_hello(
         cred.and_then(|c| c.get("ts")).and_then(Value::as_i64),
         cred.and_then(|c| c.get("mac")).and_then(Value::as_str),
     ) else {
-        return (err(id, "UNAUTHORIZED", -32001, "pairing credential required", false, None), false);
+        return (
+            err(
+                id,
+                "UNAUTHORIZED",
+                -32001,
+                "pairing credential required",
+                false,
+                None,
+            ),
+            false,
+        );
     };
     if !pairing::verify(&state.secret, boot_id, ts, mac, pairing::now_epoch_secs()) {
-        return (err(id, "UNAUTHORIZED", -32001, "pairing verification failed", false, None), false);
+        return (
+            err(
+                id,
+                "UNAUTHORIZED",
+                -32001,
+                "pairing verification failed",
+                false,
+                None,
+            ),
+            false,
+        );
     }
 
     // single-client rule: supersede any existing product plane
@@ -166,7 +246,10 @@ async fn handle_hello(
         let _ = old.tx.send(OutMsg::Close);
         tracing::info!(old = old.conn_id, new = conn_id, "mgmt client superseded");
     }
-    *cur = Some(ClientHandle { conn_id, tx: tx.clone() });
+    *cur = Some(ClientHandle {
+        conn_id,
+        tx: tx.clone(),
+    });
 
     let ack = json!({
         "contractsVersion": CONTRACTS_VERSION,
@@ -179,13 +262,28 @@ async fn handle_hello(
 async fn handle_desired_set(state: &Arc<DaemonState>, params: &Value, id: Option<Value>) -> Value {
     let desired: DesiredState = match serde_json::from_value(params.clone()) {
         Ok(d) => d,
-        Err(e) => return err(id, "PRECONDITION_FAILED", -32005, &format!("bad desired state: {e}"), false, None),
+        Err(e) => {
+            return err(
+                id,
+                "PRECONDITION_FAILED",
+                -32005,
+                &format!("bad desired state: {e}"),
+                false,
+                None,
+            )
+        }
     };
     let mut slot = state.desired.lock().await;
     if let Some(cur) = slot.as_ref() {
         if desired.generation < cur.generation {
-            return err(id, "PRECONDITION_FAILED", -32005, "stale generation", false,
-                Some(json!({"current": cur.generation, "given": desired.generation})));
+            return err(
+                id,
+                "PRECONDITION_FAILED",
+                -32005,
+                "stale generation",
+                false,
+                Some(json!({"current": cur.generation, "given": desired.generation})),
+            );
         }
     }
     let generation = desired.generation;
@@ -224,7 +322,14 @@ fn send_raw(tx: &mpsc::UnboundedSender<OutMsg>, m: OutMsg) {
 fn ok(id: Option<Value>, result: Value) -> Value {
     json!({"jsonrpc":"2.0","id": id.unwrap_or(Value::Null), "result": result})
 }
-fn err(id: Option<Value>, kind: &str, code: i64, message: &str, retryable: bool, details: Option<Value>) -> Value {
+fn err(
+    id: Option<Value>,
+    kind: &str,
+    code: i64,
+    message: &str,
+    retryable: bool,
+    details: Option<Value>,
+) -> Value {
     let mut data = json!({"kind": kind, "retryable": retryable});
     if let Some(d) = details {
         data["details"] = d;

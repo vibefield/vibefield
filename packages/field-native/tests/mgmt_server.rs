@@ -14,9 +14,14 @@ struct TestClient {
 
 impl TestClient {
     async fn connect(daemon: &RunningDaemon) -> Self {
-        let stream = UnixStream::connect(&daemon.mgmt_socket).await.expect("connect mgmt");
+        let stream = UnixStream::connect(&daemon.mgmt_socket)
+            .await
+            .expect("connect mgmt");
         let (r, w) = stream.into_split();
-        Self { reader: BufReader::new(r).lines(), writer: w }
+        Self {
+            reader: BufReader::new(r).lines(),
+            writer: w,
+        }
     }
     async fn send(&mut self, v: Value) {
         let mut line = v.to_string();
@@ -42,10 +47,12 @@ impl TestClient {
         let ts = pairing::now_epoch_secs();
         let boot = "fieldd-boot-test";
         let mac = pairing::compute_mac(&secret, boot, ts);
-        self.send(json!({"jsonrpc":"2.0","id":id,"method":"native.lifecycle.hello","params":{
-            "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
-            "credential":{"bootId":boot,"ts":ts,"mac":mac}
-        }}))
+        self.send(
+            json!({"jsonrpc":"2.0","id":id,"method":"native.lifecycle.hello","params":{
+                "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
+                "credential":{"bootId":boot,"ts":ts,"mac":mac}
+            }}),
+        )
         .await;
         self.recv().await
     }
@@ -53,7 +60,13 @@ impl TestClient {
 
 fn read_secret(daemon: &RunningDaemon) -> Vec<u8> {
     // tests derive macs the way fieldd will: from the shared 0600 pairing file
-    let path = daemon.mgmt_socket.parent().unwrap().parent().unwrap().join("pairing");
+    let path = daemon
+        .mgmt_socket
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("pairing");
     hex::decode(std::fs::read_to_string(path).unwrap().trim()).unwrap()
 }
 
@@ -74,8 +87,16 @@ async fn pairing_vector_matches_cross_language_fixture() {
     .unwrap();
     let v: Value = serde_json::from_str(&raw).unwrap();
     let secret = hex::decode(v["secretHex"].as_str().unwrap()).unwrap();
-    let mac = pairing::compute_mac(&secret, v["bootId"].as_str().unwrap(), v["ts"].as_i64().unwrap());
-    assert_eq!(mac, v["mac"].as_str().unwrap(), "D8 MAC recipe drifted from the TS side");
+    let mac = pairing::compute_mac(
+        &secret,
+        v["bootId"].as_str().unwrap(),
+        v["ts"].as_i64().unwrap(),
+    );
+    assert_eq!(
+        mac,
+        v["mac"].as_str().unwrap(),
+        "D8 MAC recipe drifted from the TS side"
+    );
 }
 
 #[tokio::test]
@@ -92,10 +113,13 @@ async fn bad_mac_and_stale_ts_rejected() {
     let (_dir, daemon) = boot().await;
 
     let mut c = TestClient::connect(&daemon).await;
-    c.send(json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
-        "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
-        "credential":{"bootId":"x","ts": pairing::now_epoch_secs(),"mac":"deadbeef"}
-    }})).await;
+    c.send(
+        json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
+            "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
+            "credential":{"bootId":"x","ts": pairing::now_epoch_secs(),"mac":"deadbeef"}
+        }}),
+    )
+    .await;
     let resp = c.recv().await;
     assert_eq!(resp["error"]["data"]["kind"], "UNAUTHORIZED");
 
@@ -103,19 +127,28 @@ async fn bad_mac_and_stale_ts_rejected() {
     let secret = read_secret(&daemon);
     let stale = pairing::now_epoch_secs() - 3600;
     let mac = pairing::compute_mac(&secret, "x", stale);
-    c2.send(json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
-        "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
-        "credential":{"bootId":"x","ts": stale,"mac": mac}
-    }})).await;
+    c2.send(
+        json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
+            "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
+            "credential":{"bootId":"x","ts": stale,"mac": mac}
+        }}),
+    )
+    .await;
     let resp = c2.recv().await;
-    assert_eq!(resp["error"]["data"]["kind"], "UNAUTHORIZED", "outside ±300s window");
+    assert_eq!(
+        resp["error"]["data"]["kind"], "UNAUTHORIZED",
+        "outside ±300s window"
+    );
 }
 
 #[tokio::test]
 async fn hello_required_before_anything() {
     let (_dir, daemon) = boot().await;
     let mut c = TestClient::connect(&daemon).await;
-    c.send(json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.health.subscribe","params":{}})).await;
+    c.send(
+        json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.health.subscribe","params":{}}),
+    )
+    .await;
     let resp = c.recv().await;
     assert_eq!(resp["error"]["data"]["kind"], "UNAUTHORIZED");
 }
@@ -131,10 +164,16 @@ async fn new_hello_supersedes_old_client() {
 
     let note = c1.recv().await;
     assert_eq!(note["method"], "native.lifecycle.superseded");
-    assert!(c1.recv_eof().await, "old connection must be closed after SUPERSEDED");
+    assert!(
+        c1.recv_eof().await,
+        "old connection must be closed after SUPERSEDED"
+    );
 
     // the new client is fully functional
-    c2.send(json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.health.subscribe","params":{}})).await;
+    c2.send(
+        json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.health.subscribe","params":{}}),
+    )
+    .await;
     let resp = c2.recv().await;
     assert!(resp["result"]["snapshot"]["units"].is_array());
 }
@@ -144,11 +183,16 @@ async fn health_snapshot_reports_stub_units() {
     let (_dir, daemon) = boot().await;
     let mut c = TestClient::connect(&daemon).await;
     c.hello(&daemon, 1).await;
-    c.send(json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.health.subscribe","params":{}})).await;
+    c.send(
+        json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.health.subscribe","params":{}}),
+    )
+    .await;
     let resp = c.recv().await;
     let units = resp["result"]["snapshot"]["units"].as_array().unwrap();
     let names: Vec<&str> = units.iter().map(|u| u["unit"].as_str().unwrap()).collect();
-    assert!(names.contains(&"mgmt") && names.contains(&"terminal") && names.contains(&"mesh-gateway"));
+    assert!(
+        names.contains(&"mgmt") && names.contains(&"terminal") && names.contains(&"mesh-gateway")
+    );
     assert_eq!(resp["result"]["snapshot"]["state"], "up");
 }
 
@@ -158,23 +202,36 @@ async fn desired_generation_guard_and_observed_delta() {
     let mut c = TestClient::connect(&daemon).await;
     c.hello(&daemon, 1).await;
 
-    c.send(json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.observed.subscribe","params":{}})).await;
+    c.send(
+        json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.observed.subscribe","params":{}}),
+    )
+    .await;
     let sub = c.recv().await;
     assert_eq!(sub["result"]["snapshot"]["generation"], 0);
 
-    c.send(json!({"jsonrpc":"2.0","id":3,"method":"native.lifecycle.desired.set","params":{
-        "generation":5,"terminals":[{"sessionId":"a"}],"workers":[]
-    }})).await;
+    c.send(
+        json!({"jsonrpc":"2.0","id":3,"method":"native.lifecycle.desired.set","params":{
+            "generation":5,"terminals":[{"sessionId":"a"}],"workers":[]
+        }}),
+    )
+    .await;
     // arrival order of ack vs delta is not guaranteed — collect both
     let (a, b) = (c.recv().await, c.recv().await);
-    let (ack, delta) = if a.get("id").is_some_and(|i| i == 3) { (a, b) } else { (b, a) };
+    let (ack, delta) = if a.get("id").is_some_and(|i| i == 3) {
+        (a, b)
+    } else {
+        (b, a)
+    };
     assert_eq!(ack["result"]["applied"], 5);
     assert_eq!(delta["method"], "native.lifecycle.observed.delta");
     assert_eq!(delta["params"]["payload"]["generation"], 5);
 
-    c.send(json!({"jsonrpc":"2.0","id":4,"method":"native.lifecycle.desired.set","params":{
-        "generation":4,"terminals":[],"workers":[]
-    }})).await;
+    c.send(
+        json!({"jsonrpc":"2.0","id":4,"method":"native.lifecycle.desired.set","params":{
+            "generation":4,"terminals":[],"workers":[]
+        }}),
+    )
+    .await;
     let resp = c.recv().await;
     assert_eq!(resp["error"]["data"]["kind"], "PRECONDITION_FAILED");
 }
@@ -184,7 +241,8 @@ async fn mesh_answers_honest_unavailable_with_real_unit_state() {
     let (_dir, daemon) = boot().await;
     let mut c = TestClient::connect(&daemon).await;
     c.hello(&daemon, 1).await;
-    c.send(json!({"jsonrpc":"2.0","id":2,"method":"native.mesh.peers.list","params":{}})).await;
+    c.send(json!({"jsonrpc":"2.0","id":2,"method":"native.mesh.peers.list","params":{}}))
+        .await;
     let resp = c.recv().await;
     assert_eq!(resp["error"]["data"]["kind"], "UNAVAILABLE");
     assert_eq!(resp["error"]["data"]["details"]["service"], "mesh-gateway");
@@ -200,11 +258,17 @@ async fn tolerant_reader_on_hello() {
     let secret = read_secret(&daemon);
     let ts = pairing::now_epoch_secs();
     let mac = pairing::compute_mac(&secret, "b", ts);
-    c.send(json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
-        "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
-        "credential":{"bootId":"b","ts":ts,"mac":mac},
-        "futureField":{"carried":true}
-    }})).await;
+    c.send(
+        json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
+            "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
+            "credential":{"bootId":"b","ts":ts,"mac":mac},
+            "futureField":{"carried":true}
+        }}),
+    )
+    .await;
     let resp = c.recv().await;
-    assert!(resp["result"].is_object(), "unknown fields must not break hello (P3)");
+    assert!(
+        resp["result"].is_object(),
+        "unknown fields must not break hello (P3)"
+    );
 }

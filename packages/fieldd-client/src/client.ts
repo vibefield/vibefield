@@ -1,4 +1,4 @@
-import { CONTRACTS_VERSION, type ClientKind } from "@vibefield/contracts";
+import { type ClientKind, CONTRACTS_VERSION } from "@vibefield/contracts";
 
 // @vibefield/fieldd-client — the isomorphic product-plane client (design-03
 // A6): runs in the Electron renderer, plugin workers, AND the shell main
@@ -35,7 +35,13 @@ export interface WsLike {
 }
 export type WsCtor = new (url: string) => WsLike;
 
-export type FielddClientStatus = "idle" | "connecting" | "ready" | "reconnecting" | "closed" | "failed";
+export type FielddClientStatus =
+  | "idle"
+  | "connecting"
+  | "ready"
+  | "reconnecting"
+  | "closed"
+  | "failed";
 
 export interface FielddClientOptions {
   url: string; // e.g. ws://127.0.0.1:9410
@@ -100,7 +106,9 @@ export class FielddClient {
   ready(): Promise<void> {
     if (this.status === "ready") return Promise.resolve();
     if (this.status === "failed" || this.status === "closed")
-      return Promise.reject(this.lastError ?? new FielddRpcError("UNAVAILABLE", `client ${this.status}`));
+      return Promise.reject(
+        this.lastError ?? new FielddRpcError("UNAVAILABLE", `client ${this.status}`),
+      );
     this.connect();
     return new Promise((resolve, reject) => {
       this.readyWaiters.push({ resolve, reject });
@@ -128,8 +136,15 @@ export class FielddClient {
     this.subs.set(key, entry);
     try {
       await this.ready();
-      const res = (await this.sendRequest(method, params, key)) as { subId: string; snapshot: unknown };
-      return { subId: res.subId, snapshot: res.snapshot, unsubscribe: () => this.unsubscribeKey(key) };
+      const res = (await this.sendRequest(method, params, key)) as {
+        subId: string;
+        snapshot: unknown;
+      };
+      return {
+        subId: res.subId,
+        snapshot: res.snapshot,
+        unsubscribe: () => this.unsubscribeKey(key),
+      };
     } catch (e) {
       this.subs.delete(key); // never leave an orphan the caller can't cancel
       throw e;
@@ -212,7 +227,11 @@ export class FielddClient {
       if (!p) return;
       this.pending.delete(id);
       const err = msg["error"] as
-        | { code?: number; message?: string; data?: { kind?: string; retryable?: boolean; details?: unknown } }
+        | {
+            code?: number;
+            message?: string;
+            data?: { kind?: string; retryable?: boolean; details?: unknown };
+          }
         | undefined;
       if (err) {
         p.reject(
@@ -325,7 +344,7 @@ export class FielddClient {
   private flushReadyWaiters(err: Error | null): void {
     const waiters = this.readyWaiters;
     this.readyWaiters = [];
-    for (const w of waiters) (err ? w.reject(err) : w.resolve());
+    for (const w of waiters) err ? w.reject(err) : w.resolve();
   }
 
   private setStatus(s: FielddClientStatus): void {

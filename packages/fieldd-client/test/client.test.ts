@@ -4,9 +4,15 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { ProductApi, TokenService, bootstrap, type FielddDaemon, type FielddHealth } from "@vibefield/fieldd";
+import {
+  bootstrap,
+  type FielddDaemon,
+  type FielddHealth,
+  ProductApi,
+  TokenService,
+} from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
+import { afterEach, describe, expect, it } from "vitest";
 import { FielddClient } from "../src/client";
 
 let cleanup: Array<() => void | Promise<void>> = [];

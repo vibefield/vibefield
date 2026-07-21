@@ -36,7 +36,9 @@ export class WsRpc {
         return;
       }
       if (typeof m["method"] === "string") {
-        this.notifications.push(m as unknown as { method: string; params: { subId?: string; payload?: unknown } });
+        this.notifications.push(
+          m as unknown as { method: string; params: { subId?: string; payload?: unknown } },
+        );
       }
     });
   }
