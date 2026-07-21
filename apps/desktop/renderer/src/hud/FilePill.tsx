@@ -14,8 +14,10 @@ import type { DocManagerApi } from "../doc-manager";
  * wears the 1.5px inside --vf-select ring — it IS the selection.
  */
 
-const MORPH_MS = 600;
-const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
+const MORPH_MS = 560;
+const EASE = "cubic-bezier(0.32, 0.72, 0, 1)"; // native-sheet ease, fast response + soft landing
+const CLOSED_RADIUS = 20;
+const OPEN_RADIUS = 32;
 
 function fmtRelative(ms: number, now = Date.now()): string {
   const s = Math.max(0, Math.floor((now - ms) / 1000));
@@ -85,21 +87,23 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
       <div
         data-file-pill=""
         data-file-pill-open={open ? "true" : "false"}
-        className={`no-drag absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden border transition-all ${
+        className={`no-drag absolute left-1/2 z-50 isolate -translate-x-1/2 transform-gpu overflow-hidden border border-black/5 bg-white/[0.88] backdrop-blur-2xl transition-[top,width,height,border-radius,background-color,box-shadow] dark:border-white/10 dark:bg-[#1C1C1E]/[0.88] ${
           open
-            ? "top-0 h-[min(46vh,420px)] w-[min(56%,34rem)] rounded-t-none rounded-b-[2.5rem] border-t-0 border-black/5 bg-white/90 shadow-[0_20px_40px_rgba(0,0,0,0.08)] backdrop-blur-3xl dark:border-white/10 dark:bg-[#1C1C1E]/90 dark:shadow-[0_20px_40px_rgba(0,0,0,0.4)]"
-            : "top-4 h-10 w-[280px] rounded-full border-black/5 bg-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl hover:bg-white/90 dark:border-white/10 dark:bg-[#1C1C1E]/80 dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] dark:hover:bg-[#1C1C1E]/90"
+            ? "top-3 h-[min(46vh,420px)] w-[min(56%,34rem)] shadow-[0_24px_64px_rgba(0,0,0,0.12),0_2px_10px_rgba(0,0,0,0.04)] dark:shadow-[0_24px_64px_rgba(0,0,0,0.48),0_2px_10px_rgba(0,0,0,0.24)]"
+            : "top-4 h-10 w-[280px] shadow-[0_8px_30px_rgba(0,0,0,0.08),0_1px_4px_rgba(0,0,0,0.04)] hover:bg-white/[0.94] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4),0_1px_4px_rgba(0,0,0,0.2)] dark:hover:bg-[#1C1C1E]/[0.94]"
         }`}
         style={{
+          borderRadius: `${open ? OPEN_RADIUS : CLOSED_RADIUS}px`,
           transitionDuration: `${MORPH_MS}ms`,
           transitionTimingFunction: EASE,
           willChange: "width, height, top, border-radius",
+          backfaceVisibility: "hidden",
         }}
       >
         <div className="flex h-full w-full flex-col">
           {/* The persistent header row — the closed pill IS this row. */}
           <div
-            className={`flex w-full shrink-0 items-center gap-1 transition-all ${
+            className={`flex w-full shrink-0 items-center gap-1 transition-[height,padding] ${
               open ? "h-12 px-4" : "h-10 px-1"
             }`}
             style={{ transitionDuration: `${MORPH_MS}ms`, transitionTimingFunction: EASE }}
@@ -156,7 +160,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
             <button
               type="button"
               onClick={() => onOpenChange(!open)}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-black/60 transition-all hover:bg-black/5 hover:text-black active:scale-95 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white ${
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-black/60 transition-[transform,color,background-color] hover:bg-black/5 hover:text-black active:scale-95 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white ${
                 open ? "rotate-180" : "rotate-0"
               }`}
               style={{ transitionDuration: `${MORPH_MS}ms`, transitionTimingFunction: EASE }}
@@ -176,9 +180,9 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
 
           {/* The explorer grid — tray choreography: delayed rise-in behind the morph. */}
           <div
-            className={`min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-6 no-scrollbar mask-fade-bottom transition-all duration-500 ease-out ${
+            className={`min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-6 no-scrollbar mask-fade-bottom transition-[opacity,transform] duration-500 ease-out ${
               open
-                ? "translate-y-0 opacity-100 delay-150"
+                ? "translate-y-0 opacity-100 delay-[180ms]"
                 : "pointer-events-none translate-y-6 opacity-0"
             }`}
           >
