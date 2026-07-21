@@ -204,11 +204,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const docLane = new DocLane({ dataPort: config.dataPort ?? 0, docs });
     const dataPort = await docLane.listen();
 
-    api.register("doc.create", (_ctx, params) => {
+    api.register("doc.create", async (_ctx, params) => {
       const parsed = DocCreateParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { name: string }", false);
-      const entry = docs.create(parsed.data.name);
+      const entry = await docs.create(parsed.data.name);
       emitHealth(); // docCount moved — reflect it on the aggregated stream
       return entry;
     });
@@ -229,7 +229,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       };
       return result;
     });
-    api.register("doc.rename", (_ctx, params) => {
+    api.register("doc.rename", async (_ctx, params) => {
       const parsed = DocRenameParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError(

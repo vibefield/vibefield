@@ -41,6 +41,8 @@ interface LaneConn {
   /** the PUT_META awaiting its PUT payload (one cycle at a time) */
   pendingMeta: LanePutMeta | null;
   helloTimer: NodeJS.Timeout | null;
+  /** Serializes async storage operations and preserves frame order. */
+  chain: Promise<void>;
 }
 
 export class DocLane {
@@ -64,25 +66,34 @@ export class DocLane {
     const conn: LaneConn = {
       docId: null,
       pendingMeta: null,
+      chain: Promise.resolve(),
       helloTimer: setTimeout(() => {
         if (!conn.docId) ws.close(1008, "no hello");
       }, HELLO_TIMEOUT_MS),
     };
-    ws.on("message", (data: RawData, isBinary: boolean) =>
-      this.onMessage(ws, conn, data, isBinary),
-    );
+    ws.on("message", (data: RawData, isBinary: boolean) => {
+      conn.chain = conn.chain
+        .then(() => this.onMessage(ws, conn, data, isBinary))
+        .catch((err: unknown) => {
+          this.sendErr(ws, "INTERNAL", err instanceof Error ? err.message : "document lane failed");
+          ws.close(1011, "document storage failed");
+        });
+    });
     ws.on("close", () => {
       if (conn.helloTimer) clearTimeout(conn.helloTimer);
-      if (conn.docId) this.opts.docs.writerDetached(conn.docId);
-      conn.docId = null;
-      conn.pendingMeta = null;
+      void conn.chain.finally(() => {
+        if (conn.docId) this.opts.docs.writerDetached(conn.docId);
+        conn.docId = null;
+        conn.pendingMeta = null;
+      });
     });
     ws.on("error", () => {
       /* close follows */
     });
   }
 
-  private onMessage(ws: WebSocket, conn: LaneConn, data: RawData, isBinary: boolean): void {
+  private async onMessage(ws: WebSocket, conn: LaneConn, data: RawData, isBinary: boolean): Promise<void> {
+    if (ws.readyState !== WS_OPEN) return;
     if (!isBinary) {
       // the lane is binary-only; a text frame is protocol garbage
       this.sendErr(ws, "PRECONDITION_FAILED", "lane frames must be binary");
@@ -103,23 +114,28 @@ export class DocLane {
       ws.close(1002, "bad frame");
       return;
     }
+    if (frame.laneId !== 0) {
+      this.sendErr(ws, "PRECONDITION_FAILED", "laneId must be zero until multiplexing is negotiated");
+      ws.close(1002, "unexpected lane id");
+      return;
+    }
 
     if (!conn.docId) {
       // pre-auth: the first frame MUST be a redeemable HELLO, nothing else
-      if (frame.kind === LANE_FRAME.HELLO) this.onHello(ws, conn, frame.payload);
+      if (frame.kind === LANE_FRAME.HELLO) await this.onHello(ws, conn, frame.payload);
       else ws.close(1008, "hello required first");
       return;
     }
 
     switch (frame.kind) {
       case LANE_FRAME.GET:
-        this.onGet(ws, conn.docId);
+        await this.onGet(ws, conn.docId);
         return;
       case LANE_FRAME.PUT_META:
         this.onPutMeta(ws, conn, frame.payload);
         return;
       case LANE_FRAME.PUT:
-        this.onPut(ws, conn, frame.payload);
+        await this.onPut(ws, conn, frame.payload);
         return;
       default:
         // tolerant reader: unknown (or out-of-sequence) kinds are logged + ignored,
@@ -129,7 +145,7 @@ export class DocLane {
     }
   }
 
-  private onHello(ws: WebSocket, conn: LaneConn, payload: Uint8Array): void {
+  private async onHello(ws: WebSocket, conn: LaneConn, payload: Uint8Array): Promise<void> {
     let hello: LaneHello;
     try {
       const parsed = LaneHello.safeParse(decodeJsonPayload(payload));
@@ -160,7 +176,7 @@ export class DocLane {
     conn.docId = redeemed.docId;
     this.opts.docs.writerAttached(redeemed.docId);
 
-    const read = this.opts.docs.readDoc(redeemed.docId);
+    const read = await this.opts.docs.readDoc(redeemed.docId);
     const helloOk: LaneHelloOk = {
       docId: redeemed.docId,
       hasDoc: read !== null,
@@ -169,8 +185,8 @@ export class DocLane {
     this.sendFrame(ws, encodeJsonFrame(LANE_FRAME.HELLO_OK, 0, helloOk));
   }
 
-  private onGet(ws: WebSocket, docId: string): void {
-    const read = this.opts.docs.readDoc(docId);
+  private async onGet(ws: WebSocket, docId: string): Promise<void> {
+    const read = await this.opts.docs.readDoc(docId);
     if (!read) {
       this.sendErr(ws, "NOT_FOUND", "no doc bytes yet");
       return;
@@ -194,7 +210,7 @@ export class DocLane {
     conn.pendingMeta = meta;
   }
 
-  private onPut(ws: WebSocket, conn: LaneConn, payload: Uint8Array): void {
+  private async onPut(ws: WebSocket, conn: LaneConn, payload: Uint8Array): Promise<void> {
     const meta = conn.pendingMeta;
     conn.pendingMeta = null; // consumed regardless of the outcome
     if (!meta) {
@@ -203,7 +219,7 @@ export class DocLane {
     }
     try {
       // conn.docId is non-null here: dispatch only reaches PUT once authenticated
-      const written = this.opts.docs.writeDoc(conn.docId as string, payload, meta);
+      const written = await this.opts.docs.writeDoc(conn.docId as string, payload, meta);
       const ok: LanePutOk = { byteLength: written.byteLength };
       this.sendFrame(ws, encodeJsonFrame(LANE_FRAME.PUT_OK, 0, ok));
     } catch (e) {

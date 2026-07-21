@@ -3,7 +3,7 @@
 // (garbage/replay/expiry rejection, PUT→GET round-trips, the single-writer lock,
 // truncated/non-ICE1 rejection), and THE restart test — the P0 exit criterion.
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -281,7 +281,7 @@ describe("lane ticket security", () => {
     let clock = 1_000_000;
     const svc = new DocumentService({ dataDir: dir, now: () => clock, ticketTtlMs: 30_000 });
     cleanup.push(() => svc.dispose());
-    const doc = svc.create("Unit");
+    const doc = await svc.create("Unit");
 
     const expiring = svc.open(doc.docId).ticket;
     clock += 30_001; // past TTL
@@ -296,7 +296,7 @@ describe("lane ticket security", () => {
 
 describe("lane PUT / GET", () => {
   it("PUT then GET on a fresh lane returns byte-identical bytes; registry updates", async () => {
-    const { daemon } = await setup();
+    const { dataDir, daemon } = await setup();
     const rpc = await productRpc(daemon);
     const made = (await rpc.call("doc.create", { name: "Board" })) as DocRegistryEntry;
 
@@ -320,6 +320,16 @@ describe("lane PUT / GET", () => {
     expect(entry.sizeBytes).toBe(env.byteLength);
     expect(entry.engineSchema).toBe(11);
     expect(entry.updatedAt).toBeGreaterThanOrEqual(made.updatedAt);
+
+    const currentPath = join(dataDir, "docs", made.docId, "current.json");
+    const current = JSON.parse(readFileSync(currentPath, "utf8")) as {
+      revisionId: string;
+      file: string;
+      byteLength: number;
+    };
+    expect(current.file).toBe(`${current.revisionId}.ice1`);
+    expect(current.byteLength).toBe(env.byteLength);
+    expect(existsSync(join(dataDir, "docs", made.docId, "revisions", current.file))).toBe(true);
   });
 
   it("RESTART: put → stop → re-bootstrap same dataDir → list + GET survive", async () => {
@@ -427,7 +437,7 @@ describe("lane write validation (leaves prior bytes untouched)", () => {
     expect(reply.kind).toBe(LANE_FRAME.ERR);
     expect(LaneErr.parse(decodeJsonPayload(reply.payload)).kind).toBe("NOT_FOUND");
     expect(existsSync(join(dataDir, "docs", made.docId, "snapshot.ice1"))).toBe(false);
-    expect(daemon.docs.readDoc(made.docId)).toBeNull();
+    expect(await daemon.docs.readDoc(made.docId)).toBeNull();
   });
 });
 

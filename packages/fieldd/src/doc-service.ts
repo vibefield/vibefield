@@ -1,15 +1,11 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import {
-  closeSync,
   existsSync,
-  fsyncSync,
   mkdirSync,
-  openSync,
   readFileSync,
   renameSync,
-  rmSync,
-  writeFileSync,
 } from "node:fs";
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   DocMeta,
@@ -66,6 +62,12 @@ interface TicketRecord {
   expiresAt: number;
 }
 
+interface CurrentRevision extends DocMeta {
+  revisionId: string;
+  file: string;
+  committedAt: number;
+}
+
 export class DocumentService {
   private readonly dataDir: string;
   private readonly now: () => number;
@@ -80,6 +82,7 @@ export class DocumentService {
   private tickets = new Map<string, TicketRecord>();
   /** docIds with a live write lane — the single-writer lock (design-02 §3.5) */
   private writers = new Set<string>();
+  private writes = new Map<string, Promise<void>>();
   private storageOk = false;
 
   constructor(opts: DocumentServiceOptions) {
@@ -99,11 +102,12 @@ export class DocumentService {
       console.error(`[doc-service] storage init failed: ${errMsg(e)}`);
     }
     this.loadRegistry();
+    this.reconcileRegistry();
   }
 
   // ---- catalog ----
 
-  create(name: string): DocRegistryEntry {
+  async create(name: string): Promise<DocRegistryEntry> {
     const docId = randomUUID();
     const entry: DocRegistryEntry = {
       docId,
@@ -113,9 +117,14 @@ export class DocumentService {
       engineSchema: null,
       sizeBytes: 0,
     };
-    mkdirSync(join(this.docsDir, docId), { recursive: true });
-    this.registry.set(docId, entry);
-    this.persistRegistry();
+    try {
+      await mkdir(join(this.docsDir, docId), { recursive: true });
+      this.registry.set(docId, entry);
+      await this.persistRegistry();
+    } catch (err) {
+      this.registry.delete(docId);
+      throw this.storageError("create", err);
+    }
     return entry;
   }
 
@@ -126,12 +135,17 @@ export class DocumentService {
   /** Relabels a doc in place. Deliberately does NOT bump updatedAt: recency means
    * content (the last accepted PUT), not the label — the explorer sorts by it, so a
    * rename must never reorder the list. Insertion order is preserved (same key). */
-  rename(docId: string, name: string): DocRegistryEntry {
+  async rename(docId: string, name: string): Promise<DocRegistryEntry> {
     const entry = this.registry.get(docId);
     if (!entry) throw new RpcCallError("NOT_FOUND", `no such doc: ${docId}`, false);
     const renamed: DocRegistryEntry = { ...entry, name };
     this.registry.set(docId, renamed);
-    this.persistRegistry();
+    try {
+      await this.persistRegistry();
+    } catch (err) {
+      this.registry.set(docId, entry);
+      throw this.storageError("rename", err);
+    }
     return renamed;
   }
 
@@ -148,7 +162,7 @@ export class DocumentService {
     this.sweepTickets();
     const ticket = randomBytes(24).toString("base64url"); // 192-bit, one-shot
     this.tickets.set(ticket, { docId, expiresAt: this.now() + this.ticketTtlMs });
-    return { docId, ticket, hasDoc: existsSync(this.snapshotPath(docId)) };
+    return { docId, ticket, hasDoc: this.hasStoredDoc(docId) };
   }
 
   /** Authoritative single-writer gate: a ticket is consumed on the first redeem
@@ -172,16 +186,46 @@ export class DocumentService {
 
   // ---- payload ----
 
-  readDoc(docId: string): { bytes: Uint8Array; meta: DocMeta } | null {
-    const snap = this.snapshotPath(docId);
-    if (!existsSync(snap)) return null;
-    const bytes = readFileSync(snap);
-    return { bytes, meta: this.readMeta(docId, bytes.byteLength) };
+  async readDoc(docId: string): Promise<{ bytes: Uint8Array; meta: DocMeta } | null> {
+    try {
+      const current = await this.readCurrent(docId);
+      if (current !== null) {
+        const bytes = await readFile(join(this.revisionsDir(docId), current.file));
+        if (bytes.byteLength !== current.byteLength) {
+          throw new RpcCallError(
+            "INTERNAL",
+            `revision ${current.revisionId} length ${bytes.byteLength} does not match manifest ${current.byteLength}`,
+            false,
+          );
+        }
+        return { bytes, meta: current };
+      }
+      const legacy = this.snapshotPath(docId);
+      if (!existsSync(legacy)) return null;
+      const bytes = await readFile(legacy);
+      return { bytes, meta: this.readMeta(docId, bytes.byteLength) };
+    } catch (err) {
+      if (err instanceof RpcCallError) throw err;
+      throw this.storageError("read", err);
+    }
   }
 
   /** Validates then persists atomically, then updates the registry. Any validation
    * failure throws BEFORE the first byte hits disk — prior bytes stay untouched. */
-  writeDoc(docId: string, bytes: Uint8Array, putMeta: LanePutMeta): DocMeta {
+  writeDoc(docId: string, bytes: Uint8Array, putMeta: LanePutMeta): Promise<DocMeta> {
+    const prior = this.writes.get(docId) ?? Promise.resolve();
+    const write = prior.catch(() => {}).then(() => this.writeDocNow(docId, bytes, putMeta));
+    const tail = write.then(
+      () => {},
+      () => {},
+    );
+    this.writes.set(docId, tail);
+    return write.finally(() => {
+      if (this.writes.get(docId) === tail) this.writes.delete(docId);
+    });
+  }
+
+  private async writeDocNow(docId: string, bytes: Uint8Array, putMeta: LanePutMeta): Promise<DocMeta> {
     const entry = this.registry.get(docId);
     if (!entry) throw new RpcCallError("NOT_FOUND", `no such doc: ${docId}`, false);
     if (bytes.byteLength !== putMeta.byteLength)
@@ -199,24 +243,56 @@ export class DocumentService {
     if (!hasIce1Magic(bytes))
       throw new RpcCallError("PRECONDITION_FAILED", "payload is not an ICE1 envelope", false);
 
-    const meta: DocMeta = {
+    const revisionId = randomUUID();
+    const meta: CurrentRevision = {
+      revisionId,
+      file: `${revisionId}.ice1`,
+      committedAt: this.now(),
       engineSchema: putMeta.engineSchema,
       savedAt: putMeta.savedAt,
       byteLength: bytes.byteLength,
       baseEpoch: entry.baseEpoch,
     };
     const dir = join(this.docsDir, docId);
-    mkdirSync(dir, { recursive: true });
-    atomicWriteSync(dir, "snapshot.ice1", bytes);
-    atomicWriteSync(dir, "meta.json", `${JSON.stringify(meta, null, 2)}\n`);
+    const revisions = this.revisionsDir(docId);
+    let previous: CurrentRevision | null = null;
+    try {
+      previous = await this.readCurrent(docId);
+    } catch {
+      // A successful new commit repairs a corrupt pointer. Unknown orphan
+      // revisions are retained for later maintenance rather than guessed at.
+    }
+    try {
+      await mkdir(revisions, { recursive: true });
+      await atomicWrite(revisions, meta.file, bytes);
+      // `current.json` is the sole commit point. Until this rename lands the
+      // previous complete revision remains authoritative.
+      await atomicWrite(dir, "current.json", `${JSON.stringify(meta, null, 2)}\n`);
+    } catch (err) {
+      throw this.storageError("write", err);
+    }
 
     this.registry.set(docId, {
       ...entry,
-      updatedAt: this.now(),
+      updatedAt: meta.committedAt,
       engineSchema: putMeta.engineSchema,
       sizeBytes: bytes.byteLength,
     });
-    this.persistRegistry();
+    try {
+      await this.persistRegistry();
+    } catch (err) {
+      // The revision is already committed. Boot reconciliation repairs the
+      // derived registry; report failure now so the writer retries its ACK.
+      throw this.storageError("registry refresh", err);
+    }
+    if (previous !== null && previous.revisionId !== revisionId) {
+      void rm(join(revisions, previous.file), { force: true }).catch((err) =>
+        console.warn(`[doc-service] old revision cleanup failed for ${docId}: ${errMsg(err)}`),
+      );
+    }
+    // Legacy files are no longer authoritative after current.json commits.
+    void rm(this.snapshotPath(docId), { force: true }).catch(() => {});
+    void rm(join(dir, "meta.json"), { force: true }).catch(() => {});
     return meta;
   }
 
@@ -236,6 +312,24 @@ export class DocumentService {
 
   private snapshotPath(docId: string): string {
     return join(this.docsDir, docId, "snapshot.ice1");
+  }
+
+  private revisionsDir(docId: string): string {
+    return join(this.docsDir, docId, "revisions");
+  }
+
+  private currentPath(docId: string): string {
+    return join(this.docsDir, docId, "current.json");
+  }
+
+  private hasStoredDoc(docId: string): boolean {
+    return existsSync(this.currentPath(docId)) || existsSync(this.snapshotPath(docId));
+  }
+
+  private async readCurrent(docId: string): Promise<CurrentRevision | null> {
+    const path = this.currentPath(docId);
+    if (!existsSync(path)) return null;
+    return parseCurrentRevision(JSON.parse(await readFile(path, "utf8")), docId);
   }
 
   private readMeta(docId: string, byteLength: number): DocMeta {
@@ -265,13 +359,45 @@ export class DocumentService {
     }
   }
 
-  private persistRegistry(): void {
-    if (!this.storageOk) return;
-    atomicWriteSync(
+  private async persistRegistry(): Promise<void> {
+    await atomicWrite(
       this.registryDir,
       this.registryFile,
       `${JSON.stringify([...this.registry.values()], null, 2)}\n`,
     );
+  }
+
+  /** `current.json` is authoritative for content-derived registry columns. */
+  private reconcileRegistry(): void {
+    let changed = false;
+    for (const [docId, entry] of this.registry) {
+      const path = this.currentPath(docId);
+      if (!existsSync(path)) continue;
+      try {
+        const current = parseCurrentRevision(JSON.parse(readFileSync(path, "utf8")), docId);
+        if (
+          entry.updatedAt !== current.committedAt ||
+          entry.engineSchema !== current.engineSchema ||
+          entry.sizeBytes !== current.byteLength
+        ) {
+          this.registry.set(docId, {
+            ...entry,
+            updatedAt: current.committedAt,
+            engineSchema: current.engineSchema,
+            sizeBytes: current.byteLength,
+          });
+          changed = true;
+        }
+      } catch (err) {
+        console.error(`[doc-service] current revision unreadable for ${docId}: ${errMsg(err)}`);
+      }
+    }
+    if (changed) void this.persistRegistry().catch((err) => console.error(`[doc-service] reconcile persist failed: ${errMsg(err)}`));
+  }
+
+  private storageError(op: string, err: unknown): RpcCallError {
+    this.storageOk = false;
+    return new RpcCallError("INTERNAL", `document storage ${op} failed: ${errMsg(err)}`, true);
   }
 
   /** Tolerant reader (design-00): missing → empty; corrupt → moved aside, boot lives;
@@ -321,28 +447,50 @@ function hasIce1Magic(bytes: Uint8Array): boolean {
 /** tmp-in-same-dir → fsync file → rename → fsync dir. No partial file is ever
  * observable at the target path; a failure before rename leaves only the tmp,
  * which is removed. (design-00 durability law; the restart test depends on it.) */
-function atomicWriteSync(dir: string, name: string, data: Uint8Array | string): void {
+async function atomicWrite(dir: string, name: string, data: Uint8Array | string): Promise<void> {
   const target = join(dir, name);
   const tmp = join(dir, `${name}.tmp-${randomBytes(6).toString("hex")}`);
   try {
-    const fd = openSync(tmp, "w", 0o600);
+    const fd = await open(tmp, "w", 0o600);
     try {
-      writeFileSync(fd, data);
-      fsyncSync(fd);
+      await fd.writeFile(data);
+      await fd.sync();
     } finally {
-      closeSync(fd);
+      await fd.close();
     }
-    renameSync(tmp, target);
+    await rename(tmp, target);
   } catch (e) {
-    rmSync(tmp, { force: true });
+    await rm(tmp, { force: true }).catch(() => {});
     throw e;
   }
-  const dirFd = openSync(dir, "r");
+  const dirFd = await open(dir, "r");
   try {
-    fsyncSync(dirFd);
+    await dirFd.sync();
   } finally {
-    closeSync(dirFd);
+    await dirFd.close();
   }
+}
+
+function parseCurrentRevision(value: unknown, docId: string): CurrentRevision {
+  if (value === null || typeof value !== "object") {
+    throw new Error(`current revision for ${docId} is not an object`);
+  }
+  const record = value as Record<string, unknown>;
+  const meta = DocMeta.safeParse(record);
+  const revisionId = record["revisionId"];
+  const file = record["file"];
+  const committedAt = record["committedAt"];
+  if (
+    !meta.success ||
+    typeof revisionId !== "string" ||
+    !/^[0-9a-f-]{36}$/i.test(revisionId) ||
+    file !== `${revisionId}.ice1` ||
+    !Number.isSafeInteger(committedAt) ||
+    (committedAt as number) < 0
+  ) {
+    throw new Error(`current revision for ${docId} is malformed`);
+  }
+  return { ...meta.data, revisionId, file, committedAt: committedAt as number };
 }
 
 function errMsg(e: unknown): string {
