@@ -2,5 +2,12 @@
 resolver = "2"
 members = ["packages/field-native"]
 
-# EL8 — version lockstep: exactly one truffle-core revision across the workspace.
-# The [patch] pin lands when field-native gains its truffle dependency (design-02 §2.1).
+[workspace.dependencies]
+truffle-core = "0.7.3"
+
+# EL8 — version lockstep: exactly one truffle-core revision across every crate in
+# this workspace (a borrowed Arc<Node> is type-incompatible across revisions).
+# Same style as electron-ghostty: registry requirement + local path patch, so the
+# checkout at ../p008/truffle (rev 0.7.3) is the single source of truth.
+[patch.crates-io]
+truffle-core = { path = "../p008/truffle/crates/truffle-core" }

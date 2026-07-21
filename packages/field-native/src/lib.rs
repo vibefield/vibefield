@@ -21,12 +21,14 @@ pub struct RunningDaemon {
     pub boot_id: String,
     pub state: Arc<state::DaemonState>,
     server: tokio::task::JoinHandle<()>,
-    manager: manager::NativeServiceManager,
+    health_refresh: tokio::task::JoinHandle<()>,
+    manager: Arc<manager::NativeServiceManager>,
 }
 
 impl RunningDaemon {
-    pub async fn shutdown(mut self) {
+    pub async fn shutdown(self) {
         self.server.abort();
+        self.health_refresh.abort();
         self.manager.stop_all().await;
     }
 }
@@ -43,7 +45,12 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
     rand::fill(&mut boot_bytes);
     let boot_id = hex::encode(boot_bytes);
 
-    let mut mgr = manager::NativeServiceManager::new(services::stubs::default_stubs())?;
+    // units push health transitions (e.g. mesh auth flow) via this channel;
+    // a refresh task re-aggregates and publishes on every ping
+    let (ping_tx, mut ping_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let mgr = Arc::new(manager::NativeServiceManager::new(services::build_units(
+        &config, ping_tx,
+    ))?);
     mgr.start_all().await;
     let health = mgr.health(&boot_id);
 
@@ -55,6 +62,18 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
     };
 
     let state = state::DaemonState::new(boot_id.clone(), secret, health, observed);
+
+    let health_refresh = tokio::spawn({
+        let mgr = mgr.clone();
+        let state = state.clone();
+        let boot_id = boot_id.clone();
+        async move {
+            while ping_rx.recv().await.is_some() {
+                while ping_rx.try_recv().is_ok() {} // coalesce bursts
+                let _ = state.health_tx.send(mgr.health(&boot_id));
+            }
+        }
+    });
 
     let socket_path = config.mgmt_socket();
     if socket_path.exists() {
@@ -70,6 +89,7 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
         boot_id,
         state,
         server,
+        health_refresh,
         manager: mgr,
     })
 }

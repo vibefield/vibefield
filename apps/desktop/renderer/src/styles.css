@@ -143,6 +143,11 @@ dd {
   background: color-mix(in srgb, var(--bad) 14%, transparent);
 }
 
+.pill.off {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

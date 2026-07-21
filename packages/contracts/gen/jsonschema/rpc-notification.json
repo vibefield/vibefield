@@ -175,7 +175,8 @@
         "starting",
         "up",
         "degraded",
-        "crashed"
+        "crashed",
+        "disabled"
       ]
     },
     "UnitHealth": {

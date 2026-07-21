@@ -15,6 +15,7 @@ interface UnitRow {
 function pillClass(v: string | undefined): string {
   if (v === "running" || v === "ok" || v === "up") return "pill good";
   if (v === "degraded" || v === "starting" || v === "stub") return "pill warn";
+  if (v === "disabled") return "pill off";
   return "pill bad";
 }
 

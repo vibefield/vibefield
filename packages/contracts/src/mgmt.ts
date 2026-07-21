@@ -10,7 +10,7 @@ import { z } from "zod";
 
 // ---- lifecycle ----
 
-export const UnitState = z.enum(["starting", "up", "degraded", "crashed"]);
+export const UnitState = z.enum(["starting", "up", "degraded", "crashed", "disabled"]);
 export type UnitState = z.infer<typeof UnitState>;
 
 export const UnitHealth = z

@@ -1606,7 +1606,8 @@ impl UnitHealth {
 #[doc = "    \"starting\","]
 #[doc = "    \"up\","]
 #[doc = "    \"degraded\","]
-#[doc = "    \"crashed\""]
+#[doc = "    \"crashed\","]
+#[doc = "    \"disabled\""]
 #[doc = "  ]"]
 #[doc = "}"]
 #[doc = r" ```"]
@@ -1632,6 +1633,8 @@ pub enum UnitState {
     Degraded,
     #[serde(rename = "crashed")]
     Crashed,
+    #[serde(rename = "disabled")]
+    Disabled,
 }
 impl ::std::fmt::Display for UnitState {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -1640,6 +1643,7 @@ impl ::std::fmt::Display for UnitState {
             Self::Up => f.write_str("up"),
             Self::Degraded => f.write_str("degraded"),
             Self::Crashed => f.write_str("crashed"),
+            Self::Disabled => f.write_str("disabled"),
         }
     }
 }
@@ -1651,6 +1655,7 @@ impl ::std::str::FromStr for UnitState {
             "up" => Ok(Self::Up),
             "degraded" => Ok(Self::Degraded),
             "crashed" => Ok(Self::Crashed),
+            "disabled" => Ok(Self::Disabled),
             _ => Err("invalid value".into()),
         }
     }

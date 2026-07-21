@@ -95,8 +95,22 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
                 send(&tx, handle_desired_set(&state, &params, id).await);
             }
             m if m.starts_with("native.mesh.") => {
-                send(&tx, err(id, "UNAVAILABLE", -32006, "mesh gateway not embedded yet",
-                    true, Some(json!({"service":"mesh-gateway","state":"stub"}))));
+                // facade lands with C2; until then report the unit's REAL state
+                // (disabled/starting/degraded) so callers see why (M2 honesty)
+                let (mesh_state, auth_url) = {
+                    let h = state.health_tx.borrow();
+                    h.units
+                        .iter()
+                        .find(|u| u.unit == "mesh-gateway")
+                        .map(|u| (u.state.to_string(), u.auth_url.clone()))
+                        .unwrap_or_else(|| ("unknown".into(), None))
+                };
+                let mut details = json!({"service":"mesh-gateway","state": mesh_state});
+                if let Some(url) = auth_url {
+                    details["authUrl"] = json!(url);
+                }
+                send(&tx, err(id, "UNAVAILABLE", -32006, "mesh facade not wired yet (C2)",
+                    true, Some(details)));
             }
             m if m.starts_with("native.process.") || m.starts_with("native.sidecar.") => {
                 send(&tx, err(id, "UNAVAILABLE", -32006, "unit not embedded yet",

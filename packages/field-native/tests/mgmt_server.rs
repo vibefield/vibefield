@@ -59,7 +59,7 @@ fn read_secret(daemon: &RunningDaemon) -> Vec<u8> {
 
 async fn boot() -> (tempfile::TempDir, RunningDaemon) {
     let dir = tempfile::tempdir().unwrap();
-    let daemon = bootstrap(NativeConfig { data_dir: dir.path().to_path_buf() })
+    let daemon = bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
         .await
         .expect("bootstrap");
     (dir, daemon)
@@ -180,7 +180,7 @@ async fn desired_generation_guard_and_observed_delta() {
 }
 
 #[tokio::test]
-async fn mesh_stub_answers_honest_unavailable() {
+async fn mesh_answers_honest_unavailable_with_real_unit_state() {
     let (_dir, daemon) = boot().await;
     let mut c = TestClient::connect(&daemon).await;
     c.hello(&daemon, 1).await;
@@ -188,6 +188,8 @@ async fn mesh_stub_answers_honest_unavailable() {
     let resp = c.recv().await;
     assert_eq!(resp["error"]["data"]["kind"], "UNAVAILABLE");
     assert_eq!(resp["error"]["data"]["details"]["service"], "mesh-gateway");
+    // C1: the details carry the unit's REAL state, not a hardcoded "stub"
+    assert_eq!(resp["error"]["data"]["details"]["state"], "disabled");
     assert_eq!(resp["error"]["data"]["retryable"], true);
 }
 
