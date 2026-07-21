@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
@@ -12,7 +13,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   root: "renderer",
   base: "./",
-  plugins: [react()],
+  plugins: [tailwindcss(), react()],
   resolve: {
     alias: [{ find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],
     // one copy each of the stateful libs (ICE marks them external in its dist)

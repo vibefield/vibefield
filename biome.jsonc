@@ -40,6 +40,12 @@
       "quoteStyle": "double"
     }
   },
+  "css": {
+    "parser": {
+      // Tailwind v4 CSS-first at-rules (@custom-variant, @source, @theme, …)
+      "tailwindDirectives": true
+    }
+  },
   "assist": {
     "enabled": true,
     "actions": {

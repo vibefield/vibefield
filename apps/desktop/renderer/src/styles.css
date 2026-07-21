@@ -1,3 +1,17 @@
+/* Tailwind v4, CSS-first (widgetlab pattern): the renderer's utility layer.
+   `@import "tailwindcss"` pulls in theme + preflight + utilities — no JS config,
+   no PostCSS; the @tailwindcss/vite plugin does the scanning and compiling.
+   The shell-ui token sheet carries DESIGN.md's --vf- and --ic- vars (imported
+   here, never redefined). The @source globs point the class scanner at code the
+   Vite graph doesn't reach on its own — the shell-ui kit and the plugins — so
+   their Tailwind classes survive the production build. (P0 answer: scan them
+   from the shell here; per-plugin compiled CSS is the distribution-era answer.) */
+@import "tailwindcss";
+@import "@vibefield/shell-ui/tokens.css";
+@custom-variant dark (&:where(.dark, .dark *));
+@source "../../../../packages/shell-ui/src";
+@source "../../../../packages/plugins";
+
 /* Track A health page — control-room dark (deliberately single-theme: this is
    an app surface previewing the Godview aesthetic, not a document). */
 :root {

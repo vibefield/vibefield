@@ -17,11 +17,13 @@ overrides:
   "@vibecook/ice": file:../infinite-canvas-engine/packages/ice
 # Shared dependency versions, declared ONCE — packages reference "catalog:".
 catalog:
+  "@tailwindcss/vite": ^4.0.0
   "@types/node": ^24.0.0
   "@types/react": ^19.2.17
   "@types/react-dom": ^19.2.3
   esbuild: ^0.28.1
   react: ^19.2.7
   react-dom: ^19.2.7
+  tailwindcss: ^4.0.0
   typescript: ^5.6.0
   vitest: ^3.0.0

@@ -1,19 +1,17 @@
 {
-  "name": "@vibefield/plugin-note",
+  "name": "@vibefield/shell-ui",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css"
   },
   "scripts": {
-    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vibecook/ice": "*",
-    "@vibefield/plugin-runtime": "workspace:*",
-    "@vibefield/shell-ui": "workspace:*"
+    "@vibecook/ice": "*"
   },
   "peerDependencies": {
     "react": "^19.0.0"
@@ -21,7 +19,6 @@
   "devDependencies": {
     "@types/react": "catalog:",
     "react": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   }
 }
