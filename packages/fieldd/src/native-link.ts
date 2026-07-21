@@ -7,6 +7,12 @@ import { computePairingMac } from "./pairing";
 // NativeLink (design-02 §3.3): the ONLY door to field-native. Owns the mgmt
 // UDS connection: D8 pairing hello, request/response correlation, subscription
 // replay on reconnect (P5 — reconnect = fresh snapshot), SUPERSEDED = fatal.
+//
+// Concurrency invariants (review-hardened):
+// - subId routes are installed SYNCHRONOUSLY while processing the subscribe
+//   response line, so a delta in the same socket chunk can never be dropped;
+// - reconnect scheduling is idempotent (single timer), and close events from
+//   stale sockets are ignored — there is never more than one live dial.
 
 export class RpcCallError extends Error {
   constructor(
@@ -41,6 +47,9 @@ interface SubEntry {
 interface Pending {
   resolve: (v: unknown) => void;
   reject: (e: Error) => void;
+  /** set for subscribe requests: the local sub key whose route must be
+   * installed synchronously when the response line is processed */
+  subKey?: number;
 }
 
 export class NativeLink extends EventEmitter {
@@ -73,24 +82,38 @@ export class NativeLink extends EventEmitter {
   }
 
   private async dial(): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
-      const sock = createConnection(this.opts.socketPath);
-      sock.once("connect", () => {
-        this.sock = sock;
-        sock.on("data", (d) => this.onData(d.toString("utf8")));
-        sock.on("close", () => this.onClose());
-        sock.on("error", () => {
-          /* close follows */
-        });
-        resolve();
-      });
-      sock.once("error", reject);
+    const sock = await new Promise<Socket>((resolve, reject) => {
+      const s = createConnection(this.opts.socketPath);
+      s.once("connect", () => resolve(s));
+      s.once("error", reject);
     });
-    await this.hello();
-    this.connected = true;
-    this.attempts = 0;
-    this.emit("connected");
-    await this.replaySubscriptions();
+    this.sock = sock;
+    this.buf = "";
+    sock.on("data", (d) => {
+      if (this.sock === sock) this.onData(d.toString("utf8"));
+    });
+    sock.on("close", () => this.onSockClose(sock));
+    sock.on("error", () => {
+      /* close follows */
+    });
+    try {
+      await this.hello();
+      this.connected = true;
+      this.attempts = 0;
+      this.emit("connected");
+      await this.replaySubscriptions();
+    } catch (e) {
+      // this socket is unusable: detach it FIRST so its close event is stale,
+      // then fail anything in flight — exactly one reconnect gets scheduled
+      // by whoever catches this rejection (or by connect()'s caller).
+      if (this.sock === sock) {
+        this.sock = null;
+        this.connected = false;
+      }
+      sock.destroy();
+      this.failPending();
+      throw e;
+    }
   }
 
   private async hello(): Promise<void> {
@@ -120,18 +143,32 @@ export class NativeLink extends EventEmitter {
     try {
       msg = JSON.parse(line);
     } catch {
-      return; // tolerant: garbage lines are logged upstream, never fatal
+      return; // tolerant: garbage lines never fatal
     }
     if (msg["id"] !== undefined && msg["id"] !== null) {
       const p = this.pending.get(msg["id"] as number);
       if (!p) return;
       this.pending.delete(msg["id"] as number);
-      const err = msg["error"] as { code?: number; message?: string; data?: { kind?: string; retryable?: boolean; details?: unknown } } | undefined;
+      const err = msg["error"] as
+        | { code?: number; message?: string; data?: { kind?: string; retryable?: boolean; details?: unknown } }
+        | undefined;
       if (err) {
-        p.reject(new RpcCallError(err.data?.kind ?? "INTERNAL", err.message ?? "rpc error", err.data?.retryable ?? false, err.data?.details, err.code));
-      } else {
-        p.resolve(msg["result"]);
+        p.reject(
+          new RpcCallError(err.data?.kind ?? "INTERNAL", err.message ?? "rpc error", err.data?.retryable ?? false, err.data?.details, err.code),
+        );
+        return;
       }
+      // install the subscription route BEFORE resolving — a delta in the same
+      // chunk is processed synchronously right after this line and must route
+      if (p.subKey !== undefined) {
+        const subId = (msg["result"] as { subId?: unknown } | undefined)?.subId;
+        if (typeof subId === "string") {
+          this.subRoutes.set(subId, p.subKey);
+          const sub = this.subs.get(p.subKey);
+          if (sub) sub.subId = subId;
+        }
+      }
+      p.resolve(msg["result"]);
       return;
     }
     // notification
@@ -143,49 +180,66 @@ export class NativeLink extends EventEmitter {
       this.sock?.destroy();
       return;
     }
-    if (method?.endsWith(".delta") && params?.subId) {
+    if (params?.subId && (method?.endsWith(".delta") || method?.endsWith(".snapshot"))) {
       const key = this.subRoutes.get(params.subId);
       const sub = key === undefined ? undefined : this.subs.get(key);
-      sub?.onEvent(params.payload, "delta");
+      sub?.onEvent(params.payload, method.endsWith(".snapshot") ? "snapshot" : "delta");
     }
   }
 
-  private onClose(): void {
-    this.connected = false;
+  private onSockClose(sock: Socket): void {
+    if (sock !== this.sock) return; // stale socket — already replaced or detached
     this.sock = null;
-    for (const [, p] of this.pending) {
-      p.reject(new RpcCallError("UNAVAILABLE", "mgmt connection closed", true));
-    }
-    this.pending.clear();
+    this.connected = false;
+    this.failPending();
     this.subRoutes.clear();
     if (this.closed || this.superseded || this.opts.reconnect === false) {
       this.emit("closed");
       return;
     }
+    this.scheduleReconnect();
+  }
+
+  /** Idempotent: at most one reconnect timer exists at any moment. */
+  private scheduleReconnect(): void {
+    if (this.closed || this.superseded || this.opts.reconnect === false) return;
+    if (this.reconnectTimer || this.sock) return;
     const delay = Math.min(500 * 2 ** this.attempts, 10_000);
     this.attempts += 1;
     this.emit("reconnecting", delay);
     this.reconnectTimer = setTimeout(() => {
-      this.dial().catch(() => this.onClose());
+      this.reconnectTimer = null;
+      this.dial().catch(() => this.scheduleReconnect());
     }, delay);
+  }
+
+  private failPending(): void {
+    for (const [, p] of this.pending) {
+      p.reject(new RpcCallError("UNAVAILABLE", "mgmt connection closed", true));
+    }
+    this.pending.clear();
   }
 
   private async replaySubscriptions(): Promise<void> {
     for (const [key, sub] of this.subs) {
-      const res = (await this.request(sub.method, sub.params)) as { subId: string; snapshot: unknown };
-      sub.subId = res.subId;
-      this.subRoutes.set(res.subId, key);
+      const res = (await this.rawRequest(sub.method, sub.params, key)) as { snapshot: unknown };
       sub.onEvent(res.snapshot, "snapshot"); // P5: reconnect = fresh snapshot
     }
   }
 
   async request(method: string, params: unknown): Promise<unknown> {
+    return await this.rawRequest(method, params);
+  }
+
+  private async rawRequest(method: string, params: unknown, subKey?: number): Promise<unknown> {
     const sock = this.sock;
     if (!sock) throw new RpcCallError("UNAVAILABLE", "not connected", true);
     const id = this.nextId++;
     const line = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
     return await new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const entry: Pending = { resolve, reject };
+      if (subKey !== undefined) entry.subKey = subKey;
+      this.pending.set(id, entry);
       sock.write(line);
     });
   }
@@ -199,15 +253,16 @@ export class NativeLink extends EventEmitter {
     const key = this.nextSubKey++;
     const entry: SubEntry = { method, params, onEvent };
     this.subs.set(key, entry);
-    const res = (await this.request(method, params)) as { subId: string; snapshot: unknown };
-    entry.subId = res.subId;
-    this.subRoutes.set(res.subId, key);
+    const res = (await this.rawRequest(method, params, key)) as { snapshot: unknown };
     return { snapshot: res.snapshot };
   }
 
   close(): void {
     this.closed = true;
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.sock?.destroy();
   }
 }

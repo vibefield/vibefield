@@ -3,6 +3,7 @@
 // WS client → ProductAPI → NativeLink → field-native and back.
 import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -129,6 +130,79 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     expect((missing["error"] as { code: number }).code).toBe(-32601);
 
     ws.close();
+    await daemon.stop();
+  }, 20_000);
+
+  it("SUPERSEDED stops the whole product plane — no zombie API (review P1)", async () => {
+    const dir = await spawnNative();
+    let fatal = "";
+    const daemon = await bootstrap({ dataDir: dir, controlPort: 0, onFatal: (r) => (fatal = r) });
+    const grant = daemon.tokens.mint([], "client");
+
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((r) => ws.once("open", () => r()));
+    const hello = await wsRequest(ws, {
+      jsonrpc: "2.0", id: 1, method: "system.hello",
+      params: { contractsVersion: "0.1.0", minCompatible: "0.1.0", clientKind: "renderer", credential: grant.token },
+    });
+    expect((hello["result"] as { serverKind: string }).serverKind).toBe("fieldd");
+
+    const wsClosed = new Promise<void>((r) => ws.once("close", () => r()));
+    // a newer fieldd takes over the native plane
+    const usurper = new NativeLink({
+      socketPath: join(dir, "native/run/mgmt.sock"),
+      pairingFile: join(dir, "native/pairing"),
+      bootId: "fieldd-usurper",
+    });
+    await usurper.connect();
+
+    await wsClosed; // the old product plane's API died with its native link
+    expect(fatal).toContain("superseded");
+    expect(daemon.native.superseded).toBe(true);
+    usurper.close();
+  }, 20_000);
+
+  it("bootstrap rollback: a failed API listen releases the native slot (review P1)", async () => {
+    const dir = await spawnNative();
+    // occupy a port with something that does NOT participate in supersession
+    const blocker = createNetServer();
+    await new Promise<void>((r) => blocker.listen(0, "127.0.0.1", () => r()));
+    const blockedPort = (blocker.address() as { port: number }).port;
+
+    // bootstrap pairs first, then fails to bind → must reject AND release the slot
+    await expect(bootstrap({ dataDir: dir, controlPort: blockedPort })).rejects.toThrow();
+
+    // rollback released its mgmt connection: a fresh link pairs and works immediately
+    const fresh = new NativeLink({
+      socketPath: join(dir, "native/run/mgmt.sock"),
+      pairingFile: join(dir, "native/pairing"),
+      bootId: "fieldd-after-rollback",
+    });
+    await fresh.connect();
+    const { snapshot } = await fresh.subscribe("native.lifecycle.health.subscribe", {}, () => {});
+    expect((snapshot as { units: unknown[] }).units.length).toBeGreaterThan(0);
+    expect(fresh.superseded).toBe(false); // nobody is holding the slot against us
+    fresh.close();
+    await new Promise<void>((r) => blocker.close(() => r()));
+  }, 20_000);
+
+  it("product hello is contract-gated: malformed shape and major mismatch are refused (review P2)", async () => {
+    const dir = await spawnNative();
+    const daemon = await bootstrap({ dataDir: dir, controlPort: 0 });
+    const grant = daemon.tokens.mint([], "client");
+
+    const ws1 = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((r) => ws1.once("open", () => r()));
+    const malformed = await wsRequest(ws1, { jsonrpc: "2.0", id: 1, method: "system.hello", params: { nope: true } });
+    expect((malformed["error"] as { data: { kind: string } }).data.kind).toBe("PRECONDITION_FAILED");
+
+    const ws2 = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((r) => ws2.once("open", () => r()));
+    const mismatch = await wsRequest(ws2, {
+      jsonrpc: "2.0", id: 1, method: "system.hello",
+      params: { contractsVersion: "1.0.0", minCompatible: "1.0.0", clientKind: "renderer", credential: grant.token },
+    });
+    expect((mismatch["error"] as { data: { kind: string } }).data.kind).toBe("INCOMPATIBLE");
     await daemon.stop();
   }, 20_000);
 

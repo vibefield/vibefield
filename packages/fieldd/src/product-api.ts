@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
   CONTRACTS_VERSION,
+  Hello,
   METHODS,
   RPC_ERROR_CODES,
   type CallerContext,
@@ -85,7 +86,25 @@ export class ProductApi extends EventEmitter {
     };
 
     if (method === "system.hello") {
-      const token = (params as { credential?: unknown })?.credential;
+      // full contract hello: shape-validated, version-gated (mirrors field-native)
+      const parsed = Hello.safeParse(params);
+      if (!parsed.success) {
+        reply(this.err(id, "PRECONDITION_FAILED", "malformed hello", false));
+        ws.close(1008, "bad hello");
+        return;
+      }
+      const oursMajor = CONTRACTS_VERSION.split(".")[0];
+      if (String(parsed.data.contractsVersion).split(".")[0] !== oursMajor) {
+        reply(
+          this.err(id, "INCOMPATIBLE", "contracts major mismatch", false, {
+            server: CONTRACTS_VERSION,
+            client: parsed.data.contractsVersion,
+          }),
+        );
+        ws.close(1008, "incompatible");
+        return;
+      }
+      const token = parsed.data.credential;
       const grant = typeof token === "string" ? this.opts.tokens.verify(token) : null;
       if (!grant) {
         reply(this.err(id, "UNAUTHORIZED", "invalid token", false));
