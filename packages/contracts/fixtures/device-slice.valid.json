@@ -1,0 +1,15 @@
+{
+  "deviceId": "nodeid-8f2a1c9b7e",
+  "name": "James MacBook Pro",
+  "platform": "darwin",
+  "headless": false,
+  "fielddVersion": "0.1.0",
+  "contractsVersion": "0.1.0",
+  "capabilities": { "terminalHost": false, "docHost": true, "push": false },
+  "productEndpoint": {
+    "serve": "product",
+    "url": "http://mac.tail1234.ts.net:443/t/3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM"
+  },
+  "bootId": "fieldd-a1b2c3d4e5f60718",
+  "publishedAt": 1753142400000
+}

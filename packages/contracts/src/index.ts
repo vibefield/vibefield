@@ -3,6 +3,7 @@
 
 export const CONTRACTS_VERSION = "0.1.0";
 
+export * from "./devices";
 export * from "./doclane";
 export * from "./docs";
 export * from "./envelope";

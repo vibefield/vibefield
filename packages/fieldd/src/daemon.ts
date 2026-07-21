@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   CONTRACTS_VERSION,
+  DeviceGetParams,
   DocCreateParams,
   type DocListResult,
   DocOpenParams,
@@ -14,6 +15,7 @@ import {
   SCOPES,
   type Scope,
 } from "@vibefield/contracts";
+import { DeviceService } from "./device-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
 import { MeshClient } from "./mesh-client";
@@ -66,12 +68,16 @@ export interface FielddDaemon {
   native: NativeLink;
   mesh: MeshClient;
   docs: DocumentService;
+  devices: DeviceService;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
   health(): FielddHealth;
   nativeHealth(): NativeHealth | null;
   stop(): Promise<void>;
 }
+
+/** The daemon's own version, published in the device slice (package version). */
+const FIELDD_VERSION = "0.1.0";
 
 export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   const bootId = `fieldd-${randomBytes(8).toString("hex")}`;
@@ -229,6 +235,37 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return docs.rename(parsed.data.docId, parsed.data.name);
     });
 
+    // -- DeviceService (C4, design-04 D31): the device directory --
+    const devices = new DeviceService({
+      dataDir: config.dataDir,
+      mesh,
+      bootId,
+      fielddVersion: FIELDD_VERSION,
+      contractsVersion: CONTRACTS_VERSION,
+      // The daemon owns the serve secret + the fused serve state, so IT
+      // composes the endpoint: url only while the product serve is active.
+      productEndpoint: () => {
+        const s = mesh.serves().find((x) => x.name === "product");
+        const url = s?.status === "active" ? capabilityUrl(s.url) : undefined;
+        return { serve: "product", ...(url !== undefined ? { url } : {}) };
+      },
+    });
+    api.register("device.list", () => ({ devices: devices.list() }));
+    api.register("device.get", (_ctx, params) => {
+      const parsed = DeviceGetParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { deviceId: string }", false);
+      const info = devices.get(parsed.data.deviceId);
+      if (!info)
+        throw new RpcCallError("NOT_FOUND", `no such device: ${parsed.data.deviceId}`, false);
+      return info;
+    });
+    api.registerSubscription("device.subscribe", (_ctx, _params, emit) => {
+      const fn = (roster: unknown) => emit(roster);
+      devices.on("changed", fn);
+      return { snapshot: devices.list(), dispose: () => devices.off("changed", fn) };
+    });
+
     // SUPERSEDED = another fieldd owns the native plane now; this one is done.
     // The flag also closes the small gap where takeover happens before this
     // listener is attached or while ProductApi is still binding its port.
@@ -239,6 +276,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       api.close();
       docLane.close();
       docs.dispose();
+      devices.dispose();
       native.close();
       config.onFatal?.(fatalReason);
     };
@@ -255,6 +293,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       api.close();
       docLane.close(); // release the lane port before the outer rollback runs
       docs.dispose();
+      devices.dispose();
       throw e;
     }
 
@@ -273,6 +312,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     ]);
     mesh.on("reconciled", emitHealth);
     mesh.on("serves-changed", emitHealth);
+    // C4: first roster sync (identity + publish); later syncs ride the mesh
+    // events DeviceService wires itself. Fire-and-forget — mesh-down is normal.
+    void devices.sync();
 
     // -- run files (shell bootstrap contract) --
     const runDir = join(config.dataDir, "fieldd", "run");
@@ -306,6 +348,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       native,
       mesh,
       docs,
+      devices,
       shellToken: shellGrant.token,
       health,
       nativeHealth: () => latestHealth,
@@ -313,6 +356,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         api.close();
         docLane.close();
         docs.dispose();
+        devices.dispose();
         native.close();
         // a superseding fieldd rewrites these for the same dataDir — never
         // delete what is no longer ours

@@ -146,7 +146,9 @@ describe("DocManager launch pipeline (B4)", () => {
     await until(() => first?.lane?.status === "closed");
     expect(daemon.docs.list()).toHaveLength(2);
     expect(localStorage.getItem("vf-last-doc")).toBe(second?.docId);
-  });
+    // 30s: two real engine seeds + lane cycles run 5-8s under full-suite
+    // parallel load (device-finish flag, 2026-07-21) — the 5s default flakes.
+  }, 30_000);
 
   it("the field-report flow: seed → new field is EMPTY → switch back restores", async () => {
     // James, 2026-07-21: "created new field, all the r3f 3d element and wires
@@ -182,7 +184,8 @@ describe("DocManager launch pipeline (B4)", () => {
       for (const _ of b) restoredWidgets += 1;
     });
     expect(restoredWidgets).toBe(21); // everything recovers
-  });
+    // 30s: three engine seeds/opens + two switches (the same parallel-load flag).
+  }, 30_000);
 
   it("restart honors vf-last-doc and restores byte-identical content", async () => {
     const { daemon, dataDir } = await stack();

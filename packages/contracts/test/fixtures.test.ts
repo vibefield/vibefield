@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ZodTypeAny } from "zod";
+import { DeviceInfo, DeviceSlice } from "../src/devices";
 import {
   DocMeta,
   DocOpenResult,
@@ -49,6 +50,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "lane-hello-ok": LaneHelloOk,
   "lane-put-meta": LanePutMeta,
   "lane-err": LaneErr,
+  "device-slice": DeviceSlice,
+  "device-info": DeviceInfo,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

@@ -228,4 +228,30 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "sync",
   }),
+
+  // C4 — DeviceService (design-04 D31, P1-lite: roster only; PeerLink/D32 and
+  // heartbeats deferred). workspace.read sits in the C3 tailnet preset, so
+  // peers may read the roster too.
+  defineMethod({
+    surface: "product",
+    method: "device.list",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "sync",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "device.get",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "sync",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "device.subscribe",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "sync",
+    subscription: true,
+  }),
 ];

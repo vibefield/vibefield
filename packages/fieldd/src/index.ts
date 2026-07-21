@@ -1,5 +1,6 @@
 // @vibefield/fieldd — the product-plane daemon (design-02 §3).
 export { bootstrap, type FielddConfig, type FielddDaemon, type FielddHealth } from "./daemon";
+export { DeviceService, type DeviceServiceOptions } from "./device-service";
 export {
   type DocOpenGrant,
   type DocServiceHealth,

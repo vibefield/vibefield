@@ -1,3 +1,4 @@
+import type { DeviceInfo } from "@vibefield/contracts";
 import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
 import type { ReactElement } from "react";
@@ -22,7 +23,7 @@ function Dot({ state }: { state: string }): ReactElement {
           state === "closed" ||
           state === "error"
         ? "var(--vf-red)"
-        : state === "disabled" || state === "stopped"
+        : state === "disabled" || state === "stopped" || state === "offline"
           ? "rgba(128, 128, 128, 0.45)"
           : "var(--vf-orange)"; // starting / pending / connecting / reconnecting / auth-required
   return (
@@ -37,6 +38,10 @@ export function MeshSection(): ReactElement {
   const conn = useFielddStatus();
   const sub = useSubscription<FielddHealth>("system.health.subscribe");
   const h = sub.data;
+  // C4 (D31): the device roster — snapshot and every delta are the DeviceInfo[]
+  // roster (self ⋈ peers), so `data` is the current roster wholesale.
+  const devicesSub = useSubscription<DeviceInfo[]>("device.subscribe");
+  const roster = devicesSub.data ?? [];
 
   // The mesh node's own unit (design-02 §2.4): prefer the gateway, tolerate any
   // mesh-named unit as the surface grows (mesh-bridge, …).
@@ -111,11 +116,36 @@ export function MeshSection(): ReactElement {
           </div>
         )}
 
-        {/* peers — the product has no peer RPC yet (spec §4, P1 defer); an honest
-            muted row, never invented data. Deepens when the surface grows one. */}
-        <div className="flex items-center justify-between pl-2">
-          <span className={labelCls}>peers</span>
-          <span className={labelCls}>not yet surfaced</span>
+        {/* devices — the C4 roster (self ⋈ peers). online is a FACT, not a
+            status: green when the tailnet backs the device, muted grey when not
+            (DESIGN.md §2.5 — offline is never an error). docHost shows a muted
+            "docs" hint. Empty / errored rosters render honestly, never blank. */}
+        <div className="pl-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className={labelCls}>devices</span>
+            {roster.length > 0 && <span className={labelCls}>{roster.length}</span>}
+          </div>
+          {devicesSub.error !== null ? (
+            <div className={`pl-2 ${labelCls}`}>roster unavailable</div>
+          ) : roster.length === 0 ? (
+            <div className={`pl-2 ${labelCls}`}>no devices yet</div>
+          ) : (
+            roster.map((d) => (
+              <div key={d.deviceId} className="flex items-center justify-between gap-2 pl-2">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Dot state={d.online ? "up" : "offline"} />
+                  <span className="min-w-0 truncate">
+                    {d.name}
+                    {d.self && <span className={labelCls}> · this device</span>}
+                  </span>
+                </span>
+                <span className="flex flex-none items-center gap-1.5">
+                  {d.capabilities.docHost && <span className={labelCls}>docs</span>}
+                  <span className={labelCls}>{d.platform}</span>
+                </span>
+              </div>
+            ))
+          )}
         </div>
 
         {sub.error !== null && <div className={labelCls}>health stream unavailable</div>}

@@ -113,11 +113,12 @@ describe("widgetlab panels", () => {
     // The System diagnostics section renders inside the panel (2026-07-21 law).
     expect(container?.textContent).toContain("System");
     expect(container?.textContent).toContain("connection");
-    // C3: the Mesh section is a sibling of System; peers are honestly "not yet
-    // surfaced" until the product grows a peer RPC (never-connected client here).
+    // C4: the Mesh section is a sibling of System; its device roster renders the
+    // honest empty state for the never-connected client here (the subscription
+    // sits in loading — no data, no error — so "no devices yet").
     expect(container?.textContent).toContain("Mesh");
-    expect(container?.textContent).toContain("peers");
-    expect(container?.textContent).toContain("not yet surfaced");
+    expect(container?.textContent).toContain("devices");
+    expect(container?.textContent).toContain("no devices yet");
     // B3: the board-persistence row (module store; "booting" pre-attach).
     expect(container?.textContent).toContain("board");
     // Controlled: the grid inputs render (a spacing value from the default cfg).

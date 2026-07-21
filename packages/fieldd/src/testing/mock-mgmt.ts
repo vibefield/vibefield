@@ -27,6 +27,18 @@ export class MockMgmtServer {
   serveSnapshot: unknown[] = [];
   /** simulate serves living in the node: a dropped daemon loses them */
   clearServesOnDisconnect = false;
+  /** scripted SyncedStore state (C4): deviceId → RAW slice data. Single-store
+   * model — tests only drive field.devices.v1. store.open/subscribe wrap each
+   * entry as {data, version}; store.set overwrites "dev-self" (own slice only).
+   * Seeded with "dev-self" so store.open keeps its one-slice shape (mesh-client
+   * store passthrough test). */
+  storeSlices = new Map<string, unknown>([["dev-self", { hello: 1 }]]);
+  /** every store.set's written data, in order — the publish-on-boot assertion */
+  storeWrites: unknown[] = [];
+  /** scripted tailnet peers answered by native.mesh.peers.list (default: none) */
+  meshPeers: unknown[] = [];
+  private storeVersion = 0;
+  private lastStoreId = "";
   private nextSub = 1;
   private issued: Array<{ sock: Socket; subId: string; method: string }> = [];
 
@@ -191,14 +203,54 @@ export class MockMgmtServer {
         reply({ result: { subId, snapshot: { serves: [...this.serveSnapshot] } } });
         return;
       }
-      case "native.mesh.store.open":
-        reply({
-          result: {
-            storeId: p["storeId"],
-            slices: { "dev-self": { data: { hello: 1 }, version: 1 } },
-          },
-        });
+      case "native.mesh.peers.list":
+        reply({ result: { peers: [...this.meshPeers] } });
         return;
+      case "native.mesh.store.open": {
+        const storeId = String(p["storeId"]);
+        this.lastStoreId = storeId;
+        reply({ result: this.storeSnapshot(storeId) });
+        return;
+      }
+      case "native.mesh.store.get": {
+        const storeId = p["storeId"];
+        const deviceId = p["deviceId"];
+        if (typeof deviceId === "string") {
+          // a specific peer's slice (mesh.rs: {storeId, deviceId, slice}) —
+          // shape-faithful, though DeviceService only uses the no-deviceId arm.
+          const data = this.storeSlices.get(deviceId);
+          reply({
+            result: { storeId, deviceId, slice: data === undefined ? null : { data, version: 1 } },
+          });
+        } else {
+          // NO deviceId → the node's OWN mesh identity + local slice. This is
+          // how DeviceService discovers its device_id (D30); mesh.rs replies
+          // {storeId, deviceId: store.device_id(), data: store.local()}.
+          reply({
+            result: {
+              storeId,
+              deviceId: "dev-self",
+              data: this.storeSlices.get("dev-self") ?? null,
+            },
+          });
+        }
+        return;
+      }
+      case "native.mesh.store.set": {
+        // store.set writes the OWN slice only; mesh.rs replies {storeId, version}.
+        this.storeSlices.set("dev-self", p["data"]);
+        this.storeWrites.push(p["data"]);
+        reply({ result: { storeId: p["storeId"], version: ++this.storeVersion } });
+        return;
+      }
+      case "native.mesh.store.subscribe": {
+        const storeId = String(p["storeId"]);
+        this.lastStoreId = storeId;
+        const subId = `s${this.nextSub++}`;
+        this.issued.push({ sock, subId, method: msg.method });
+        reply({ result: { subId, snapshot: this.storeSnapshot(storeId) } });
+        return;
+      }
       default:
         reply({ result: {} });
     }
@@ -238,6 +290,40 @@ export class MockMgmtServer {
         }) + "\n",
       );
     }
+  }
+
+  /** Push a store delta on every live store subscription (mirrors mesh.rs
+   * spawn_store_forwarder). Payload kinds: {kind:"peerUpdated", deviceId, data,
+   * version} / {kind:"peerRemoved", deviceId} / {kind:"localChanged", deviceId,
+   * data}. Routed native.mesh.store.subscribe → native.mesh.store.delta. */
+  pushStoreDelta(payload: unknown): void {
+    this.pushDelta("mesh.store.subscribe", payload);
+  }
+
+  /** Push a wholesale store re-snapshot (broadcast-lag path) as a
+   * native.mesh.store.snapshot notification. `slices` is deviceId → RAW data;
+   * each is wrapped {data, version} to match store_snapshot. */
+  pushStoreSnapshot(slices: Record<string, unknown>): void {
+    const wrapped: Record<string, unknown> = {};
+    for (const [dev, data] of Object.entries(slices)) wrapped[dev] = { data, version: 1 };
+    for (const e of this.issued) {
+      if (!e.method.endsWith("mesh.store.subscribe") || e.sock.destroyed) continue;
+      e.sock.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          method: "native.mesh.store.snapshot",
+          params: { subId: e.subId, payload: { storeId: this.lastStoreId, slices: wrapped } },
+        }) + "\n",
+      );
+    }
+  }
+
+  /** SyncedStore snapshot shape (mesh.rs store_snapshot): {storeId, slices},
+   * each slice wrapped {data, version} from the raw storeSlices map. */
+  private storeSnapshot(storeId: string): { storeId: string; slices: Record<string, unknown> } {
+    const slices: Record<string, unknown> = {};
+    for (const [dev, data] of this.storeSlices) slices[dev] = { data, version: 1 };
+    return { storeId, slices };
   }
 
   killClients(): void {
