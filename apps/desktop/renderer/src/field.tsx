@@ -16,7 +16,7 @@ import {
   GLViews,
   type GlFrameStats,
 } from "@vibecook/ice/r3f";
-import { InfiniteCanvas, type InfiniteCanvasHandle } from "@vibecook/ice/react";
+import { InfiniteCanvas, type InfiniteCanvasHandle, useStageHold } from "@vibecook/ice/react";
 import { spawnCommentAroundSelection } from "@vibefield/plugin-field-tools";
 import {
   type ReactElement,
@@ -26,14 +26,17 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import { PMREMGenerator, type Texture } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import type { BoardBoot } from "./board-boot";
 import { setBoardStatus } from "./board-status";
 import { installCursorHalo } from "./cursor";
+import type { DocManager } from "./doc-manager";
 import { buildRegistry, createFieldEngine, seedField } from "./field-engine";
+import { FilePill } from "./hud/FilePill";
+import { LoadingVeil } from "./hud/LoadingVeil";
 import { NavigationBreadcrumbs } from "./hud/NavigationBreadcrumbs";
 import { WidgetTray } from "./hud/WidgetTray";
 import { ZoomPill } from "./hud/ZoomPill";
@@ -124,44 +127,76 @@ const fabCls = (active: boolean) =>
       : "bg-white text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
   }`;
 
-export function FieldView({ board }: { board: BoardBoot }): ReactElement {
+export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
   const registry = useMemo(buildRegistry, []);
   const ce = useMemo(() => createFieldEngine(registry), [registry]);
+  const docState = useSyncExternalStore(manager.subscribe, manager.getState);
+  const pending = docState.pending;
 
-  // B3 — the doc attaches to the COMMITTED engine only, never in the memo
-  // factory: StrictMode double-invokes factories, and an orphaned twin engine
-  // must never stream envelopes to the daemon (the widgetlab-desktop lesson).
-  // Layout effect: open-or-seed lands before first paint (no empty frame).
+  // B4 launch: register the previews stage (chunks of 3 — each capture call
+  // owns one WebGL context, and 7 rapid context cycles flirts with the browser
+  // cap; skip-if-captured makes doc-switch re-runs instant), then boot the
+  // manager. StrictMode double-effect is absorbed by boot()'s guard.
+  useEffect(() => {
+    manager.setPreviewRunner(async (onTick) => {
+      const glTypes = [...registry.allWidgets().values()]
+        .filter((w) => w.surface === "gl")
+        .map((w) => w.type);
+      const chunks: string[][] = [];
+      for (let i = 0; i < glTypes.length; i += 3) chunks.push(glTypes.slice(i, i + 3));
+      let done = 0;
+      onTick(0, glTypes.length);
+      for (const types of chunks) {
+        await captureWidgetPreviews({
+          types,
+          environment: (gl) =>
+            new PMREMGenerator(gl).fromScene(new RoomEnvironment(), 0.04).texture,
+        });
+        done += types.length;
+        onTick(done, glTypes.length);
+      }
+    });
+    void manager.boot();
+    return () => manager.setPreviewRunner(null);
+  }, [manager, registry]);
+
+  // B3 law carried into B4 — the doc attaches to the COMMITTED engine only,
+  // never in the memo factory (the StrictMode twin must never stream to the
+  // daemon). Keyed on the manager's pending session: a doc switch tears the
+  // old session down (flush → stop → close; the manager drains the retired
+  // lane after this effect re-applies) and lands the new one before paint.
   useLayoutEffect(() => {
-    const lane = board.lane;
-    if (board.initialBytes !== null) {
-      const res = ce.docs.open(board.initialBytes);
+    if (pending === null) return;
+    const lane = pending.lane;
+    if (pending.initialBytes !== null) {
+      const res = ce.docs.open(pending.initialBytes);
       if (!res.ok) {
         // Honest quarantine (the M5 law): the at-rest bytes stay untouched on
         // disk; a blank board + surfaced state beats autosaving over them.
         console.error(`[board] quarantined: ${res.reason}`);
         setBoardStatus({ state: "quarantined", detail: res.reason });
         ce.docs.create();
+        ce.world.sync();
+        manager.contentApplied(pending.generation);
         return () => ce.docs.close();
       }
+      ce.world.sync();
     } else {
-      // First run (or detached boot): the registry named no bytes — seed.
-      seedField(ce, ce.docs.create());
+      const session = ce.docs.create();
+      // The demo scene belongs to the bootstrap default doc alone (seed flag);
+      // user-created docs open as an empty field.
+      if (pending.seed) seedField(ce, session);
+      else ce.world.sync();
     }
     if (lane === null) {
-      setBoardStatus({ state: "detached", detail: board.degraded ?? "fieldd unreachable" });
+      // degraded (in-memory) session — the manager already set the board row
+      manager.contentApplied(pending.generation);
       return () => ce.docs.close();
     }
-    setBoardStatus({ state: "live", lastSavedAt: null });
-    const offLane = lane.onStatusChange(() => {
-      if (lane.status === "attached")
-        setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
-      else if (lane.status === "reconnecting")
-        setBoardStatus({ state: "detached", detail: "reconnecting", lastSavedAt: lane.lastPutAt });
-    });
     // Autosave starts DIRTY (ice law): a seeded first-run board reaches fieldd
-    // after the first debounce, no user edit required.
+    // after the first debounce, no user edit required. Lane status → board row
+    // wiring lives in the manager now (it owns lane lifecycles).
     const autosave = ce.docs.autosave({
       put: async (bytes) => {
         setBoardStatus({ state: "saving", lastSavedAt: lane.lastPutAt });
@@ -169,6 +204,7 @@ export function FieldView({ board }: { board: BoardBoot }): ReactElement {
         setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
       },
     });
+    manager.contentApplied(pending.generation);
     const flush = () => void autosave.flush();
     window.addEventListener("beforeunload", flush);
     return () => {
@@ -178,14 +214,31 @@ export function FieldView({ board }: { board: BoardBoot }): ReactElement {
       // can never be persisted as an empty board.
       void autosave.flush();
       autosave.stop();
-      offLane();
       ce.docs.close();
     };
-  }, [ce, board]);
+  }, [ce, manager, pending]);
   // The P0 ground layer (grid + wires + snap guides, one WebGPU canvas) —
   // memoized: a new factory identity re-boots the canvas mount effect.
   const groundFactory = useMemo(() => ground(), []);
-  const [trayOpen, setTrayOpen] = useState(false);
+  const [trayOpen, setTrayOpenRaw] = useState(false);
+  const [docsOpen, setDocsOpenRaw] = useState(false);
+  // One sheet at a time: the tray and the docs explorer are mutually exclusive
+  // (two simultaneous sheets would fight over the recede and the stage hold).
+  const setTrayOpen = useCallback((o: boolean) => {
+    setTrayOpenRaw(o);
+    if (o) setDocsOpenRaw(false);
+  }, []);
+  const setDocsOpen = useCallback((o: boolean) => {
+    setDocsOpenRaw(o);
+    if (o) setTrayOpenRaw(false);
+  }, []);
+  const sheetOpen = trayOpen || docsOpen;
+  // The docs sheet + the loading veil quiesce the stage exactly like the tray.
+  useStageHold(ce, docsOpen, "docs-explorer");
+  useStageHold(ce, docState.phase === "loading", "loading-veil");
+  useEffect(() => {
+    if (docsOpen) ce.ops.cancelActiveGestures();
+  }, [docsOpen, ce]);
 
   const [showSettings, setShowSettings] = useState(false);
   const [showInspector, setShowInspector] = useState(false);
@@ -267,32 +320,10 @@ export function FieldView({ board }: { board: BoardBoot }): ReactElement {
   useEffect(() => disposeGl, [disposeGl]);
   useEffect(() => disposeHalo, [disposeHalo]);
 
-  // GL tray previews (design-005 §2 P2): the r3f capture pipeline runs in
-  // IDLE time — never on the boot path (the "cached after first capture"
-  // contract). The environment is a FACTORY, built ON the capture renderer:
-  // PMREM textures don't cross renderers (no CPU image — the main canvas's
-  // envTex reads black there), so the capture mirrors EnvLoader instead.
-  // Skip-if-captured + coalescing live in the capturer, so StrictMode
-  // double-fires cost nothing.
-  useEffect(() => {
-    const w = window as Window & {
-      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    const kick = (): void => {
-      captureWidgetPreviews({
-        environment: (gl) => new PMREMGenerator(gl).fromScene(new RoomEnvironment(), 0.04).texture,
-      }).catch((e) =>
-        console.warn("[field] GL preview capture failed — tray tiles keep their fallback.", e),
-      );
-    };
-    const idleId = w.requestIdleCallback?.(kick, { timeout: 4000 });
-    const timerId = idleId === undefined ? window.setTimeout(kick, 1500) : undefined;
-    return () => {
-      if (idleId !== undefined) w.cancelIdleCallback?.(idleId);
-      if (timerId !== undefined) window.clearTimeout(timerId);
-    };
-  }, []);
+  // (B4: the GL preview capture moved OFF the idle path into the loading
+  // pipeline's previews stage — registered with the manager above. The
+  // environment stays a factory built ON the capture renderer: PMREM textures
+  // don't cross renderers.)
 
   // Theme → live tokens: the settings panel makes DESIGN.md's static defaults
   // dynamic. We write the TOKEN source (--vf-canvas-bg — the widgetlab-compat
@@ -321,9 +352,12 @@ export function FieldView({ board }: { board: BoardBoot }): ReactElement {
   );
 
   // Natural boot framing (widgetlab, 2026-07-18: "zoom to fit, but with an
-  // upper and bottom cap"): frame the seeds once the viewport is measured and
-  // membership has stamped the first tick.
+  // upper and bottom cap"): frame the content once the viewport is measured
+  // and membership has stamped the first tick. Re-keyed per doc generation
+  // (B4): a switched-in doc gets its own arrival framing.
+  const generation = pending?.generation ?? 0;
   useEffect(() => {
+    if (generation === 0) return; // no doc landed yet — the veil is up
     if (ce.ops.frameContent()) return;
     let tries = 0;
     const id = setInterval(() => {
@@ -331,7 +365,7 @@ export function FieldView({ board }: { board: BoardBoot }): ReactElement {
       if (ce.ops.frameContent() || tries > 40) clearInterval(id);
     }, 50);
     return () => clearInterval(id);
-  }, [ce]);
+  }, [ce, generation]);
 
   // Keyboard shortcuts. <InfiniteCanvas> already installs the engine default
   // keymap (⌘Z undo, ⇧⌘Z redo, ⌫ delete, Esc cancel, v/h/c tools — all
@@ -408,7 +442,7 @@ export function FieldView({ board }: { board: BoardBoot }): ReactElement {
         style={{
           position: "absolute",
           inset: 0,
-          transform: trayOpen ? "scale(0.98)" : "scale(1)",
+          transform: sheetOpen ? "scale(0.98)" : "scale(1)",
           transition: "transform 600ms var(--vf-ease-island)",
         }}
       >
@@ -448,6 +482,9 @@ export function FieldView({ board }: { board: BoardBoot }): ReactElement {
       {/* Chrome overlays sit OUTSIDE the recede wrapper — they never scale. */}
       <NavigationBreadcrumbs engine={ce} />
       <ZoomPill ce={ce} />
+      {/* The file pill (B4): top-center — new doc, the editable name, and the
+          morph-open docs explorer. */}
+      <FilePill manager={manager} open={docsOpen} onOpenChange={setDocsOpen} />
       {/* Dark mode toggle (widgetlab position) — no-drag: it sits in the titlebar strip. */}
       <button
         type="button"
@@ -500,6 +537,9 @@ export function FieldView({ board }: { board: BoardBoot }): ReactElement {
         />
       )}
       {showInspector && <InspectorPanel engine={ce} onClose={() => setShowInspector(false)} />}
+
+      {/* The loading veil rides ABOVE all chrome — loading is modal (B4 §2). */}
+      <LoadingVeil loading={docState.loading} />
     </div>
   );
 }

@@ -123,6 +123,18 @@ export class DocumentService {
     return [...this.registry.values()];
   }
 
+  /** Relabels a doc in place. Deliberately does NOT bump updatedAt: recency means
+   * content (the last accepted PUT), not the label — the explorer sorts by it, so a
+   * rename must never reorder the list. Insertion order is preserved (same key). */
+  rename(docId: string, name: string): DocRegistryEntry {
+    const entry = this.registry.get(docId);
+    if (!entry) throw new RpcCallError("NOT_FOUND", `no such doc: ${docId}`, false);
+    const renamed: DocRegistryEntry = { ...entry, name };
+    this.registry.set(docId, renamed);
+    this.persistRegistry();
+    return renamed;
+  }
+
   // ---- lane admission ----
 
   /** Mints a one-shot lane ticket, or refuses if a writer already holds the doc. */

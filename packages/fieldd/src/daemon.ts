@@ -7,6 +7,7 @@ import {
   type DocListResult,
   DocOpenParams,
   type DocOpenResult,
+  DocRenameParams,
   METHODS,
   type NativeHealth,
   PORTS,
@@ -191,6 +192,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         hasDoc: grant.hasDoc,
       };
       return result;
+    });
+    api.register("doc.rename", (_ctx, params) => {
+      const parsed = DocRenameParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { docId: uuid, name: string }",
+          false,
+        );
+      // label-only edit — docCount is unchanged, so no emitHealth here
+      return docs.rename(parsed.data.docId, parsed.data.name);
     });
 
     // SUPERSEDED = another fieldd owns the native plane now; this one is done.

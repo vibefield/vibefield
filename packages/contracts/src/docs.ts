@@ -35,6 +35,12 @@ export type DocListResult = z.infer<typeof DocListResult>;
 export const DocOpenParams = z.object({ docId: z.string().uuid() }).passthrough();
 export type DocOpenParams = z.infer<typeof DocOpenParams>;
 
+/** doc.rename params — a label-only edit (the service updates name, never updatedAt). */
+export const DocRenameParams = z
+  .object({ docId: z.string().uuid(), name: z.string().min(1) })
+  .passthrough();
+export type DocRenameParams = z.infer<typeof DocRenameParams>;
+
 /** doc.open result — the lane wiring info. The ticket is one-shot and short-TTL;
  * laneUrl carries the ACTUAL bound data port (tests bind port 0 — never hardcode). */
 export const DocOpenResult = z

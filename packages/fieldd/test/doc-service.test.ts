@@ -2,7 +2,7 @@
 // the create/list/open catalog over the product WS, the ticketed binary lane
 // (garbage/replay/expiry rejection, PUT→GET round-trips, the single-writer lock,
 // truncated/non-ICE1 rejection), and THE restart test — the P0 exit criterion.
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -428,5 +428,67 @@ describe("lane write validation (leaves prior bytes untouched)", () => {
     expect(LaneErr.parse(decodeJsonPayload(reply.payload)).kind).toBe("NOT_FOUND");
     expect(existsSync(join(dataDir, "docs", made.docId, "snapshot.ice1"))).toBe(false);
     expect(daemon.docs.readDoc(made.docId)).toBeNull();
+  });
+});
+
+describe("doc.rename (product WS)", () => {
+  it("renames a doc and doc.list reflects the new name", async () => {
+    const { daemon } = await setup();
+    const rpc = await productRpc(daemon);
+    const made = (await rpc.call("doc.create", { name: "Board" })) as DocRegistryEntry;
+
+    const renamed = (await rpc.call("doc.rename", {
+      docId: made.docId,
+      name: "Field Notes",
+    })) as DocRegistryEntry;
+    expect(DocRegistryEntry.safeParse(renamed).success).toBe(true);
+    expect(renamed.name).toBe("Field Notes");
+
+    const listed = (await rpc.call("doc.list", {})) as { docs: DocRegistryEntry[] };
+    expect(listed.docs.find((d) => d.docId === made.docId)!.name).toBe("Field Notes");
+  });
+
+  it("does NOT bump updatedAt (recency is content, not the label)", async () => {
+    const { daemon } = await setup();
+    const rpc = await productRpc(daemon);
+    const made = (await rpc.call("doc.create", { name: "Board" })) as DocRegistryEntry;
+
+    const renamed = (await rpc.call("doc.rename", {
+      docId: made.docId,
+      name: "Renamed",
+    })) as DocRegistryEntry;
+    expect(renamed.updatedAt).toBe(made.updatedAt);
+  });
+
+  it("an unknown docId is NOT_FOUND", async () => {
+    const { daemon } = await setup();
+    const rpc = await productRpc(daemon);
+    const err = await rpc.callErr("doc.rename", { docId: randomUUID(), name: "ghost" });
+    expect(err.data?.kind).toBe("NOT_FOUND");
+  });
+
+  it("a token without doc.write is FORBIDDEN_SCOPE", async () => {
+    const { daemon } = await setup();
+    const owner = await productRpc(daemon);
+    const made = (await owner.call("doc.create", { name: "Board" })) as DocRegistryEntry;
+
+    const reader = await productRpc(daemon, daemon.tokens.mint(["doc.read"], "reader").token);
+    const denied = await reader.callErr("doc.rename", { docId: made.docId, name: "nope" });
+    expect(denied.data?.kind).toBe("FORBIDDEN_SCOPE");
+  });
+
+  it("RESTART: a renamed name survives stop + re-bootstrap on the same dataDir", async () => {
+    const { dataDir, daemon } = await setup();
+    const rpc = await productRpc(daemon);
+    const made = (await rpc.call("doc.create", { name: "Board" })) as DocRegistryEntry;
+    await rpc.call("doc.rename", { docId: made.docId, name: "Persisted" });
+
+    await daemon.stop();
+
+    const daemon2 = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon2.stop());
+    const rpc2 = await productRpc(daemon2);
+    const listed = (await rpc2.call("doc.list", {})) as { docs: DocRegistryEntry[] };
+    expect(listed.docs.find((d) => d.docId === made.docId)?.name).toBe("Persisted");
   });
 });

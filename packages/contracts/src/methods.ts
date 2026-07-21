@@ -210,4 +210,12 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "stream",
   }),
+  // Relabels a doc; idempotent, and never bumps updatedAt (recency is content, not the label).
+  defineMethod({
+    surface: "product",
+    method: "doc.rename",
+    scope: "doc.write",
+    idempotent: true,
+    locality: "sync",
+  }),
 ];

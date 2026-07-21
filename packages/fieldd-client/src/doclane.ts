@@ -119,6 +119,13 @@ export class DocLaneClient {
     this.setStatus("closed");
   }
 
+  /** Retire the lane: settle every queued op (a doc switch's final flush PUT
+   * included), THEN close — so retiring can never truncate the last save. */
+  async drain(): Promise<void> {
+    await this.chain.catch(() => {});
+    this.close();
+  }
+
   // ---- internals ----
 
   /** Ops are FIFO and never overlap; a failed op never poisons the chain. */

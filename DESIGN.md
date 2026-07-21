@@ -235,6 +235,23 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
   badges (±%) are solid green/red with white text, `rounded px-1`.
 - **Floating round buttons**: 40px, solid chrome surface, `shadow-lg`, icon at
   `neutral-500` → full on hover.
+- **The file pill** (B4): top-center chrome, `top-4`, **40px tall** (the top-chrome
+  control height — 64px stays the bottom island's) — ⊕ new doc · the doc name (13px
+  medium, click-to-rename in place: transparent input, Enter/blur commits, Esc reverts)
+  · a chevron. It morphs (M1, island ease 600ms) into the **docs explorer**: a
+  top-attached sheet `w-[min(56%,34rem)] × min(46vh,420px)`, `rounded-b-[2.5rem]`,
+  sheet material, the §5 sheet shadow **sign-flipped** (`0 20px 40px …` — a top sheet
+  throws its shadow down); chevron rotates 180°; backdrop dim + recede + stage hold,
+  one sheet at a time with the tray. Doc tiles: `aspect-[16/10] rounded-[10px]` faces
+  painted as a **mini empty field** (canvas-bg + the §2.1 CSS-fallback dots — the
+  ground motif as the doc's face until real thumbnails); name 12px medium, relative
+  time caption in `tabular-nums`; the CURRENT doc wears the 1.5px inside `--vf-select`
+  ring (it is the selection); hover 1.03 / active 0.95.
+- **The loading veil** (B4): a full-window chrome frost (`white/60 + backdrop-blur-xl`,
+  dark `#171717/60`) while a doc loads — centered thin bar (`3px × 220px`, colorless
+  fill: loading is not a §2.5 state) over an 11px/50% lowercase stage label
+  ("preparing previews"). **Late-veil rule:** invisible until 120ms of loading elapse
+  (a cached switch never flashes); 240ms fade-out. Loading is modal; the stage holds.
 - **Empty / degraded states**: a state is rendered, never blank space — dashed-hairline
   pill for drop affordances ("Release here to put it back"), progress with numbers
   ("index rebuilding · 42%"), placeholder faces for missing plugins (A6/A8). Empty
@@ -266,6 +283,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   bar are REMOVED outright. **Placement laws:** the window IS the field — chrome floats
   over the canvas, there is no app bar; dev-facing diagnostics render as *sections inside
   the Settings panel* (`SystemSection` is the template) — never as standalone pages.
+  Top-row slots (all inside the 52px drag strip, all `no-drag`): breadcrumbs left
+  (`left-24`, clearing the traffic lights) · **the file pill center** · theme fab right.
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
