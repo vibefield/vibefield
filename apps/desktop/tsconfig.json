@@ -4,5 +4,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["electron", "vite.config.ts"]
+  "include": ["electron", "test", "vite.config.ts", "vitest.config.ts"]
 }

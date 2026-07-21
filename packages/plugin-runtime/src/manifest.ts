@@ -6,6 +6,10 @@ import type { Scope } from "@vibefield/contracts";
 // unchanged. A plugin's widget types are namespaced "<pluginId>.<name>" —
 // the registry enforces it (A4: names are governed, not squatted).
 
+/** Tray shelves a widget can declare (P-3, widgetlab port). The tray adds "All" on top. */
+export const WIDGET_CATEGORIES = ["Cards", "3D", "Nodes", "Tools"] as const;
+export type WidgetCategory = (typeof WIDGET_CATEGORIES)[number];
+
 export interface WidgetDecl {
   /** namespaced widget type, e.g. "note.card" */
   type: string;
@@ -14,6 +18,14 @@ export interface WidgetDecl {
   defaultSize: { w: number; h: number };
   /** shown in spawn UIs; keep it one line */
   description?: string;
+  /** tray shelf (P-3, widgetlab port): defaults by surface — gl → "3D", else "Cards" */
+  category?: WidgetCategory;
+  /**
+   * CSS background for tray/folder mini silhouettes when no live preview
+   * renders. D22 threat-pass note: this is raw CSS from the manifest — fine
+   * for built-ins, MUST be schema-validated/sanitized before dynamic plugins.
+   */
+  preview?: string;
 }
 
 export interface PluginManifest {
