@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { PORTS } from "@vibefield/contracts";
 import { bootstrap } from "./daemon";
 
 function nativeAlive(socketPath: string): Promise<boolean> {
@@ -25,6 +26,9 @@ async function main(): Promise<void> {
     process.env["FIELDD_DATA_DIR"] ??
     join(homedir(), "Library", "Application Support", "VibeField");
   const portEnv = process.env["FIELDD_CONTROL_PORT"];
+  // the data lane binds the registered port by default (the daemon's own default
+  // is ephemeral, for test isolation) — FIELDD_DATA_PORT overrides, 0 = ephemeral.
+  const dataPortEnv = process.env["FIELDD_DATA_PORT"];
   const nativeBin = process.env["FIELDD_NATIVE_BIN"];
   const allowedOrigins = [
     "file://",
@@ -48,6 +52,7 @@ async function main(): Promise<void> {
   const daemon = await bootstrap({
     dataDir,
     ...(portEnv !== undefined ? { controlPort: Number(portEnv) } : {}),
+    dataPort: dataPortEnv !== undefined ? Number(dataPortEnv) : PORTS.FIELDD_WS_DATA,
     allowedOrigins,
     ...(nativePid !== undefined ? { nativePid } : {}),
     onFatal: (reason) => {

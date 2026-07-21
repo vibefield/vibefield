@@ -47,6 +47,25 @@ async function openRpc(port: number): Promise<WsRpc> {
   return new WsRpc(ws);
 }
 
+describe("bootstrap lifecycle", () => {
+  it("rejects when takeover happens before the fatal listener is attached", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-startup-race-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    await mock.start();
+    cleanup.push(() => mock.stop());
+    mock.supersedeAfterSubscribe = true;
+    let fatal = "";
+
+    await expect(
+      bootstrap({ dataDir, controlPort: 0, onFatal: (reason) => (fatal = reason) }),
+    ).rejects.toThrow(/superseded/);
+    expect(fatal).toContain("superseded");
+  });
+});
+
 describe("run files (shell bootstrap contract)", () => {
   it("writes a 0600 shell.token + product.json, and removes them on stop", async () => {
     const { dataDir, daemon } = await setup();

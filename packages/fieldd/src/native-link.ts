@@ -38,11 +38,19 @@ export interface NativeLinkOptions {
 }
 
 type SubEventKind = "snapshot" | "delta";
+interface QueuedSubEvent {
+  payload: unknown;
+  kind: SubEventKind;
+}
 interface SubEntry {
   method: string;
   params: unknown;
   onEvent: (payload: unknown, kind: SubEventKind) => void;
   subId?: string;
+  /** Hold deltas while a subscribe response's snapshot is being applied. */
+  buffering: boolean;
+  queued: QueuedSubEvent[];
+  activation?: NodeJS.Immediate;
 }
 interface Pending {
   resolve: (v: unknown) => void;
@@ -54,6 +62,8 @@ interface Pending {
 
 export class NativeLink extends EventEmitter {
   private sock: Socket | null = null;
+  private connectingSock: Socket | null = null;
+  private dialPromise: Promise<void> | null = null;
   private buf = "";
   private nextId = 1;
   private pending = new Map<number, Pending>();
@@ -73,21 +83,37 @@ export class NativeLink extends EventEmitter {
 
   /** Waits for field-native's pairing file + socket (it creates both), dials, hellos. */
   async connect(): Promise<void> {
+    this.assertOpen();
+    if (this.connected) return;
     const deadline = Date.now() + (this.opts.waitForDaemonMs ?? 10_000);
     while (!existsSync(this.opts.pairingFile) || !existsSync(this.opts.socketPath)) {
+      this.assertOpen();
       if (Date.now() > deadline)
         throw new Error("field-native did not come up (pairing/socket missing)");
       await sleep(100);
     }
+    this.assertOpen();
     await this.dial();
   }
 
-  private async dial(): Promise<void> {
-    const sock = await new Promise<Socket>((resolve, reject) => {
-      const s = createConnection(this.opts.socketPath);
-      s.once("connect", () => resolve(s));
-      s.once("error", reject);
+  /** Coalesces callers so there is never more than one connection attempt. */
+  private dial(): Promise<void> {
+    if (this.dialPromise) return this.dialPromise;
+    let tracked: Promise<void>;
+    tracked = this.performDial().finally(() => {
+      if (this.dialPromise === tracked) this.dialPromise = null;
     });
+    this.dialPromise = tracked;
+    return tracked;
+  }
+
+  private async performDial(): Promise<void> {
+    this.assertOpen();
+    const sock = await this.openSocket();
+    if (this.closed || this.superseded) {
+      sock.destroy();
+      this.assertOpen();
+    }
     this.sock = sock;
     this.buf = "";
     sock.on("data", (d) => {
@@ -99,10 +125,11 @@ export class NativeLink extends EventEmitter {
     });
     try {
       await this.hello();
+      await this.replaySubscriptions();
+      this.assertOpen();
       this.connected = true;
       this.attempts = 0;
       this.emit("connected");
-      await this.replaySubscriptions();
     } catch (e) {
       // this socket is unusable: detach it FIRST so its close event is stale,
       // then fail anything in flight — exactly one reconnect gets scheduled
@@ -115,6 +142,38 @@ export class NativeLink extends EventEmitter {
       this.failPending();
       throw e;
     }
+  }
+
+  private async openSocket(): Promise<Socket> {
+    return await new Promise<Socket>((resolve, reject) => {
+      const sock = createConnection(this.opts.socketPath);
+      this.connectingSock = sock;
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        sock.off("connect", onConnect);
+        sock.off("error", onError);
+        sock.off("close", onClose);
+        if (this.connectingSock === sock) this.connectingSock = null;
+        fn();
+      };
+      const onConnect = () => finish(() => resolve(sock));
+      const onError = (error: Error) => finish(() => reject(error));
+      const onClose = () =>
+        finish(() =>
+          reject(new RpcCallError("UNAVAILABLE", "mgmt connection closed while dialing", true)),
+        );
+      sock.once("connect", onConnect);
+      sock.once("error", onError);
+      sock.once("close", onClose);
+      if (this.closed || this.superseded) sock.destroy();
+    });
+  }
+
+  private assertOpen(): void {
+    if (this.closed || this.superseded)
+      throw new RpcCallError("UNAVAILABLE", "native link is closed", false);
   }
 
   private async hello(): Promise<void> {
@@ -174,11 +233,19 @@ export class NativeLink extends EventEmitter {
       // chunk is processed synchronously right after this line and must route
       if (p.subKey !== undefined) {
         const subId = (msg["result"] as { subId?: unknown } | undefined)?.subId;
-        if (typeof subId === "string") {
-          this.subRoutes.set(subId, p.subKey);
-          const sub = this.subs.get(p.subKey);
-          if (sub) sub.subId = subId;
+        if (typeof subId !== "string") {
+          p.reject(
+            new RpcCallError(
+              "INTERNAL",
+              "subscription response did not include a string subId",
+              false,
+            ),
+          );
+          return;
         }
+        this.subRoutes.set(subId, p.subKey);
+        const sub = this.subs.get(p.subKey);
+        if (sub) sub.subId = subId;
       }
       p.resolve(msg["result"]);
       return;
@@ -195,7 +262,14 @@ export class NativeLink extends EventEmitter {
     if (params?.subId && (method?.endsWith(".delta") || method?.endsWith(".snapshot"))) {
       const key = this.subRoutes.get(params.subId);
       const sub = key === undefined ? undefined : this.subs.get(key);
-      sub?.onEvent(params.payload, method.endsWith(".snapshot") ? "snapshot" : "delta");
+      if (sub) {
+        const event: QueuedSubEvent = {
+          payload: params.payload,
+          kind: method.endsWith(".snapshot") ? "snapshot" : "delta",
+        };
+        if (sub.buffering) sub.queued.push(event);
+        else sub.onEvent(event.payload, event.kind);
+      }
     }
   }
 
@@ -205,6 +279,7 @@ export class NativeLink extends EventEmitter {
     this.connected = false;
     this.failPending();
     this.subRoutes.clear();
+    this.prepareSubscriptionsForReconnect();
     if (this.closed || this.superseded || this.opts.reconnect === false) {
       this.emit("closed");
       return;
@@ -234,8 +309,39 @@ export class NativeLink extends EventEmitter {
 
   private async replaySubscriptions(): Promise<void> {
     for (const [key, sub] of this.subs) {
+      this.prepareSubscription(sub);
       const res = (await this.rawRequest(sub.method, sub.params, key)) as { snapshot: unknown };
       sub.onEvent(res.snapshot, "snapshot"); // P5: reconnect = fresh snapshot
+      this.activateSubscription(sub);
+    }
+  }
+
+  private prepareSubscription(sub: SubEntry): void {
+    if (sub.activation) {
+      clearImmediate(sub.activation);
+      delete sub.activation;
+    }
+    sub.buffering = true;
+    sub.queued = [];
+  }
+
+  private prepareSubscriptionsForReconnect(): void {
+    for (const sub of this.subs.values()) this.prepareSubscription(sub);
+  }
+
+  private activateSubscription(sub: SubEntry): void {
+    delete sub.activation;
+    sub.buffering = false;
+    const queued = sub.queued;
+    sub.queued = [];
+    for (const event of queued) sub.onEvent(event.payload, event.kind);
+  }
+
+  private removeSubscription(key: number, sub: SubEntry): void {
+    if (sub.activation) clearImmediate(sub.activation);
+    this.subs.delete(key);
+    for (const [subId, routeKey] of this.subRoutes) {
+      if (routeKey === key) this.subRoutes.delete(subId);
     }
   }
 
@@ -263,10 +369,21 @@ export class NativeLink extends EventEmitter {
     onEvent: (payload: unknown, kind: SubEventKind) => void,
   ): Promise<{ snapshot: unknown }> {
     const key = this.nextSubKey++;
-    const entry: SubEntry = { method, params, onEvent };
+    const entry: SubEntry = { method, params, onEvent, buffering: true, queued: [] };
     this.subs.set(key, entry);
-    const res = (await this.rawRequest(method, params, key)) as { snapshot: unknown };
-    return { snapshot: res.snapshot };
+    try {
+      const res = (await this.rawRequest(method, params, key)) as { snapshot: unknown };
+      // Promise continuations run before setImmediate, so callers can apply the
+      // returned snapshot before any same-chunk deltas are released.
+      entry.activation = setImmediate(() => {
+        if (this.subs.get(key) === entry && !this.closed && !this.superseded)
+          this.activateSubscription(entry);
+      });
+      return { snapshot: res.snapshot };
+    } catch (e) {
+      this.removeSubscription(key, entry);
+      throw e;
+    }
   }
 
   close(): void {
@@ -275,6 +392,9 @@ export class NativeLink extends EventEmitter {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.connectingSock?.destroy();
+    this.connectingSock = null;
+    this.prepareSubscriptionsForReconnect();
     this.sock?.destroy();
   }
 }

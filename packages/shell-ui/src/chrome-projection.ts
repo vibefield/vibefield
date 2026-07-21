@@ -7,8 +7,8 @@
 import {
   Captures,
   ChromeSettings,
-  defineQuery,
   Drag,
+  defineQuery,
   type Entity,
   GesturePhases,
   Grab,
@@ -52,18 +52,8 @@ const grabQ = defineQuery([Grab]);
 const selectedQ = defineQuery([Selected]);
 const overlapCandidateQ = defineQuery([OverlapCandidate]);
 const overlapRejectedQ = defineQuery([OverlapRejected]);
-const armedPossibleQ = defineQuery([
-  Drag,
-  HadSequence,
-  GesturePhases.tags.Possible,
-  Captures,
-]);
-const armedActiveQ = defineQuery([
-  Drag,
-  HadSequence,
-  GesturePhases.tags.Active,
-  Captures,
-]);
+const armedPossibleQ = defineQuery([Drag, HadSequence, GesturePhases.tags.Possible, Captures]);
+const armedActiveQ = defineQuery([Drag, HadSequence, GesturePhases.tags.Active, Captures]);
 
 const projections = new WeakMap<World, ChromeProjection>();
 
@@ -145,8 +135,7 @@ function createChromeProjection(world: World): ChromeProjection {
     previous: CardChromeSnapshot | undefined,
     selectionSize: number,
   ): CardChromeSnapshot => {
-    const lifted =
-      world.isAlive(entity) && (world.has(entity, Grab) || armedByHold(world, entity));
+    const lifted = world.isAlive(entity) && (world.has(entity, Grab) || armedByHold(world, entity));
     const scale = world.getResource(ChromeSettings)?.liftScale ?? 1.05;
     const lift =
       previous?.lift.lifted === lifted && previous.lift.scale === scale
@@ -288,8 +277,7 @@ export function useCardChromeProjection(world: World, entity: Entity): CardChrom
   const projection = projectionFor(world);
   const last = useRef(projection.getSnapshot(entity));
   const subscribe = useCallback(
-    (listener: () => void) =>
-      hidden ? () => undefined : projection.subscribe(entity, listener),
+    (listener: () => void) => (hidden ? () => undefined : projection.subscribe(entity, listener)),
     [projection, entity, hidden],
   );
   const getSnapshot = useCallback(() => {

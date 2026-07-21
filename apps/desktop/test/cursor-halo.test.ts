@@ -16,7 +16,7 @@ import {
 import { describe, expect, it } from "vitest";
 import { installCursorHalo } from "../renderer/src/cursor";
 import { Cur, DOT_SCALE, MID_SCALE } from "../renderer/src/cursor/components";
-import { buildRegistry, createFieldEngine } from "../renderer/src/field-engine";
+import { buildRegistry, createFieldEngine, seedField } from "../renderer/src/field-engine";
 
 const curQ = defineQuery([Cur]);
 
@@ -42,6 +42,7 @@ function ev(partial: Partial<InputEvent> & Pick<InputEvent, "kind">): InputEvent
 
 function setup() {
   const ce = createFieldEngine(buildRegistry());
+  seedField(ce, ce.docs.create()); // B3 split: engine boots doc-less
   ce.world.setResource(Viewport, { w: 1900, h: 1100, dpr: 1 }); // identity camera — screen == world
   const container = document.createElement("div");
   document.body.appendChild(container);

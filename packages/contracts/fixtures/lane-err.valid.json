@@ -1,0 +1,4 @@
+{
+  "kind": "PRECONDITION_FAILED",
+  "message": "another writer holds the lane for this doc"
+}

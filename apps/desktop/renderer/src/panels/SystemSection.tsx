@@ -1,6 +1,7 @@
 import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
-import type { ReactElement } from "react";
+import { type ReactElement, useSyncExternalStore } from "react";
+import { getBoardStatus, subscribeBoardStatus } from "../board-status";
 import { borderCls, labelCls, sectionCls } from "./SettingsPanel";
 
 // System diagnostics — a Settings SECTION, not a page (James, 2026-07-21:
@@ -26,10 +27,20 @@ function Dot({ state }: { state: string }): ReactElement {
   );
 }
 
+/** DESIGN.md §2.5 hue mapping for the board-persistence states. */
+const BOARD_DOT: Record<string, string> = {
+  live: "ready",
+  saving: "saving", // transitional → orange
+  booting: "booting",
+  detached: "detached",
+  quarantined: "failed",
+};
+
 export function SystemSection(): ReactElement {
   const conn = useFielddStatus();
   const sub = useSubscription<FielddHealth>("system.health.subscribe");
   const h = sub.data;
+  const board = useSyncExternalStore(subscribeBoardStatus, getBoardStatus);
   return (
     <div className={borderCls}>
       <div className={sectionCls}>System</div>
@@ -39,6 +50,16 @@ export function SystemSection(): ReactElement {
           <span className="flex items-center gap-1.5">
             <Dot state={conn} />
             {conn}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className={labelCls}>board</span>
+          <span className="flex items-center gap-1.5 truncate">
+            <Dot state={BOARD_DOT[board.state] ?? "failed"} />
+            {board.state}
+            {board.detail !== undefined && ` · ${board.detail}`}
+            {typeof board.lastSavedAt === "number" &&
+              ` · saved ${new Date(board.lastSavedAt).toLocaleTimeString()}`}
           </span>
         </div>
         {h !== null && (
@@ -54,6 +75,13 @@ export function SystemSection(): ReactElement {
               <span className="flex items-center gap-1.5">
                 <Dot state={h.nativeConnected ? (h.native?.state ?? "up") : "closed"} />
                 {h.nativeConnected ? (h.native?.state ?? "up") : "disconnected"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className={labelCls}>docs</span>
+              <span className="flex items-center gap-1.5">
+                <Dot state={h.docs.state} />
+                {h.docs.state} · {h.docs.docCount} doc{h.docs.docCount === 1 ? "" : "s"}
               </span>
             </div>
             {h.native?.units.map((u) => (

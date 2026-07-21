@@ -3,6 +3,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ZodTypeAny } from "zod";
+import {
+  DocMeta,
+  DocOpenResult,
+  DocRegistryEntry,
+  LaneErr,
+  LaneHello,
+  LaneHelloOk,
+  LanePutMeta,
+} from "../src/docs";
 import { Hello, HelloAck, RpcRequest, RpcResponse } from "../src/envelope";
 import { ErrorData } from "../src/errors";
 import {
@@ -31,6 +40,13 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "store-snapshot": StoreSnapshot,
   "serve-config": ServeConfig,
   "serve-entry": ServeEntry,
+  "doc-registry-entry": DocRegistryEntry,
+  "doc-open-result": DocOpenResult,
+  "doc-meta": DocMeta,
+  "lane-hello": LaneHello,
+  "lane-hello-ok": LaneHelloOk,
+  "lane-put-meta": LanePutMeta,
+  "lane-err": LaneErr,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

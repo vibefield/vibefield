@@ -18,8 +18,8 @@ import { RpcCallError } from "./native-link";
 // scope checks from the generated method registry. Subscriptions follow the
 // mgmt-channel convention (P5): subscribe → {subId, snapshot}, then
 // `<base>.delta {subId, payload}` notifications until system.unsubscribe or
-// connection close. The :9411 binary data-lane socket lands with
-// DocumentService (nothing mints doc tickets yet).
+// connection close. The :9411 binary data-lane socket is served separately by
+// DocLane + DocumentService (doc.open mints the one-shot tickets that gate it).
 
 const WS_OPEN = 1;
 
@@ -85,12 +85,31 @@ export class ProductApi extends EventEmitter {
     const wss = new WebSocketServer({ port: this.opts.port, host: "127.0.0.1" });
     this.wss = wss;
     wss.on("connection", (ws, req) => this.onConnection(ws, req));
+    wss.once("close", () => {
+      if (this.wss === wss) this.wss = null;
+    });
     await new Promise<void>((resolve, reject) => {
-      wss.once("listening", resolve);
-      wss.once("error", reject);
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        wss.off("listening", onListening);
+        wss.off("error", onError);
+        wss.off("close", onClose);
+        fn();
+      };
+      const onListening = () => finish(resolve);
+      const onError = (error: Error) => finish(() => reject(error));
+      const onClose = () =>
+        finish(() => reject(new Error("Product API closed before it started listening")));
+      wss.once("listening", onListening);
+      wss.once("error", onError);
+      wss.once("close", onClose);
     });
     const addr = wss.address();
-    return typeof addr === "object" && addr ? addr.port : this.opts.port;
+    if (typeof addr !== "object" || !addr)
+      throw new Error("Product API closed before startup completed");
+    return addr.port;
   }
 
   private onConnection(ws: WebSocket, req: IncomingMessage): void {

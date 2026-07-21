@@ -183,4 +183,31 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+
+  // B3 — DocumentService, P0 local-only subset (design-01 §5.1, M4; design-02 §5 fence).
+  // The rest of the doc.* catalog (subscribeRegistry/close/delete/compact/export/import)
+  // is deferred and deliberately undeclared — the lint enforces declared == shipped.
+  defineMethod({
+    surface: "product",
+    method: "doc.create",
+    scope: "doc.write",
+    idempotent: false,
+    locality: "sync",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "doc.list",
+    scope: "doc.read",
+    idempotent: true,
+    locality: "sync",
+  }),
+  // Mints a fresh one-shot lane ticket per call (EL2 — bytes ride the ticketed
+  // :9411 lane this method fronts, hence the stream class).
+  defineMethod({
+    surface: "product",
+    method: "doc.open",
+    scope: "doc.write",
+    idempotent: false,
+    locality: "stream",
+  }),
 ];

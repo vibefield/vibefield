@@ -279,7 +279,9 @@ async function main(): Promise<void> {
 
   ipcMain.handle("vibefield:connection", async (event) => {
     const minted = (await shell.client.request("system.mintWindowToken", {
-      scopes: [],
+      // B3: the renderer owns the board doc — doc.* is scope-gated (EL7), and
+      // the :9411 lane itself is entered through doc.open's one-shot ticket.
+      scopes: ["doc.read", "doc.write"],
       label: `window-${event.sender.id}`,
     })) as { token: string };
     return { port: shell.info.port, token: minted.token };

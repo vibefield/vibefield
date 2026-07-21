@@ -3,12 +3,18 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   CONTRACTS_VERSION,
+  DocCreateParams,
+  type DocListResult,
+  DocOpenParams,
+  type DocOpenResult,
   METHODS,
   type NativeHealth,
   PORTS,
   SCOPES,
   type Scope,
 } from "@vibefield/contracts";
+import { DocLane } from "./doc-lane";
+import { DocumentService } from "./doc-service";
 import { MeshClient } from "./mesh-client";
 import { NativeLink, RpcCallError } from "./native-link";
 import { ProductApi } from "./product-api";
@@ -28,6 +34,10 @@ import { TokenService } from "./token-service";
 export interface FielddConfig {
   dataDir: string;
   controlPort?: number; // default PORTS.FIELDD_WS_CONTROL; 0 = ephemeral (tests)
+  // default 0 = ephemeral; bin.ts supplies PORTS.FIELDD_WS_DATA for the real
+  // launch. Kept ephemeral-by-default so parallel test daemons never collide on
+  // a fixed port — the bound port always travels in doc.open's laneUrl anyway.
+  dataPort?: number;
   allowedOrigins?: string[];
   /** invoked when this fieldd must die (e.g. superseded by a newer boot) */
   onFatal?: (reason: string) => void;
@@ -39,14 +49,18 @@ export interface FielddHealth {
   fieldd: { state: "up"; bootId: string; contractsVersion: string; startedAt: number; pid: number };
   nativeConnected: boolean;
   native: NativeHealth | null;
+  docs: { state: string; docCount: number };
 }
 
 export interface FielddDaemon {
   bootId: string;
   controlPort: number;
+  /** the bound :9411-class data lane port (0-config ⇒ ephemeral; tests read it here) */
+  dataPort: number;
   tokens: TokenService;
   native: NativeLink;
   mesh: MeshClient;
+  docs: DocumentService;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
   health(): FielddHealth;
@@ -69,6 +83,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // everything past pairing is transactional — never leak the client slot
   try {
     const mesh = new MeshClient(native);
+    const docs = new DocumentService({ dataDir: config.dataDir });
     // -- health aggregation: native deltas + link liveness, one stream out --
     let latestHealth: NativeHealth | null = null;
     const healthListeners = new Set<(h: FielddHealth) => void>();
@@ -82,6 +97,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
       nativeConnected: native.connected,
       native: latestHealth,
+      docs: docs.health(),
     });
     const emitHealth = () => {
       const h = health();
@@ -147,14 +163,64 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return { token: grant.token, tokenId: grant.tokenId, scopes: grant.scopes };
     });
 
-    // SUPERSEDED = another fieldd owns the native plane now; this one is done.
-    native.on("superseded", () => {
-      api.close();
-      native.close();
-      config.onFatal?.("superseded: another fieldd took over this device's native plane");
+    // -- doc lane (the :9411-class binary data plane) + doc.* handlers --
+    const docLane = new DocLane({ dataPort: config.dataPort ?? 0, docs });
+    const dataPort = await docLane.listen();
+
+    api.register("doc.create", (_ctx, params) => {
+      const parsed = DocCreateParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { name: string }", false);
+      const entry = docs.create(parsed.data.name);
+      emitHealth(); // docCount moved — reflect it on the aggregated stream
+      return entry;
+    });
+    api.register("doc.list", () => {
+      const result: DocListResult = { docs: docs.list() };
+      return result;
+    });
+    api.register("doc.open", (_ctx, params) => {
+      const parsed = DocOpenParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { docId: uuid }", false);
+      const grant = docs.open(parsed.data.docId);
+      const result: DocOpenResult = {
+        docId: grant.docId,
+        laneUrl: `ws://127.0.0.1:${dataPort}`,
+        ticket: grant.ticket,
+        hasDoc: grant.hasDoc,
+      };
+      return result;
     });
 
-    const controlPort = await api.listen();
+    // SUPERSEDED = another fieldd owns the native plane now; this one is done.
+    // The flag also closes the small gap where takeover happens before this
+    // listener is attached or while ProductApi is still binding its port.
+    let fatalReason: string | null = null;
+    const stopForSupersession = () => {
+      if (fatalReason) return;
+      fatalReason = "superseded: another fieldd took over this device's native plane";
+      api.close();
+      docLane.close();
+      docs.dispose();
+      native.close();
+      config.onFatal?.(fatalReason);
+    };
+    native.on("superseded", stopForSupersession);
+    if (native.superseded) stopForSupersession();
+
+    let controlPort: number;
+    try {
+      if (fatalReason) throw new Error(fatalReason);
+      controlPort = await api.listen();
+      if (fatalReason || native.superseded || native.closed)
+        throw new Error(fatalReason ?? "native link closed during Product API startup");
+    } catch (e) {
+      api.close();
+      docLane.close(); // release the lane port before the outer rollback runs
+      docs.dispose();
+      throw e;
+    }
 
     // -- run files (shell bootstrap contract) --
     const runDir = join(config.dataDir, "fieldd", "run");
@@ -183,14 +249,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     return {
       bootId,
       controlPort,
+      dataPort,
       tokens,
       native,
       mesh,
+      docs,
       shellToken: shellGrant.token,
       health,
       nativeHealth: () => latestHealth,
       async stop() {
         api.close();
+        docLane.close();
+        docs.dispose();
         native.close();
         // a superseding fieldd rewrites these for the same dataDir — never
         // delete what is no longer ours

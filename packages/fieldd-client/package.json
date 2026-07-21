@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/client.ts",
+    "./doclane": "./src/doclane.ts",
     "./react": "./src/react.ts"
   },
   "scripts": {

@@ -10,8 +10,12 @@ export class MockMgmtServer {
   sockets = new Set<Socket>();
   connections = 0;
   failNextHello = false;
+  /** subscription methods in this set answer a persistent RPC error */
+  rejectedSubscriptions = new Set<string>();
   /** when set, subscribe responses are followed by a delta IN THE SAME write */
   deltaInSameChunk = false;
+  /** send SUPERSEDED immediately after the next subscribe response */
+  supersedeAfterSubscribe = false;
   /** when set, every native.mesh.* call answers UNAVAILABLE (node not up) */
   meshUnavailable = false;
   /** scripted node-side serve state (C2 reconcile tests) */
@@ -91,6 +95,20 @@ export class MockMgmtServer {
       return;
     }
     if (msg.method.endsWith(".subscribe")) {
+      if (this.rejectedSubscriptions.has(msg.method)) {
+        sock.write(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: msg.id,
+            error: {
+              code: -32601,
+              message: "subscription rejected",
+              data: { kind: "NOT_FOUND", retryable: false },
+            },
+          }) + "\n",
+        );
+        return;
+      }
       const subId = `s${this.nextSub++}`;
       this.issued.push({ sock, subId, method: msg.method });
       const resp = JSON.stringify({
@@ -98,7 +116,15 @@ export class MockMgmtServer {
         id: msg.id,
         result: { subId, snapshot: { n: 0 } },
       });
-      if (this.deltaInSameChunk) {
+      if (this.supersedeAfterSubscribe) {
+        this.supersedeAfterSubscribe = false;
+        const superseded = JSON.stringify({
+          jsonrpc: "2.0",
+          method: "native.lifecycle.superseded",
+          params: { reason: "scripted takeover" },
+        });
+        sock.write(`${resp}\n${superseded}\n`);
+      } else if (this.deltaInSameChunk) {
         const delta = JSON.stringify({
           jsonrpc: "2.0",
           method: msg.method.replace(/\.subscribe$/, ".delta"),

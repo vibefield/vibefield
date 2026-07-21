@@ -2,7 +2,8 @@
 // scripted mock mgmt server (review findings 2026-07-21):
 // - a delta arriving in the SAME socket chunk as the subscribe response;
 // - exactly-one reconnect after connection loss (no duplicate timers);
-// - a hello failure during reconnect still converges to a single live dial.
+// - a rejected subscription cannot poison later reconnects;
+// - close is terminal, including before a connection attempt starts.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,33 +34,44 @@ async function setup(): Promise<{ mock: MockMgmtServer; link: NativeLink }> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe("NativeLink concurrency", () => {
-  it("delivers a delta that arrives in the same chunk as the subscribe response", async () => {
+  it("applies the returned snapshot before a same-chunk delta", async () => {
     const { mock, link } = await setup();
     mock.deltaInSameChunk = true;
     await link.connect();
-    const deltas: unknown[] = [];
+    const order: string[] = [];
+    let state: unknown = null;
     const { snapshot } = await link.subscribe("x.y.subscribe", {}, (p, kind) => {
-      if (kind === "delta") deltas.push(p);
+      order.push(kind);
+      state = p;
     });
-    expect(snapshot).toEqual({ n: 0 });
+    order.push("returned-snapshot");
+    state = snapshot;
     await sleep(50);
-    expect(deltas).toEqual([{ n: 1 }]); // pre-fix: dropped (route installed after await)
+    expect(order).toEqual(["returned-snapshot", "delta"]);
+    expect(state).toEqual({ n: 1 });
   });
 
-  it("reconnects exactly once after connection loss and replays the subscription", async () => {
+  it("reconnects once and replays snapshot before a same-chunk delta", async () => {
     const { mock, link } = await setup();
     await link.connect();
-    const snapshots: unknown[] = [];
+    const events: Array<{ kind: string; payload: unknown }> = [];
+    let state: unknown = null;
     await link.subscribe("x.y.subscribe", {}, (p, kind) => {
-      if (kind === "snapshot") snapshots.push(p);
+      events.push({ kind, payload: p });
+      state = p;
     });
     expect(mock.connections).toBe(1);
 
+    mock.deltaInSameChunk = true;
     mock.killClients();
     await sleep(900); // first backoff is 500ms
     expect(link.connected).toBe(true);
     expect(mock.connections).toBe(2); // exactly one reconnect
-    expect(snapshots).toEqual([{ n: 0 }]); // fresh snapshot on reconnect (P5)
+    expect(events).toEqual([
+      { kind: "snapshot", payload: { n: 0 } },
+      { kind: "delta", payload: { n: 1 } },
+    ]);
+    expect(state).toEqual({ n: 1 });
 
     await sleep(400);
     expect(mock.connections).toBe(2); // and it stays that way — no duplicate timers
@@ -79,5 +91,32 @@ describe("NativeLink concurrency", () => {
 
     await sleep(400);
     expect(mock.connections).toBe(3);
+  });
+
+  it("removes a rejected subscription so the next reconnect can recover", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    mock.rejectedSubscriptions.add("x.rejected.subscribe");
+
+    await expect(link.subscribe("x.rejected.subscribe", {}, () => {})).rejects.toMatchObject({
+      kind: "NOT_FOUND",
+    });
+    expect(link.connected).toBe(true);
+
+    mock.killClients();
+    await sleep(900);
+    expect(link.connected).toBe(true);
+    expect(mock.connections).toBe(2);
+  });
+
+  it("cancels an in-flight dial when close makes the link terminal", async () => {
+    const { mock, link } = await setup();
+    const connecting = link.connect();
+    link.close();
+
+    await expect(connecting).rejects.toThrow(/closed|dialing/);
+    await sleep(50);
+    expect(link.connected).toBe(false);
+    expect(mock.sockets.size).toBe(0);
   });
 });

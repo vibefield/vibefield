@@ -17,8 +17,11 @@ import { widgetlabManifest, widgetlabWidgets } from "@vibefield/plugin-widgetlab
 import { setPreviewBackground } from "@vibefield/shell-ui";
 
 // The field's engine + seed, React-free (Track D3/D4): FieldView renders it,
-// the headless contract tests (drop-consume) drive it. P0: one in-memory doc
-// per app run (DocumentService persistence lands in B3).
+// the headless contract tests (drop-consume) drive it. B3 split the two —
+// `createFieldEngine` is DOC-LESS (no create, no seed); the caller decides
+// open-vs-seed AFTER asking fieldd for the board (registry-open law: never
+// blind-seed). `seedField` is the first-run payload — and the persistence
+// tests' named census.
 
 export function buildRegistry(): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
@@ -133,7 +136,7 @@ function seedWire(
 }
 
 export function createFieldEngine(registry: PluginRegistry<WidgetType>): CanvasEngine {
-  const ce = createCanvasEngine({
+  return createCanvasEngine({
     widgets: [...registry.allWidgets().values()],
     settings: {
       zoom: { min: 0.25, max: 3 },
@@ -143,7 +146,10 @@ export function createFieldEngine(registry: PluginRegistry<WidgetType>): CanvasE
       chrome: { liftScale: 1.05 },
     },
   });
-  const session = ce.docs.create(); // a doc is mandatory before any spawn/edit
+}
+
+/** The first-run board (widgetlab demo scene). Requires a live doc session. */
+export function seedField(ce: CanvasEngine, session: DocSession): void {
   for (const [type, x, y, w, h, props] of SCENE) {
     ce.ops.spawnWidget(type, {
       x,
@@ -183,5 +189,4 @@ export function createFieldEngine(registry: PluginRegistry<WidgetType>): CanvasE
   seedWire(session, signal, "out", filter, "in");
   seedWire(session, filter, "out", scope, "in-a");
   ce.world.sync(); // project the seeds before the first frame
-  return ce;
 }

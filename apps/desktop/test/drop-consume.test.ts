@@ -18,12 +18,15 @@ import {
   Viewport,
 } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
-import { buildRegistry, createFieldEngine } from "../renderer/src/field-engine";
+import { buildRegistry, createFieldEngine, seedField } from "../renderer/src/field-engine";
 
 const idQ = defineQuery([Position, PrefabId]);
 
 function makeEngine() {
-  return createFieldEngine(buildRegistry());
+  // B3 split: the engine boots doc-less; this suite drives the seeded board.
+  const ce = createFieldEngine(buildRegistry());
+  seedField(ce, ce.docs.create());
+  return ce;
 }
 
 function findByType(world: ReturnType<typeof makeEngine>["world"], type: string): Entity[] {

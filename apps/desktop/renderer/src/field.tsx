@@ -1,5 +1,10 @@
 import { Canvas, useThree } from "@react-three/fiber";
-import { DEFAULT_GRID_CONFIG, type GridConfig, selectedEntities } from "@vibecook/ice";
+import {
+  DEFAULT_GRID_CONFIG,
+  ENGINE_SCHEMA_VERSION,
+  type GridConfig,
+  selectedEntities,
+} from "@vibecook/ice";
 import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
 import { ground } from "@vibecook/ice/ground";
 import {
@@ -13,12 +18,22 @@ import {
 } from "@vibecook/ice/r3f";
 import { InfiniteCanvas, type InfiniteCanvasHandle } from "@vibecook/ice/react";
 import { spawnCommentAroundSelection } from "@vibefield/plugin-field-tools";
-import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { PMREMGenerator, type Texture } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import type { BoardBoot } from "./board-boot";
+import { setBoardStatus } from "./board-status";
 import { installCursorHalo } from "./cursor";
-import { buildRegistry, createFieldEngine } from "./field-engine";
+import { buildRegistry, createFieldEngine, seedField } from "./field-engine";
 import { NavigationBreadcrumbs } from "./hud/NavigationBreadcrumbs";
 import { WidgetTray } from "./hud/WidgetTray";
 import { ZoomPill } from "./hud/ZoomPill";
@@ -109,10 +124,64 @@ const fabCls = (active: boolean) =>
       : "bg-white text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
   }`;
 
-export function FieldView(): ReactElement {
+export function FieldView({ board }: { board: BoardBoot }): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
   const registry = useMemo(buildRegistry, []);
   const ce = useMemo(() => createFieldEngine(registry), [registry]);
+
+  // B3 — the doc attaches to the COMMITTED engine only, never in the memo
+  // factory: StrictMode double-invokes factories, and an orphaned twin engine
+  // must never stream envelopes to the daemon (the widgetlab-desktop lesson).
+  // Layout effect: open-or-seed lands before first paint (no empty frame).
+  useLayoutEffect(() => {
+    const lane = board.lane;
+    if (board.initialBytes !== null) {
+      const res = ce.docs.open(board.initialBytes);
+      if (!res.ok) {
+        // Honest quarantine (the M5 law): the at-rest bytes stay untouched on
+        // disk; a blank board + surfaced state beats autosaving over them.
+        console.error(`[board] quarantined: ${res.reason}`);
+        setBoardStatus({ state: "quarantined", detail: res.reason });
+        ce.docs.create();
+        return () => ce.docs.close();
+      }
+    } else {
+      // First run (or detached boot): the registry named no bytes — seed.
+      seedField(ce, ce.docs.create());
+    }
+    if (lane === null) {
+      setBoardStatus({ state: "detached", detail: board.degraded ?? "fieldd unreachable" });
+      return () => ce.docs.close();
+    }
+    setBoardStatus({ state: "live", lastSavedAt: null });
+    const offLane = lane.onStatusChange(() => {
+      if (lane.status === "attached")
+        setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
+      else if (lane.status === "reconnecting")
+        setBoardStatus({ state: "detached", detail: "reconnecting", lastSavedAt: lane.lastPutAt });
+    });
+    // Autosave starts DIRTY (ice law): a seeded first-run board reaches fieldd
+    // after the first debounce, no user edit required.
+    const autosave = ce.docs.autosave({
+      put: async (bytes) => {
+        setBoardStatus({ state: "saving", lastSavedAt: lane.lastPutAt });
+        await lane.put(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt: Date.now() });
+        setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
+      },
+    });
+    const flush = () => void autosave.flush();
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      // Order is load-bearing: flush exports SYNCHRONOUSLY at entry (final
+      // save), stop() then bars any later export — so close()'s world reset
+      // can never be persisted as an empty board.
+      void autosave.flush();
+      autosave.stop();
+      offLane();
+      ce.docs.close();
+    };
+  }, [ce, board]);
   // The P0 ground layer (grid + wires + snap guides, one WebGPU canvas) —
   // memoized: a new factory identity re-boots the canvas mount effect.
   const groundFactory = useMemo(() => ground(), []);

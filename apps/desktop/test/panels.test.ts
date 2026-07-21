@@ -113,6 +113,8 @@ describe("widgetlab panels", () => {
     // The System diagnostics section renders inside the panel (2026-07-21 law).
     expect(container?.textContent).toContain("System");
     expect(container?.textContent).toContain("connection");
+    // B3: the board-persistence row (module store; "booting" pre-attach).
+    expect(container?.textContent).toContain("board");
     // Controlled: the grid inputs render (a spacing value from the default cfg).
     const numberInputs = container?.querySelectorAll('input[type="number"]');
     expect(numberInputs?.length ?? 0).toBeGreaterThan(0);
