@@ -204,7 +204,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const docLane = new DocLane({ dataPort: config.dataPort ?? 0, docs });
     const dataPort = await docLane.listen();
 
-    api.register("doc.create", async (_ctx, params) => {
+    const requireLocalDocumentCaller = (ctx: { transport: string }): void => {
+      if (ctx.transport !== "ws-loopback") {
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "document persistence methods are available only over loopback",
+          false,
+        );
+      }
+    };
+
+    api.register("doc.create", async (ctx, params) => {
+      requireLocalDocumentCaller(ctx);
       const parsed = DocCreateParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { name: string }", false);
@@ -212,11 +223,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       emitHealth(); // docCount moved — reflect it on the aggregated stream
       return entry;
     });
-    api.register("doc.list", () => {
+    api.register("doc.list", (ctx) => {
+      requireLocalDocumentCaller(ctx);
       const result: DocListResult = { docs: docs.list() };
       return result;
     });
-    api.register("doc.open", (_ctx, params) => {
+    api.register("doc.open", (ctx, params) => {
+      requireLocalDocumentCaller(ctx);
       const parsed = DocOpenParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { docId: uuid }", false);
@@ -229,7 +242,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       };
       return result;
     });
-    api.register("doc.rename", async (_ctx, params) => {
+    api.register("doc.rename", async (ctx, params) => {
+      requireLocalDocumentCaller(ctx);
       const parsed = DocRenameParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError(
