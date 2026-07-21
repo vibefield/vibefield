@@ -1,13 +1,24 @@
-import { type CanvasEngine, createCanvasEngine, type WidgetType } from "@vibecook/ice";
+import {
+  type CanvasEngine,
+  createCanvasEngine,
+  type DocSession,
+  type Entity,
+  PrefabId,
+  type WidgetType,
+  Wire,
+  WireFrom,
+  WirePorts,
+  WireTo,
+} from "@vibecook/ice";
 import { fieldToolsManifest, fieldToolsWidgets } from "@vibefield/plugin-field-tools";
 import { noteManifest, noteWidgets } from "@vibefield/plugin-note";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
 import { widgetlabManifest, widgetlabWidgets } from "@vibefield/plugin-widgetlab";
 import { setPreviewBackground } from "@vibefield/shell-ui";
 
-// The field's engine + seed, React-free (Track D3): FieldView renders it, the
-// headless contract tests (drop-consume) drive it. P0: one in-memory doc per
-// app run (DocumentService persistence lands in B3).
+// The field's engine + seed, React-free (Track D3/D4): FieldView renders it,
+// the headless contract tests (drop-consume) drive it. P0: one in-memory doc
+// per app run (DocumentService persistence lands in B3).
 
 export function buildRegistry(): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
@@ -24,9 +35,8 @@ export function buildRegistry(): PluginRegistry<WidgetType> {
   return registry;
 }
 
-// === the demo scene — widgetlab App.tsx coordinates verbatim (DOM subset) ===
-// The GL column (G3X..) and the node trio arrive with D4; the folders keep
-// their exact widgetlab positions so the drop-consume test coordinates hold.
+// === the demo scene — widgetlab App.tsx coordinates verbatim ===
+// (debug-resizable is the one widgetlab row not ported — a dev widget, cut.)
 
 const GX = 50;
 const GY = 50;
@@ -67,6 +77,11 @@ const SCENE: Array<[string, number, number, number, number, Record<string, unkno
   ["widgetlab.stocks", GX, GY + PITCH * 3, 329, 155],
   ["widgetlab.fitness", GX, GY + PITCH * 4, 329, 345],
   ["widgetlab.photos", GX + PITCH * 2 + 19, GY, 329, 535],
+  ["widgetlab.sphere", G3X, GY, 155, 155],
+  ["widgetlab.crystal", G3X + PITCH, GY, 155, 155],
+  ["widgetlab.torus-knot", G3X, GY + PITCH, 329, 155],
+  ["widgetlab.cube", G3X, GY + PITCH * 2, 329, 155],
+  ["widgetlab.gold-knot", G3X, GY + PITCH * 3, 329, 345],
   [
     "field.folder",
     G3X + PITCH * 2 + 40,
@@ -84,7 +99,38 @@ const SCENE: Array<[string, number, number, number, number, Record<string, unkno
     { title: "Saved", accent: "#EC4899" },
   ],
   ["widgetlab.todo", G6X, GY, 329, 345],
+  ["widgetlab.shapes", G6X, GY + 345 + 19, 329, 345],
+  ["widgetlab.orbit-cube", G6X, GY + (345 + 19) * 2, 329, 155],
 ];
+
+/**
+ * Seed one wire between two node widgets — nodeboard's `seedWire` verbatim on
+ * a doc session (design-001 §5.3: a `Wire`-tagged entity carrying
+ * `WirePorts{from,to}` + the endpoint relations; geometry never stores a port
+ * entity).
+ */
+function seedWire(
+  session: DocSession,
+  from: Entity,
+  fromPort: string,
+  to: Entity,
+  toPort: string,
+): void {
+  session.store.transaction(
+    (tx) => {
+      const wire = tx.spawn({
+        components: [
+          [PrefabId, { id: "wire" }],
+          [WirePorts, { from: fromPort, to: toPort }],
+        ],
+        tags: [Wire],
+      });
+      tx.setRelation(wire, WireFrom, from);
+      tx.setRelation(wire, WireTo, to);
+    },
+    { undoable: false }, // seeds — the user's first ⌘Z stays clean (moodboard rule)
+  );
+}
 
 export function createFieldEngine(registry: PluginRegistry<WidgetType>): CanvasEngine {
   const ce = createCanvasEngine({
@@ -97,7 +143,7 @@ export function createFieldEngine(registry: PluginRegistry<WidgetType>): CanvasE
       chrome: { liftScale: 1.05 },
     },
   });
-  ce.docs.create(); // a doc is mandatory before any spawn/edit
+  const session = ce.docs.create(); // a doc is mandatory before any spawn/edit
   for (const [type, x, y, w, h, props] of SCENE) {
     ce.ops.spawnWidget(type, {
       x,
@@ -108,6 +154,34 @@ export function createFieldEngine(registry: PluginRegistry<WidgetType>): CanvasE
       ...(props !== undefined ? { props } : {}),
     });
   }
+  // Node trio (widgetlab 2026-07-16): a wire-able signal → filter → scope
+  // chain in its own column right of the todo column. Hover a node to
+  // materialize its port dots, drag dot-to-dot to connect (ports accept
+  // "signal"; the dashed preview goes solid on a compatible target).
+  const NX = G6X + 329 + 39; // 1880 — the next column in the v1 grid rhythm
+  const signal = ce.ops.spawnWidget("widgetlab.signal", {
+    x: NX,
+    y: 50,
+    w: 170,
+    h: 96,
+    undoable: false,
+  });
+  const filter = ce.ops.spawnWidget("widgetlab.filter", {
+    x: NX + 240,
+    y: 170,
+    w: 170,
+    h: 96,
+    undoable: false,
+  });
+  const scope = ce.ops.spawnWidget("widgetlab.scope", {
+    x: NX + 480,
+    y: 62,
+    w: 170,
+    h: 96,
+    undoable: false,
+  });
+  seedWire(session, signal, "out", filter, "in");
+  seedWire(session, filter, "out", scope, "in-a");
   ce.world.sync(); // project the seeds before the first frame
   return ce;
 }

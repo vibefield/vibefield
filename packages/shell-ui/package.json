@@ -17,8 +17,11 @@
     "react": "^19.0.0"
   },
   "devDependencies": {
+    "@react-three/fiber": "^9.6.1",
     "@types/react": "catalog:",
+    "@types/three": "^0.185.0",
     "react": "catalog:",
+    "three": "^0.185.0",
     "typescript": "catalog:"
   }
 }

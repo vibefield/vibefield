@@ -32,6 +32,10 @@
   --vf-ease-lift: cubic-bezier(0.2, 0.9, 0.3, 1.2);
   --vf-ease-pop: cubic-bezier(0.34, 1.45, 0.64, 1);
 
+  /* §7 Interactive states — the engine's P4 union box wraps rounded cards
+     (world px; the chrome reflector zoom-scales it — widgetlab App law) */
+  --ic-selection-radius: 22px;
+
   /* §7 Interactive states — overlap glow/rim knobs (light defaults) */
   --ic-glow-color: 128, 128, 128;
   --ic-glow-size-t: 60px;

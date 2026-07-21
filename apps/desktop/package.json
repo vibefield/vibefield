@@ -36,6 +36,7 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@types/three": "^0.185.0",
     "@vibefield/fieldd": "workspace:*",
     "@vitejs/plugin-react": "^6.0.3",
     "concurrently": "^10.0.3",

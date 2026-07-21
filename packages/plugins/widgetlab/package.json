@@ -11,15 +11,19 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@react-three/drei": "^10.0.0",
+    "@react-three/fiber": "^9.6.1",
     "@vibecook/ice": "*",
     "@vibefield/plugin-runtime": "workspace:*",
-    "@vibefield/shell-ui": "workspace:*"
+    "@vibefield/shell-ui": "workspace:*",
+    "three": "^0.185.0"
   },
   "peerDependencies": {
     "react": "^19.0.0"
   },
   "devDependencies": {
     "@types/react": "catalog:",
+    "@types/three": "^0.185.0",
     "react": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

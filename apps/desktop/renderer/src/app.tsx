@@ -71,7 +71,7 @@ export function App(): ReactElement {
       </header>
 
       <div className="view" style={{ display: view === "field" ? "flex" : "none" }}>
-        <FieldView />
+        <FieldView dark={dark} />
       </div>
       {view === "system" && (
         <div className="view">
