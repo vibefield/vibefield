@@ -43,6 +43,7 @@ pub mod error {
 #[doc = "    \"ios\","]
 #[doc = "    \"peer-fieldd\","]
 #[doc = "    \"mcp-agent\","]
+#[doc = "    \"fieldd\","]
 #[doc = "    \"field-native\","]
 #[doc = "    \"debug\""]
 #[doc = "  ]"]
@@ -74,6 +75,8 @@ pub enum ClientKind {
     PeerFieldd,
     #[serde(rename = "mcp-agent")]
     McpAgent,
+    #[serde(rename = "fieldd")]
+    Fieldd,
     #[serde(rename = "field-native")]
     FieldNative,
     #[serde(rename = "debug")]
@@ -88,6 +91,7 @@ impl ::std::fmt::Display for ClientKind {
             Self::Ios => f.write_str("ios"),
             Self::PeerFieldd => f.write_str("peer-fieldd"),
             Self::McpAgent => f.write_str("mcp-agent"),
+            Self::Fieldd => f.write_str("fieldd"),
             Self::FieldNative => f.write_str("field-native"),
             Self::Debug => f.write_str("debug"),
         }
@@ -103,6 +107,7 @@ impl ::std::str::FromStr for ClientKind {
             "ios" => Ok(Self::Ios),
             "peer-fieldd" => Ok(Self::PeerFieldd),
             "mcp-agent" => Ok(Self::McpAgent),
+            "fieldd" => Ok(Self::Fieldd),
             "field-native" => Ok(Self::FieldNative),
             "debug" => Ok(Self::Debug),
             _ => Err("invalid value".into()),

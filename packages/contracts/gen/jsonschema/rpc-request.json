@@ -14,6 +14,7 @@
         "ios",
         "peer-fieldd",
         "mcp-agent",
+        "fieldd",
         "field-native",
         "debug"
       ]

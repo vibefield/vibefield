@@ -43,7 +43,7 @@ impl TestClient {
         let boot = "fieldd-boot-test";
         let mac = pairing::compute_mac(&secret, boot, ts);
         self.send(json!({"jsonrpc":"2.0","id":id,"method":"native.lifecycle.hello","params":{
-            "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"field-native",
+            "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
             "credential":{"bootId":boot,"ts":ts,"mac":mac}
         }}))
         .await;
@@ -93,7 +93,7 @@ async fn bad_mac_and_stale_ts_rejected() {
 
     let mut c = TestClient::connect(&daemon).await;
     c.send(json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
-        "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"field-native",
+        "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
         "credential":{"bootId":"x","ts": pairing::now_epoch_secs(),"mac":"deadbeef"}
     }})).await;
     let resp = c.recv().await;
@@ -104,7 +104,7 @@ async fn bad_mac_and_stale_ts_rejected() {
     let stale = pairing::now_epoch_secs() - 3600;
     let mac = pairing::compute_mac(&secret, "x", stale);
     c2.send(json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
-        "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"field-native",
+        "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
         "credential":{"bootId":"x","ts": stale,"mac": mac}
     }})).await;
     let resp = c2.recv().await;
@@ -199,7 +199,7 @@ async fn tolerant_reader_on_hello() {
     let ts = pairing::now_epoch_secs();
     let mac = pairing::compute_mac(&secret, "b", ts);
     c.send(json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
-        "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"field-native",
+        "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
         "credential":{"bootId":"b","ts":ts,"mac":mac},
         "futureField":{"carried":true}
     }})).await;

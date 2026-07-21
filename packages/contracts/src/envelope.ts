@@ -13,6 +13,7 @@ export const ClientKind = z.enum([
   "ios",
   "peer-fieldd",
   "mcp-agent",
+  "fieldd", // the mgmt channel's client (fieldd → field-native)
   "field-native",
   "debug",
 ]);
