@@ -168,12 +168,13 @@ async function loadRenderer(win: BrowserWindow): Promise<void> {
 async function createWindow(shell: Shell, show = true): Promise<BrowserWindow> {
   const win = new BrowserWindow({
     titleBarStyle: shouldFillPrimaryWorkArea ? "hiddenInset" : "default",
-    trafficLightPosition: shouldFillPrimaryWorkArea ? { x: 18, y: 22 } : undefined,
+    // conditional spread: exactOptionalPropertyTypes forbids an explicit undefined
+    ...(shouldFillPrimaryWorkArea ? { trafficLightPosition: { x: 18, y: 22 } } : {}),
     width: 1180,
     height: 780,
     show,
     title: "VibeField",
-    backgroundColor: "#0b0d10",
+    backgroundColor: "#171717", // pre-paint = the dark canvas token (--vf-canvas-bg)
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
       sandbox: true,
@@ -224,7 +225,8 @@ async function smoke(shell: Shell, root: string): Promise<void> {
 async function spikeLoro(): Promise<void> {
   const win = new BrowserWindow({
     titleBarStyle: shouldFillPrimaryWorkArea ? "hiddenInset" : "default",
-    trafficLightPosition: shouldFillPrimaryWorkArea ? { x: 18, y: 22 } : undefined,
+    // conditional spread: exactOptionalPropertyTypes forbids an explicit undefined
+    ...(shouldFillPrimaryWorkArea ? { trafficLightPosition: { x: 18, y: 22 } } : {}),
     show: false,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   });

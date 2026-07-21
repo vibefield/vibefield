@@ -14,6 +14,8 @@
  * panels comes from vitest.config's `esbuild.jsx: "automatic"`.
  */
 import { type CanvasEngine, createCanvasEngine, DEFAULT_GRID_CONFIG } from "@vibecook/ice";
+import { FielddClient } from "@vibefield/fieldd-client";
+import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
@@ -81,26 +83,36 @@ describe("widgetlab panels", () => {
   it("SettingsPanel mounts with controlled grid/theme/glow props", () => {
     const engine = makeEngine();
     let grid = DEFAULT_GRID_CONFIG;
+    // SystemSection (diagnostics live inside Settings) reads the fieldd hooks —
+    // a provider with a never-connected client renders the honest idle state.
+    const client = new FielddClient({ url: "ws://127.0.0.1:1", token: "test" });
     mount(
-      createElement(SettingsPanel, {
-        engine,
-        gridConfig: grid,
-        onGridChange: (g) => {
-          grid = g;
-        },
-        themeColors: THEME,
-        onThemeColorsChange: () => {},
-        overlapGlow: GLOW,
-        onOverlapGlowChange: () => {},
-        overlapGlowThemeColors: GLOW_THEME,
-        onOverlapGlowThemeColorsChange: () => {},
-        onClose: () => {},
-      }),
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(SettingsPanel, {
+          engine,
+          gridConfig: grid,
+          onGridChange: (g) => {
+            grid = g;
+          },
+          themeColors: THEME,
+          onThemeColorsChange: () => {},
+          overlapGlow: GLOW,
+          onOverlapGlowChange: () => {},
+          overlapGlowThemeColors: GLOW_THEME,
+          onOverlapGlowThemeColorsChange: () => {},
+          onClose: () => {},
+        }),
+      ),
     );
 
     expect(container?.textContent).toContain("Settings");
     expect(container?.textContent).toContain("Grid Spacings");
     expect(container?.textContent).toContain("Zoom Range");
+    // The System diagnostics section renders inside the panel (2026-07-21 law).
+    expect(container?.textContent).toContain("System");
+    expect(container?.textContent).toContain("connection");
     // Controlled: the grid inputs render (a spacing value from the default cfg).
     const numberInputs = container?.querySelectorAll('input[type="number"]');
     expect(numberInputs?.length ?? 0).toBeGreaterThan(0);

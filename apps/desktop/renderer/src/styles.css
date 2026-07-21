@@ -12,35 +12,19 @@
 @source "../../../../packages/shell-ui/src";
 @source "../../../../packages/plugins";
 
-/* Track A health page — control-room dark (deliberately single-theme: this is
-   an app surface previewing the Godview aesthetic, not a document). */
-:root {
-  --bg: #0b0d10;
-  --panel: #12151b;
-  --line: #232a34;
-  --ink: #dfe6ee;
-  --muted: #8b95a3;
-  --good: #3fd68f;
-  --warn: #f2b24d;
-  --bad: #f0655f;
-  --accent: #6ee7c7;
-  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+/* The window IS the field (2026-07-21): no app bar, no pages — chrome floats
+   over the canvas per DESIGN.md §1. Base styles only; every surface color
+   comes from the shell-ui tokens. Browser-gesture guards are the widgetlab
+   rules minus global user-select (which would kill text selection in the
+   note editor — the engine prevents selection during its own gestures). */
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
 }
 
 * {
   box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font:
-    14px / 1.5 -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
 }
 
 html,
@@ -49,252 +33,26 @@ body,
   height: 100%;
 }
 
-.frame {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--line);
-  flex: none;
-}
-
-.view {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-
-.view main {
-  max-width: 980px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 20px 24px 48px;
-}
-
-.tabs {
-  display: flex;
-  gap: 4px;
-  margin-left: 18px;
-}
-
-.tabs button {
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 13px;
-  padding: 5px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.tabs button:hover {
-  color: var(--ink);
-}
-
-.tabs button.active {
-  color: var(--ink);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  padding: 4px 11px;
+body {
+  margin: 0;
+  background: var(--vf-canvas-bg);
+  font:
+    14px / 1.5 -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .field-wrap {
   position: relative;
-  flex: 1;
-  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
 .field-canvas {
   position: absolute;
   inset: 0;
-}
-
-.field-toolbar {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  z-index: 10;
-}
-
-.field-toolbar button {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-  padding: 6px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-}
-
-.field-toolbar button:hover {
-  border-color: var(--accent);
-}
-
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.mark {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--accent);
-  align-self: center;
-}
-
-.brand .sub {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-/* biome-ignore lint/style/noDescendingSpecificity: element defaults grouped after component classes on purpose */
-main {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-main a {
-  color: var(--accent);
-}
-
-.cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 16px 18px;
-}
-
-.card h2 {
-  margin: 0 0 12px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-}
-
-dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 6px 16px;
-  margin: 0;
-}
-
-dt {
-  color: var(--muted);
-}
-
-dd {
-  margin: 0;
-  text-align: right;
-}
-
-.mono {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.pill {
-  display: inline-block;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.pill.good {
-  color: var(--good);
-  background: color-mix(in srgb, var(--good) 12%, transparent);
-}
-
-.pill.warn {
-  color: var(--warn);
-  background: color-mix(in srgb, var(--warn) 12%, transparent);
-}
-
-.pill.bad {
-  color: var(--bad);
-  background: color-mix(in srgb, var(--bad) 14%, transparent);
-}
-
-.pill.off {
-  color: var(--muted);
-  background: color-mix(in srgb, var(--muted) 12%, transparent);
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th {
-  text-align: left;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  font-weight: 500;
-  padding: 4px 12px 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-td {
-  padding: 8px 12px 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-tr:last-child td {
-  border-bottom: none;
-}
-
-.ticker {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ticker li.bad {
-  color: var(--bad);
-}
-
-.ticker li.good {
-  color: var(--good);
 }
 
 /* Invisible macOS titlebar: native traffic lights remain while this strip moves the window. */

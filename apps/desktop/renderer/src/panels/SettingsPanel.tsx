@@ -32,6 +32,7 @@ import {
   writeRuntimeResource,
 } from "@vibecook/ice";
 import { useState } from "react";
+import { SystemSection } from "./SystemSection";
 import type { OverlapGlowConfig, OverlapGlowThemeColors, ThemeColors } from "./types";
 
 interface SettingsPanelProps {
@@ -59,9 +60,11 @@ const widgetQ = defineQuery([PrefabId]);
 
 const inputCls =
   "w-full rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 text-right dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-200";
-const labelCls = "text-neutral-400 dark:text-neutral-500";
-const sectionCls = "mb-1 text-neutral-400 dark:text-neutral-500";
-const borderCls = "border-t border-neutral-100 pt-2 dark:border-neutral-700";
+// Exported: sibling panel SECTIONS (SystemSection — diagnostics live inside
+// Settings, never as pages) share the vocabulary instead of redeclaring it.
+export const labelCls = "text-neutral-400 dark:text-neutral-500";
+export const sectionCls = "mb-1 text-neutral-400 dark:text-neutral-500";
+export const borderCls = "border-t border-neutral-100 pt-2 dark:border-neutral-700";
 const btnCls =
   "flex-1 rounded bg-neutral-100 py-1 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700";
 
@@ -676,6 +679,9 @@ export function SettingsPanel({
             ))}
           </div>
         </div>
+
+        {/* System diagnostics — sections, never pages (2026-07-21). */}
+        <SystemSection />
       </div>
     </div>
   );

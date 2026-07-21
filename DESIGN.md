@@ -261,12 +261,11 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   tokens, never hex literals (exception: a widget's own committed content surface).
 - **Dark mode**: `.dark` class + `data-theme="dark"` stamped together (03·A §6); cards
   keep their committed surfaces across themes.
-- **Current gap (2026-07-21, to converge as shell-ui lands):** the desktop System/health
-  page (bespoke `#0b0d10` control-room palette — sanctioned family, wrong tokens), the
-  Field toolbar (ad-hoc buttons), and the note widget (radius 10, small hard shadows,
-  2px `#6ee7c7` outer selection ring, no lift) all predate this doc. The note widget is
-  the first conversion target: CardShell chrome + §7 states around its sticky-yellow
-  content surface.
+- **Converged (Track D + cleanup, 2026-07-21):** the note widget wears CardShell (D1);
+  the ad-hoc Field toolbar died with the island (D2); the System/health page and the app
+  bar are REMOVED outright. **Placement laws:** the window IS the field — chrome floats
+  over the canvas, there is no app bar; dev-facing diagnostics render as *sections inside
+  the Settings panel* (`SystemSection` is the template) — never as standalone pages.
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.

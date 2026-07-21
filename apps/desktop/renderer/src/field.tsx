@@ -29,13 +29,15 @@ import {
   SettingsPanel,
   type ThemeColors,
 } from "./panels";
+import { useTheme } from "./theme";
 
 // The Field (B2 + Track D1–D4): plugins' widgets → one canvas engine →
 // InfiniteCanvas over the widgetlab ground, the GL island layer (bridge +
 // pointer router + composite views), the cursor halo, the morphing island
 // (WidgetTray) as the spawn door, and the diagnostics panels. Composition is
 // widgetlab App.tsx, decomposed per design-03 (the engine/seed lives in
-// field-engine.ts; the theme lives in the App header).
+// field-engine.ts). The window IS the field (2026-07-21): no app bar — the
+// theme toggle floats top-right, diagnostics live inside Settings.
 
 // === v1 theme constants (widgetlab App.tsx verbatim) ===
 
@@ -107,7 +109,8 @@ const fabCls = (active: boolean) =>
       : "bg-white text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
   }`;
 
-export function FieldView({ dark }: { dark: boolean }): ReactElement {
+export function FieldView(): ReactElement {
+  const { dark, toggle: toggleTheme } = useTheme();
   const registry = useMemo(buildRegistry, []);
   const ce = useMemo(() => createFieldEngine(registry), [registry]);
   // The P0 ground layer (grid + wires + snap guides, one WebGPU canvas) —
@@ -376,6 +379,15 @@ export function FieldView({ dark }: { dark: boolean }): ReactElement {
       {/* Chrome overlays sit OUTSIDE the recede wrapper — they never scale. */}
       <NavigationBreadcrumbs engine={ce} />
       <ZoomPill ce={ce} />
+      {/* Dark mode toggle (widgetlab position) — no-drag: it sits in the titlebar strip. */}
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="no-drag absolute top-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-500 shadow-lg transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+        title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        {dark ? "☀" : "☾"}
+      </button>
       <WidgetTray ce={ce} registry={registry} open={trayOpen} onOpenChange={setTrayOpen} />
 
       <button
