@@ -2,6 +2,8 @@ import { DocListResult, DocOpenResult, DocRegistryEntry } from "@vibefield/contr
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { setBoardStatus } from "./board-status";
+import type { DocThumbnailScene } from "./doc-thumbnail-scene";
+import { DocThumbnailCache } from "./doc-thumbnails";
 
 // B4 DocManager (thinking-b4-doc-ux §1): the renderer-spine lifecycle owner for
 // canvas docs — launch decision, doc switching, create/rename, and the loading
@@ -36,6 +38,8 @@ export interface DocManagerState {
   doc: { docId: string; name: string } | null;
   /** explorer cache, most recently updated first */
   docs: DocRegistryEntry[];
+  /** Device-local persisted derived artifacts; blob URLs are renderer-lifetime only. */
+  thumbnailUrls: Readonly<Record<string, string>>;
   pending: DocSessionPending | null;
 }
 
@@ -91,6 +95,7 @@ export class DocManager {
     loading: { progress: 0, stage: "opening doc" },
     doc: null,
     docs: [],
+    thumbnailUrls: {},
     pending: null,
   };
   private listeners = new Set<() => void>();
@@ -106,6 +111,10 @@ export class DocManager {
    * the daemon's single-writer lock while the old socket is still closing. */
   private drains: Promise<void>[] = [];
   private offLane: (() => void) | null = null;
+  private readonly thumbnails = new DocThumbnailCache((docId, url) => {
+    if (this.state.thumbnailUrls[docId] === url) return;
+    this.patch({ thumbnailUrls: { ...this.state.thumbnailUrls, [docId]: url } });
+  });
 
   constructor(
     private readonly client: FielddClient,
@@ -227,7 +236,16 @@ export class DocManager {
     );
     const sorted = [...docs].sort((a, b) => b.updatedAt - a.updatedAt);
     this.patch({ docs: sorted });
+    void this.thumbnails
+      .hydrate(sorted.map((doc) => doc.docId))
+      .catch((error: unknown) => console.warn("[doc-thumbnail] cache hydrate failed", error));
     return sorted;
+  }
+
+  /** Called only after fieldd acknowledges the matching autosave checkpoint. */
+  thumbnailCheckpoint(docId: string, revision: string, scene: DocThumbnailScene): void {
+    if (docId.length === 0) return;
+    this.thumbnails.schedule(docId, revision, scene);
   }
 
   /** FieldView calls this at the end of its attach effect: the doc is on the

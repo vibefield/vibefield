@@ -28,6 +28,24 @@ function fmtRelative(ms: number, now = Date.now()): string {
   return new Date(ms).toLocaleDateString();
 }
 
+function DocThumbnailImage({ src }: { src: string }): ReactElement {
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => setLoaded(false), [src]);
+  return (
+    <img
+      src={src}
+      alt=""
+      draggable={false}
+      loading="lazy"
+      decoding="async"
+      onLoad={() => setLoaded(true)}
+      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-out ${
+        loaded ? "opacity-100" : "opacity-0"
+      }`}
+    />
+  );
+}
+
 export interface FilePillProps {
   manager: DocManagerApi;
   open: boolean;
@@ -196,6 +214,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
               <div className="grid grid-cols-3 gap-4">
                 {state.docs.map((d: DocRegistryEntry) => {
                   const current = d.docId === state.doc?.docId;
+                  const thumbnailUrl = state.thumbnailUrls[d.docId];
                   return (
                     <button
                       key={d.docId}
@@ -207,7 +226,8 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
                       className="group flex flex-col gap-1.5 text-left transition-transform duration-200 hover:scale-[1.03] active:scale-95"
                       title={current ? `${d.name} — current` : `Open ${d.name}`}
                     >
-                      <div className="vf-doc-face relative aspect-[16/10] w-full rounded-[10px] border border-black/5 dark:border-white/10">
+                      <div className="vf-doc-face relative aspect-[16/10] w-full overflow-hidden rounded-[10px] border border-black/5 dark:border-white/10">
+                        {thumbnailUrl !== undefined && <DocThumbnailImage src={thumbnailUrl} />}
                         {current && (
                           <div
                             className="absolute inset-0 rounded-[10px]"

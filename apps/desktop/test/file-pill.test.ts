@@ -39,6 +39,7 @@ function fakeManager(overrides?: Partial<DocManagerState>) {
         sizeBytes: 10,
       },
     ],
+    thumbnailUrls: { [DOC_B]: "blob:studio-thumbnail" },
     pending: null,
     ...overrides,
   };
@@ -149,6 +150,14 @@ describe("FilePill", () => {
     act(() => current.click());
     expect(onOpen).toHaveBeenCalledWith(false);
     expect(manager.switchTo).not.toHaveBeenCalled();
+  });
+
+  it("uses a persisted thumbnail URL without asking the manager to generate one", () => {
+    const manager = fakeManager();
+    mount(manager, true);
+    const image = container?.querySelector('img[src="blob:studio-thumbnail"]');
+    expect(image).not.toBeNull();
+    expect(manager.refreshDocs).toHaveBeenCalledTimes(1);
   });
 
   it("busy (loading) disables new + rename but never the chevron", () => {

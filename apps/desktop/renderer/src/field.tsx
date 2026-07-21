@@ -35,6 +35,7 @@ import { setBoardStatus } from "./board-status";
 import { installCursorHalo } from "./cursor";
 import type { DocManager } from "./doc-manager";
 import { buildRegistry, createFieldEngine, seedField } from "./field-engine";
+import { captureDocThumbnailScene } from "./doc-thumbnail-scene";
 import { FilePill } from "./hud/FilePill";
 import { LoadingVeil } from "./hud/LoadingVeil";
 import { NavigationBreadcrumbs } from "./hud/NavigationBreadcrumbs";
@@ -209,8 +210,17 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
     // wiring lives in the manager now (it owns lane lifecycles).
     const autosave = ce.docs.autosave({
       put: async (bytes) => {
+        const savedAt = Date.now();
+        // Capture only durable structural state, synchronously, while this
+        // engine is still alive. Rendering/encoding happens later in a worker.
+        const thumbnailScene = captureDocThumbnailScene(ce);
         setBoardStatus({ state: "saving", lastSavedAt: lane.lastPutAt });
-        await lane.put(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt: Date.now() });
+        await lane.put(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt });
+        manager.thumbnailCheckpoint(
+          pending.docId,
+          `${savedAt}:${bytes.byteLength}`,
+          thumbnailScene,
+        );
         setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
       },
     });
