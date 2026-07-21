@@ -12,6 +12,14 @@ export class MockMgmtServer {
   failNextHello = false;
   /** when set, subscribe responses are followed by a delta IN THE SAME write */
   deltaInSameChunk = false;
+  /** when set, every native.mesh.* call answers UNAVAILABLE (node not up) */
+  meshUnavailable = false;
+  /** scripted node-side serve state (C2 reconcile tests) */
+  meshServes = new Map<string, { name: string; url: string }>();
+  meshAddCalls = 0;
+  meshRemoveCalls = 0;
+  /** simulate serves living in the node: a dropped daemon loses them */
+  clearServesOnDisconnect = false;
   private nextSub = 1;
   private issued: Array<{ sock: Socket; subId: string; method: string }> = [];
 
@@ -32,6 +40,7 @@ export class MockMgmtServer {
     sock.on("close", () => {
       this.sockets.delete(sock);
       this.issued = this.issued.filter((e) => e.sock !== sock);
+      if (this.clearServesOnDisconnect) this.meshServes.clear();
     });
     let buf = "";
     sock.on("data", (d) => {
@@ -46,7 +55,11 @@ export class MockMgmtServer {
     sock.on("error", () => {});
   }
 
-  private onLine(sock: Socket, msg: { id: number; method: string }): void {
+  private onLine(sock: Socket, msg: { id: number; method: string; params?: Record<string, unknown> }): void {
+    if (msg.method.startsWith("native.mesh.")) {
+      this.onMesh(sock, msg);
+      return;
+    }
     if (msg.method === "native.lifecycle.hello") {
       if (this.failNextHello) {
         this.failNextHello = false;
@@ -90,6 +103,45 @@ export class MockMgmtServer {
       return;
     }
     sock.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} }) + "\n");
+  }
+
+  private onMesh(sock: Socket, msg: { id: number; method: string; params?: Record<string, unknown> }): void {
+    const reply = (body: object) => sock.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body }) + "\n");
+    if (this.meshUnavailable) {
+      reply({
+        error: {
+          code: -32006,
+          message: "mesh node not up",
+          data: { kind: "UNAVAILABLE", retryable: true, details: { service: "mesh-gateway", state: "starting" } },
+        },
+      });
+      return;
+    }
+    const p = msg.params ?? {};
+    switch (msg.method) {
+      case "native.mesh.serve.list":
+        reply({ result: { serves: [...this.meshServes.values()] } });
+        return;
+      case "native.mesh.serve.add": {
+        this.meshAddCalls += 1;
+        const name = String(p["name"]);
+        const entry = { name, url: `https://mock.ts.net/${name}` };
+        this.meshServes.set(name, entry);
+        reply({ result: { ...p, url: entry.url } });
+        return;
+      }
+      case "native.mesh.serve.remove": {
+        this.meshRemoveCalls += 1;
+        this.meshServes.delete(String(p["name"]));
+        reply({ result: { removed: true } });
+        return;
+      }
+      case "native.mesh.store.open":
+        reply({ result: { storeId: p["storeId"], slices: { "dev-self": { data: { hello: 1 }, version: 1 } } } });
+        return;
+      default:
+        reply({ result: {} });
+    }
   }
 
   /** Push a delta on every live subscription whose method ends with the suffix. */

@@ -9,6 +9,7 @@ import {
   type NativeHealth,
   type Scope,
 } from "@vibefield/contracts";
+import { MeshClient } from "./mesh-client";
 import { NativeLink, RpcCallError } from "./native-link";
 import { ProductApi } from "./product-api";
 import { TokenService } from "./token-service";
@@ -45,6 +46,7 @@ export interface FielddDaemon {
   controlPort: number;
   tokens: TokenService;
   native: NativeLink;
+  mesh: MeshClient;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
   health(): FielddHealth;
@@ -66,6 +68,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
 
   // everything past pairing is transactional — never leak the client slot
   try {
+    const mesh = new MeshClient(native);
     // -- health aggregation: native deltas + link liveness, one stream out --
     let latestHealth: NativeHealth | null = null;
     const healthListeners = new Set<(h: FielddHealth) => void>();
@@ -160,6 +163,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       controlPort,
       tokens,
       native,
+      mesh,
       shellToken: shellGrant.token,
       health,
       nativeHealth: () => latestHealth,

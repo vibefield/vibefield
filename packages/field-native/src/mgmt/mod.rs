@@ -1,7 +1,10 @@
 //! Management-channel server (design-02 §2.7): newline JSON-RPC over UDS,
 //! hello-gated (D8), single authenticated client (new hello ⇒ SUPERSEDED),
-//! snapshot-then-delta subscriptions (P5). Serves the M2 lifecycle surface;
-//! native.mesh.* answers honestly UNAVAILABLE until the gateway embeds.
+//! snapshot-then-delta subscriptions (P5). Serves the M2 lifecycle surface +
+//! the C2 mesh facade (mesh.rs); mesh calls answer UNAVAILABLE with the unit's
+//! real state until the node is up.
+
+mod mesh;
 
 use crate::contracts::{DesiredState, Hello};
 use crate::pairing;
@@ -95,22 +98,7 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
                 send(&tx, handle_desired_set(&state, &params, id).await);
             }
             m if m.starts_with("native.mesh.") => {
-                // facade lands with C2; until then report the unit's REAL state
-                // (disabled/starting/degraded) so callers see why (M2 honesty)
-                let (mesh_state, auth_url) = {
-                    let h = state.health_tx.borrow();
-                    h.units
-                        .iter()
-                        .find(|u| u.unit == "mesh-gateway")
-                        .map(|u| (u.state.to_string(), u.auth_url.clone()))
-                        .unwrap_or_else(|| ("unknown".into(), None))
-                };
-                let mut details = json!({"service":"mesh-gateway","state": mesh_state});
-                if let Some(url) = auth_url {
-                    details["authUrl"] = json!(url);
-                }
-                send(&tx, err(id, "UNAVAILABLE", -32006, "mesh facade not wired yet (C2)",
-                    true, Some(details)));
+                mesh::handle(&state, &tx, m, &params, id).await;
             }
             m if m.starts_with("native.process.") || m.starts_with("native.sidecar.") => {
                 send(&tx, err(id, "UNAVAILABLE", -32006, "unit not embedded yet",

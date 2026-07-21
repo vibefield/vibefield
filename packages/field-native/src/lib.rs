@@ -48,9 +48,8 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
     // units push health transitions (e.g. mesh auth flow) via this channel;
     // a refresh task re-aggregates and publishes on every ping
     let (ping_tx, mut ping_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let mgr = Arc::new(manager::NativeServiceManager::new(services::build_units(
-        &config, ping_tx,
-    ))?);
+    let (units, mesh_handle) = services::build_units(&config, ping_tx);
+    let mgr = Arc::new(manager::NativeServiceManager::new(units)?);
     mgr.start_all().await;
     let health = mgr.health(&boot_id);
 
@@ -61,7 +60,7 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
         workers: vec![],
     };
 
-    let state = state::DaemonState::new(boot_id.clone(), secret, health, observed);
+    let state = state::DaemonState::new(boot_id.clone(), secret, health, observed, mesh_handle);
 
     let health_refresh = tokio::spawn({
         let mgr = mgr.clone();

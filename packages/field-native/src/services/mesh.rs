@@ -18,22 +18,66 @@
 use crate::config::NativeConfig;
 use crate::contracts::{UnitHealth, UnitState};
 use crate::manager::NativeService;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
+use truffle_core::synced_store::SyncedStore;
 use truffle_core::{network::tailscale::TailscaleProvider, Node};
 
 /// = @vibefield/contracts registries APP_ID (one tailnet app namespace per product).
 const APP_ID: &str = "vibefield";
 const SIDECAR_NAMES: [&str; 2] = ["sidecar-slim", "truffle-sidecar"];
 
-type MeshNode = Node<TailscaleProvider>;
+pub type MeshNode = Node<TailscaleProvider>;
+pub type JsonStore = SyncedStore<Value>;
 
 struct Shared {
     health: Mutex<UnitHealth>,
     node: tokio::sync::Mutex<Option<Arc<MeshNode>>>,
     /// pokes the daemon's health-refresh task (lib.rs) after every transition
     ping: UnboundedSender<()>,
+    /// facade state (C2): open stores + declared serves (config JSON kept for list)
+    stores: tokio::sync::Mutex<HashMap<String, Arc<JsonStore>>>,
+    serves: tokio::sync::Mutex<HashMap<String, Value>>,
+}
+
+/// Cloneable door to the mesh for the mgmt server (design-02: fieldd consumes
+/// mesh-as-a-service; this handle is the in-process seam it lands on).
+#[derive(Clone)]
+pub struct MeshHandle {
+    shared: Arc<Shared>,
+}
+
+impl MeshHandle {
+    pub async fn node(&self) -> Option<Arc<MeshNode>> {
+        self.shared.node.lock().await.clone()
+    }
+
+    /// Get-or-create a JSON synced store, file-backed under the node's state dir.
+    pub async fn open_store(&self, node: &Arc<MeshNode>, store_id: &str) -> Arc<JsonStore> {
+        let mut stores = self.shared.stores.lock().await;
+        if let Some(s) = stores.get(store_id) {
+            return s.clone();
+        }
+        let backend = Arc::new(truffle_core::synced_store::FileBackend::new(
+            node.state_dir().join("synced_store"),
+        ));
+        let store = node.synced_store_with_backend::<Value>(store_id, backend);
+        stores.insert(store_id.to_string(), store.clone());
+        store
+    }
+
+    pub async fn record_serve(&self, name: &str, config: Value) {
+        self.shared.serves.lock().await.insert(name.to_string(), config);
+    }
+    pub async fn forget_serve(&self, name: &str) {
+        self.shared.serves.lock().await.remove(name);
+    }
+    pub async fn serve_config(&self, name: &str) -> Option<Value> {
+        self.shared.serves.lock().await.get(name).cloned()
+    }
 }
 
 impl Shared {
@@ -75,9 +119,16 @@ impl MeshUnit {
                 }),
                 node: tokio::sync::Mutex::new(None),
                 ping,
+                stores: tokio::sync::Mutex::new(HashMap::new()),
+                serves: tokio::sync::Mutex::new(HashMap::new()),
             }),
             task: Mutex::new(None),
         }
+    }
+
+    /// The mgmt server's door to the mesh (C2 facade).
+    pub fn handle(&self) -> MeshHandle {
+        MeshHandle { shared: self.shared.clone() }
     }
 
     /// The live node, once up (C2 facade calls go through this).

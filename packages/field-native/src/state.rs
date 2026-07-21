@@ -1,4 +1,5 @@
 use crate::contracts::{DesiredState, NativeHealth, ObservedState};
+use crate::services::mesh::MeshHandle;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Mutex};
@@ -23,6 +24,8 @@ pub struct DaemonState {
     pub observed_tx: watch::Sender<ObservedState>,
     pub desired: Mutex<Option<DesiredState>>,
     pub current_client: Mutex<Option<ClientHandle>>,
+    /// the mgmt facade's door to the mesh unit (C2)
+    pub mesh: MeshHandle,
     next_conn_id: AtomicU64,
     next_sub_id: AtomicU64,
 }
@@ -33,6 +36,7 @@ impl DaemonState {
         secret: [u8; 32],
         health: NativeHealth,
         observed: ObservedState,
+        mesh: MeshHandle,
     ) -> Arc<Self> {
         let (health_tx, _) = watch::channel(health);
         let (observed_tx, _) = watch::channel(observed);
@@ -43,6 +47,7 @@ impl DaemonState {
             observed_tx,
             desired: Mutex::new(None),
             current_client: Mutex::new(None),
+            mesh,
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),
         })
