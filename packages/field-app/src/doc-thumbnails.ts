@@ -1,4 +1,8 @@
 import type { DocThumbnailScene } from "./doc-thumbnail-scene";
+import {
+  isHidden as realIsHidden,
+  onVisibilityChange as realOnVisibilityChange,
+} from "./visibility";
 
 const DB_NAME = "vibefield-derived-artifacts";
 const STORE_NAME = "doc-thumbnails";
@@ -29,17 +33,35 @@ interface WorkerReply {
   error?: string;
 }
 
+interface VisibilitySeam {
+  isHidden(): boolean;
+  onVisibilityChange(fn: (hidden: boolean) => void): () => void;
+}
+
 export class DocThumbnailCache {
   private readonly hydrated = new Set<string>();
   private readonly urls = new Map<string, string>();
   private readonly latestRevision = new Map<string, string>();
   private readonly jobs = new Map<string, ThumbnailJob>();
+  private readonly parked = new Map<string, ThumbnailJob>();
+  private watchingVisibility = false;
   private renderChain: Promise<void> = Promise.resolve();
   private dbPromise: Promise<IDBDatabase | null> | null = null;
   private worker: Worker | null = null;
   private requestId = 0;
 
-  constructor(private readonly publish: (docId: string, url: string) => void) {}
+  constructor(
+    private readonly publish: (docId: string, url: string) => void,
+    private readonly vis: VisibilitySeam = {
+      isHidden: realIsHidden,
+      onVisibilityChange: realOnVisibilityChange,
+    },
+  ) {}
+
+  /** honesty + test seam: captures currently waiting on visibility (PF6) */
+  parkedCount(): number {
+    return this.parked.size;
+  }
 
   async hydrate(docIds: string[]): Promise<void> {
     const wanted = docIds.filter((docId) => !this.hydrated.has(docId));
@@ -70,9 +92,32 @@ export class DocThumbnailCache {
     const job = this.jobs.get(docId);
     if (job === undefined) return;
     this.jobs.delete(docId);
+    // PF6 — visibility silences the source: a hidden window captures nothing.
+    // The job parks; the next `visible` flushes it (latest-wins stays intact
+    // through renderAndPersist's revision checks). App-lifetime object — the
+    // single listener is registered lazily and never needs teardown.
+    if (this.vis.isHidden()) {
+      this.parked.set(docId, job);
+      this.watchVisibility();
+      return;
+    }
+    this.chain(job);
+  }
+
+  private chain(job: ThumbnailJob): void {
     this.renderChain = this.renderChain
       .then(() => this.renderAndPersist(job))
       .catch((error: unknown) => console.warn("[doc-thumbnail] generation failed", error));
+  }
+
+  private watchVisibility(): void {
+    if (this.watchingVisibility) return;
+    this.watchingVisibility = true;
+    this.vis.onVisibilityChange((hidden) => {
+      if (hidden) return;
+      for (const job of this.parked.values()) this.chain(job);
+      this.parked.clear();
+    });
   }
 
   private async renderAndPersist(job: ThumbnailJob): Promise<void> {

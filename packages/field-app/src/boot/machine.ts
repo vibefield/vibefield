@@ -55,6 +55,9 @@ export interface BootMachineDeps {
   stableFrames?: number;
   /** cap past warmth: degraded reveal + logged miss, never a hung splash */
   stabilityCapMs?: number;
+  /** hidden windows have no frames to judge — the reveal proceeds unwatched
+   * (PF6; with background throttling restored, rAF may not tick at all) */
+  isHidden?: () => boolean;
   mark?: (name: string) => void;
 }
 
@@ -185,6 +188,8 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
   }
 
   function stabilize(): Promise<boolean> {
+    const hidden = deps.isHidden ?? (() => typeof document !== "undefined" && document.hidden);
+    if (hidden()) return Promise.resolve(false); // nothing to judge; not degraded
     return new Promise((resolve) => {
       const budget = deps.frameBudgetMs ?? FRAME_BUDGET_MS;
       const need = deps.stableFrames ?? STABLE_FRAMES;

@@ -12,10 +12,13 @@ export function webPreferences(preloadPath: string): WebPreferences {
     sandbox: true,
     contextIsolation: true,
     nodeIntegration: false,
-    // covered/occluded windows must keep ticking: engine rAF + Loro sync.
-    // Slice 5 removes this and lands the visibility policy (PF6; the
-    // packaging-kit verify item design-03 §4.7 records).
-    backgroundThrottling: false,
+    // Electron's default (throttle hidden renderers) restored — ESR slice 5.
+    // Safe because durable truth lives in the daemons: autosave is
+    // commit-driven, never rAF-driven, and the persistence path is
+    // visibility-EXEMPT by law (§5.4.5 — persistence-exemption.test.ts).
+    // Hidden work pauses at its source (field-app visibility.ts); refocus
+    // recovers from daemon truth (P5). Closes design-03 §4.7's PF6 verify item.
+    backgroundThrottling: true,
   };
 }
 
