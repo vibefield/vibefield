@@ -13,15 +13,31 @@ export function BootRoot({ machine }: { machine: BootMachine }): ReactElement {
   const view = useSyncExternalStore(machine.subscribe, machine.view);
   const ready = machine.ready;
   const revealed = view.phase === "interactive";
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!revealed) return;
+    const t = setTimeout(() => setSettled(true), 600); // outlive the 560ms settle
+    return () => clearTimeout(t);
+  }, [revealed]);
   return (
     <>
       {ready !== null && (
         <div
           className="absolute inset-0 motion-reduce:transition-none"
-          style={{
-            transform: revealed ? "scale(1)" : "scale(0.99)",
-            transition: `transform 560ms ${EASE}`,
-          }}
+          // The settle transform exists ONLY while settling: a persistent
+          // transform creates a stacking context that flattens the whole app
+          // BELOW the z-40 .app-drag strip — every click in the top 52px died
+          // (field report 2026-07-22). Once settled the wrapper is inert and
+          // body-level stacking returns: the pill's no-drag hole punches
+          // through the drag strip again.
+          style={
+            settled
+              ? undefined
+              : {
+                  transform: revealed ? "scale(1)" : "scale(0.99)",
+                  transition: `transform 560ms ${EASE}`,
+                }
+          }
         >
           <ready.mod.FielddProvider client={ready.client}>
             <ready.mod.FieldView manager={ready.manager} />
