@@ -1,13 +1,12 @@
 {
-  "extends": "../../../tsconfig.base.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "types": ["vite/client"],
     "noEmit": true,
     // an app, not a library: no declaration emit — also silences TS2742
     // portability errors for types inferred from ice's transitive strata dep
     "declaration": false
   },
-  "include": ["src", "../test"]
+  "include": ["src", "test"]
 }

@@ -7,7 +7,7 @@
 // test is the canary that tells us the day the in-place path becomes viable.
 import { defineQuery, Position, PrefabId, WirePorts } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
-import { buildRegistry, createFieldEngine, seedField } from "../renderer/src/field-engine";
+import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
 const widgetQ = defineQuery([Position, PrefabId]);
 const wireQ = defineQuery([WirePorts]);

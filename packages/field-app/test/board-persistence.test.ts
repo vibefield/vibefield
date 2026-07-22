@@ -1,6 +1,6 @@
 import { defineQuery, Position, PrefabId, WirePorts } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
-import { buildRegistry, createFieldEngine, seedField } from "../renderer/src/field-engine";
+import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
 // B3 restart survival, headless: the demo scene is the persistence test payload
 // (thinking-widgetlab-port §5 named it so). Seed → exportEnvelope → a FRESH

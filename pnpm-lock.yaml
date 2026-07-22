@@ -50,95 +50,16 @@ importers:
         version: 2.5.4
 
   apps/desktop:
-    dependencies:
-      '@react-three/fiber':
-        specifier: ^9.6.1
-        version: 9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
-      '@vibecook/ice':
-        specifier: file:../../../infinite-canvas-engine/packages/ice
-        version: file:../infinite-canvas-engine/packages/ice(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
-      '@vibefield/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@vibefield/fieldd-client':
-        specifier: workspace:*
-        version: link:../../packages/fieldd-client
-      '@vibefield/plugin-field-tools':
-        specifier: workspace:*
-        version: link:../../packages/plugins/field-tools
-      '@vibefield/plugin-note':
-        specifier: workspace:*
-        version: link:../../packages/plugins/note
-      '@vibefield/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../packages/plugin-runtime
-      '@vibefield/plugin-widgetlab':
-        specifier: workspace:*
-        version: link:../../packages/plugins/widgetlab
-      '@vibefield/shell-ui':
-        specifier: workspace:*
-        version: link:../../packages/shell-ui
-      loro-crdt:
-        specifier: ^1.13.6
-        version: 1.13.7
-      react:
-        specifier: 'catalog:'
-        version: 19.2.7
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.2.7(react@19.2.7)
-      three:
-        specifier: ^0.185.0
-        version: 0.185.1
     devDependencies:
-      '@tailwindcss/vite':
-        specifier: 'catalog:'
-        version: 4.3.3(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
-      '@types/node':
-        specifier: 'catalog:'
-        version: 24.13.3
-      '@types/react':
-        specifier: 'catalog:'
-        version: 19.2.17
-      '@types/react-dom':
-        specifier: 'catalog:'
-        version: 19.2.3(@types/react@19.2.17)
-      '@types/three':
-        specifier: ^0.185.0
-        version: 0.185.1
       '@vibefield/electron-shell':
         specifier: workspace:*
         version: link:../../packages/electron-shell
-      '@vibefield/fieldd':
-        specifier: workspace:*
-        version: link:../../packages/fieldd
-      '@vibefield/fieldd-supervisor':
-        specifier: workspace:*
-        version: link:../../packages/fieldd-supervisor
-      '@vitejs/plugin-react':
-        specifier: ^6.0.3
-        version: 6.0.3(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
       concurrently:
         specifier: ^10.0.3
         version: 10.0.3
       electron:
         specifier: ^43.1.1
         version: 43.1.1
-      happy-dom:
-        specifier: ^20.0.0
-        version: 20.11.0
-      tailwindcss:
-        specifier: 'catalog:'
-        version: 4.3.3
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vite:
-        specifier: ^8.1.5
-        version: 8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)
-      vitest:
-        specifier: 'catalog:'
-        version: 3.2.7(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)
 
   packages/contracts:
     dependencies:
@@ -167,19 +88,101 @@ importers:
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@vibefield/field-app':
+        specifier: workspace:*
+        version: link:../field-app
       '@vibefield/fieldd-supervisor':
         specifier: workspace:*
         version: link:../fieldd-supervisor
     devDependencies:
+      '@tailwindcss/vite':
+        specifier: 'catalog:'
+        version: 4.3.3(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      '@vitejs/plugin-react':
+        specifier: ^6.0.3
+        version: 6.0.3(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
       electron:
         specifier: ^43.1.1
         version: 43.1.1
       esbuild:
         specifier: 'catalog:'
         version: 0.28.1
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.3.3
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: ^8.1.5
+        version: 8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)
+
+  packages/field-app:
+    dependencies:
+      '@react-three/fiber':
+        specifier: ^9.6.1
+        version: 9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@vibecook/ice':
+        specifier: file:../../../infinite-canvas-engine/packages/ice
+        version: file:../infinite-canvas-engine/packages/ice(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@vibefield/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@vibefield/fieldd-client':
+        specifier: workspace:*
+        version: link:../fieldd-client
+      '@vibefield/plugin-field-tools':
+        specifier: workspace:*
+        version: link:../plugins/field-tools
+      '@vibefield/plugin-note':
+        specifier: workspace:*
+        version: link:../plugins/note
+      '@vibefield/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+      '@vibefield/plugin-widgetlab':
+        specifier: workspace:*
+        version: link:../plugins/widgetlab
+      '@vibefield/shell-ui':
+        specifier: workspace:*
+        version: link:../shell-ui
+      loro-crdt:
+        specifier: ^1.13.6
+        version: 1.13.7
+      react:
+        specifier: 'catalog:'
+        version: 19.2.7
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.7(react@19.2.7)
+      three:
+        specifier: ^0.185.0
+        version: 0.185.1
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.17)
+      '@types/three':
+        specifier: ^0.185.0
+        version: 0.185.1
+      '@vibefield/fieldd':
+        specifier: workspace:*
+        version: link:../fieldd
+      happy-dom:
+        specifier: ^20.0.0
+        version: 20.11.0
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

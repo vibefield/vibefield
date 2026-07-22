@@ -8,8 +8,8 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DocManagerApi, DocManagerState } from "../renderer/src/doc-manager";
-import { FilePill } from "../renderer/src/hud/FilePill";
+import type { DocManagerApi, DocManagerState } from "../src/doc-manager";
+import { FilePill } from "../src/hud/FilePill";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

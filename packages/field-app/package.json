@@ -1,0 +1,39 @@
+{
+  "name": "@vibefield/field-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./spike": "./src/spike/spike-loro.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.6.1",
+    "@vibecook/ice": "*",
+    "@vibefield/contracts": "workspace:*",
+    "@vibefield/fieldd-client": "workspace:*",
+    "@vibefield/plugin-field-tools": "workspace:*",
+    "@vibefield/plugin-note": "workspace:*",
+    "@vibefield/plugin-runtime": "workspace:*",
+    "@vibefield/plugin-widgetlab": "workspace:*",
+    "@vibefield/shell-ui": "workspace:*",
+    "loro-crdt": "^1.13.6",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "three": "^0.185.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@types/three": "^0.185.0",
+    "@vibefield/fieldd": "workspace:*",
+    "happy-dom": "^20.0.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

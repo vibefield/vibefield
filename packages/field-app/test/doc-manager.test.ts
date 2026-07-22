@@ -15,8 +15,8 @@ import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_DOC_NAME, DocManager } from "../renderer/src/doc-manager";
-import { buildRegistry, createFieldEngine, seedField } from "../renderer/src/field-engine";
+import { DEFAULT_DOC_NAME, DocManager } from "../src/doc-manager";
+import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {

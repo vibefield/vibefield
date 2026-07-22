@@ -11,7 +11,10 @@ import { defineConfig } from "vite";
 // needs no loopback server, no vite-plugin-wasm, no COOP/COEP. Exact-match
 // regex so explicit subpath imports never double-append.
 export default defineConfig({
-  root: "renderer",
+  // root = the tiny renderer-host adapter (ESR 3a); the product code lives
+  // behind @vibefield/field-app's public entry. Output lands in THIS package's
+  // dist so the shell is self-contained (main loads ../renderer from dist/main).
+  root: join(import.meta.dirname, "src", "renderer-host"),
   base: "./",
   plugins: [tailwindcss(), react()],
   resolve: {
@@ -31,11 +34,13 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: join(import.meta.dirname, "renderer", "index.html"),
+        main: join(import.meta.dirname, "src", "renderer-host", "index.html"),
         // test-only entry (ESR-12): built ONLY when the spike is requested —
         // the production renderer output carries no spike code
         ...(process.env["VITE_SPIKE"]
-          ? { "spike-loro": join(import.meta.dirname, "renderer", "spike-loro.html") }
+          ? {
+              "spike-loro": join(import.meta.dirname, "src", "renderer-host", "spike-loro.html"),
+            }
           : {}),
       },
     },

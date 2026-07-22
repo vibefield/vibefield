@@ -106,7 +106,8 @@ export async function runSpikeLoro(): Promise<void> {
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
   try {
-    await win.loadFile(join(app.getAppPath(), "dist", "renderer", "spike-loro.html"));
+    // dist/testing → dist/renderer: the shell's own renderer output (ESR 3a)
+    await win.loadFile(join(__dirname, "..", "renderer", "spike-loro.html"));
     const raw = await waitForConsole(win, "SPIKE_LORO ", 30_000);
     const result = JSON.parse(raw) as { ok: boolean };
     console.log(`SPIKE_LORO ${raw}`);

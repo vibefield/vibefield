@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { app, BrowserWindow, screen } from "electron";
+import { BrowserWindow, screen } from "electron";
 import { isSmokeLike, type ShellMode } from "./modes";
 import { webPreferences } from "./window-policy";
 
@@ -40,7 +40,8 @@ export async function loadRenderer(
   viteUrl: string,
 ): Promise<void> {
   if (mode !== "dev") {
-    await win.loadFile(join(app.getAppPath(), "dist", "renderer", "index.html"));
+    // the shell is self-contained: dist/main → dist/renderer (ESR 3a)
+    await win.loadFile(join(__dirname, "..", "renderer", "index.html"));
     return;
   }
   for (let i = 0; i < 40; i++) {

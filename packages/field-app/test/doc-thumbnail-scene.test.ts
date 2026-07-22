@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { captureDocThumbnailScene } from "../renderer/src/doc-thumbnail-scene";
-import { buildRegistry, createFieldEngine, seedField } from "../renderer/src/field-engine";
+import { captureDocThumbnailScene } from "../src/doc-thumbnail-scene";
+import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
 describe("document thumbnail scene", () => {
   it("projects the seeded canvas into sanitized root-level silhouettes and wires", () => {

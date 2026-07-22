@@ -77,8 +77,11 @@ function matchesForbid(spec, forbid) {
 
 // A cross-package deep import: reaching past a new package's public entries. Bare
 // `@vibefield/field-app` (no subpath) is the public root and allowed; `/main`,
-// `/preload`, `/host` are the declared entries (spec §8.2).
-const NEW_PACKAGE_ENTRIES = new Set(["main", "preload", "host"]);
+// `/preload`, `/host` are the declared entries (spec §8.2), plus `/spike` —
+// field-app's exported spike implementation, consumed by the shell's test-only
+// spike page (ESR 3a: the page is a shell harness; the implementation needs the
+// canvas deps only field-app carries).
+const NEW_PACKAGE_ENTRIES = new Set(["main", "preload", "host", "spike"]);
 function isDeepPackageImport(spec) {
   const m = /^@vibefield\/(?:electron-shell|field-app|fieldd-supervisor)\/(.+)$/.exec(spec);
   if (m === null) return false;
@@ -137,8 +140,8 @@ const RULES = [
   },
   {
     id: "R4",
-    // pending slice 3 — the renderer still lives under apps/desktop
-    enforce: false,
+    // slice 3a moved the renderer to field-app — apps/desktop is packaging-only
+    enforce: true,
     description: "no .ts/.tsx application source under apps/desktop (except *.config.ts and test/)",
     applies: (p) =>
       TS_ONLY.test(p) && under(p, "apps/desktop") && !isConfigFile(p) && !isTestPath(p),

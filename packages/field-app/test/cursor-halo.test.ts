@@ -14,9 +14,9 @@ import {
   type World,
 } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
-import { installCursorHalo } from "../renderer/src/cursor";
-import { Cur, DOT_SCALE, MID_SCALE } from "../renderer/src/cursor/components";
-import { buildRegistry, createFieldEngine, seedField } from "../renderer/src/field-engine";
+import { installCursorHalo } from "../src/cursor";
+import { Cur, DOT_SCALE, MID_SCALE } from "../src/cursor/components";
+import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
 const curQ = defineQuery([Cur]);
 

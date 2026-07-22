@@ -1,6 +1,6 @@
 import { PluginRegistry } from "@vibefield/plugin-runtime";
 import { describe, expect, it } from "vitest";
-import { buildCatalog } from "../renderer/src/hud/tray-catalog";
+import { buildCatalog } from "../src/hud/tray-catalog";
 
 // buildCatalog is a pure derivation over a live PluginRegistry (no ICE, no DOM):
 // each manifest widget row joined with its registered def becomes a tray tile.

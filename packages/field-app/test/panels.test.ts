@@ -19,13 +19,13 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { NavigationBreadcrumbs } from "../renderer/src/hud/NavigationBreadcrumbs";
+import { NavigationBreadcrumbs } from "../src/hud/NavigationBreadcrumbs";
 import {
   type OverlapGlowConfig,
   type OverlapGlowThemeColors,
   SettingsPanel,
   type ThemeColors,
-} from "../renderer/src/panels";
+} from "../src/panels";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

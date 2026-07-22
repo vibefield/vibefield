@@ -18,7 +18,7 @@ import {
   Viewport,
 } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
-import { buildRegistry, createFieldEngine, seedField } from "../renderer/src/field-engine";
+import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
 const idQ = defineQuery([Position, PrefabId]);
 
