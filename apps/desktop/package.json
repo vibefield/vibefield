@@ -12,7 +12,7 @@
     "start": "pnpm build && electron .",
     "smoke": "pnpm build:shell && electron . --smoke",
     "spike:loro": "pnpm build:shell && VITE_SPIKE=1 pnpm build:renderer && electron . --spike-loro",
-    "smoke:canvas": "pnpm build && electron . --smoke-canvas"
+    "smoke:canvas": "pnpm build && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-canvas"
   },
   "devDependencies": {
     "@vibefield/electron-shell": "workspace:*",

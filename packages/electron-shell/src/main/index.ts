@@ -31,6 +31,7 @@ const testing = () =>
   import("../testing/smoke.cjs") as Promise<typeof import("../testing/smoke")>;
 
 async function main(): Promise<void> {
+  performance.mark("vf:shell:boot-start");
   await app.whenReady();
   installCsp(MODE);
 
@@ -42,21 +43,31 @@ async function main(): Promise<void> {
   const root = dataRoot(MODE);
   const repoRoot = resolve(app.getAppPath(), "..", "..");
   supervisor = buildSupervisor({ mode: MODE, root, repoRoot, viteUrl: VITE_URL });
-  const handle = await supervisor.ensure();
+  // ensure() starts NOW; the window never waits for it (ESR-8 / design-03
+  // §4.3 v0.3 — the splash is the honest face while the daemon comes up).
+  const fielddReady = supervisor.ensure();
+  fielddReady.then(
+    (handle) => {
+      handle.client.onStatusChange(() => {
+        console.log(`[shell] fieldd link: ${handle.client.status}`);
+      });
+    },
+    () => {
+      // observed: the renderer's bootstrap invoke surfaces the failure with an
+      // honest retry (each invoke re-runs ensure); nothing to crash here
+    },
+  );
 
   if (MODE === "smoke") {
-    await (await testing()).runSmoke(handle, supervisor, root);
+    await (await testing()).runSmoke(await fielddReady, supervisor, root);
     return;
   }
 
-  registerWindowBootstrap(registry, handle);
-  handle.client.onStatusChange(() => {
-    console.log(`[shell] fieldd link: ${handle.client.status}`);
-  });
+  registerWindowBootstrap(registry, supervisor);
 
   if (MODE === "smoke-canvas") {
     await (await testing()).runSmokeCanvas({
-      handle,
+      handle: await fielddReady,
       supervisor,
       root,
       registry,
@@ -66,6 +77,7 @@ async function main(): Promise<void> {
     return;
   }
 
+  performance.mark("vf:shell:window-created");
   const win = createMainWindow({ mode: MODE, preloadPath: PRELOAD_PATH, show: true });
   registry.adopt(win);
   installNavigationPolicy(win, MODE);

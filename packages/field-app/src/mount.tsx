@@ -1,33 +1,40 @@
 import { FielddClient } from "@vibefield/fieldd-client";
-import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { createRoot } from "react-dom/client";
-import { DocManager } from "./doc-manager";
-import { FieldView } from "./field";
+import { BootRoot } from "./boot/BootRoot";
+import { createBootMachine } from "./boot/machine";
 import { type FieldHost, setHost } from "./host";
-import "./styles.css";
+import "./tw.css";
 
 // The window IS the field (2026-07-21, James): no app bar, no tabs — chrome
 // floats over the canvas (DESIGN.md §1); diagnostics live inside the Settings
-// panel. The provider stays app-wide so any surface can read fieldd.
-// B4: the app renders IMMEDIATELY under the loading veil; the DocManager runs
-// the launch pipeline (last doc → most recent → the seeded default "Field")
-// and FieldView applies sessions to the engine. A failed launch degrades to
-// an in-memory board with persistence honestly detached.
-//
-// ESR 3a: the host seam replaces window.vibefield — same await-then-render
-// flow as before, mechanically. Slice 4 makes the mount synchronous behind the
-// splash (design-03 §4.3 v0.3); until then this preserves today's boot exactly.
+// panel. ESR slice 4 (design-03 §4.3 v0.3): the mount is SYNCHRONOUS — the
+// splash paints before any await — and the boot machine runs bootstrap, the
+// eager workspace import, the document warm-up, and the stability gate behind
+// it. The reveal fires once, fully warm. Everything heavy lives in the
+// workspace chunk; this module stays splash-bundle small.
 
 export function mountFieldApp(opts: { container: HTMLElement; host: FieldHost }): void {
   setHost(opts.host);
-  let manager: DocManager | null = null;
-  let client: FielddClient | null = null;
+  performance.mark("vf:renderer:entry");
+
+  const machine = createBootMachine({
+    host: opts.host,
+    importWorkspace: () => import("./workspace"),
+    makeClient: (conn) => {
+      const client = new FielddClient({
+        url: `ws://127.0.0.1:${conn.port}`,
+        token: conn.token,
+      });
+      client.connect();
+      return client;
+    },
+  });
 
   opts.host.onPrepareClose((requestId) => {
     void (async () => {
       try {
-        await manager?.shutdown();
-        client?.close();
+        await machine.ready?.manager.shutdown();
+        machine.client?.close();
         opts.host.completeClose({ requestId, ok: true });
       } catch (error) {
         opts.host.completeClose({
@@ -39,18 +46,12 @@ export function mountFieldApp(opts: { container: HTMLElement; host: FieldHost })
     })();
   });
 
-  const boot = async (): Promise<void> => {
-    const conn = await opts.host.getConnection();
-    client = new FielddClient({ url: `ws://127.0.0.1:${conn.port}`, token: conn.token });
-    client.connect();
-    manager = new DocManager(client);
-    createRoot(opts.container).render(
-      <FielddProvider client={client}>
-        <FieldView manager={manager} />
-      </FielddProvider>,
-    );
-  };
-  void boot();
+  // synchronous first paint (ESR §5.4.2) — no await before this render
+  createRoot(opts.container).render(<BootRoot machine={machine} />);
+  requestAnimationFrame(() => {
+    performance.mark("vf:renderer:first-frame");
+    machine.start();
+  });
 
   const dragRegion = document.createElement("div");
   dragRegion.className = "app-drag";

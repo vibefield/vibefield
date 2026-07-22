@@ -252,6 +252,22 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
   fill: loading is not a §2.5 state) over an 11px/50% lowercase stage label
   ("preparing previews"). **Late-veil rule:** invisible until 120ms of loading elapse
   (a cached switch never flashes); 240ms fade-out. Loading is modal; the stage holds.
+- **The boot splash** (ESR slice 4; design-03 §4.3 v0.3): the app's first face, painted
+  before anything heavy loads — the canvas ground itself (`--vf-canvas-bg` + the §2.1
+  CSS-fallback dots at rest; the field waking, not a logo card), the wordmark
+  "VibeField" centered (13px medium, `/50` — quiet), the veil's thin bar
+  (`3px × 220px`, colorless) beneath it over an 11px/50% lowercase stage label. Stages
+  are REAL, never theater: "waking the daemon" → the DocManager's own strings
+  ("opening doc" … "preparing previews") → "settling". Unlike the veil the splash is
+  NOT late (there is nothing behind it yet) and NOT frost (nothing to frost).
+  Unavailable is honest voice (§9): the stage line becomes the plain reason and a
+  ghost "Retry" appears — no apology, no spinner theater.
+- **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
+  the splash (the frame-stability gate — never reveal mid-hitch), then the splash
+  fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
+  `--vf-ease-island` (a breath, not a zoom). Fires once, fully warm. Reduced motion:
+  fade only. Doc SWITCHES stay the loading veil's business — the splash exists only
+  at boot.
 - **Empty / degraded states**: a state is rendered, never blank space — dashed-hairline
   pill for drop affordances ("Release here to put it back"), progress with numbers
   ("index rebuilding · 42%"), placeholder faces for missing plugins (A6/A8). Empty

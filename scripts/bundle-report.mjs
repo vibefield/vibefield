@@ -112,6 +112,33 @@ for (const [name, c] of Object.entries(shellFiles)) {
   console.log(row(name, c, ""));
 }
 
+// --assert (slice 4, spec §10.2): the initial graph must exclude the heavy
+// world; a lazy chunk must actually carry it; no spike artifacts in prod.
+if (args.includes("--assert")) {
+  const problems = [];
+  for (const name of initial) {
+    const c = chunks.get(name);
+    if (!c) continue;
+    if (c.markers.includes("three")) problems.push(`${name}: three in the initial graph`);
+    if (c.markers.includes("wasm-base64")) problems.push(`${name}: loro wasm in the initial graph`);
+  }
+  for (const name of chunks.keys()) {
+    if (name.startsWith("spike-")) problems.push(`${name}: spike artifact in production output`);
+  }
+  const lazyCarriesWorld = [...chunks].some(
+    ([name, c]) =>
+      !initial.has(name) && (c.markers.includes("three") || c.markers.includes("wasm-base64")),
+  );
+  if (!lazyCarriesWorld) {
+    problems.push("no lazy chunk carries the workspace (three/loro) — the split did not happen");
+  }
+  if (problems.length > 0) {
+    console.error(`\nbundle assert FAILED:\n  ${problems.join("\n  ")}`);
+    process.exit(1);
+  }
+  console.log(`\nbundle assert OK — initial ${kb(initRaw)} raw / ${kb(initGzip)} gz, world lazy`);
+}
+
 const report = {
   generatedFor: "electron-shell-refactor baseline",
   entries,

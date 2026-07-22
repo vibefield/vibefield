@@ -1,0 +1,7 @@
+/* Tailwind source registration (ESR 3a/4): the renderer build runs from
+   electron-shell, and Tailwind v4's auto-detection anchors there — this
+   package sits behind a workspace symlink it will not scan. @source
+   re-registers the field-app tree explicitly; styles.css stays the tailwind
+   entry itself (and is deliberately untouched here). */
+@import "./styles.css";
+@source "../";
