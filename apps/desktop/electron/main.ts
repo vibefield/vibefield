@@ -182,10 +182,7 @@ function prepareRendererClose(win: BrowserWindow, timeoutMs = 15_000): Promise<v
       if (error === undefined) resolve();
       else reject(error);
     };
-    const onReply = (
-      event: Electron.IpcMainEvent,
-      result: RendererCloseResult,
-    ) => {
+    const onReply = (event: Electron.IpcMainEvent, result: RendererCloseResult) => {
       if (event.sender !== win.webContents || result?.requestId !== requestId) return;
       if (result.ok) finish();
       else finish(new Error(result.error ?? "renderer could not persist the document"));

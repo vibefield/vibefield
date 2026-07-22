@@ -15,8 +15,8 @@ export const DocRegistryEntry = z
     /** epoch ms of the last accepted PUT (or creation). */
     updatedAt: z.number().int(),
     /** bumped only by doc.compact (deferred) — 0 throughout B3. */
-      baseEpoch: z.number().int(),
-      /** from the last PUT's meta; null until the first PUT lands (fieldd never decodes the envelope). */
+    baseEpoch: z.number().int(),
+    /** from the last PUT's meta; null until the first PUT lands (fieldd never decodes the envelope). */
     engineSchema: z.number().int().nullable(),
     /** at-rest envelope size; 0 until the first PUT. */
     sizeBytes: z.number().int(),
@@ -60,12 +60,12 @@ export const DocMeta = z
     engineSchema: z.number().int().nullable(),
     /** epoch ms stamped by the writer (the renderer's autosave savedAt). */
     savedAt: z.number().int(),
-      byteLength: z.number().int(),
-      baseEpoch: z.number().int(),
-      /** Exact durable revision acknowledged by fieldd; absent on legacy snapshots. */
-      revisionId: z.string().uuid().optional(),
-      /** Opaque incremental records following the checkpoint on GET. */
-      journalEntries: z.number().int().nonnegative().optional(),
+    byteLength: z.number().int(),
+    baseEpoch: z.number().int(),
+    /** Exact durable revision acknowledged by fieldd; absent on legacy snapshots. */
+    revisionId: z.string().uuid().optional(),
+    /** Opaque incremental records following the checkpoint on GET. */
+    journalEntries: z.number().int().nonnegative().optional(),
   })
   .passthrough();
 export type DocMeta = z.infer<typeof DocMeta>;

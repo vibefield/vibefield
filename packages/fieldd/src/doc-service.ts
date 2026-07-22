@@ -1,10 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -267,7 +262,11 @@ export class DocumentService {
     });
   }
 
-  private async writeDocNow(docId: string, bytes: Uint8Array, putMeta: LanePutMeta): Promise<DocMeta> {
+  private async writeDocNow(
+    docId: string,
+    bytes: Uint8Array,
+    putMeta: LanePutMeta,
+  ): Promise<DocMeta> {
     const entry = this.registry.get(docId);
     if (!entry) throw new RpcCallError("NOT_FOUND", `no such doc: ${docId}`, false);
     if (bytes.byteLength !== putMeta.byteLength)
@@ -523,7 +522,10 @@ export class DocumentService {
         console.error(`[doc-service] current revision unreadable for ${docId}: ${errMsg(err)}`);
       }
     }
-    if (changed) void this.persistRegistry().catch((err) => console.error(`[doc-service] reconcile persist failed: ${errMsg(err)}`));
+    if (changed)
+      void this.persistRegistry().catch((err) =>
+        console.error(`[doc-service] reconcile persist failed: ${errMsg(err)}`),
+      );
   }
 
   private storageError(op: string, err: unknown): RpcCallError {
@@ -678,7 +680,9 @@ function currentMeta(current: CurrentRevision): DocMeta {
 }
 
 function storedSize(current: CurrentRevision): number {
-  return current.byteLength + current.updates.reduce((total, update) => total + update.byteLength, 0);
+  return (
+    current.byteLength + current.updates.reduce((total, update) => total + update.byteLength, 0)
+  );
 }
 
 function errMsg(e: unknown): string {

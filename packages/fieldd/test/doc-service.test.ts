@@ -3,7 +3,15 @@
 // (garbage/replay/expiry rejection, PUT→GET round-trips, the single-writer lock,
 // truncated/non-ICE1 rejection), and THE restart test — the P0 exit criterion.
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -452,9 +460,9 @@ describe("lane write validation (leaves prior bytes untouched)", () => {
     // PUT_META claims one length; the PUT body is a different length → rejected
     w.probe.send(
       encodeJsonFrame(LANE_FRAME.PUT_META, 0, {
-          engineSchema: 1,
-          revisionId: randomUUID(),
-          savedAt: Date.now(),
+        engineSchema: 1,
+        revisionId: randomUUID(),
+        savedAt: Date.now(),
         byteLength: good.byteLength,
       }),
     );

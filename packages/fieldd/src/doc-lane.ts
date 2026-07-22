@@ -93,7 +93,12 @@ export class DocLane {
     });
   }
 
-  private async onMessage(ws: WebSocket, conn: LaneConn, data: RawData, isBinary: boolean): Promise<void> {
+  private async onMessage(
+    ws: WebSocket,
+    conn: LaneConn,
+    data: RawData,
+    isBinary: boolean,
+  ): Promise<void> {
     if (ws.readyState !== WS_OPEN) return;
     if (!isBinary) {
       // the lane is binary-only; a text frame is protocol garbage
@@ -116,7 +121,11 @@ export class DocLane {
       return;
     }
     if (frame.laneId !== 0) {
-      this.sendErr(ws, "PRECONDITION_FAILED", "laneId must be zero until multiplexing is negotiated");
+      this.sendErr(
+        ws,
+        "PRECONDITION_FAILED",
+        "laneId must be zero until multiplexing is negotiated",
+      );
       ws.close(1002, "unexpected lane id");
       return;
     }
