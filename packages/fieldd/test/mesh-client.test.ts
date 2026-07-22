@@ -3,6 +3,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PORTS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { MeshClient, type ServeState } from "../src/mesh-client";
 import { NativeLink } from "../src/native-link";
@@ -95,10 +96,13 @@ describe("MeshClient", () => {
 
   // ---- C3: runtime status stream fused into serves() ----
 
-  const productSpec = { name: "product", target: { kind: "port" as const, port: 9410 } };
+  const productSpec = {
+    name: "product",
+    target: { kind: "port" as const, port: PORTS.FIELDD_WS_CONTROL },
+  };
   const runtimeEntry = (over: Partial<Record<string, unknown>> = {}) => ({
     name: "product",
-    target: { kind: "port", port: 9410 },
+    target: { kind: "port", port: PORTS.FIELDD_WS_CONTROL },
     url: "https://dev.ts.net/product",
     status: "running",
     ...over,

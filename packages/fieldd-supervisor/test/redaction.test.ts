@@ -1,0 +1,114 @@
+import { join } from "node:path";
+import { CONTRACTS_VERSION } from "@vibefield/contracts";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createFielddSupervisor, createLineBuffer, createLogTail, redactLine } from "../src/index";
+import { createHarness, FIXTURE_READY, type Harness } from "./helpers";
+
+// §12.2 log redaction: the unit primitives (redactLine · createLineBuffer ·
+// createLogTail) and the end-to-end guarantee that a secret printed by a
+// spawned child never reaches an onLog sink in the clear (EL7).
+
+let h: Harness;
+beforeEach(() => {
+  h = createHarness();
+});
+afterEach(async () => {
+  await h.cleanup();
+});
+
+describe("redactLine", () => {
+  it("masks a /t/<pathSecret> capability URL", () => {
+    const out = redactLine("dialing GET /t/AbCdEf0123456789ghijklmn for the serve");
+    expect(out).toContain("/t/[redacted]");
+    expect(out).not.toContain("AbCdEf0123456789ghijklmn");
+  });
+
+  it("masks a token=<value> bearer shape", () => {
+    const out = redactLine("connecting with token=SUPERSECRETvalue0123456789 now");
+    expect(out).toBe("connecting with token=[redacted] now");
+    expect(out).not.toContain("SUPERSECRETvalue0123456789");
+  });
+
+  it("leaves short token-ish values and ordinary lines untouched", () => {
+    expect(redactLine("token=abc")).toBe("token=abc"); // below the 16-char floor
+    expect(redactLine("fieldd up :49410 (boot-abc)")).toBe("fieldd up :49410 (boot-abc)");
+  });
+});
+
+describe("createLineBuffer", () => {
+  it("splits lines across chunk boundaries", () => {
+    const lines: string[] = [];
+    const buf = createLineBuffer((l) => lines.push(l));
+    buf.push("hel");
+    buf.push("lo\nwor");
+    buf.push("ld\n");
+    expect(lines).toEqual(["hello", "world"]);
+  });
+
+  it("flush() emits an unterminated tail (child died mid-line)", () => {
+    const lines: string[] = [];
+    const buf = createLineBuffer((l) => lines.push(l));
+    buf.push("partial tail no newline");
+    expect(lines).toEqual([]); // nothing emitted until the newline or flush
+    buf.flush();
+    expect(lines).toEqual(["partial tail no newline"]);
+  });
+
+  it("redacts each emitted line and skips empty ones", () => {
+    const lines: string[] = [];
+    const buf = createLineBuffer((l) => lines.push(l));
+    buf.push("\n\n"); // pure blank lines never emit
+    buf.push("token=abcdefghijklmnop0123456\n");
+    expect(lines).toEqual(["token=[redacted]"]);
+  });
+});
+
+describe("createLogTail", () => {
+  it("keeps only the last N lines", () => {
+    const tail = createLogTail(3);
+    for (const n of ["1", "2", "3", "4", "5"]) tail.note(n);
+    expect(tail.lines()).toEqual(["3", "4", "5"]);
+  });
+
+  it("returns a copy, not the live buffer", () => {
+    const tail = createLogTail();
+    tail.note("a");
+    const snap = tail.lines();
+    tail.note("b");
+    expect(snap).toEqual(["a"]); // the earlier snapshot is unaffected
+  });
+});
+
+describe("redaction through a spawned child", () => {
+  it("a secret the child prints is [redacted] in onLog and never leaks raw", async () => {
+    const raw = "abcdefghijklmnopqrstuvwxyz123456";
+    const secretLine = `token=${raw}`;
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    const script = h.writeFixture(join(root, "fx"), "fieldd.mjs", FIXTURE_READY);
+    const logs: string[] = [];
+    const sup = h.track(
+      createFielddSupervisor({
+        dataRoot: root,
+        spawn: { command: process.execPath, args: [script] },
+        environment: {
+          CV: CONTRACTS_VERSION,
+          TEST_PRODUCT_PORT: String(port),
+          SHELL_TOKEN: token,
+          PRINT_SECRET: secretLine,
+        },
+        shutdownPolicy: "leave-running",
+        adoptProbeMs: 300,
+        readinessDeadlineMs: 3000,
+        onLog: (l) => logs.push(l),
+      }),
+    );
+
+    const handle = await sup.ensure();
+    h.trackPid(handle.childPid);
+
+    const joined = logs.join("\n");
+    expect(joined).not.toContain(raw); // the raw secret never reached the sink
+    expect(logs.some((l) => l.includes("token=[redacted]"))).toBe(true);
+  });
+});

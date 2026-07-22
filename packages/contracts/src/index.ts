@@ -11,3 +11,4 @@ export * from "./errors";
 export * from "./methods";
 export * from "./mgmt";
 export * from "./registries";
+export * from "./shell";

@@ -109,6 +109,9 @@ importers:
       '@vibefield/fieldd':
         specifier: workspace:*
         version: link:../../packages/fieldd
+      '@vibefield/fieldd-supervisor':
+        specifier: workspace:*
+        version: link:../../packages/fieldd-supervisor
       '@vitejs/plugin-react':
         specifier: ^6.0.3
         version: 6.0.3(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
@@ -205,6 +208,28 @@ importers:
       react:
         specifier: 'catalog:'
         version: 19.2.7
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)
+
+  packages/fieldd-supervisor:
+    dependencies:
+      '@vibefield/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@vibefield/fieldd-client':
+        specifier: workspace:*
+        version: link:../fieldd-client
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@vibefield/fieldd':
+        specifier: workspace:*
+        version: link:../fieldd
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

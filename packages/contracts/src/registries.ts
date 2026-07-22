@@ -104,3 +104,15 @@ export const SOCKETS = {
   MGMT: "mgmt.sock",
   MESHDATA: "meshdata.sock",
 } as const;
+
+/** The CLOSED Electron IPC surface (ESR spec §6.2): three channels, nothing
+ * else. Payload schemas live in shell.ts; call sites import these names — a raw
+ * `vibefield:` literal outside contracts is a boundary violation (wall R6). */
+export const IPC_CHANNELS = {
+  /** renderer → main invoke, once per webContents generation: WindowConnection */
+  windowBootstrap: "vibefield:shell:window-bootstrap",
+  /** main → renderer event, once per close attempt: CloseRequest */
+  prepareClose: "vibefield:shell:prepare-close",
+  /** renderer → main event, once per close attempt: CloseResult */
+  closeResult: "vibefield:shell:close-result",
+} as const;

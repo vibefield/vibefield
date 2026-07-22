@@ -12,6 +12,7 @@ import {
   METHODS,
   type NativeHealth,
   PORTS,
+  type ProductInfo,
   SCOPES,
   type Scope,
 } from "@vibefield/contracts";
@@ -368,7 +369,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           contractsVersion: CONTRACTS_VERSION,
           startedAt,
           nativePid: config.nativePid ?? null,
-        },
+        } satisfies ProductInfo, // the shell/supervisor adoption contract (shell.ts)
         null,
         2,
       ) + "\n",

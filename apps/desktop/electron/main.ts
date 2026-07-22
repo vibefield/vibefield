@@ -1,16 +1,26 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { FielddClient } from "@vibefield/fieldd-client";
+import {
+  type CloseRequest,
+  type CloseResult,
+  IPC_CHANNELS,
+  type WindowConnection,
+} from "@vibefield/contracts";
+import {
+  createFielddSupervisor,
+  type FielddHandle,
+  type FielddSupervisor,
+} from "@vibefield/fieldd-supervisor";
 import { app, BrowserWindow, dialog, ipcMain, screen, session } from "electron";
 
-// VibeField shell main (Track A walking skeleton, design-03 §2):
-// adopt-or-spawn fieldd (which ensures field-native), hello as shell-main with
-// the 0600 run/shell.token, mint per-window renderer tokens over IPC, open the
-// window. Main stays off every hot path (PF2) — it brokers the connection
-// descriptor once, then all product traffic is renderer ⇄ fieldd over the
-// loopback WS.
+// VibeField shell main (Track A walking skeleton → ESR slice 1, design-03 §2):
+// fieldd ownership lives in @vibefield/fieldd-supervisor (adopt-or-spawn,
+// readiness, structured failure, stop-owned policy); main composes it, mints
+// per-window renderer tokens over the closed IPC surface (contract channel
+// registry), and opens the window. Main stays off every hot path (PF2) — it
+// brokers the connection descriptor once, then all product traffic is
+// renderer ⇄ fieldd over the loopback WS.
 
 const DEV = process.argv.includes("--dev");
 const SMOKE = process.argv.includes("--smoke");
@@ -24,27 +34,9 @@ const repoRoot = resolve(appRoot, "..", "..");
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-interface ProductInfo {
-  port: number;
-  pid: number;
-  bootId: string;
-  nativePid: number | null;
-}
-
-interface Shell {
-  client: FielddClient;
-  info: ProductInfo;
-}
-
-let fielddChild: ChildProcess | null = null;
+let supervisor: FielddSupervisor | null = null;
 let mainWin: BrowserWindow | null = null;
 let closeRequestSequence = 0;
-
-interface RendererCloseResult {
-  requestId: string;
-  ok: boolean;
-  error?: string;
-}
 
 function dataRoot(): string {
   if (process.env["FIELDD_DATA_DIR"]) return process.env["FIELDD_DATA_DIR"];
@@ -77,71 +69,27 @@ function waitForConsole(win: BrowserWindow, prefix: string, timeoutMs: number): 
   });
 }
 
-/** A live fieldd answers on the port recorded in product.json with the token
- * from shell.token; anything else (stale files, foreign listener) fails the
- * bounded probe and we spawn our own. */
-async function tryAdopt(root: string, probeMs: number): Promise<Shell | null> {
-  const runDir = join(root, "fieldd", "run");
-  const productPath = join(runDir, "product.json");
-  const tokenPath = join(runDir, "shell.token");
-  if (!existsSync(productPath) || !existsSync(tokenPath)) return null;
-  let client: FielddClient | null = null;
-  try {
-    const info = JSON.parse(readFileSync(productPath, "utf8")) as ProductInfo;
-    const token = readFileSync(tokenPath, "utf8").trim();
-    client = new FielddClient({
-      url: `ws://127.0.0.1:${info.port}`,
-      token,
-      clientKind: "shell-main",
-    });
-    client.connect();
-    await Promise.race([
-      client.ready(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("adopt probe timeout")), probeMs)),
-    ]);
-    return { client, info };
-  } catch {
-    client?.close();
-    return null;
-  }
-}
-
-async function ensureFieldd(root: string): Promise<Shell> {
-  const adopted = await tryAdopt(root, 1500);
-  if (adopted) {
-    console.log(`[shell] adopted running fieldd :${adopted.info.port} (${adopted.info.bootId})`);
-    return adopted;
-  }
-
+/** The supervisor owns adopt/spawn/probe/readiness (ESR §5.3); this builder
+ * owns only what a supervisor must never know: Electron paths, the runner
+ * (our own binary in Node mode), and the mode-derived policy. Smoke isolates
+ * BOTH daemon ports (slice-0 finding 2: :9411 collisions with a live daemon)
+ * and dev/smoke stop what they spawned — never an adopted process. */
+function buildSupervisor(root: string): FielddSupervisor {
   const fielddBin =
     process.env["FIELDD_BIN"] ?? join(repoRoot, "packages", "fieldd", "dist", "bin.cjs");
   const nativeBin =
     process.env["FIELDD_NATIVE_BIN"] ?? join(repoRoot, "target", "debug", "field-native");
   if (!existsSync(fielddBin)) throw new Error(`fieldd bin missing (build it): ${fielddBin}`);
-
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ELECTRON_RUN_AS_NODE: "1", // run the fieldd bundle with our own binary
-    FIELDD_DATA_DIR: root,
-    ...(existsSync(nativeBin) ? { FIELDD_NATIVE_BIN: nativeBin } : {}),
-    ...(DEV ? { FIELDD_ALLOWED_ORIGINS: new URL(VITE_URL).origin } : {}),
-    ...(SMOKE ? { FIELDD_CONTROL_PORT: "0" } : {}),
-  };
-  fielddChild = spawn(process.execPath, [fielddBin], { env, stdio: ["ignore", "pipe", "pipe"] });
-  fielddChild.stdout?.on("data", (d) => console.log(`[fieldd] ${String(d).trim()}`));
-  fielddChild.stderr?.on("data", (d) => console.error(`[fieldd!] ${String(d).trim()}`));
-  console.log(`[shell] spawned fieldd pid=${fielddChild.pid}`);
-
-  const deadline = Date.now() + 20_000;
-  while (Date.now() < deadline) {
-    const shell = await tryAdopt(root, 600);
-    if (shell) {
-      console.log(`[shell] fieldd up :${shell.info.port} (${shell.info.bootId})`);
-      return shell;
-    }
-    await sleep(200);
-  }
-  throw new Error("fieldd did not come up within 20s");
+  return createFielddSupervisor({
+    dataRoot: root,
+    spawn: { command: process.execPath, args: [fielddBin] },
+    environment: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    ...(existsSync(nativeBin) ? { nativeExecutable: nativeBin } : {}),
+    ...(DEV ? { allowedOrigins: [new URL(VITE_URL).origin] } : {}),
+    ...(SMOKE || SMOKE_CANVAS ? { controlPort: 0, dataPort: 0 } : {}),
+    shutdownPolicy: DEV || SMOKE || SMOKE_CANVAS ? "stop-owned" : "leave-running",
+    onLog: (line) => console.log(`[fieldd] ${line}`),
+  });
 }
 
 function installCsp(): void {
@@ -177,12 +125,12 @@ function prepareRendererClose(win: BrowserWindow, timeoutMs = 15_000): Promise<v
   return new Promise((resolve, reject) => {
     const finish = (error?: Error) => {
       clearTimeout(timeout);
-      ipcMain.off("vibefield:close-ready", onReply);
+      ipcMain.off(IPC_CHANNELS.closeResult, onReply);
       win.webContents.off("destroyed", onDestroyed);
       if (error === undefined) resolve();
       else reject(error);
     };
-    const onReply = (event: Electron.IpcMainEvent, result: RendererCloseResult) => {
+    const onReply = (event: Electron.IpcMainEvent, result: CloseResult) => {
       if (event.sender !== win.webContents || result?.requestId !== requestId) return;
       if (result.ok) finish();
       else finish(new Error(result.error ?? "renderer could not persist the document"));
@@ -192,9 +140,12 @@ function prepareRendererClose(win: BrowserWindow, timeoutMs = 15_000): Promise<v
       () => finish(new Error(`document shutdown timed out after ${timeoutMs}ms`)),
       timeoutMs,
     );
-    ipcMain.on("vibefield:close-ready", onReply);
+    ipcMain.on(IPC_CHANNELS.closeResult, onReply);
     win.webContents.once("destroyed", onDestroyed);
-    win.webContents.send("vibefield:prepare-close", requestId);
+    win.webContents.send(IPC_CHANNELS.prepareClose, {
+      requestId,
+      reason: "window",
+    } satisfies CloseRequest);
   });
 }
 
@@ -238,7 +189,7 @@ function installDurableClose(win: BrowserWindow): void {
   });
 }
 
-async function createWindow(shell: Shell, show = true): Promise<BrowserWindow> {
+async function createWindow(handle: FielddHandle, show = true): Promise<BrowserWindow> {
   const win = new BrowserWindow({
     titleBarStyle: shouldFillPrimaryWorkArea ? "hiddenInset" : "default",
     // conditional spread: exactOptionalPropertyTypes forbids an explicit undefined
@@ -264,33 +215,31 @@ async function createWindow(shell: Shell, show = true): Promise<BrowserWindow> {
     if (mainWin === win) mainWin = null;
   });
   await loadRenderer(win);
-  void shell; // window count is the shell's only per-window state so far
+  void handle; // window count is the shell's only per-window state so far
   return win;
 }
 
-async function smoke(shell: Shell, root: string): Promise<void> {
-  const health = (await shell.client.request("system.health")) as {
+/** Teardown for smoke/dev exits: stop-owned via the supervisor (adopted
+ * daemons survive — ownership law), then remove the root ONLY if this run
+ * created it (an injected FIELDD_DATA_DIR is someone else's data). */
+async function smokeTeardown(sup: FielddSupervisor, root: string): Promise<void> {
+  await sup.dispose();
+  if (!process.env["FIELDD_DATA_DIR"]) rmSync(root, { recursive: true, force: true });
+}
+
+async function smoke(handle: FielddHandle, sup: FielddSupervisor, root: string): Promise<void> {
+  const health = (await handle.client.request("system.health")) as {
     nativeConnected: boolean;
     native: { units?: Array<{ unit: string }> } | null;
   };
   const summary = {
     ok: health.nativeConnected,
-    port: shell.info.port,
+    port: handle.info.port,
     nativeConnected: health.nativeConnected,
     units: health.native?.units?.map((u) => u.unit) ?? [],
   };
   console.log(`SMOKE ${JSON.stringify(summary)}`);
-  shell.client.close();
-  fielddChild?.kill("SIGTERM");
-  if (shell.info.nativePid) {
-    try {
-      process.kill(shell.info.nativePid, "SIGTERM");
-    } catch {
-      /* already gone */
-    }
-  }
-  await sleep(300);
-  rmSync(root, { recursive: true, force: true });
+  await smokeTeardown(sup, root);
   app.exit(summary.ok ? 0 : 2); // exit is queued; the caller returns without opening a window
 }
 
@@ -344,54 +293,48 @@ async function main(): Promise<void> {
   }
 
   const root = dataRoot();
-  const shell = await ensureFieldd(root);
+  supervisor = buildSupervisor(root);
+  const handle = await supervisor.ensure();
 
   if (SMOKE) {
-    await smoke(shell, root);
+    await smoke(handle, supervisor, root);
     return;
   }
 
-  ipcMain.handle("vibefield:connection", async (event) => {
-    const minted = (await shell.client.request("system.mintWindowToken", {
+  ipcMain.handle(IPC_CHANNELS.windowBootstrap, async (event) => {
+    const minted = (await handle.client.request("system.mintWindowToken", {
       // B3: the renderer owns the board doc — doc.* is scope-gated (EL7), and
       // the :9411 lane itself is entered through doc.open's one-shot ticket.
       // C4: workspace.read lets the Settings mesh section read the device roster.
       scopes: ["doc.read", "doc.write", "workspace.read"],
       label: `window-${event.sender.id}`,
     })) as { token: string };
-    return { port: shell.info.port, token: minted.token };
+    return { port: handle.info.port, token: minted.token } satisfies WindowConnection;
   });
 
-  shell.client.onStatusChange(() => {
-    console.log(`[shell] fieldd link: ${shell.client.status}`);
+  handle.client.onStatusChange(() => {
+    console.log(`[shell] fieldd link: ${handle.client.status}`);
   });
 
   if (SMOKE_CANVAS) {
-    // full spine + real renderer, hidden: pass iff the canvas reports in
-    const win = await createWindow(shell, false);
+    // full spine + real renderer, hidden: pass iff the canvas reports in.
+    // Teardown runs on EVERY path — the old failure path leaked the spawned
+    // daemons (slice-0 finding 3).
+    const win = await createWindow(handle, false);
+    let ok = false;
     try {
       const raw = await waitForConsole(win, "CANVAS_READY ", 45_000);
       console.log(`SMOKE_CANVAS ${raw}`);
-      shell.client.close();
-      fielddChild?.kill("SIGTERM");
-      if (shell.info.nativePid) {
-        try {
-          process.kill(shell.info.nativePid, "SIGTERM");
-        } catch {
-          /* already gone */
-        }
-      }
-      await sleep(300);
-      rmSync(root, { recursive: true, force: true });
-      app.exit(0);
+      ok = true;
     } catch (e) {
       console.error(`SMOKE_CANVAS failed: ${e instanceof Error ? e.message : e}`);
-      app.exit(2);
     }
+    await smokeTeardown(supervisor, root);
+    app.exit(ok ? 0 : 2);
     return;
   }
 
-  await createWindow(shell);
+  await createWindow(handle);
 }
 
 // D10 — one shell per device
@@ -406,11 +349,13 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on("window-all-closed", () => app.quit()); // skeleton: no tray yet
   app.on("will-quit", () => {
-    // dev/smoke own their fieldd; a real install leaves the daemon running
-    if ((DEV || SMOKE) && fielddChild) fielddChild.kill("SIGTERM");
+    // policy-encoded teardown: stop-owned (dev/smoke) stops only what THIS
+    // shell spawned; production leave-running just closes the client
+    void supervisor?.dispose();
   });
   main().catch((e: unknown) => {
     console.error("[shell] fatal:", e);
+    void supervisor?.dispose(); // boot failure must not leak a spawned daemon
     app.exit(1);
   });
 }
