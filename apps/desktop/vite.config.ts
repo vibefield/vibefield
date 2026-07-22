@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// Renderer build only — electron/main+preload are esbuild bundles (build:shell).
+// Renderer build only — main/preload live in @vibefield/electron-shell (build:shell).
 //
 // Loro wasm decision (B1 spike, mirrors ICE's widgetlab-desktop): alias bare
 // "loro-crdt" to its base64 variant — wasm inlined in JS, compiled
@@ -32,7 +32,11 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: join(import.meta.dirname, "renderer", "index.html"),
-        "spike-loro": join(import.meta.dirname, "renderer", "spike-loro.html"),
+        // test-only entry (ESR-12): built ONLY when the spike is requested —
+        // the production renderer output carries no spike code
+        ...(process.env["VITE_SPIKE"]
+          ? { "spike-loro": join(import.meta.dirname, "renderer", "spike-loro.html") }
+          : {}),
       },
     },
   },

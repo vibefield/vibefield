@@ -62,6 +62,23 @@ try {
   );
 }
 
+// --- import-boundary walls (spec §8.3; slice 2 turns this into a hard gate) ---
+// Enforce mode exits 1 on enforce-true violations (pending rules like R4 are
+// reported, not gated). Quiet on success; on failure the checker's report
+// (owning rule + file path) is surfaced alongside the problem.
+try {
+  execSync("node scripts/check-import-boundaries.mjs --enforce", {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+} catch (err) {
+  const detail = `${err.stdout ?? ""}${err.stderr ?? ""}`.trim();
+  if (detail) console.error(detail);
+  problems.push(
+    "import-boundary walls failed (node scripts/check-import-boundaries.mjs --enforce)",
+  );
+}
+
 // --- report ------------------------------------------------------------------
 for (const w of warnings) console.warn(`preflight WARN: ${w}`);
 for (const p of problems) console.error(`preflight FAIL: ${p}`);

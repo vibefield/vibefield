@@ -9,7 +9,7 @@ import {
 } from "../src/doclane";
 import { LaneHelloOk } from "../src/docs";
 
-describe(":9411 lane frame codec", () => {
+describe("the doc-lane frame codec (data WS)", () => {
   it("round-trips a binary payload", () => {
     const payload = new Uint8Array([0x49, 0x43, 0x45, 0x31, 0, 1, 2, 250]);
     const frame = decodeLaneFrame(encodeLaneFrame(LANE_FRAME.PUT, 0, payload));

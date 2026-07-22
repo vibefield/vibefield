@@ -1,0 +1,69 @@
+import { describe, expect, it } from "vitest";
+import { isSmokeLike, parseMode, type ShellMode, shutdownPolicy } from "../src/main/modes";
+
+// Mode selection is parsed ONCE (ESR §5.2.6). These lock the precedence, the
+// smoke-like classification, and the daemon-lifetime policy so no downstream
+// module re-derives them from argv.
+
+const ALL_MODES: readonly ShellMode[] = [
+  "production",
+  "dev",
+  "smoke",
+  "smoke-canvas",
+  "spike-loro",
+];
+
+describe("parseMode", () => {
+  it("defaults to production when no recognized flag is present", () => {
+    expect(parseMode([])).toBe("production");
+    expect(parseMode(["node", "main.js"])).toBe("production");
+    expect(parseMode(["--unknown", "--also-unknown"])).toBe("production");
+  });
+
+  it("selects each mode from its own flag", () => {
+    expect(parseMode(["--dev"])).toBe("dev");
+    expect(parseMode(["--smoke"])).toBe("smoke");
+    expect(parseMode(["--smoke-canvas"])).toBe("smoke-canvas");
+    expect(parseMode(["--spike-loro"])).toBe("spike-loro");
+  });
+
+  it("finds the flag anywhere in argv, not only at a fixed position", () => {
+    expect(parseMode(["/usr/bin/node", "/app/main.js", "--dev"])).toBe("dev");
+    expect(parseMode(["--foo", "--smoke", "--bar"])).toBe("smoke");
+    expect(parseMode(["a", "b", "c", "--spike-loro"])).toBe("spike-loro");
+  });
+
+  it("honors precedence spike-loro > smoke > smoke-canvas > dev", () => {
+    expect(parseMode(["--dev", "--smoke-canvas", "--smoke", "--spike-loro"])).toBe("spike-loro");
+    expect(parseMode(["--dev", "--smoke-canvas", "--smoke"])).toBe("smoke");
+    expect(parseMode(["--dev", "--smoke-canvas"])).toBe("smoke-canvas");
+    expect(parseMode(["--dev", "--smoke"])).toBe("smoke");
+    expect(parseMode(["--smoke-canvas", "--spike-loro"])).toBe("spike-loro");
+    expect(parseMode(["--dev", "--spike-loro"])).toBe("spike-loro");
+  });
+});
+
+describe("isSmokeLike", () => {
+  // Exactly the three transient, port-isolated, never-packaged runs.
+  const smokeLike = new Set<ShellMode>(["smoke", "smoke-canvas", "spike-loro"]);
+
+  it.each(ALL_MODES)("classifies %s", (mode) => {
+    expect(isSmokeLike(mode)).toBe(smokeLike.has(mode));
+  });
+});
+
+describe("shutdownPolicy", () => {
+  // The subtle line: spike-loro joins PRODUCTION in leave-running — it is not a
+  // stop-owned smoke run despite passing isSmokeLike.
+  const expected: Record<ShellMode, "stop-owned" | "leave-running"> = {
+    production: "leave-running",
+    dev: "stop-owned",
+    smoke: "stop-owned",
+    "smoke-canvas": "stop-owned",
+    "spike-loro": "leave-running",
+  };
+
+  it.each(ALL_MODES)("%s", (mode) => {
+    expect(shutdownPolicy(mode)).toBe(expected[mode]);
+  });
+});

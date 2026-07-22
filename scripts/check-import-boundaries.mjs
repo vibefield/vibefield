@@ -5,8 +5,10 @@
 //
 // Report-only by default (ALWAYS exit 0) so it runs across every migration slice
 // while the pre-refactor layout still legitimately trips rules. `--enforce` flips
-// it to a hard gate that exits 1 on any violation (slice 2 wires that into
-// preflight). `--self-test` proves each rule on synthetic fixtures.
+// it to a hard gate that exits 1 on ENFORCE-TRUE violations only; rules still
+// marked `enforce: false` (pending a later slice) are reported but never gated
+// (slice 2 wires the gate into preflight). `--self-test` proves each rule on
+// synthetic fixtures.
 //
 // Node >=22 ESM, builtins only — no new dependencies (spec: textual first version
 // is allowed; upgrade to real TS/ESM parsing only if textual checks get ambiguous).
@@ -96,12 +98,14 @@ function importsTestingOrSpike(spec) {
 const RULES = [
   {
     id: "R1",
+    enforce: true,
     description: "no electron/node:* import under packages/field-app/src",
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/field-app/src"),
     importTest: (s) => importsModule(s, "electron") || s.startsWith("node:"),
   },
   {
     id: "R2",
+    enforce: true,
     description:
       "no React/ICE/Three/Loro/plugin/field-app import under electron-shell src/main or src/preload",
     applies: (p) =>
@@ -126,12 +130,15 @@ const RULES = [
   },
   {
     id: "R3",
+    enforce: true,
     description: "no electron import under packages/fieldd-supervisor/src",
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd-supervisor/src"),
     importTest: (s) => importsModule(s, "electron"),
   },
   {
     id: "R4",
+    // pending slice 3 — the renderer still lives under apps/desktop
+    enforce: false,
     description: "no .ts/.tsx application source under apps/desktop (except *.config.ts and test/)",
     applies: (p) =>
       TS_ONLY.test(p) && under(p, "apps/desktop") && !isConfigFile(p) && !isTestPath(p),
@@ -139,6 +146,7 @@ const RULES = [
   },
   {
     id: "R5",
+    enforce: true,
     description:
       "no deep import across the three new packages (only /main, /preload, /host entries)",
     applies: (p) => SOURCE_EXT.test(p),
@@ -146,18 +154,31 @@ const RULES = [
   },
   {
     id: "R6",
+    enforce: true,
     description: "no raw vibefield: IPC channel string literal outside packages/contracts",
     applies: (p) => TS_ONLY.test(p) && !under(p, "packages/contracts"),
     linePattern: /["'`]vibefield:[^"'`]*/g,
   },
   {
     id: "R7",
+    enforce: true,
+    // Strip comment tails before matching (see stripCommentTails): a port named
+    // in prose like ":9411 lane" is documentation, not a call site. Ports inside
+    // string literals still match — those are real hardcoded endpoints.
+    stripComments: true,
     description: "no hardcoded fieldd port 9410/9411 outside packages/contracts/src/registries.ts",
     applies: (p) => TS_ONLY.test(p) && p !== "packages/contracts/src/registries.ts",
     linePattern: /\b(?:9410|9411)\b/g,
   },
   {
     id: "R8",
+    enforce: true,
+    // Static-only (approved slice 2): the rule is about STATIC imports (spec §8.3
+    // / ESR-12 §5.2.6). Dynamic `import()`/`require()` is the sanctioned escape
+    // hatch for reaching the separate test-only build artifact (dist/testing/*,
+    // which the production bundle never contains), so it is exempt FOR R8 ONLY —
+    // R1/R5/R9 still catch dynamic imports.
+    staticOnly: true,
     description:
       "no production static import of testing/spike- modules under apps/desktop, electron-shell, field-app",
     applies: (p) =>
@@ -168,6 +189,7 @@ const RULES = [
   },
   {
     id: "R9",
+    enforce: true,
     description:
       "no ws import under packages/field-app/src or apps/desktop/renderer/src (fieldd-client stays isomorphic)",
     applies: (p) =>
@@ -176,6 +198,10 @@ const RULES = [
     importTest: (s) => s === "ws",
   },
 ];
+
+// Enforce map (spec §8.3 slice 2): --enforce gates ONLY on enforce-true rules.
+// Pending rules (enforce:false) are still reported, marked "(pending)".
+const ENFORCE_BY_ID = new Map(RULES.map((r) => [r.id, r.enforce]));
 
 // --- source walking & import extraction --------------------------------------
 
@@ -200,19 +226,20 @@ function collectFiles(root) {
   return out;
 }
 
-// Textual import extraction (spec allows a textual first version). Catches
-// `import/export ... from "x"`, side-effect `import "x"`, dynamic `import("x")`,
-// and `require("x")`. Line-based; returns the unique specifiers on a line.
-const IMPORT_PATTERNS = [
-  /\bfrom\s*["'`]([^"'`]+)["'`]/g,
-  /\bimport\s+["'`]([^"'`]+)["'`]/g,
+// Textual import extraction (spec allows a textual first version). Line-based;
+// returns the unique specifiers on a line. Patterns are split by kind because R8
+// is static-only: STATIC forms are `import/export ... from "x"` and the bare
+// side-effect `import "x"`; DYNAMIC forms are `import("x")` and `require("x")`.
+const STATIC_IMPORT_PATTERNS = [/\bfrom\s*["'`]([^"'`]+)["'`]/g, /\bimport\s+["'`]([^"'`]+)["'`]/g];
+const DYNAMIC_IMPORT_PATTERNS = [
   /\bimport\s*\(\s*["'`]([^"'`]+)["'`]/g,
   /\brequire\s*\(\s*["'`]([^"'`]+)["'`]/g,
 ];
+const IMPORT_PATTERNS = [...STATIC_IMPORT_PATTERNS, ...DYNAMIC_IMPORT_PATTERNS];
 
-function extractImports(line) {
+function matchSpecs(line, patterns) {
   const specs = new Set();
-  for (const re of IMPORT_PATTERNS) {
+  for (const re of patterns) {
     re.lastIndex = 0;
     for (;;) {
       const m = re.exec(line);
@@ -222,6 +249,53 @@ function extractImports(line) {
     }
   }
   return specs;
+}
+
+// All imports (static + dynamic) — the default for import-graph rules (R1/R5/R9
+// must catch dynamic imports too).
+function extractImports(line) {
+  return matchSpecs(line, IMPORT_PATTERNS);
+}
+
+// Static imports only — for `staticOnly` rules (R8): a dynamic import()/require()
+// is the sanctioned test-only escape hatch and MUST NOT trip R8.
+function extractStaticImports(line) {
+  return matchSpecs(line, STATIC_IMPORT_PATTERNS);
+}
+
+// R7-only comment stripping. R7 targets *hardcoded* ports; a port named in prose
+// like ":9411 lane" is documentation, not a call site. Per-line approximation,
+// deliberately not a tokenizer (spec §8.3: upgrade to real parsing only if this
+// gets ambiguous):
+//   - a line whose first non-space char is `*` is a block-comment body line and
+//     is dropped whole;
+//   - otherwise scan left-to-right tracking ' " ` string state (with backslash
+//     escapes) and truncate at the first `//` or `/*` seen OUTSIDE a string.
+// Ports inside STRING LITERALS survive (e.g. "ws://127.0.0.1:9410", whose `//`
+// is inside the quotes) — those are real endpoints and MUST still trip R7.
+// Multi-line string/template and block-comment state is not carried across lines.
+function stripCommentTails(line) {
+  if (line.trimStart().startsWith("*")) return "";
+  let quote = null;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quote !== null) {
+      if (ch === "\\") {
+        i += 1;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "/" && (line[i + 1] === "/" || line[i + 1] === "*")) {
+      return line.slice(0, i);
+    }
+  }
+  return line;
 }
 
 // --- the check ---------------------------------------------------------------
@@ -247,10 +321,21 @@ function runCheck(root) {
       const lineNo = i + 1;
 
       if (importRules.length > 0) {
-        const specs = extractImports(line);
-        if (specs.size > 0) {
-          for (const spec of specs) {
-            for (const r of importRules) {
+        const allSpecs = extractImports(line);
+        if (allSpecs.size > 0) {
+          // staticOnly rules (R8) see only static specifiers; computed lazily and
+          // reused. staticSpecs ⊆ allSpecs, so an all-dynamic line yields an empty
+          // set and the staticOnly rule simply does not fire.
+          let staticSpecs = null;
+          for (const r of importRules) {
+            let ruleSpecs;
+            if (r.staticOnly) {
+              if (staticSpecs === null) staticSpecs = extractStaticImports(line);
+              ruleSpecs = staticSpecs;
+            } else {
+              ruleSpecs = allSpecs;
+            }
+            for (const spec of ruleSpecs) {
               if (r.importTest(spec)) {
                 violations.push({ id: r.id, file: rel, line: lineNo, offender: spec });
               }
@@ -260,9 +345,10 @@ function runCheck(root) {
       }
 
       for (const r of lineRules) {
+        const target = r.stripComments ? stripCommentTails(line) : line;
         r.linePattern.lastIndex = 0;
         for (;;) {
-          const m = r.linePattern.exec(line);
+          const m = r.linePattern.exec(target);
           if (m === null) break;
           violations.push({ id: r.id, file: rel, line: lineNo, offender: m[0] });
           if (m.index === r.linePattern.lastIndex) r.linePattern.lastIndex += 1;
@@ -275,6 +361,7 @@ function runCheck(root) {
 
 // --- reporting ---------------------------------------------------------------
 
+// Returns the enforce-true violation count — the number that gates --enforce.
 function report(violations, { enforce }) {
   const sorted = [...violations].sort((a, b) => {
     if (a.file !== b.file) return a.file.localeCompare(b.file);
@@ -286,31 +373,47 @@ function report(violations, { enforce }) {
 
   for (const v of sorted) {
     const loc = v.line === null ? v.file : `${v.file}:${v.line}`;
-    console.log(`  ${v.id.padEnd(3)} ${loc}  ${v.offender}`);
+    const tag = ENFORCE_BY_ID.get(v.id) ? "" : "  (pending)";
+    console.log(`  ${v.id.padEnd(3)} ${loc}  ${v.offender}${tag}`);
   }
 
   const counts = new Map();
   for (const v of violations) counts.set(v.id, (counts.get(v.id) ?? 0) + 1);
   const files = new Set(violations.map((v) => v.file)).size;
+  const enforced = violations.filter((v) => ENFORCE_BY_ID.get(v.id)).length;
+  const pending = violations.length - enforced;
 
   console.log("");
   console.log("Import-boundary summary (spec §8.3):");
   for (const r of RULES) {
-    console.log(`  ${r.id}: ${String(counts.get(r.id) ?? 0).padStart(3)}  ${r.description}`);
+    const n = String(counts.get(r.id) ?? 0).padStart(3);
+    console.log(`  ${r.id}: ${n}  [${r.enforce ? "enforce" : "pending"}] ${r.description}`);
   }
-  console.log(`  total: ${violations.length} violation(s) across ${files} file(s)`);
+  console.log(
+    `  total: ${violations.length} across ${files} file(s) — ${enforced} enforced, ${pending} pending`,
+  );
 
   if (violations.length === 0) {
     console.log("\ncheck-import-boundaries: clean");
   } else if (enforce) {
-    console.error(
-      `\ncheck-import-boundaries: FAIL — ${violations.length} violation(s) [--enforce]`,
-    );
+    const pendingNote = pending > 0 ? ` (+${pending} pending, not gated)` : "";
+    if (enforced > 0) {
+      console.error(
+        `\ncheck-import-boundaries: FAIL — ${enforced} enforced violation(s)${pendingNote} [--enforce]`,
+      );
+    } else {
+      console.log(
+        `\ncheck-import-boundaries: pass — 0 enforced violation(s)${pendingNote} [--enforce]`,
+      );
+    }
   } else {
     console.log(
-      `\ncheck-import-boundaries: ${violations.length} violation(s) (report-only; exit 0)`,
+      `\ncheck-import-boundaries: ${violations.length} violation(s) (report-only; exit 0)` +
+        ` — ${enforced} enforced, ${pending} pending`,
     );
   }
+
+  return enforced;
 }
 
 // --- self-test ---------------------------------------------------------------
@@ -322,6 +425,13 @@ function runSelfTest() {
       id: "R1",
       file: "packages/field-app/src/uses-node.ts",
       body: 'import fs from "node:fs";\nimport { app } from "electron";\n',
+    },
+    // R8 staticOnly is R8-SCOPED, not global: a DYNAMIC import("electron") under
+    // field-app still trips R1 (R1/R5/R9 keep full static+dynamic coverage).
+    {
+      id: "R1",
+      file: "packages/field-app/src/dynamic-electron.ts",
+      body: 'const e = () => import("electron");\n',
     },
     {
       id: "R2",
@@ -350,6 +460,14 @@ function runSelfTest() {
       body: 'const u = "ws://127.0.0.1:9410";\n',
     },
     { id: "R7", file: "packages/fieldd/test/port-in-test.test.ts", body: "const p = 9411;\n" },
+    // R7 real code on a line that ALSO carries a comment port: the real 9410 must
+    // fire while the commented 9411 is stripped (proves stripCommentTails is surgical).
+    {
+      id: "R7",
+      file: "packages/fieldd/src/port-real-plus-comment.ts",
+      body: "const p = 9410; // not the 9411 lane\n",
+    },
+    // R8 (staticOnly) still fires on a STATIC import of a testing/ module.
     {
       id: "R8",
       file: "packages/field-app/src/imports-testing.ts",
@@ -381,6 +499,28 @@ function runSelfTest() {
       file: "apps/desktop/test/uses-testing.test.ts",
       body: 'import { M } from "../testing/mock";\nexport const t = true;\n',
     },
+    // R8 staticOnly: a DYNAMIC import of a testing/ module under an R8 root (the
+    // shell composition root's sanctioned smoke-bundle reach) must NOT fire R8.
+    {
+      file: "packages/electron-shell/src/main/dynamic-testing.ts",
+      body: 'const t = () => import("../testing/smoke.cjs");\n',
+    },
+    // R7 comment stripping: a port named ONLY in a comment must not fire.
+    // `//` line comment (with a `:9411` prose mention alongside a bare 9410).
+    {
+      file: "packages/fieldd/src/port-in-line-comment.ts",
+      body: "// the :9411 lane; port 9410 is registry-pinned\nexport const a = 1;\n",
+    },
+    // single-line `/** ... */` JSDoc (the shape of daemon.ts's data-lane doc).
+    {
+      file: "packages/fieldd/src/port-in-jsdoc.ts",
+      body: "/** bound to the :9411 lane */\nexport const b = 2;\n",
+    },
+    // multi-line block comment: `/*` opener + `*`-continuation body lines.
+    {
+      file: "packages/fieldd/src/port-in-block-comment.ts",
+      body: "/*\n * the 9411 data lane and 9410 control port are pinned in registries.ts\n */\nexport const c = 3;\n",
+    },
   ];
 
   const tmp = mkdtempSync(join(tmpdir(), "vf-import-walls-"));
@@ -392,8 +532,9 @@ function runSelfTest() {
       writeFileSync(abs, c.body);
     }
 
+    const found = runCheck(tmp);
     const byFile = new Map();
-    for (const v of runCheck(tmp)) {
+    for (const v of found) {
       if (!byFile.has(v.file)) byFile.set(v.file, new Set());
       byFile.get(v.file).add(v.id);
     }
@@ -410,6 +551,18 @@ function runSelfTest() {
       console.log(`  ${clean ? "PASS" : "FAIL"}  clean ${c.file}${extra}`);
       if (!clean) ok = false;
     }
+
+    // Enforce semantics (slice 2): only R4 is pending; a pending-rule violation
+    // is reported but must NOT count toward the --enforce gate.
+    const tableOk = RULES.every((r) => (r.id === "R4" ? r.enforce === false : r.enforce === true));
+    console.log(`  ${tableOk ? "PASS" : "FAIL"}  enforce table: only R4 pending`);
+    if (!tableOk) ok = false;
+
+    const r4Reported = found.some((v) => v.id === "R4");
+    const r4Gated = found.some((v) => v.id === "R4" && ENFORCE_BY_ID.get(v.id));
+    const pendingOk = r4Reported && !r4Gated;
+    console.log(`  ${pendingOk ? "PASS" : "FAIL"}  R4 reported but not gated by --enforce`);
+    if (!pendingOk) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -426,7 +579,8 @@ if (args.has("--help")) {
   console.log(
     "usage: node scripts/check-import-boundaries.mjs [--enforce] [--self-test]\n" +
       "  (default)    report every import-wall violation, always exit 0\n" +
-      "  --enforce    exit 1 if any violation (the gate slice 2 wires into preflight)\n" +
+      "  --enforce    exit 1 on enforce-true violations only; pending rules are\n" +
+      "               reported but not gated (the gate slice 2 wires into preflight)\n" +
       "  --self-test  run rule fixtures in a temp dir; exit 1 on any self-test failure",
   );
   process.exit(0);
@@ -438,5 +592,5 @@ if (args.has("--self-test")) {
 
 const enforce = args.has("--enforce");
 const violations = runCheck(resolve(import.meta.dirname, ".."));
-report(violations, { enforce });
-process.exit(enforce && violations.length > 0 ? 1 : 0);
+const enforced = report(violations, { enforce });
+process.exit(enforce && enforced > 0 ? 1 : 0);

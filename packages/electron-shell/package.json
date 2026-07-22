@@ -1,0 +1,26 @@
+{
+  "name": "@vibefield/electron-shell",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./main": "./dist/main/index.cjs",
+    "./preload": "./dist/preload/index.cjs"
+  },
+  "scripts": {
+    "build": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --external:electron '--external:../testing/smoke.cjs' --outfile=dist/main/index.cjs && esbuild src/preload/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload/index.cjs && esbuild src/testing/smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/testing/smoke.cjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibefield/contracts": "workspace:*",
+    "@vibefield/fieldd-supervisor": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "electron": "^43.1.1",
+    "esbuild": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
