@@ -279,12 +279,31 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
 
   const [showSettings, setShowSettings] = useState(false);
   const [showEcs, setShowEcs] = useState(false);
+  const [hudReturning, setHudReturning] = useState(false);
+  const hudWasLoading = useRef(docState.phase === "loading");
   const [gridConfig, setGridConfig] = useState<GridConfig>({ ...DEFAULT_GRID_CONFIG });
   const [themeColors, setThemeColors] = useState<ThemeColors>(DEFAULT_THEME_COLORS);
   const [overlapGlow, setOverlapGlow] = useState<OverlapGlowConfig>(DEFAULT_OVERLAP_GLOW);
   const [overlapGlowThemeColors, setOverlapGlowThemeColors] = useState<OverlapGlowThemeColors>(
     DEFAULT_OVERLAP_GLOW_THEME_COLORS,
   );
+
+  useLayoutEffect(() => {
+    if (docState.phase === "loading") {
+      hudWasLoading.current = true;
+      setHudReturning(false);
+      return;
+    }
+
+    if (!hudWasLoading.current) return;
+
+    hudWasLoading.current = false;
+    setHudReturning(true);
+    const timeout = window.setTimeout(() => setHudReturning(false), 760);
+    return () => window.clearTimeout(timeout);
+  }, [docState.phase]);
+
+  const hudMotion = docState.phase === "loading" ? "out" : hudReturning ? "in" : "idle";
 
   useEffect(() => {
     // after mount commit — the smoke's pass condition covers InfiniteCanvas itself
@@ -486,6 +505,29 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
     };
   }, [showEcs, ce]);
 
+  useLayoutEffect(() => {
+    const dock = document.querySelector<HTMLElement>(".ice-dock");
+    if (!dock) return;
+
+    dock.classList.add("hud-flight");
+    if (hudMotion === "idle") {
+      delete dock.dataset.docTransition;
+      return;
+    }
+
+    if (hudMotion === "out") {
+      const rect = dock.getBoundingClientRect();
+      const dx = rect.left + rect.width / 2 - window.innerWidth / 2;
+      const dy = rect.top + rect.height / 2 - window.innerHeight / 2;
+      const length = Math.hypot(dx, dy) || 1;
+      const distance = Math.hypot(window.innerWidth, window.innerHeight) + Math.hypot(rect.width, rect.height);
+      dock.style.setProperty("--hud-flight-x", `${(dx / length) * distance}px`);
+      dock.style.setProperty("--hud-flight-y", `${(dy / length) * distance}px`);
+    }
+
+    dock.dataset.docTransition = hudMotion;
+  }, [hudMotion, showEcs]);
+
   // GL frame profiling → profiler HUD lanes ("gl cpu" = the whole compositor
   // pass on the main thread; "gpu" = summed render-call GPU time, 0 where
   // timer queries are unsupported). Only wired while the ECS panel is open —
@@ -499,7 +541,11 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   }, []);
 
   return (
-    <div className="field-wrap" style={{ background: "var(--vf-canvas-bg)" }}>
+    <div
+      className="field-wrap"
+      data-doc-transition={hudMotion}
+      style={{ background: "var(--vf-canvas-bg)" }}
+    >
       {/* The recede (reference design): the canvas eases to 0.98 while the
           sheet is up. Only the wrapper transforms — the tray handoff
           ratio-corrects, so the transient scale never skews engine picks.
@@ -562,7 +608,8 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
       <button
         type="button"
         onClick={toggleTheme}
-        className="no-drag absolute top-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-500 shadow-lg transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+        data-hud-flight="top-right"
+        className="hud-flight no-drag absolute top-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-500 shadow-lg transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
         title={dark ? "Switch to light mode" : "Switch to dark mode"}
       >
         {dark ? (
@@ -598,7 +645,8 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
       <button
         type="button"
         onClick={() => setShowSettings((s) => !s)}
-        className={`${fabCls(showSettings)} bottom-4 left-4`}
+        data-hud-flight="bottom-left"
+        className={`hud-flight ${fabCls(showSettings)} bottom-4 left-4`}
         title="Settings"
       >
         <svg
@@ -618,7 +666,8 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
       <button
         type="button"
         onClick={() => setShowEcs((s) => !s)}
-        className={`${fabCls(showEcs)} bottom-4 right-4`}
+        data-hud-flight="bottom-right"
+        className={`hud-flight ${fabCls(showEcs)} bottom-4 right-4`}
         title="ICE Devtools"
       >
         <svg

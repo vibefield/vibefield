@@ -661,7 +661,8 @@ export function WidgetTray({
         ref={panelRef}
         data-tray-panel=""
         data-tray-open={open ? "true" : "false"}
-        className={`absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden border transition-all ${
+        data-hud-flight="bottom-center"
+        className={`hud-flight absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden border transition-all ${
           open
             ? "bottom-0 h-[60vh] w-[min(80%,64rem)] rounded-t-[2.5rem] rounded-b-none border-b-0 border-black/5 bg-white/90 shadow-[0_-20px_40px_rgba(0,0,0,0.08)] backdrop-blur-3xl dark:border-white/10 dark:bg-[#1C1C1E]/90 dark:shadow-[0_-20px_40px_rgba(0,0,0,0.4)]"
             : "bottom-8 h-16 w-[440px] rounded-[32px] border-black/5 bg-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl hover:bg-white/90 dark:border-white/10 dark:bg-[#1C1C1E]/80 dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] dark:hover:bg-[#1C1C1E]/90"

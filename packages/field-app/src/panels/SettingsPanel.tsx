@@ -167,7 +167,10 @@ export function SettingsPanel({
   const stressDisabled = stressWidgetType === undefined;
 
   return (
-    <div className="absolute bottom-14 left-4 z-50 w-72 max-h-[80vh] overflow-y-auto rounded-lg border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-sm font-mono text-[11px] dark:border-neutral-700 dark:bg-neutral-900/95 dark:text-neutral-300">
+    <div
+      data-hud-flight="bottom-left"
+      className="hud-flight absolute bottom-14 left-4 z-50 w-72 max-h-[80vh] overflow-y-auto rounded-lg border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-sm font-mono text-[11px] dark:border-neutral-700 dark:bg-neutral-900/95 dark:text-neutral-300"
+    >
       <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-2 dark:border-neutral-700">
         <span className="font-semibold text-neutral-700 dark:text-neutral-200">Settings</span>
         <button

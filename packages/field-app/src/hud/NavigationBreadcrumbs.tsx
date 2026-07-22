@@ -142,7 +142,10 @@ export function NavigationBreadcrumbs({ engine }: NavigationBreadcrumbsProps) {
 
   return (
     // left-24 clears the macOS traffic lights (hidden-inset titlebar); no-drag: inside the drag strip
-    <div className="no-drag absolute top-[9px] left-24 z-50 flex items-center gap-2">
+    <div
+      data-hud-flight="top-left"
+      className="hud-flight no-drag absolute top-[9px] left-24 z-50 flex items-center gap-2"
+    >
       {/* Back button */}
       <button
         type="button"

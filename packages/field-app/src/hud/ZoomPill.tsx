@@ -18,7 +18,10 @@ export function ZoomPill({ ce }: { ce: CanvasEngine }) {
   }, [ce]);
   const zoomBy = (f: number) => ce.ops.zoomTo((ce.world.getResource(Camera)?.zoom ?? 1) * f);
   return (
-    <div className="no-drag absolute top-4 right-16 z-50 flex h-10 items-center overflow-hidden rounded-full bg-white shadow-lg dark:bg-neutral-800">
+    <div
+      data-hud-flight="top-right"
+      className="hud-flight no-drag absolute top-4 right-16 z-50 flex h-10 items-center overflow-hidden rounded-full bg-white shadow-lg dark:bg-neutral-800"
+    >
       <button
         type="button"
         onClick={() => zoomBy(0.8)}
