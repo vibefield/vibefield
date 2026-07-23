@@ -43,8 +43,10 @@ import {
 import { useStageHold, WidgetPreview } from "@vibecook/ice/react";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import { CARD_BG, CARD_RADIUS } from "@vibefield/shell-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { sharedChromeTicker } from "../chrome-ticker";
 import { buildCatalog, CATEGORIES, type CatalogEntry } from "./tray-catalog";
+import { useChromeValue } from "./use-chrome-value";
 
 const ghostQ = defineQuery([InsertGhost]);
 
@@ -469,11 +471,11 @@ const TOOLS = [
 const SEG_W = 72;
 
 function ToolSwitcher({ ce }: { ce: CanvasEngine }) {
-  const [active, setActive] = useState("select");
-  useEffect(() => {
-    const id = setInterval(() => setActive(ce.world.getResource(ActiveTool)?.id ?? "select"), 120);
-    return () => clearInterval(id);
-  }, [ce]);
+  // 120ms cadence on the shared chrome ticker (3b — no private interval).
+  const active = useChromeValue(
+    useCallback(() => ce.world.getResource(ActiveTool)?.id ?? "select", [ce]),
+    120,
+  );
   const idx = Math.max(
     0,
     TOOLS.findIndex((t) => t.id === active),
@@ -553,14 +555,16 @@ export function WidgetTray({
     if (open) ce.ops.cancelActiveGestures();
   }, [open, ce]);
 
-  // Ghost poll (chrome-grade 60ms): drives the toolbar's put-back affordance
-  // AND the fly-back shrink (2026-07-19, James: "also shrink its size, do a
-  // scale down to 0 transition along with the fly") — a retiring ghost's
-  // host scales to nothing while the engine tween carries it home; the reap
-  // despawns it at arrival, so the fill-forwards end state never lingers.
+  // Ghost scan (chrome-grade 60ms, on the shared ticker since 3b): drives the
+  // toolbar's put-back affordance AND the fly-back shrink (2026-07-19, James:
+  // "also shrink its size, do a scale down to 0 transition along with the
+  // fly") — a retiring ghost's host scales to nothing while the engine tween
+  // carries it home; the reap despawns it at arrival, so the fill-forwards
+  // end state never lingers. (A ghost only exists mid-gesture, so a hidden
+  // window has none to scan — pausing with the ticker is safe.)
   useEffect(() => {
     const shrunk = new Set<Entity>();
-    const id = setInterval(() => {
+    return sharedChromeTicker().subscribe(60, () => {
       let live = false;
       ce.world.query(ghostQ).each((b) => {
         for (const r of b) {
@@ -580,8 +584,7 @@ export function WidgetTray({
         }
       });
       setGhostLive(live);
-    }, 60);
-    return () => clearInterval(id);
+    });
   }, [ce]);
 
   // Release over the toolbar mid-insert = cancel (the put-back). Event-time

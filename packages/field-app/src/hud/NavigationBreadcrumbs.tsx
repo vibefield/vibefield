@@ -14,9 +14,9 @@
  *    widget type → the first group carrying a `title` field → that value. If no
  *    such field exists we fall back to the PrefabId string, then "Folder"
  *    (reported — there is no generic "widget title" seam).
- *  - Updates poll on a 200ms interval (v1 used `engine.onFrame`; v3 has no such
- *    hook — this is chrome, polling is fine), setState-suppressed by structural
- *    equality.
+ *  - Updates read at a 200ms cadence on the shared chrome ticker (3b — the
+ *    private 200ms setInterval kept firing hidden), setState-suppressed by
+ *    structural equality.
  */
 import {
   type CanvasEngine,
@@ -27,7 +27,8 @@ import {
   PrefabId,
   widgets,
 } from "@vibecook/ice";
-import { useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
+import { useChromeValue } from "./use-chrome-value";
 
 interface NavigationBreadcrumbsProps {
   engine: CanvasEngine;
@@ -108,22 +109,13 @@ function crumbsEqual(a: Crumb[], b: Crumb[]): boolean {
 }
 
 export function NavigationBreadcrumbs({ engine }: NavigationBreadcrumbsProps) {
-  const [crumbs, setCrumbs] = useState<Crumb[]>(() => readCrumbs(engine));
-  const lastCrumbsRef = useRef<Crumb[]>(crumbs);
-
-  // Re-read on a poll interval, setState only if the nav stack actually
-  // changed (v1 used engine.onFrame; v3 has no per-frame hook for chrome).
-  useEffect(() => {
-    const tick = () => {
-      const next = readCrumbs(engine);
-      if (!crumbsEqual(lastCrumbsRef.current, next)) {
-        lastCrumbsRef.current = next;
-        setCrumbs(next);
-      }
-    };
-    const interval = setInterval(tick, 200);
-    return () => clearInterval(interval);
-  }, [engine]);
+  // Re-read at a chrome-ticker cadence; the structural-equality gate keeps the
+  // previous array identity so unchanged stacks never re-render.
+  const crumbs = useChromeValue(
+    useCallback(() => readCrumbs(engine), [engine]),
+    200,
+    crumbsEqual,
+  );
 
   const canGoBack = crumbs.length > 1;
 

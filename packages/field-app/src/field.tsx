@@ -1,23 +1,5 @@
-import { Canvas, useThree } from "@react-three/fiber";
-import {
-  DEFAULT_GRID_CONFIG,
-  ENGINE_SCHEMA_VERSION,
-  type GridConfig,
-  selectedEntities,
-} from "@vibecook/ice";
-import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
-import { ground } from "@vibecook/ice/ground";
-import {
-  captureWidgetPreviews,
-  createGLBridge,
-  createGLPointerRouter,
-  type GLBridge,
-  type GLPointerRouter,
-  GLViews,
-  type GlFrameStats,
-} from "@vibecook/ice/r3f";
-import { InfiniteCanvas, type InfiniteCanvasHandle, useStageHold } from "@vibecook/ice/react";
-import { spawnCommentAroundSelection } from "@vibefield/plugin-field-tools";
+import type { GridConfig } from "@vibecook/ice";
+import type { DevtoolsHandle } from "@vibecook/ice/devtools";
 import {
   type ReactElement,
   useCallback,
@@ -26,230 +8,46 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
-import { createPortal } from "react-dom";
-import { PMREMGenerator, type Texture } from "three";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { setBoardStatus } from "./board-status";
-import { installCursorHalo } from "./cursor";
 import type { DocManager } from "./doc-manager";
-import { captureDocThumbnailScene } from "./doc-thumbnail-scene";
-import { buildRegistry, createFieldEngine, seedField } from "./field-engine";
-import { FilePill } from "./hud/FilePill";
-import { LoadingVeil } from "./hud/LoadingVeil";
-import { NavigationBreadcrumbs } from "./hud/NavigationBreadcrumbs";
-import { WidgetTray } from "./hud/WidgetTray";
-import { ZoomPill } from "./hud/ZoomPill";
-import {
-  type OverlapGlowConfig,
-  type OverlapGlowThemeColors,
-  SettingsPanel,
-  type ThemeColors,
-} from "./panels";
+import { CanvasStage } from "./field/CanvasStage";
+import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
+import { hexToRgb01 } from "./field/theme-constants";
+import { usePreviewWarmup } from "./field/use-preview-warmup";
+import { useWorkspaceSession } from "./field/use-workspace-session";
 import { useTheme } from "./theme";
 
-// The Field (B2 + Track D1–D4): plugins' widgets → one canvas engine →
-// InfiniteCanvas over the widgetlab ground, the GL island layer (bridge +
-// pointer router + composite views), the cursor halo, the morphing island
-// (WidgetTray) as the spawn door, and the diagnostics panels. Composition is
-// widgetlab App.tsx, decomposed per design-03 (the engine/seed lives in
-// field-engine.ts). The window IS the field (2026-07-21): no app bar — the
-// theme toggle floats top-right, diagnostics live inside Settings.
-
-// === v1 theme constants (widgetlab App.tsx verbatim) ===
-
-const DEFAULT_THEME_COLORS: ThemeColors = {
-  dotLight: "#BFC4CC",
-  dotDark: "#595E66",
-  bgLight: "#FAFAFA",
-  bgDark: "#171717",
-};
-
-const DEFAULT_OVERLAP_GLOW_THEME_COLORS: OverlapGlowThemeColors = {
-  glowLight: "#808080",
-  glowDark: "#FFFFFF",
-  rimLight: "#808080",
-  rimDark: "#FFFFFF",
-};
-
-/** v1 DEFAULT_OVERLAP_GLOW_CONFIG values ([candidate, target] pairs — CardShell's var defaults). */
-const DEFAULT_OVERLAP_GLOW: OverlapGlowConfig = {
-  glowColor: [0.5, 0.5, 0.5],
-  glowAlpha: [0.25, 0.45],
-  glowSize: [60, 80],
-  rimColor: [0.5, 0.5, 0.5],
-  rimWidth: 1,
-  rimAlpha: [0.3, 0.5],
-  rimRadius: 40,
-};
-
-function hexToRgb01(hex: string): [number, number, number] {
-  const s = hex.replace("#", "").padEnd(6, "0").slice(0, 6);
-  return [
-    Number.parseInt(s.slice(0, 2), 16) / 255,
-    Number.parseInt(s.slice(2, 4), 16) / 255,
-    Number.parseInt(s.slice(4, 6), 16) / 255,
-  ];
-}
-
-function hexToRgb255(hex: string): string {
-  const s = hex.replace("#", "").padEnd(6, "0").slice(0, 6);
-  return `${Number.parseInt(s.slice(0, 2), 16)}, ${Number.parseInt(s.slice(2, 4), 16)}, ${Number.parseInt(s.slice(4, 6), 16)}`;
-}
-
-/**
- * v1's `r3fRoot={<Environment preset="apartment"/>}` equivalent — but
- * DETERMINISTIC: three's built-in RoomEnvironment through PMREM instead of
- * drei's CDN HDR (a slow/blocked fetch left the metallic cards silhouetted —
- * field-verified 2026-07-12). Near-identical neutral studio look, zero
- * network. <GLViews environment> stamps it on every island scene.
- */
-function EnvLoader({ onTex }: { onTex: (t: Texture | null) => void }) {
-  const gl = useThree((s) => s.gl);
-  const tex = useMemo(() => {
-    const pmrem = new PMREMGenerator(gl);
-    const t = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
-    return t;
-  }, [gl]);
-  useEffect(() => {
-    onTex(tex);
-    return () => onTex(null);
-  }, [tex, onTex]);
-  return null;
-}
-
-const fabCls = (active: boolean) =>
-  `absolute z-50 flex h-10 w-10 items-center justify-center rounded-full shadow-lg transition-colors ${
-    active
-      ? "bg-neutral-800 text-white dark:bg-white dark:text-neutral-800"
-      : "bg-white text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
-  }`;
+// The Field (B2 + Track D1–D4), decomposed per ESR §5.4.3 (slice 3b):
+// FieldView is the WorkspaceApp — it composes the explicit units and owns only
+// cross-cutting UI state (sheets, hud motion, chrome settings). The logic
+// lives with its owners:
+//   useWorkspaceSession — one engine generation + one document-attach lifetime
+//   PersistenceController — doc changes → lane, durable flush on close
+//   CanvasStage — ICE/DOM/GL composition (inside the generation-keyed wrapper)
+//   ChromeLayer — HUD, pills, tray, panels, overlays + chrome effects
+//   usePreviewWarmup — preview discovery/chunking into the loading pipeline
+//   DocManager — launch, metadata, lanes, switching (React-free; no UI)
+// The window IS the field (2026-07-21): no app bar — the theme toggle floats
+// top-right, diagnostics live inside Settings.
 
 export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
-  const registry = useMemo(buildRegistry, []);
-  const docState = useSyncExternalStore(manager.subscribe, manager.getState);
-  const pending = docState.pending;
-  // ONE ENGINE PER DOC (B4 fix, 2026-07-21): a doc switch REMOUNTS the engine
-  // and the whole canvas stack (key below). The store layer supports in-place
-  // close→open (doc-swap.test pins it), but our composition stacks six
-  // stateful layers on the engine (GL bridge/router/plane, halo, ground,
-  // devtools) and the retained GL + WebGPU frames survive a world reset —
-  // field report: stale 3D cards + wires after "new field". Remounting lands
-  // every switch on the exact path boot/restart already prove, behind the
-  // veil. The extra virgin engine at first boot (generation 0 → 1) is the
-  // accepted cost of uniformity.
-  const generation = pending?.generation ?? 0;
-  const ce = useMemo(() => createFieldEngine(registry), [registry, generation]);
+  // Shared seams between units: the stage publishes its GL/halo teardown for
+  // the session's engine disposal (the GL disposal order invariant); chrome
+  // publishes the live devtools handle for the stage's GL profiling lanes.
+  const stageDisposeRef = useRef<(() => void) | null>(null);
+  const devtoolsRef = useRef<DevtoolsHandle | null>(null);
 
-  // B4 launch: register the previews stage (chunks of 3 — each capture call
-  // owns one WebGL context, and 7 rapid context cycles flirts with the browser
-  // cap; skip-if-captured makes doc-switch re-runs instant), then boot the
-  // manager. StrictMode double-effect is absorbed by boot()'s guard.
+  const { ce, registry, generation, docState } = useWorkspaceSession(manager, stageDisposeRef);
+  usePreviewWarmup(manager, registry);
+
   useEffect(() => {
-    manager.setPreviewRunner(async (onTick) => {
-      const glTypes = [...registry.allWidgets().values()]
-        .filter((w) => w.surface === "gl")
-        .map((w) => w.type);
-      const chunks: string[][] = [];
-      for (let i = 0; i < glTypes.length; i += 3) chunks.push(glTypes.slice(i, i + 3));
-      let done = 0;
-      onTick(0, glTypes.length);
-      for (const types of chunks) {
-        await captureWidgetPreviews({
-          types,
-          environment: (gl) =>
-            new PMREMGenerator(gl).fromScene(new RoomEnvironment(), 0.04).texture,
-        });
-        done += types.length;
-        onTick(done, glTypes.length);
-      }
-    });
-    void manager.boot();
-    return () => manager.setPreviewRunner(null);
-  }, [manager, registry]);
+    // after mount commit — the smoke's pass condition covers InfiniteCanvas itself
+    console.log(
+      `CANVAS_READY {"widgetTypes":${registry.allWidgets().size},"plugins":${registry.all().length}}`,
+    );
+  }, [registry]);
 
-  // B3 law carried into B4 — the doc attaches to the COMMITTED engine only,
-  // never in the memo factory (the StrictMode twin must never stream to the
-  // daemon). Keyed on the manager's pending session: a doc switch tears the
-  // old session down only after the manager has durably flushed it, then lands
-  // the new one before paint.
-  useLayoutEffect(() => {
-    if (pending === null) return;
-    const lane = pending.lane;
-    if (pending.initialBytes !== null) {
-      const res = ce.docs.open(pending.initialBytes);
-      if (!res.ok) {
-        // Honest quarantine (the M5 law): the at-rest bytes stay untouched on
-        // disk; a blank board + surfaced state beats autosaving over them.
-        console.error(`[board] quarantined: ${res.reason}`);
-        setBoardStatus({ state: "quarantined", detail: res.reason });
-        ce.docs.create();
-        ce.world.sync();
-        manager.contentApplied(pending.generation);
-        return () => ce.docs.close();
-      }
-      try {
-        for (const update of pending.initialUpdates) res.session.applyRemote(update);
-      } catch (error) {
-        ce.docs.close();
-        const detail = error instanceof Error ? error.message : String(error);
-        console.error(`[board] journal quarantined: ${detail}`);
-        setBoardStatus({ state: "quarantined", detail });
-        ce.docs.create();
-        ce.world.sync();
-        manager.contentApplied(pending.generation);
-        return () => ce.docs.close();
-      }
-      ce.world.sync();
-    } else {
-      const session = ce.docs.create();
-      // The demo scene belongs to the bootstrap default doc alone (seed flag);
-      // user-created docs open as an empty field.
-      if (pending.seed) seedField(ce, session);
-      else ce.world.sync();
-    }
-    if (lane === null) {
-      // degraded (in-memory) session — the manager already set the board row
-      manager.contentApplied(pending.generation);
-      return () => ce.docs.close();
-    }
-    // Autosave starts DIRTY (ice law): a seeded first-run board reaches fieldd
-    // after the first debounce, no user edit required. Lane status → board row
-    // wiring lives in the manager now (it owns lane lifecycles).
-    const persist = async (kind: "checkpoint" | "update", bytes: Uint8Array): Promise<void> => {
-      const savedAt = Date.now();
-      // Capture only durable structural state, synchronously, while this
-      // engine is still alive. Rendering/encoding happens later in a worker.
-      const thumbnailScene = captureDocThumbnailScene(ce);
-      setBoardStatus({ state: "saving", lastSavedAt: lane.lastPutAt });
-      const receipt = await (kind === "checkpoint"
-        ? lane.put(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt })
-        : lane.putUpdate(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt }));
-      manager.thumbnailCheckpoint(pending.docId, receipt.revisionId, thumbnailScene);
-      setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
-    };
-    const autosave = ce.docs.autosave({
-      put: (bytes) => persist("checkpoint", bytes),
-      append: (bytes) => persist("update", bytes),
-    });
-    const unregisterPersistence = manager.registerPersistence(pending.generation, {
-      flush: () => autosave.flush(),
-      close: () => autosave.close(),
-    });
-    manager.contentApplied(pending.generation);
-    return () => {
-      unregisterPersistence();
-      autosave.stop();
-      ce.docs.close();
-    };
-  }, [ce, manager, pending]);
-  // The P0 ground layer (grid + wires + snap guides, one WebGPU canvas) —
-  // memoized per doc generation: the ground remounts WITH the engine (a
-  // factory is one canvas-mount's state; reuse across remounts is undefined).
-  const groundFactory = useMemo(() => ground(), [generation]);
   const [trayOpen, setTrayOpenRaw] = useState(false);
   const [docsOpen, setDocsOpenRaw] = useState(false);
   // One sheet at a time: the tray and the docs explorer are mutually exclusive
@@ -263,24 +61,11 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
     if (o) setTrayOpenRaw(false);
   }, []);
   const sheetOpen = trayOpen || docsOpen;
-  // The docs sheet + the loading veil quiesce the stage exactly like the tray.
-  useStageHold(ce, docsOpen, "docs-explorer");
-  useStageHold(ce, docState.phase === "loading", "loading-veil");
-  useEffect(() => {
-    if (docsOpen) ce.ops.cancelActiveGestures();
-  }, [docsOpen, ce]);
 
-  const [showSettings, setShowSettings] = useState(false);
-  const [showEcs, setShowEcs] = useState(false);
+  const chrome = useChromeState();
+
   const [hudReturning, setHudReturning] = useState(false);
   const hudWasLoading = useRef(docState.phase === "loading");
-  const [gridConfig, setGridConfig] = useState<GridConfig>({ ...DEFAULT_GRID_CONFIG });
-  const [themeColors, setThemeColors] = useState<ThemeColors>(DEFAULT_THEME_COLORS);
-  const [overlapGlow, setOverlapGlow] = useState<OverlapGlowConfig>(DEFAULT_OVERLAP_GLOW);
-  const [overlapGlowThemeColors, setOverlapGlowThemeColors] = useState<OverlapGlowThemeColors>(
-    DEFAULT_OVERLAP_GLOW_THEME_COLORS,
-  );
-
   useLayoutEffect(() => {
     if (docState.phase === "loading") {
       hudWasLoading.current = true;
@@ -298,241 +83,13 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
 
   const hudMotion = docState.phase === "loading" ? "out" : hudReturning ? "in" : "idle";
 
-  useEffect(() => {
-    // after mount commit — the smoke's pass condition covers InfiniteCanvas itself
-    console.log(
-      `CANVAS_READY {"widgetTypes":${registry.allWidgets().size},"plugins":${registry.all().length}}`,
-    );
-  }, [registry]);
-
-  // --- GL root: bridge + router + P2 plane arrive in onReady; glRoute delegates
-  // via ref. glRef keeps the whole set so we can tear it down — onReady fires
-  // from InfiniteCanvas's mount effect, so a StrictMode double-mount would
-  // otherwise stack a stale bridge (reflector + world observer) and a stale
-  // plane div (glboard disposes the same set in its boot handle's dispose()).
-  const routerRef = useRef<GLPointerRouter | null>(null);
-  const glRef = useRef<{ bridge: GLBridge; router: GLPointerRouter; plane: HTMLDivElement } | null>(
-    null,
-  );
-  const [gl, setGl] = useState<{ bridge: GLBridge; plane: HTMLDivElement } | null>(null);
-  const [envTex, setEnvTex] = useState<Texture | null>(null);
-  const glRoute = useCallback(
-    (kind: "down" | "move" | "up" | "cancel", x: number, y: number, e: PointerEvent) => {
-      const router = routerRef.current;
-      if (router === null) return false;
-      const handled = router.route(kind, x, y, e);
-      // Moves carry the rich verdict: the router's hover-time overInteractive
-      // feeds the pointer's OverInteractive tag (cursor-halo dot over the
-      // orbit cube / claimed shapes, same telegraph as DOM interactives).
-      return kind === "move" ? { handled, overInteractive: router.overInteractive() } : handled;
-    },
-    [],
-  );
-  const disposeGl = useCallback(() => {
-    const prev = glRef.current;
-    if (prev === null) return;
-    prev.bridge.uninstall(); // unregisters the render reflector + world observer
-    prev.plane.remove();
-    glRef.current = null;
-    routerRef.current = null;
-  }, []);
-  // Cursor halo (2026-07-18): the pointerlab morph as an OS-cursor accent —
-  // ring on canvas, zoomed-in ring over cards, solid dot over internal
-  // interactives (the opt-out telegraph). Same StrictMode discipline as GL:
-  // dispose the prior mount's install before wiring a fresh one.
-  const haloRef = useRef<(() => void) | null>(null);
-  const disposeHalo = useCallback(() => {
-    haloRef.current?.();
-    haloRef.current = null;
-  }, []);
-  const onReady = useCallback(
-    (handle: InfiniteCanvasHandle) => {
-      disposeHalo();
-      haloRef.current = installCursorHalo(ce, handle.host.container);
-      disposeGl(); // drop a prior mount's set before wiring a fresh one
-      const bridge = createGLBridge(ce.engine);
-      // DEV-only forensics twin of __ice — headless scripts inspect islands.
-      (window as unknown as { __iceBridge?: GLBridge }).__iceBridge = bridge;
-      const router = createGLPointerRouter({ world: ce.world, bridge, index: ce.stack.index });
-      routerRef.current = router;
-      const plane = handle.host.container.ownerDocument.createElement("div");
-      plane.style.cssText = "position:absolute;inset:0;pointer-events:none;"; // P2: display-only (router owns GL hits)
-      // P2 sits UNDER the lifted plane (P3) and chrome — glboard's insertion
-      // point; appending last would stack GL over dragged widgets/chrome.
-      handle.host.container.insertBefore(plane, handle.planes.lifted);
-      glRef.current = { bridge, router, plane };
-      setGl({ bridge, plane });
-    },
-    [ce, disposeGl, disposeHalo],
-  );
-  useEffect(() => disposeGl, [disposeGl]);
-  useEffect(() => disposeHalo, [disposeHalo]);
-
-  // Engine lifecycle (one per doc): when the generation re-keys `ce`, tear the
-  // PRIOR engine's wiring down and dispose it. Ordering is safe by React's
-  // rules: the attach layout-effect's cleanup (final flush → stop → close)
-  // runs in the commit phase, BEFORE this passive cleanup disposes the engine.
-  useEffect(() => {
-    return () => {
-      disposeGl();
-      disposeHalo();
-      setGl(null);
-      ce.dispose();
-    };
-  }, [ce, disposeGl, disposeHalo]);
-
-  // (B4: the GL preview capture moved OFF the idle path into the loading
-  // pipeline's previews stage — registered with the manager above. The
-  // environment stays a factory built ON the capture renderer: PMREM textures
-  // don't cross renderers.)
-
-  // Theme → live tokens: the settings panel makes DESIGN.md's static defaults
-  // dynamic. We write the TOKEN source (--vf-canvas-bg — the widgetlab-compat
-  // --canvas-bg alias follows), and CardShell's glow knobs; the rim colors
-  // stay tokens.css's .dark-aware defaults. --ic-selection-radius is static in
-  // tokens.css (22px, the union-box corner).
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--vf-canvas-bg", dark ? themeColors.bgDark : themeColors.bgLight);
-    root.style.setProperty(
-      "--ic-glow-color",
-      hexToRgb255(dark ? overlapGlowThemeColors.glowDark : overlapGlowThemeColors.glowLight),
-    );
-    root.style.setProperty("--ic-glow-size-c", `${overlapGlow.glowSize[0]}px`);
-    root.style.setProperty("--ic-glow-size-t", `${overlapGlow.glowSize[1]}px`);
-    root.style.setProperty("--ic-glow-alpha-c", String(overlapGlow.glowAlpha[0]));
-    root.style.setProperty("--ic-glow-alpha-t", String(overlapGlow.glowAlpha[1]));
-  }, [dark, themeColors, overlapGlow, overlapGlowThemeColors]);
-
   const effectiveGrid = useMemo<Partial<GridConfig>>(
     () => ({
-      ...gridConfig,
-      dotColor: hexToRgb01(dark ? themeColors.dotDark : themeColors.dotLight),
+      ...chrome.gridConfig,
+      dotColor: hexToRgb01(dark ? chrome.themeColors.dotDark : chrome.themeColors.dotLight),
     }),
-    [gridConfig, dark, themeColors],
+    [chrome.gridConfig, dark, chrome.themeColors],
   );
-
-  // Natural boot framing (widgetlab, 2026-07-18: "zoom to fit, but with an
-  // upper and bottom cap"): frame the content once the viewport is measured
-  // and membership has stamped the first tick. Re-keyed per doc generation
-  // (B4): a switched-in doc gets its own arrival framing.
-  useEffect(() => {
-    if (generation === 0) return; // no doc landed yet — the veil is up
-    let presentFrame: number | null = null;
-    const present = (): void => {
-      presentFrame = requestAnimationFrame(() => manager.canvasPresented(generation));
-    };
-    // An empty field has nothing to frame, but still needs one painted frame
-    // before the cover reveals it.
-    if (captureDocThumbnailScene(ce).widgets.length === 0 || ce.ops.frameContent()) {
-      present();
-      return () => {
-        if (presentFrame !== null) cancelAnimationFrame(presentFrame);
-      };
-    }
-    let tries = 0;
-    const id = setInterval(() => {
-      tries += 1;
-      if (ce.ops.frameContent() || tries > 40) {
-        clearInterval(id);
-        present();
-      }
-    }, 50);
-    return () => {
-      clearInterval(id);
-      if (presentFrame !== null) cancelAnimationFrame(presentFrame);
-    };
-  }, [ce, generation, manager]);
-
-  // Keyboard shortcuts. <InfiniteCanvas> already installs the engine default
-  // keymap (⌘Z undo, ⇧⌘Z redo, ⌫ delete, Esc cancel, v/h/c tools — all
-  // skipping editable targets). This handler adds ONLY the two pieces the
-  // default keymap lacks (widgetlab App law — a duplicate listener would fire
-  // engine actions twice):
-  //  - Esc exits the current container when nested;
-  //  - C with a SELECTION wraps it in a comment (capture phase +
-  //    stopPropagation, so the keymap's connect-tool binding never sees it;
-  //    with no selection C falls through and stays the tool shortcut — the
-  //    widgetlab C/connect collision resolved by "selection decides").
-  useEffect(() => {
-    const isEditableTarget = (target: EventTarget | null): boolean => {
-      if (!(target instanceof HTMLElement)) return false;
-      const tag = target.tagName;
-      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || isEditableTarget(e.target)) return;
-      if (ce.nav.depth() > 0) {
-        e.preventDefault();
-        ce.ops.exitContainer();
-      }
-    };
-    const onKeyDownCapture = (e: KeyboardEvent) => {
-      if ((e.key !== "c" && e.key !== "C") || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isEditableTarget(e.target)) return;
-      if (selectedEntities(ce.world).length === 0) return; // fall through → connect tool
-      e.preventDefault();
-      e.stopPropagation();
-      spawnCommentAroundSelection(ce);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keydown", onKeyDownCapture, true);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keydown", onKeyDownCapture, true);
-    };
-  }, [ce]);
-
-  // ECS devtools while the button is active (v1's EcsDevtools panel slot).
-  // The FACADE goes in (not ce.engine): the strata observer's durable tab
-  // tracks docs.current() live only through it. The handle also rides a ref
-  // so the GL profiling callback below can feed the profiler HUD's lanes.
-  const devtoolsRef = useRef<DevtoolsHandle | null>(null);
-  useEffect(() => {
-    if (!showEcs) return;
-    const d = attachDevtools(ce, { presence: () => ce.docs.presence() });
-    devtoolsRef.current = d;
-    return () => {
-      devtoolsRef.current = null;
-      d.detach();
-    };
-  }, [showEcs, ce]);
-
-  useLayoutEffect(() => {
-    const dock = document.querySelector<HTMLElement>(".ice-dock");
-    if (!dock) return;
-
-    dock.classList.add("hud-flight");
-    if (hudMotion === "idle") {
-      delete dock.dataset.docTransition;
-      return;
-    }
-
-    if (hudMotion === "out") {
-      const rect = dock.getBoundingClientRect();
-      const dx = rect.left + rect.width / 2 - window.innerWidth / 2;
-      const dy = rect.top + rect.height / 2 - window.innerHeight / 2;
-      const length = Math.hypot(dx, dy) || 1;
-      const distance =
-        Math.hypot(window.innerWidth, window.innerHeight) + Math.hypot(rect.width, rect.height);
-      dock.style.setProperty("--hud-flight-x", `${(dx / length) * distance}px`);
-      dock.style.setProperty("--hud-flight-y", `${(dy / length) * distance}px`);
-    }
-
-    dock.dataset.docTransition = hudMotion;
-  }, [hudMotion, showEcs]);
-
-  // GL frame profiling → profiler HUD lanes ("gl cpu" = the whole compositor
-  // pass on the main thread; "gpu" = summed render-call GPU time, 0 where
-  // timer queries are unsupported). Only wired while the ECS panel is open —
-  // GLViews skips all measurement when the prop is absent.
-  const onGlStats = useCallback((s: GlFrameStats) => {
-    const dt = devtoolsRef.current;
-    if (dt === null) return;
-    dt.lane("gl cpu", s.cpuMs);
-    if (s.gpuMs > 0) dt.lane("gpu", s.gpuMs);
-    dt.glStats(s); // the full GL panel: renderer counts, VT census, LOD bands, culls
-  }, []);
 
   return (
     <div
@@ -544,7 +101,7 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
           sheet is up. Only the wrapper transforms — the tray handoff
           ratio-corrects, so the transient scale never skews engine picks.
           KEYED by doc generation: a switch remounts the whole canvas stack
-          (engine + InfiniteCanvas + GL Canvas + ground) — see the ce memo. */}
+          (engine + InfiniteCanvas + GL Canvas + ground) — see the session. */}
       <div
         key={generation}
         style={{
@@ -559,145 +116,29 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
           transition: "transform 600ms var(--vf-ease-island), opacity 420ms var(--vf-ease-island)",
         }}
       >
-        <InfiniteCanvas
-          engine={ce}
-          ground={groundFactory}
+        <CanvasStage
+          ce={ce}
           grid={effectiveGrid}
-          glRoute={glRoute}
-          onReady={onReady}
-          className="field-canvas"
-        >
-          {/* Canvas pointerEvents none is LOAD-BEARING (glboard precedent):
-              without it the R3F canvas swallows every pointer event over the
-              whole viewport — DOM widgets lose hover/click while the engine
-              keeps working via container bubbling (field report 2026-07-12). */}
-          {gl !== null &&
-            createPortal(
-              <Canvas
-                orthographic
-                frameloop="never"
-                gl={{ alpha: true, antialias: false }}
-                style={{ pointerEvents: "none", position: "absolute", inset: 0 }}
-              >
-                <EnvLoader onTex={setEnvTex} />
-                <GLViews
-                  engine={ce.engine}
-                  bridge={gl.bridge}
-                  store={ce.runtime.store}
-                  environment={envTex}
-                  {...(showEcs ? { onFrameStats: onGlStats } : {})}
-                />
-              </Canvas>,
-              gl.plane,
-            )}
-        </InfiniteCanvas>
-      </div>
-      {/* Chrome overlays sit OUTSIDE the recede wrapper — they never scale. */}
-      <NavigationBreadcrumbs engine={ce} />
-      <ZoomPill ce={ce} />
-      {/* The file pill (B4): top-center — new doc, the editable name, and the
-          morph-open docs explorer. */}
-      <FilePill manager={manager} open={docsOpen} onOpenChange={setDocsOpen} />
-      {/* Dark mode toggle (widgetlab position) — no-drag: it sits in the titlebar strip. */}
-      <button
-        type="button"
-        onClick={toggleTheme}
-        data-hud-flight="top-right"
-        className="hud-flight no-drag absolute top-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-500 shadow-lg transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
-        title={dark ? "Switch to light mode" : "Switch to dark mode"}
-      >
-        {dark ? (
-          <svg
-            aria-hidden="true"
-            className="h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          >
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" />
-          </svg>
-        ) : (
-          <svg
-            aria-hidden="true"
-            className="h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
-          </svg>
-        )}
-      </button>
-      <WidgetTray ce={ce} registry={registry} open={trayOpen} onOpenChange={setTrayOpen} />
-
-      <button
-        type="button"
-        onClick={() => setShowSettings((s) => !s)}
-        data-hud-flight="bottom-left"
-        className={`hud-flight ${fabCls(showSettings)} bottom-4 left-4`}
-        title="Settings"
-      >
-        <svg
-          aria-hidden="true"
-          className="h-5 w-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.86 2.86-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.55v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.86-2.86.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-1.5-1H2.5V10h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06L6.56 4.2l.06.06A1.7 1.7 0 0 0 8.5 4.6a1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.86 2.86-.06.06A1.7 1.7 0 0 0 18.9 9a1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        onClick={() => setShowEcs((s) => !s)}
-        data-hud-flight="bottom-right"
-        className={`hud-flight ${fabCls(showEcs)} bottom-4 right-4`}
-        title="ICE Devtools"
-      >
-        <svg
-          aria-hidden="true"
-          className="h-5 w-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="m8 2 1.5 2M16 2l-1.5 2M3 13h3M18 13h3M5 7l2 1M19 7l-2 1" />
-          <rect x="6" y="5" width="12" height="16" rx="6" />
-          <path d="M6 13h12M12 5v16" />
-        </svg>
-      </button>
-
-      {showSettings && (
-        <SettingsPanel
-          engine={ce}
-          gridConfig={gridConfig}
-          onGridChange={setGridConfig}
-          themeColors={themeColors}
-          onThemeColorsChange={setThemeColors}
-          overlapGlow={overlapGlow}
-          onOverlapGlowChange={setOverlapGlow}
-          overlapGlowThemeColors={overlapGlowThemeColors}
-          onOverlapGlowThemeColorsChange={setOverlapGlowThemeColors}
-          stressWidgetType="widgetlab.clock"
-          onClose={() => setShowSettings(false)}
+          ecsOpen={chrome.showEcs}
+          devtoolsRef={devtoolsRef}
+          disposeRef={stageDisposeRef}
         />
-      )}
-
-      {/* The loading veil rides ABOVE all chrome — loading is modal (B4 §2). */}
-      <LoadingVeil loading={docState.loading} />
+      </div>
+      <ChromeLayer
+        ce={ce}
+        manager={manager}
+        registry={registry}
+        dark={dark}
+        onToggleTheme={toggleTheme}
+        hudMotion={hudMotion}
+        docState={docState}
+        trayOpen={trayOpen}
+        onTrayOpenChange={setTrayOpen}
+        docsOpen={docsOpen}
+        onDocsOpenChange={setDocsOpen}
+        chrome={chrome}
+        devtoolsRef={devtoolsRef}
+      />
     </div>
   );
 }

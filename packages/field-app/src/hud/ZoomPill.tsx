@@ -1,21 +1,22 @@
 /**
  * ZoomPill — the −/percent/+ zoom control, extracted VERBATIM from widgetlab's
- * `App.tsx` (the `// === chrome bits ===` section) for Track D2. Polls the
- * Camera resource every 100ms; − = zoomBy(0.8), the percent button resets to
- * 100% (double-click = zoom to fit), + = zoomBy(1.25).
+ * `App.tsx` (the `// === chrome bits ===` section) for Track D2. Reads the
+ * Camera resource at a 100ms cadence on the shared chrome ticker (3b — the
+ * private setInterval kept firing hidden); − = zoomBy(0.8), the percent
+ * button resets to 100% (double-click = zoom to fit), + = zoomBy(1.25).
  */
 import { Camera, type CanvasEngine } from "@vibecook/ice";
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useChromeValue } from "./use-chrome-value";
+
+const zoomEqual = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-4;
 
 export function ZoomPill({ ce }: { ce: CanvasEngine }) {
-  const [zoom, setZoom] = useState(1);
-  useEffect(() => {
-    const id = setInterval(() => {
-      const z = ce.world.getResource(Camera)?.zoom ?? 1;
-      setZoom((prev) => (Math.abs(prev - z) > 1e-4 ? z : prev));
-    }, 100);
-    return () => clearInterval(id);
-  }, [ce]);
+  const zoom = useChromeValue(
+    useCallback(() => ce.world.getResource(Camera)?.zoom ?? 1, [ce]),
+    100,
+    zoomEqual,
+  );
   const zoomBy = (f: number) => ce.ops.zoomTo((ce.world.getResource(Camera)?.zoom ?? 1) * f);
   return (
     <div
