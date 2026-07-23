@@ -12,6 +12,7 @@ import {
   LanePutMeta,
   type LanePutOk,
 } from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import type { DocumentService } from "./doc-service";
 import { RpcCallError } from "./native-link";
@@ -34,6 +35,7 @@ export interface DocLaneOptions {
   /** 0 = ephemeral (tests); production passes PORTS.FIELDD_WS_DATA via bin.ts. */
   dataPort: number;
   docs: DocumentService;
+  logger?: Logger;
 }
 
 interface LaneConn {
@@ -48,8 +50,11 @@ interface LaneConn {
 
 export class DocLane {
   private wss: WebSocketServer | null = null;
+  private readonly logger: Logger;
 
-  constructor(private readonly opts: DocLaneOptions) {}
+  constructor(private readonly opts: DocLaneOptions) {
+    this.logger = opts.logger ?? createNoopLogger();
+  }
 
   async listen(): Promise<number> {
     const wss = new WebSocketServer({ port: this.opts.dataPort, host: "127.0.0.1" });
@@ -150,7 +155,11 @@ export class DocLane {
       default:
         // tolerant reader: unknown (or out-of-sequence) kinds are logged + ignored,
         // never fatal — a future frame kind must degrade, not drop the lane
-        console.warn(`[doc-lane] ignoring unexpected frame kind ${frame.kind}`);
+        this.logger.warn(
+          "fieldd.doclane.frame_rejected",
+          "An unexpected document-lane frame was ignored",
+          { frameKind: frame.kind },
+        );
         return;
     }
   }

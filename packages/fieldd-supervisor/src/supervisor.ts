@@ -1,13 +1,16 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { assertDataRootUsable } from "./paths";
 import { type ProbeResult, tryAdopt } from "./probe";
-import { createLineBuffer, createLogTail } from "./process-log";
+import { createLineBuffer, createLogTail, redactLine } from "./process-log";
 import {
   type FielddHandle,
+  type FielddReadySignal,
   type FielddSupervisor,
+  type FielddSupervisorEvent,
   type FielddSupervisorOptions,
   type ProbeFailure,
   SupervisorError,
+  type SupervisorLifecycleEventName,
 } from "./types";
 
 // The adopt-or-spawn state machine (spec §5.3). Ownership is explicit and
@@ -22,7 +25,25 @@ const POLL_INTERVAL_MS = 200;
 const STOP_TERM_WAIT_MS = 2_000;
 
 export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSupervisor {
-  const log = (line: string) => opts.onLog?.(line);
+  const emit = (event: FielddSupervisorEvent): void => {
+    try {
+      opts.onEvent?.(event);
+    } catch {
+      // Observation must never control daemon ownership or lifecycle.
+    }
+  };
+  const lifecycle = (
+    event: SupervisorLifecycleEventName,
+    message: string,
+    attrs?: Readonly<Record<string, string | number | boolean | null>>,
+  ): void => {
+    emit({
+      kind: "lifecycle",
+      event,
+      message,
+      ...(attrs !== undefined ? { attrs } : {}),
+    });
+  };
   const internal = new AbortController(); // dispose() cancels everything through this
   let inflight: Promise<FielddHandle> | null = null;
   let handle: FielddHandle | null = null;
@@ -63,10 +84,16 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     const adopted = await tryAdopt(opts.dataRoot, opts.adoptProbeMs ?? ADOPT_PROBE_MS, signal);
     throwIfAborted(signal);
     if (adopted.ok) {
-      log(`adopted running fieldd :${adopted.info.port} (${adopted.info.bootId})`);
+      lifecycle("fieldd.supervisor.adopted", "Adopted a running fieldd", {
+        port: adopted.info.port,
+        pid: adopted.info.pid,
+        bootId: adopted.info.bootId,
+      });
       return makeHandle("adopted", adopted);
     }
-    log(`no adoptable fieldd (${adopted.failure}) — spawning`);
+    lifecycle("fieldd.supervisor.spawn_required", "No adoptable fieldd was available", {
+      probeFailure: adopted.failure,
+    });
 
     const tail = createLogTail();
     const spawned = spawnFieldd(tail);
@@ -83,7 +110,9 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     };
     spawned.on("exit", (code, sig) => noteExit(code, sig));
     spawned.on("error", (e) => {
-      tail.note(String(e));
+      const line = redactLine(e.message);
+      tail.note(`[stderr] ${line}`);
+      emit({ kind: "stderr", line });
       noteExit(null, null);
     });
 
@@ -108,11 +137,19 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
             // someone else's daemon owns the root — ours lost the race; stop it
             // BOUNDED (TERM→KILL), not fire-and-forget: a surviving loser could
             // later be adopted and become unkillable
-            log(`root already served by pid ${probe.info.pid} — stopping our spawn`);
+            lifecycle(
+              "fieldd.supervisor.spawn_race_lost",
+              "Another fieldd won the data-root spawn race",
+              { incumbentPid: probe.info.pid, spawnedPid: spawned.pid ?? null },
+            );
             await stopChild(spawned, null);
             child = null;
           } else {
-            log(`fieldd up :${probe.info.port} (${probe.info.bootId})`);
+            lifecycle("fieldd.supervisor.ready", "Spawned fieldd became ready", {
+              port: probe.info.port,
+              pid: probe.info.pid,
+              bootId: probe.info.bootId,
+            });
           }
           return makeHandle(ownership, probe);
         }
@@ -179,19 +216,32 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
         e,
       );
     }
-    const sink = (line: string) => {
-      tail.note(line);
-      log(line);
+    let readySeen = false;
+    const stdoutSink = (line: string) => {
+      const signal = readySeen ? null : parseReadySignal(line);
+      if (signal) {
+        readySeen = true;
+        emit({ kind: "readiness", signal });
+        return;
+      }
+      tail.note(`[stdout] ${line}`);
+      emit({ kind: "unexpected-stdout", line });
     };
-    const out = createLineBuffer(sink);
-    const err = createLineBuffer(sink);
+    const stderrSink = (line: string) => {
+      tail.note(`[stderr] ${line}`);
+      emit({ kind: "stderr", line });
+    };
+    const out = createLineBuffer(stdoutSink);
+    const err = createLineBuffer(stderrSink);
     spawned.stdout?.on("data", (d: Buffer) => out.push(d));
     spawned.stderr?.on("data", (d: Buffer) => err.push(d));
     spawned.on("close", () => {
       out.flush();
       err.flush();
     });
-    log(`spawned fieldd pid=${spawned.pid}`);
+    lifecycle("fieldd.supervisor.spawned", "Spawned fieldd", {
+      ...(spawned.pid !== undefined ? { pid: spawned.pid } : {}),
+    });
     return spawned;
   }
 
@@ -218,11 +268,18 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     // stop-owned is FULL dev/smoke teardown: the spawned fieldd and the
     // field-native it recorded. (In production nothing calls this — the
     // two-plane law keeps daemons alive past the shell.)
+    lifecycle("fieldd.supervisor.stop_requested", "Requested fieldd shutdown", {
+      ...(proc.pid !== undefined ? { pid: proc.pid } : {}),
+      nativePid,
+    });
     if (proc.exitCode === null && !proc.killed) proc.kill("SIGTERM");
     await new Promise<void>((resolve) => {
       if (proc.exitCode !== null) return resolve();
       const t = setTimeout(() => {
         proc.kill("SIGKILL");
+        lifecycle("fieldd.supervisor.force_killed", "fieldd exceeded its shutdown deadline", {
+          ...(proc.pid !== undefined ? { pid: proc.pid } : {}),
+        });
         resolve();
       }, STOP_TERM_WAIT_MS);
       proc.once("exit", () => {
@@ -237,6 +294,9 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
         /* already gone */
       }
     }
+    lifecycle("fieldd.supervisor.stopped", "Owned fieldd shutdown completed", {
+      ...(proc.pid !== undefined ? { pid: proc.pid } : {}),
+    });
   }
 
   async function dispose(): Promise<void> {
@@ -262,9 +322,31 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       await stopChild(child, null);
     }
     child = null;
+    lifecycle("fieldd.supervisor.disposed", "fieldd supervisor disposed");
   }
 
   return { ensure, dispose };
+}
+
+function parseReadySignal(line: string): FielddReadySignal | null {
+  try {
+    const value = JSON.parse(line) as Record<string, unknown>;
+    if (
+      value["ready"] !== true ||
+      !Number.isInteger(value["port"]) ||
+      (value["port"] as number) <= 0 ||
+      (value["port"] as number) > 65_535 ||
+      typeof value["bootId"] !== "string" ||
+      value["bootId"].length === 0 ||
+      value["bootId"].length > 256 ||
+      !/^[A-Za-z0-9_-]+$/.test(value["bootId"])
+    ) {
+      return null;
+    }
+    return { ready: true, port: value["port"] as number, bootId: value["bootId"] };
+  } catch {
+    return null;
+  }
 }
 
 function throwIfAborted(signal: AbortSignal): void {

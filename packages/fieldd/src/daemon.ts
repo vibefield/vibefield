@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   CONTRACTS_VERSION,
@@ -9,6 +10,7 @@ import {
   DocOpenParams,
   type DocOpenResult,
   DocRenameParams,
+  LOG_STREAMS,
   METHODS,
   type NativeHealth,
   PluginsDisableParams,
@@ -21,7 +23,9 @@ import {
   SCOPES,
   type Scope,
 } from "@vibefield/contracts";
+import type { LoggingHealthV1 } from "@vibefield/contracts/logging";
 import type { WsCtor } from "@vibefield/fieldd-client";
+import { createNodeLogging, createNoopLogger, type NodeLogging } from "@vibefield/logging";
 import { DeviceService } from "./device-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
@@ -61,6 +65,9 @@ export interface FielddConfig {
   /** PLUG-P2 — plugin discovery roots (§9.1): dirs whose children are plugin
    * dirs. Unset ⇒ an empty registry (honest, never a scan of guessed paths). */
   pluginRoots?: { bundled?: string[]; devLinked?: string[] };
+  /** Platform-resolved diagnostic root. Omit only for embedded/unit use where
+   * the caller deliberately supplies no process-owned evidence sink. */
+  logRoot?: string;
 }
 
 export interface FielddHealth {
@@ -69,6 +76,7 @@ export interface FielddHealth {
   native: NativeHealth | null;
   docs: { state: string; docCount: number };
   plugins: { count: number; enabled: number; invalid: number };
+  logging: LoggingHealthV1 | null;
   /** C3: the declared serves with their fused reconcile+runtime state. `url`
    * is the full CAPABILITY URL (base serve URL + the secret route path) —
    * the Settings mesh section is where the user reads it; never log it. */
@@ -87,6 +95,7 @@ export interface FielddDaemon {
   devices: DeviceService;
   peers: PeerLink;
   plugins: PluginRegistryService;
+  logging: NodeLogging | null;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
   health(): FielddHealth;
@@ -100,19 +109,50 @@ const FIELDD_VERSION = "0.1.0";
 export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   const bootId = `fieldd-${randomBytes(8).toString("hex")}`;
   const startedAt = Date.now();
+  const logging =
+    config.logRoot === undefined
+      ? null
+      : await createNodeLogging({
+          logRoot: config.logRoot,
+          stream: LOG_STREAMS.SYSTEM_FIELDD,
+          service: "fieldd",
+          role: "daemon",
+          bootId,
+          instanceId: bootId,
+          component: "bootstrap",
+          aliases: {
+            home: homedir(),
+            temp: tmpdir(),
+            logs: config.logRoot,
+            data: config.dataDir,
+          },
+        });
+  const logger = logging?.logger ?? createNoopLogger();
+  let loggingClosePromise: Promise<void> | null = null;
+  const closeLogging = (): Promise<void> => {
+    if (!logging) return Promise.resolve();
+    loggingClosePromise ??= logging.close();
+    return loggingClosePromise;
+  };
+  logger.info("fieldd.lifecycle.boot_started", "fieldd boot started");
   const tokens = new TokenService();
 
   const native = new NativeLink({
     socketPath: join(config.dataDir, "native", "run", "mgmt.sock"),
     pairingFile: join(config.dataDir, "native", "pairing"),
     bootId,
+    logger: logger.child({ component: "native_link" }),
   });
-  await native.connect();
 
   // everything past pairing is transactional — never leak the client slot
   try {
+    await native.connect();
+    logger.info("fieldd.native_link.connected", "The native management link connected");
     const mesh = new MeshClient(native);
-    const docs = new DocumentService({ dataDir: config.dataDir });
+    const docs = new DocumentService({
+      dataDir: config.dataDir,
+      logger: logger.child({ component: "docs.service" }),
+    });
     // PLUG-P2 — the plugin registry (§9): manifest-only discovery, pre-listen
     // so the first snapshot is warm. No module code loads here (§19.1).
     const plugins = new PluginRegistryService({
@@ -145,6 +185,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       native: latestHealth,
       docs: docs.health(),
       plugins: plugins.health(),
+      logging: logging?.health() ?? null,
       mesh: {
         // serves() is the FUSED view (reconcile ∘ runtime — mesh-client C3)
         serves: mesh.serves().map((s) => {
@@ -224,7 +265,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
 
     // -- doc lane (the :9411-class binary data plane) + doc.* handlers --
-    const docLane = new DocLane({ dataPort: config.dataPort ?? 0, docs });
+    const docLane = new DocLane({
+      dataPort: config.dataPort ?? 0,
+      docs,
+      logger: logger.child({ component: "docs.lane" }),
+    });
     const dataPort = await docLane.listen();
 
     const requireLocalDocumentCaller = (ctx: { transport: string }): void => {
@@ -425,6 +470,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const stopForSupersession = () => {
       if (fatalReason) return;
       fatalReason = "superseded: another fieldd took over this device's native plane";
+      logger.fatal(
+        "fieldd.lifecycle.superseded",
+        "fieldd was superseded by another native-plane owner",
+      );
       api.close();
       docLane.close();
       docs.dispose();
@@ -432,7 +481,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       devices.dispose();
       plugins.dispose();
       native.close();
-      config.onFatal?.(fatalReason);
+      const reason = fatalReason;
+      if (logging) {
+        void closeLogging().finally(() => config.onFatal?.(reason));
+      } else {
+        config.onFatal?.(reason);
+      }
     };
     native.on("superseded", stopForSupersession);
     if (native.superseded) stopForSupersession();
@@ -481,7 +535,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     chmodSync(tokenPath, 0o600); // umask-proof
     writeFileSync(
       productPath,
-      JSON.stringify(
+      `${JSON.stringify(
         {
           port: controlPort,
           pid: process.pid,
@@ -492,8 +546,38 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         } satisfies ProductInfo, // the shell/supervisor adoption contract (shell.ts)
         null,
         2,
-      ) + "\n",
+      )}\n`,
     );
+
+    logger.info("fieldd.lifecycle.ready", "fieldd is ready", { controlPort, dataPort });
+    let stopPromise: Promise<void> | null = null;
+    const stop = (): Promise<void> => {
+      stopPromise ??= (async () => {
+        logger.info("fieldd.lifecycle.stopping", "fieldd is stopping");
+        try {
+          api.close();
+          docLane.close();
+          docs.dispose();
+          peers.dispose();
+          devices.dispose();
+          plugins.dispose();
+          native.close();
+          // a superseding fieldd rewrites these for the same dataDir — never
+          // delete what is no longer ours
+          if (!native.superseded) {
+            rmSync(tokenPath, { force: true });
+            rmSync(productPath, { force: true });
+          }
+          logger.info("fieldd.lifecycle.stopped", "fieldd stopped");
+        } catch (error) {
+          logger.error("fieldd.lifecycle.stop_failed", "fieldd resource shutdown failed", error);
+          throw error;
+        } finally {
+          await closeLogging();
+        }
+      })();
+      return stopPromise;
+    };
 
     return {
       bootId,
@@ -506,27 +590,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       devices,
       peers,
       plugins,
+      logging,
       shellToken: shellGrant.token,
       health,
       nativeHealth: () => latestHealth,
-      async stop() {
-        api.close();
-        docLane.close();
-        docs.dispose();
-        peers.dispose();
-        devices.dispose();
-        plugins.dispose();
-        native.close();
-        // a superseding fieldd rewrites these for the same dataDir — never
-        // delete what is no longer ours
-        if (!native.superseded) {
-          rmSync(tokenPath, { force: true });
-          rmSync(productPath, { force: true });
-        }
-      },
+      stop,
     };
   } catch (e) {
     native.close(); // rollback: release the mgmt client slot
+    logger.fatal("fieldd.lifecycle.bootstrap_failed", "fieldd bootstrap failed", e);
+    await closeLogging();
     throw e;
   }
 }

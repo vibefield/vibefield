@@ -7,6 +7,7 @@ import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { PORTS } from "@vibefield/contracts";
+import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
 import { bootstrap } from "./daemon";
 
 function nativeAlive(socketPath: string): Promise<boolean> {
@@ -41,6 +42,9 @@ async function main(): Promise<void> {
     bundled: splitRoots(process.env["FIELDD_PLUGIN_ROOTS"]),
     devLinked: splitRoots(process.env["FIELDD_PLUGIN_DEV_ROOTS"]),
   };
+  const logRoot = resolvePlatformLogRoot({
+    allowOverride: process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1",
+  });
 
   let nativePid: number | undefined;
   const socketPath = join(dataDir, "native", "run", "mgmt.sock");
@@ -58,6 +62,7 @@ async function main(): Promise<void> {
 
   const daemon = await bootstrap({
     dataDir,
+    logRoot,
     ...(portEnv !== undefined ? { controlPort: Number(portEnv) } : {}),
     dataPort: dataPortEnv !== undefined ? Number(dataPortEnv) : PORTS.FIELDD_WS_DATA,
     allowedOrigins,
@@ -69,7 +74,7 @@ async function main(): Promise<void> {
     },
   });
   process.stdout.write(
-    JSON.stringify({ ready: true, port: daemon.controlPort, bootId: daemon.bootId }) + "\n",
+    `${JSON.stringify({ ready: true, port: daemon.controlPort, bootId: daemon.bootId })}\n`,
   );
 
   const shutdown = () => {
@@ -80,6 +85,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((e: unknown) => {
-  process.stderr.write(`fieldd failed to start: ${e instanceof Error ? e.message : String(e)}\n`);
+  const error = serializeError(e, { aliases: { home: homedir() } });
+  process.stderr.write(`fieldd failed to start: ${error.message}\n`);
   process.exit(1);
 });

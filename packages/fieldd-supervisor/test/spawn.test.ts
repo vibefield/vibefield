@@ -4,6 +4,7 @@ import { CONTRACTS_VERSION } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createFielddSupervisor,
+  type FielddSupervisorEvent,
   type FielddSupervisorOptions,
   SupervisorError,
 } from "../src/index";
@@ -31,21 +32,32 @@ afterEach(async () => {
 
 /** Grab the spawned pid out of the supervisor's own log line, so even a child
  * from a rejected ensure() gets cleaned up. */
-function trackSpawnedPid(logs: string[]) {
-  const m = logs.join("\n").match(/spawned fieldd pid=(\d+)/);
-  if (m) h.trackPid(Number(m[1]));
+function spawnedPid(events: FielddSupervisorEvent[]): number | undefined {
+  const event = events.find(
+    (candidate) =>
+      candidate.kind === "lifecycle" && candidate.event === "fieldd.supervisor.spawned",
+  );
+  return event?.kind === "lifecycle" && typeof event.attrs?.["pid"] === "number"
+    ? event.attrs["pid"]
+    : undefined;
 }
 
-function spawnedPid(logs: string[]): number | undefined {
-  const m = logs.join("\n").match(/spawned fieldd pid=(\d+)/);
-  return m ? Number(m[1]) : undefined;
+function trackSpawnedPid(events: FielddSupervisorEvent[]) {
+  h.trackPid(spawnedPid(events));
+}
+
+function hasLifecycle(
+  events: FielddSupervisorEvent[],
+  event: Extract<FielddSupervisorEvent, { kind: "lifecycle" }>["event"],
+): boolean {
+  return events.some((candidate) => candidate.kind === "lifecycle" && candidate.event === event);
 }
 
 function spawnSup(
   root: string,
   fixture: string,
   env: Record<string, string | undefined>,
-  logs: string[],
+  events: FielddSupervisorEvent[],
   extra?: Partial<FielddSupervisorOptions>,
 ) {
   const script = h.writeFixture(join(root, "fx"), "fieldd.mjs", fixture);
@@ -57,7 +69,7 @@ function spawnSup(
       shutdownPolicy: "leave-running",
       adoptProbeMs: 300,
       readinessDeadlineMs: 3000,
-      onLog: (l) => logs.push(l),
+      onEvent: (event) => events.push(event),
       ...extra,
     }),
   );
@@ -67,7 +79,7 @@ describe("spawn: no adoptable fieldd exists", () => {
   it("spawns the fixture, reaches readiness, ownership spawned + childPid set", async () => {
     const { port, token } = await h.startProduct();
     const root = h.mkRoot();
-    const logs: string[] = [];
+    const logs: FielddSupervisorEvent[] = [];
     const sup = spawnSup(
       root,
       FIXTURE_READY,
@@ -85,11 +97,18 @@ describe("spawn: no adoptable fieldd exists", () => {
     expect(handle.info.port).toBe(port);
     expect(handle.info.pid).toBe(handle.childPid);
     expect(handle.client.status).toBe("ready");
+    expect(logs.filter((event) => event.kind === "readiness")).toEqual([
+      {
+        kind: "readiness",
+        signal: { ready: true, port, bootId: "boot-fixture" },
+      },
+    ]);
+    expect(logs.some((event) => event.kind === "unexpected-stdout")).toBe(false);
   });
 
   it("child exits before readiness → rejects PROMPTLY with kind child-exit + stderr tail", async () => {
     const root = h.mkRoot();
-    const logs: string[] = [];
+    const logs: FielddSupervisorEvent[] = [];
     // no ProductApi: the fixture dies before it could ever become ready
     const sup = spawnSup(root, FIXTURE_EXIT_1, {}, logs, { readinessDeadlineMs: 5000 });
 
@@ -110,7 +129,7 @@ describe("spawn: no adoptable fieldd exists", () => {
 
   it("never-ready child → bounded readiness-timeout with the probe detail", async () => {
     const root = h.mkRoot();
-    const logs: string[] = [];
+    const logs: FielddSupervisorEvent[] = [];
     const sup = spawnSup(root, FIXTURE_IDLE, {}, logs, {
       shutdownPolicy: "stop-owned",
       readinessDeadlineMs: 1500,
@@ -139,7 +158,7 @@ describe("spawn: no adoptable fieldd exists", () => {
   it("a timed-out attempt kills its child; a Retry spawns fresh — never two", async () => {
     const { port, token } = await h.startProduct();
     const root = h.mkRoot();
-    const logs: string[] = [];
+    const logs: FielddSupervisorEvent[] = [];
     // attempt 1: an idle stand-in that never becomes ready. leave-running on
     // purpose — the attempt-terminal stop is POLICY-INDEPENDENT (a child that
     // never reached readiness is no daemon; the two-plane law doesn't apply).
@@ -152,7 +171,7 @@ describe("spawn: no adoptable fieldd exists", () => {
         shutdownPolicy: "leave-running",
         adoptProbeMs: 200,
         readinessDeadlineMs: 900,
-        onLog: (l) => logs.push(l),
+        onEvent: (event) => logs.push(event),
       }),
     );
 
@@ -182,7 +201,7 @@ describe("spawn: no adoptable fieldd exists", () => {
     const { port, token } = await h.startProduct();
     const root = h.mkRoot();
     const marker = join(root, "spawns.log");
-    const logs: string[] = [];
+    const logs: FielddSupervisorEvent[] = [];
     const sup = spawnSup(
       root,
       FIXTURE_READY,
@@ -202,10 +221,38 @@ describe("spawn: no adoptable fieldd exists", () => {
     expect(starts).toHaveLength(1);
   });
 
+  it("ignores observer failures so diagnostics cannot control daemon ownership", async () => {
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    const script = h.writeFixture(join(root, "fx"), "fieldd.mjs", FIXTURE_READY);
+    const sup = h.track(
+      createFielddSupervisor({
+        dataRoot: root,
+        spawn: { command: process.execPath, args: [script] },
+        environment: {
+          CV: CONTRACTS_VERSION,
+          TEST_PRODUCT_PORT: String(port),
+          SHELL_TOKEN: token,
+        },
+        shutdownPolicy: "leave-running",
+        adoptProbeMs: 300,
+        readinessDeadlineMs: 3_000,
+        onEvent() {
+          throw new Error("observer failure");
+        },
+      }),
+    );
+
+    const handle = await sup.ensure();
+    h.trackPid(handle.childPid);
+    expect(handle.ownership).toBe("spawned");
+    expect(handle.client.status).toBe("ready");
+  });
+
   it("loses the race (product.json pid ≠ ours) → adopts the incumbent, stops its own spawn", async () => {
     const { port, token } = await h.startProduct();
     const root = h.mkRoot();
-    const logs: string[] = [];
+    const logs: FielddSupervisorEvent[] = [];
     // the fixture writes a product.json whose pid is NOT its own (the test
     // runner's pid — alive and certainly different), so the supervisor concludes
     // another daemon already owns the root and must not claim ownership.
@@ -223,7 +270,7 @@ describe("spawn: no adoptable fieldd exists", () => {
     expect(handle.ownership).toBe("adopted"); // never claims a daemon it didn't win
     expect(handle.childPid).toBeUndefined(); // no owned child on an adopted handle
     expect(handle.info.pid).toBe(process.pid); // the recorded (foreign) pid, verbatim
-    expect(logs.join("\n")).toContain("stopping our spawn");
+    expect(hasLifecycle(logs, "fieldd.supervisor.spawn_race_lost")).toBe(true);
     // the losing spawn is torn down, not orphaned
     expect(ourSpawn).toBeGreaterThan(0);
     expect(await waitDead(ourSpawn as number)).toBe(true);
@@ -236,7 +283,7 @@ describe("the sun_path guard (slice-0 finding 4)", () => {
   it("an over-long data root rejects data-root-too-long BEFORE any spawn", async () => {
     const root = h.mkLongRoot();
     const sentinel = join(root, "spawned-anyway");
-    const logs: string[] = [];
+    const logs: FielddSupervisorEvent[] = [];
     const sup = h.track(
       createFielddSupervisor({
         dataRoot: root,
@@ -248,7 +295,7 @@ describe("the sun_path guard (slice-0 finding 4)", () => {
         environment: {},
         shutdownPolicy: "leave-running",
         readinessDeadlineMs: 2000,
-        onLog: (l) => logs.push(l),
+        onEvent: (event) => logs.push(event),
       }),
     );
 
@@ -261,6 +308,6 @@ describe("the sun_path guard (slice-0 finding 4)", () => {
     expect(err).toBeInstanceOf(SupervisorError);
     expect((err as SupervisorError).kind).toBe("data-root-too-long");
     expect(existsSync(sentinel)).toBe(false); // nothing was spawned
-    expect(logs.join("\n")).not.toContain("spawned fieldd"); // and the log agrees
+    expect(hasLifecycle(logs, "fieldd.supervisor.spawned")).toBe(false);
   });
 });

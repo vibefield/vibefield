@@ -30,6 +30,11 @@ export function buildSupervisor(opts: {
     process.env["FIELDD_NATIVE_BIN"] ?? join(opts.repoRoot, "target", "debug", "field-native");
   if (!existsSync(fielddBin)) throw new Error(`fieldd bin missing (build it): ${fielddBin}`);
   const smokeLike = opts.mode === "smoke" || opts.mode === "smoke-canvas";
+  const logOverride = smokeLike
+    ? join(opts.root, "logs")
+    : opts.mode === "dev"
+      ? process.env["FIELD_LOG_DIR"]
+      : undefined;
   return createFielddSupervisor({
     dataRoot: opts.root,
     spawn: { command: process.execPath, args: [fielddBin] },
@@ -42,11 +47,19 @@ export function buildSupervisor(opts: {
       FIELDD_PLUGIN_ROOTS: process.env["FIELDD_PLUGIN_ROOTS"] ?? join(opts.repoRoot, "plugins"),
       FIELDD_PLUGIN_DEV_ROOTS:
         process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? join(opts.repoRoot, "examples", "plugins"),
+      // Only an explicit mode decision can enable FIELD_LOG_DIR. Production
+      // removes both ambient values before spawning the daemon.
+      FIELD_LOG_DIR: logOverride,
+      FIELDD_ALLOW_LOG_DIR_OVERRIDE: logOverride === undefined ? undefined : "1",
     },
     ...(existsSync(nativeBin) ? { nativeExecutable: nativeBin } : {}),
     ...(opts.mode === "dev" ? { allowedOrigins: [new URL(opts.viteUrl).origin] } : {}),
     ...(smokeLike ? { controlPort: 0, dataPort: 0 } : {}),
     shutdownPolicy: shutdownPolicy(opts.mode),
-    onLog: (line) => console.log(`[fieldd] ${line}`),
+    onEvent: (event) => {
+      if (event.kind === "stderr" || event.kind === "unexpected-stdout") {
+        process.stderr.write(`[fieldd ${event.kind}] ${event.line}\n`);
+      }
+    },
   });
 }

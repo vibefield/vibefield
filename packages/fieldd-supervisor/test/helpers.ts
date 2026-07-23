@@ -202,6 +202,7 @@ writeFileSync(join(dir, "product.json"), JSON.stringify({
   port, pid, bootId: "boot-fixture",
   contractsVersion: process.env.CV, startedAt: Date.now(), nativePid: null,
 }));
+process.stdout.write(JSON.stringify({ ready: true, port, bootId: "boot-fixture" }) + "\\n");
 setInterval(() => {}, 1e6);
 `;
 

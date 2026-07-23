@@ -51,6 +51,49 @@ export interface FielddSpawnCommand {
   args: readonly string[];
 }
 
+export interface FielddReadySignal {
+  readonly ready: true;
+  readonly port: number;
+  readonly bootId: string;
+}
+
+export type SupervisorLifecycleEventName =
+  | "fieldd.supervisor.adopted"
+  | "fieldd.supervisor.spawn_required"
+  | "fieldd.supervisor.spawned"
+  | "fieldd.supervisor.spawn_race_lost"
+  | "fieldd.supervisor.ready"
+  | "fieldd.supervisor.stop_requested"
+  | "fieldd.supervisor.force_killed"
+  | "fieldd.supervisor.stopped"
+  | "fieldd.supervisor.disposed";
+
+export type FielddSupervisorEvent =
+  | {
+      readonly kind: "lifecycle";
+      readonly event: SupervisorLifecycleEventName;
+      readonly message: string;
+      readonly attrs?: Readonly<Record<string, string | number | boolean | null>>;
+    }
+  | {
+      /** A schema-valid line from fieldd's bounded stdout startup protocol.
+       * It is control data, never a diagnostic log line. */
+      readonly kind: "readiness";
+      readonly signal: FielddReadySignal;
+    }
+  | {
+      /** Bounded/redacted emergency output. Routine fieldd logs never use this
+       * route; fieldd persists them in its process-owned stream. */
+      readonly kind: "stderr";
+      readonly line: string;
+    }
+  | {
+      /** Any non-readiness stdout is abnormal and remains in the bounded
+       * child-exit tail for diagnosis. */
+      readonly kind: "unexpected-stdout";
+      readonly line: string;
+    };
+
 export interface FielddSupervisorOptions {
   dataRoot: string;
   spawn: FielddSpawnCommand;
@@ -69,8 +112,9 @@ export interface FielddSupervisorOptions {
   readinessDeadlineMs?: number;
   /** budget for the first adoption probe before deciding to spawn */
   adoptProbeMs?: number;
-  /** line-buffered, secret-redacted child output + supervisor decisions */
-  onLog?: (line: string) => void;
+  /** Typed lifecycle/control/emergency boundary. Readiness stdout is never
+   * collapsed into stderr or duplicated as a routine shell log. */
+  onEvent?: (event: FielddSupervisorEvent) => void;
 }
 
 export interface FielddHandle {

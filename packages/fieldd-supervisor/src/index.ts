@@ -12,10 +12,13 @@ export {
 export { createFielddSupervisor } from "./supervisor";
 export {
   type FielddHandle,
+  type FielddReadySignal,
   type FielddSpawnCommand,
   type FielddSupervisor,
+  type FielddSupervisorEvent,
   type FielddSupervisorOptions,
   type ProbeFailure,
   SupervisorError,
   type SupervisorErrorKind,
+  type SupervisorLifecycleEventName,
 } from "./types";

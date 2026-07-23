@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-// LOG-L0 characterization harness. This measures the current direct-Console
-// call path against an immediate discard destination; it is NOT a persistence
-// benchmark and deliberately claims no queue, batching, backpressure, or
-// durability. LOG-L1 keeps this baseline and adds sink-enqueue scenarios.
+// Versioned LOG-L0/LOG-L1 harness. It retains the direct-Console discard
+// baseline and adds disabled/accepted calls through the real bounded Node sink.
+import { execFileSync } from "node:child_process";
 import { Console } from "node:console";
+import { mkdtempSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Writable } from "node:stream";
 
-const HARNESS_VERSION = 1;
+const HARNESS_VERSION = 2;
 const DEFAULT_ITERATIONS = 50_000;
 
 class ImmediateDiscard extends Writable {
@@ -62,6 +65,36 @@ const scenarios = [
 ];
 sink.end();
 
+const workDir = mkdtempSync(join(tmpdir(), "vibefield-logging-bench-"));
+let nodeSink;
+try {
+  const bundle = join(workDir, "sink-benchmark.cjs");
+  const pnpmCli = process.env.npm_execpath;
+  const command = pnpmCli ? process.execPath : "pnpm";
+  const prefix = pnpmCli ? [pnpmCli] : [];
+  execFileSync(
+    command,
+    [
+      ...prefix,
+      "--filter",
+      "@vibefield/logging",
+      "exec",
+      "esbuild",
+      join(process.cwd(), "scripts", "bench-logging-sink.ts"),
+      "--bundle",
+      "--platform=node",
+      "--format=cjs",
+      `--outfile=${bundle}`,
+    ],
+    { cwd: process.cwd(), stdio: "ignore" },
+  );
+  const driver = createRequire(import.meta.url)(bundle);
+  nodeSink = await driver.measureLoggingSink(iterations, join(workDir, "logs"));
+  scenarios.push(...nodeSink.scenarios);
+} finally {
+  rmSync(workDir, { recursive: true, force: true });
+}
+
 process.stdout.write(
   `${JSON.stringify(
     {
@@ -70,12 +103,24 @@ process.stdout.write(
       runtime: process.version,
       platform: `${process.platform}-${process.arch}`,
       semantics: {
-        destination: "immediate-discard",
-        applicationQueue: "none",
-        batching: "none",
-        backpressurePolicy: "none",
-        dropAccounting: "none",
-        persistence: "none",
+        consoleBaseline: {
+          destination: "immediate-discard",
+          applicationQueue: "none",
+          persistence: "none",
+        },
+        nodeSink: {
+          destination: "process-owned NDJSON segment writer",
+          applicationQueue: "bounded with reserved high-severity capacity",
+          batching: "up to 128 records / 256 KiB per writer block",
+          backpressurePolicy: "lower levels drop first",
+          persistence: "flush between measurement batches",
+        },
+      },
+      nodeSinkHealth: {
+        accepted: nodeSink.accepted,
+        dropped: nodeSink.dropped,
+        queueHighWaterRecords: nodeSink.queueHighWaterRecords,
+        ringHighWaterBytes: nodeSink.ringHighWaterBytes,
       },
       scenarios,
     },

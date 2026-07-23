@@ -5,6 +5,7 @@ import {
   createFielddSupervisor,
   createLineBuffer,
   createLogTail,
+  type FielddSupervisorEvent,
   MAX_PARTIAL_LINE_BYTES,
   PARTIAL_LINE_TRUNCATION_MARKER,
   redactLine,
@@ -13,7 +14,7 @@ import { createHarness, FIXTURE_READY, type Harness } from "./helpers";
 
 // §12.2 log redaction: the unit primitives (redactLine · createLineBuffer ·
 // createLogTail) and the end-to-end guarantee that a secret printed by a
-// spawned child never reaches an onLog sink in the clear (EL7).
+// spawned child never reaches a typed output event in the clear (EL7).
 
 let h: Harness;
 beforeEach(() => {
@@ -111,13 +112,13 @@ describe("createLogTail", () => {
 });
 
 describe("redaction through a spawned child", () => {
-  it("a secret the child prints is [redacted] in onLog and never leaks raw", async () => {
+  it("a secret the child prints is [redacted] in unexpected stdout and never leaks raw", async () => {
     const raw = "abcdefghijklmnopqrstuvwxyz123456";
     const secretLine = `token=${raw}`;
     const { port, token } = await h.startProduct();
     const root = h.mkRoot();
     const script = h.writeFixture(join(root, "fx"), "fieldd.mjs", FIXTURE_READY);
-    const logs: string[] = [];
+    const events: FielddSupervisorEvent[] = [];
     const sup = h.track(
       createFielddSupervisor({
         dataRoot: root,
@@ -131,15 +132,22 @@ describe("redaction through a spawned child", () => {
         shutdownPolicy: "leave-running",
         adoptProbeMs: 300,
         readinessDeadlineMs: 3000,
-        onLog: (l) => logs.push(l),
+        onEvent: (event) => events.push(event),
       }),
     );
 
     const handle = await sup.ensure();
     h.trackPid(handle.childPid);
 
-    const joined = logs.join("\n");
+    const output = events
+      .filter(
+        (event): event is Extract<FielddSupervisorEvent, { kind: "unexpected-stdout" }> =>
+          event.kind === "unexpected-stdout",
+      )
+      .map((event) => event.line);
+    const joined = output.join("\n");
     expect(joined).not.toContain(raw); // the raw secret never reached the sink
-    expect(logs.some((l) => l.includes("token=[redacted]"))).toBe(true);
+    expect(output.some((line) => line.includes("token=[redacted]"))).toBe(true);
+    expect(events.filter((event) => event.kind === "readiness")).toHaveLength(1);
   });
 });

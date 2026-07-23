@@ -9,6 +9,7 @@ import {
   type LanePutMeta,
   STORES,
 } from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
 
 // DocumentService (design-02 §3.5, B3 shape A): fieldd owns the board's at-rest
@@ -31,6 +32,7 @@ export interface DocumentServiceOptions {
   now?: () => number;
   /** one-shot lane ticket lifetime (default 30s) */
   ticketTtlMs?: number;
+  logger?: Logger;
 }
 
 /** doc.open's return: the caller pairs the ticket with laneUrl before dialing. */
@@ -80,6 +82,7 @@ export class DocumentService {
   private readonly registryDir: string;
   private readonly registryFile: string;
   private readonly registryPath: string;
+  private readonly logger: Logger;
 
   /** insertion-ordered so list() reads back in creation order */
   private registry = new Map<string, DocRegistryEntry>();
@@ -93,6 +96,7 @@ export class DocumentService {
     this.dataDir = opts.dataDir;
     this.now = opts.now ?? Date.now;
     this.ticketTtlMs = opts.ticketTtlMs ?? 30_000;
+    this.logger = opts.logger ?? createNoopLogger();
     this.docsDir = join(this.dataDir, "docs");
     this.registryDir = join(this.dataDir, "registries");
     this.registryFile = `${STORES.DOCS}.json`;
@@ -103,7 +107,11 @@ export class DocumentService {
       this.storageOk = true;
     } catch (e) {
       // honest degraded state — health() reports "failed", boot does not die
-      console.error(`[doc-service] storage init failed: ${errMsg(e)}`);
+      this.logger.error(
+        "fieldd.docs.storage_initialization_failed",
+        "Document storage initialization failed",
+        e,
+      );
     }
     this.loadRegistry();
     this.reconcileRegistry();
@@ -334,9 +342,15 @@ export class DocumentService {
       const obsolete = [previous.file, ...previous.updates.map((update) => update.file)];
       for (const file of obsolete) {
         if (file === meta.file) continue;
-        void rm(join(revisions, file), { force: true }).catch((err) =>
-          console.warn(`[doc-service] old revision cleanup failed for ${docId}: ${errMsg(err)}`),
-        );
+        void rm(join(revisions, file), { force: true }).catch((error) => {
+          this.logger
+            .child({ docId })
+            .warn(
+              "fieldd.docs.revision_cleanup_failed",
+              "An obsolete document revision could not be removed",
+              { error },
+            );
+        });
       }
     }
     // Legacy files are no longer authoritative after current.json commits.
@@ -471,7 +485,12 @@ export class DocumentService {
       } catch {
         /* fall through to the synthesized sidecar below */
       }
-      console.warn(`[doc-service] meta.json unreadable for ${docId}; synthesizing from registry`);
+      this.logger
+        .child({ docId })
+        .warn(
+          "fieldd.docs.metadata_unreadable",
+          "Document metadata was unreadable; registry metadata was used",
+        );
     }
     const entry = this.registry.get(docId);
     return {
@@ -519,13 +538,23 @@ export class DocumentService {
           changed = true;
         }
       } catch (err) {
-        console.error(`[doc-service] current revision unreadable for ${docId}: ${errMsg(err)}`);
+        this.logger
+          .child({ docId })
+          .error(
+            "fieldd.docs.current_revision_unreadable",
+            "The current document revision was unreadable",
+            err,
+          );
       }
     }
     if (changed)
-      void this.persistRegistry().catch((err) =>
-        console.error(`[doc-service] reconcile persist failed: ${errMsg(err)}`),
-      );
+      void this.persistRegistry().catch((err) => {
+        this.logger.error(
+          "fieldd.docs.reconcile_persist_failed",
+          "The reconciled document registry could not be persisted",
+          err,
+        );
+      });
   }
 
   private storageError(op: string, err: unknown): RpcCallError {
@@ -541,7 +570,11 @@ export class DocumentService {
     try {
       raw = readFileSync(this.registryPath, "utf8");
     } catch (e) {
-      console.error(`[doc-service] registry unreadable, starting empty: ${errMsg(e)}`);
+      this.logger.error(
+        "fieldd.docs.registry_unreadable",
+        "The document registry was unreadable; an empty registry was started",
+        e,
+      );
       return;
     }
     let parsed: unknown;
@@ -558,7 +591,12 @@ export class DocumentService {
     for (const item of parsed) {
       const entry = DocRegistryEntry.safeParse(item);
       if (entry.success) this.registry.set(entry.data.docId, entry.data);
-      else console.warn(`[doc-service] dropping invalid registry entry: ${entry.error.message}`);
+      else
+        this.logger.warn(
+          "fieldd.docs.registry_entry_rejected",
+          "An invalid document registry entry was rejected",
+          { issueCount: entry.error.issues.length },
+        );
     }
   }
 
@@ -566,9 +604,18 @@ export class DocumentService {
     const aside = `${this.registryPath}.corrupt-${this.now()}`;
     try {
       renameSync(this.registryPath, aside);
-      console.error(`[doc-service] docs registry ${why}; moved aside to ${aside}`);
+      this.logger.warn(
+        "fieldd.docs.registry_quarantined",
+        "A corrupt document registry was quarantined",
+        { reason: why, quarantinePath: aside },
+      );
     } catch (e) {
-      console.error(`[doc-service] docs registry ${why}; could not quarantine: ${errMsg(e)}`);
+      this.logger.error(
+        "fieldd.docs.registry_quarantine_failed",
+        "A corrupt document registry could not be quarantined",
+        e,
+        { reason: why },
+      );
     }
   }
 }

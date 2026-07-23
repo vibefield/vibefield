@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
 import { CONTRACTS_VERSION } from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { computePairingMac } from "./pairing";
 
 // NativeLink (design-02 §3.3): the ONLY door to field-native. Owns the mgmt
@@ -35,6 +36,7 @@ export interface NativeLinkOptions {
   reconnect?: boolean;
   /** how long to wait for field-native to create socket/pairing on first boot */
   waitForDaemonMs?: number;
+  logger?: Logger;
 }
 
 type SubEventKind = "snapshot" | "delta";
@@ -72,6 +74,7 @@ export class NativeLink extends EventEmitter {
   private nextSubKey = 1;
   private attempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private readonly logger: Logger;
 
   connected = false;
   superseded = false;
@@ -79,6 +82,7 @@ export class NativeLink extends EventEmitter {
 
   constructor(private readonly opts: NativeLinkOptions) {
     super();
+    this.logger = opts.logger ?? createNoopLogger();
   }
 
   /** Waits for field-native's pairing file + socket (it creates both), dials, hellos. */
@@ -323,9 +327,10 @@ export class NativeLink extends EventEmitter {
         // down anyway). Transport-dead errors still abort: with no socket the
         // remaining replays can't succeed either.
         if (this.closed || this.superseded || this.sock === null) throw e;
-        console.warn(
-          `[native-link] subscription replay refused, kept for next reconnect: ${sub.method}`,
-          e instanceof Error ? e.message : e,
+        this.logger.warn(
+          "fieldd.native_link.subscription_replay_refused",
+          "A native subscription replay was refused and retained for the next reconnect",
+          { method: sub.method, error: e },
         );
       }
     }
@@ -368,7 +373,7 @@ export class NativeLink extends EventEmitter {
     const sock = this.sock;
     if (!sock) throw new RpcCallError("UNAVAILABLE", "not connected", true);
     const id = this.nextId++;
-    const line = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
+    const line = `${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`;
     return await new Promise((resolve, reject) => {
       const entry: Pending = { resolve, reject };
       if (subKey !== undefined) entry.subKey = subKey;

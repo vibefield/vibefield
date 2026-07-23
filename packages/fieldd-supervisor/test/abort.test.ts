@@ -3,6 +3,7 @@ import { CONTRACTS_VERSION } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createFielddSupervisor,
+  type FielddSupervisorEvent,
   type FielddSupervisorOptions,
   SupervisorError,
 } from "../src/index";
@@ -23,12 +24,21 @@ afterEach(async () => {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-function spawnedPid(logs: string[]): number | undefined {
-  const m = logs.join("\n").match(/spawned fieldd pid=(\d+)/);
-  return m ? Number(m[1]) : undefined;
+function spawnedPid(events: FielddSupervisorEvent[]): number | undefined {
+  const event = events.find(
+    (candidate) =>
+      candidate.kind === "lifecycle" && candidate.event === "fieldd.supervisor.spawned",
+  );
+  return event?.kind === "lifecycle" && typeof event.attrs?.["pid"] === "number"
+    ? event.attrs["pid"]
+    : undefined;
 }
 
-function idleSup(root: string, logs: string[], extra?: Partial<FielddSupervisorOptions>) {
+function idleSup(
+  root: string,
+  events: FielddSupervisorEvent[],
+  extra?: Partial<FielddSupervisorOptions>,
+) {
   const script = h.writeFixture(join(root, "fx"), "fieldd.mjs", FIXTURE_IDLE);
   return h.track(
     createFielddSupervisor({
@@ -38,7 +48,7 @@ function idleSup(root: string, logs: string[], extra?: Partial<FielddSupervisorO
       shutdownPolicy: "stop-owned",
       adoptProbeMs: 300,
       readinessDeadlineMs: 10_000, // long: the abort/dispose must be what ends it
-      onLog: (l) => logs.push(l),
+      onEvent: (event) => events.push(event),
       ...extra,
     }),
   );
@@ -47,7 +57,7 @@ function idleSup(root: string, logs: string[], extra?: Partial<FielddSupervisorO
 describe("cancellation", () => {
   it("an external AbortSignal fired during readiness rejects with kind aborted", async () => {
     const root = h.mkRoot();
-    const logs: string[] = [];
+    const logs: FielddSupervisorEvent[] = [];
     const sup = idleSup(root, logs);
     const ac = new AbortController();
 
@@ -76,7 +86,7 @@ describe("cancellation", () => {
 
   it("dispose() during an in-flight ensure() rejects it AND stops the spawned child", async () => {
     const root = h.mkRoot();
-    const logs: string[] = [];
+    const logs: FielddSupervisorEvent[] = [];
     const sup = idleSup(root, logs);
 
     // handle the rejection up front: dispose() rejects the in-flight ensure()
