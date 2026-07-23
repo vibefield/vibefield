@@ -14,12 +14,14 @@ a private mesh across machines, and an iPhone companion.
 | `packages/field-native` | Rust native-plane daemon: mgmt server, D8 pairing, MeshGateway (truffle node); embedded ghosttea TerminalService to come |
 | `packages/fieldd` | Node product-plane daemon: NativeLink, TokenService, ProductAPI (dual-WS), MeshClient |
 | `packages/fieldd-client` | renderer/worker client — loopback WS + React hooks |
+| `packages/fieldd-supervisor` | Node-only fieldd discovery/adopt/spawn/shutdown library — executes inside Electron main, never a process of its own |
+| `packages/electron-shell` | Electron main + preload + the tiny renderer host, and the renderer's vite build — a composition root with no product logic |
+| `packages/field-app` | the browser-compatible renderer product: boot machine, DocManager, the FieldView units (session/canvas/persistence/chrome/previews), HUD |
+| `packages/shell-ui` | the design kit — CardShell, tokens, GL card chrome (DESIGN.md made code) |
 | `packages/plugin-runtime` | plugin manifest / registry / renderer context (P0 core of the design-03 plugin system) |
-| `packages/plugins/note` | first built-in plugin — `note.card` sticky note on ICE `defineWidget` |
-| `apps/desktop` | the Electron spine: windows, Field/System views, smoke harnesses |
+| `packages/plugins/*` | built-in plugins: `note` (sticky note), `field-tools` (folder/comment), `widgetlab` (the 18-widget parity pack) |
+| `apps/desktop` | packaging-only: delegating scripts + the electron dep; no application source lives here |
 | `services/push-relay` | *(planned)* the one cloud hop — open-source APNs wake-hint relay |
-
-Further packages (shell-ui design kit, more built-in plugins) land per design-03 as the tracks progress.
 
 ## Getting started
 
