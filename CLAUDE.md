@@ -31,6 +31,9 @@ Required sibling checkouts, verified by `pnpm preflight`:
   bug class (B2's missing ground.js).
 - `../p008/truffle` — Cargo `[patch.crates-io]` target for `truffle-core` (EL8 lockstep).
 
+Sibling REVISIONS are pinned in `siblings.lock.json` (preflight verifies the SHAs; dirty trees
+warn). After deliberately syncing a sibling, accept the new revision with `pnpm siblings:pin`.
+
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
 (contracts codegen; preflight checks the version).
 

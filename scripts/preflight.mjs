@@ -3,12 +3,59 @@
 // present (README "Getting started", CLAUDE.md "Machine setup"). Hard-fails on
 // missing pieces, warns on freshness/version drift. Run: `pnpm preflight`.
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const problems = [];
 const warnings = [];
+
+// --- sibling revision pins (siblings.lock.json) ------------------------------
+// The ice file: dep and the truffle cargo [patch] point at WORKING TREES —
+// presence checks alone leave the build unreproducible: a green verify can't be
+// replayed without knowing which sibling revisions it ran against. The lock
+// records the SHAs; preflight verifies them. Updating the lock IS the deliberate
+// upgrade event (EL8 spirit): sync the sibling, then `pnpm siblings:pin`. Dirty
+// sibling trees only WARN — co-developing them is the normal state; the pin is
+// about the base revision.
+const SIBLINGS = {
+  "infinite-canvas-engine": resolve(root, "../infinite-canvas-engine"),
+  truffle: resolve(root, "../p008/truffle"),
+};
+const SIBLINGS_LOCK = join(root, "siblings.lock.json");
+
+function siblingSha(dir) {
+  return execSync("git rev-parse HEAD", { cwd: dir, stdio: ["ignore", "pipe", "ignore"] })
+    .toString()
+    .trim();
+}
+
+function siblingDirty(dir) {
+  return (
+    execSync("git status --porcelain", { cwd: dir, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim().length > 0
+  );
+}
+
+if (process.argv.includes("--pin-siblings")) {
+  const pinned = {};
+  for (const [name, dir] of Object.entries(SIBLINGS)) {
+    try {
+      pinned[name] = siblingSha(dir);
+    } catch {
+      console.error(`siblings:pin FAIL: ${name} is not a git checkout at ${dir}`);
+      process.exit(1);
+    }
+  }
+  const doc = {
+    "//": "Machine-coupled sibling revisions. Verified by pnpm preflight; update deliberately via pnpm siblings:pin (EL8: upgrades are events, never drift).",
+    siblings: pinned,
+  };
+  writeFileSync(SIBLINGS_LOCK, `${JSON.stringify(doc, null, 2)}\n`);
+  for (const [name, sha] of Object.entries(pinned)) console.log(`pinned ${name} @ ${sha}`);
+  process.exit(0);
+}
 
 // --- sibling checkouts -------------------------------------------------------
 const ICE = resolve(root, "../infinite-canvas-engine/packages/ice");
@@ -42,6 +89,40 @@ if (existsSync(ICE)) {
     warnings.push(
       "ice dist/ is older than its src/ — rebuild ice or you'll consume stale-dist bugs",
     );
+  }
+}
+
+// --- sibling revisions vs the lock -------------------------------------------
+if (!existsSync(SIBLINGS_LOCK)) {
+  problems.push("siblings.lock.json missing — run `pnpm siblings:pin` to record sibling revisions");
+} else {
+  const lock = JSON.parse(readFileSync(SIBLINGS_LOCK, "utf8"));
+  for (const [name, dir] of Object.entries(SIBLINGS)) {
+    if (!existsSync(dir)) continue; // presence failure already reported above
+    let sha = null;
+    try {
+      sha = siblingSha(dir);
+    } catch {
+      warnings.push(`${name}: not a git checkout at ${dir} — revision pin unverifiable`);
+      continue;
+    }
+    const pinned = lock.siblings?.[name];
+    if (pinned === undefined) {
+      problems.push(`${name} has no entry in siblings.lock.json — run \`pnpm siblings:pin\``);
+    } else if (sha !== pinned) {
+      problems.push(
+        `${name} is at ${sha.slice(0, 12)} but siblings.lock.json pins ` +
+          `${String(pinned).slice(0, 12)} — sync the sibling to the pin, or accept the new ` +
+          "revision deliberately: `pnpm siblings:pin` (EL8)",
+      );
+    }
+    try {
+      if (siblingDirty(dir)) {
+        warnings.push(`${name} working tree is dirty — verify runs against unpinned edits`);
+      }
+    } catch {
+      // status unavailable: the SHA check above already covered the repo shape
+    }
   }
 }
 
