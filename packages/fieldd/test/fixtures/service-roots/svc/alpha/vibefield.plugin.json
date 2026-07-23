@@ -1,0 +1,142 @@
+{
+  "activation": [
+    "onStartup"
+  ],
+  "backgroundReason": "fixture: activates at startup to serve the P4 host tests",
+  "capabilities": [
+    "services.provide",
+    "background"
+  ],
+  "contributes": {
+    "capabilities": [
+      {
+        "description": "Call the fixture KV/echo methods",
+        "id": "x.vibefield.fixture.svc.use",
+        "risk": "write",
+        "title": "Use the fixture service"
+      }
+    ],
+    "services": [
+      {
+        "methods": [
+          {
+            "idempotent": true,
+            "input": {
+              "additionalProperties": false,
+              "properties": {
+                "msg": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "msg"
+              ],
+              "type": "object"
+            },
+            "kind": "query",
+            "locality": "local",
+            "name": "echo",
+            "output": {
+              "additionalProperties": false,
+              "properties": {
+                "echo": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "echo"
+              ],
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.fixture.svc.use"
+          },
+          {
+            "idempotent": true,
+            "input": {
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "kind": "query",
+            "locality": "local",
+            "name": "boom",
+            "output": {
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.fixture.svc.use"
+          },
+          {
+            "idempotent": false,
+            "input": {
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "kind": "mutation",
+            "locality": "local",
+            "name": "die",
+            "output": {
+              "additionalProperties": false,
+              "properties": {
+                "dying": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "dying"
+              ],
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.fixture.svc.use"
+          },
+          {
+            "delta": {
+              "additionalProperties": false,
+              "properties": {
+                "n": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "n"
+              ],
+              "type": "object"
+            },
+            "idempotent": true,
+            "input": {
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "kind": "subscription",
+            "locality": "local",
+            "name": "ticks",
+            "requiredCapability": "x.vibefield.fixture.svc.use",
+            "snapshot": {
+              "additionalProperties": false,
+              "properties": {
+                "n": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "n"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "namespace": "x.vibefield.fixture.svc"
+      }
+    ]
+  },
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "service": "./service.js"
+  },
+  "id": "vibefield.fixture.svc",
+  "manifestVersion": 1,
+  "title": "Service Fixture",
+  "version": "0.1.0"
+}

@@ -8,6 +8,7 @@ import {
   Hello,
   METHODS,
   type MethodDef,
+  NAMESPACES,
   RPC_ERROR_CODES,
   type Scope,
   TAILNET_SCOPES,
@@ -64,7 +65,22 @@ export type DeviceForwarder = (
 
 /** The slice of TokenService the API needs (keeps the dependency one-way). */
 export interface TokenServiceLike {
-  verify(token: string): { tokenId: string; scopes: Scope[]; label: string } | null;
+  verify(
+    token: string,
+  ): { tokenId: string; scopes: Scope[]; label: string; pluginId?: string } | null;
+}
+
+/** P4 — the dynamic-method router (ServiceRegistry): any "x."-prefixed method
+ * routes here instead of the static METHODS table (§14.6 exact map). */
+export interface DynamicRouterLike {
+  kindOf(method: string): "call" | "subscription" | undefined;
+  call(ctx: CallerContext, method: string, params: unknown): Promise<unknown>;
+  subscribe(
+    ctx: CallerContext,
+    method: string,
+    params: unknown,
+    emit: (payload: unknown) => void,
+  ): Promise<{ snapshot: unknown; dispose: () => void }>;
 }
 
 interface ConnState {
@@ -87,6 +103,55 @@ export class ProductApi extends EventEmitter {
   private nextSubId = 1;
   private ownDeviceId: (() => string) | null = null;
   private forwarder: DeviceForwarder | null = null;
+  private dynamicRouter: DynamicRouterLike | null = null;
+
+  /** P4 — arm the x.* dynamic-method path (the ServiceRegistry). */
+  setDynamicRouter(router: DynamicRouterLike): void {
+    this.dynamicRouter = router;
+  }
+
+  /** The dynamic execution tail: the router owns gating and validation; this
+   * owns only the wire protocol (subId minting + delta frames, P5 shape). */
+  private async executeDynamic(
+    ws: WebSocket,
+    state: ConnState,
+    id: unknown,
+    method: string,
+    params: unknown,
+    reply: (v: unknown) => void,
+  ): Promise<void> {
+    const router = this.dynamicRouter;
+    const ctx = state.ctx;
+    if (router === null || !ctx) return;
+    const kind = router.kindOf(method);
+    if (kind === undefined) {
+      reply(this.err(id, "NOT_FOUND", `no provider for ${method}`, false, undefined, -32601));
+      return;
+    }
+    if (kind === "subscription") {
+      const subId = `ps-${this.nextSubId++}`;
+      let active = true;
+      const emit = (payload: unknown) => {
+        if (active && ws.readyState === WS_OPEN)
+          ws.send(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              method: `${method}.delta`,
+              params: { subId, payload },
+            }),
+          );
+      };
+      const { snapshot, dispose } = await router.subscribe(ctx, method, params, emit);
+      state.subs.set(subId, () => {
+        active = false;
+        dispose();
+      });
+      reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
+      return;
+    }
+    const result = await router.call(ctx, method, params);
+    reply({ jsonrpc: "2.0", id, result });
+  }
 
   constructor(private readonly opts: ProductApiOptions) {
     super();
@@ -248,11 +313,16 @@ export class ProductApi extends EventEmitter {
       const token = parsed.data.credential;
       const grant = typeof token === "string" ? this.opts.tokens.verify(token) : null;
       if (grant) {
-        // a verified token is a real local grant — it wins on either door
+        // a verified token is a real local grant — it wins on either door.
+        // P4: a plugin-bound grant derives the {kind:"plugin"} principal (D20
+        // — identity comes from the mint, never from the caller's claims).
         state.authed = true;
         state.scopes = grant.scopes;
         state.ctx = {
-          principal: { kind: "local-token", tokenId: grant.tokenId, scopes: grant.scopes },
+          principal:
+            grant.pluginId !== undefined
+              ? { kind: "plugin", id: grant.pluginId, scopes: grant.scopes }
+              : { kind: "local-token", tokenId: grant.tokenId, scopes: grant.scopes },
           transport: state.tailnetLogin !== null ? "ws-tailnet" : "ws-loopback",
           receivedAt: Date.now(),
           clientKind: parsed.data.clientKind, // §11.2 kind gate reads it (restrict-only)
@@ -308,6 +378,22 @@ export class ProductApi extends EventEmitter {
         state.subs.delete(subId as string);
       }
       reply({ jsonrpc: "2.0", id, result: { removed: dispose !== undefined } });
+      return;
+    }
+
+    // P4 — dynamic services (§14): "x."-prefixed methods live in the
+    // registered-namespace exact map, never in METHODS; the router runs its
+    // own §14.4 pipeline (capability gate included — no static scope here).
+    if (method.startsWith(NAMESPACES.DYNAMIC_PREFIX) && this.dynamicRouter !== null) {
+      try {
+        await this.executeDynamic(ws, state, id, method, params, reply);
+      } catch (e) {
+        if (e instanceof RpcCallError) {
+          reply(this.err(id, e.kind as ErrorKind, e.message, e.retryable, e.details));
+        } else {
+          reply(this.err(id, "INTERNAL", e instanceof Error ? e.message : "internal error", false));
+        }
+      }
       return;
     }
 

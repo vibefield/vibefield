@@ -1,0 +1,424 @@
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { Worker } from "node:worker_threads";
+import {
+  PLUGIN_LIMITS,
+  type PluginManifestV1,
+  type PublicEntryState,
+  type Scope,
+  validatePluginManifest,
+} from "@vibefield/contracts";
+import type { PluginRegistryService } from "./plugin-registry";
+import type { ServiceCallerInfo, ServiceRegistry } from "./service-registry";
+import type { TokenService } from "./token-service";
+
+// ServiceHost (plugin spec §14.2/§18, P4): one worker thread per plugin
+// service entry, host-owned harness, §10.4 deadlines, the §18.3 crash ladder,
+// §18.2 deactivation order. The worker gets a plugin-bound product lease and a
+// MINIMAL env (EL7 — daemon secrets never enter plugin runtimes); handlers
+// stay worker-side, only metadata and calls cross the port.
+//
+// The host re-reads + re-validates the plugin's manifest at start (a local
+// file the daemon already trusts paths for): PluginRecord is the SANITIZED
+// public row and deliberately carries no entry paths — the host is
+// daemon-internal and may know them.
+
+/** §15.2 entry-kind eligibility — the core scopes a SERVICE token may carry.
+ * Renderer/shell powers (shell.*, terminal.attach, tokens.mint, plugins.*,
+ * native.admin, agent.bless) never enter service principals. */
+const SERVICE_ELIGIBLE_SCOPES: readonly Scope[] = [
+  "services.provide",
+  "process.spawn",
+  "background",
+  "net.outbound",
+  "storage.self",
+  "mcp.consume",
+  "mcp.contribute",
+  "canvas.read",
+  "canvas.write",
+  "doc.read",
+  "doc.write",
+  "workspace.read",
+  "index.read",
+  "artifact.publish",
+  "agent.observe",
+  "approval.respond",
+] as const;
+
+export interface ServiceHostConfig {
+  registry: ServiceRegistry;
+  plugins: PluginRegistryService;
+  tokens: TokenService;
+  /** the bound product port (workers dial loopback with their lease) */
+  controlPort: () => number;
+  /** override for the bundled daemon (bin.cjs cannot use import.meta) */
+  harnessPath?: string;
+  /** test seams — production defaults are the §10.4 PLUGIN_LIMITS */
+  deadlines?: { activateMs?: number; deactivateMs?: number };
+  /** test seam — production defaults are the §18.3 ladder constants */
+  ladder?: { baseMs?: number; maxMs?: number; windowMs?: number; quarantineAt?: number };
+}
+
+interface Entry {
+  state: PublicEntryState;
+  worker: Worker | null;
+  /** registry unregister fns for this plugin's live providers */
+  unregisters: Map<string, () => void>;
+  pending: Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>;
+  sinks: Map<
+    number,
+    {
+      snapshot(v: unknown): void;
+      delta(v: unknown): void;
+      end(e?: { kind: string; message: string }): void;
+    }
+  >;
+  crashTimes: number[];
+  restartTimer: NodeJS.Timeout | null;
+  /** deliberate teardown in progress — an exit is not a crash */
+  stopping: boolean;
+  generation: number;
+}
+
+export class ServiceHost {
+  private readonly entries = new Map<string, Entry>();
+  private nextCallId = 1;
+  private disposed = false;
+
+  constructor(private readonly cfg: ServiceHostConfig) {}
+
+  private entry(pluginId: string): Entry {
+    let e = this.entries.get(pluginId);
+    if (e === undefined) {
+      e = {
+        state: "none",
+        worker: null,
+        unregisters: new Map(),
+        pending: new Map(),
+        sinks: new Map(),
+        crashTimes: [],
+        restartTimer: null,
+        stopping: false,
+        generation: 0,
+      };
+      this.entries.set(pluginId, e);
+    }
+    return e;
+  }
+
+  state(pluginId: string): PublicEntryState {
+    return this.entries.get(pluginId)?.state ?? "none";
+  }
+
+  /** start every enabled plugin whose manifest declares entries.service and
+   * activation onStartup (§18.6 — restart activates only demanded services) */
+  async startEligible(): Promise<void> {
+    for (const record of this.cfg.plugins.list()) {
+      if (!record.enabled) continue;
+      const manifest = await this.readManifest(record.id);
+      if (manifest === null || manifest.entries?.service === undefined) continue;
+      if (!manifest.activation.includes("onStartup")) continue;
+      await this.start(record.id).catch((e) => {
+        console.error(`[services] ${record.id} startup activation failed: ${String(e)}`);
+      });
+    }
+  }
+
+  /** explicit (re)start — clears crash history (user re-enable clears quarantine, §18.3) */
+  async restartFresh(pluginId: string): Promise<void> {
+    const e = this.entry(pluginId);
+    e.crashTimes = [];
+    if (e.restartTimer !== null) {
+      clearTimeout(e.restartTimer);
+      e.restartTimer = null;
+    }
+    await this.start(pluginId);
+  }
+
+  async start(pluginId: string): Promise<void> {
+    if (this.disposed) return;
+    const e = this.entry(pluginId);
+    if (e.worker !== null || e.state === "activating") return; // idempotent
+    if (e.state === "quarantined" && e.crashTimes.length > 0) return; // §18.3 — user clear required
+
+    const record = this.cfg.plugins.get(pluginId);
+    if (record === undefined || !record.enabled) return;
+    const root = this.cfg.plugins.rootPath(pluginId);
+    const manifest = await this.readManifest(pluginId);
+    const entryRel = manifest?.entries?.service;
+    if (root === undefined || manifest === null || entryRel === undefined) return;
+    const entryPath = resolve(join(root, entryRel));
+    if (!entryPath.startsWith(resolve(root))) {
+      this.setState(pluginId, e, "quarantined");
+      console.error(`[services] ${pluginId}: service entry escapes its root — refused`);
+      return;
+    }
+
+    const generation = ++e.generation;
+    e.stopping = false;
+    this.setState(pluginId, e, "activating");
+
+    const scopes = record.grantedCapabilities.filter((c): c is Scope =>
+      (SERVICE_ELIGIBLE_SCOPES as readonly string[]).includes(c),
+    );
+    const lease = this.cfg.tokens.mint(scopes, `plugin:${pluginId}:service`, { pluginId });
+
+    const harness =
+      this.cfg.harnessPath ?? new URL("./service-worker-harness.mjs", import.meta.url).pathname;
+    const worker = new Worker(harness, {
+      workerData: {
+        pluginId,
+        version: record.version,
+        entryPath,
+        leaseUrl: `ws://127.0.0.1:${this.cfg.controlPort()}`,
+        leaseToken: lease.token,
+      },
+      env: {}, // EL7 — a minimal environment, daemon secrets stripped
+    });
+    e.worker = worker;
+
+    const declarations = manifest.contributes?.services ?? [];
+    const activateDeadline =
+      this.cfg.deadlines?.activateMs ?? PLUGIN_LIMITS.SERVICE_ACTIVATE_DEADLINE_MS;
+
+    await new Promise<void>((resolveActivate, rejectActivate) => {
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn();
+      };
+      const timer = setTimeout(() => {
+        // §10.4 — a hung activation is terminated, honestly failed
+        finish(() => {
+          void worker.terminate();
+          this.setState(pluginId, e, "degraded");
+          rejectActivate(new Error(`${pluginId}: activate exceeded ${activateDeadline}ms`));
+        });
+      }, activateDeadline);
+
+      worker.on("message", (msg: Record<string, unknown>) => {
+        if (e.generation !== generation) return; // a stale worker's echo
+        switch (msg["t"]) {
+          case "activated":
+            finish(() => {
+              this.setState(pluginId, e, "active");
+              resolveActivate();
+            });
+            return;
+          case "activate-failed":
+            finish(() => {
+              void worker.terminate();
+              this.setState(pluginId, e, "degraded");
+              rejectActivate(
+                new Error(
+                  `${pluginId}: ${(msg["error"] as { message?: string } | undefined)?.message ?? "activation failed"}`,
+                ),
+              );
+            });
+            return;
+          case "provide": {
+            try {
+              const namespace = String(msg["namespace"]);
+              const nsDecls = declarations.filter((s) => s.namespace === namespace);
+              const unregister = this.cfg.registry.register({
+                pluginId,
+                namespace,
+                declarations: nsDecls.flatMap((s) => s.methods),
+                implemented: msg["implemented"] as Array<{
+                  name: string;
+                  kind: "query" | "mutation" | "subscription";
+                }>,
+                handlers: this.portHandlers(pluginId, e, namespace),
+              });
+              e.unregisters.set(namespace, unregister);
+            } catch (err) {
+              console.error(`[services] ${pluginId} provide refused: ${String(err)}`);
+            }
+            return;
+          }
+          case "unprovide": {
+            const namespace = String(msg["namespace"]);
+            e.unregisters.get(namespace)?.();
+            e.unregisters.delete(namespace);
+            return;
+          }
+          case "result": {
+            const id = msg["id"] as number;
+            const waiter = e.pending.get(id);
+            e.pending.delete(id);
+            if (waiter === undefined) return;
+            if (msg["ok"] === true) waiter.resolve(msg["value"]);
+            else {
+              const err = msg["error"] as { message?: string } | undefined;
+              waiter.reject(new Error(err?.message ?? "provider error"));
+            }
+            return;
+          }
+          case "sub-snapshot":
+            e.sinks.get(msg["id"] as number)?.snapshot(msg["value"]);
+            return;
+          case "sub-delta":
+            e.sinks.get(msg["id"] as number)?.delta(msg["value"]);
+            return;
+          case "sub-end": {
+            const id = msg["id"] as number;
+            e.sinks.get(id)?.end(msg["error"] as { kind: string; message: string } | undefined);
+            e.sinks.delete(id);
+            return;
+          }
+          case "log": {
+            const level = msg["level"] as "debug" | "info" | "warn" | "error";
+            const line = `[plugin:${pluginId}:service] ${String(msg["message"])}`;
+            (level === "error" ? console.error : level === "warn" ? console.warn : console.info)(
+              line,
+            );
+            return;
+          }
+          default:
+            return;
+        }
+      });
+
+      worker.on("error", (err) => {
+        if (e.generation !== generation) return;
+        console.error(`[services] ${pluginId} worker error: ${err.message}`);
+        finish(() => rejectActivate(err)); // pre-activation error path
+      });
+
+      worker.on("exit", (code) => {
+        if (e.generation !== generation) return;
+        e.worker = null;
+        this.failAllInflight(e, "provider gone");
+        this.cfg.registry.withdrawPlugin(pluginId);
+        e.unregisters.clear();
+        if (e.stopping || this.disposed) return;
+        finish(() =>
+          rejectActivate(new Error(`${pluginId}: worker exited (${code}) during activation`)),
+        );
+        this.onCrash(pluginId, e);
+      });
+    });
+  }
+
+  /** §18.3 — degraded → backoff restart; 3 crashes in the window → quarantine */
+  private onCrash(pluginId: string, e: Entry): void {
+    const now = Date.now();
+    const windowMs = this.cfg.ladder?.windowMs ?? 600_000;
+    const quarantineAt = this.cfg.ladder?.quarantineAt ?? 3;
+    e.crashTimes = [...e.crashTimes.filter((t) => now - t < windowMs), now];
+    if (e.crashTimes.length >= quarantineAt) {
+      this.setState(pluginId, e, "quarantined");
+      console.error(
+        `[services] ${pluginId} quarantined after ${e.crashTimes.length} crashes (§18.3 — re-enable to clear)`,
+      );
+      return;
+    }
+    this.setState(pluginId, e, "restarting");
+    const baseMs = this.cfg.ladder?.baseMs ?? 1_000;
+    const maxMs = this.cfg.ladder?.maxMs ?? 30_000;
+    const backoff = Math.min(baseMs * 2 ** (e.crashTimes.length - 1), maxMs);
+    e.restartTimer = setTimeout(() => {
+      e.restartTimer = null;
+      void this.start(pluginId).catch((err) => {
+        console.error(`[services] ${pluginId} restart failed: ${String(err)}`);
+      });
+    }, backoff);
+  }
+
+  /** §18.2 deactivation: signal → bounded wait → force-terminate → inactive */
+  async stop(pluginId: string): Promise<void> {
+    const e = this.entries.get(pluginId);
+    if (e === undefined) return;
+    if (e.restartTimer !== null) {
+      clearTimeout(e.restartTimer);
+      e.restartTimer = null;
+    }
+    const worker = e.worker;
+    e.stopping = true;
+    if (worker !== null) {
+      const deadline = this.cfg.deadlines?.deactivateMs ?? PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS;
+      await new Promise<void>((done) => {
+        const timer = setTimeout(() => done(), deadline);
+        worker.once("message", function onMsg(msg: Record<string, unknown>) {
+          if (msg["t"] === "deactivated") {
+            clearTimeout(timer);
+            done();
+          }
+        });
+        worker.postMessage({ t: "deactivate" });
+      });
+      await worker.terminate();
+      e.worker = null;
+    }
+    this.failAllInflight(e, "provider deactivated");
+    this.cfg.registry.withdrawPlugin(pluginId);
+    e.unregisters.clear();
+    this.setState(pluginId, e, "inactive");
+  }
+
+  async stopAll(): Promise<void> {
+    this.disposed = true;
+    await Promise.all([...this.entries.keys()].map((id) => this.stop(id)));
+  }
+
+  private failAllInflight(e: Entry, reason: string): void {
+    for (const [, waiter] of e.pending) waiter.reject(new Error(reason));
+    e.pending.clear();
+    for (const [, sink] of e.sinks) sink.end({ kind: "UNAVAILABLE", message: reason });
+    e.sinks.clear();
+  }
+
+  private setState(pluginId: string, e: Entry, state: PublicEntryState): void {
+    e.state = state;
+    this.cfg.plugins.setServiceEntryState(pluginId, state);
+  }
+
+  /** the port bridge the ServiceRegistry invokes — handlers stay worker-side */
+  private portHandlers(pluginId: string, e: Entry, namespace: string) {
+    return {
+      call: (name: string, params: unknown, caller: ServiceCallerInfo): Promise<unknown> => {
+        const worker = e.worker;
+        if (worker === null) return Promise.reject(new Error("provider gone"));
+        const id = this.nextCallId++;
+        return new Promise((resolveCall, rejectCall) => {
+          e.pending.set(id, { resolve: resolveCall, reject: rejectCall });
+          worker.postMessage({ t: "call", id, namespace, name, params, caller });
+        });
+      },
+      subscribe: async (
+        name: string,
+        params: unknown,
+        caller: ServiceCallerInfo,
+        sink: {
+          snapshot(v: unknown): void;
+          delta(v: unknown): void;
+          end(err?: { kind: string; message: string }): void;
+        },
+      ): Promise<() => void> => {
+        const worker = e.worker;
+        if (worker === null) throw new Error("provider gone");
+        const id = this.nextCallId++;
+        e.sinks.set(id, sink);
+        worker.postMessage({ t: "subscribe", id, namespace, name, params, caller });
+        return () => {
+          e.sinks.delete(id);
+          e.worker?.postMessage({ t: "unsubscribe", id });
+        };
+      },
+    };
+  }
+
+  private async readManifest(pluginId: string): Promise<PluginManifestV1 | null> {
+    const root = this.cfg.plugins.rootPath(pluginId);
+    if (root === undefined) return null;
+    try {
+      const raw = JSON.parse(await readFile(join(root, "vibefield.plugin.json"), "utf8"));
+      const result = validatePluginManifest(raw);
+      return result.ok ? result.manifest : null;
+    } catch {
+      return null;
+    }
+  }
+}

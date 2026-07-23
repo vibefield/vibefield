@@ -1,0 +1,156 @@
+{
+  "activation": [
+    "onStartup"
+  ],
+  "backgroundReason": "Keeps the in-memory store and its active watch subscriptions alive so get/set/watch answer at any time, not only while some other trigger is active.",
+  "capabilities": [
+    "services.provide",
+    "background"
+  ],
+  "contributes": {
+    "capabilities": [
+      {
+        "description": "Read and write keys in this plugin's in-memory key-value store.",
+        "id": "x.vibefield.example.kv.use",
+        "risk": "write",
+        "title": "Use the example KV store"
+      }
+    ],
+    "services": [
+      {
+        "methods": [
+          {
+            "idempotent": true,
+            "input": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "kind": "query",
+            "locality": "local",
+            "name": "get",
+            "output": {
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.example.kv.use"
+          },
+          {
+            "idempotent": false,
+            "input": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "value"
+              ],
+              "type": "object"
+            },
+            "kind": "mutation",
+            "locality": "local",
+            "name": "set",
+            "output": {
+              "additionalProperties": false,
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.example.kv.use"
+          },
+          {
+            "delta": {
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "type": "object"
+            },
+            "idempotent": true,
+            "input": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "kind": "subscription",
+            "locality": "local",
+            "name": "watch",
+            "requiredCapability": "x.vibefield.example.kv.use",
+            "snapshot": {
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "namespace": "x.vibefield.example.kv"
+      }
+    ]
+  },
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "service": "./service.js"
+  },
+  "id": "vibefield.example.kv",
+  "manifestVersion": 1,
+  "title": "KV (example service)",
+  "version": "0.1.0"
+}

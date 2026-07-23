@@ -328,4 +328,27 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+
+  // PLUG-P4 — dynamic services observation (§14/§22.2). The x.* methods
+  // themselves are DELIBERATELY not here: they are manifest data routed by the
+  // registered-namespace exact map (§6.2/§14.6); ProductApi hands any "x."-
+  // prefixed method to the ServiceRegistry, whose registration schema is the
+  // static validation (§22.4). services.provide/unregister as PRODUCT methods
+  // await the process host (the worker port is the only provider transport in
+  // P4); endpoints await §17.3's slice — declared == shipped (D36).
+  defineMethod({
+    surface: "product",
+    method: "services.list",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "services.subscribe",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
 ];

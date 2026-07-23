@@ -42,6 +42,10 @@ async function main(): Promise<void> {
     bundled: splitRoots(process.env["FIELDD_PLUGIN_ROOTS"]),
     devLinked: splitRoots(process.env["FIELDD_PLUGIN_DEV_ROOTS"]),
   };
+  // P4 — the bundled daemon ships the worker harness beside bin.cjs; source
+  // runs resolve it in-package. Explicit env always wins.
+  const serviceHarnessPath =
+    process.env["FIELDD_SERVICE_HARNESS"] ?? join(__dirname, "service-harness.mjs");
   const logRoot = resolvePlatformLogRoot({
     allowOverride: process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1",
   });
@@ -88,6 +92,7 @@ async function main(): Promise<void> {
     dataPort: dataPortEnv !== undefined ? Number(dataPortEnv) : PORTS.FIELDD_WS_DATA,
     allowedOrigins,
     pluginRoots,
+    serviceHarnessPath,
     ...(nativePid !== undefined ? { nativePid } : {}),
     onFatal: (reason) => {
       process.stderr.write(`fieldd fatal: ${reason}\n`);

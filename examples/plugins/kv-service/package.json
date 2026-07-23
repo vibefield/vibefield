@@ -1,0 +1,24 @@
+{
+  "name": "@vibefield/plugin-example-kv",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/manifest.ts"
+  },
+  "scripts": {
+    "gen:manifest": "tsx scripts/emit-manifest.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibefield/contracts": "workspace:*",
+    "@vibefield/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@vibefield/plugin-build": "workspace:*",
+    "tsx": "^4.19.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

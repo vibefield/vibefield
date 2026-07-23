@@ -82,3 +82,59 @@ export interface RendererPluginModule {
 export function defineRendererPlugin(mod: RendererPluginModule): RendererPluginModule {
   return mod;
 }
+
+// --- the service entry (P4, spec §14) ----------------------------------------
+
+/** What a dynamic-method handler learns about its caller — sanitized by the
+ * host (§14.4: provider code never trusts caller-supplied identity). */
+export interface PluginCallContext {
+  readonly caller: { readonly kind: string; readonly pluginId?: string };
+}
+
+/** §14.5 — snapshot-then-delta, both schema-validated by the host router. */
+export interface SnapshotDeltaSink {
+  snapshot(value: unknown): void;
+  delta(value: unknown): void;
+}
+
+export type DynamicMethodHandler =
+  | {
+      kind: "query" | "mutation";
+      handle(params: unknown, call: PluginCallContext): Promise<unknown> | unknown;
+    }
+  | {
+      kind: "subscription";
+      subscribe(
+        params: unknown,
+        call: PluginCallContext,
+        sink: SnapshotDeltaSink,
+      ): Disposable | Promise<Disposable>;
+    };
+
+/** §14.4 — registration is accepted only when every implemented method has an
+ * exact manifest declaration and every declaration an implementation. */
+export interface PluginServiceProviderAPI {
+  provide(registration: {
+    namespace: string;
+    methods: Record<string, DynamicMethodHandler>;
+  }): Disposable;
+}
+
+/** §14.1, the P4 subset — settings/storage/process/endpoints/mcp/net arrive
+ * with their runtimes (P5/P6); absent APIs are ABSENT, never stubs. */
+export interface ServicePluginContext {
+  readonly plugin: { readonly id: string; readonly version: string };
+  readonly signal: AbortSignal;
+  readonly logger: PluginLogger;
+  readonly client: PluginProductClient;
+  readonly services: PluginServiceProviderAPI;
+  track<T extends Disposable>(resource: T): T;
+}
+
+export interface ServicePluginModule {
+  activate(ctx: ServicePluginContext): void | Disposable | Promise<void | Disposable>;
+}
+
+export function defineServicePlugin(mod: ServicePluginModule): ServicePluginModule {
+  return mod;
+}

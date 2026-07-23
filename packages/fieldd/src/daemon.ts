@@ -34,6 +34,8 @@ import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
 import { PluginRegistryService } from "./plugin-registry";
 import { ProductApi } from "./product-api";
+import { ServiceHost } from "./service-host";
+import { ServiceRegistry } from "./service-registry";
 import { TokenService } from "./token-service";
 
 // fieldd bootstrap (design-02 §3.6, P0 slice): tokens → NativeLink (pair +
@@ -68,6 +70,9 @@ export interface FielddConfig {
   /** Platform-resolved diagnostic root. Omit only for embedded/unit use where
    * the caller deliberately supplies no process-owned evidence sink. */
   logRoot?: string;
+  /** P4 — override for the bundled daemon (bin.cjs cannot resolve the .mjs
+   * harness via import.meta); dev/tests use the in-package source path. */
+  serviceHarnessPath?: string;
 }
 
 export interface FielddHealth {
@@ -95,6 +100,7 @@ export interface FielddDaemon {
   devices: DeviceService;
   peers: PeerLink;
   plugins: PluginRegistryService;
+  services: ServiceRegistry;
   logging: NodeLogging | null;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
@@ -163,6 +169,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
     });
     await plugins.refresh();
+    // P4 — the dynamic-method router (§14): grants resolve through the plugin
+    // registry; providers arrive from the service host (worker port) below.
+    const services = new ServiceRegistry({
+      grantedCapabilities: (pluginId) => plugins.get(pluginId)?.grantedCapabilities,
+    });
+    // assigned after listen (workers dial the bound port); handlers guard null
+    let serviceHost: ServiceHost | null = null;
     // C3 — the serve route secret (thinking-c3 §1): the provenance proof
     // shared by exactly two parties, this process and the sidecar's route
     // config. 192-bit; base64url is path-safe. Never logged, never in
@@ -373,13 +386,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const parsed = PluginsEnableParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id: pluginId }", false);
-      return plugins.enable(parsed.data.id);
+      const record = await plugins.enable(parsed.data.id);
+      // §18.3 — an explicit re-enable clears quarantine and restarts fresh
+      void serviceHost?.restartFresh(parsed.data.id).catch((e) => {
+        console.error(`[services] ${parsed.data.id} enable-restart failed: ${String(e)}`);
+      });
+      return record;
     });
     api.register("plugins.disable", async (_ctx, params) => {
       const parsed = PluginsDisableParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id: pluginId }", false);
-      return plugins.disable(parsed.data.id);
+      const record = await plugins.disable(parsed.data.id);
+      await serviceHost?.stop(parsed.data.id); // §16.5 — deactivates providers, data untouched
+      return plugins.get(parsed.data.id) ?? record;
     });
     api.register("plugins.reload", async () => {
       await plugins.refresh();
@@ -439,7 +459,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const scopes = record.grantedCapabilities.filter((c): c is Scope =>
         (SCOPES as readonly string[]).includes(c),
       );
-      const grant = tokens.mint(scopes, `plugin:${record.id}`, { ttlMs: LEASE_TTL_MS });
+      // P4: the lease is a PLUGIN-BOUND grant — hello with it derives the
+      // {kind:"plugin"} principal, so custom-capability gates bind (D20).
+      const grant = tokens.mint(scopes, `plugin:${record.id}`, {
+        ttlMs: LEASE_TTL_MS,
+        pluginId: record.id,
+      });
       const result: PluginsOpenRendererSessionResult = {
         token: grant.token,
         scopes: grant.scopes,
@@ -449,6 +474,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return result;
     });
     plugins.on("changed", emitHealth); // plugin counts fold into the aggregated stream
+
+    // -- dynamic services (PLUG-P4, §14/§22.2) --
+    api.setDynamicRouter(services);
+    api.register("services.list", () => services.snapshot());
+    api.registerSubscription("services.subscribe", (_ctx, _params, emit) => {
+      const fn = (snap: unknown) => emit(snap);
+      services.on("changed", fn);
+      return { snapshot: services.snapshot(), dispose: () => services.off("changed", fn) };
+    });
+    // §16.5 — disable deactivates providers (data untouched); the service host
+    // adds worker teardown when it attaches (bootstrap tail).
+    plugins.on("changed", () => {
+      for (const record of plugins.list()) if (!record.enabled) services.withdrawPlugin(record.id);
+    });
 
     // -- PeerLink (C5, design-04 D32): the device?-routing substrate --
     const peers = new PeerLink({
@@ -474,11 +513,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         "fieldd.lifecycle.superseded",
         "fieldd was superseded by another native-plane owner",
       );
+      void serviceHost?.stopAll();
       api.close();
       docLane.close();
       docs.dispose();
       peers.dispose();
       devices.dispose();
+      services.dispose();
       plugins.dispose();
       native.close();
       const reason = fatalReason;
@@ -502,6 +543,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docLane.close(); // release the lane port before the outer rollback runs
       docs.dispose();
       devices.dispose();
+      services.dispose();
       plugins.dispose();
       throw e;
     }
@@ -524,6 +566,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // C4: first roster sync (identity + publish); later syncs ride the mesh
     // events DeviceService wires itself. Fire-and-forget — mesh-down is normal.
     void devices.sync();
+
+    // -- ServiceHost (PLUG-P4, §14.2/§18): workers for service entries --
+    serviceHost = new ServiceHost({
+      registry: services,
+      plugins,
+      tokens,
+      controlPort: () => controlPort,
+      ...(config.serviceHarnessPath !== undefined
+        ? { harnessPath: config.serviceHarnessPath }
+        : {}),
+    });
+    // fire-and-forget: activation states surface honestly through the registry
+    void serviceHost.startEligible();
 
     // -- run files (shell bootstrap contract) --
     const runDir = join(config.dataDir, "fieldd", "run");
@@ -555,11 +610,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       stopPromise ??= (async () => {
         logger.info("fieldd.lifecycle.stopping", "fieldd is stopping");
         try {
+          await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           api.close();
           docLane.close();
           docs.dispose();
           peers.dispose();
           devices.dispose();
+          services.dispose();
           plugins.dispose();
           native.close();
           // a superseding fieldd rewrites these for the same dataDir — never
@@ -590,6 +647,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       devices,
       peers,
       plugins,
+      services,
       logging,
       shellToken: shellGrant.token,
       health,

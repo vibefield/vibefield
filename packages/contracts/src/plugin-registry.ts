@@ -165,3 +165,48 @@ export const PluginsOpenRendererSessionResult = z
   })
   .passthrough();
 export type PluginsOpenRendererSessionResult = z.infer<typeof PluginsOpenRendererSessionResult>;
+
+// --- dynamic services (§14, P4) -----------------------------------------------
+
+/** Sanitized provider row (§9.4 spirit): method names/kinds/caps, never the
+ * JSON Schemas (those are registration-side data) and never paths. */
+export const ServiceProviderRecord = z
+  .object({
+    pluginId: PluginId,
+    namespace: z.string().regex(/^x\./),
+    methods: z.array(
+      z
+        .object({
+          name: z.string().min(1),
+          kind: z.enum(["query", "mutation", "subscription"]),
+          idempotent: z.boolean(),
+          requiredCapability: z.string().min(1),
+        })
+        .passthrough(),
+    ),
+    state: z.enum(["active"]),
+  })
+  .passthrough();
+export type ServiceProviderRecord = z.infer<typeof ServiceProviderRecord>;
+
+export const ServicesSnapshot = z
+  .object({
+    generation: z.number().int().nonnegative(),
+    providers: z.array(ServiceProviderRecord),
+  })
+  .passthrough();
+export type ServicesSnapshot = z.infer<typeof ServicesSnapshot>;
+
+/** §14.5 — the delta envelope for DYNAMIC subscriptions: snapshot-then-delta,
+ * provider loss ends the stream with one honest `unavailable` event. */
+export const DynamicSubEvent = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("snapshot"), value: z.unknown() }).passthrough(),
+  z.object({ kind: z.literal("delta"), value: z.unknown() }).passthrough(),
+  z
+    .object({
+      kind: z.literal("unavailable"),
+      error: z.object({ kind: z.string(), message: z.string() }).passthrough(),
+    })
+    .passthrough(),
+]);
+export type DynamicSubEvent = z.infer<typeof DynamicSubEvent>;

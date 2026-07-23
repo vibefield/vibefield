@@ -19,4 +19,11 @@ export {
   PluginRegistryService,
 } from "./plugin-registry";
 export { ProductApi } from "./product-api";
+export { ServiceHost, type ServiceHostConfig } from "./service-host";
+export {
+  type ServiceCallerInfo,
+  type ServiceProviderBinding,
+  type ServiceProviderHandlers,
+  ServiceRegistry,
+} from "./service-registry";
 export { type TokenGrant, TokenService } from "./token-service";

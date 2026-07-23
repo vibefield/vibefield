@@ -13,6 +13,9 @@ export interface TokenGrant {
   label: string;
   /** epoch ms — present only for TTL'd mints (renderer leases, P3b) */
   expiresAt?: number;
+  /** P4 — a plugin-bound grant: hello with it derives a {kind:"plugin"}
+   * principal (D20 provenance; the plugin cannot choose its identity). */
+  pluginId?: string;
 }
 
 export interface TokenEvent {
@@ -30,6 +33,8 @@ interface TokenRecord {
   createdAt: number;
   /** epoch ms — expired records verify null and are dropped (leases, P3b) */
   expiresAt?: number;
+  /** P4 — plugin-bound grants (renderer leases + service-entry mints) */
+  pluginId?: string;
 }
 
 export class TokenService {
@@ -38,7 +43,7 @@ export class TokenService {
 
   constructor(private readonly onEvent?: (e: TokenEvent) => void) {}
 
-  mint(scopes: Scope[], label: string, opts?: { ttlMs?: number }): TokenGrant {
+  mint(scopes: Scope[], label: string, opts?: { ttlMs?: number; pluginId?: string }): TokenGrant {
     for (const s of scopes) {
       if (!(SCOPES as readonly string[]).includes(s)) throw new Error(`unknown scope: ${s}`);
     }
@@ -51,6 +56,7 @@ export class TokenService {
       label,
       createdAt: Date.now(),
       ...(expiresAt !== undefined ? { expiresAt } : {}),
+      ...(opts?.pluginId !== undefined ? { pluginId: opts.pluginId } : {}),
     });
     this.byId.set(tokenId, token);
     this.onEvent?.({ kind: "mint", tokenId, label, scopes, at: Date.now() });
@@ -60,10 +66,13 @@ export class TokenService {
       scopes: [...scopes],
       label,
       ...(expiresAt !== undefined ? { expiresAt } : {}),
+      ...(opts?.pluginId !== undefined ? { pluginId: opts.pluginId } : {}),
     };
   }
 
-  verify(token: string): { tokenId: string; scopes: Scope[]; label: string } | null {
+  verify(
+    token: string,
+  ): { tokenId: string; scopes: Scope[]; label: string; pluginId?: string } | null {
     const rec = this.byToken.get(token); // token is 192-bit random — map lookup is fine
     if (!rec) {
       this.onEvent?.({ kind: "verify-failed", at: Date.now() });
@@ -76,7 +85,12 @@ export class TokenService {
       this.onEvent?.({ kind: "verify-failed", tokenId: rec.tokenId, at: Date.now() });
       return null;
     }
-    return { tokenId: rec.tokenId, scopes: rec.scopes, label: rec.label };
+    return {
+      tokenId: rec.tokenId,
+      scopes: rec.scopes,
+      label: rec.label,
+      ...(rec.pluginId !== undefined ? { pluginId: rec.pluginId } : {}),
+    };
   }
 
   revoke(tokenId: string): boolean {

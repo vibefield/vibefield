@@ -90,6 +90,12 @@ const summary = (kind: PluginErrorSummary["kind"], message: string): PluginError
 export class PluginRegistryService extends EventEmitter {
   private generation = 0;
   private rows = new Map<string, PluginRecord>();
+  /** plugin dir absolute paths — DAEMON-INTERNAL (never in any snapshot); the
+   * service host resolves entries.service against them. */
+  private rootPaths = new Map<string, string>();
+  /** P4 — live service-entry states asserted by the ServiceHost; an overlay so
+   * a refresh() rebuild never erases runtime truth (§9.3 states). */
+  private serviceStates = new Map<string, PluginRecord["service"]>();
   private problems: PluginRegistryProblem[] = [];
   private records: InstallRecordsFile | null = null;
   private readonly recordsPath: string;
@@ -104,6 +110,7 @@ export class PluginRegistryService extends EventEmitter {
   async refresh(): Promise<void> {
     const records = await this.loadRecords();
     const rows = new Map<string, PluginRecord>();
+    const rootPaths = new Map<string, string>();
     const problems: PluginRegistryProblem[] = [];
 
     // bundled roots scan first — no source may shadow a bundled id (§9.1)
@@ -175,10 +182,12 @@ export class PluginRegistryService extends EventEmitter {
           continue; // first-discovered wins; bundled scans first (§9.1)
         }
         rows.set(row.id, row);
+        rootPaths.set(row.id, join(root, dir));
       }
     }
 
     this.rows = rows;
+    this.rootPaths = rootPaths;
     this.problems = problems;
     this.publish();
   }
@@ -276,9 +285,26 @@ export class PluginRegistryService extends EventEmitter {
   snapshot(): PluginRegistrySnapshot {
     return {
       generation: this.generation,
-      plugins: [...this.rows.values()].sort((a, b) => a.id.localeCompare(b.id)),
+      plugins: [...this.rows.values()]
+        .map((row) => {
+          const service = this.serviceStates.get(row.id);
+          return service !== undefined && service !== row.service ? { ...row, service } : row;
+        })
+        .sort((a, b) => a.id.localeCompare(b.id)),
       problems: [...this.problems].sort((a, b) => a.root.localeCompare(b.root)),
     };
+  }
+
+  /** DAEMON-INTERNAL: the plugin dir path (service-entry resolution). */
+  rootPath(id: string): string | undefined {
+    return this.rootPaths.get(id);
+  }
+
+  /** P4 — the ServiceHost asserts live §9.3 service-entry states here. */
+  setServiceEntryState(id: string, state: PluginRecord["service"]): void {
+    if (this.serviceStates.get(id) === state) return;
+    this.serviceStates.set(id, state);
+    this.publish();
   }
 
   list(): PluginRecord[] {
