@@ -7,7 +7,10 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!packages/contracts/gen"]
+    // vibefield.plugin.json: GENERATED canonical artifacts (plugin spec §5.2) —
+    // byte-stable key-sorted JSON whose only formatter is the plugin-build
+    // emitter; biome's array-collapsing would fight the freshness tests.
+    "includes": ["**", "!packages/contracts/gen", "!**/vibefield.plugin.json"]
   },
   "formatter": {
     "enabled": true,

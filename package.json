@@ -19,6 +19,7 @@
     "lint:rust": "cargo clippy --workspace --all-targets -- -D warnings",
     "format": "biome format --write . && cargo fmt",
     "gen": "pnpm --filter @vibefield/contracts gen:rust",
+    "gen:manifests": "pnpm -r gen:manifest",
     "gen:check": "pnpm gen && git diff --exit-code -- packages/contracts/gen packages/field-native/src/contracts.rs",
     "preflight": "node scripts/preflight.mjs",
     "siblings:pin": "node scripts/preflight.mjs --pin-siblings",

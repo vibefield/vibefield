@@ -1,0 +1,62 @@
+{
+  "activation": [
+    "onWidget:note.card"
+  ],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "category": "Cards",
+        "defaultSize": {
+          "h": 180,
+          "w": 260
+        },
+        "description": "A sticky note — double-click to edit",
+        "groups": {},
+        "interaction": {
+          "movable": true,
+          "resizable": true,
+          "selectable": true,
+          "snap": "target"
+        },
+        "minSize": {
+          "h": 80,
+          "w": 120
+        },
+        "preview": {
+          "kind": "color",
+          "value": "#f6e7a9"
+        },
+        "props": {
+          "color": {
+            "default": "#f6e7a9",
+            "kind": "string"
+          },
+          "text": {
+            "default": "",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Note",
+        "type": "note.card"
+      }
+    ]
+  },
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "id": "note",
+  "manifestVersion": 1,
+  "title": "Notes",
+  "version": "0.1.0"
+}

@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "gen:manifest": "tsx scripts/emit-manifest.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -25,7 +26,9 @@
   "devDependencies": {
     "@types/react": "catalog:",
     "@types/three": "^0.185.0",
+    "@vibefield/plugin-build": "workspace:*",
     "react": "catalog:",
+    "tsx": "^4.19.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

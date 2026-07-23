@@ -1,0 +1,946 @@
+{
+  "activation": [
+    "onWidget:widgetlab.clock",
+    "onWidget:widgetlab.battery",
+    "onWidget:widgetlab.calendar",
+    "onWidget:widgetlab.weather",
+    "onWidget:widgetlab.stocks",
+    "onWidget:widgetlab.fitness",
+    "onWidget:widgetlab.photos",
+    "onWidget:widgetlab.todo",
+    "onWidget:widgetlab.sphere",
+    "onWidget:widgetlab.crystal",
+    "onWidget:widgetlab.torus-knot",
+    "onWidget:widgetlab.cube",
+    "onWidget:widgetlab.gold-knot",
+    "onWidget:widgetlab.shapes",
+    "onWidget:widgetlab.orbit-cube",
+    "onWidget:widgetlab.signal",
+    "onWidget:widgetlab.filter",
+    "onWidget:widgetlab.scope"
+  ],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "category": "Cards",
+        "defaultSize": {
+          "h": 155,
+          "w": 155
+        },
+        "description": "Analog clock with a live second hand",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "resizable": false,
+          "snap": "both",
+          "solid": true
+        },
+        "props": {
+          "timezone": {
+            "default": "local",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Clock",
+        "type": "widgetlab.clock"
+      },
+      {
+        "category": "Cards",
+        "defaultSize": {
+          "h": 155,
+          "w": 155
+        },
+        "description": "Battery ring",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "resizable": false,
+          "snap": "both",
+          "solid": true
+        },
+        "props": {
+          "airpods": {
+            "default": 91,
+            "kind": "number",
+            "max": 100,
+            "min": 0
+          },
+          "phone": {
+            "default": 82,
+            "kind": "number",
+            "max": 100,
+            "min": 0
+          },
+          "watch": {
+            "default": 47,
+            "kind": "number",
+            "max": 100,
+            "min": 0
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Battery",
+        "type": "widgetlab.battery"
+      },
+      {
+        "category": "Cards",
+        "defaultSize": {
+          "h": 155,
+          "w": 155
+        },
+        "description": "Today + the next event",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "resizable": false,
+          "snap": "both",
+          "solid": true
+        },
+        "preview": {
+          "kind": "color",
+          "value": "#ffffff"
+        },
+        "props": {
+          "dateIso": {
+            "default": "",
+            "kind": "string"
+          },
+          "nextEvent": {
+            "default": "Design review",
+            "kind": "string"
+          },
+          "nextEventTime": {
+            "default": "3:30 PM",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Calendar",
+        "type": "widgetlab.calendar"
+      },
+      {
+        "category": "Cards",
+        "defaultSize": {
+          "h": 155,
+          "w": 329
+        },
+        "description": "Temperature, hi/lo, condition glyph",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "resizable": false,
+          "snap": "both",
+          "solid": true
+        },
+        "preview": {
+          "kind": "gradient",
+          "value": "linear-gradient(135deg, #3A86FF 0%, #1D4ED8 55%, #0B2AB5 100%)"
+        },
+        "props": {
+          "condition": {
+            "default": "partly-cloudy",
+            "kind": "enum",
+            "options": [
+              "sunny",
+              "cloudy",
+              "partly-cloudy",
+              "rainy"
+            ]
+          },
+          "high": {
+            "default": 68,
+            "kind": "number"
+          },
+          "location": {
+            "default": "San Francisco",
+            "kind": "string"
+          },
+          "low": {
+            "default": 58,
+            "kind": "number"
+          },
+          "temp": {
+            "default": 64,
+            "kind": "number"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Weather",
+        "type": "widgetlab.weather"
+      },
+      {
+        "category": "Cards",
+        "defaultSize": {
+          "h": 155,
+          "w": 329
+        },
+        "description": "Tickers with sparklines",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "resizable": false,
+          "snap": "both",
+          "solid": true
+        },
+        "preview": {
+          "kind": "color",
+          "value": "#000000"
+        },
+        "props": {
+          "tickers": {
+            "default": [
+              {
+                "changePct": 2.14,
+                "history": [
+                  210,
+                  211,
+                  214,
+                  213,
+                  216,
+                  215,
+                  217,
+                  218,
+                  217,
+                  218.54
+                ],
+                "price": 218.54,
+                "symbol": "AAPL"
+              },
+              {
+                "changePct": -1.32,
+                "history": [
+                  252,
+                  249,
+                  247,
+                  246,
+                  244,
+                  243,
+                  241,
+                  242,
+                  240,
+                  241.02
+                ],
+                "price": 241.02,
+                "symbol": "TSLA"
+              },
+              {
+                "changePct": 4.72,
+                "history": [
+                  820,
+                  828,
+                  835,
+                  840,
+                  846,
+                  855,
+                  860,
+                  865,
+                  870,
+                  872.3
+                ],
+                "price": 872.3,
+                "symbol": "NVDA"
+              }
+            ],
+            "inner": {
+              "item": {
+                "fields": {
+                  "changePct": {
+                    "kind": "number"
+                  },
+                  "history": {
+                    "item": {
+                      "kind": "number"
+                    },
+                    "kind": "array"
+                  },
+                  "price": {
+                    "kind": "number"
+                  },
+                  "symbol": {
+                    "kind": "string"
+                  }
+                },
+                "kind": "object"
+              },
+              "kind": "array"
+            },
+            "kind": "json"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Stocks",
+        "type": "widgetlab.stocks"
+      },
+      {
+        "category": "Cards",
+        "defaultSize": {
+          "h": 345,
+          "w": 329
+        },
+        "description": "Activity rings",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "resizable": false,
+          "snap": "both",
+          "solid": true
+        },
+        "preview": {
+          "kind": "color",
+          "value": "#000000"
+        },
+        "props": {
+          "exercise": {
+            "default": {
+              "current": 22,
+              "goal": 30
+            },
+            "inner": {
+              "fields": {
+                "current": {
+                  "kind": "number"
+                },
+                "goal": {
+                  "kind": "number"
+                }
+              },
+              "kind": "object"
+            },
+            "kind": "json"
+          },
+          "move": {
+            "default": {
+              "current": 420,
+              "goal": 520
+            },
+            "inner": {
+              "fields": {
+                "current": {
+                  "kind": "number"
+                },
+                "goal": {
+                  "kind": "number"
+                }
+              },
+              "kind": "object"
+            },
+            "kind": "json"
+          },
+          "stand": {
+            "default": {
+              "current": 9,
+              "goal": 12
+            },
+            "inner": {
+              "fields": {
+                "current": {
+                  "kind": "number"
+                },
+                "goal": {
+                  "kind": "number"
+                }
+              },
+              "kind": "object"
+            },
+            "kind": "json"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Fitness",
+        "type": "widgetlab.fitness"
+      },
+      {
+        "category": "Cards",
+        "defaultSize": {
+          "h": 535,
+          "w": 329
+        },
+        "description": "A photo stack",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "resizable": false,
+          "snap": "both",
+          "solid": true
+        },
+        "preview": {
+          "kind": "gradient",
+          "value": "linear-gradient(135deg, #FF9E5E 0%, #E0526E 55%, #33204A 100%)"
+        },
+        "props": {
+          "badge": {
+            "default": "ON THIS DAY",
+            "kind": "string"
+          },
+          "hue": {
+            "default": 18,
+            "kind": "number",
+            "max": 360,
+            "min": 0
+          },
+          "location": {
+            "default": "California · April 21",
+            "kind": "string"
+          },
+          "title": {
+            "default": "Sunset over Point Reyes",
+            "kind": "string"
+          },
+          "yearsAgo": {
+            "default": 4,
+            "kind": "number"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Photos",
+        "type": "widgetlab.photos"
+      },
+      {
+        "category": "Cards",
+        "defaultSize": {
+          "h": 345,
+          "w": 329
+        },
+        "description": "Checklist",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "resizable": false,
+          "snap": "both",
+          "solid": true
+        },
+        "preview": {
+          "kind": "color",
+          "value": "#000000"
+        },
+        "props": {
+          "items": {
+            "default": [
+              {
+                "done": true,
+                "id": "1",
+                "text": "Ship RFC-006"
+              },
+              {
+                "done": true,
+                "id": "2",
+                "text": "Audit pointer router"
+              },
+              {
+                "done": false,
+                "id": "3",
+                "text": "Test in playground"
+              },
+              {
+                "done": false,
+                "id": "4",
+                "text": "Document author contract"
+              }
+            ],
+            "inner": {
+              "item": {
+                "fields": {
+                  "done": {
+                    "kind": "boolean"
+                  },
+                  "id": {
+                    "kind": "string"
+                  },
+                  "text": {
+                    "kind": "string"
+                  }
+                },
+                "kind": "object"
+              },
+              "kind": "array"
+            },
+            "kind": "json"
+          },
+          "title": {
+            "default": "Today",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "To-do",
+        "type": "widgetlab.todo"
+      },
+      {
+        "category": "3D",
+        "defaultSize": {
+          "h": 155,
+          "w": 155
+        },
+        "description": "A matte sphere",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "movable": true,
+          "selectable": true,
+          "snap": "both",
+          "solid": true
+        },
+        "minSize": {
+          "h": 120,
+          "w": 120
+        },
+        "preview": {
+          "kind": "gradient",
+          "value": "linear-gradient(135deg, #FFB6C1 0%, #FF7E8A 55%, #C24A6B 100%)"
+        },
+        "props": {
+          "color": {
+            "default": "#F5B8D0",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "gl",
+        "title": "Sphere",
+        "type": "widgetlab.sphere"
+      },
+      {
+        "category": "3D",
+        "defaultSize": {
+          "h": 155,
+          "w": 155
+        },
+        "description": "A floating crystal — chromeless island",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "movable": true,
+          "selectable": true,
+          "snap": "both",
+          "solid": true
+        },
+        "minSize": {
+          "h": 120,
+          "w": 120
+        },
+        "props": {
+          "tint": {
+            "default": "#9AE5FF",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "gl",
+        "title": "Crystal",
+        "type": "widgetlab.crystal"
+      },
+      {
+        "category": "3D",
+        "defaultSize": {
+          "h": 155,
+          "w": 329
+        },
+        "description": "A spinning torus knot",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "movable": true,
+          "selectable": true,
+          "snap": "both",
+          "solid": true
+        },
+        "minSize": {
+          "h": 120,
+          "w": 200
+        },
+        "preview": {
+          "kind": "gradient",
+          "value": "linear-gradient(135deg, #2D1B5E 0%, #1A1240 55%, #0A0820 100%)"
+        },
+        "props": {
+          "hue": {
+            "default": 285,
+            "kind": "number",
+            "max": 360,
+            "min": 0
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "gl",
+        "title": "Torus knot",
+        "type": "widgetlab.torus-knot"
+      },
+      {
+        "category": "3D",
+        "defaultSize": {
+          "h": 155,
+          "w": 329
+        },
+        "description": "A floating rounded cube — chromeless island",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "movable": true,
+          "selectable": true,
+          "snap": "both",
+          "solid": true
+        },
+        "minSize": {
+          "h": 120,
+          "w": 200
+        },
+        "props": {
+          "color": {
+            "default": "#E8523B",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "gl",
+        "title": "Cube",
+        "type": "widgetlab.cube"
+      },
+      {
+        "category": "3D",
+        "defaultSize": {
+          "h": 345,
+          "w": 329
+        },
+        "description": "A gilded knot",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "movable": true,
+          "selectable": true,
+          "snap": "both",
+          "solid": true
+        },
+        "minSize": {
+          "h": 200,
+          "w": 240
+        },
+        "preview": {
+          "kind": "gradient",
+          "value": "linear-gradient(135deg, #4A2814 0%, #2A0E12 60%, #14080C 100%)"
+        },
+        "props": {
+          "metal": {
+            "default": "gold",
+            "kind": "enum",
+            "options": [
+              "gold",
+              "chrome",
+              "copper"
+            ]
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "gl",
+        "title": "Gold knot",
+        "type": "widgetlab.gold-knot"
+      },
+      {
+        "category": "3D",
+        "defaultSize": {
+          "h": 345,
+          "w": 329
+        },
+        "description": "A repelling shape swarm — drag inside it",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "movable": true,
+          "selectable": true,
+          "snap": "both",
+          "solid": true
+        },
+        "minSize": {
+          "h": 200,
+          "w": 240
+        },
+        "preview": {
+          "kind": "gradient",
+          "value": "linear-gradient(135deg, #1F2333 0%, #14161F 60%, #0A0B12 100%)"
+        },
+        "props": {
+          "accentIdx": {
+            "default": 0,
+            "kind": "number",
+            "max": 3,
+            "min": 0
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "gl",
+        "title": "Shapes",
+        "type": "widgetlab.shapes"
+      },
+      {
+        "category": "3D",
+        "defaultSize": {
+          "h": 155,
+          "w": 329
+        },
+        "description": "Drag the cube itself — the mesh claims the gesture",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "movable": true,
+          "selectable": true,
+          "snap": "both",
+          "solid": true
+        },
+        "minSize": {
+          "h": 120,
+          "w": 200
+        },
+        "preview": {
+          "kind": "gradient",
+          "value": "linear-gradient(135deg, #102030 0%, #050a14 100%)"
+        },
+        "props": {
+          "hue": {
+            "default": 200,
+            "kind": "number",
+            "max": 360,
+            "min": 0
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "gl",
+        "title": "Orbit cube",
+        "type": "widgetlab.orbit-cube"
+      },
+      {
+        "category": "Nodes",
+        "defaultSize": {
+          "h": 96,
+          "w": 170
+        },
+        "description": "A source node — one out port",
+        "groups": {},
+        "interaction": {
+          "movable": true,
+          "resizable": false,
+          "selectable": true,
+          "snap": "both"
+        },
+        "minSize": {
+          "h": 80,
+          "w": 140
+        },
+        "ports": [
+          {
+            "accepts": [
+              "signal"
+            ],
+            "id": "out",
+            "side": "e"
+          }
+        ],
+        "preview": {
+          "kind": "color",
+          "value": "#1C2540"
+        },
+        "props": {
+          "hz": {
+            "default": 440,
+            "kind": "number",
+            "max": 20000,
+            "min": 1
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Signal",
+        "type": "widgetlab.signal"
+      },
+      {
+        "category": "Nodes",
+        "defaultSize": {
+          "h": 96,
+          "w": 170
+        },
+        "description": "A transform node — in and out",
+        "groups": {},
+        "interaction": {
+          "movable": true,
+          "resizable": false,
+          "selectable": true,
+          "snap": "both"
+        },
+        "minSize": {
+          "h": 80,
+          "w": 140
+        },
+        "ports": [
+          {
+            "accepts": [
+              "signal"
+            ],
+            "id": "in",
+            "side": "w"
+          },
+          {
+            "accepts": [
+              "signal"
+            ],
+            "id": "out",
+            "side": "e"
+          }
+        ],
+        "preview": {
+          "kind": "color",
+          "value": "#1F3327"
+        },
+        "props": {
+          "mode": {
+            "default": "lowpass",
+            "kind": "enum",
+            "options": [
+              "lowpass",
+              "highpass",
+              "bandpass"
+            ]
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Filter",
+        "type": "widgetlab.filter"
+      },
+      {
+        "category": "Nodes",
+        "defaultSize": {
+          "h": 96,
+          "w": 170
+        },
+        "description": "A sink node — two inputs",
+        "groups": {},
+        "interaction": {
+          "movable": true,
+          "resizable": false,
+          "selectable": true,
+          "snap": "both"
+        },
+        "minSize": {
+          "h": 80,
+          "w": 140
+        },
+        "ports": [
+          {
+            "accepts": [
+              "signal"
+            ],
+            "id": "in-a",
+            "side": "w"
+          },
+          {
+            "accepts": [
+              "signal"
+            ],
+            "id": "in-b",
+            "side": "w"
+          }
+        ],
+        "preview": {
+          "kind": "color",
+          "value": "#33231C"
+        },
+        "props": {},
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Scope",
+        "type": "widgetlab.scope"
+      }
+    ]
+  },
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "id": "widgetlab",
+  "manifestVersion": 1,
+  "title": "Widgetlab",
+  "version": "0.1.0"
+}

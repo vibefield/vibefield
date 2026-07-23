@@ -1,0 +1,104 @@
+{
+  "activation": [
+    "onWidget:field.folder",
+    "onWidget:field.comment"
+  ],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "category": "Tools",
+        "container": {
+          "accepts": [
+            "widget"
+          ],
+          "provides": [
+            "widget"
+          ]
+        },
+        "defaultSize": {
+          "h": 345,
+          "w": 329
+        },
+        "description": "A container — drop cards in, double-click to enter",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "movable": true,
+          "resizable": false,
+          "selectable": true,
+          "snap": "both"
+        },
+        "preview": {
+          "kind": "color",
+          "value": "#1D1D2B"
+        },
+        "props": {
+          "accent": {
+            "default": "#7B96FF",
+            "kind": "string"
+          },
+          "title": {
+            "default": "Folder",
+            "kind": "string"
+          }
+        },
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Folder",
+        "type": "field.folder"
+      },
+      {
+        "category": "Tools",
+        "defaultSize": {
+          "h": 300,
+          "w": 400
+        },
+        "description": "Wrap widgets in a tinted group — C wraps the selection",
+        "groups": {},
+        "interaction": {
+          "dragOn": "press",
+          "movable": true,
+          "resizable": true,
+          "selectable": true,
+          "snap": "target",
+          "sweepContained": true
+        },
+        "preview": {
+          "kind": "gradient",
+          "value": "linear-gradient(135deg, rgba(99, 102, 241, 0.45), rgba(99, 102, 241, 0.18))"
+        },
+        "props": {
+          "color": {
+            "default": "#6366F1",
+            "kind": "string"
+          },
+          "title": {
+            "default": "Comment",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Comment",
+        "type": "field.comment"
+      }
+    ]
+  },
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "id": "field",
+  "manifestVersion": 1,
+  "title": "Field tools",
+  "version": "0.1.0"
+}
