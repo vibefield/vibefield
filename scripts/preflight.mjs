@@ -3,7 +3,7 @@
 // present (README "Getting started", CLAUDE.md "Machine setup"). Hard-fails on
 // missing pieces, warns on freshness/version drift. Run: `pnpm preflight`.
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");

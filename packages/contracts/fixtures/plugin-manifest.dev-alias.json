@@ -1,0 +1,23 @@
+{
+  "manifestVersion": 1,
+  "id": "note",
+  "version": "0.1.0",
+  "title": "Notes (dev alias)",
+  "description": "§21.2 bridge fixture: single-segment dev-era id — V1 tolerates, distribution refuses",
+  "engines": { "app": ">=0.0.0", "contracts": "^0.1.0" },
+  "entries": { "renderer": "./dist/renderer.js" },
+  "activation": ["onWidget:note.card"],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "type": "note.card",
+        "title": "Note",
+        "schemaVersion": 1,
+        "surface": "dom",
+        "sizeMode": "resizable",
+        "defaultSize": { "w": 260, "h": 180 }
+      }
+    ]
+  }
+}

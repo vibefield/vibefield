@@ -1,0 +1,32 @@
+{
+  "manifestVersion": 1,
+  "id": "com.example.notes",
+  "version": "0.1.0",
+  "title": "Example Notes",
+  "description": "A renderer-only note widget — the minimal real plugin",
+  "engines": { "app": "^0.1.0", "contracts": "^0.1.0" },
+  "entries": { "renderer": "./dist/renderer.js" },
+  "activation": ["onWidget:com.example.notes"],
+  "capabilities": ["doc.write"],
+  "contributes": {
+    "widgets": [
+      {
+        "type": "com.example.notes",
+        "title": "Note",
+        "description": "A sticky note",
+        "category": "Cards",
+        "preview": { "kind": "color", "value": "#F6E7A9" },
+        "schemaVersion": 1,
+        "surface": "dom",
+        "sizeMode": "resizable",
+        "defaultSize": { "w": 260, "h": 180 },
+        "minSize": { "w": 120, "h": 90 },
+        "props": {
+          "text": { "kind": "string", "default": "", "maxLength": 4000 },
+          "color": { "kind": "enum", "values": ["yellow", "blue", "pink"], "default": "yellow" }
+        },
+        "groups": [["text"], ["color"]]
+      }
+    ]
+  }
+}

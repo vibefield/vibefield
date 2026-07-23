@@ -46,4 +46,23 @@ describe("PluginRegistry", () => {
     expect(() => r.register(manifest(), { "note.card": "impl" })).toThrow(/already registered/);
     expect(() => r.register(manifest({ id: "Bad_Id" }), {})).toThrow(/plugin id/);
   });
+
+  it("resolves ownership through the exact type map, never by splitting (§6.2)", () => {
+    const r = new PluginRegistry<string>();
+    r.register(manifest(), { "note.card": "impl" });
+    expect(r.ownerOf("note.card")).toBe("note");
+    expect(r.ownerOf("note.gone")).toBeUndefined();
+    // split-derived lookup would consult plugin "note" for "note.card.deep";
+    // the exact map answers from the registered set alone.
+    expect(r.hasWidget("note.card.deep")).toBe(false);
+  });
+
+  it("registers a validated V1 projection alongside the legacy manifest", () => {
+    const r = new PluginRegistry<string>();
+    r.register(manifest(), { "note.card": "impl" });
+    const p = r.plugin("note");
+    expect(p?.v1.manifestVersion).toBe(1);
+    expect(p?.v1.contributes?.widgets?.[0]?.type).toBe("note.card");
+    expect(p?.adaptWarnings).toEqual([]);
+  });
 });

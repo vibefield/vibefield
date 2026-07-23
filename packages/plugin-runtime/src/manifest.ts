@@ -1,14 +1,16 @@
-import type { Scope } from "@vibefield/contracts";
+import type { Scope, WidgetCategory } from "@vibefield/contracts";
+import { LegacyPluginManifest, WIDGET_CATEGORIES } from "@vibefield/contracts";
 
 // Plugin manifest (design-03 §4, P0 subset): what a plugin declares about
-// itself. P0 plugins are built-in (statically imported by the shell); the
-// manifest shape is the contract that later dynamic loading (D22) reuses
-// unchanged. A plugin's widget types are namespaced "<pluginId>.<name>" —
-// the registry enforces it (A4: names are governed, not squatted).
+// itself. P0 plugins are built-in (statically imported by the shell). Slice P0
+// of the plugin-architecture spec moved schema AUTHORITY to @vibefield/contracts
+// (PA-3): the category vocabulary and the legacy zod shape live there; this
+// module keeps the authoring-side TS types and the established validate voice.
+// The registry additionally adapts every legacy manifest to PluginManifestV1
+// (see adapter.ts) — the §21.1 bridge until P1's canonical manifests.
 
-/** Tray shelves a widget can declare (P-3, widgetlab port). The tray adds "All" on top. */
-export const WIDGET_CATEGORIES = ["Cards", "3D", "Nodes", "Tools"] as const;
-export type WidgetCategory = (typeof WIDGET_CATEGORIES)[number];
+export type { WidgetCategory };
+export { WIDGET_CATEGORIES };
 
 export interface WidgetDecl {
   /** namespaced widget type, e.g. "note.card" */
@@ -22,8 +24,8 @@ export interface WidgetDecl {
   category?: WidgetCategory;
   /**
    * CSS background for tray/folder mini silhouettes when no live preview
-   * renders. D22 threat-pass note: this is raw CSS from the manifest — fine
-   * for built-ins, MUST be schema-validated/sanitized before dynamic plugins.
+   * renders. Legacy-only: V1 manifests carry a schema-sanitized SafePreview
+   * (the D22 threat note answered); the adapter maps this best-effort.
    */
   preview?: string;
 }
@@ -47,5 +49,14 @@ export function validateManifest(m: PluginManifest): void {
       throw new Error(`widget type ${w.type} must live in the plugin's namespace ${m.id}.*`);
     if (w.defaultSize.w <= 0 || w.defaultSize.h <= 0)
       throw new Error(`widget ${w.type} has a non-positive defaultSize`);
+  }
+  // The contracts schema is the authority (PA-3); the hand checks above only
+  // preserve this module's established error voice for its callers' tests.
+  const parsed = LegacyPluginManifest.safeParse(m);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    throw new Error(
+      `plugin manifest ${m.id} invalid: ${first?.path.join(".") ?? "<root>"}: ${first?.message}`,
+    );
   }
 }

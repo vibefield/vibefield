@@ -1,5 +1,9 @@
 // zod → JSON Schema artifacts (design-01 §3). Committed under gen/jsonschema/;
 // field-native's typify-generated Rust is produced from these files.
+//
+// DELIBERATELY ABSENT: src/plugins.ts (PluginManifestV1 and friends). Plugin
+// manifests are TS-only — field-native exposes no plugin loader (plugin spec
+// §4.2), so a Rust reader would be dead code the fixtures can't exercise.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

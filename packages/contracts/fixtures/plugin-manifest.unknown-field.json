@@ -1,0 +1,12 @@
+{
+  "manifestVersion": 1,
+  "id": "com.example.notes",
+  "version": "0.1.0",
+  "title": "Example Notes",
+  "engines": { "app": "^0.1.0", "contracts": "^0.1.0" },
+  "entries": { "renderer": "./dist/renderer.js" },
+  "activation": [],
+  "capabilities": [],
+  "futureField": { "carried": true },
+  "contributes": { "futureContribution": [{ "id": "x" }] }
+}
