@@ -3,9 +3,14 @@
   "id": "com.example.notes",
   "version": "0.1.0",
   "title": "Example Notes",
-  "description": "A renderer-only note widget — the minimal real plugin",
-  "engines": { "app": "^0.1.0", "contracts": "^0.1.0" },
-  "entries": { "renderer": "./dist/renderer.js" },
+  "description": "A renderer-only note widget \u2014 the minimal real plugin",
+  "engines": {
+    "app": "^0.1.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
   "activation": ["onWidget:com.example.notes"],
   "capabilities": ["doc.write"],
   "contributes": {
@@ -15,17 +20,37 @@
         "title": "Note",
         "description": "A sticky note",
         "category": "Cards",
-        "preview": { "kind": "color", "value": "#F6E7A9" },
+        "preview": {
+          "kind": "color",
+          "value": "#F6E7A9"
+        },
         "schemaVersion": 1,
         "surface": "dom",
-        "sizeMode": "resizable",
-        "defaultSize": { "w": 260, "h": 180 },
-        "minSize": { "w": 120, "h": 90 },
-        "props": {
-          "text": { "kind": "string", "default": "", "maxLength": 4000 },
-          "color": { "kind": "enum", "values": ["yellow", "blue", "pink"], "default": "yellow" }
+        "sizeMode": "fixed",
+        "defaultSize": {
+          "w": 260,
+          "h": 180
         },
-        "groups": [["text"], ["color"]]
+        "minSize": {
+          "w": 120,
+          "h": 90
+        },
+        "props": {
+          "text": {
+            "kind": "string",
+            "default": "",
+            "maxLength": 4000
+          },
+          "color": {
+            "kind": "enum",
+            "options": ["yellow", "blue", "pink"],
+            "default": "yellow"
+          }
+        },
+        "groups": {
+          "text": ["text"],
+          "color": ["color"]
+        }
       }
     ]
   }

@@ -52,10 +52,12 @@ export function adaptLegacyManifest(legacy: PluginManifest): AdaptedManifest {
       ...(preview !== undefined ? { preview } : {}),
       schemaVersion: 1,
       surface: "dom" as const,
-      sizeMode: "resizable" as const,
+      // "fixed" is both the engine default and the truth for all 21 shipped
+      // widgets (2026-07-23 inventory); canonical manifests state it per widget.
+      sizeMode: "fixed" as const,
       defaultSize: w.defaultSize,
       props: {},
-      groups: [],
+      groups: {},
     };
   });
   const raw = {

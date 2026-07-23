@@ -15,7 +15,7 @@
         "title": "Note",
         "schemaVersion": 1,
         "surface": "dom",
-        "sizeMode": "resizable",
+        "sizeMode": "fixed",
         "defaultSize": { "w": 260, "h": 180 }
       }
     ]

@@ -162,6 +162,26 @@ export type ActivationEvent = z.infer<typeof ActivationEvent>;
 // shipped built-ins: folder demanded container, nodes demanded ports/provides,
 // every widgetlab card demanded interaction) ----------------------------------
 
+/** ICE p.json inner shapes (props.ts JsonShape, mirrored 1:1 — validation-only,
+ * never their own strata components; the outer json prop is ONE string cell). */
+export type JsonShape =
+  | { kind: "string" }
+  | { kind: "number" }
+  | { kind: "boolean" }
+  | { kind: "enum"; options: string[] }
+  | { kind: "array"; item: JsonShape }
+  | { kind: "object"; fields: Record<string, JsonShape> };
+export const JsonShape: z.ZodType<JsonShape> = z.lazy(() =>
+  z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("string") }),
+    z.object({ kind: z.literal("number") }),
+    z.object({ kind: z.literal("boolean") }),
+    z.object({ kind: z.literal("enum"), options: z.array(z.string()).min(1).max(64) }),
+    z.object({ kind: z.literal("array"), item: JsonShape }),
+    z.object({ kind: z.literal("object"), fields: z.record(JsonShape) }),
+  ]),
+);
+
 const propBase = {
   optional: z.boolean().optional(),
   /** default true; immutable props belong to no conflict group */
@@ -182,8 +202,9 @@ export const PropSpec = z.discriminatedUnion("kind", [
       ...propBase,
       kind: z.literal("number"),
       default: z.number().optional(),
-      minimum: z.number().optional(),
-      maximum: z.number().optional(),
+      /** engine vocabulary (p.number): min/max, not JSON-Schema minimum/maximum */
+      min: z.number().optional(),
+      max: z.number().optional(),
     })
     .passthrough(),
   z
@@ -193,7 +214,8 @@ export const PropSpec = z.discriminatedUnion("kind", [
     .object({
       ...propBase,
       kind: z.literal("enum"),
-      values: z.array(z.string()).min(1).max(64),
+      /** engine vocabulary (p.enum): `options` — additive-only across versions */
+      options: z.array(z.string()).min(1).max(64),
       default: z.string().optional(),
     })
     .passthrough(),
@@ -201,6 +223,10 @@ export const PropSpec = z.discriminatedUnion("kind", [
     .object({
       ...propBase,
       kind: z.literal("json"),
+      /** the ICE p.json inner shape — without it stocks/fitness/todo-class
+       * props cannot be reconstructed from manifest data */
+      inner: JsonShape,
+      /** the PARSED default value (the builder serializes for the string cell) */
       default: z.unknown().optional(),
       maxBytes: z.number().int().positive().max(PLUGIN_LIMITS.KV_VALUE_MAX_BYTES).optional(),
     })
@@ -226,20 +252,26 @@ export const WidgetContribution = z
 
     schemaVersion: z.number().int().positive(),
     surface: z.enum(["dom", "gl"]),
-    sizeMode: z.enum(["fixed", "resizable", "content"]),
+    /** engine vocabulary (defineWidget): resizability is interaction.resizable */
+    sizeMode: z.enum(["fixed", "auto-height", "auto"]),
     defaultSize: SizeSpec,
     minSize: SizeSpec.optional(),
+    /** reserved — no engine support yet (defineWidget has no maxSize); hosts ignore */
     maxSize: SizeSpec.optional(),
 
-    /** ICE interaction flags — durable contract, host-derived into the prefab. */
+    /** ICE interaction flags — durable contract, host-derived into the prefab.
+     * Vocabulary is the engine's WidgetInteraction verbatim: snap
+     * source/target/both/none (default target), dragOn press/longPress,
+     * sweepContained = the comment-box drag. */
     interaction: z
       .object({
         selectable: z.boolean().optional(),
         movable: z.boolean().optional(),
         resizable: z.boolean().optional(),
-        snap: z.enum(["grid", "size", "both", "none"]).optional(),
-        dragOn: z.enum(["press", "hold"]).optional(),
+        snap: z.enum(["source", "target", "both", "none"]).optional(),
+        dragOn: z.enum(["press", "longPress"]).optional(),
         solid: z.boolean().optional(),
+        sweepContained: z.boolean().optional(),
       })
       .passthrough()
       .optional(),
@@ -251,16 +283,18 @@ export const WidgetContribution = z
       })
       .passthrough()
       .optional(),
-    /** leaf drop-matching currency when not a container. */
+    /** leaf drop-matching currency when not a container (engine: container wins). */
     provides: z.array(z.string()).max(16).optional(),
-    /** node ports (wire endpoints); the engine renders and routes the wires. */
+    /** node ports (wire endpoints); the engine renders and routes the wires.
+     * accepts optional = connects to anything; index = slot along the side. */
     ports: z
       .array(
         z
           .object({
             id: z.string().min(1).max(32),
             side: z.enum(["n", "e", "s", "w"]),
-            accepts: z.array(z.string()).min(1).max(16),
+            index: z.number().int().nonnegative().optional(),
+            accepts: z.array(z.string()).max(16).optional(),
           })
           .passthrough(),
       )
@@ -268,7 +302,11 @@ export const WidgetContribution = z
       .optional(),
 
     props: z.record(PropSpec).optional().default({}),
-    groups: z.array(z.array(z.string()).min(1)).optional().default([]),
+    /** NAMED conflict groups (engine truth: the generated strata component is
+     * `${type}:${groupName}`, so names are DURABLE). Ungrouped props auto-join
+     * the engine's "props" default group — omitting groups entirely is the
+     * common case and exactly what all 21 shipped widgets do. */
+    groups: z.record(z.array(z.string()).min(1)).optional().default({}),
   })
   .passthrough();
 export type WidgetContribution = z.infer<typeof WidgetContribution>;
@@ -586,9 +624,14 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       const path = ["contributes", "widgets", wi];
       const propNames = Object.keys(w.props);
       if (propNames.length > PLUGIN_LIMITS.PROPS_MAX) issue("too many props", path);
+      // Explicit groups: names are DURABLE component suffixes (`${type}:${name}`),
+      // membership disjoint, members declared. Ungrouped props auto-join the
+      // engine's "props" default group, so absence of groups is normal.
       const grouped = new Map<string, number>();
-      for (const g of w.groups) {
-        for (const name of g) {
+      for (const [gname, members] of Object.entries(w.groups)) {
+        if (!ID_SEGMENT_RE.test(gname))
+          issue(`group name ${gname} must match [a-z][a-z0-9-]*`, path);
+        for (const name of members) {
           if (!propNames.includes(name)) issue(`group names undeclared prop ${name}`, path);
           const n = (grouped.get(name) ?? 0) + 1;
           grouped.set(name, n);
@@ -596,22 +639,19 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
         }
       }
       for (const [name, spec] of Object.entries(w.props)) {
-        const mutable = spec.mutable !== false;
-        if (mutable && !grouped.has(name))
-          issue(`mutable prop ${name} must belong to exactly one conflict group`, path);
-        if (!mutable && grouped.has(name))
+        if (spec.mutable === false && grouped.has(name))
           issue(`immutable prop ${name} must not belong to a conflict group`, path);
         if (
           spec.kind === "enum" &&
           spec.default !== undefined &&
-          !spec.values.includes(spec.default)
+          !spec.options.includes(spec.default)
         )
-          issue(`enum default ${spec.default} not in values for prop ${name}`, path);
+          issue(`enum default ${spec.default} not in options for prop ${name}`, path);
         if (spec.kind === "number" && spec.default !== undefined) {
-          if (spec.minimum !== undefined && spec.default < spec.minimum)
-            issue(`number default below minimum for prop ${name}`, path);
-          if (spec.maximum !== undefined && spec.default > spec.maximum)
-            issue(`number default above maximum for prop ${name}`, path);
+          if (spec.min !== undefined && spec.default < spec.min)
+            issue(`number default below min for prop ${name}`, path);
+          if (spec.max !== undefined && spec.default > spec.max)
+            issue(`number default above max for prop ${name}`, path);
         }
         if (
           spec.kind === "string" &&

@@ -3,8 +3,15 @@
   "id": "com.example.metrics",
   "version": "1.2.0",
   "title": "Metrics",
-  "engines": { "app": "^0.1.0", "contracts": "^0.1.0", "platforms": ["darwin", "linux"] },
-  "entries": { "renderer": "./dist/renderer.js", "service": "./dist/service.js" },
+  "engines": {
+    "app": "^0.1.0",
+    "contracts": "^0.1.0",
+    "platforms": ["darwin", "linux"]
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js",
+    "service": "./dist/service.js"
+  },
   "host": "worker",
   "activation": ["onService:x.com.example.metrics.snapshot", "onWidget:com.example.metrics.chart"],
   "capabilities": [
@@ -30,11 +37,27 @@
         "title": "Metrics chart",
         "schemaVersion": 1,
         "surface": "dom",
-        "sizeMode": "resizable",
-        "defaultSize": { "w": 329, "h": 155 },
-        "ports": [{ "id": "out", "side": "e", "accepts": ["signal"] }],
-        "props": { "source": { "kind": "string", "maxLength": 200 } },
-        "groups": [["source"]]
+        "sizeMode": "fixed",
+        "defaultSize": {
+          "w": 329,
+          "h": 155
+        },
+        "ports": [
+          {
+            "id": "out",
+            "side": "e",
+            "accepts": ["signal"]
+          }
+        ],
+        "props": {
+          "source": {
+            "kind": "string",
+            "maxLength": 200
+          }
+        },
+        "groups": {
+          "source": ["source"]
+        }
       }
     ],
     "systems": [
@@ -50,7 +73,12 @@
         "sampleHz": {
           "title": "Sample rate",
           "scope": "user",
-          "schema": { "type": "number", "minimum": 1, "maximum": 60, "default": 10 }
+          "schema": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 60,
+            "default": 10
+          }
         }
       }
     },
@@ -64,13 +92,24 @@
             "requiredCapability": "x.com.example.metrics.read",
             "idempotent": true,
             "locality": "local",
-            "input": { "type": "object", "additionalProperties": false },
+            "input": {
+              "type": "object",
+              "additionalProperties": false
+            },
             "output": {
               "type": "object",
               "required": ["sampledAt", "values"],
               "properties": {
-                "sampledAt": { "type": "number" },
-                "values": { "type": "array", "items": { "type": "number" }, "maxItems": 1000 }
+                "sampledAt": {
+                  "type": "number"
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 1000
+                }
               },
               "additionalProperties": false
             }

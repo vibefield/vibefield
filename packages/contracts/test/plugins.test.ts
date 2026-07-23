@@ -27,10 +27,10 @@ const base = () => ({
         title: "Demo",
         schemaVersion: 1,
         surface: "dom",
-        sizeMode: "resizable",
+        sizeMode: "fixed",
         defaultSize: { w: 100, h: 100 },
         props: { label: { kind: "string", maxLength: 40 } },
-        groups: [["label"]],
+        groups: { label: ["label"] },
       },
     ],
   },
@@ -105,14 +105,16 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     );
   });
 
-  it("a mutable prop belongs to exactly one group; groups name declared props", () => {
-    const withGroups = (m: ReturnType<typeof base>, groups: string[][]) => ({
+  it("groups are named, disjoint, and reference declared props; omitting them is legal", () => {
+    const withGroups = (m: ReturnType<typeof base>, groups: Record<string, string[]>) => ({
       ...m,
       contributes: { widgets: [{ ...m.contributes.widgets[0]!, groups }] },
     });
-    refuse((m) => withGroups(m, []), /exactly one conflict group/);
-    refuse((m) => withGroups(m, [["label"], ["label"]]), /more than one group/);
-    refuse((m) => withGroups(m, [["label"], ["ghost"]]), /undeclared prop ghost/);
+    // ungrouped props auto-join the engine's "props" default group (engine truth)
+    expect(validatePluginManifest(withGroups(base(), {})).ok).toBe(true);
+    refuse((m) => withGroups(m, { a: ["label"], b: ["label"] }), /more than one group/);
+    refuse((m) => withGroups(m, { a: ["ghost"] }), /undeclared prop ghost/);
+    refuse((m) => withGroups(m, { Bad_Name: ["label"] }), /group name/);
   });
 
   it("custom capabilities live in the owner namespace", () => {
