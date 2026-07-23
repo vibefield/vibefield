@@ -32,7 +32,7 @@
  * Frame math: v1 `dt` (seconds) → `dtMs / 1000`. Accent write: v1
  * `useUpdateWidget` → `useCommit` (the sanctioned durable widget-write path).
  */
-import { defineWidget, p, Size } from "@vibecook/ice";
+import { Size, widgets } from "@vibecook/ice";
 import { useIslandFrame } from "@vibecook/ice/r3f";
 import {
   useCommit,
@@ -170,11 +170,15 @@ function ShapesView({ entity, world }: WidgetComponentProps): ReactElement {
 
   const onClick = (): void => {
     if (movedRef.current > CLICK_MOVE_THRESHOLD) return; // a drag, not a click
+    // host registration precedes any mount at runtime, so the lookup is safe
+    // here; still guarded because groups.find always returns T | undefined.
+    const group = widgets.get(TYPE)?.groups.find((g) => g.name === "props");
+    if (group === undefined) return;
     // A durable-write failure (e.g. no active doc) must never break the handler
     // or the router — the repel keeps working even if the accent can't persist.
     try {
       commit((tx) => {
-        tx.edit(entity).set(propsGroup.component, {
+        tx.edit(entity).set(group.component, {
           accentIdx: (accentIdx + 1) % ACCENTS.length,
         } as never);
       });
@@ -332,20 +336,13 @@ function ShapesView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const ShapesCard = defineWidget({
-  type: TYPE,
-  props: { accentIdx: p.number({ default: 0, min: 0, max: 3 }) },
-  surface: "gl",
-  animated: true,
-  component: ShapesView,
-  chrome: makeGlCardChrome(BACKPLATE),
-  sizeMode: "fixed",
-  defaultSize: { w: SIZE.w, h: SIZE.h },
-  minSize: { w: 240, h: 200 },
-  interaction: { solid: true, dragOn: "press", selectable: true, movable: true, snap: "both" },
-  provides: ["widget"], // drop-to-consume advertisement — CardContainer accepts ["widget"]
-});
-
-const propsGroup = ShapesCard.groups.find(
-  (g) => g.name === "props",
-) as (typeof ShapesCard.groups)[number];
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships the component and the DOM
+// chrome binding (GL-only — the manifest carries no chrome data, only code).
+// The module-level `ShapesCard.groups.find(...)` hazard (a defineWidget-
+// produced object read from outside its own scope, before the type was
+// necessarily registered) is gone with the call itself — onClick above now
+// resolves its group through the live `widgets` registry at write time.
+export const SHAPES_TYPE = TYPE;
+export const SHAPES_CHROME = makeGlCardChrome(BACKPLATE);
+export { ShapesView };

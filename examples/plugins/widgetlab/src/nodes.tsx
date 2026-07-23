@@ -13,15 +13,12 @@
  * snap sources+targets like every widgetlab card, and NOT solid (nodes may
  * rest overlapping — rejecting drops would fight dense graph layouts).
  */
-import { defineWidget, p } from "@vibecook/ice";
 import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import type { CSSProperties, ReactElement } from "react";
 
 /** Node preset (between the iOS "small" card and nodeboard's 150×84). */
 export const NODE_SIZE = { w: 170, h: 96 } as const;
-
-const INTERACTION = { selectable: true, movable: true, resizable: false, snap: "both" } as const;
 
 function PortLabel({ side, label }: { side: "e" | "w"; label: string }): ReactElement {
   const style: CSSProperties = {
@@ -74,12 +71,18 @@ export const NODE_BG = {
 
 // --- signal-node: a source. One "out" port (east). --------------------------
 
+// C1b·2: the defineWidget call is GONE from all three nodes below — the host
+// builds each prefab from the canonical manifest (§12.2). These modules ship
+// only the components; each TYPE const replaces what used to be an inline
+// string literal repeated at the call site and in useWidgetProps.
+export const SIGNAL_TYPE = "widgetlab.signal";
+
 type SignalProps = { readonly hz: number };
 
 function SignalNodeView({ entity, world }: WidgetComponentProps): ReactElement {
-  const props = useWidgetProps<SignalProps>(world, entity, "widgetlab.signal");
+  const props = useWidgetProps<SignalProps>(world, entity, SIGNAL_TYPE);
   return (
-    <CardShell world={world} entity={entity} background={NODE_BG["widgetlab.signal"]}>
+    <CardShell world={world} entity={entity} background={NODE_BG[SIGNAL_TYPE]}>
       <NodeBody title="Signal" subtitle={`${props?.hz ?? 440} Hz`} accent="#5E9EFF">
         <PortLabel side="e" label="out" />
       </NodeBody>
@@ -87,27 +90,18 @@ function SignalNodeView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const SignalNode = defineWidget({
-  type: "widgetlab.signal",
-  props: { hz: p.number({ default: 440, min: 1, max: 20000 }) },
-  surface: "dom",
-  component: SignalNodeView,
-  sizeMode: "fixed",
-  defaultSize: NODE_SIZE,
-  minSize: { w: 140, h: 80 },
-  interaction: INTERACTION,
-  ports: [{ id: "out", side: "e", accepts: ["signal"] }],
-  provides: ["widget"],
-});
+export { SignalNodeView };
 
 // --- filter-node: in (west) → out (east). ------------------------------------
+
+export const FILTER_TYPE = "widgetlab.filter";
 
 type FilterProps = { readonly mode: "lowpass" | "highpass" | "bandpass" };
 
 function FilterNodeView({ entity, world }: WidgetComponentProps): ReactElement {
-  const props = useWidgetProps<FilterProps>(world, entity, "widgetlab.filter");
+  const props = useWidgetProps<FilterProps>(world, entity, FILTER_TYPE);
   return (
-    <CardShell world={world} entity={entity} background={NODE_BG["widgetlab.filter"]}>
+    <CardShell world={world} entity={entity} background={NODE_BG[FILTER_TYPE]}>
       <NodeBody title="Filter" subtitle={props?.mode ?? "lowpass"} accent="#4ADE80">
         <PortLabel side="w" label="in" />
         <PortLabel side="e" label="out" />
@@ -116,27 +110,15 @@ function FilterNodeView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const FilterNode = defineWidget({
-  type: "widgetlab.filter",
-  props: { mode: p.enum(["lowpass", "highpass", "bandpass"], { default: "lowpass" }) },
-  surface: "dom",
-  component: FilterNodeView,
-  sizeMode: "fixed",
-  defaultSize: NODE_SIZE,
-  minSize: { w: 140, h: 80 },
-  interaction: INTERACTION,
-  ports: [
-    { id: "in", side: "w", accepts: ["signal"] },
-    { id: "out", side: "e", accepts: ["signal"] },
-  ],
-  provides: ["widget"],
-});
+export { FilterNodeView };
 
 // --- scope-node: a sink with TWO inputs (even side distribution). -------------
 
+export const SCOPE_TYPE = "widgetlab.scope";
+
 function ScopeNodeView({ entity, world }: WidgetComponentProps): ReactElement {
   return (
-    <CardShell world={world} entity={entity} background={NODE_BG["widgetlab.scope"]}>
+    <CardShell world={world} entity={entity} background={NODE_BG[SCOPE_TYPE]}>
       <NodeBody title="Scope" subtitle="A / B" accent="#FFB86C">
         <PortLabel side="w" label="a · b" />
       </NodeBody>
@@ -144,19 +126,4 @@ function ScopeNodeView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const ScopeNode = defineWidget({
-  type: "widgetlab.scope",
-  surface: "dom",
-  component: ScopeNodeView,
-  sizeMode: "fixed",
-  defaultSize: NODE_SIZE,
-  minSize: { w: 140, h: 80 },
-  interaction: INTERACTION,
-  ports: [
-    { id: "in-a", side: "w", accepts: ["signal"] },
-    { id: "in-b", side: "w", accepts: ["signal"] },
-  ],
-  provides: ["widget"],
-});
-
-export const NODE_WIDGETS = [SignalNode, FilterNode, ScopeNode];
+export { ScopeNodeView };

@@ -12,7 +12,7 @@
  * sphere, material) is verbatim; the only adaptation is reading the widget's
  * live size from the world (`Size`) instead of v1's width/height render props.
  */
-import { defineWidget, p, Size } from "@vibecook/ice";
+import { Size } from "@vibecook/ice";
 import { useWidgetProps, useWorldComponent, type WidgetComponentProps } from "@vibecook/ice/react";
 import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/shell-ui";
 import { type ReactElement, useRef } from "react";
@@ -70,16 +70,9 @@ function MatteSphereView({ entity, world }: WidgetComponentProps): ReactElement 
   );
 }
 
-export const MatteSphereCard = defineWidget({
-  type: TYPE,
-  props: { color: p.string({ default: "#F5B8D0" }) },
-  surface: "gl",
-  animated: false,
-  component: MatteSphereView,
-  chrome: makeGlCardChrome(BACKPLATE),
-  sizeMode: "fixed",
-  defaultSize: { w: SIZE.w, h: SIZE.h },
-  minSize: { w: 120, h: 120 },
-  interaction: { solid: true, dragOn: "press", selectable: true, movable: true, snap: "both" },
-  provides: ["widget"], // drop-to-consume advertisement — CardContainer accepts ["widget"]
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships the component and the DOM
+// chrome binding (GL-only — the manifest carries no chrome data, only code).
+export const SPHERE_TYPE = TYPE;
+export const SPHERE_CHROME = makeGlCardChrome(BACKPLATE);
+export { MatteSphereView };

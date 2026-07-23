@@ -6,7 +6,6 @@
  *
  * size: medium
  */
-import { defineWidget, p } from "@vibecook/ice";
 import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import type { ReactElement } from "react";
@@ -133,24 +132,7 @@ function StocksView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const StocksCard = defineWidget({
-  type: TYPE,
-  defaultSize: { w: 329, h: 155 }, // v1 scene size — tray tiles and inserts match the demo grid
-  props: {
-    tickers: p.json(
-      p.array(
-        p.object({
-          symbol: { kind: "string" },
-          price: { kind: "number" },
-          changePct: { kind: "number" },
-          history: p.array({ kind: "number" }),
-        }),
-      ),
-      { default: DEFAULT_TICKERS },
-    ),
-  },
-  surface: "dom",
-  component: StocksView,
-  provides: ["widget"],
-  interaction: { solid: true, dragOn: "press", resizable: false, snap: "both" },
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships only the component.
+export const STOCKS_TYPE = TYPE;
+export { StocksView };

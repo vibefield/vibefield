@@ -36,7 +36,7 @@
  * regardless of move distance, so the log is guarded by a move threshold to
  * keep v1's "a drag is not a click".
  */
-import { defineWidget, p, Size } from "@vibecook/ice";
+import { Size } from "@vibecook/ice";
 import { useIslandInvalidate } from "@vibecook/ice/r3f";
 import { useWidgetProps, useWorldComponent, type WidgetComponentProps } from "@vibecook/ice/react";
 import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/shell-ui";
@@ -176,16 +176,9 @@ function OrbitCubeView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const OrbitCubeCard = defineWidget({
-  type: TYPE,
-  props: { hue: p.number({ default: 200, min: 0, max: 360 }) },
-  surface: "gl",
-  animated: false, // event-driven; repaints scheduled via useIslandInvalidate
-  component: OrbitCubeView,
-  chrome: makeGlCardChrome(BACKPLATE),
-  sizeMode: "fixed",
-  defaultSize: { w: SIZE.w, h: SIZE.h },
-  minSize: { w: 200, h: 120 },
-  interaction: { solid: true, dragOn: "press", selectable: true, movable: true, snap: "both" },
-  provides: ["widget"], // drop-to-consume advertisement — CardContainer accepts ["widget"]
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships the component and the DOM
+// chrome binding (GL-only — the manifest carries no chrome data, only code).
+export const ORBIT_CUBE_TYPE = TYPE;
+export const ORBIT_CUBE_CHROME = makeGlCardChrome(BACKPLATE);
+export { OrbitCubeView };

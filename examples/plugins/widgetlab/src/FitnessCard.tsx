@@ -5,7 +5,6 @@
  *
  * size: large
  */
-import { defineWidget, p } from "@vibecook/ice";
 import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import type { ReactElement } from "react";
@@ -21,8 +20,6 @@ type FitnessProps = {
   readonly exercise: Goal;
   readonly stand: Goal;
 };
-
-const goalShape = p.object({ current: { kind: "number" }, goal: { kind: "number" } });
 
 function Ring({
   r,
@@ -140,16 +137,10 @@ function FitnessView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const FitnessCard = defineWidget({
-  type: TYPE,
-  defaultSize: { w: 329, h: 345 }, // v1 scene size — tray tiles and inserts match the demo grid
-  props: {
-    move: p.json(goalShape, { default: { current: 420, goal: 520 } }),
-    exercise: p.json(goalShape, { default: { current: 22, goal: 30 } }),
-    stand: p.json(goalShape, { default: { current: 9, goal: 12 } }),
-  },
-  surface: "dom",
-  component: FitnessView,
-  provides: ["widget"],
-  interaction: { solid: true, dragOn: "press", resizable: false, snap: "both" },
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). goalShape lived only in that call's three
+// p.json(...) uses and is gone with it — the manifest's move/exercise/stand
+// props each carry the same {current, goal} shape as inline data. This module
+// ships only the component.
+export const FITNESS_TYPE = TYPE;
+export { FitnessView };

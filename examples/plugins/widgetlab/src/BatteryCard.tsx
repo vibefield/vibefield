@@ -5,7 +5,6 @@
  *
  * size: small
  */
-import { defineWidget, p } from "@vibecook/ice";
 import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import type { ReactElement } from "react";
@@ -82,16 +81,7 @@ function BatteryView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const BatteryCard = defineWidget({
-  type: TYPE,
-  defaultSize: { w: 155, h: 155 }, // v1 scene size — tray tiles and inserts match the demo grid
-  props: {
-    phone: p.number({ default: 82, min: 0, max: 100 }),
-    watch: p.number({ default: 47, min: 0, max: 100 }),
-    airpods: p.number({ default: 91, min: 0, max: 100 }),
-  },
-  surface: "dom",
-  component: BatteryView,
-  provides: ["widget"],
-  interaction: { solid: true, dragOn: "press", resizable: false, snap: "both" },
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships only the component.
+export const BATTERY_TYPE = TYPE;
+export { BatteryView };

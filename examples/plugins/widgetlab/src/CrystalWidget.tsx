@@ -15,7 +15,7 @@
  * is accumulated locally. Scene JSX (lights, icosahedron, physical material)
  * is verbatim; size comes from the live `Size` instead of render props.
  */
-import { defineWidget, p, Size } from "@vibecook/ice";
+import { Size } from "@vibecook/ice";
 import { useIslandFrame } from "@vibecook/ice/r3f";
 import { useWidgetProps, useWorldComponent, type WidgetComponentProps } from "@vibecook/ice/react";
 import { GlLiftGroup } from "@vibefield/shell-ui";
@@ -92,15 +92,7 @@ function CrystalView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const CrystalWidget = defineWidget({
-  type: TYPE,
-  props: { tint: p.string({ default: "#9AE5FF" }) },
-  surface: "gl",
-  animated: true,
-  component: CrystalView,
-  sizeMode: "fixed",
-  defaultSize: { w: SIZE.w, h: SIZE.h },
-  minSize: { w: 120, h: 120 },
-  interaction: { solid: true, dragOn: "press", selectable: true, movable: true, snap: "both" },
-  provides: ["widget"], // drop-to-consume advertisement — CardContainer accepts ["widget"]
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships only the component.
+export const CRYSTAL_TYPE = TYPE;
+export { CrystalView };

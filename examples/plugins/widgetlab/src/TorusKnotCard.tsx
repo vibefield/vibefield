@@ -11,7 +11,7 @@
  * Scene JSX (lights, torus-knot, iridescent physical material) is verbatim;
  * size comes from the live `Size`. `hue` is a `p.number` (0–360).
  */
-import { defineWidget, p, Size } from "@vibecook/ice";
+import { Size } from "@vibecook/ice";
 import { useIslandFrame } from "@vibecook/ice/r3f";
 import { useWidgetProps, useWorldComponent, type WidgetComponentProps } from "@vibecook/ice/react";
 import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/shell-ui";
@@ -87,16 +87,9 @@ function TorusKnotView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const TorusKnotCard = defineWidget({
-  type: TYPE,
-  props: { hue: p.number({ default: 285, min: 0, max: 360 }) },
-  surface: "gl",
-  animated: true,
-  component: TorusKnotView,
-  chrome: makeGlCardChrome(BACKPLATE),
-  sizeMode: "fixed",
-  defaultSize: { w: SIZE.w, h: SIZE.h },
-  minSize: { w: 200, h: 120 },
-  interaction: { solid: true, dragOn: "press", selectable: true, movable: true, snap: "both" },
-  provides: ["widget"], // drop-to-consume advertisement — CardContainer accepts ["widget"]
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships the component and the DOM
+// chrome binding (GL-only — the manifest carries no chrome data, only code).
+export const TORUS_KNOT_TYPE = TYPE;
+export const TORUS_KNOT_CHROME = makeGlCardChrome(BACKPLATE);
+export { TorusKnotView };

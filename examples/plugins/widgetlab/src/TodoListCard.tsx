@@ -16,7 +16,7 @@
  *
  * size: large
  */
-import { defineWidget, p } from "@vibecook/ice";
+import { widgets } from "@vibecook/ice";
 import { useCommit, useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import { type ReactElement, useState } from "react";
@@ -49,7 +49,7 @@ function TodoListView({ entity, world }: WidgetComponentProps): ReactElement {
   // One guarded transaction; the whole "props" group written absolutely, with
   // `items` serialized into its json string cell.
   const writeItems = (nextItems: TodoItem[]): void => {
-    const group = TodoListCard.groups.find((g) => g.name === "props");
+    const group = widgets.get(TYPE)?.groups.find((g) => g.name === "props");
     if (group === undefined) return;
     commit((tx) =>
       tx.edit(entity).set(group.component, {
@@ -156,24 +156,11 @@ function TodoListView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const TodoListCard = defineWidget({
-  type: TYPE,
-  defaultSize: { w: 329, h: 345 }, // v1 scene size — tray tiles and inserts match the demo grid
-  props: {
-    title: p.string({ default: "Today" }),
-    items: p.json(
-      p.array(
-        p.object({
-          id: { kind: "string" },
-          text: { kind: "string" },
-          done: { kind: "boolean" },
-        }),
-      ),
-      { default: DEFAULT_ITEMS },
-    ),
-  },
-  surface: "dom",
-  component: TodoListView,
-  provides: ["widget"],
-  interaction: { solid: true, dragOn: "press", resizable: false, snap: "both" },
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships only the component. The
+// module-level `TodoListCard.groups.find(...)` hazard (a defineWidget-produced
+// object referenced from outside its own scope) is gone with the call itself —
+// writeItems above now resolves its group through the live `widgets` registry
+// at write time (host registration precedes any mount at runtime).
+export const TODO_TYPE = TYPE;
+export { TodoListView };

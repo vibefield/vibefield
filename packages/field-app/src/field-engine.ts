@@ -14,7 +14,7 @@ import type { PluginManifestV1 } from "@vibefield/contracts";
 import { fieldToolsBindings, fieldToolsManifest } from "@vibefield/plugin-field-tools";
 import { noteBindings, noteManifest } from "@vibefield/plugin-note";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
-import { widgetlabManifest, widgetlabWidgets } from "@vibefield/plugin-widgetlab";
+import { widgetlabBindings, widgetlabManifest } from "@vibefield/plugin-widgetlab";
 import { setPreviewBackground } from "@vibefield/shell-ui";
 import { buildWidgetType, type WidgetBinding } from "./plugin-host/build-widget";
 
@@ -47,7 +47,7 @@ export function buildRegistry(): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
   registerCanonical(registry, noteManifest, noteBindings);
   registerCanonical(registry, fieldToolsManifest, fieldToolsBindings);
-  registry.register(widgetlabManifest, widgetlabWidgets);
+  registerCanonical(registry, widgetlabManifest, widgetlabBindings);
   // Spine wiring: manifest `preview` data → shell-ui's silhouette registry
   // (folder minis + tray fallbacks read previewBackground — one source, P-3).
   for (const plugin of registry.all()) {

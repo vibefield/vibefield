@@ -10,7 +10,6 @@
  *
  * size: small
  */
-import { defineWidget, p } from "@vibecook/ice";
 import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import { type ReactElement, useEffect, useState } from "react";
@@ -77,16 +76,7 @@ function CalendarView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const CalendarCard = defineWidget({
-  type: TYPE,
-  defaultSize: { w: 155, h: 155 }, // v1 scene size — tray tiles and inserts match the demo grid
-  props: {
-    dateIso: p.string({ default: "" }),
-    nextEvent: p.string({ default: "Design review" }),
-    nextEventTime: p.string({ default: "3:30 PM" }),
-  },
-  surface: "dom",
-  component: CalendarView,
-  provides: ["widget"],
-  interaction: { solid: true, dragOn: "press", resizable: false, snap: "both" },
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships only the component.
+export const CALENDAR_TYPE = TYPE;
+export { CalendarView };

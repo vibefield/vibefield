@@ -5,7 +5,6 @@
  *
  * size: medium
  */
-import { defineWidget, p } from "@vibecook/ice";
 import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import type { ReactElement } from "react";
@@ -16,12 +15,6 @@ const TYPE = "widgetlab.weather";
 export const WEATHER_SIZE = { w: 329, h: 155 };
 
 type WeatherCondition = "sunny" | "cloudy" | "partly-cloudy" | "rainy";
-const WEATHER_CONDITIONS: readonly WeatherCondition[] = [
-  "sunny",
-  "cloudy",
-  "partly-cloudy",
-  "rainy",
-];
 
 type WeatherProps = {
   readonly location: string;
@@ -150,18 +143,9 @@ function WeatherView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const WeatherCard = defineWidget({
-  type: TYPE,
-  defaultSize: { w: 329, h: 155 }, // v1 scene size — tray tiles and inserts match the demo grid
-  props: {
-    location: p.string({ default: "San Francisco" }),
-    temp: p.number({ default: 64 }),
-    high: p.number({ default: 68 }),
-    low: p.number({ default: 58 }),
-    condition: p.enum(WEATHER_CONDITIONS, { default: "partly-cloudy" }),
-  },
-  surface: "dom",
-  component: WeatherView,
-  provides: ["widget"],
-  interaction: { solid: true, dragOn: "press", resizable: false, snap: "both" },
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). WEATHER_CONDITIONS lived only in that call's
+// p.enum(...) and is gone with it — the manifest's condition prop carries the
+// same four options as inline data. This module ships only the component.
+export const WEATHER_TYPE = TYPE;
+export { WeatherView };

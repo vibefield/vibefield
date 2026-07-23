@@ -5,7 +5,6 @@
  *
  * size: xl
  */
-import { defineWidget, p } from "@vibecook/ice";
 import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import type { ReactElement } from "react";
@@ -129,18 +128,7 @@ function PhotosView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const PhotosCard = defineWidget({
-  type: TYPE,
-  defaultSize: { w: 329, h: 535 }, // v1 scene size — tray tiles and inserts match the demo grid
-  props: {
-    badge: p.string({ default: "ON THIS DAY" }),
-    yearsAgo: p.number({ default: 4 }),
-    title: p.string({ default: "Sunset over Point Reyes" }),
-    location: p.string({ default: "California · April 21" }),
-    hue: p.number({ default: 18, min: 0, max: 360 }),
-  },
-  surface: "dom",
-  component: PhotosView,
-  provides: ["widget"],
-  interaction: { solid: true, dragOn: "press", resizable: false, snap: "both" },
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships only the component.
+export const PHOTOS_TYPE = TYPE;
+export { PhotosView };

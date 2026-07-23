@@ -13,7 +13,7 @@
  * material) is verbatim; size comes from the live `Size`.
  */
 import { RoundedBox } from "@react-three/drei";
-import { defineWidget, p, Size } from "@vibecook/ice";
+import { Size } from "@vibecook/ice";
 import { useIslandFrame } from "@vibecook/ice/r3f";
 import { useWidgetProps, useWorldComponent, type WidgetComponentProps } from "@vibecook/ice/react";
 import { GlLiftGroup } from "@vibefield/shell-ui";
@@ -78,15 +78,7 @@ function CubeView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-export const FloatingCubeWidget = defineWidget({
-  type: TYPE,
-  props: { color: p.string({ default: "#E8523B" }) },
-  surface: "gl",
-  animated: true,
-  component: CubeView,
-  sizeMode: "fixed",
-  defaultSize: { w: SIZE.w, h: SIZE.h },
-  minSize: { w: 200, h: 120 },
-  interaction: { solid: true, dragOn: "press", selectable: true, movable: true, snap: "both" },
-  provides: ["widget"], // drop-to-consume advertisement — CardContainer accepts ["widget"]
-});
+// C1b·2: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships only the component.
+export const CUBE_TYPE = TYPE;
+export { CubeView };
