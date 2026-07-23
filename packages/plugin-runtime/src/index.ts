@@ -10,4 +10,4 @@ export {
   type WidgetCategory,
   type WidgetDecl,
 } from "./manifest";
-export { PluginRegistry, type RegisteredPlugin } from "./registry";
+export { PluginRegistry, type RegisteredPlugin, safePreviewToCss } from "./registry";

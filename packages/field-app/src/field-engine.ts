@@ -11,10 +11,11 @@ import {
   WireTo,
 } from "@vibecook/ice";
 import { fieldToolsManifest, fieldToolsWidgets } from "@vibefield/plugin-field-tools";
-import { noteManifest, noteWidgets } from "@vibefield/plugin-note";
+import { noteBindings, noteManifest } from "@vibefield/plugin-note";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
 import { widgetlabManifest, widgetlabWidgets } from "@vibefield/plugin-widgetlab";
 import { setPreviewBackground } from "@vibefield/shell-ui";
+import { buildWidgetType } from "./plugin-host/build-widget";
 
 // The field's engine + seed, React-free (Track D3/D4): FieldView renders it,
 // the headless contract tests (drop-consume) drive it. B3 split the two —
@@ -25,7 +26,16 @@ import { setPreviewBackground } from "@vibefield/shell-ui";
 
 export function buildRegistry(): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
-  registry.register(noteManifest, noteWidgets);
+  // C1a — note rides the canonical path: the HOST builds its prefab from the
+  // manifest (§12.2, build-widget.ts); field-tools/widgetlab convert at C1b.
+  const noteWidgets = Object.fromEntries(
+    (noteManifest.contributes?.widgets ?? []).map((w) => {
+      const binding = noteBindings[w.type as keyof typeof noteBindings];
+      if (binding === undefined) throw new Error(`no binding for declared widget ${w.type}`);
+      return [w.type, buildWidgetType(w, binding)];
+    }),
+  );
+  registry.registerV1(noteManifest, noteWidgets);
   registry.register(fieldToolsManifest, fieldToolsWidgets);
   registry.register(widgetlabManifest, widgetlabWidgets);
   // Spine wiring: manifest `preview` data → shell-ui's silhouette registry

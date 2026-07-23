@@ -1,4 +1,3 @@
-import { defineWidget, p } from "@vibecook/ice";
 import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import { type ReactElement, useRef, useState } from "react";
@@ -106,17 +105,8 @@ function NoteView({ entity, world }: WidgetComponentProps): ReactElement {
   );
 }
 
-/** defineWidget registers into ICE's module-level catalog as an import side-effect. */
-export const NoteCard = defineWidget({
-  type: TYPE,
-  surface: "dom",
-  props: {
-    text: p.string({ default: "" }),
-    color: p.string({ default: "#f6e7a9" }),
-  },
-  component: NoteView,
-  defaultSize: { w: 260, h: 180 },
-  minSize: { w: 120, h: 80 },
-  interaction: { selectable: true, movable: true, resizable: true, snap: "target" },
-  provides: ["widget"],
-});
+// C1a: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2, field-app's buildWidgetType). This module ships
+// only the component; the durable contract lives in manifest.ts.
+export const NOTE_TYPE = TYPE;
+export { NoteView };

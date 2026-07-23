@@ -382,6 +382,9 @@ importers:
       '@vibecook/ice':
         specifier: file:../../../infinite-canvas-engine/packages/ice
         version: file:../infinite-canvas-engine/packages/ice(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@vibefield/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@vibefield/plugin-runtime':
         specifier: workspace:*
         version: link:../../packages/plugin-runtime
