@@ -21,7 +21,7 @@
  * commits ONE setWidgetProps tx on blur/Enter — per-keystroke transactions
  * would shred the undo stack.
  */
-import { defineWidget, type Entity, p, Selected, type World } from "@vibecook/ice";
+import { type Entity, Selected, type World } from "@vibecook/ice";
 import { useOps, useWidgetProps } from "@vibecook/ice/react";
 import { CARD_RADIUS, useDragLift } from "@vibefield/shell-ui";
 import {
@@ -149,26 +149,7 @@ function CommentView({ entity, world }: { entity: Entity; world: World }): React
   );
 }
 
-export const CommentCard = defineWidget({
-  type: TYPE,
-  surface: "dom",
-  props: {
-    title: p.string({ default: "Comment" }),
-    color: p.string({ default: "#6366F1" }),
-  },
-  component: CommentView,
-  defaultSize: { w: 400, h: 300 },
-  // Comments are widgets too (2026-07-18, James: "i do want that"): provides
-  // lets a comment (and its swept group) FILE INTO an accepting folder. The
-  // engine's sweeper drop rule keeps this sane — Solid cards never reject a
-  // comment group, and a non-matching container is a plain move.
-  provides: ["widget"],
-  interaction: {
-    selectable: true,
-    movable: true,
-    resizable: true,
-    snap: "target",
-    dragOn: "press",
-    sweepContained: true,
-  },
-});
+// C1b: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2). This module ships only the component.
+export const COMMENT_TYPE = TYPE;
+export { CommentView };

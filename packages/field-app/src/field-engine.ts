@@ -10,12 +10,13 @@ import {
   WirePorts,
   WireTo,
 } from "@vibecook/ice";
-import { fieldToolsManifest, fieldToolsWidgets } from "@vibefield/plugin-field-tools";
+import type { PluginManifestV1 } from "@vibefield/contracts";
+import { fieldToolsBindings, fieldToolsManifest } from "@vibefield/plugin-field-tools";
 import { noteBindings, noteManifest } from "@vibefield/plugin-note";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
 import { widgetlabManifest, widgetlabWidgets } from "@vibefield/plugin-widgetlab";
 import { setPreviewBackground } from "@vibefield/shell-ui";
-import { buildWidgetType } from "./plugin-host/build-widget";
+import { buildWidgetType, type WidgetBinding } from "./plugin-host/build-widget";
 
 // The field's engine + seed, React-free (Track D3/D4): FieldView renders it,
 // the headless contract tests (drop-consume) drive it. B3 split the two —
@@ -24,19 +25,28 @@ import { buildWidgetType } from "./plugin-host/build-widget";
 // blind-seed). `seedField` is the first-run payload — and the persistence
 // tests' named census.
 
-export function buildRegistry(): PluginRegistry<WidgetType> {
-  const registry = new PluginRegistry<WidgetType>();
-  // C1a — note rides the canonical path: the HOST builds its prefab from the
-  // manifest (§12.2, build-widget.ts); field-tools/widgetlab convert at C1b.
-  const noteWidgets = Object.fromEntries(
-    (noteManifest.contributes?.widgets ?? []).map((w) => {
-      const binding = noteBindings[w.type as keyof typeof noteBindings];
+/** The canonical path (§12.2): build every declared prefab from manifest data
+ * with its code-side binding, then register manifest + implementations as one
+ * unit. Every converted plugin rides this; widgetlab converts at C1b's tail. */
+function registerCanonical(
+  registry: PluginRegistry<WidgetType>,
+  manifest: PluginManifestV1,
+  bindings: Record<string, WidgetBinding>,
+): void {
+  const widgets = Object.fromEntries(
+    (manifest.contributes?.widgets ?? []).map((w) => {
+      const binding = bindings[w.type];
       if (binding === undefined) throw new Error(`no binding for declared widget ${w.type}`);
       return [w.type, buildWidgetType(w, binding)];
     }),
   );
-  registry.registerV1(noteManifest, noteWidgets);
-  registry.register(fieldToolsManifest, fieldToolsWidgets);
+  registry.registerV1(manifest, widgets);
+}
+
+export function buildRegistry(): PluginRegistry<WidgetType> {
+  const registry = new PluginRegistry<WidgetType>();
+  registerCanonical(registry, noteManifest, noteBindings);
+  registerCanonical(registry, fieldToolsManifest, fieldToolsBindings);
   registry.register(widgetlabManifest, widgetlabWidgets);
   // Spine wiring: manifest `preview` data → shell-ui's silhouette registry
   // (folder minis + tray fallbacks read previewBackground — one source, P-3).

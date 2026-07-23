@@ -24,13 +24,11 @@
 import {
   CameraLimits,
   ChildOf,
-  defineWidget,
   type Entity,
   FIT_DEFAULTS,
   MeasuredSize,
   Position,
   PrefabId,
-  p,
   Size,
   Viewport,
   type World,
@@ -307,20 +305,7 @@ function FolderView({ entity, world }: { entity: Entity; world: World }): ReactE
   );
 }
 
-export const FolderCard = defineWidget({
-  type: TYPE,
-  surface: "dom",
-  props: {
-    title: p.string({ default: "Folder" }),
-    accent: p.string({ default: "#7B96FF" }),
-  },
-  component: FolderView,
-  sizeMode: "fixed",
-  defaultSize: { w: FOLDER_SIZE.w, h: FOLDER_SIZE.h },
-  interaction: { selectable: true, movable: true, resizable: false, snap: "both", dragOn: "press" },
-  // Folders are widgets too (2026-07-17): without container.provides a folder
-  // can never match another folder's accepts — folder-in-folder was silently
-  // impossible. (For containers, Provides reads container.provides; the
-  // top-level `provides` field is the LEAF path — define-widget.ts:292.)
-  container: { accepts: ["widget"], provides: ["widget"] },
-});
+// C1b: the defineWidget call is GONE — the host builds the prefab from the
+// canonical manifest (§12.2; the container semantics live there as data).
+export const FOLDER_TYPE = TYPE;
+export { FolderView };

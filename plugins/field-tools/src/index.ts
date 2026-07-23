@@ -1,13 +1,15 @@
-import { CommentCard } from "./comment";
-import { FolderCard } from "./folder";
+// @vibefield/plugin-field-tools — organizational actors (folder + comment).
+// C1b: the manifest is CANONICAL V1; this package exports COMPONENTS — the
+// host builds every prefab from the manifest (§12.2).
+import { COMMENT_TYPE, CommentView } from "./comment";
+import { FOLDER_TYPE, FolderView } from "./folder";
 
 export { COMMENT_PALETTE, spawnCommentAroundSelection } from "./commands";
-export { CommentCard } from "./comment";
-export { FOLDER_BG, FolderCard } from "./folder";
+export { FOLDER_BG } from "./folder";
 export { fieldToolsManifest } from "./manifest";
 
-/** defineWidget registers into ICE's module-level catalog as an import side-effect. */
-export const fieldToolsWidgets = {
-  "field.comment": CommentCard,
-  "field.folder": FolderCard,
+/** widget type → the opaque code-side binding the host's builder consumes. */
+export const fieldToolsBindings = {
+  [COMMENT_TYPE]: { component: CommentView },
+  [FOLDER_TYPE]: { component: FolderView },
 };

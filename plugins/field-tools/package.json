@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vibecook/ice": "*",
+    "@vibefield/contracts": "workspace:*",
     "@vibefield/plugin-runtime": "workspace:*",
     "@vibefield/shell-ui": "workspace:*"
   },
