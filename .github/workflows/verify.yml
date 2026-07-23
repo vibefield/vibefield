@@ -1,0 +1,86 @@
+# THE gate (CLAUDE.md "Commands"): `pnpm verify`, run VERBATIM. macOS runner so CI
+# mirrors the dev machine (darwin) exactly — the desktop/Electron tests and the
+# @vibecook/truffle-sidecar-darwin-* bits are native; green here must mean green there.
+# This repo does NOT build standalone: it consumes two sibling checkouts
+# (../infinite-canvas-engine — file: dep · ../p008/truffle — cargo [patch]) pinned by
+# siblings.lock.json. EL8: sibling revisions are deliberate pins, never drift, and
+# preflight hard-fails if the checkouts don't match the lock.
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One live run per ref; cancel superseded pushes. macOS minutes bill at 10x — never stack.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Siblings are separate PUBLIC repos on the same account — a plain HTTPS clone
+      # needs no token. Check out the EXACT pinned SHAs into the relative locations
+      # preflight resolves (../infinite-canvas-engine, ../p008/truffle). A fresh detached
+      # checkout is clean and at the pinned SHA, so preflight's revision + dirty checks
+      # both pass. No shallow clone: the pin may sit behind the branch tip.
+      - name: Fetch sibling checkouts at pinned revisions (EL8)
+        run: |
+          set -euo pipefail
+          ice_sha=$(jq -r '.siblings["infinite-canvas-engine"]' siblings.lock.json)
+          truffle_sha=$(jq -r '.siblings.truffle' siblings.lock.json)
+          git clone --no-tags https://github.com/jamesyong-42/infinite-canvas-engine.git ../infinite-canvas-engine
+          git -C ../infinite-canvas-engine checkout --detach "$ice_sha"
+          mkdir -p ../p008
+          git clone --no-tags https://github.com/jamesyong-42/truffle.git ../p008/truffle
+          git -C ../p008/truffle checkout --detach "$truffle_sha"
+
+      # pnpm pinned from the packageManager field (pnpm@11.13.1); node from .nvmrc.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # cargo-typify drives the contracts codegen; gen:check diffs are version-sensitive,
+      # so the version is EXACT (0.7.0, per preflight). Cache the compiled binary — it's
+      # a fixed input, not a per-commit one.
+      - name: Cache cargo-typify 0.7.0
+        id: typify
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-typify
+          key: cargo-typify-0.7.0-${{ runner.os }}
+      - if: steps.typify.outputs.cache-hit != 'true'
+        run: cargo install cargo-typify --version 0.7.0 --locked
+
+      # Registry/git/target cache for the Rust build (field-native + truffle-core source).
+      # cache-bin off: the typify binary is owned by the dedicated cache step above.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: "false"
+
+      # ice ships its dist/ as the file: dep's entry point; preflight FAILs when it's
+      # missing and WARNs when it's stale, so build it fresh before verify. Root `build`
+      # is `pnpm -r --if-present run build` (packages/ice: tsup + tsc dts).
+      - name: Build ice dist
+        run: |
+          pnpm -C ../infinite-canvas-engine install --frozen-lockfile
+          pnpm -C ../infinite-canvas-engine build
+
+      - run: pnpm install --frozen-lockfile
+
+      # THE gate, verbatim: preflight -> typecheck -> biome -> rustfmt/clippy -> TS+Rust tests -> gen freshness.
+      - run: pnpm verify

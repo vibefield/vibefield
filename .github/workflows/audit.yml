@@ -1,0 +1,50 @@
+# Supply-chain audit — REPORT-FIRST. Both jobs are continue-on-error, so a freshly
+# disclosed advisory never blocks a solo dev's merge; HARDENING IS A ONE-LINE FLIP —
+# drop `continue-on-error: true` (or set it false) on the audit step. Runs on Linux:
+# audits read committed lockfiles (pnpm-lock.yaml, Cargo.lock) against advisory DBs —
+# no native build, no siblings — so the macOS 10x minutes of verify.yml aren't spent here.
+name: audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 15 * * 1" # Mondays — advisories land on the calendar, not on commits
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pnpm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # pnpm from the packageManager field
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      # --prod: runtime deps only — a dev-only advisory doesn't ship. Reads pnpm-lock.yaml
+      # against the npm advisory DB; deliberately NO `pnpm install` (that needs the ice
+      # sibling for the file: dep). Hardening: drop continue-on-error.
+      - run: pnpm audit --prod
+        continue-on-error: true
+
+  cargo-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo-audit
+        id: cargo-audit-bin
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}
+      - if: steps.cargo-audit-bin.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked
+      # Reads Cargo.lock against the RustSec DB; no build, so the truffle [patch] path
+      # need not be present. Hardening: drop continue-on-error.
+      - run: cargo audit --file Cargo.lock
+        continue-on-error: true
