@@ -4,6 +4,8 @@ packages:
   # the platform, not inside it; examples/ holds dev/reference packs (widgetlab).
   - "plugins/*"
   - "examples/plugins/*"
+  # authoring kit (plugin spec §5.4): build/check tooling, never host code.
+  - "tooling/*"
   - "apps/*"
   - "services/*"
 allowBuilds:
