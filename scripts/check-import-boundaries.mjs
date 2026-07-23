@@ -555,17 +555,18 @@ function runSelfTest() {
       if (!clean) ok = false;
     }
 
-    // Enforce semantics (slice 2): only R4 is pending; a pending-rule violation
-    // is reported but must NOT count toward the --enforce gate.
-    const tableOk = RULES.every((r) => (r.id === "R4" ? r.enforce === false : r.enforce === true));
-    console.log(`  ${tableOk ? "PASS" : "FAIL"}  enforce table: only R4 pending`);
+    // Enforce semantics: R4 flipped to enforce during 3a (the renderer left
+    // apps/desktop), so the table must hold EVERY rule enforced and an R4 hit
+    // must actually gate. (This block asserted "only R4 pending" long after
+    // that flip; nothing ran --self-test, so the rot sat invisible until the
+    // 2026-07-23 review — preflight now runs the self-test every time.)
+    const tableOk = RULES.every((r) => r.enforce === true);
+    console.log(`  ${tableOk ? "PASS" : "FAIL"}  enforce table: every rule enforced`);
     if (!tableOk) ok = false;
 
-    const r4Reported = found.some((v) => v.id === "R4");
     const r4Gated = found.some((v) => v.id === "R4" && ENFORCE_BY_ID.get(v.id));
-    const pendingOk = r4Reported && !r4Gated;
-    console.log(`  ${pendingOk ? "PASS" : "FAIL"}  R4 reported but not gated by --enforce`);
-    if (!pendingOk) ok = false;
+    console.log(`  ${r4Gated ? "PASS" : "FAIL"}  R4 detected and gated by --enforce`);
+    if (!r4Gated) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

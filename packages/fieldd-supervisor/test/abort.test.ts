@@ -6,7 +6,7 @@ import {
   type FielddSupervisorOptions,
   SupervisorError,
 } from "../src/index";
-import { createHarness, FIXTURE_IDLE, type Harness } from "./helpers";
+import { createHarness, FIXTURE_IDLE, type Harness, waitDead } from "./helpers";
 
 // §12.2 abort during probe/readiness, dispose() cancelling an in-flight
 // ensure() (and stopping the child it spawned), and idempotent dispose. The
@@ -62,12 +62,16 @@ describe("cancellation", () => {
     ac.abort();
 
     const err = await settled;
-    h.trackPid(spawnedPid(logs));
+    const pid = spawnedPid(logs);
+    h.trackPid(pid);
 
     expect(err).toBeInstanceOf(SupervisorError);
     expect((err as SupervisorError).kind).toBe("aborted");
     // it ended on the abort, nowhere near the 10s deadline
     expect(Date.now() - started).toBeLessThan(3000);
+    // and the aborted attempt stopped its own child (review P1 class)
+    expect(pid).toBeGreaterThan(0);
+    expect(await waitDead(pid as number)).toBe(true);
   });
 
   it("dispose() during an in-flight ensure() rejects it AND stops the spawned child", async () => {

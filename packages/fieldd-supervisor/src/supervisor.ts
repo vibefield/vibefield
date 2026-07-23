@@ -87,53 +87,71 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       noteExit(null, null);
     });
 
-    const deadline = Date.now() + (opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS);
-    let lastFailure: ProbeFailure = "no-run-files";
-    while (Date.now() < deadline) {
-      throwIfAborted(signal);
-      const exited = exitState.info;
-      if (exited) {
-        throw new SupervisorError(
-          "child-exit",
-          `fieldd exited before readiness (code ${exited.code}, signal ${exited.signal})` +
-            (tail.lines().length > 0 ? `\n  ${tail.lines().join("\n  ")}` : ""),
-          lastFailure,
-        );
-      }
-      const probe = await tryAdopt(opts.dataRoot, POLL_PROBE_MS, signal);
-      if (probe.ok) {
-        const ownership = probe.info.pid === spawned.pid ? "spawned" : "adopted";
-        if (ownership === "adopted") {
-          // someone else's daemon owns the root — ours lost the race; stop it
-          log(`root already served by pid ${probe.info.pid} — stopping our spawn`);
-          spawned.kill("SIGTERM");
-          child = null;
-        } else {
-          log(`fieldd up :${probe.info.port} (${probe.info.bootId})`);
+    try {
+      const deadline = Date.now() + (opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS);
+      let lastFailure: ProbeFailure = "no-run-files";
+      while (Date.now() < deadline) {
+        throwIfAborted(signal);
+        const exited = exitState.info;
+        if (exited) {
+          throw new SupervisorError(
+            "child-exit",
+            `fieldd exited before readiness (code ${exited.code}, signal ${exited.signal})` +
+              (tail.lines().length > 0 ? `\n  ${tail.lines().join("\n  ")}` : ""),
+            lastFailure,
+          );
         }
-        return makeHandle(ownership, probe);
-      }
-      lastFailure = probe.failure;
-      // sleep, but wake early on child exit or abort — never sit out the
-      // interval while the child is already dead
-      await new Promise<void>((resolve) => {
-        const t = setTimeout(done, POLL_INTERVAL_MS);
-        function done(): void {
-          clearTimeout(t);
-          signal.removeEventListener("abort", done);
-          exitWaiters.delete(done);
-          resolve();
+        const probe = await tryAdopt(opts.dataRoot, POLL_PROBE_MS, signal);
+        if (probe.ok) {
+          const ownership = probe.info.pid === spawned.pid ? "spawned" : "adopted";
+          if (ownership === "adopted") {
+            // someone else's daemon owns the root — ours lost the race; stop it
+            // BOUNDED (TERM→KILL), not fire-and-forget: a surviving loser could
+            // later be adopted and become unkillable
+            log(`root already served by pid ${probe.info.pid} — stopping our spawn`);
+            await stopChild(spawned, null);
+            child = null;
+          } else {
+            log(`fieldd up :${probe.info.port} (${probe.info.bootId})`);
+          }
+          return makeHandle(ownership, probe);
         }
-        signal.addEventListener("abort", done, { once: true });
-        exitWaiters.add(done);
-      });
+        lastFailure = probe.failure;
+        // sleep, but wake early on child exit or abort — never sit out the
+        // interval while the child is already dead
+        await new Promise<void>((resolve) => {
+          const t = setTimeout(done, POLL_INTERVAL_MS);
+          function done(): void {
+            clearTimeout(t);
+            signal.removeEventListener("abort", done);
+            exitWaiters.delete(done);
+            resolve();
+          }
+          signal.addEventListener("abort", done, { once: true });
+          exitWaiters.add(done);
+        });
+      }
+      throw new SupervisorError(
+        "readiness-timeout",
+        `fieldd did not come up within ${opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS}ms ` +
+          `(last probe: ${lastFailure})`,
+        lastFailure,
+      );
+    } catch (error) {
+      // The attempt is TERMINAL: it must never leak its child into a retry
+      // (2026-07-23 review P1 — a timed-out spawn survived, the next attempt's
+      // spawnFieldd overwrote `child`, orphaning the first; worse, a surviving
+      // half-start could later be probed as "adopted" and become unkillable).
+      // A child that never reached readiness is not a daemon the two-plane law
+      // protects, so this stop applies under EVERY shutdown policy. fieldd's
+      // own SIGTERM path tears down any field-native it started; pre-ready we
+      // have no recorded nativePid to escalate on.
+      if (exitState.info === null && spawned.exitCode === null) {
+        await stopChild(spawned, null);
+      }
+      if (child === spawned) child = null;
+      throw error;
     }
-    throw new SupervisorError(
-      "readiness-timeout",
-      `fieldd did not come up within ${opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS}ms ` +
-        `(last probe: ${lastFailure})`,
-      lastFailure,
-    );
   }
 
   function spawnFieldd(tail: ReturnType<typeof createLogTail>): ChildProcess {
@@ -225,6 +243,14 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     if (disposed) return;
     disposed = true;
     internal.abort();
+    // an in-flight attempt runs its own terminal cleanup on abort (stops the
+    // child it spawned, bounded); wait for it so handle/child are settled here
+    if (inflight) {
+      await inflight.then(
+        () => undefined,
+        () => undefined,
+      );
+    }
     const h = handle;
     handle = null;
     if (h) {

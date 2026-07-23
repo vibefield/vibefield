@@ -4,7 +4,7 @@ import { app } from "electron";
 import { installDurableClose } from "./close";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { registerWindowBootstrap } from "./ipc";
-import { fatal, installLifecycle } from "./lifecycle";
+import { installLifecycle } from "./lifecycle";
 import { isSmokeLike, parseMode } from "./modes";
 import { installCsp, installNavigationPolicy } from "./security";
 import { WindowRegistry } from "./window-policy";
@@ -90,6 +90,6 @@ async function main(): Promise<void> {
 if (!isSmokeLike(MODE) && !app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  installLifecycle({ registry, getSupervisor });
-  main().catch((e: unknown) => fatal(e, getSupervisor));
+  const flow = installLifecycle({ registry, getSupervisor });
+  main().catch((e: unknown) => flow.fatal(e));
 }

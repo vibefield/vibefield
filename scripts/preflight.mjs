@@ -62,10 +62,26 @@ try {
   );
 }
 
-// --- import-boundary walls (spec §8.3; slice 2 turns this into a hard gate) ---
-// Enforce mode exits 1 on enforce-true violations (pending rules like R4 are
-// reported, not gated). Quiet on success; on failure the checker's report
-// (owning rule + file path) is surfaced alongside the problem.
+// --- import-boundary self-test (the checker's own fixtures) ------------------
+// A rotten rule table makes --enforce meaningless — the 2026-07-23 review found
+// the self-test red (stale R4-pending expectations) with nothing running it.
+try {
+  execSync("node scripts/check-import-boundaries.mjs --self-test", {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+} catch (err) {
+  const detail = `${err.stdout ?? ""}${err.stderr ?? ""}`.trim();
+  if (detail) console.error(detail);
+  problems.push(
+    "import-boundary self-test failed (node scripts/check-import-boundaries.mjs --self-test)",
+  );
+}
+
+// --- import-boundary walls (spec §8.3; a hard gate since slice 2) ------------
+// Enforce mode exits 1 on enforce-true violations. Quiet on success; on failure
+// the checker's report (owning rule + file path) is surfaced alongside the
+// problem.
 try {
   execSync("node scripts/check-import-boundaries.mjs --enforce", {
     cwd: root,

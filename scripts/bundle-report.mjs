@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Bundle report (electron-shell refactor, spec §10.3): sizes + the initial module
-// graph of the built renderer. Report-only — slice 4 adds enforcing assertions.
-// Usage: node scripts/bundle-report.mjs [--dist <dir>] [--json <path>]
+// graph of the built renderer; --assert (wired into smoke:canvas) enforces the
+// split invariants and that the shell bundles exist where this report looks.
+// Usage: node scripts/bundle-report.mjs [--dist <dir>] [--json <path>] [--assert]
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -11,7 +12,7 @@ const argValue = (flag) => {
   const i = args.indexOf(flag);
   return i >= 0 ? args[i + 1] : undefined;
 };
-const distDir = resolve(argValue("--dist") ?? "apps/desktop/dist");
+const distDir = resolve(argValue("--dist") ?? "packages/electron-shell/dist");
 const rendererDir = join(distDir, "renderer");
 const assetsDir = join(rendererDir, "assets");
 
@@ -74,11 +75,15 @@ const walk = (name) => {
 for (const e of [...entries, ...preloads, ...styles]) walk(e);
 
 // ---- shell bundles ---------------------------------------------------------
+// dist layout since slice 3a: main/index.cjs + preload/index.cjs (+ the
+// external smoke artifact, informational — packaging must omit testing/).
+// The old flat main.cjs/preload.cjs paths silently printed an empty section
+// (2026-07-23 review finding); --assert now fails on a missing shell bundle.
 const shellFiles = {};
-for (const f of ["main.cjs", "preload.cjs"]) {
+for (const rel of ["main/index.cjs", "preload/index.cjs", "testing/smoke.cjs"]) {
   try {
-    const buf = readFileSync(join(distDir, f));
-    shellFiles[f] = { raw: buf.length, gzip: gzipSync(buf).length };
+    const buf = readFileSync(join(distDir, rel));
+    shellFiles[rel] = { raw: buf.length, gzip: gzipSync(buf).length };
   } catch {
     /* not built */
   }
@@ -131,6 +136,11 @@ if (args.includes("--assert")) {
   );
   if (!lazyCarriesWorld) {
     problems.push("no lazy chunk carries the workspace (three/loro) — the split did not happen");
+  }
+  for (const rel of ["main/index.cjs", "preload/index.cjs"]) {
+    if (!shellFiles[rel]) {
+      problems.push(`${rel}: shell bundle missing under ${distDir} (stale report path?)`);
+    }
   }
   if (problems.length > 0) {
     console.error(`\nbundle assert FAILED:\n  ${problems.join("\n  ")}`);

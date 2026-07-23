@@ -71,8 +71,10 @@ describe("webPreferences", () => {
     expect(prefs.sandbox).toBe(true);
     expect(prefs.contextIsolation).toBe(true);
     expect(prefs.nodeIntegration).toBe(false);
-    // Slice-5 removal is tracked; today covered/occluded windows keep ticking.
-    expect(prefs.backgroundThrottling).toBe(false);
+    // Electron's hidden-renderer throttling restored to default (slice 5) —
+    // safe because persistence is visibility-EXEMPT by law (§5.4.5; pinned by
+    // field-app's persistence-exemption suite).
+    expect(prefs.backgroundThrottling).toBe(true);
   });
 });
 

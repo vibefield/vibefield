@@ -159,6 +159,20 @@ export function createHarness(): Harness {
   };
 }
 
+/** Poll (bounded) until `pid` is gone — signal delivery is asynchronous. */
+export async function waitDead(pid: number, ms = 2000): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return true;
+    }
+    await new Promise<void>((r) => setTimeout(r, 30));
+  }
+  return false;
+}
+
 // ---- fixture bodies (run by process.execPath as ESM) --------------------
 //
 // Each reads FIELDD_DATA_DIR (the supervisor injects it) and behaves as a

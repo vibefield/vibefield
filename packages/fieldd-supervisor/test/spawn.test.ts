@@ -13,6 +13,7 @@ import {
   FIXTURE_IDLE,
   FIXTURE_READY,
   type Harness,
+  waitDead,
 } from "./helpers";
 
 // §12.2 spawn-when-none, child-exit-before-readiness, bounded readiness
@@ -38,22 +39,6 @@ function trackSpawnedPid(logs: string[]) {
 function spawnedPid(logs: string[]): number | undefined {
   const m = logs.join("\n").match(/spawned fieldd pid=(\d+)/);
   return m ? Number(m[1]) : undefined;
-}
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-/** Poll (bounded) until `pid` is gone — SIGTERM is asynchronous. */
-async function waitDead(pid: number, ms = 2000): Promise<boolean> {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    try {
-      process.kill(pid, 0);
-    } catch {
-      return true;
-    }
-    await sleep(30);
-  }
-  return false;
 }
 
 function spawnSup(
@@ -144,7 +129,53 @@ describe("spawn: no adoptable fieldd exists", () => {
     expect(se.message).toContain("no-run-files"); // last probe detail
     const elapsed = Date.now() - started;
     expect(elapsed).toBeGreaterThanOrEqual(1400);
-    expect(elapsed).toBeLessThan(3000); // honored the deadline, did not hang
+    expect(elapsed).toBeLessThan(4000); // honored the deadline (+ bounded stop)
+    // review P1: the rejection must not leave the never-ready child running
+    const pid = spawnedPid(logs);
+    expect(pid).toBeGreaterThan(0);
+    expect(await waitDead(pid as number)).toBe(true);
+  });
+
+  it("a timed-out attempt kills its child; a Retry spawns fresh — never two", async () => {
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    const logs: string[] = [];
+    // attempt 1: an idle stand-in that never becomes ready. leave-running on
+    // purpose — the attempt-terminal stop is POLICY-INDEPENDENT (a child that
+    // never reached readiness is no daemon; the two-plane law doesn't apply).
+    const script = h.writeFixture(join(root, "fx"), "fieldd.mjs", FIXTURE_IDLE);
+    const sup = h.track(
+      createFielddSupervisor({
+        dataRoot: root,
+        spawn: { command: process.execPath, args: [script] },
+        environment: { CV: CONTRACTS_VERSION, TEST_PRODUCT_PORT: String(port), SHELL_TOKEN: token },
+        shutdownPolicy: "leave-running",
+        adoptProbeMs: 200,
+        readinessDeadlineMs: 900,
+        onLog: (l) => logs.push(l),
+      }),
+    );
+
+    const err = await sup.ensure().then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(SupervisorError);
+    expect((err as SupervisorError).kind).toBe("readiness-timeout");
+    const pid1 = spawnedPid(logs);
+    h.trackPid(pid1);
+    expect(pid1).toBeGreaterThan(0);
+    expect(await waitDead(pid1 as number)).toBe(true); // dead BEFORE the retry
+
+    // attempt 2: the same script path now behaves like a healthy fieldd — the
+    // retry must spawn fresh and own it, with exactly one child alive
+    h.writeFixture(join(root, "fx"), "fieldd.mjs", FIXTURE_READY);
+    const handle = await sup.ensure();
+    h.trackPid(handle.childPid);
+    expect(handle.ownership).toBe("spawned");
+    expect(handle.childPid).toBeGreaterThan(0);
+    expect(handle.childPid).not.toBe(pid1);
+    expect(handle.client.status).toBe("ready");
   });
 
   it("concurrent ensure() before readiness share ONE handle and spawn exactly once", async () => {

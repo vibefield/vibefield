@@ -219,24 +219,17 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
     // Autosave starts DIRTY (ice law): a seeded first-run board reaches fieldd
     // after the first debounce, no user edit required. Lane status → board row
     // wiring lives in the manager now (it owns lane lifecycles).
-    const persist = async (
-      kind: "checkpoint" | "update",
-      bytes: Uint8Array,
-    ): Promise<void> => {
-        const savedAt = Date.now();
-        // Capture only durable structural state, synchronously, while this
-        // engine is still alive. Rendering/encoding happens later in a worker.
-        const thumbnailScene = captureDocThumbnailScene(ce);
-        setBoardStatus({ state: "saving", lastSavedAt: lane.lastPutAt });
-        const receipt = await (kind === "checkpoint"
-          ? lane.put(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt })
-          : lane.putUpdate(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt }));
-        manager.thumbnailCheckpoint(
-          pending.docId,
-          receipt.revisionId,
-          thumbnailScene,
-        );
-        setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
+    const persist = async (kind: "checkpoint" | "update", bytes: Uint8Array): Promise<void> => {
+      const savedAt = Date.now();
+      // Capture only durable structural state, synchronously, while this
+      // engine is still alive. Rendering/encoding happens later in a worker.
+      const thumbnailScene = captureDocThumbnailScene(ce);
+      setBoardStatus({ state: "saving", lastSavedAt: lane.lastPutAt });
+      const receipt = await (kind === "checkpoint"
+        ? lane.put(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt })
+        : lane.putUpdate(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt }));
+      manager.thumbnailCheckpoint(pending.docId, receipt.revisionId, thumbnailScene);
+      setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
     };
     const autosave = ce.docs.autosave({
       put: (bytes) => persist("checkpoint", bytes),
@@ -520,7 +513,8 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
       const dx = rect.left + rect.width / 2 - window.innerWidth / 2;
       const dy = rect.top + rect.height / 2 - window.innerHeight / 2;
       const length = Math.hypot(dx, dy) || 1;
-      const distance = Math.hypot(window.innerWidth, window.innerHeight) + Math.hypot(rect.width, rect.height);
+      const distance =
+        Math.hypot(window.innerWidth, window.innerHeight) + Math.hypot(rect.width, rect.height);
       dock.style.setProperty("--hud-flight-x", `${(dx / length) * distance}px`);
       dock.style.setProperty("--hud-flight-y", `${(dy / length) * distance}px`);
     }
