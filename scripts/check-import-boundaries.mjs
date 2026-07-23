@@ -200,6 +200,35 @@ const RULES = [
       (under(p, "packages/field-app/src") || under(p, "apps/desktop/renderer/src")),
     importTest: (s) => s === "ws",
   },
+  {
+    id: "R10",
+    // Slice L0 (plugin-architecture spec §11.3): plugins depend on the plugin SDK
+    // only — no host implementation, platform packages, raw ICE, or Electron.
+    // REPORT-ONLY until slice P3 lands @vibefield/plugin-sdk: the walking
+    // skeleton's direct ice/plugin-runtime/shell-ui imports legitimately trip it,
+    // and the reports are the P3 migration worklist. Flipping enforce also means
+    // removing R10 from EXPECTED_PENDING in the self-test — a deliberate act.
+    enforce: false,
+    description:
+      "plugins import only the plugin SDK (no host/platform/ICE/Electron under plugins/, examples/plugins/)",
+    applies: (p) => SOURCE_EXT.test(p) && underAny(p, ["plugins", "examples/plugins"]),
+    importTest: (s) =>
+      matchesForbid(s, {
+        modules: [
+          "@vibecook/ice",
+          "@vibefield/electron-shell",
+          "@vibefield/field-app",
+          "@vibefield/fieldd",
+          "@vibefield/fieldd-client",
+          "@vibefield/fieldd-supervisor",
+          "@vibefield/plugin-runtime",
+          "@vibefield/shell-ui",
+          "electron",
+          "ws",
+        ],
+        prefixes: ["node:"],
+      }),
+  },
 ];
 
 // Enforce map (spec §8.3 slice 2): --enforce gates ONLY on enforce-true rules.
@@ -477,6 +506,17 @@ function runSelfTest() {
       body: 'import { M } from "../testing/mock";\n',
     },
     { id: "R9", file: "packages/field-app/src/uses-ws.ts", body: 'import WebSocket from "ws";\n' },
+    // R10 covers BOTH plugin roots (plugins/ and examples/plugins/).
+    {
+      id: "R10",
+      file: "plugins/note/src/uses-runtime.ts",
+      body: 'import { PluginRegistry } from "@vibefield/plugin-runtime";\n',
+    },
+    {
+      id: "R10",
+      file: "examples/plugins/widgetlab/src/uses-electron.ts",
+      body: 'import { app } from "electron";\nimport { CardShell } from "@vibefield/shell-ui";\n',
+    },
   ];
   const cleans = [
     // react + a /host entry import + plain code: proves R1/R2/R9 don't overfire and
@@ -524,6 +564,11 @@ function runSelfTest() {
       file: "packages/fieldd/src/port-in-block-comment.ts",
       body: "/*\n * the 9411 data lane and 9410 control port are pinned in registries.ts\n */\nexport const c = 3;\n",
     },
+    // R10 allows the SDK, contracts types, and react under plugins/.
+    {
+      file: "plugins/note/src/clean-sdk.ts",
+      body: 'import { defineRendererPlugin } from "@vibefield/plugin-sdk";\nimport type { Scope } from "@vibefield/contracts";\nimport React from "react";\nexport const ok = 1;\n',
+    },
   ];
 
   const tmp = mkdtempSync(join(tmpdir(), "vf-import-walls-"));
@@ -555,18 +600,26 @@ function runSelfTest() {
       if (!clean) ok = false;
     }
 
-    // Enforce semantics: R4 flipped to enforce during 3a (the renderer left
-    // apps/desktop), so the table must hold EVERY rule enforced and an R4 hit
-    // must actually gate. (This block asserted "only R4 pending" long after
-    // that flip; nothing ran --self-test, so the rot sat invisible until the
-    // 2026-07-23 review — preflight now runs the self-test every time.)
-    const tableOk = RULES.every((r) => r.enforce === true);
-    console.log(`  ${tableOk ? "PASS" : "FAIL"}  enforce table: every rule enforced`);
+    // Enforce semantics: the expected table is EXPLICIT so rot stays visible
+    // (the 2026-07-23 lesson: a loose "only X pending" assertion sat stale for
+    // three slices). Every rule is enforced EXCEPT the named pending set — R10
+    // is pending by design until plugin-architecture slice P3 lands the SDK;
+    // flipping it to enforce requires editing THIS set, a deliberate act.
+    const EXPECTED_PENDING = new Set(["R10"]);
+    const tableOk = RULES.every((r) => r.enforce === !EXPECTED_PENDING.has(r.id));
+    console.log(
+      `  ${tableOk ? "PASS" : "FAIL"}  enforce table: every rule enforced except {${[...EXPECTED_PENDING].join(", ")}}`,
+    );
     if (!tableOk) ok = false;
 
     const r4Gated = found.some((v) => v.id === "R4" && ENFORCE_BY_ID.get(v.id));
     console.log(`  ${r4Gated ? "PASS" : "FAIL"}  R4 detected and gated by --enforce`);
     if (!r4Gated) ok = false;
+
+    // R10 must be DETECTED but never gate --enforce while pending.
+    const r10Pending = found.some((v) => v.id === "R10" && !ENFORCE_BY_ID.get(v.id));
+    console.log(`  ${r10Pending ? "PASS" : "FAIL"}  R10 detected and NOT gated (pending until P3)`);
+    if (!r10Pending) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

@@ -1,6 +1,9 @@
 packages:
   - "packages/*"
-  - "packages/plugins/*"
+  # plugins live at the repo ROOT (plugin spec §5.1/PA-35): product actors beside
+  # the platform, not inside it; examples/ holds dev/reference packs (widgetlab).
+  - "plugins/*"
+  - "examples/plugins/*"
   - "apps/*"
   - "services/*"
 allowBuilds:

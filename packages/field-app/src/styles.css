@@ -14,9 +14,12 @@
    the 3a rename unchanged — pointing ABOVE the repo, so Tailwind silently
    scanned nothing and every plugin utility class vanished from the built CSS
    (field report 2026-07-23: "dom widgets look quite off"). The bundle
-   assert's CSS canaries now fail the build if a source tree's classes drop. */
+   assert's CSS canaries now fail the build if a source tree's classes drop.
+   Slice L0 moved plugins to the repo root (plugins/ + examples/plugins/) —
+   same hazard class, globs re-pointed WITH the move, canaries prove it. */
 @source "../../../packages/shell-ui/src";
-@source "../../../packages/plugins";
+@source "../../../plugins";
+@source "../../../examples/plugins";
 
 /* The window IS the field (2026-07-21): no app bar, no pages — chrome floats
    over the canvas per DESIGN.md §1. Base styles only; every surface color

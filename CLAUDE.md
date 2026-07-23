@@ -67,7 +67,9 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
   outside tokens; the named easings; the shadow recipes).
 - Every daemon seam ships contract fixtures parsed on both sides (EL9); kill-matrix
   integration tests live in `packages/fieldd/test`. New plugins get at least a
-  manifest/registry test (`packages/plugins/note/test` is the template).
+  manifest/registry test (`plugins/note/test` is the template). Plugins live at the
+  repo root (`plugins/*`, dev/reference packs in `examples/plugins/*`) — walls rule
+  R10 (report-only until the plugin SDK lands) keeps them SDK-only.
 - Env vars: see `.env.example`. Nothing auto-loads `.env` — export in the launching shell.
 
 ## Commits

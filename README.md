@@ -19,7 +19,8 @@ a private mesh across machines, and an iPhone companion.
 | `packages/field-app` | the browser-compatible renderer product: boot machine, DocManager, the FieldView units (session/canvas/persistence/chrome/previews), HUD |
 | `packages/shell-ui` | the design kit — CardShell, tokens, GL card chrome (DESIGN.md made code) |
 | `packages/plugin-runtime` | plugin manifest / registry / renderer context (P0 core of the design-03 plugin system) |
-| `packages/plugins/*` | built-in plugins: `note` (sticky note), `field-tools` (folder/comment), `widgetlab` (the 18-widget parity pack) |
+| `plugins/*` | built-in plugins at the repo root (product actors beside the platform — plugin spec §5.1): `note` (sticky note), `field-tools` (folder/comment) |
+| `examples/plugins/widgetlab` | the 18-widget parity pack — dev/reference plugin, staged as demo boot content |
 | `apps/desktop` | packaging-only: delegating scripts + the electron dep; no application source lives here |
 | `services/push-relay` | *(planned)* the one cloud hop — open-source APNs wake-hint relay |
 
