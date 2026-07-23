@@ -1,4 +1,5 @@
 import { type CloseRequest, type CloseResult, IPC_CHANNELS } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
 import { type BrowserWindow, dialog, ipcMain } from "electron";
 
 // The durable-close protocol, main side (ESR §6.4): one active attempt per
@@ -36,7 +37,7 @@ export function prepareRendererClose(win: BrowserWindow, timeoutMs = 15_000): Pr
   });
 }
 
-export function installDurableClose(win: BrowserWindow): void {
+export function installDurableClose(win: BrowserWindow, logger?: Logger): void {
   let closeAllowed = false;
   let busy = false;
 
@@ -48,6 +49,12 @@ export function installDurableClose(win: BrowserWindow): void {
       closeAllowed = true;
       win.close();
     } catch (error) {
+      logger?.error(
+        "desktop.window.close_prepare_failed",
+        "The renderer could not complete its durable close",
+        error,
+        { windowId: String(win.id) },
+      );
       const detail = error instanceof Error ? error.message : String(error);
       const choice = await dialog.showMessageBox(win, {
         type: "error",
@@ -61,8 +68,16 @@ export function installDurableClose(win: BrowserWindow): void {
       });
       busy = false;
       if (choice.response === 0) {
+        logger?.info("desktop.window.close_retry_requested", "The user retried durable close", {
+          windowId: String(win.id),
+        });
         void attemptClose();
       } else if (!win.isDestroyed()) {
+        logger?.warn(
+          "desktop.window.close_forced",
+          "The user closed the window without a successful renderer drain",
+          { windowId: String(win.id) },
+        );
         closeAllowed = true;
         win.close();
       }

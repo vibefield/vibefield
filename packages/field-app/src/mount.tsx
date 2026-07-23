@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BootRoot } from "./boot/BootRoot";
 import { createBootMachine } from "./boot/machine";
 import { type FieldHost, setHost } from "./host";
+import { setRendererLogger } from "./logging";
 import "./tw.css";
 
 // The window IS the field (2026-07-21, James): no app bar, no tabs — chrome
@@ -15,6 +16,7 @@ import "./tw.css";
 
 export function mountFieldApp(opts: { container: HTMLElement; host: FieldHost }): void {
   setHost(opts.host);
+  setRendererLogger(opts.host.logger);
   performance.mark("vf:renderer:entry");
 
   const machine = createBootMachine({

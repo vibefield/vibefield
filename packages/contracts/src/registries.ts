@@ -59,6 +59,20 @@ export const LOG_STREAMS = {
 } as const;
 export type LogStream = (typeof LOG_STREAMS)[keyof typeof LOG_STREAMS];
 
+/** LOG §12.4 — the renderer logging data plane is one bounded MessagePort per
+ * WebContents generation. These are transport limits, so the browser-side
+ * queue and the Electron accepting host consume the same tiny root constants
+ * without importing the zod-heavy logging schema subpath into the boot chunk. */
+export const LOG_TRANSPORT_LIMITS = {
+  RENDERER_BATCH_RECORDS: 50,
+  RENDERER_BATCH_BYTES: 256 * 1024,
+  RENDERER_QUEUE_RECORDS: 1_000,
+  RENDERER_QUEUE_BYTES: 2 * 1024 * 1024,
+  RENDERER_RECORD_BYTES: 64 * 1024,
+  RENDERER_BATCHES_PER_SECOND: 10,
+  FIRST_PARTY_PARTIAL_LINE_BYTES: 64 * 1024,
+} as const;
+
 /** Every grantable capability (design-01 §7 + design-03 §8 + design-04). */
 export const SCOPES = [
   "canvas.read",
@@ -125,7 +139,7 @@ export const SOCKETS = {
   MESHDATA: "meshdata.sock",
 } as const;
 
-/** The CLOSED Electron IPC surface (ESR spec §6.2): three channels, nothing
+/** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4): four channels, nothing
  * else. Payload schemas live in shell.ts; call sites import these names — a raw
  * `vibefield:` literal outside contracts is a boundary violation (wall R6). */
 export const IPC_CHANNELS = {
@@ -135,4 +149,6 @@ export const IPC_CHANNELS = {
   prepareClose: "vibefield:shell:prepare-close",
   /** renderer → main event, once per close attempt: CloseResult */
   closeResult: "vibefield:shell:close-result",
+  /** main → preload, one transferred MessagePort per WebContents generation */
+  rendererLogPort: "vibefield:logging:renderer-port",
 } as const;

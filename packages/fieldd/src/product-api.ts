@@ -40,12 +40,15 @@ const WS_OPEN = 1;
 
 export type Handler = (ctx: CallerContext, params: unknown) => Promise<unknown> | unknown;
 
-/** Returns the snapshot plus a dispose; `emit` pushes deltas until dispose. */
+/** Returns the snapshot plus a dispose; `emit` pushes deltas until dispose.
+ * MAY be async (P5 — settings snapshots read files); the dispatcher awaits. */
 export type SubscriptionHandler = (
   ctx: CallerContext,
   params: unknown,
   emit: (payload: unknown) => void,
-) => { snapshot: unknown; dispose: () => void };
+) =>
+  | { snapshot: unknown; dispose: () => void }
+  | Promise<{ snapshot: unknown; dispose: () => void }>;
 
 export interface ProductApiOptions {
   port: number; // 0 = ephemeral (tests)
@@ -104,6 +107,24 @@ export class ProductApi extends EventEmitter {
   private ownDeviceId: (() => string) | null = null;
   private forwarder: DeviceForwarder | null = null;
   private dynamicRouter: DynamicRouterLike | null = null;
+  /** live authed connections — the §15.4 revocation path closes by principal */
+  private readonly liveConns = new Set<{ ws: WebSocket; state: ConnState }>();
+
+  /** §15.4 — sever every connection whose principal IS this plugin: leases are
+   * already revoked by the caller, so a reconnect dies at hello; live subs die
+   * with the socket. */
+  dropPluginConnections(pluginId: string): number {
+    let dropped = 0;
+    for (const conn of [...this.liveConns]) {
+      const principal = conn.state.ctx?.principal;
+      if (principal?.kind === "plugin" && principal.id === pluginId) {
+        conn.ws.terminate();
+        this.liveConns.delete(conn);
+        dropped += 1;
+      }
+    }
+    return dropped;
+  }
 
   /** P4 — arm the x.* dynamic-method path (the ServiceRegistry). */
   setDynamicRouter(router: DynamicRouterLike): void {
@@ -239,10 +260,13 @@ export class ProductApi extends EventEmitter {
       tailnetLogin: door,
       subs: new Map(),
     };
+    const conn = { ws, state };
+    this.liveConns.add(conn);
     ws.on("message", (raw) => {
       void this.onMessage(ws, state, raw.toString());
     });
     ws.on("close", () => {
+      this.liveConns.delete(conn);
       for (const dispose of state.subs.values()) dispose();
       state.subs.clear();
     });
@@ -479,7 +503,7 @@ export class ProductApi extends EventEmitter {
             }),
           );
       };
-      const { snapshot, dispose } = subHandler(ctx, params, emit);
+      const { snapshot, dispose } = await subHandler(ctx, params, emit);
       state.subs.set(subId, () => {
         active = false;
         dispose();

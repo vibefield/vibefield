@@ -31,6 +31,7 @@ describe("logging sanitizer", () => {
         proxy_authorization: token,
         nested: {
           accessToken: token,
+          bootstrapToken: token,
           sessionCookie: token,
           tokenCount: 17,
           secretPresent: true,
@@ -45,6 +46,7 @@ describe("logging sanitizer", () => {
     expect(serialized).not.toContain(token);
     expect(result?.attrs?.nested).toEqual({
       accessToken: "[redacted]",
+      bootstrapToken: "[redacted]",
       sessionCookie: "[redacted]",
       tokenCount: 17,
       secretPresent: true,

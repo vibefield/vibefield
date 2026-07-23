@@ -1,4 +1,6 @@
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { LOG_STREAMS } from "../packages/contracts/src/registries";
+import { createRendererLoggingClient } from "../packages/electron-shell/src/renderer-host/renderer-logger";
 import { createNodeLogging } from "../packages/logging/src/index";
 
 interface Scenario {
@@ -26,6 +28,125 @@ function result(name: string, samplesUs: Float64Array, measuredNs: bigint): Scen
   };
 }
 
+async function rendererEventLoopTrial(withLogging: boolean): Promise<{
+  p99Ms: number;
+  emitted: number;
+  elapsedMs: number;
+}> {
+  const durationMs = 1_500;
+  const delay = monitorEventLoopDelay({ resolution: 1 });
+  const client = withLogging
+    ? createRendererLoggingClient({
+        send: () => true,
+        component: "renderer.benchmark",
+      })
+    : null;
+  let emitted = 0;
+  const started = performance.now();
+  delay.enable();
+  await new Promise<void>((resolve) => {
+    const timer = setInterval(() => {
+      const elapsed = performance.now() - started;
+      const target = Math.floor(elapsed); // 1 record/ms = 1,000 records/sec
+      while (emitted < target) {
+        client?.logger.info("renderer.benchmark.stress", "renderer stress record");
+        emitted += 1;
+      }
+      if (elapsed >= durationMs) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, 10);
+  });
+  const elapsedMs = performance.now() - started;
+  delay.disable();
+  client?.close();
+  return {
+    p99Ms: Number((delay.percentile(99) / 1_000_000).toFixed(3)),
+    emitted,
+    elapsedMs: Number(elapsedMs.toFixed(1)),
+  };
+}
+
+async function measureRenderer(iterations: number): Promise<{
+  scenarios: Scenario[];
+  sentBatches: number;
+  sentRecords: number;
+  maxBatchRecords: number;
+  maxBatchBytes: number;
+  floodQueueRecords: number;
+  floodQueueBytes: number;
+  floodDropped: number;
+  eventLoop: {
+    baselineP99Ms: number;
+    stressP99Ms: number;
+    regressionP99Ms: number;
+    emitted: number;
+    elapsedMs: number;
+  };
+}> {
+  let sentBatches = 0;
+  let sentRecords = 0;
+  let maxBatchRecords = 0;
+  let maxBatchBytes = 0;
+  const client = createRendererLoggingClient({
+    send(raw) {
+      const batch = JSON.parse(raw) as { records: unknown[] };
+      sentBatches += 1;
+      sentRecords += batch.records.length;
+      maxBatchRecords = Math.max(maxBatchRecords, batch.records.length);
+      maxBatchBytes = Math.max(maxBatchBytes, Buffer.byteLength(raw, "utf8"));
+      return true;
+    },
+    component: "renderer.benchmark",
+  });
+  const samples = new Float64Array(iterations);
+  let measuredNs = 0n;
+  for (let index = 0; index < iterations; index += 1) {
+    const started = process.hrtime.bigint();
+    client.logger.info("renderer.benchmark.accepted", "accepted renderer record");
+    const elapsed = process.hrtime.bigint() - started;
+    measuredNs += elapsed;
+    samples[index] = Number(elapsed) / 1_000;
+    if ((index + 1) % 50 === 0) client.flush();
+  }
+  client.flush();
+  client.close();
+
+  const floodIterations = Math.min(10_000, Math.max(2_000, Math.floor(iterations / 5)));
+  const disconnected = createRendererLoggingClient({
+    send: () => false,
+    component: "renderer.benchmark",
+  });
+  for (let index = 0; index < floodIterations; index += 1) {
+    disconnected.logger.info("renderer.benchmark.flood", "disconnected renderer record", {
+      index,
+    });
+  }
+  const flood = disconnected.health();
+  disconnected.close();
+
+  const baselineDelay = await rendererEventLoopTrial(false);
+  const stressDelay = await rendererEventLoopTrial(true);
+  return {
+    scenarios: [result("accepted-renderer-enqueue", samples, measuredNs)],
+    sentBatches,
+    sentRecords,
+    maxBatchRecords,
+    maxBatchBytes,
+    floodQueueRecords: flood.queueRecords,
+    floodQueueBytes: flood.queueBytes,
+    floodDropped: Object.values(flood.dropped).reduce((sum, count) => sum + count, 0),
+    eventLoop: {
+      baselineP99Ms: baselineDelay.p99Ms,
+      stressP99Ms: stressDelay.p99Ms,
+      regressionP99Ms: Number(Math.max(0, stressDelay.p99Ms - baselineDelay.p99Ms).toFixed(3)),
+      emitted: stressDelay.emitted,
+      elapsedMs: stressDelay.elapsedMs,
+    },
+  };
+}
+
 export async function measureLoggingSink(
   iterations: number,
   logRoot: string,
@@ -35,6 +156,7 @@ export async function measureLoggingSink(
   dropped: number;
   queueHighWaterRecords: number;
   ringHighWaterBytes: number;
+  renderer: Awaited<ReturnType<typeof measureRenderer>>;
 }> {
   const sink = await createNodeLogging({
     logRoot,
@@ -81,10 +203,12 @@ export async function measureLoggingSink(
 
   const health = sink.health();
   await sink.close();
+  const renderer = await measureRenderer(iterations);
   return {
     scenarios: [
       result("disabled-node-debug", disabledSamples, disabledNs),
       result("accepted-node-enqueue", acceptedSamples, acceptedNs),
+      ...renderer.scenarios,
     ],
     accepted: health.counters.accepted - acceptedBefore,
     dropped:
@@ -95,5 +219,6 @@ export async function measureLoggingSink(
       health.counters.droppedError,
     queueHighWaterRecords: health.queue.highWaterRecords,
     ringHighWaterBytes: health.ring.highWaterBytes,
+    renderer,
   };
 }

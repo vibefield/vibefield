@@ -10,12 +10,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { emitCanvasReadyMarker } from "./development-console";
 import type { DocManager } from "./doc-manager";
 import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { hexToRgb01 } from "./field/theme-constants";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
+import { getRendererLogger } from "./logging";
 import { setPluginClientBackend } from "./plugin-host/plugin-client";
 import { usePluginRegistryFeed } from "./plugin-host/plugin-registry-store";
 import { useTheme } from "./theme";
@@ -57,9 +59,12 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
 
   useEffect(() => {
     // after mount commit — the smoke's pass condition covers InfiniteCanvas itself
-    console.log(
-      `CANVAS_READY {"widgetTypes":${registry.allWidgets().size},"plugins":${registry.all().length}}`,
-    );
+    const widgetTypes = registry.allWidgets().size;
+    const plugins = registry.all().length;
+    getRendererLogger()
+      .child({ component: "canvas" })
+      .info("renderer.canvas.ready", "The canvas renderer is ready", { widgetTypes, plugins });
+    emitCanvasReadyMarker(widgetTypes, plugins);
   }, [registry]);
 
   const [trayOpen, setTrayOpenRaw] = useState(false);

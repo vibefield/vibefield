@@ -3,6 +3,7 @@ import type {
   LogLevelNameV1,
   LogRecordV1,
   LogTruncationReasonV1,
+  LogTruncationV1,
   LogValueV1,
 } from "@vibefield/contracts/logging";
 import { FIRST_PARTY_VALUE_LIMITS } from "./limits";
@@ -60,6 +61,8 @@ export interface NormalizeRecordInput {
   instanceId: string;
   seq: number;
   time: number;
+  observedTime?: number;
+  truncation?: LogTruncationV1;
   maxRecordBytes: number;
   aliases?: LogSanitizerAliases;
 }
@@ -100,6 +103,19 @@ function truncateUtf8(value: string, maxBytes: number, marker = "…[truncated]"
 
 function normalizeSecretKey(key: string): string {
   return key.toLowerCase().replace(/[_\s-]/g, "");
+}
+
+function isSecretKey(key: string): boolean {
+  const normalized = normalizeSecretKey(key);
+  return (
+    SECRET_KEYS.has(normalized) ||
+    normalized.endsWith("token") ||
+    normalized.endsWith("password") ||
+    normalized.endsWith("credential") ||
+    normalized.endsWith("privatekey") ||
+    normalized.endsWith("apikey") ||
+    normalized.endsWith("sessioncookie")
+  );
 }
 
 function sanitizeUrl(value: string): string {
@@ -196,7 +212,7 @@ export function serializeError(
   }
   if (typeof value === "object") seen.add(value);
   try {
-    const rawType = safeDataProperty(value, "name");
+    const rawType = safeDataProperty(value, "name") ?? safeDataProperty(value, "type");
     const rawMessage = safeDataProperty(value, "message");
     const rawCode = safeDataProperty(value, "code");
     const rawStack = safeDataProperty(value, "stack");
@@ -219,7 +235,7 @@ export function serializeError(
     const causeValues: unknown[] = [];
     const cause = safeDataProperty(value, "cause");
     if (cause !== undefined) causeValues.push(cause);
-    const aggregate = safeDataProperty(value, "errors");
+    const aggregate = safeDataProperty(value, "errors") ?? safeDataProperty(value, "causes");
     if (Array.isArray(aggregate)) {
       const descriptors = Object.getOwnPropertyDescriptors(aggregate);
       for (let index = 0; index < aggregate.length && causeValues.length < maxCauses; index += 1) {
@@ -342,7 +358,7 @@ function sanitizeValue(
         break;
       }
       const safeKey = truncateUtf8(redactPatterns(key, aliases), 160);
-      if (SECRET_KEYS.has(normalizeSecretKey(key))) {
+      if (isSecretKey(key)) {
         result[safeKey] = "[redacted]";
       } else {
         result[safeKey] = sanitizeValue(
@@ -466,7 +482,10 @@ export function normalizeLogRecord(input: NormalizeRecordInput): LogRecordV1 | n
     const component = input.bindings.component ?? input.component;
     if (typeof component !== "string") return null;
     if (!COMPONENT_NAME.test(component) || component.length > 160) return null;
-    const tracker: TruncationTracker = { reasons: new Set(), fields: new Set() };
+    const tracker: TruncationTracker = {
+      reasons: new Set(input.truncation?.reasons ?? []),
+      fields: new Set(input.truncation?.fields ?? []),
+    };
     const redactedMessage = redactPatterns(input.message, input.aliases);
     const message = truncateUtf8(redactedMessage, FIRST_PARTY_VALUE_LIMITS.messageBytes);
     if (message !== redactedMessage) {
@@ -496,6 +515,9 @@ export function normalizeLogRecord(input: NormalizeRecordInput): LogRecordV1 | n
     const record: LogRecordV1 = {
       v: 1,
       time: safeNonnegativeInteger(input.time),
+      ...(input.observedTime !== undefined
+        ? { observedTime: safeNonnegativeInteger(input.observedTime) }
+        : {}),
       level: LEVEL_NUMBER[input.level],
       severity: input.level.toUpperCase() as LogRecordV1["severity"],
       event: input.event,
@@ -520,8 +542,20 @@ export function normalizeLogRecord(input: NormalizeRecordInput): LogRecordV1 | n
     };
     if (tracker.reasons.size > 0) {
       record.truncation = {
+        ...(input.truncation?.originalBytes !== undefined
+          ? { originalBytes: safeNonnegativeInteger(input.truncation.originalBytes) }
+          : {}),
+        ...(input.truncation?.droppedBytes !== undefined
+          ? { droppedBytes: safeNonnegativeInteger(input.truncation.droppedBytes) }
+          : {}),
+        ...(input.truncation?.originalItems !== undefined
+          ? { originalItems: safeNonnegativeInteger(input.truncation.originalItems) }
+          : {}),
+        ...(input.truncation?.droppedItems !== undefined
+          ? { droppedItems: safeNonnegativeInteger(input.truncation.droppedItems) }
+          : {}),
         reasons: [...tracker.reasons].slice(0, 8),
-        fields: [...tracker.fields].slice(0, 32),
+        ...(tracker.fields.size > 0 ? { fields: [...tracker.fields].slice(0, 32) } : {}),
       };
     }
     return enforceRecordLimit(record, input.maxRecordBytes, tracker);

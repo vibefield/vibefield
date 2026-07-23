@@ -159,6 +159,9 @@ importers:
       '@vibefield/fieldd-supervisor':
         specifier: workspace:*
         version: link:../fieldd-supervisor
+      '@vibefield/logging':
+        specifier: workspace:*
+        version: link:../logging
     devDependencies:
       '@tailwindcss/vite':
         specifier: 'catalog:'
@@ -272,6 +275,9 @@ importers:
       '@vibefield/plugin-build':
         specifier: workspace:*
         version: link:../../tooling/plugin-build
+      '@vibefield/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
@@ -328,6 +334,9 @@ importers:
       '@vibefield/fieldd-client':
         specifier: workspace:*
         version: link:../fieldd-client
+      '@vibefield/logging':
+        specifier: workspace:*
+        version: link:../logging
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

@@ -25,7 +25,7 @@ export const kvManifest: PluginManifestV1 = {
   activation: ["onStartup"],
   backgroundReason:
     "Keeps the in-memory store and its active watch subscriptions alive so get/set/watch answer at any time, not only while some other trigger is active.",
-  capabilities: ["services.provide", "background"],
+  capabilities: ["services.provide", "background", "storage.self"],
   contributes: {
     capabilities: [
       {

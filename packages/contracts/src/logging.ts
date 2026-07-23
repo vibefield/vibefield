@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LOG_STREAMS } from "./registries";
+import { LOG_STREAMS, LOG_TRANSPORT_LIMITS } from "./registries";
 
 // LOG-L0 normalized diagnostic contracts. This module is a dedicated package
 // subpath and is deliberately NOT re-exported from src/index.ts (LOG-41): the
@@ -249,6 +249,61 @@ export const LogRecordV1 = z
   .passthrough()
   .describe("vibefield.logging.contract.v1");
 export type LogRecordV1 = z.infer<typeof LogRecordV1>;
+
+/** Renderer/utility-originated record before the trusted Node host stamps
+ * service, role, pid, boot/instance/window identity, sequence, and observed
+ * time. Unknown fields are discarded by the accepting adapter; a renderer can
+ * never claim a host-owned field through this shape. */
+export const LogIngressRecordV1 = z
+  .object({
+    v: LogSchemaVersionV1,
+    time: LogSafeIntegerV1,
+    level: LogLevelNameV1,
+    event: EventName,
+    msg: z.string().max(16 * 1024),
+    component: ComponentName,
+    traceId: LogBoundedIdentityV1.optional(),
+    spanId: LogBoundedIdentityV1.optional(),
+    operationId: LogBoundedIdentityV1.optional(),
+    requestId: LogBoundedIdentityV1.optional(),
+    sessionId: LogBoundedIdentityV1.optional(),
+    docId: LogBoundedIdentityV1.optional(),
+    deviceId: LogBoundedIdentityV1.optional(),
+    err: LogErrorV1.optional(),
+    attrs: LogAttributesV1.optional(),
+    truncation: LogTruncationV1.optional(),
+  })
+  .strip();
+export type LogIngressRecordV1 = z.infer<typeof LogIngressRecordV1>;
+
+export const RendererLogDropCountsV1 = z
+  .object({
+    trace: LogSafeIntegerV1,
+    debug: LogSafeIntegerV1,
+    info: LogSafeIntegerV1,
+    warn: LogSafeIntegerV1,
+    error: LogSafeIntegerV1,
+    fatal: LogSafeIntegerV1,
+  })
+  .strict();
+export type RendererLogDropCountsV1 = z.infer<typeof RendererLogDropCountsV1>;
+
+/** The only renderer logging MessagePort payload after bounded JSON framing.
+ * The encoded byte cap is checked before JSON.parse by Electron main. */
+export const RendererLogBatchV1 = z
+  .object({
+    v: LogSchemaVersionV1,
+    records: z.array(LogIngressRecordV1).max(LOG_TRANSPORT_LIMITS.RENDERER_BATCH_RECORDS),
+    dropped: RendererLogDropCountsV1.optional(),
+  })
+  .strict()
+  .refine(
+    (batch) =>
+      batch.records.length > 0 ||
+      (batch.dropped !== undefined && Object.values(batch.dropped).some((count) => count > 0)),
+    "a renderer log batch must contain a record or a non-zero drop summary",
+  );
+export type RendererLogBatchV1 = z.infer<typeof RendererLogBatchV1>;
 
 export const LoggingWriterStateV1 = z.enum([
   "starting",

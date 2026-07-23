@@ -26,6 +26,7 @@ import type {
   LoggerBindings,
   LogRetentionPolicy,
   NodeLogging,
+  TrustedLogIngress,
 } from "./types";
 
 interface QueuedLine {
@@ -282,22 +283,67 @@ class NodeLoggingService implements NodeLogging {
     error?: unknown,
     attrs?: LogFields,
   ): void {
-    if (!this.accepting || !this.pino.isLevelEnabled(level)) return;
-    const record = normalizeLogRecord({
+    this.normalizeAndWrite({
       level,
       event,
       message,
       ...(error !== undefined ? { error } : {}),
       ...(attrs !== undefined ? { attrs } : {}),
       bindings,
+      pid: this.options.pid ?? process.pid,
+      time: this.now(),
+    });
+  }
+
+  ingest(input: TrustedLogIngress): void {
+    this.normalizeAndWrite({
+      level: input.level,
+      event: input.event,
+      message: input.message,
+      ...(input.error !== undefined ? { error: input.error } : {}),
+      ...(input.attrs !== undefined ? { attrs: input.attrs } : {}),
+      bindings: {
+        ...(input.bindings ?? {}),
+        component: input.component,
+        ...(input.windowId !== undefined ? { windowId: input.windowId } : {}),
+      },
+      pid: input.pid ?? this.options.pid ?? process.pid,
+      time: input.time,
+      observedTime: input.observedTime ?? this.now(),
+      ...(input.truncation !== undefined ? { truncation: input.truncation } : {}),
+    });
+  }
+
+  private normalizeAndWrite(input: {
+    level: LogLevelNameV1;
+    event: string;
+    message: string;
+    error?: unknown;
+    attrs?: LogFields;
+    bindings: LoggerBindings;
+    pid: number;
+    time: number;
+    observedTime?: number;
+    truncation?: TrustedLogIngress["truncation"];
+  }): void {
+    if (!this.accepting || !this.pino.isLevelEnabled(input.level)) return;
+    const record = normalizeLogRecord({
+      level: input.level,
+      event: input.event,
+      message: input.message,
+      ...(input.error !== undefined ? { error: input.error } : {}),
+      ...(input.attrs !== undefined ? { attrs: input.attrs } : {}),
+      bindings: input.bindings,
       service: this.options.service,
       role: this.options.role,
       component: this.options.component ?? "root",
-      pid: this.options.pid ?? process.pid,
+      pid: input.pid,
       bootId: this.options.bootId,
       instanceId: this.options.instanceId,
       seq: ++this.seq,
-      time: this.now(),
+      time: input.time,
+      ...(input.observedTime !== undefined ? { observedTime: input.observedTime } : {}),
+      ...(input.truncation !== undefined ? { truncation: input.truncation } : {}),
       maxRecordBytes: this.buffers.maxRecordBytes,
       ...(this.options.aliases !== undefined ? { aliases: this.options.aliases } : {}),
     });
@@ -307,7 +353,7 @@ class NodeLoggingService implements NodeLogging {
     }
     const { level: _level, severity: _severity, msg, ...fields } = record;
     try {
-      const method = this.pino[level].bind(this.pino) as (
+      const method = this.pino[input.level].bind(this.pino) as (
         values: Record<string, unknown>,
         message: string,
       ) => void;

@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./logging": "./src/logging.ts",
     "./spike": "./src/spike/spike-loro.ts"
   },
   "scripts": {

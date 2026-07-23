@@ -1,6 +1,7 @@
 import type { DocRegistryEntry } from "@vibefield/contracts";
 import { type ReactElement, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { DocManagerApi } from "../doc-manager";
+import { getRendererLogger } from "../logging";
 
 /**
  * The file pill (thinking-b4 §3, DESIGN.md §8): top-center chrome — new doc,
@@ -85,7 +86,15 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
   const commitEdit = (): void => {
     setEditing(false);
     const name = draft.trim();
-    if (name.length > 0) void manager.rename(name).catch((e) => console.warn("[file-pill]", e));
+    if (name.length > 0) {
+      void manager
+        .rename(name)
+        .catch((error: unknown) =>
+          getRendererLogger()
+            .child({ component: "docs.file_pill", docId: state.doc?.docId })
+            .error("renderer.docs.rename_failed", "Document rename failed", error),
+        );
+    }
   };
 
   const docName = state.doc?.name ?? "…";

@@ -10,12 +10,36 @@
 // no token table, no other plugin's context). Everything else arrives over the
 // parent port as the small message protocol below; handlers stay worker-side,
 // only metadata crosses.
+import { registerHooks } from "node:module";
 import { parentPort, workerData } from "node:worker_threads";
+
+// Dev-source resolution: workspace packages export .ts sources with
+// EXTENSIONLESS relative imports (tsc/vite resolve them; Node's type
+// stripping erases but never resolves). Retry <specifier>.ts for relative
+// misses OUTSIDE node_modules; the bundled daemon's harness ships compiled
+// JS and never hits this path.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    try {
+      return nextResolve(specifier, context);
+    } catch (error) {
+      if (
+        (specifier.startsWith("./") || specifier.startsWith("../")) &&
+        !specifier.endsWith(".ts") &&
+        context.parentURL !== undefined &&
+        !context.parentURL.includes("/node_modules/")
+      ) {
+        return nextResolve(`${specifier}.ts`, context);
+      }
+      throw error;
+    }
+  },
+});
 
 const port = parentPort;
 if (port === null) throw new Error("service harness must run as a worker");
 
-const { pluginId, version, entryPath, leaseUrl, leaseToken } = workerData;
+const { pluginId, version, entryPath, leaseUrl, leaseToken, scopes = [] } = workerData;
 
 const controller = new AbortController();
 const tracked = [];
@@ -93,6 +117,16 @@ const ctx = {
     return resource;
   },
 };
+
+// P5 — ctx.settings/ctx.storage: present iff the lease carries storage.self
+// (§10.2 absent-API law). One shared implementation from the SDK, riding the
+// plugin's own product client — the daemon's caller matrix is the authority.
+if (scopes.includes("storage.self")) {
+  const { createStorageSurfaces } = await import("@vibefield/plugin-sdk");
+  const surfaces = createStorageSurfaces(ctx.client);
+  ctx.settings = surfaces.settings;
+  ctx.storage = surfaces.storage;
+}
 
 function errorShape(e) {
   return { kind: "INTERNAL", message: e instanceof Error ? e.message : String(e) };

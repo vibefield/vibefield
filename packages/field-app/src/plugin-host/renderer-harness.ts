@@ -1,11 +1,12 @@
 import { PLUGIN_LIMITS, type PluginManifestV1 } from "@vibefield/contracts";
-import type {
-  Disposable,
-  PluginLogger,
-  RendererPluginContext,
-  RendererPluginModule,
-  WidgetBinding,
-  WidgetRegistration,
+import {
+  createStorageSurfaces,
+  type Disposable,
+  type PluginLogger,
+  type RendererPluginContext,
+  type RendererPluginModule,
+  type WidgetBinding,
+  type WidgetRegistration,
 } from "@vibefield/plugin-sdk";
 import { createPluginProductClient } from "./plugin-client";
 
@@ -59,6 +60,7 @@ export function activateRenderer(
   if (cached !== undefined) return cached;
 
   const declared = new Set((manifest.contributes?.widgets ?? []).map((w) => w.type));
+  const client = createPluginProductClient(manifest.id);
   const bindings = new Map<string, WidgetBinding>();
   const resources: Disposable[] = [];
   const controller = new AbortController();
@@ -85,7 +87,9 @@ export function activateRenderer(
     },
     // §11.2: every call this plugin makes rides its own leased connection —
     // the plugin principal, not the window's. Lazy: idle plugins cost nothing.
-    client: createPluginProductClient(manifest.id),
+    client,
+    // P5 — present iff the manifest requests storage.self (§10.2 absent-API law)
+    ...(manifest.capabilities.includes("storage.self") ? createStorageSurfaces(client) : {}),
     track<T extends Disposable>(resource: T): T {
       resources.push(resource);
       return resource;

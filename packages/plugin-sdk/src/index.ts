@@ -68,6 +68,9 @@ export interface RendererPluginContext {
   readonly logger: PluginLogger;
   readonly widgets: RendererWidgetAPI;
   readonly client: PluginProductClient;
+  /** present iff the manifest requests storage.self (§16.3 — absent, not stubbed) */
+  readonly settings?: PluginSettingsAPI;
+  readonly storage?: PluginStorageAPI;
   track<T extends Disposable>(resource: T): T;
 }
 
@@ -128,6 +131,9 @@ export interface ServicePluginContext {
   readonly logger: PluginLogger;
   readonly client: PluginProductClient;
   readonly services: PluginServiceProviderAPI;
+  /** present iff the manifest requests storage.self (§16.3 — absent, not stubbed) */
+  readonly settings?: PluginSettingsAPI;
+  readonly storage?: PluginStorageAPI;
   track<T extends Disposable>(resource: T): T;
 }
 
@@ -137,4 +143,97 @@ export interface ServicePluginModule {
 
 export function defineServicePlugin(mod: ServicePluginModule): ServicePluginModule {
   return mod;
+}
+
+// --- settings + storage (P5, spec §16.2/§16.3) --------------------------------
+
+/** §16.2 — declared keys only; values validate host-side; defaults come from
+ * the schema (an unset key with a default resolves to it). */
+export interface PluginSettingsAPI {
+  get<T>(key: string): Promise<T | undefined>;
+  set<T>(key: string, value: T): Promise<void>;
+  reset(key: string): Promise<void>;
+  subscribe<T>(key: string, observer: (value: T | undefined) => void): Disposable;
+}
+
+/** §16.3 — the KV half. Files are deliberately ABSENT this slice: bodies ride
+ * a ticketed lane (EL2), which is its own slice — absent, never a stub. */
+export interface PluginStorageAPI {
+  readonly kv: {
+    get<T>(key: string): Promise<T | null>;
+    set<T>(key: string, value: T): Promise<void>;
+    delete(key: string): Promise<void>;
+    list(prefix?: string): Promise<string[]>;
+  };
+}
+
+/** ONE implementation for both hosts (worker harness + renderer harness):
+ * everything rides the plugin's own product client, so the daemon's caller
+ * matrix (self-scoping, storage.self, quotas) is the enforcement — this is a
+ * convenience veneer, never an authority. */
+export function createStorageSurfaces(client: PluginProductClient): {
+  settings: PluginSettingsAPI;
+  storage: PluginStorageAPI;
+} {
+  const settings: PluginSettingsAPI = {
+    async get(key) {
+      const res = (await client.request("storage.settings.get", { key })) as {
+        value?: unknown;
+      };
+      return res.value as never;
+    },
+    async set(key, value) {
+      await client.request("storage.settings.set", { key, value });
+    },
+    async reset(key) {
+      await client.request("storage.settings.reset", { key });
+    },
+    subscribe(key, observer) {
+      let cancelled = false;
+      let unsubscribe: (() => void) | null = null;
+      void client
+        .subscribe("storage.settings.subscribe", {}, (payload) => {
+          if (cancelled) return;
+          const snap = payload as { values?: Record<string, unknown> } | null;
+          if (snap?.values !== undefined) observer(snap.values[key] as never);
+        })
+        .then((sub) => {
+          if (cancelled) {
+            sub.unsubscribe();
+            return;
+          }
+          unsubscribe = sub.unsubscribe;
+          const snap = sub.snapshot as { values?: Record<string, unknown> } | null;
+          if (snap?.values !== undefined) observer(snap.values[key] as never);
+        })
+        .catch(() => undefined); // daemon away — the observer simply never fires
+      return {
+        dispose() {
+          cancelled = true;
+          unsubscribe?.();
+        },
+      };
+    },
+  };
+  const storage: PluginStorageAPI = {
+    kv: {
+      async get(key) {
+        const res = (await client.request("storage.kv.get", { key })) as { value: unknown };
+        return res.value as never;
+      },
+      async set(key, value) {
+        await client.request("storage.kv.set", { key, value });
+      },
+      async delete(key) {
+        await client.request("storage.kv.delete", { key });
+      },
+      async list(prefix) {
+        const res = (await client.request("storage.kv.list", {
+          ...(prefix !== undefined ? { prefix } : {}),
+        })) as { keys: string[] };
+        return res.keys;
+      },
+    },
+  };
+  return { settings, storage };
 }

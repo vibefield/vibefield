@@ -14,15 +14,20 @@ import { type ClientKind, CONTRACTS_VERSION } from "@vibefield/contracts";
 //   retrying with the same token/version can never succeed.
 
 export class FielddRpcError extends Error {
-  constructor(
-    public readonly kind: string,
-    message: string,
-    public readonly retryable: boolean = false,
-    public readonly details?: unknown,
-    public readonly code?: number,
-  ) {
+  // plain fields, no TS parameter properties: plugin workers import this file
+  // under Node's strip-only type erasure, which cannot rewrite ctor sugar (P5)
+  readonly kind: string;
+  readonly retryable: boolean;
+  readonly details?: unknown;
+  readonly code?: number;
+
+  constructor(kind: string, message: string, retryable = false, details?: unknown, code?: number) {
     super(message);
     this.name = "FielddRpcError";
+    this.kind = kind;
+    this.retryable = retryable;
+    if (details !== undefined) this.details = details;
+    if (code !== undefined) this.code = code;
   }
 }
 
@@ -98,7 +103,13 @@ export class FielddClient {
   private readyWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
   private closedByUser = false;
 
-  constructor(private readonly opts: FielddClientOptions) {}
+  // no TS parameter property: the worker harness imports this file under
+  // Node's strip-only type erasure, which cannot rewrite ctor sugar (P5)
+  private readonly opts: FielddClientOptions;
+
+  constructor(opts: FielddClientOptions) {
+    this.opts = opts;
+  }
 
   /** The dial target — P3b: plugin-bound sibling clients connect to the same
    * daemon this client reached (never a credential, just the address). */

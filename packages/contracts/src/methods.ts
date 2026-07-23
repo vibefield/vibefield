@@ -351,4 +351,68 @@ export const METHODS: MethodDef[] = [
     locality: "local",
     subscription: true,
   }),
+
+  // PLUG-P5 — settings + KV storage (§16.2/§16.3/§22.3). scope null on
+  // purpose: the HANDLER enforces the caller matrix (plugin principals need
+  // storage.self in their lease and are self-scoped; the pane path needs
+  // plugins.manage + explicit pluginId; kv.* is plugin-only). storage.file.*
+  // is deliberately undeclared — file BODIES ride a ticketed lane (EL2), and
+  // that lane is its own slice (D36: declared == shipped).
+  defineMethod({
+    surface: "product",
+    method: "storage.settings.get",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.settings.set",
+    scope: null,
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.settings.reset",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.settings.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.kv.get",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.kv.set",
+    scope: null,
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.kv.delete",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.kv.list",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
 ];

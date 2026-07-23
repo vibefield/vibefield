@@ -1,5 +1,6 @@
 import { CloseRequest, CloseResult, IPC_CHANNELS, WindowConnection } from "@vibefield/contracts";
 import { contextBridge, ipcRenderer } from "electron";
+import { PreloadLogBridge, type RendererLogPort } from "./logging";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
 // Product traffic flows over the loopback WS (D27), never over IPC. BOTH
@@ -8,14 +9,36 @@ import { contextBridge, ipcRenderer } from "electron";
 // throws at its call site instead of crossing the boundary. No ipcRenderer,
 // channel string, or Electron object escapes into the page.
 
+const logging = new PreloadLogBridge();
+ipcRenderer.on(IPC_CHANNELS.rendererLogPort, (event) => {
+  const port = event.ports[0] as RendererLogPort | undefined;
+  if (port !== undefined) logging.attach(port);
+});
+
 contextBridge.exposeInMainWorld("vibefield", {
+  submitRendererLogs: (serializedBatch: string): boolean => logging.submit(serializedBatch),
   getConnection: async (): Promise<{ port: number; token: string }> =>
     WindowConnection.parse(await ipcRenderer.invoke(IPC_CHANNELS.windowBootstrap)),
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {
       const request = CloseRequest.safeParse(raw);
       if (!request.success) {
-        console.error("[vibefield] dropped malformed prepare-close payload");
+        logging.submit(
+          JSON.stringify({
+            v: 1,
+            records: [
+              {
+                v: 1,
+                time: Date.now(),
+                level: "error",
+                event: "renderer.preload.close_payload_rejected",
+                msg: "Preload rejected a malformed prepare-close payload",
+                component: "preload.close",
+                attrs: { issueCount: request.error.issues.length },
+              },
+            ],
+          }),
+        );
         return;
       }
       handler(request.data.requestId);

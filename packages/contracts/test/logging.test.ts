@@ -1,5 +1,5 @@
 import { DiagnosticLogQueryV1, DiagnosticLogSnapshotV1 } from "@vibefield/contracts/diagnostics";
-import { LoggingHealthV1, LogRecordV1 } from "@vibefield/contracts/logging";
+import { LoggingHealthV1, LogRecordV1, RendererLogBatchV1 } from "@vibefield/contracts/logging";
 import { describe, expect, it } from "vitest";
 import * as rootContracts from "../src/index";
 
@@ -48,6 +48,61 @@ describe("normalized record boundaries", () => {
       }).success,
     ).toBe(false);
     expect(LogRecordV1.safeParse({ ...baseRecord, level: 15 }).success).toBe(false);
+  });
+
+  it("accepts bounded renderer batches while stripping every claimed host identity", () => {
+    const parsed = RendererLogBatchV1.parse({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: 10,
+          level: "warn",
+          event: "renderer.boot.stability_cap_reached",
+          msg: "revealed with the bounded degraded path",
+          component: "boot",
+          service: "fieldd",
+          role: "daemon",
+          pid: 999,
+          bootId: "claimed",
+          windowId: "claimed",
+          attrs: { frames: 12 },
+        },
+      ],
+    });
+    expect(parsed.records[0]).toEqual({
+      v: 1,
+      time: 10,
+      level: "warn",
+      event: "renderer.boot.stability_cap_reached",
+      msg: "revealed with the bounded degraded path",
+      component: "boot",
+      attrs: { frames: 12 },
+    });
+  });
+
+  it("bounds renderer batch cardinality and rejects empty/no-op envelopes", () => {
+    expect(RendererLogBatchV1.safeParse({ v: 1, records: [] }).success).toBe(false);
+    expect(
+      RendererLogBatchV1.safeParse({
+        v: 1,
+        records: Array.from({ length: 51 }, () => ({
+          v: 1,
+          time: 1,
+          level: "info",
+          event: "renderer.test.recorded",
+          msg: "bounded",
+          component: "test",
+        })),
+      }).success,
+    ).toBe(false);
+    expect(
+      RendererLogBatchV1.safeParse({
+        v: 1,
+        records: [],
+        dropped: { trace: 0, debug: 1, info: 0, warn: 0, error: 0, fatal: 0 },
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects circular and hostile values without rejecting repeated safe references", () => {

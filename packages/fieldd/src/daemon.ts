@@ -10,6 +10,10 @@ import {
   DocOpenParams,
   type DocOpenResult,
   DocRenameParams,
+  KvDeleteParams,
+  KvGetParams,
+  KvListParams,
+  KvSetParams,
   LOG_STREAMS,
   METHODS,
   type NativeHealth,
@@ -22,6 +26,10 @@ import {
   type ProductInfo,
   SCOPES,
   type Scope,
+  SettingsGetParams,
+  SettingsResetParams,
+  SettingsSetParams,
+  SettingsSubscribeParams,
 } from "@vibefield/contracts";
 import type { LoggingHealthV1 } from "@vibefield/contracts/logging";
 import type { WsCtor } from "@vibefield/fieldd-client";
@@ -33,6 +41,9 @@ import { MeshClient } from "./mesh-client";
 import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
 import { PluginRegistryService } from "./plugin-registry";
+import { emitPendingPluginServiceLog } from "./plugin-service-console";
+import { PluginSettingsService, type SecretStore } from "./plugin-settings";
+import { PluginKvStore } from "./plugin-storage";
 import { ProductApi } from "./product-api";
 import { ServiceHost } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
@@ -73,6 +84,8 @@ export interface FielddConfig {
   /** P4 — override for the bundled daemon (bin.cjs cannot resolve the .mjs
    * harness via import.meta); dev/tests use the in-package source path. */
   serviceHarnessPath?: string;
+  /** P5 test seam — secret-scope settings backend (default: darwin keychain). */
+  secretStore?: SecretStore;
 }
 
 export interface FielddHealth {
@@ -173,9 +186,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // registry; providers arrive from the service host (worker port) below.
     const services = new ServiceRegistry({
       grantedCapabilities: (pluginId) => plugins.get(pluginId)?.grantedCapabilities,
+      logger: logger.child({ component: "plugin.service.router" }),
     });
     // assigned after listen (workers dial the bound port); handlers guard null
     let serviceHost: ServiceHost | null = null;
+    // P5 — settings + KV storage (§16.2/§16.3)
+    const settings = new PluginSettingsService({
+      dataDir: config.dataDir,
+      plugins,
+      logger: logger.child({ component: "plugin.settings" }),
+      ...(config.secretStore !== undefined ? { secretStore: config.secretStore } : {}),
+    });
+    const kvStore = new PluginKvStore(config.dataDir);
     // C3 — the serve route secret (thinking-c3 §1): the provenance proof
     // shared by exactly two parties, this process and the sidecar's route
     // config. 192-bit; base64url is path-safe. Never logged, never in
@@ -389,7 +411,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const record = await plugins.enable(parsed.data.id);
       // §18.3 — an explicit re-enable clears quarantine and restarts fresh
       void serviceHost?.restartFresh(parsed.data.id).catch((e) => {
-        console.error(`[services] ${parsed.data.id} enable-restart failed: ${String(e)}`);
+        logger
+          .child({ component: "plugin.service.host" })
+          .error(
+            "fieldd.plugin_service.enable_restart_failed",
+            "Enabled plugin service failed to restart",
+            e,
+            { pluginId: parsed.data.id },
+          );
       });
       return record;
     });
@@ -399,6 +428,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id: pluginId }", false);
       const record = await plugins.disable(parsed.data.id);
       await serviceHost?.stop(parsed.data.id); // §16.5 — deactivates providers, data untouched
+      // §15.4 — revocation is LIVE: leases die at the mint table, live
+      // plugin-principal connections sever; data stays (§16.5).
+      tokens.revokeByPlugin(parsed.data.id);
+      api.dropPluginConnections(parsed.data.id);
       return plugins.get(parsed.data.id) ?? record;
     });
     api.register("plugins.reload", async () => {
@@ -475,6 +508,116 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     plugins.on("changed", emitHealth); // plugin counts fold into the aggregated stream
 
+    // -- settings + KV storage (PLUG-P5, §16.2/§16.3): scope:null methods with
+    // a HANDLER-ENFORCED caller matrix — plugin principals need storage.self
+    // and are always self-scoped; the pane path needs plugins.manage + an
+    // explicit pluginId; kv.* is plugin-only. --
+    const settingsCaller = (
+      ctx: { principal: { kind: string; id?: string; scopes?: string[] } },
+      requested: string | undefined,
+    ): { pluginId: string; ownerPlugin: boolean } => {
+      const principal = ctx.principal as
+        | { kind: "plugin"; id: string; scopes: string[] }
+        | { kind: "local-token"; tokenId: string; scopes: string[] }
+        | { kind: string };
+      if (principal.kind === "plugin") {
+        const own = principal as { id: string; scopes: string[] };
+        if (!own.scopes.includes("storage.self"))
+          throw new RpcCallError("FORBIDDEN_SCOPE", "requires storage.self", false);
+        if (requested !== undefined && requested !== own.id)
+          throw new RpcCallError("FORBIDDEN_SCOPE", "plugin settings are self-scoped", false);
+        const record = plugins.get(own.id);
+        if (record === undefined || !record.enabled)
+          throw new RpcCallError("PRECONDITION_FAILED", `${own.id} is disabled`, false, {
+            pluginKind: "PLUGIN_DISABLED",
+          });
+        return { pluginId: own.id, ownerPlugin: true };
+      }
+      if (principal.kind === "local-token") {
+        const scopes = (principal as { scopes: string[] }).scopes;
+        if (!scopes.includes("plugins.manage"))
+          throw new RpcCallError("FORBIDDEN_SCOPE", "requires plugins.manage", false);
+        if (requested === undefined)
+          throw new RpcCallError("PRECONDITION_FAILED", "pluginId required", false);
+        return { pluginId: requested, ownerPlugin: false };
+      }
+      throw new RpcCallError("FORBIDDEN_SCOPE", "settings are local surfaces", false);
+    };
+    const kvCaller = (ctx: { principal: { kind: string; id?: string; scopes?: string[] } }) => {
+      if (ctx.principal.kind !== "plugin")
+        throw new RpcCallError("FORBIDDEN_SCOPE", "kv storage is plugin-only", false);
+      const principal = ctx.principal as { id: string; scopes: string[] };
+      if (!principal.scopes.includes("storage.self"))
+        throw new RpcCallError("FORBIDDEN_SCOPE", "requires storage.self", false);
+      const record = plugins.get(principal.id);
+      if (record === undefined || !record.enabled)
+        throw new RpcCallError("PRECONDITION_FAILED", `${principal.id} is disabled`, false, {
+          pluginKind: "PLUGIN_DISABLED",
+        });
+      return principal.id;
+    };
+    api.register("storage.settings.get", async (ctx, params) => {
+      const parsed = SettingsGetParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { pluginId?, key }", false);
+      const caller = settingsCaller(ctx, parsed.data.pluginId);
+      return settings.get(caller.pluginId, parsed.data.key, { ownerPlugin: caller.ownerPlugin });
+    });
+    api.register("storage.settings.set", async (ctx, params) => {
+      const parsed = SettingsSetParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { pluginId?, key, value }", false);
+      const caller = settingsCaller(ctx, parsed.data.pluginId);
+      await settings.set(caller.pluginId, parsed.data.key, parsed.data.value);
+      return { ok: true };
+    });
+    api.register("storage.settings.reset", async (ctx, params) => {
+      const parsed = SettingsResetParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { pluginId?, key }", false);
+      const caller = settingsCaller(ctx, parsed.data.pluginId);
+      await settings.reset(caller.pluginId, parsed.data.key);
+      return { ok: true };
+    });
+    api.registerSubscription("storage.settings.subscribe", async (ctx, params, emit) => {
+      const parsed = SettingsSubscribeParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { pluginId? }", false);
+      const caller = settingsCaller(ctx, parsed.data.pluginId);
+      const fn = (snap: { pluginId: string }) => {
+        if (snap.pluginId === caller.pluginId) emit(snap);
+      };
+      settings.on("changed", fn);
+      return {
+        snapshot: await settings.snapshot(caller.pluginId),
+        dispose: () => settings.off("changed", fn),
+      };
+    });
+    api.register("storage.kv.get", async (ctx, params) => {
+      const parsed = KvGetParams.safeParse(params);
+      if (!parsed.success) throw new RpcCallError("PRECONDITION_FAILED", "expected { key }", false);
+      return { value: await kvStore.get(kvCaller(ctx), parsed.data.key) };
+    });
+    api.register("storage.kv.set", async (ctx, params) => {
+      const parsed = KvSetParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { key, value }", false);
+      await kvStore.set(kvCaller(ctx), parsed.data.key, parsed.data.value);
+      return { ok: true };
+    });
+    api.register("storage.kv.delete", async (ctx, params) => {
+      const parsed = KvDeleteParams.safeParse(params);
+      if (!parsed.success) throw new RpcCallError("PRECONDITION_FAILED", "expected { key }", false);
+      await kvStore.delete(kvCaller(ctx), parsed.data.key);
+      return { ok: true };
+    });
+    api.register("storage.kv.list", async (ctx, params) => {
+      const parsed = KvListParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { prefix? }", false);
+      return { keys: await kvStore.list(kvCaller(ctx), parsed.data.prefix) };
+    });
+
     // -- dynamic services (PLUG-P4, §14/§22.2) --
     api.setDynamicRouter(services);
     api.register("services.list", () => services.snapshot());
@@ -520,6 +663,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       peers.dispose();
       devices.dispose();
       services.dispose();
+      settings.dispose();
       plugins.dispose();
       native.close();
       const reason = fatalReason;
@@ -544,6 +688,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs.dispose();
       devices.dispose();
       services.dispose();
+      settings.dispose();
       plugins.dispose();
       throw e;
     }
@@ -576,6 +721,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.serviceHarnessPath !== undefined
         ? { harnessPath: config.serviceHarnessPath }
         : {}),
+      logger: logger.child({ component: "plugin.service.host" }),
+      pluginLog: emitPendingPluginServiceLog,
     });
     // fire-and-forget: activation states surface honestly through the registry
     void serviceHost.startEligible();
@@ -617,6 +764,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           peers.dispose();
           devices.dispose();
           services.dispose();
+          settings.dispose();
           plugins.dispose();
           native.close();
           // a superseding fieldd rewrites these for the same dataDir — never

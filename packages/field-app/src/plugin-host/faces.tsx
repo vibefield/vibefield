@@ -7,6 +7,7 @@ import {
   type ReactNode,
   useSyncExternalStore,
 } from "react";
+import { getRendererLogger } from "../logging";
 import { getPluginRegistrySnapshot, subscribePluginRegistry } from "./plugin-registry-store";
 
 // The spine-owned non-normal faces (spec §12.4) + the per-widget failure
@@ -96,7 +97,14 @@ class WidgetFaceBoundary extends Component<BoundaryProps, { error: string | null
     return { error: error instanceof Error ? error.message : String(error) };
   }
   override componentDidCatch(error: unknown): void {
-    console.error(`[plugins] widget ${this.props.type} render threw:`, error);
+    getRendererLogger()
+      .child({ component: "plugin.host" })
+      .error(
+        "renderer.plugins.widget_render_failed",
+        "A plugin widget face threw during render",
+        error,
+        { widgetType: this.props.type },
+      );
   }
   override render(): ReactNode {
     if (this.state.error === null) return this.props.children;

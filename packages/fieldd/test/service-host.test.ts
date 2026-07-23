@@ -145,7 +145,11 @@ describe("the example KV service — a real plugin through the real host", () =>
   // the one seam the SDK mock cannot prove: the WORKER importing service.js
   // from examples/plugins resolves @vibefield/plugin-sdk via the package's own
   // workspace link, activates, and serves over the product surface
-  it("dev-linked kv-service activates and round-trips set/get/watch", async () => {
+  // generous cap: the worker's FIRST product dial type-strips the whole
+  // contracts+zod graph in-worker before hello (dev-source mode only)
+  it("dev-linked kv-service activates and round-trips set/get/watch", {
+    timeout: 30_000,
+  }, async () => {
     const EXAMPLES = join(HERE, "..", "..", "..", "examples", "plugins");
     const dataDir = mkdtempSync(join(tmpdir(), "vf-kv-"));
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));

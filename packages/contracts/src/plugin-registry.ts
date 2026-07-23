@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { SemverString } from "./envelope";
-import { CommandContribution, PluginId, SurfaceContribution, WidgetContribution } from "./plugins";
+import {
+  CommandContribution,
+  PluginId,
+  SettingsContribution,
+  SurfaceContribution,
+  WidgetContribution,
+} from "./plugins";
 
 // Plugin registry wire surface (plugin spec §9.4/§22.1, slice P2): what
 // `plugins.list/get/subscribe/enable/disable/reload` carry between fieldd and
@@ -63,6 +69,9 @@ export const SanitizedContributions = z
     widgets: z.array(WidgetContribution).default([]),
     commands: z.array(CommandContribution).default([]),
     surfaces: z.array(SurfaceContribution).default([]),
+    /** P5 — the §8.5 declaration (scalar form-subset schemas; PUBLIC data —
+     * the generated pane renders from it; values live behind storage.settings) */
+    settings: SettingsContribution.optional(),
   })
   .passthrough();
 export type SanitizedContributions = z.infer<typeof SanitizedContributions>;
@@ -107,13 +116,18 @@ export const PluginRegistryProblem = z
   .passthrough();
 export type PluginRegistryProblem = z.infer<typeof PluginRegistryProblem>;
 
-export const PluginRegistrySnapshot = z
-  .object({
-    generation: z.number().int().nonnegative(),
-    plugins: z.array(PluginRecord),
-    problems: z.array(PluginRegistryProblem),
-  })
-  .passthrough();
+/** Named shape + explicit annotation: with §8.5 settings nested inside every
+ * record the INFERRED type exceeds tsc's serialization cap (TS7056 — the P0
+ * lesson repeating); a named reference stays compact. */
+const PluginRegistrySnapshotShape = {
+  generation: z.number().int().nonnegative(),
+  plugins: z.array(PluginRecord),
+  problems: z.array(PluginRegistryProblem),
+};
+export const PluginRegistrySnapshot: z.ZodObject<
+  typeof PluginRegistrySnapshotShape,
+  "passthrough"
+> = z.object(PluginRegistrySnapshotShape).passthrough();
 export type PluginRegistrySnapshot = z.infer<typeof PluginRegistrySnapshot>;
 
 // --- method params/results (§22.1, the P2 six) --------------------------------
@@ -135,7 +149,7 @@ export type PluginsReloadParams = z.infer<typeof PluginsReloadParams>;
  * subscription snapshot/delta payloads are PluginRegistrySnapshot verbatim
  * (deltas are coalesced full snapshots — spec §9.4 allows server re-snapshot).
  * plugins.get/enable/disable return the single PluginRecord. */
-export const PluginsListResult = PluginRegistrySnapshot;
+export const PluginsListResult: typeof PluginRegistrySnapshot = PluginRegistrySnapshot;
 export type PluginsListResult = z.infer<typeof PluginsListResult>;
 
 // --- the renderer principal lease (§11.2, P3b) --------------------------------
@@ -210,3 +224,72 @@ export const DynamicSubEvent = z.discriminatedUnion("kind", [
     .passthrough(),
 ]);
 export type DynamicSubEvent = z.infer<typeof DynamicSubEvent>;
+
+// --- settings + KV storage (§16.2/§16.3, P5) ----------------------------------
+
+/** storage.settings.* params. Plugin principals are always SELF-scoped —
+ * pluginId is for the trusted pane path (plugins.manage) and must match the
+ * caller's own id when a plugin supplies it. */
+export const SettingsGetParams = z
+  .object({ pluginId: PluginId.optional(), key: z.string().min(1).max(128) })
+  .passthrough();
+export type SettingsGetParams = z.infer<typeof SettingsGetParams>;
+
+/** Unset key with a schema default → { value: default, isSet: false }.
+ * SECRET keys to any caller but the owning plugin: value OMITTED, secret true
+ * — the value never enters snapshots, logs, or the pane (§16.2). */
+export const SettingsGetResult = z
+  .object({
+    value: z.unknown().optional(),
+    isSet: z.boolean(),
+    secret: z.boolean().optional(),
+  })
+  .passthrough();
+export type SettingsGetResult = z.infer<typeof SettingsGetResult>;
+
+export const SettingsSetParams = z
+  .object({
+    pluginId: PluginId.optional(),
+    key: z.string().min(1).max(128),
+    value: z.unknown(),
+  })
+  .passthrough();
+export type SettingsSetParams = z.infer<typeof SettingsSetParams>;
+
+export const SettingsResetParams = SettingsGetParams;
+export type SettingsResetParams = z.infer<typeof SettingsResetParams>;
+
+export const SettingsSubscribeParams = z.object({ pluginId: PluginId.optional() }).passthrough();
+export type SettingsSubscribeParams = z.infer<typeof SettingsSubscribeParams>;
+
+/** The per-plugin settings snapshot: PERSISTED non-secret values only
+ * (defaults are never persisted); secrets appear as NAMES, never values. */
+export const SettingsSnapshot = z
+  .object({
+    pluginId: PluginId,
+    values: z.record(z.unknown()),
+    secretsSet: z.array(z.string()),
+  })
+  .passthrough();
+export type SettingsSnapshot = z.infer<typeof SettingsSnapshot>;
+
+/** storage.kv.* — plugin-principal-only, self-scoped, quota-bounded (§16.3). */
+export const KvGetParams = z.object({ key: z.string().min(1).max(512) }).passthrough();
+export type KvGetParams = z.infer<typeof KvGetParams>;
+
+export const KvGetResult = z.object({ value: z.unknown() }).passthrough();
+export type KvGetResult = z.infer<typeof KvGetResult>;
+
+export const KvSetParams = z
+  .object({ key: z.string().min(1).max(512), value: z.unknown() })
+  .passthrough();
+export type KvSetParams = z.infer<typeof KvSetParams>;
+
+export const KvDeleteParams = KvGetParams;
+export type KvDeleteParams = z.infer<typeof KvDeleteParams>;
+
+export const KvListParams = z.object({ prefix: z.string().max(512).optional() }).passthrough();
+export type KvListParams = z.infer<typeof KvListParams>;
+
+export const KvListResult = z.object({ keys: z.array(z.string()) }).passthrough();
+export type KvListResult = z.infer<typeof KvListResult>;

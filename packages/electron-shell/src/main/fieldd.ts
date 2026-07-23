@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFielddSupervisor, type FielddSupervisor } from "@vibefield/fieldd-supervisor";
+import type { Logger } from "@vibefield/logging";
 import { app } from "electron";
 import { isSmokeLike, type ShellMode, shutdownPolicy } from "./modes";
 
@@ -23,6 +24,8 @@ export function buildSupervisor(opts: {
   root: string;
   repoRoot: string;
   viteUrl: string;
+  logRoot: string;
+  logger: Logger;
 }): FielddSupervisor {
   const fielddBin =
     process.env["FIELDD_BIN"] ?? join(opts.repoRoot, "packages", "fieldd", "dist", "bin.cjs");
@@ -30,11 +33,7 @@ export function buildSupervisor(opts: {
     process.env["FIELDD_NATIVE_BIN"] ?? join(opts.repoRoot, "target", "debug", "field-native");
   if (!existsSync(fielddBin)) throw new Error(`fieldd bin missing (build it): ${fielddBin}`);
   const smokeLike = opts.mode === "smoke" || opts.mode === "smoke-canvas";
-  const logOverride = smokeLike
-    ? join(opts.root, "logs")
-    : opts.mode === "dev"
-      ? process.env["FIELD_LOG_DIR"]
-      : undefined;
+  const logger = opts.logger.child({ component: "daemon.supervisor" });
   return createFielddSupervisor({
     dataRoot: opts.root,
     spawn: { command: process.execPath, args: [fielddBin] },
@@ -47,18 +46,37 @@ export function buildSupervisor(opts: {
       FIELDD_PLUGIN_ROOTS: process.env["FIELDD_PLUGIN_ROOTS"] ?? join(opts.repoRoot, "plugins"),
       FIELDD_PLUGIN_DEV_ROOTS:
         process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? join(opts.repoRoot, "examples", "plugins"),
-      // Only an explicit mode decision can enable FIELD_LOG_DIR. Production
-      // removes both ambient values before spawning the daemon.
-      FIELD_LOG_DIR: logOverride,
-      FIELDD_ALLOW_LOG_DIR_OVERRIDE: logOverride === undefined ? undefined : "1",
+      // The shell resolved this root under its own mode policy. Passing that
+      // trusted absolute decision keeps all three process owners aligned while
+      // fieldd still refuses an ambient override on its own.
+      FIELD_LOG_DIR: opts.logRoot,
+      FIELDD_ALLOW_LOG_DIR_OVERRIDE: "1",
     },
     ...(existsSync(nativeBin) ? { nativeExecutable: nativeBin } : {}),
     ...(opts.mode === "dev" ? { allowedOrigins: [new URL(opts.viteUrl).origin] } : {}),
     ...(smokeLike ? { controlPort: 0, dataPort: 0 } : {}),
     shutdownPolicy: shutdownPolicy(opts.mode),
     onEvent: (event) => {
-      if (event.kind === "stderr" || event.kind === "unexpected-stdout") {
-        process.stderr.write(`[fieldd ${event.kind}] ${event.line}\n`);
+      if (event.kind === "lifecycle") {
+        logger.info(event.event, event.message, event.attrs);
+      } else if (event.kind === "readiness") {
+        logger.info("desktop.fieldd.readiness_received", "fieldd readiness was validated", {
+          port: event.signal.port,
+          bootId: event.signal.bootId,
+        });
+      } else if (event.kind === "stderr") {
+        logger.error(
+          "desktop.fieldd.emergency_output",
+          "fieldd emitted bounded emergency stderr",
+          undefined,
+          { line: event.line },
+        );
+      } else {
+        logger.warn(
+          "desktop.fieldd.unexpected_stdout",
+          "fieldd emitted unexpected bounded stdout",
+          { line: event.line },
+        );
       }
     },
   });

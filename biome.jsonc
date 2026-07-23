@@ -43,6 +43,28 @@
       "quoteStyle": "double"
     }
   },
+  "overrides": [
+    {
+      // LOG-L3: first-party runtime code must use the injected logger. Tests,
+      // smoke/dev protocols, and plugin-origin adapters have separate evidence
+      // contracts and remain outside this rule's scope.
+      "includes": [
+        "packages/*/src/**/*.{ts,tsx,js,mjs,cjs}",
+        "!packages/electron-shell/src/testing/smoke.ts",
+        "!packages/field-app/src/spike/**",
+        "!packages/field-app/src/development-console.ts",
+        "!packages/field-app/src/plugin-host/renderer-harness.ts",
+        "!packages/fieldd/src/plugin-service-console.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "error"
+          }
+        }
+      }
+    }
+  ],
   "css": {
     "parser": {
       // Tailwind v4 CSS-first at-rules (@custom-variant, @source, @theme, …)

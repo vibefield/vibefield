@@ -93,7 +93,13 @@ export class DocLaneClient {
   private initialUpdateCount = 0;
   private lastRevisionId: string | null = null;
 
-  constructor(private readonly opts: DocLaneClientOptions) {}
+  // no TS parameter property: the worker harness imports this file under
+  // Node's strip-only type erasure, which cannot rewrite ctor sugar (P5)
+  private readonly opts: DocLaneClientOptions;
+
+  constructor(opts: DocLaneClientOptions) {
+    this.opts = opts;
+  }
 
   onStatusChange(fn: () => void): () => void {
     this.statusListeners.add(fn);

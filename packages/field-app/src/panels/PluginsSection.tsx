@@ -1,7 +1,8 @@
-import type { PluginRecord } from "@vibefield/contracts";
+import type { PluginRecord, SettingsContribution } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useState } from "react";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
+import { PluginSettingsForm } from "./PluginSettingsForm";
 import { borderCls, labelCls, sectionCls } from "./SettingsPanel";
 
 // Plugins — a Settings SECTION, sibling to System/Mesh (PLUG-P2 UI: the
@@ -31,8 +32,14 @@ function PluginRow({ plugin }: { plugin: PluginRecord }): ReactElement {
   const client = useFielddClient();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const toggleable = plugin.state === "enabled" || plugin.state === "disabled";
   const widgetCount = plugin.contributions.widgets.length;
+  // contributions.settings (§8.5) lands in parallel; read it through a typed
+  // view so this file compiles before the SanitizedContributions field does.
+  const settingsProps = (plugin.contributions as { settings?: SettingsContribution }).settings
+    ?.properties;
+  const hasSettings = settingsProps !== undefined && Object.keys(settingsProps).length > 0;
 
   const toggle = async () => {
     setPending(true);
@@ -72,6 +79,16 @@ function PluginRow({ plugin }: { plugin: PluginRecord }): ReactElement {
           <span className={labelCls}>
             {widgetCount} widget{widgetCount === 1 ? "" : "s"}
           </span>
+          {hasSettings && (
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((v) => !v)}
+              aria-expanded={settingsOpen}
+              className={`flex-none ${labelCls} hover:text-neutral-600 dark:hover:text-neutral-300`}
+            >
+              settings {settingsOpen ? "▾" : "▸"}
+            </button>
+          )}
         </span>
       </div>
       {/* the registry's own lastError and a live toggle error share one voice
@@ -86,6 +103,9 @@ function PluginRow({ plugin }: { plugin: PluginRecord }): ReactElement {
             {plugin.lastError.message}
           </div>
         )
+      )}
+      {hasSettings && settingsOpen && settingsProps !== undefined && (
+        <PluginSettingsForm pluginId={plugin.id} properties={settingsProps} />
       )}
     </div>
   );

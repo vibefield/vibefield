@@ -4,6 +4,7 @@ import { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { setBoardStatus } from "./board-status";
 import type { DocThumbnailScene } from "./doc-thumbnail-scene";
 import { DocThumbnailCache } from "./doc-thumbnails";
+import { getRendererLogger } from "./logging";
 
 // B4 DocManager (thinking-b4-doc-ux §1): the renderer-spine lifecycle owner for
 // canvas docs — launch decision, doc switching, create/rename, and the loading
@@ -195,7 +196,9 @@ export class DocManager {
     if (this.state.doc?.docId === docId && this.state.phase === "ready") return;
     const entry = this.state.docs.find((d) => d.docId === docId);
     if (!entry) {
-      console.warn(`[doc-manager] switchTo unknown doc ${docId}`);
+      getRendererLogger()
+        .child({ component: "docs.manager", docId })
+        .warn("renderer.docs.switch_rejected", "Document switch targeted an unknown document");
       return;
     }
     this.stage(0, "opening doc");
@@ -232,7 +235,14 @@ export class DocManager {
       this.degradedSession(e);
       return;
     }
-    console.warn(`[doc-manager] ${what} failed — keeping the current doc:`, e);
+    getRendererLogger()
+      .child({ component: "docs.manager", docId: this.state.doc?.docId })
+      .error(
+        "renderer.docs.action_failed",
+        "A document action failed; the current document remains active",
+        e,
+        { action: what },
+      );
     this.patch({ phase: "ready", loading: null });
   }
 
@@ -262,7 +272,15 @@ export class DocManager {
     this.patch({ docs: sorted });
     void this.thumbnails
       .hydrate(sorted.map((doc) => doc.docId))
-      .catch((error: unknown) => console.warn("[doc-thumbnail] cache hydrate failed", error));
+      .catch((error: unknown) =>
+        getRendererLogger()
+          .child({ component: "docs.thumbnails" })
+          .error(
+            "renderer.docs.thumbnail_cache_hydrate_failed",
+            "Document thumbnail cache hydration failed",
+            error,
+          ),
+      );
     return sorted;
   }
 
@@ -377,7 +395,9 @@ export class DocManager {
    * persistence detached and the reason on the board row. */
   private degradedSession(e: unknown): void {
     const detail = e instanceof Error ? e.message : String(e);
-    console.warn(`[doc-manager] degraded session: ${detail}`);
+    getRendererLogger()
+      .child({ component: "docs.manager" })
+      .error("renderer.docs.session_degraded", "Document session entered degraded mode", e);
     this.installSession({
       generation: ++this.generation,
       docId: "",
@@ -425,7 +445,13 @@ export class DocManager {
         });
       } catch (e) {
         // previews fail soft — tray tiles keep their manifest fallbacks
-        console.warn("[doc-manager] preview capture failed", e);
+        getRendererLogger()
+          .child({ component: "docs.manager", docId: this.state.doc?.docId })
+          .error(
+            "renderer.docs.preview_capture_failed",
+            "Document preview capture failed softly",
+            e,
+          );
       }
     }
     await this.waitForCanvasPresentation(generation);

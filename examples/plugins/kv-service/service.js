@@ -4,16 +4,29 @@
 // ONLY @vibefield/plugin-sdk (wall R10). An in-memory Map backs get/set;
 // watch keeps a per-key set of sinks and fans out deltas on every set of
 // that key. Every handler is total — a missing key is a null value, never
-// a throw.
+// a throw. With storage.self granted, the map persists through plugin KV
+// (loaded at activate, written through on set) — the P5 dogfood.
 
 import { defineServicePlugin } from "@vibefield/plugin-sdk";
 
 /** @typedef {import("@vibefield/plugin-sdk").SnapshotDeltaSink} SnapshotDeltaSink */
 
 export default defineServicePlugin({
-  activate(ctx) {
+  async activate(ctx) {
     /** @type {Map<string, string>} */
     const store = new Map();
+    // P5 dogfood — ctx.storage is present iff the manifest requests
+    // storage.self: the store survives worker restarts via plugin KV.
+    if (ctx.storage !== undefined) {
+      const persisted = await ctx.storage.kv.get("entries");
+      if (persisted !== null && typeof persisted === "object")
+        for (const [k, v] of Object.entries(persisted)) if (typeof v === "string") store.set(k, v);
+    }
+    const persist = () => {
+      void ctx.storage?.kv
+        .set("entries", Object.fromEntries(store))
+        .catch((e) => ctx.logger.warn(`persist failed: ${e instanceof Error ? e.message : e}`));
+    };
     /** @type {Map<string, Set<SnapshotDeltaSink>>} */
     const watchers = new Map();
 
@@ -41,6 +54,7 @@ export default defineServicePlugin({
             const { key, value } = /** @type {{ key: string, value: string }} */ (params);
             store.set(key, value);
             notify(key);
+            persist();
             return { ok: true };
           },
         },

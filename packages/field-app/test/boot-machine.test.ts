@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BootMachineDeps, BootPhase, WorkspaceModule } from "../src/boot/machine";
 import { createBootMachine } from "../src/boot/machine";
 import type { FieldHost } from "../src/host";
+import type { RendererLogger } from "../src/logging";
 
 // The §12.5 regression suite for the central boot decisions (ESR §5.4.2 + §12.4–12.5;
 // design-03 §4.3 v0.3). The machine is framework-free and every seam is injected, so
@@ -74,7 +75,19 @@ function harness(
   const importWorkspace = vi.fn();
   const clientStub = { close: () => {} } as unknown as FielddClient;
   const makeClient = vi.fn(() => clientStub);
+  const warn = vi.fn<RendererLogger["warn"]>();
+  const logger: RendererLogger = {
+    child: () => logger,
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn,
+    error: vi.fn(),
+    fatal: vi.fn(),
+    isLevelEnabled: () => true,
+  };
   const host = {
+    logger,
     getConnection,
     onPrepareClose: () => () => {},
     completeClose: () => {},
@@ -104,6 +117,7 @@ function harness(
     importWorkspace,
     makeClient,
     clientStub,
+    warn,
     /** Set the scripted clock to `at`, then run the next queued rAF tick. */
     fireFrame(at: number) {
       clock = at;
@@ -292,7 +306,6 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
   });
 
   it("forces a logged degraded reveal when the stability cap expires without enough clean frames", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const h = harness({ stableFrames: 10, frameBudgetMs: 16, stabilityCapMs: 50 });
     await bootToStabilizing(h);
 
@@ -303,7 +316,10 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     await flush();
     expect(h.machine.view().phase).toBe("interactive");
     expect(h.machine.view().degradedReveal).toBe(true);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("stability cap hit"));
+    expect(h.warn).toHaveBeenCalledWith(
+      "renderer.boot.stability_cap_reached",
+      expect.stringContaining("bounded degraded reveal"),
+    );
   });
 
   it("surfaces an unavailable+retryable state when bootstrap fails, and retry resumes from the failed step", async () => {

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Versioned LOG-L0/LOG-L1 harness. It retains the direct-Console discard
-// baseline and adds disabled/accepted calls through the real bounded Node sink.
+// Versioned LOG-L0–LOG-L3 harness. It retains the direct-Console discard
+// baseline, measures the real bounded Node sink, and exercises the renderer
+// queue/batcher plus a baseline-normalized 1,000-records/sec event-loop trial.
 import { execFileSync } from "node:child_process";
 import { Console } from "node:console";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -9,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 
-const HARNESS_VERSION = 2;
+const HARNESS_VERSION = 3;
 const DEFAULT_ITERATIONS = 50_000;
 
 class ImmediateDiscard extends Writable {
@@ -115,6 +116,12 @@ process.stdout.write(
           backpressurePolicy: "lower levels drop first",
           persistence: "flush between measurement batches",
         },
+        rendererSink: {
+          destination: "bounded renderer queue with serialized batch callback",
+          applicationQueue: "1,000 records / 2 MiB; lower levels drop first",
+          batching: "up to 50 records / 256 KiB",
+          persistence: "Electron host route measured separately by conformance tests",
+        },
       },
       nodeSinkHealth: {
         accepted: nodeSink.accepted,
@@ -122,6 +129,16 @@ process.stdout.write(
         queueHighWaterRecords: nodeSink.queueHighWaterRecords,
         ringHighWaterBytes: nodeSink.ringHighWaterBytes,
       },
+      rendererSinkHealth: {
+        sentBatches: nodeSink.renderer.sentBatches,
+        sentRecords: nodeSink.renderer.sentRecords,
+        maxBatchRecords: nodeSink.renderer.maxBatchRecords,
+        maxBatchBytes: nodeSink.renderer.maxBatchBytes,
+        floodQueueRecords: nodeSink.renderer.floodQueueRecords,
+        floodQueueBytes: nodeSink.renderer.floodQueueBytes,
+        floodDropped: nodeSink.renderer.floodDropped,
+      },
+      rendererEventLoop: nodeSink.renderer.eventLoop,
       scenarios,
     },
     null,

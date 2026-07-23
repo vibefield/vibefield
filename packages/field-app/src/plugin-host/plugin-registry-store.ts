@@ -1,6 +1,7 @@
 import { PluginRegistrySnapshot } from "@vibefield/contracts";
 import { useSubscription } from "@vibefield/fieldd-client/react";
 import { useEffect, useSyncExternalStore } from "react";
+import { getRendererLogger } from "../logging";
 
 // PLUG-P2 — the fieldd registry snapshot, renderer-side (board-status pattern:
 // a module-level store so the session hook and the Settings section read it
@@ -19,7 +20,13 @@ export function setPluginRegistrySnapshot(raw: unknown): void {
   const parsed = PluginRegistrySnapshot.safeParse(raw);
   if (!parsed.success) {
     // tolerant reader: refuse junk, keep the last good snapshot
-    console.warn(`[plugins] unreadable registry snapshot: ${parsed.error.issues[0]?.message}`);
+    getRendererLogger()
+      .child({ component: "plugin.host" })
+      .warn(
+        "renderer.plugins.registry_snapshot_rejected",
+        "An unreadable plugin registry snapshot was rejected",
+        { issue: parsed.error.issues[0]?.message ?? "unknown" },
+      );
     return;
   }
   current = parsed.data;

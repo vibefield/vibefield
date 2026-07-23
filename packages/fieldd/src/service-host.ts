@@ -8,6 +8,7 @@ import {
   type Scope,
   validatePluginManifest,
 } from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { PluginRegistryService } from "./plugin-registry";
 import type { ServiceCallerInfo, ServiceRegistry } from "./service-registry";
 import type { TokenService } from "./token-service";
@@ -57,6 +58,13 @@ export interface ServiceHostConfig {
   deadlines?: { activateMs?: number; deactivateMs?: number };
   /** test seam — production defaults are the §18.3 ladder constants */
   ladder?: { baseMs?: number; maxMs?: number; windowMs?: number; quarantineAt?: number };
+  logger?: Logger;
+  /** LOG-L4 replaces this explicit pending adapter with plugins/service. */
+  pluginLog?: (record: {
+    pluginId: string;
+    level: "debug" | "info" | "warn" | "error";
+    message: string;
+  }) => void;
 }
 
 interface Entry {
@@ -84,8 +92,11 @@ export class ServiceHost {
   private readonly entries = new Map<string, Entry>();
   private nextCallId = 1;
   private disposed = false;
+  private readonly logger: Logger;
 
-  constructor(private readonly cfg: ServiceHostConfig) {}
+  constructor(private readonly cfg: ServiceHostConfig) {
+    this.logger = cfg.logger ?? createNoopLogger();
+  }
 
   private entry(pluginId: string): Entry {
     let e = this.entries.get(pluginId);
@@ -119,7 +130,12 @@ export class ServiceHost {
       if (manifest === null || manifest.entries?.service === undefined) continue;
       if (!manifest.activation.includes("onStartup")) continue;
       await this.start(record.id).catch((e) => {
-        console.error(`[services] ${record.id} startup activation failed: ${String(e)}`);
+        this.logger.error(
+          "fieldd.plugin_service.startup_activation_failed",
+          "Plugin service startup activation failed",
+          e,
+          { pluginId: record.id },
+        );
       });
     }
   }
@@ -150,7 +166,12 @@ export class ServiceHost {
     const entryPath = resolve(join(root, entryRel));
     if (!entryPath.startsWith(resolve(root))) {
       this.setState(pluginId, e, "quarantined");
-      console.error(`[services] ${pluginId}: service entry escapes its root — refused`);
+      this.logger.error(
+        "fieldd.plugin_service.entry_path_rejected",
+        "Plugin service entry escaped its plugin root and was refused",
+        undefined,
+        { pluginId },
+      );
       return;
     }
 
@@ -172,8 +193,31 @@ export class ServiceHost {
         entryPath,
         leaseUrl: `ws://127.0.0.1:${this.cfg.controlPort()}`,
         leaseToken: lease.token,
+        scopes: lease.scopes, // presence-gates ctx.settings/storage (§10.2)
       },
       env: {}, // EL7 — a minimal environment, daemon secrets stripped
+      // a CLEAN node CLI for the worker: no inherited loaders/debug flags
+      // (vitest's tinypool execArgv otherwise leaks in and wedges module
+      // loading; production hygiene wants this anyway)
+      execArgv: [],
+      // worker stdio flows through the HOST's log surface — a dying worker's
+      // last words must never vanish into a parent runner's void (§23)
+      stdout: true,
+      stderr: true,
+    });
+    worker.stdout?.on("data", (chunk: Buffer) => {
+      this.logger.info("fieldd.plugin_service.worker_stdout", "Plugin service worker stdout", {
+        pluginId,
+        line: String(chunk).trimEnd(),
+      });
+    });
+    worker.stderr?.on("data", (chunk: Buffer) => {
+      this.logger.error(
+        "fieldd.plugin_service.worker_stderr",
+        "Plugin service worker stderr",
+        undefined,
+        { pluginId, line: String(chunk).trimEnd() },
+      );
     });
     e.worker = worker;
 
@@ -204,6 +248,11 @@ export class ServiceHost {
           case "activated":
             finish(() => {
               this.setState(pluginId, e, "active");
+              this.logger.info(
+                "fieldd.plugin_service.activated",
+                "Plugin service worker activated",
+                { pluginId },
+              );
               resolveActivate();
             });
             return;
@@ -234,7 +283,12 @@ export class ServiceHost {
               });
               e.unregisters.set(namespace, unregister);
             } catch (err) {
-              console.error(`[services] ${pluginId} provide refused: ${String(err)}`);
+              this.logger.error(
+                "fieldd.plugin_service.provide_rejected",
+                "Plugin service provider registration was refused",
+                err,
+                { pluginId },
+              );
             }
             return;
           }
@@ -270,10 +324,11 @@ export class ServiceHost {
           }
           case "log": {
             const level = msg["level"] as "debug" | "info" | "warn" | "error";
-            const line = `[plugin:${pluginId}:service] ${String(msg["message"])}`;
-            (level === "error" ? console.error : level === "warn" ? console.warn : console.info)(
-              line,
-            );
+            const message =
+              typeof msg["message"] === "string"
+                ? msg["message"]
+                : "[plugin emitted a non-string log message]";
+            this.cfg.pluginLog?.({ pluginId, level, message });
             return;
           }
           default:
@@ -283,7 +338,12 @@ export class ServiceHost {
 
       worker.on("error", (err) => {
         if (e.generation !== generation) return;
-        console.error(`[services] ${pluginId} worker error: ${err.message}`);
+        this.logger.error(
+          "fieldd.plugin_service.worker_failed",
+          "Plugin service worker emitted an error",
+          err,
+          { pluginId },
+        );
         finish(() => rejectActivate(err)); // pre-activation error path
       });
 
@@ -310,8 +370,11 @@ export class ServiceHost {
     e.crashTimes = [...e.crashTimes.filter((t) => now - t < windowMs), now];
     if (e.crashTimes.length >= quarantineAt) {
       this.setState(pluginId, e, "quarantined");
-      console.error(
-        `[services] ${pluginId} quarantined after ${e.crashTimes.length} crashes (§18.3 — re-enable to clear)`,
+      this.logger.error(
+        "fieldd.plugin_service.quarantined",
+        "Plugin service was quarantined after repeated crashes",
+        undefined,
+        { pluginId, crashCount: e.crashTimes.length },
       );
       return;
     }
@@ -322,7 +385,12 @@ export class ServiceHost {
     e.restartTimer = setTimeout(() => {
       e.restartTimer = null;
       void this.start(pluginId).catch((err) => {
-        console.error(`[services] ${pluginId} restart failed: ${String(err)}`);
+        this.logger.error(
+          "fieldd.plugin_service.restart_failed",
+          "Plugin service restart failed",
+          err,
+          { pluginId },
+        );
       });
     }, backoff);
   }
@@ -356,6 +424,9 @@ export class ServiceHost {
     this.cfg.registry.withdrawPlugin(pluginId);
     e.unregisters.clear();
     this.setState(pluginId, e, "inactive");
+    this.logger.info("fieldd.plugin_service.deactivated", "Plugin service worker deactivated", {
+      pluginId,
+    });
   }
 
   async stopAll(): Promise<void> {
@@ -376,7 +447,7 @@ export class ServiceHost {
   }
 
   /** the port bridge the ServiceRegistry invokes — handlers stay worker-side */
-  private portHandlers(pluginId: string, e: Entry, namespace: string) {
+  private portHandlers(_pluginId: string, e: Entry, namespace: string) {
     return {
       call: (name: string, params: unknown, caller: ServiceCallerInfo): Promise<unknown> => {
         const worker = e.worker;

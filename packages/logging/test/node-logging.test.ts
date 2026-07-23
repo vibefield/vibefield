@@ -93,6 +93,68 @@ describe("node logging writer lifecycle", () => {
     await service.close();
   });
 
+  it("host-stamps forwarded records while preserving bounded origin and observation time", async () => {
+    const logRoot = await root();
+    const service = await logging(logRoot, {
+      service: "renderer",
+      role: "renderer",
+      stream: LOG_STREAMS.SYSTEM_RENDERER,
+      pid: 101,
+      now: () => 200,
+    });
+    service.ingest({
+      time: 100,
+      observedTime: 200,
+      level: "error",
+      event: "renderer.test.forwarded",
+      message: "forwarded",
+      component: "test.forwarded",
+      pid: 202,
+      windowId: "window-7",
+      bindings: { operationId: "operation-1" },
+      error: {
+        type: "RendererError",
+        message: "render failed",
+        stack: "at <home>/renderer.js:1",
+      },
+      attrs: {
+        token: "abcdefghijklmnopqrstuvwxyz123456",
+        webContentsId: 7,
+      },
+      truncation: {
+        reasons: ["partial-line"],
+        originalBytes: 70_000,
+        droppedBytes: 4_464,
+      },
+    });
+    await service.flush();
+
+    const record = JSON.parse((await readFile(service.filePath, "utf8")).trim());
+    expect(record).toMatchObject({
+      time: 100,
+      observedTime: 200,
+      service: "renderer",
+      role: "renderer",
+      pid: 202,
+      bootId: "boot-test",
+      instanceId: "instance-test",
+      seq: 1,
+      windowId: "window-7",
+      operationId: "operation-1",
+      component: "test.forwarded",
+      err: { type: "RendererError", message: "render failed" },
+      attrs: {
+        token: "[redacted]",
+        webContentsId: 7,
+      },
+      truncation: {
+        reasons: ["partial-line"],
+        originalBytes: 70_000,
+        droppedBytes: 4_464,
+      },
+    });
+  });
+
   it("rotates on size and on a UTC day boundary", async () => {
     const logRoot = await root();
     let now = Date.UTC(2026, 6, 22, 23, 59, 59);

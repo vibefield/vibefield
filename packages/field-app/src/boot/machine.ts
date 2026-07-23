@@ -170,7 +170,14 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
       patch({ phase: "stabilizing", stage: "settling", progress: 1 });
       const degraded = await stabilize();
       mark("vf:renderer:stable");
-      if (degraded) console.warn("[boot] stability cap hit — degraded reveal");
+      if (degraded) {
+        deps.host.logger
+          .child({ component: "boot" })
+          .warn(
+            "renderer.boot.stability_cap_reached",
+            "The renderer used the bounded degraded reveal path",
+          );
+      }
 
       patch({ phase: "interactive", stage: "", degradedReveal: degraded });
       mark("vf:renderer:interactive");

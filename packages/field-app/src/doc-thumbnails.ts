@@ -1,4 +1,5 @@
 import type { DocThumbnailScene } from "./doc-thumbnail-scene";
+import { getRendererLogger } from "./logging";
 import {
   isHidden as realIsHidden,
   onVisibilityChange as realOnVisibilityChange,
@@ -107,7 +108,15 @@ export class DocThumbnailCache {
   private chain(job: ThumbnailJob): void {
     this.renderChain = this.renderChain
       .then(() => this.renderAndPersist(job))
-      .catch((error: unknown) => console.warn("[doc-thumbnail] generation failed", error));
+      .catch((error: unknown) =>
+        getRendererLogger()
+          .child({ component: "docs.thumbnails", docId: job.docId })
+          .error(
+            "renderer.docs.thumbnail_generation_failed",
+            "Document thumbnail generation failed",
+            error,
+          ),
+      );
   }
 
   private watchVisibility(): void {

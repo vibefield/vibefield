@@ -1,5 +1,6 @@
 import type { WidgetType } from "@vibecook/ice";
 import { isDistributablePluginId, type WidgetContribution } from "@vibefield/contracts";
+import { getRendererLogger } from "../logging";
 import { buildWidgetType } from "./build-widget";
 import { ghostFaceComponent } from "./faces";
 
@@ -43,7 +44,13 @@ export function buildGhostWidgetTypes(
       interaction: { selectable: true, movable: true, resizable: true, snap: "target" },
     };
     out.push(buildWidgetType(contribution, { component: ghostFaceComponent(type) }));
-    console.warn(`[plugins] ghost stub registered: ${type}@${version} (plugin absent)`);
+    getRendererLogger()
+      .child({ component: "plugin.host" })
+      .warn(
+        "renderer.plugins.ghost_stub_registered",
+        "A preserving widget stub was registered for an absent plugin",
+        { type, version },
+      );
   }
   return out;
 }

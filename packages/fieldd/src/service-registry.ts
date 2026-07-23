@@ -8,6 +8,7 @@ import {
   type ServiceProviderRecord,
   type ServicesSnapshot,
 } from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { Ajv, type ValidateFunction } from "ajv";
 import { RpcCallError } from "./native-link";
 
@@ -85,15 +86,18 @@ export class ServiceRegistry extends EventEmitter {
   private readonly methods = new Map<string, MethodEntry>();
   private readonly providers = new Map<string, ServiceProviderBinding>();
   private readonly subs = new Set<LiveSub>();
+  private readonly logger: Logger;
   private generation = 0;
 
   constructor(
     private readonly opts: {
       /** the plugin registry's granted set (undefined = unknown plugin) */
       grantedCapabilities(pluginId: string): readonly string[] | undefined;
+      logger?: Logger;
     },
   ) {
     super();
+    this.logger = opts.logger ?? createNoopLogger();
   }
 
   /** §14.4/§14.6 registration. Throws RpcCallError; on success returns the
@@ -247,14 +251,22 @@ export class ServiceRegistry extends EventEmitter {
       );
     }
     if (entry.output !== undefined && !entry.output(value)) {
-      console.error(`[services] ${method} output failed its declared schema — refused`);
+      this.logger.error(
+        "fieldd.plugin_service.output_schema_rejected",
+        "Plugin service output failed its declared schema",
+        undefined,
+        { method, pluginId: entry.pluginId },
+      );
       throw new RpcCallError("INTERNAL", `${method}: provider returned schema-invalid data`, false);
     }
-    console.info(
-      `[services] ${method} ${Date.now() - started}ms caller=${callerInfo(ctx).kind}${
-        callerInfo(ctx).pluginId !== undefined ? `:${callerInfo(ctx).pluginId}` : ""
-      }`,
-    );
+    const caller = callerInfo(ctx);
+    this.logger.info("fieldd.plugin_service.call_completed", "Plugin service call completed", {
+      method,
+      pluginId: entry.pluginId,
+      durationMs: Date.now() - started,
+      callerKind: caller.kind,
+      ...(caller.pluginId !== undefined ? { callerPluginId: caller.pluginId } : {}),
+    });
     return value;
   }
 
@@ -285,7 +297,12 @@ export class ServiceRegistry extends EventEmitter {
       snapshot: (value: unknown) => {
         if (sub.ended) return;
         if (entry.snapshot !== undefined && !entry.snapshot(value)) {
-          console.error(`[services] ${method} snapshot failed its schema — dropped`);
+          this.logger.error(
+            "fieldd.plugin_service.subscription_snapshot_rejected",
+            "Plugin service subscription snapshot failed its declared schema",
+            undefined,
+            { method, pluginId: entry.pluginId },
+          );
           return;
         }
         const event: DynamicSubEvent = { kind: "snapshot", value };
@@ -301,7 +318,12 @@ export class ServiceRegistry extends EventEmitter {
       delta: (value: unknown) => {
         if (sub.ended || settleFirst !== null) return; // no deltas before the snapshot
         if (entry.delta !== undefined && !entry.delta(value)) {
-          console.error(`[services] ${method} delta failed its schema — dropped`);
+          this.logger.error(
+            "fieldd.plugin_service.subscription_delta_rejected",
+            "Plugin service subscription delta failed its declared schema",
+            undefined,
+            { method, pluginId: entry.pluginId },
+          );
           return;
         }
         emit({ kind: "delta", value });

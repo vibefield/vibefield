@@ -263,6 +263,9 @@ export class PluginRegistryService extends EventEmitter {
         widgets: m.contributes?.widgets ?? [],
         commands: m.contributes?.commands ?? [],
         surfaces: m.contributes?.surfaces ?? [],
+        // P5 — the §8.5 declaration is PUBLIC pane data; values stay behind
+        // storage.settings (the delegated suite caught this omission)
+        ...(m.contributes?.settings !== undefined ? { settings: m.contributes.settings } : {}),
       },
       renderer: (m.entries?.renderer !== undefined ? "inactive" : "none") as "inactive" | "none",
       service: (m.entries?.service !== undefined ? "inactive" : "none") as "inactive" | "none",

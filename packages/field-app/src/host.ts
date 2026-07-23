@@ -7,8 +7,10 @@
 // Slice 4 evolves getConnection into getBootstrap (the WindowBootstrap
 // envelope with controlUrl); until that wire exists this mirrors today's
 // bridge exactly.
+import type { RendererLogger } from "./logging";
 
 export interface FieldHost {
+  readonly logger: RendererLogger;
   getConnection(): Promise<{ port: number; token: string }>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

@@ -77,11 +77,10 @@ function matchesForbid(spec, forbid) {
 
 // A cross-package deep import: reaching past a new package's public entries. Bare
 // `@vibefield/field-app` (no subpath) is the public root and allowed; `/main`,
-// `/preload`, `/host` are the declared entries (spec §8.2), plus `/spike` —
-// field-app's exported spike implementation, consumed by the shell's test-only
-// spike page (ESR 3a: the page is a shell harness; the implementation needs the
-// canvas deps only field-app carries).
-const NEW_PACKAGE_ENTRIES = new Set(["main", "preload", "host", "spike"]);
+// `/preload`, `/host` are the declared entries (spec §8.2), plus field-app's
+// browser-safe `/logging` seam and exported `/spike` implementation consumed by
+// the shell's test-only spike page.
+const NEW_PACKAGE_ENTRIES = new Set(["main", "preload", "host", "logging", "spike"]);
 function isDeepPackageImport(spec) {
   const m = /^@vibefield\/(?:electron-shell|field-app|fieldd-supervisor)\/(.+)$/.exec(spec);
   if (m === null) return false;
@@ -150,8 +149,7 @@ const RULES = [
   {
     id: "R5",
     enforce: true,
-    description:
-      "no deep import across the three new packages (only /main, /preload, /host entries)",
+    description: "no deep import across the three new packages (declared public entries only)",
     applies: (p) => SOURCE_EXT.test(p),
     importTest: isDeepPackageImport,
   },
@@ -233,18 +231,23 @@ const RULES = [
   },
   {
     id: "R11",
-    // LOG-L0 report-only inventory; LOG-L3 flips this after first-party runtime
-    // callsites have a real sink. The smoke artifact is an explicit console
-    // program and remains allowlisted by file.
-    enforce: false,
-    description: "no runtime console.* outside explicit smoke/test/development adapters",
+    // ENFORCED since LOG-L3: first-party runtime diagnostics must enter a
+    // process-owned sink. Plugin-origin console adapters remain visible under
+    // pending R15 until LOG-L4 gives them provenance-aware plugin sinks.
+    enforce: true,
+    description: "no first-party runtime console.* outside explicit smoke/development adapters",
     applies: (p) =>
       SOURCE_EXT.test(p) &&
-      (under(p, "packages") || under(p, "plugins") || under(p, "examples/plugins")) &&
+      under(p, "packages") &&
       !isTestPath(p) &&
       !/(^|\/)scripts\//.test(p) &&
       !under(p, "packages/field-app/src/spike") &&
-      p !== "packages/electron-shell/src/testing/smoke.ts",
+      ![
+        "packages/electron-shell/src/testing/smoke.ts",
+        "packages/field-app/src/development-console.ts",
+        "packages/field-app/src/plugin-host/renderer-harness.ts",
+        "packages/fieldd/src/plugin-service-console.ts",
+      ].includes(p),
     linePattern: /\bconsole\.(?:debug|info|log|warn|error|trace)\s*\(/g,
   },
   {
@@ -270,6 +273,7 @@ const RULES = [
         "packages/plugin-runtime",
         "packages/plugin-sdk",
       ]) &&
+      p !== "packages/fieldd/src/service-worker-harness.mjs" &&
       !isTestPath(p),
     linePattern:
       /\b(?:log|logger)\.(?:trace|debug|info|warn|error|fatal)\(\s*["'`](?![a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+["'`])[^"'`]*/g,
@@ -283,6 +287,24 @@ const RULES = [
       SOURCE_EXT.test(p) && p !== "packages/contracts/src/registries.ts" && !isTestPath(p),
     linePattern:
       /["'`](?:system\/(?:desktop|renderer|utility|fieldd|field-native)|plugins\/(?:renderer|service|utility)|(?:desktop|renderer|utility|fieldd|field-native|service)\.ndjson)["'`]/g,
+  },
+  {
+    id: "R15",
+    // LOG-L3 separates the plugin-origin migration ledger from the now-blocking
+    // first-party console wall. LOG-L4 replaces these adapters/calls with
+    // provenance-aware plugins/{renderer,service,utility} routes and enforces it.
+    enforce: false,
+    description: "plugin-origin runtime console.* awaits provenance-aware LOG-L4 sinks",
+    applies: (p) =>
+      SOURCE_EXT.test(p) &&
+      !isTestPath(p) &&
+      !/(^|\/)scripts\//.test(p) &&
+      (underAny(p, ["plugins", "examples/plugins"]) ||
+        [
+          "packages/field-app/src/plugin-host/renderer-harness.ts",
+          "packages/fieldd/src/plugin-service-console.ts",
+        ].includes(p)),
+    linePattern: /\bconsole\.(?:debug|info|log|warn|error|trace)\s*\(/g,
   },
 ];
 
@@ -592,6 +614,11 @@ function runSelfTest() {
       file: "packages/fieldd/src/hardcoded-log-stream.ts",
       body: 'const stream = "system/fieldd";\n',
     },
+    {
+      id: "R15",
+      file: "plugins/note/src/raw-console.ts",
+      body: 'console.info("plugin-origin");\n',
+    },
   ];
   const cleans = [
     // react + a /host entry import + plain code: proves R1/R2/R9 don't overfire and
@@ -657,11 +684,15 @@ function runSelfTest() {
       file: "plugins/note/test/uses-node.test.ts",
       body: 'import { readFileSync } from "node:fs";\nimport { PluginRegistry } from "@vibefield/plugin-runtime";\nexport const t = readFileSync;\n',
     },
-    // LOG walls: sanctioned console adapter, contained Pino, valid event, and
-    // the single stream-name registry are all clean.
+    // LOG walls: sanctioned first-party console adapters, contained Pino, valid
+    // event, and the single stream-name registry are all clean.
     {
       file: "packages/electron-shell/src/testing/smoke.ts",
       body: 'console.log("SMOKE");\n',
+    },
+    {
+      file: "packages/field-app/src/development-console.ts",
+      body: 'console.log("CANVAS_READY");\n',
     },
     {
       file: "plugins/note/scripts/emit-manifest.ts",
@@ -674,6 +705,10 @@ function runSelfTest() {
     {
       file: "packages/fieldd/src/valid-event.ts",
       body: 'log.info("fieldd.lifecycle.ready", "fieldd ready");\n',
+    },
+    {
+      file: "packages/fieldd/src/service-worker-harness.mjs",
+      body: 'logger.warn("plugin message first");\n',
     },
   ];
 
@@ -711,7 +746,7 @@ function runSelfTest() {
     // three slices). Every rule is enforced — R10's pending era ended when
     // slice P3 landed the SDK (2026-07-23); adding a new pending rule means
     // editing THIS set, a deliberate act.
-    const EXPECTED_PENDING = new Set(["R11", "R12", "R13", "R14"]);
+    const EXPECTED_PENDING = new Set(["R12", "R13", "R14", "R15"]);
     const tableOk = RULES.every((r) => r.enforce === !EXPECTED_PENDING.has(r.id));
     console.log(
       `  ${tableOk ? "PASS" : "FAIL"}  enforce table: every rule enforced except {${[...EXPECTED_PENDING].join(", ")}}`,
@@ -726,6 +761,10 @@ function runSelfTest() {
     const r10Gated = found.some((v) => v.id === "R10" && ENFORCE_BY_ID.get(v.id) === true);
     console.log(`  ${r10Gated ? "PASS" : "FAIL"}  R10 detected and GATED (enforced since P3)`);
     if (!r10Gated) ok = false;
+
+    const r11Gated = found.some((v) => v.id === "R11" && ENFORCE_BY_ID.get(v.id) === true);
+    console.log(`  ${r11Gated ? "PASS" : "FAIL"}  R11 detected and GATED (enforced since LOG-L3)`);
+    if (!r11Gated) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

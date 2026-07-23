@@ -17,7 +17,8 @@
   "dependencies": {
     "@vibefield/contracts": "workspace:*",
     "@vibefield/field-app": "workspace:*",
-    "@vibefield/fieldd-supervisor": "workspace:*"
+    "@vibefield/fieldd-supervisor": "workspace:*",
+    "@vibefield/logging": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:",

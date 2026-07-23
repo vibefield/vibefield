@@ -11,6 +11,7 @@ import { setBoardStatus } from "../board-status";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
+import { getRendererLogger } from "../logging";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import { migrateTypeRenames } from "../plugin-host/migrate-type-renames";
 import { bindPersistence } from "./persistence-controller";
@@ -88,18 +89,37 @@ export function useWorkspaceSession(
       try {
         const migration = migrateTypeRenames(pending.initialBytes, pending.initialUpdates);
         if (migration.migrated) {
-          console.log(`[board] C2 type-rename migration: ${migration.renamedCells} cell(s)`);
+          getRendererLogger()
+            .child({ component: "board.session", docId: pending.docId })
+            .info(
+              "renderer.board.type_rename_completed",
+              "Legacy widget type identifiers were migrated",
+              { renamedCells: migration.renamedCells },
+            );
           bytes = migration.bytes;
           updates = []; // the journal is folded into the migrated snapshot
         }
       } catch (error) {
-        console.warn(`[board] type-rename migration skipped: ${String(error)}`);
+        getRendererLogger()
+          .child({ component: "board.session", docId: pending.docId })
+          .error(
+            "renderer.board.type_rename_skipped",
+            "Widget type migration failed; the original bytes remain untouched",
+            error,
+          );
       }
       const res = ce.docs.open(bytes);
       if (!res.ok) {
         // Honest quarantine (the M5 law): the at-rest bytes stay untouched on
         // disk; a blank board + surfaced state beats autosaving over them.
-        console.error(`[board] quarantined: ${res.reason}`);
+        getRendererLogger()
+          .child({ component: "board.session", docId: pending.docId })
+          .error(
+            "renderer.board.quarantined",
+            "Document bytes were quarantined instead of overwritten",
+            undefined,
+            { reason: res.reason },
+          );
         setBoardStatus({ state: "quarantined", detail: res.reason });
         ce.docs.create();
         ce.world.sync();
@@ -111,7 +131,14 @@ export function useWorkspaceSession(
       } catch (error) {
         ce.docs.close();
         const detail = error instanceof Error ? error.message : String(error);
-        console.error(`[board] journal quarantined: ${detail}`);
+        getRendererLogger()
+          .child({ component: "board.session", docId: pending.docId })
+          .error(
+            "renderer.board.journal_quarantined",
+            "A document journal was quarantined instead of applied",
+            error,
+            { detail },
+          );
         setBoardStatus({ state: "quarantined", detail });
         ce.docs.create();
         ce.world.sync();
@@ -128,7 +155,9 @@ export function useWorkspaceSession(
         // dirty-start PUT would stomp this honest status row.
         const missing = res.session.report?.newerInDoc ?? [];
         const detail = missing.length > 0 ? `needs ${missing.join(", ")}` : "newer doc schema";
-        console.warn(`[board] read-only: ${detail}`);
+        getRendererLogger()
+          .child({ component: "board.session", docId: pending.docId })
+          .warn("renderer.board.read_only", "Document opened read-only", { detail });
         setBoardStatus({ state: "readonly", detail });
         manager.contentApplied(pending.generation);
         return () => ce.docs.close();

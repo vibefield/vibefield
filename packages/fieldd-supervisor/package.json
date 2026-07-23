@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@vibefield/contracts": "workspace:*",
-    "@vibefield/fieldd-client": "workspace:*"
+    "@vibefield/fieldd-client": "workspace:*",
+    "@vibefield/logging": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

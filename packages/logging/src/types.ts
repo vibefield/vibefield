@@ -5,6 +5,7 @@ import type {
   LogRecordV1,
   LogRoleV1,
   LogServiceV1,
+  LogTruncationV1,
 } from "@vibefield/contracts/logging";
 
 export type LogFields = Readonly<Record<string, unknown>>;
@@ -88,6 +89,24 @@ export interface CreateNodeLoggingOptions {
   testHooks?: NodeLoggingTestHooks;
 }
 
+/** Trusted-host input after an Electron/child boundary has validated its wire
+ * envelope. The sink still sanitizes values and owns every process identity,
+ * sequence, service, role, boot, and instance field. */
+export interface TrustedLogIngress {
+  time: number;
+  observedTime?: number;
+  level: LogLevelNameV1;
+  event: string;
+  message: string;
+  component: string;
+  error?: unknown;
+  attrs?: LogFields;
+  bindings?: Omit<LoggerBindings, "component" | "windowId">;
+  windowId?: string;
+  pid?: number;
+  truncation?: LogTruncationV1;
+}
+
 export interface RecentLogSnapshot {
   records: LogRecordV1[];
   oldestCursor: number;
@@ -98,6 +117,7 @@ export interface RecentLogSnapshot {
 export interface NodeLogging {
   readonly logger: Logger;
   readonly filePath: string;
+  ingest(record: TrustedLogIngress): void;
   health(): LoggingHealthV1;
   recent(limit?: number): RecentLogSnapshot;
   setLevel(level: LogLevelNameV1): void;

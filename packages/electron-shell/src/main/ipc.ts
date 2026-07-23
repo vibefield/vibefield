@@ -1,5 +1,6 @@
 import { IPC_CHANNELS } from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
+import type { Logger } from "@vibefield/logging";
 import { ipcMain } from "electron";
 import { createBootstrapHandler } from "./bootstrap";
 import type { WindowRegistry } from "./window-policy";
@@ -15,12 +16,28 @@ import type { WindowRegistry } from "./window-policy";
 export function registerWindowBootstrap(
   registry: WindowRegistry,
   supervisor: FielddSupervisor,
+  logger?: Logger,
 ): void {
-  ipcMain.handle(
-    IPC_CHANNELS.windowBootstrap,
-    createBootstrapHandler({
-      owns: (sender) => registry.owns(sender),
-      ensure: (o) => supervisor.ensure(o),
-    }),
-  );
+  const handle = createBootstrapHandler({
+    owns: (sender) => registry.owns(sender),
+    ensure: (o) => supervisor.ensure(o),
+  });
+  ipcMain.handle(IPC_CHANNELS.windowBootstrap, async (event) => {
+    try {
+      const result = await handle(event);
+      logger?.info(
+        "desktop.ipc.window_bootstrap_completed",
+        "A registered renderer received its fieldd connection",
+        { webContentsId: event.sender.id },
+      );
+      return result;
+    } catch (error) {
+      logger?.warn(
+        "desktop.ipc.window_bootstrap_rejected",
+        "Electron rejected or failed a renderer bootstrap request",
+        { webContentsId: event.sender.id, error },
+      );
+      throw error;
+    }
+  });
 }

@@ -42,8 +42,13 @@ export function waitForConsole(
 /** Stop-owned via the supervisor (adopted daemons survive — ownership law),
  * then remove the root ONLY if this run created it (an injected
  * FIELDD_DATA_DIR is someone else's data). */
-async function teardown(supervisor: FielddSupervisor, root: string): Promise<void> {
+async function teardown(
+  supervisor: FielddSupervisor,
+  root: string,
+  beforeExit: () => Promise<void>,
+): Promise<void> {
   await supervisor.dispose();
+  await beforeExit();
   if (!process.env["FIELDD_DATA_DIR"]) rmSync(root, { recursive: true, force: true });
 }
 
@@ -51,6 +56,7 @@ export async function runSmoke(
   handle: FielddHandle,
   supervisor: FielddSupervisor,
   root: string,
+  beforeExit: () => Promise<void>,
 ): Promise<void> {
   const health = (await handle.client.request("system.health")) as {
     nativeConnected: boolean;
@@ -63,7 +69,7 @@ export async function runSmoke(
     units: health.native?.units?.map((u) => u.unit) ?? [],
   };
   console.log(`SMOKE ${JSON.stringify(summary)}`);
-  await teardown(supervisor, root);
+  await teardown(supervisor, root, beforeExit);
   app.exit(summary.ok ? 0 : 2); // exit is queued; the caller returns without opening a window
 }
 
@@ -77,6 +83,8 @@ export async function runSmokeCanvas(opts: {
   registry: WindowRegistry;
   preloadPath: string;
   viteUrl: string;
+  beforeExit: () => Promise<void>;
+  onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
   const win = createMainWindow({
     mode: "smoke-canvas",
@@ -84,6 +92,7 @@ export async function runSmokeCanvas(opts: {
     show: false,
   });
   opts.registry.adopt(win); // the bootstrap sender policy admits only registered windows
+  opts.onWindow?.(win);
   let ok = false;
   try {
     await loadRenderer(win, "smoke-canvas", opts.viteUrl);
@@ -93,14 +102,17 @@ export async function runSmokeCanvas(opts: {
   } catch (e) {
     console.error(`SMOKE_CANVAS failed: ${e instanceof Error ? e.message : e}`);
   }
-  await teardown(opts.supervisor, opts.root);
+  await teardown(opts.supervisor, opts.root, opts.beforeExit);
   app.exit(ok ? 0 : 2);
 }
 
 /** B1 spike: load the spike page over file:// in a sandboxed window and report
  * the renderer's own verdict. No daemons involved. Built only when the spike
  * entry is requested (VITE_SPIKE=1) — never part of the production renderer. */
-export async function runSpikeLoro(): Promise<void> {
+export async function runSpikeLoro(opts: {
+  root: string;
+  beforeExit: () => Promise<void>;
+}): Promise<void> {
   const win = new BrowserWindow({
     show: false,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
@@ -111,9 +123,13 @@ export async function runSpikeLoro(): Promise<void> {
     const raw = await waitForConsole(win, "SPIKE_LORO ", 30_000);
     const result = JSON.parse(raw) as { ok: boolean };
     console.log(`SPIKE_LORO ${raw}`);
+    await opts.beforeExit();
+    if (!process.env["FIELDD_DATA_DIR"]) rmSync(opts.root, { recursive: true, force: true });
     app.exit(result.ok ? 0 : 2);
   } catch (e) {
     console.error(`SPIKE_LORO failed: ${e instanceof Error ? e.message : e}`);
+    await opts.beforeExit();
+    if (!process.env["FIELDD_DATA_DIR"]) rmSync(opts.root, { recursive: true, force: true });
     app.exit(2);
   }
 }

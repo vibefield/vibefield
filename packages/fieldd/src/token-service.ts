@@ -93,6 +93,20 @@ export class TokenService {
     };
   }
 
+  /** P5/§15.4 — revoke every live grant bound to a plugin (disable path).
+   * Returns how many grants died; the caller drops live connections. */
+  revokeByPlugin(pluginId: string): number {
+    let count = 0;
+    for (const [token, rec] of [...this.byToken]) {
+      if (rec.pluginId !== pluginId) continue;
+      this.byToken.delete(token);
+      this.byId.delete(rec.tokenId);
+      this.onEvent?.({ kind: "revoke", tokenId: rec.tokenId, at: Date.now() });
+      count += 1;
+    }
+    return count;
+  }
+
   revoke(tokenId: string): boolean {
     const token = this.byId.get(tokenId);
     if (!token) return false;

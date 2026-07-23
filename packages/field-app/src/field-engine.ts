@@ -17,6 +17,7 @@ import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
 import type { RendererPluginModule, WidgetBinding } from "@vibefield/plugin-sdk";
 import { widgetlabManifest, widgetlabRenderer } from "@vibefield/plugin-widgetlab";
 import { setPreviewBackground } from "@vibefield/shell-ui";
+import { getRendererLogger } from "./logging";
 import { buildWidgetType } from "./plugin-host/build-widget";
 import { failedFaceComponent } from "./plugin-host/faces";
 import { type ActivatedRenderer, activateRenderer } from "./plugin-host/renderer-harness";
@@ -76,8 +77,16 @@ export function buildRegistry(): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
   for (const [manifest, mod] of BUNDLED) {
     const activation = activateRenderer(manifest, mod);
-    if (activation.state === "failed")
-      console.error(`[plugins] ${manifest.id} renderer activation failed: ${activation.error}`);
+    if (activation.state === "failed") {
+      getRendererLogger()
+        .child({ component: "plugin.host" })
+        .error(
+          "renderer.plugins.activation_failed",
+          "A bundled renderer plugin failed activation",
+          activation.error,
+          { pluginId: manifest.id },
+        );
+    }
     // §11.4: a failed plugin registers face-only widgets — its boards render
     // honest failed faces; peers and the canvas are untouched.
     registerCanonical(registry, manifest, activation);

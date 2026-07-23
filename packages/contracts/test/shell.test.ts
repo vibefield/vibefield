@@ -130,8 +130,13 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the three channel keys, in order", () => {
-    expect(Object.keys(IPC_CHANNELS)).toEqual(["windowBootstrap", "prepareClose", "closeResult"]);
+  it("exposes exactly the four channel keys, in order", () => {
+    expect(Object.keys(IPC_CHANNELS)).toEqual([
+      "windowBootstrap",
+      "prepareClose",
+      "closeResult",
+      "rendererLogPort",
+    ]);
   });
 
   it("pins the exact channel strings (a new or renamed channel must move the spec table first)", () => {
@@ -139,6 +144,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       windowBootstrap: "vibefield:shell:window-bootstrap",
       prepareClose: "vibefield:shell:prepare-close",
       closeResult: "vibefield:shell:close-result",
+      rendererLogPort: "vibefield:logging:renderer-port",
     });
   });
 });
