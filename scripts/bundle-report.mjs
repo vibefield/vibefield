@@ -142,6 +142,24 @@ if (args.includes("--assert")) {
       problems.push(`${rel}: shell bundle missing under ${distDir} (stale report path?)`);
     }
   }
+  // CSS canaries — one utility per SCANNED SOURCE TREE. The silent-CSS bug
+  // class has struck three times (B2 stale ice dist; 3a symlink-blind
+  // auto-detection; 3a's stale @source hops in styles.css that dropped every
+  // plugin class for a day). Aggregate size hid the last one; per-tree
+  // canaries cannot. Bracket-free names so CSS escaping never false-negatives.
+  const CSS_CANARIES = [
+    ["tabular-nums", "field-app (ZoomPill)"],
+    ["leading-none", "plugins (widgetlab cards)"],
+  ];
+  const cssName = [...chunks.keys()].find((n) => n.endsWith(".css"));
+  const cssText = cssName ? readFileSync(join(assetsDir, cssName), "utf8") : "";
+  for (const [cls, source] of CSS_CANARIES) {
+    if (!cssText.includes(cls)) {
+      problems.push(
+        `built CSS is missing .${cls} — the ${source} tree is not being scanned (stale @source path?)`,
+      );
+    }
+  }
   if (problems.length > 0) {
     console.error(`\nbundle assert FAILED:\n  ${problems.join("\n  ")}`);
     process.exit(1);

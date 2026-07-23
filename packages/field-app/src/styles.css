@@ -9,8 +9,14 @@
 @import "tailwindcss";
 @import "@vibefield/shell-ui/tokens.css";
 @custom-variant dark (&:where(.dark, .dark *));
-@source "../../../../packages/shell-ui/src";
-@source "../../../../packages/plugins";
+/* Three hops from packages/field-app/src → repo root. These were written as
+   four hops from the file's pre-3a home (apps/desktop/renderer/src) and rode
+   the 3a rename unchanged — pointing ABOVE the repo, so Tailwind silently
+   scanned nothing and every plugin utility class vanished from the built CSS
+   (field report 2026-07-23: "dom widgets look quite off"). The bundle
+   assert's CSS canaries now fail the build if a source tree's classes drop. */
+@source "../../../packages/shell-ui/src";
+@source "../../../packages/plugins";
 
 /* The window IS the field (2026-07-21): no app bar, no pages — chrome floats
    over the canvas per DESIGN.md §1. Base styles only; every surface color
