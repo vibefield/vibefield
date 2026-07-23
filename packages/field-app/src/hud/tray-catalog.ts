@@ -1,5 +1,6 @@
 import {
   type PluginRegistry,
+  safePreviewToCss,
   WIDGET_CATEGORIES,
   type WidgetCategory,
 } from "@vibefield/plugin-runtime";
@@ -8,7 +9,8 @@ import {
 // never ICE's module-global catalog — labels, categories, and preview
 // silhouettes are manifest DATA, so the sheet needs zero per-widget code
 // knowledge. Pure derivation; unit-tested without ICE. The category union has
-// ONE source (plugin-runtime's WIDGET_CATEGORIES); the tray only adds "All".
+// ONE source (contracts' WIDGET_CATEGORIES); the tray only adds "All".
+// C1c: reads the canonical V1 contributes directly (SafePreview → CSS).
 
 export const CATEGORIES = ["All", ...WIDGET_CATEGORIES] as const;
 export type TrayCategory = (typeof CATEGORIES)[number];
@@ -18,7 +20,7 @@ export interface CatalogEntry<W> {
   type: string;
   title: string;
   category: WidgetCategory;
-  /** CSS background for the silhouette fallback (manifest `preview`) */
+  /** CSS background for the silhouette fallback (manifest SafePreview) */
   preview?: string;
   def: W;
 }
@@ -30,14 +32,15 @@ interface DefLike {
 export function buildCatalog<W extends DefLike>(registry: PluginRegistry<W>): CatalogEntry<W>[] {
   const out: CatalogEntry<W>[] = [];
   for (const plugin of registry.all()) {
-    for (const decl of plugin.manifest.widgets) {
-      const def = plugin.widgets.get(decl.type);
-      if (def === undefined) continue; // register() guarantees the pair; belt and braces
+    for (const w of plugin.v1.contributes?.widgets ?? []) {
+      const def = plugin.widgets.get(w.type);
+      if (def === undefined) continue; // registerV1 guarantees the pair; belt and braces
+      const preview = safePreviewToCss(w.preview);
       out.push({
-        type: decl.type,
-        title: decl.title,
-        category: decl.category ?? (def.surface === "gl" ? "3D" : "Cards"),
-        ...(decl.preview !== undefined ? { preview: decl.preview } : {}),
+        type: w.type,
+        title: w.title,
+        category: w.category ?? (def.surface === "gl" ? "3D" : "Cards"),
+        ...(preview !== undefined ? { preview } : {}),
         def,
       });
     }

@@ -13,9 +13,10 @@ import { SCOPES } from "./registries";
 //     tolerates single-segment DEV ALIASES (note/field/widgetlab) until the
 //     §21.2 durable-ID ratification; `isDistributablePluginId` is the strict
 //     rule distribution will gate on.
-//   - LegacyPluginManifest — the walking-skeleton shape the current built-ins
-//     author (spec §21.1 bridge). plugin-runtime validates against it and
-//     adapts to V1; it retires with slice P1's canonical manifests.
+//   - LegacyPluginManifest — the walking-skeleton shape the P0 built-ins
+//     authored. TOMBSTONE (C1c): every plugin is canonical V1 now and the
+//     adapter is deleted; the shape stays only until C2's doc migration
+//     confirms nothing on disk still needs a reader for it.
 
 // --- limits (spec §7.1/§10.4/§16.3: every string and collection is bounded) ---
 

@@ -1,4 +1,4 @@
-import { PluginRegistry } from "@vibefield/plugin-runtime";
+import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
 import { describe, expect, it } from "vitest";
 import { noteBindings, noteManifest } from "../src";
 
@@ -16,7 +16,9 @@ describe("plugin-note", () => {
     expect([...registry.allWidgets().keys()]).toEqual(
       (noteManifest.contributes?.widgets ?? []).map((w) => w.type),
     );
-    // the derived legacy view: tray silhouette CSS survives the V1 conversion
-    expect(registry.plugin("note")?.manifest.widgets[0]?.preview).toBe("#f6e7a9");
+    // tray silhouette CSS derives straight from the SafePreview (C1c)
+    expect(safePreviewToCss(registry.plugin("note")?.v1.contributes?.widgets?.[0]?.preview)).toBe(
+      "#f6e7a9",
+    );
   });
 });

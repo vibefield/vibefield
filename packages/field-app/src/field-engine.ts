@@ -13,7 +13,7 @@ import {
 import type { PluginManifestV1 } from "@vibefield/contracts";
 import { fieldToolsBindings, fieldToolsManifest } from "@vibefield/plugin-field-tools";
 import { noteBindings, noteManifest } from "@vibefield/plugin-note";
-import { PluginRegistry } from "@vibefield/plugin-runtime";
+import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
 import { widgetlabBindings, widgetlabManifest } from "@vibefield/plugin-widgetlab";
 import { setPreviewBackground } from "@vibefield/shell-ui";
 import { buildWidgetType, type WidgetBinding } from "./plugin-host/build-widget";
@@ -48,11 +48,12 @@ export function buildRegistry(): PluginRegistry<WidgetType> {
   registerCanonical(registry, noteManifest, noteBindings);
   registerCanonical(registry, fieldToolsManifest, fieldToolsBindings);
   registerCanonical(registry, widgetlabManifest, widgetlabBindings);
-  // Spine wiring: manifest `preview` data → shell-ui's silhouette registry
+  // Spine wiring: manifest SafePreview data → shell-ui's silhouette registry
   // (folder minis + tray fallbacks read previewBackground — one source, P-3).
   for (const plugin of registry.all()) {
-    for (const decl of plugin.manifest.widgets) {
-      if (decl.preview !== undefined) setPreviewBackground(decl.type, decl.preview);
+    for (const w of plugin.v1.contributes?.widgets ?? []) {
+      const css = safePreviewToCss(w.preview);
+      if (css !== undefined) setPreviewBackground(w.type, css);
     }
   }
   return registry;

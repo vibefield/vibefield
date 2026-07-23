@@ -1,4 +1,4 @@
-import { PluginRegistry } from "@vibefield/plugin-runtime";
+import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
 import { describe, expect, it } from "vitest";
 import { fieldToolsBindings, fieldToolsManifest } from "../src";
 
@@ -19,9 +19,12 @@ describe("plugin-field-tools", () => {
       provides: ["widget"],
     });
     expect(widgets.find((w) => w.type === "field.comment")?.interaction?.sweepContained).toBe(true);
-    // derived legacy view: silhouette CSS survives the V1 conversion
-    const legacy = registry.plugin("field")?.manifest.widgets ?? [];
-    expect(legacy.find((w) => w.type === "field.folder")?.preview).toBe("#1D1D2B");
-    expect(legacy.find((w) => w.type === "field.comment")?.preview).toContain("linear-gradient");
+    // silhouette CSS derives straight from the SafePreview (C1c)
+    expect(safePreviewToCss(widgets.find((w) => w.type === "field.folder")?.preview)).toBe(
+      "#1D1D2B",
+    );
+    expect(safePreviewToCss(widgets.find((w) => w.type === "field.comment")?.preview)).toContain(
+      "linear-gradient",
+    );
   });
 });

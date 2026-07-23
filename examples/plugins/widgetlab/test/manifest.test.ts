@@ -1,4 +1,4 @@
-import { PluginRegistry } from "@vibefield/plugin-runtime";
+import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
 import { describe, expect, it } from "vitest";
 import { widgetlabBindings, widgetlabManifest } from "../src";
 
@@ -23,11 +23,12 @@ describe("plugin-widgetlab", () => {
       { id: "out", side: "e", accepts: ["signal"] },
     ]);
 
-    // derived legacy view: silhouette CSS survives the V1 conversion
-    const legacy = registry.plugin("widgetlab")?.manifest.widgets ?? [];
-    expect(legacy.find((w) => w.type === "widgetlab.calendar")?.preview).toBe("#ffffff");
-    expect(legacy.find((w) => w.type === "widgetlab.weather")?.preview).toContain(
-      "linear-gradient",
+    // silhouette CSS derives straight from the SafePreview (C1c)
+    expect(safePreviewToCss(widgets.find((w) => w.type === "widgetlab.calendar")?.preview)).toBe(
+      "#ffffff",
     );
+    expect(
+      safePreviewToCss(widgets.find((w) => w.type === "widgetlab.weather")?.preview),
+    ).toContain("linear-gradient");
   });
 });

@@ -1,13 +1,14 @@
+import type { PluginManifestV1 } from "@vibefield/contracts";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
 import { describe, expect, it } from "vitest";
 import { buildCatalog } from "../src/hud/tray-catalog";
 
 // buildCatalog is a pure derivation over a live PluginRegistry (no ICE, no DOM):
-// each manifest widget row joined with its registered def becomes a tray tile.
-// We register one fake plugin and assert the join, the category fallback, and
-// def identity.
+// each canonical manifest widget row joined with its registered def becomes a
+// tray tile. We register one fake plugin and assert the join, the category
+// fallback, and def identity.
 //
-// Not tested here: buildCatalog's `def === undefined` skip guard. register()
+// Not tested here: buildCatalog's `def === undefined` skip guard. registerV1()
 // enforces declared-vs-provided parity (it throws on either mismatch — covered
 // by packages/plugin-runtime/test/registry.test.ts), so a declared row with no
 // implementation is unrepresentable through the public API; the guard is
@@ -22,27 +23,46 @@ const glImpl: FakeDef = { surface: "gl" };
 
 // "fake.a": explicit category + preview. "fake.b": neither → category falls back
 // off the def's surface ("gl" → "3D"), preview stays absent.
+const fakeManifest: PluginManifestV1 = {
+  manifestVersion: 1,
+  id: "fake",
+  version: "0.0.0",
+  title: "Fake",
+  engines: { app: ">=0.0.0", contracts: "^0.1.0" },
+  entries: { renderer: "./dist/renderer.js" },
+  activation: [],
+  capabilities: [],
+  contributes: {
+    widgets: [
+      {
+        type: "fake.a",
+        title: "Fake A",
+        schemaVersion: 1,
+        surface: "dom",
+        sizeMode: "fixed",
+        defaultSize: { w: 4, h: 3 },
+        category: "Tools",
+        preview: { kind: "color", value: "#123456" },
+        props: {},
+        groups: {},
+      },
+      {
+        type: "fake.b",
+        title: "Fake B",
+        schemaVersion: 1,
+        surface: "gl",
+        sizeMode: "fixed",
+        defaultSize: { w: 4, h: 3 },
+        props: {},
+        groups: {},
+      },
+    ],
+  },
+};
+
 function fakeRegistry(): PluginRegistry<FakeDef> {
   const registry = new PluginRegistry<FakeDef>();
-  registry.register(
-    {
-      id: "fake",
-      version: "0.0.0",
-      title: "Fake",
-      scopes: [],
-      widgets: [
-        {
-          type: "fake.a",
-          title: "Fake A",
-          defaultSize: { w: 4, h: 3 },
-          category: "Tools",
-          preview: "#123456",
-        },
-        { type: "fake.b", title: "Fake B", defaultSize: { w: 4, h: 3 } },
-      ],
-    },
-    { "fake.a": domImpl, "fake.b": glImpl },
-  );
+  registry.registerV1(fakeManifest, { "fake.a": domImpl, "fake.b": glImpl });
   return registry;
 }
 
@@ -58,7 +78,7 @@ describe("buildCatalog", () => {
     expect(catalog.map((e) => e.title)).toEqual(["Fake A", "Fake B"]);
   });
 
-  it("uses the manifest category and preview when present", () => {
+  it("uses the manifest category and SafePreview-derived CSS when present", () => {
     const a = buildCatalog(fakeRegistry()).find((e) => e.type === "fake.a");
     expect(a?.category).toBe("Tools");
     expect(a?.preview).toBe("#123456");
