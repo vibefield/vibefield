@@ -4,6 +4,7 @@
 // the §14.5 snapshot-then-delta conformance.
 export default {
   activate(ctx) {
+    console.log("fixture service stdout");
     ctx.services.provide({
       namespace: "x.vibefield.fixture.svc",
       methods: {

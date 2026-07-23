@@ -71,6 +71,7 @@ export const LOG_TRANSPORT_LIMITS = {
   RENDERER_RECORD_BYTES: 64 * 1024,
   RENDERER_BATCHES_PER_SECOND: 10,
   FIRST_PARTY_PARTIAL_LINE_BYTES: 64 * 1024,
+  PLUGIN_PARTIAL_LINE_BYTES: 16 * 1024,
 } as const;
 
 /** Every grantable capability (design-01 §7 + design-03 §8 + design-04). */

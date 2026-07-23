@@ -86,6 +86,13 @@ export interface FielddConfig {
   serviceHarnessPath?: string;
   /** P5 test seam — secret-scope settings backend (default: darwin keychain). */
   secretStore?: SecretStore;
+  /** LOG-L3/LOG-L4 test seam: production uses the explicit pending plugin
+   * adapter until plugins/service persistence replaces it. */
+  pluginLog?: (record: {
+    pluginId: string;
+    level: "debug" | "info" | "warn" | "error";
+    message: string;
+  }) => void;
 }
 
 export interface FielddHealth {
@@ -722,7 +729,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ? { harnessPath: config.serviceHarnessPath }
         : {}),
       logger: logger.child({ component: "plugin.service.host" }),
-      pluginLog: emitPendingPluginServiceLog,
+      pluginLog: config.pluginLog ?? emitPendingPluginServiceLog,
     });
     // fire-and-forget: activation states surface honestly through the registry
     void serviceHost.startEligible();

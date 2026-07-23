@@ -2,13 +2,14 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
 import {
+  LOG_TRANSPORT_LIMITS,
   PLUGIN_LIMITS,
   type PluginManifestV1,
   type PublicEntryState,
   type Scope,
   validatePluginManifest,
 } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { createBoundedLineFramer, createNoopLogger, type Logger } from "@vibefield/logging";
 import type { PluginRegistryService } from "./plugin-registry";
 import type { ServiceCallerInfo, ServiceRegistry } from "./service-registry";
 import type { TokenService } from "./token-service";
@@ -86,6 +87,7 @@ interface Entry {
   /** deliberate teardown in progress — an exit is not a crash */
   stopping: boolean;
   generation: number;
+  detachOutput: (() => void) | null;
 }
 
 export class ServiceHost {
@@ -111,6 +113,7 @@ export class ServiceHost {
         restartTimer: null,
         stopping: false,
         generation: 0,
+        detachOutput: null,
       };
       this.entries.set(pluginId, e);
     }
@@ -205,20 +208,8 @@ export class ServiceHost {
       stdout: true,
       stderr: true,
     });
-    worker.stdout?.on("data", (chunk: Buffer) => {
-      this.logger.info("fieldd.plugin_service.worker_stdout", "Plugin service worker stdout", {
-        pluginId,
-        line: String(chunk).trimEnd(),
-      });
-    });
-    worker.stderr?.on("data", (chunk: Buffer) => {
-      this.logger.error(
-        "fieldd.plugin_service.worker_stderr",
-        "Plugin service worker stderr",
-        undefined,
-        { pluginId, line: String(chunk).trimEnd() },
-      );
-    });
+    e.detachOutput?.();
+    e.detachOutput = this.capturePluginOutput(worker, pluginId);
     e.worker = worker;
 
     const declarations = manifest.contributes?.services ?? [];
@@ -349,6 +340,8 @@ export class ServiceHost {
 
       worker.on("exit", (code) => {
         if (e.generation !== generation) return;
+        e.detachOutput?.();
+        e.detachOutput = null;
         e.worker = null;
         this.failAllInflight(e, "provider gone");
         this.cfg.registry.withdrawPlugin(pluginId);
@@ -418,6 +411,8 @@ export class ServiceHost {
         worker.postMessage({ t: "deactivate" });
       });
       await worker.terminate();
+      e.detachOutput?.();
+      e.detachOutput = null;
       e.worker = null;
     }
     this.failAllInflight(e, "provider deactivated");
@@ -444,6 +439,49 @@ export class ServiceHost {
   private setState(pluginId: string, e: Entry, state: PublicEntryState): void {
     e.state = state;
     this.cfg.plugins.setServiceEntryState(pluginId, state);
+  }
+
+  /** Plugin-owned stdout/stderr must never enter system/fieldd. Consume both
+   * streams through the shared bounded framer and keep them on the explicit
+   * LOG-L4 plugin adapter until plugins/service persistence lands. */
+  private capturePluginOutput(worker: Worker, pluginId: string): () => void {
+    const detach: Array<() => void> = [];
+    const attach = (stream: "stdout" | "stderr", level: "info" | "error"): void => {
+      const readable = worker[stream];
+      if (readable === null) return;
+      let ended = false;
+      const framer = createBoundedLineFramer({
+        maxBytes: LOG_TRANSPORT_LIMITS.PLUGIN_PARTIAL_LINE_BYTES,
+        onLine: (line) => {
+          this.cfg.pluginLog?.({
+            pluginId,
+            level,
+            message: `[${stream}${line.truncated ? ":truncated" : ""}] ${line.line}`,
+          });
+        },
+      });
+      const onData = (chunk: Buffer | string): void => framer.push(chunk);
+      const onEnd = (): void => {
+        if (ended) return;
+        ended = true;
+        framer.flush();
+      };
+      readable.on("data", onData);
+      readable.on("end", onEnd);
+      detach.push(() => {
+        readable.off("data", onData);
+        readable.off("end", onEnd);
+        onEnd();
+      });
+    };
+    attach("stdout", "info");
+    attach("stderr", "error");
+    let detached = false;
+    return () => {
+      if (detached) return;
+      detached = true;
+      for (const stop of detach.splice(0)) stop();
+    };
   }
 
   /** the port bridge the ServiceRegistry invokes — handlers stay worker-side */

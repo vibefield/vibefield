@@ -25,7 +25,10 @@ const SVC_ROOT = join(HERE, "fixtures", "service-roots", "svc");
 const NS = "x.vibefield.fixture.svc";
 const ID = "vibefield.fixture.svc";
 
-async function setup(): Promise<{ daemon: FielddDaemon }> {
+async function setup(): Promise<{
+  daemon: FielddDaemon;
+  pluginLogs: Array<{ pluginId: string; level: string; message: string }>;
+}> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-svchost-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -33,13 +36,15 @@ async function setup(): Promise<{ daemon: FielddDaemon }> {
   const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
   await mock.start();
   cleanup.push(() => mock.stop());
+  const pluginLogs: Array<{ pluginId: string; level: string; message: string }> = [];
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
     pluginRoots: { bundled: [SVC_ROOT] },
+    pluginLog: (record) => pluginLogs.push(record),
   });
   cleanup.push(() => daemon.stop());
-  return { daemon };
+  return { daemon, pluginLogs };
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -57,9 +62,14 @@ const serviceState = (daemon: FielddDaemon): string =>
 
 describe("ServiceHost — the worker end-to-end (§14.2)", () => {
   it("activates onStartup, serves x.* round-trips, sanitizes provider errors, streams §14.5 subs", async () => {
-    const { daemon } = await setup();
+    const { daemon, pluginLogs } = await setup();
     // startEligible is fire-and-forget — the state stream is the truth
     await until(() => serviceState(daemon) === "active", 8000);
+    expect(pluginLogs).toContainEqual({
+      pluginId: ID,
+      level: "info",
+      message: "[stdout] fixture service stdout",
+    });
     expect(daemon.services.snapshot().providers.map((p) => p.namespace)).toEqual([NS]);
 
     const rpc = await openRpc(daemon.controlPort);
