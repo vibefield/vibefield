@@ -43,10 +43,9 @@ import {
 import { useStageHold, WidgetPreview } from "@vibecook/ice/react";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import { CARD_BG, CARD_RADIUS } from "@vibefield/shell-ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { sharedChromeTicker } from "../chrome-ticker";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCatalog, CATEGORIES, type CatalogEntry } from "./tray-catalog";
-import { useChromeValue } from "./use-chrome-value";
+import { useReactiveResource } from "./use-reactive";
 
 const ghostQ = defineQuery([InsertGhost]);
 
@@ -470,12 +469,11 @@ const TOOLS = [
 ] as const;
 const SEG_W = 72;
 
+const activeToolId = (t: { id: string | null } | undefined): string => t?.id ?? "select";
+
 function ToolSwitcher({ ce }: { ce: CanvasEngine }) {
-  // 120ms cadence on the shared chrome ticker (3b — no private interval).
-  const active = useChromeValue(
-    useCallback(() => ce.world.getResource(ActiveTool)?.id ?? "select", [ce]),
-    120,
-  );
+  // Reactive subscription (3b amendment) — fires only when the tool changes.
+  const active = useReactiveResource(ce, ActiveTool, activeToolId);
   const idx = Math.max(
     0,
     TOOLS.findIndex((t) => t.id === active),
@@ -555,16 +553,17 @@ export function WidgetTray({
     if (open) ce.ops.cancelActiveGestures();
   }, [open, ce]);
 
-  // Ghost scan (chrome-grade 60ms, on the shared ticker since 3b): drives the
-  // toolbar's put-back affordance AND the fly-back shrink (2026-07-19, James:
-  // "also shrink its size, do a scale down to 0 transition along with the
-  // fly") — a retiring ghost's host scales to nothing while the engine tween
-  // carries it home; the reap despawns it at arrival, so the fill-forwards
-  // end state never lingers. (A ghost only exists mid-gesture, so a hidden
-  // window has none to scan — pausing with the ticker is safe.)
+  // Ghost scan, EVENT-DRIVEN (3b amendment): Tier-1 observeQuery fires on any
+  // InsertGhost archetype move — spawn, the GhostRetiring tag flip, despawn —
+  // so the scan runs exactly when ghosts change, never on a clock. It drives
+  // the toolbar's put-back affordance AND the fly-back shrink (2026-07-19,
+  // James: "also shrink its size, do a scale down to 0 transition along with
+  // the fly") — a retiring ghost's host scales to nothing while the engine
+  // tween carries it home; the reap despawns it at arrival, so the
+  // fill-forwards end state never lingers.
   useEffect(() => {
     const shrunk = new Set<Entity>();
-    return sharedChromeTicker().subscribe(60, () => {
+    return ce.world.reactive.observeQuery(ghostQ, () => {
       let live = false;
       ce.world.query(ghostQ).each((b) => {
         for (const r of b) {

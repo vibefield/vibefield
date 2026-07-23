@@ -1,22 +1,19 @@
 /**
  * ZoomPill — the −/percent/+ zoom control, extracted VERBATIM from widgetlab's
- * `App.tsx` (the `// === chrome bits ===` section) for Track D2. Reads the
- * Camera resource at a 100ms cadence on the shared chrome ticker (3b — the
- * private setInterval kept firing hidden); − = zoomBy(0.8), the percent
- * button resets to 100% (double-click = zoom to fit), + = zoomBy(1.25).
+ * `App.tsx` (the `// === chrome bits ===` section) for Track D2. The percent
+ * is a reactive subscription (3b amendment): strata's `observeResource(Camera)`
+ * fires at notify() only when the camera actually changed, and the rounded-
+ * percent snapshot re-renders only when the DISPLAY changes — no timer at all.
+ * − = zoomBy(0.8), the percent button resets to 100% (double-click = zoom to
+ * fit), + = zoomBy(1.25).
  */
 import { Camera, type CanvasEngine } from "@vibecook/ice";
-import { useCallback } from "react";
-import { useChromeValue } from "./use-chrome-value";
+import { useReactiveResource } from "./use-reactive";
 
-const zoomEqual = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-4;
+const zoomPct = (c: { zoom: number } | undefined): number => Math.round((c?.zoom ?? 1) * 100);
 
 export function ZoomPill({ ce }: { ce: CanvasEngine }) {
-  const zoom = useChromeValue(
-    useCallback(() => ce.world.getResource(Camera)?.zoom ?? 1, [ce]),
-    100,
-    zoomEqual,
-  );
+  const pct = useReactiveResource(ce, Camera, zoomPct);
   const zoomBy = (f: number) => ce.ops.zoomTo((ce.world.getResource(Camera)?.zoom ?? 1) * f);
   return (
     <div
@@ -38,9 +35,9 @@ export function ZoomPill({ ce }: { ce: CanvasEngine }) {
         onDoubleClick={() => ce.ops.zoomToFit()}
         className="flex h-10 w-14 items-center justify-center text-sm font-medium tabular-nums text-neutral-700 transition-colors hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-700"
         title="Click: reset to 100% · Double-click: zoom to fit"
-        aria-label={`Current zoom: ${Math.round(zoom * 100)}%`}
+        aria-label={`Current zoom: ${pct}%`}
       >
-        {Math.round(zoom * 100)}%
+        {pct}%
       </button>
       <button
         type="button"

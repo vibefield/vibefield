@@ -14,9 +14,11 @@
  *    widget type → the first group carrying a `title` field → that value. If no
  *    such field exists we fall back to the PrefabId string, then "Folder"
  *    (reported — there is no generic "widget title" seam).
- *  - Updates read at a 200ms cadence on the shared chrome ticker (3b — the
- *    private 200ms setInterval kept firing hidden), setState-suppressed by
- *    structural equality.
+ *  - Updates are EVENT-DRIVEN (3b amendment): strata's Tier-1 `observeQuery`
+ *    wakes on NavEntry spawn/despawn at notify() (enter/exit), and a Tier-3
+ *    `observeValue` per resolved container title component catches a rename
+ *    while nested. The port-era note "v3 has no per-frame hook for chrome"
+ *    was outdated — the reactive layer fires every engine step.
  */
 import {
   type CanvasEngine,
@@ -27,8 +29,7 @@ import {
   PrefabId,
   widgets,
 } from "@vibecook/ice";
-import { useCallback } from "react";
-import { useChromeValue } from "./use-chrome-value";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 
 interface NavigationBreadcrumbsProps {
   engine: CanvasEngine;
@@ -109,13 +110,46 @@ function crumbsEqual(a: Crumb[], b: Crumb[]): boolean {
 }
 
 export function NavigationBreadcrumbs({ engine }: NavigationBreadcrumbsProps) {
-  // Re-read at a chrome-ticker cadence; the structural-equality gate keeps the
-  // previous array identity so unchanged stacks never re-render.
-  const crumbs = useChromeValue(
-    useCallback(() => readCrumbs(engine), [engine]),
-    200,
-    crumbsEqual,
+  // The cached array identity moves ONLY when the crumbs structurally change,
+  // so useSyncExternalStore's Object.is gate suppresses idle re-renders.
+  const crumbsRef = useRef<Crumb[] | null>(null);
+  if (crumbsRef.current === null) crumbsRef.current = readCrumbs(engine);
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const titleSubs: (() => void)[] = [];
+      function fire(): void {
+        const next = readCrumbs(engine);
+        if (crumbsEqual(crumbsRef.current ?? [], next)) return;
+        crumbsRef.current = next;
+        rewireTitles(); // the container set may have changed with the stack
+        onChange();
+      }
+      function rewireTitles(): void {
+        for (const un of titleSubs.splice(0)) un();
+        engine.world.query(navEntryQ).each((b) => {
+          for (const r of b) {
+            const container = engine.world.getRelation(b.entity(r), NavFrame);
+            if (container === undefined || !engine.world.isAlive(container)) continue;
+            const type = engine.world.get(container, PrefabId)?.id;
+            const widget = typeof type === "string" ? widgets.get(type) : undefined;
+            const group = widget?.groups.find((g) => "title" in g.fields);
+            if (group !== undefined) {
+              titleSubs.push(engine.world.reactive.observeValue(container, group.component, fire));
+            }
+          }
+        });
+      }
+      const unQuery = engine.world.reactive.observeQuery(navEntryQ, fire);
+      rewireTitles();
+      return () => {
+        unQuery();
+        for (const un of titleSubs) un();
+      };
+    },
+    [engine],
   );
+  const getCrumbs = useCallback(() => crumbsRef.current ?? [], []);
+  const crumbs = useSyncExternalStore(subscribe, getCrumbs, getCrumbs);
 
   const canGoBack = crumbs.length > 1;
 
