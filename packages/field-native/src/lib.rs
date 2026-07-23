@@ -3,6 +3,7 @@
 // (regenerate: `pnpm --filter @vibefield/contracts gen:rust`); golden fixtures pin it.
 pub mod config;
 pub mod contracts;
+pub mod logging;
 pub mod manager;
 pub mod mgmt;
 pub mod pairing;
@@ -23,27 +24,53 @@ pub struct RunningDaemon {
     server: tokio::task::JoinHandle<()>,
     health_refresh: tokio::task::JoinHandle<()>,
     manager: Arc<manager::NativeServiceManager>,
+    logging: Option<logging::NativeLogging>,
 }
 
 impl RunningDaemon {
     pub async fn shutdown(self) {
+        tracing::info!(
+            event = "field_native.lifecycle.stopping",
+            component = "lifecycle",
+            "field-native is stopping"
+        );
         self.server.abort();
         self.health_refresh.abort();
         self.manager.stop_all().await;
+        tracing::info!(
+            event = "field_native.lifecycle.stopped",
+            component = "lifecycle",
+            "field-native stopped"
+        );
+        if let Some(logging) = self.logging {
+            let _ = logging.close(std::time::Duration::from_secs(2));
+        }
     }
 }
 
 /// Boot (design-02 §2.8): config → pairing → manager start → bind mgmt → ready.
 pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
+    bootstrap_with_logging(config, logging::new_boot_id(), None).await
+}
+
+/// Production boot after the process-owned writer and tracing subscriber have
+/// been installed by main. Tests use `bootstrap` to avoid competing global
+/// subscribers inside one test process.
+pub async fn bootstrap_with_logging(
+    config: config::NativeConfig,
+    boot_id: String,
+    logging: Option<logging::NativeLogging>,
+) -> Result<RunningDaemon> {
+    tracing::info!(
+        event = "field_native.lifecycle.boot_started",
+        component = "bootstrap",
+        "field-native boot started"
+    );
     let run_dir = config.run_dir();
     fs::create_dir_all(&run_dir).with_context(|| format!("create {}", run_dir.display()))?;
     fs::set_permissions(&run_dir, fs::Permissions::from_mode(0o700))?;
 
     let secret = pairing::load_or_create_secret(&config.pairing_file())?;
-
-    let mut boot_bytes = [0u8; 16];
-    rand::fill(&mut boot_bytes);
-    let boot_id = hex::encode(boot_bytes);
 
     // units push health transitions (e.g. mesh auth flow) via this channel;
     // a refresh task re-aggregates and publishes on every ping
@@ -60,7 +87,14 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
         workers: vec![],
     };
 
-    let state = state::DaemonState::new(boot_id.clone(), secret, health, observed, mesh_handle);
+    let state = state::DaemonState::new(
+        boot_id.clone(),
+        secret,
+        health,
+        observed,
+        mesh_handle,
+        logging.clone(),
+    );
 
     let health_refresh = tokio::spawn({
         let mgr = mgr.clone();
@@ -90,5 +124,6 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
         server,
         health_refresh,
         manager: mgr,
+        logging,
     })
 }

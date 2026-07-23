@@ -1,4 +1,5 @@
 use crate::contracts::{DesiredState, NativeHealth, ObservedState};
+use crate::logging::NativeLogging;
 use crate::services::mesh::MeshHandle;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -26,6 +27,9 @@ pub struct DaemonState {
     pub current_client: Mutex<Option<ClientHandle>>,
     /// the mgmt facade's door to the mesh unit (C2)
     pub mesh: MeshHandle,
+    /// Process-owned native diagnostic producer. Embedded unit tests omit it;
+    /// the production main installs it before service composition.
+    pub logging: Option<NativeLogging>,
     next_conn_id: AtomicU64,
     next_sub_id: AtomicU64,
 }
@@ -37,6 +41,7 @@ impl DaemonState {
         health: NativeHealth,
         observed: ObservedState,
         mesh: MeshHandle,
+        logging: Option<NativeLogging>,
     ) -> Arc<Self> {
         let (health_tx, _) = watch::channel(health);
         let (observed_tx, _) = watch::channel(observed);
@@ -48,6 +53,7 @@ impl DaemonState {
             desired: Mutex::new(None),
             current_client: Mutex::new(None),
             mesh,
+            logging,
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),
         })

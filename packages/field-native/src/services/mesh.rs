@@ -187,7 +187,12 @@ impl NativeService for MeshUnit {
                     .sidecar_path(&sidecar)
                     .state_dir(&state_dir)
                     .build_with_auth_handler(move |url| {
-                        tracing::info!(url = %url, "mesh auth required");
+                        tracing::info!(
+                            event = "field_native.mesh.authentication_required",
+                            component = "mesh",
+                            auth_url_present = true,
+                            "Mesh authentication is required"
+                        );
                         auth_shared.set(
                             UnitState::Starting,
                             Some("tailnet login required".into()),
@@ -208,10 +213,20 @@ impl NativeService for MeshUnit {
                         .unwrap_or_else(|| info.tailscale_hostname.clone());
                     *shared.node.lock().await = Some(node);
                     shared.set(UnitState::Up, Some(format!("tailnet {name}")), None);
-                    tracing::info!(name = %name, "mesh node up");
+                    tracing::info!(
+                        event = "field_native.mesh.node_ready",
+                        component = "mesh",
+                        node_name = %name,
+                        "The mesh node is ready"
+                    );
                 }
                 Err(e) => {
-                    tracing::error!(error = %e, "mesh bring-up failed");
+                    tracing::error!(
+                        event = "field_native.mesh.bring_up_failed",
+                        component = "mesh",
+                        error = %e,
+                        "Mesh bring-up failed"
+                    );
                     shared.set(
                         UnitState::Degraded,
                         Some(format!("bring-up failed: {e}")),

@@ -18,6 +18,15 @@ const BIN = join(ROOT, "target/debug/field-native");
 let children: ChildProcess[] = [];
 let dirs: string[] = [];
 
+function nativeEnv(dataDir: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    FIELD_NATIVE_DATA_DIR: dataDir,
+    FIELD_LOG_DIR: join(dataDir, "logs"),
+    FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
+  };
+}
+
 beforeAll(() => {
   execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
 }, 180_000);
@@ -33,7 +42,7 @@ async function spawnNative(): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), "vf-"));
   dirs.push(dir);
   const child = spawn(BIN, [], {
-    env: { ...process.env, FIELD_NATIVE_DATA_DIR: dir },
+    env: nativeEnv(dir),
     stdio: "ignore",
   });
   children.push(child);
@@ -282,7 +291,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
 
     // same data dir, fresh boot: pairing secret persists → fieldd re-pairs by itself
     const revived = spawn(BIN, [], {
-      env: { ...process.env, FIELD_NATIVE_DATA_DIR: dir },
+      env: nativeEnv(dir),
       stdio: "ignore",
     });
     children.push(revived);

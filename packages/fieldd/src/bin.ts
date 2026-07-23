@@ -52,9 +52,30 @@ async function main(): Promise<void> {
     // The native plane outlives this fieldd (OS plane; launchd owns it later).
     // field-native unlinks a stale socket itself before binding.
     const child = spawn(nativeBin, [], {
-      env: { ...process.env, FIELD_NATIVE_DATA_DIR: dataDir },
+      env: {
+        ...process.env,
+        FIELD_NATIVE_DATA_DIR: dataDir,
+        // fieldd passes the root it already resolved under the trusted shell
+        // mode decision. field-native never trusts an ambient override alone.
+        FIELD_LOG_DIR: logRoot,
+        FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
+        // Level overrides remain development/test-only even though fieldd
+        // inherits a broad shell environment.
+        FIELD_NATIVE_LOG_FILTER:
+          process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1"
+            ? process.env["FIELD_NATIVE_LOG_FILTER"]
+            : undefined,
+        FIELD_NATIVE_ALLOW_LOG_FILTER:
+          process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1" &&
+          process.env["FIELD_NATIVE_ALLOW_LOG_FILTER"] === "1"
+            ? "1"
+            : undefined,
+      },
       detached: true,
-      stdio: "ignore",
+      // Routine evidence is process-owned NDJSON now. stdout has no logging
+      // protocol; stderr is only the one-shot emergency fallback and inherits
+      // the launch chain without making fieldd its collector.
+      stdio: ["ignore", "ignore", "inherit"],
     });
     child.unref();
     nativePid = child.pid;

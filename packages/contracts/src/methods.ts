@@ -120,6 +120,21 @@ export const METHODS: MethodDef[] = [
   }),
   defineMethod({
     surface: "mgmt",
+    method: "native.diagnostics.query",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.diagnostics.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "mgmt",
     method: "native.mesh.peers.list",
     scope: null,
     idempotent: true,

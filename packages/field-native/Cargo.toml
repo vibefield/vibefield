@@ -8,11 +8,13 @@ anyhow = "1.0.104"
 async-trait = "0.1.91"
 hex = "0.4.3"
 hmac = "0.13.0"
+libc = "0.2.186"
 rand = "0.10.2"
 regress = "0.11.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
+time = { version = "0.3.47", default-features = false, features = ["std"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "signal"] }
 tracing = "0.1.44"
 truffle-core.workspace = true

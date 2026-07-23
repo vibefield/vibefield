@@ -50,10 +50,21 @@ impl NativeServiceManager {
     pub async fn start_all(&self) {
         for s in &self.services {
             if let Err(e) = s.start().await {
-                tracing::error!(unit = s.id(), error = %e, "service failed to start");
+                tracing::error!(
+                    event = "field_native.service.start_failed",
+                    component = "service_manager",
+                    unit = s.id(),
+                    error = %e,
+                    "A native service failed to start"
+                );
                 self.failed.lock().unwrap().push((s.id(), e.to_string()));
             } else {
-                tracing::info!(unit = s.id(), "started");
+                tracing::info!(
+                    event = "field_native.service.started",
+                    component = "service_manager",
+                    unit = s.id(),
+                    "A native service started"
+                );
             }
         }
     }
@@ -61,7 +72,13 @@ impl NativeServiceManager {
     pub async fn stop_all(&self) {
         for s in self.services.iter().rev() {
             if let Err(e) = s.stop().await {
-                tracing::warn!(unit = s.id(), error = %e, "service stop error");
+                tracing::warn!(
+                    event = "field_native.service.stop_failed",
+                    component = "service_manager",
+                    unit = s.id(),
+                    error = %e,
+                    "A native service failed to stop cleanly"
+                );
             }
         }
     }

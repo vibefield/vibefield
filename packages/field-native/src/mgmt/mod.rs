@@ -4,6 +4,7 @@
 //! the C2 mesh facade (mesh.rs); mesh calls answer UNAVAILABLE with the unit's
 //! real state until the node is up.
 
+mod diagnostics;
 mod mesh;
 
 use crate::contracts::{DesiredState, Hello};
@@ -25,7 +26,12 @@ pub async fn serve(listener: UnixListener, state: Arc<DaemonState>) {
                 tokio::spawn(async move { handle_conn(stream, state).await });
             }
             Err(e) => {
-                tracing::error!(error = %e, "mgmt accept failed");
+                tracing::error!(
+                    event = "field_native.mgmt.accept_failed",
+                    component = "mgmt",
+                    error = %e,
+                    "The native management listener stopped accepting connections"
+                );
                 break;
             }
         }
@@ -123,6 +129,12 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
             }
             "native.lifecycle.desired.set" => {
                 send(&tx, handle_desired_set(&state, &params, id).await);
+            }
+            "native.diagnostics.query" => {
+                send(&tx, diagnostics::query(&state, &params, id));
+            }
+            "native.diagnostics.subscribe" => {
+                diagnostics::subscribe(&state, &tx, &params, id);
             }
             m if m.starts_with("native.mesh.") => {
                 mesh::handle(&state, &tx, m, &params, id).await;
@@ -244,12 +256,24 @@ async fn handle_hello(
                 .to_string(),
         ));
         let _ = old.tx.send(OutMsg::Close);
-        tracing::info!(old = old.conn_id, new = conn_id, "mgmt client superseded");
+        tracing::info!(
+            event = "field_native.mgmt.client_superseded",
+            component = "mgmt",
+            previous_connection = old.conn_id,
+            new_connection = conn_id,
+            "A newer fieldd management client superseded the previous connection"
+        );
     }
     *cur = Some(ClientHandle {
         conn_id,
         tx: tx.clone(),
     });
+    tracing::info!(
+        event = "field_native.mgmt.client_authenticated",
+        component = "mgmt",
+        connection = conn_id,
+        "fieldd authenticated to the native management channel"
+    );
 
     let ack = json!({
         "contractsVersion": CONTRACTS_VERSION,
@@ -291,6 +315,12 @@ async fn handle_desired_set(state: &Arc<DaemonState>, params: &Value, id: Option
     drop(slot);
     // skeleton reconciliation: no real units yet — observed tracks the applied generation
     state.observed_tx.send_modify(|o| o.generation = generation);
+    tracing::info!(
+        event = "field_native.lifecycle.desired_applied",
+        component = "mgmt",
+        generation,
+        "The desired native state generation was applied"
+    );
     ok(id, json!({"applied": generation}))
 }
 

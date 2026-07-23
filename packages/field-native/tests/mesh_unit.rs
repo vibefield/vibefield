@@ -38,6 +38,8 @@ async fn mesh_enabled_without_sidecar_degrades_honestly() {
     let dir = tempfile::tempdir().unwrap();
     let config = NativeConfig {
         data_dir: dir.path().to_path_buf(),
+        log_root: None,
+        log_filter: None,
         mesh_enabled: true,
         sidecar_override: Some("/nonexistent/sidecar-slim".into()),
     };
@@ -65,6 +67,8 @@ async fn mesh_live_bring_up_reaches_auth_or_up() {
     let dir = tempfile::tempdir().unwrap();
     let config = NativeConfig {
         data_dir: dir.path().to_path_buf(),
+        log_root: None,
+        log_filter: None,
         mesh_enabled: true,
         sidecar_override: Some(sidecar.into()),
     };
