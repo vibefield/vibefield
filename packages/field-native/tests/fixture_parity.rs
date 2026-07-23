@@ -4,8 +4,9 @@
 // deliberate unknown fields are parse-tolerance checks only — serde's default
 // ignore-unknown IS the tolerant reader; field-native never echoes those shapes.
 use field_native::contracts::{
-    DesiredState, ErrorData, Hello, HelloAck, NativeHealth, ObservedState, PeerInfo, RpcRequest,
-    RpcResponse, ServeConfig, ServeEntry, StoreSnapshot,
+    DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, Hello, HelloAck,
+    LogRecordV1, LoggingHealthV1, NativeHealth, ObservedState, PeerInfo, RpcRequest, RpcResponse,
+    ServeConfig, ServeEntry, StoreSnapshot,
 };
 use serde_json::Value;
 use std::{fs, path::PathBuf};
@@ -71,6 +72,19 @@ fn mgmt_mesh_fixtures() {
     roundtrip::<StoreSnapshot>("store-snapshot.valid.json", true);
     roundtrip::<ServeConfig>("serve-config.valid.json", true);
     roundtrip::<ServeEntry>("serve-entry.valid.json", true);
+}
+
+#[test]
+fn logging_diagnostics_fixtures() {
+    roundtrip::<LogRecordV1>("log-record.system.json", true);
+    roundtrip::<LogRecordV1>("log-record.plugin.json", true);
+    roundtrip::<LoggingHealthV1>("logging-health.valid.json", true);
+    roundtrip::<DiagnosticLogSnapshotV1>("diagnostic-snapshot.valid.json", true);
+    roundtrip::<DiagnosticLogDeltaV1>("diagnostic-delta.valid.json", true);
+
+    let mut invalid_level = load("log-record.system.json");
+    invalid_level["level"] = serde_json::json!(15);
+    assert!(serde_json::from_value::<LogRecordV1>(invalid_level).is_err());
 }
 
 #[test]

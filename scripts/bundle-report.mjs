@@ -46,6 +46,8 @@ const MARKERS = [
   ["three", /REVISION\s*[:=]/],
   ["wasm-base64", /application\/wasm|[A-Za-z0-9+/]{65536}/],
   ["react-dom", /createRoot/],
+  ["logging-contracts", /vibefield\.logging\.contract\.v1/],
+  ["diagnostics-contracts", /vibefield\.diagnostics\.contract\.v1/],
 ];
 for (const name of readdirSync(assetsDir)) {
   const path = join(assetsDir, name);
@@ -126,6 +128,12 @@ if (args.includes("--assert")) {
     if (!c) continue;
     if (c.markers.includes("three")) problems.push(`${name}: three in the initial graph`);
     if (c.markers.includes("wasm-base64")) problems.push(`${name}: loro wasm in the initial graph`);
+    if (c.markers.includes("logging-contracts")) {
+      problems.push(`${name}: logging contracts in the initial renderer graph`);
+    }
+    if (c.markers.includes("diagnostics-contracts")) {
+      problems.push(`${name}: diagnostics contracts in the initial renderer graph`);
+    }
   }
   for (const name of chunks.keys()) {
     if (name.startsWith("spike-")) problems.push(`${name}: spike artifact in production output`);

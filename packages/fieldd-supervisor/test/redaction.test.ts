@@ -1,7 +1,14 @@
 import { join } from "node:path";
 import { CONTRACTS_VERSION } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createFielddSupervisor, createLineBuffer, createLogTail, redactLine } from "../src/index";
+import {
+  createFielddSupervisor,
+  createLineBuffer,
+  createLogTail,
+  MAX_PARTIAL_LINE_BYTES,
+  PARTIAL_LINE_TRUNCATION_MARKER,
+  redactLine,
+} from "../src/index";
 import { createHarness, FIXTURE_READY, type Harness } from "./helpers";
 
 // §12.2 log redaction: the unit primitives (redactLine · createLineBuffer ·
@@ -60,6 +67,30 @@ describe("createLineBuffer", () => {
     buf.push("\n\n"); // pure blank lines never emit
     buf.push("token=abcdefghijklmnop0123456\n");
     expect(lines).toEqual(["token=[redacted]"]);
+  });
+
+  it("caps an unterminated line, emits one truncation marker, and resumes after newline", () => {
+    const lines: string[] = [];
+    const buf = createLineBuffer((l) => lines.push(l));
+    const secret = "token=abcdefghijklmnop0123456";
+    buf.push(`${secret}${"x".repeat(MAX_PARTIAL_LINE_BYTES)}`);
+    buf.push("discarded remainder");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("token=[redacted]");
+    expect(lines[0]).toContain(PARTIAL_LINE_TRUNCATION_MARKER);
+    expect(lines[0]).not.toContain("abcdefghijklmnop0123456");
+
+    buf.push("\nnext line\n");
+    expect(lines.at(-1)).toBe("next line");
+    expect(lines.filter((line) => line.includes(PARTIAL_LINE_TRUNCATION_MARKER))).toHaveLength(1);
+  });
+
+  it("measures the partial-line limit in bytes rather than UTF-16 characters", () => {
+    const lines: string[] = [];
+    const buf = createLineBuffer((l) => lines.push(l));
+    buf.push("🙂".repeat(MAX_PARTIAL_LINE_BYTES / 4 + 1));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(PARTIAL_LINE_TRUNCATION_MARKER);
   });
 });
 

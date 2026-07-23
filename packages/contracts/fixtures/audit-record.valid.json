@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "eventId": "audit_01",
+  "time": 1784852404123,
+  "actor": {
+    "kind": "shell-main",
+    "id": "shell_01",
+    "label": "desktop shell"
+  },
+  "action": "support.bundle.export",
+  "target": {
+    "kind": "support-bundle",
+    "id": "bundle_01"
+  },
+  "phase": "outcome",
+  "outcome": "succeeded",
+  "reasonCode": "USER_REQUESTED",
+  "traceId": "trace_export_01",
+  "operationId": "operation_export_01",
+  "transportProvenance": "local-product-api",
+  "attrs": {
+    "rangeHours": 24,
+    "includedAudit": false,
+    "includedCrashes": false
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "time": 1784852401123,
+  "observedTime": 1784852401128,
+  "level": 30,
+  "severity": "INFO",
+  "event": "plugin.log",
+  "msg": "Plugin renderer activated",
+  "service": "renderer",
+  "role": "renderer",
+  "component": "plugin.host",
+  "pid": 4833,
+  "bootId": "boot_renderer_01",
+  "instanceId": "renderer_01",
+  "seq": 93,
+  "traceId": "trace_plugin_01",
+  "operationId": "activation_01",
+  "windowId": "window_01",
+  "plugin": {
+    "id": "vibefield.note",
+    "version": "0.1.0",
+    "installRevision": "sha256-abc123",
+    "entry": "renderer",
+    "windowId": "window_01",
+    "installSource": "bundled",
+    "trust": "r0-bundled"
+  },
+  "attrs": {
+    "durationMs": 12,
+    "category": "activation"
+  }
+}

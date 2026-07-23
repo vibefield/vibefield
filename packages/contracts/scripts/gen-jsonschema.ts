@@ -10,6 +10,12 @@ import { fileURLToPath } from "node:url";
 import type { ZodTypeAny } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import {
+  DiagnosticCursorV1,
+  DiagnosticLogDeltaV1,
+  DiagnosticLogSnapshotV1,
+  DiagnosticProducerStateV1,
+} from "../src/diagnostics";
+import {
   ClientKind,
   Hello,
   HelloAck,
@@ -25,6 +31,30 @@ import {
   ServerKind,
 } from "../src/envelope";
 import { ErrorData, ErrorKind, UnavailableDetails } from "../src/errors";
+import {
+  LOG_LEVEL_VALUES_V1,
+  LogAttributesV1,
+  LogBoundedIdentityV1,
+  LogErrorV1,
+  LoggingBufferHealthV1,
+  LoggingCountersV1,
+  LoggingFailureV1,
+  LoggingHealthV1,
+  LoggingWriterStateV1,
+  LogLevelNameV1,
+  LogLevelV1,
+  LogRecordV1,
+  LogRoleV1,
+  LogSafeIntegerV1,
+  LogSchemaVersionV1,
+  LogServiceV1,
+  LogSeverityV1,
+  LogStreamV1,
+  LogTruncationReasonV1,
+  LogTruncationV1,
+  LogValueV1,
+  PluginLogProvenanceV1,
+} from "../src/logging";
 import {
   DesiredState,
   DesiredTerminal,
@@ -49,7 +79,7 @@ mkdirSync(OUT, { recursive: true });
 
 // Shared sub-schemas become NAMED definitions so refs are typify-resolvable
 // (#/definitions/X — never nested property paths).
-const SHARED = {
+const BASE_SHARED = {
   SemverString,
   ClientKind,
   ServerKind,
@@ -81,6 +111,37 @@ const SHARED = {
   ServeEntry,
 } as const;
 
+// Logging/diagnostics (LOG-42) — ONLY the native-consumed subset. Audit,
+// leases, queries, parse failures, and support manifests stay TS-only until
+// field-native has a real reader.
+const LOGGING_SHARED = {
+  LogAttributesV1,
+  LogBoundedIdentityV1,
+  LogSafeIntegerV1,
+  LogSchemaVersionV1,
+  LogLevelV1,
+  LogLevelNameV1,
+  LogSeverityV1,
+  LogServiceV1,
+  LogRoleV1,
+  LogStreamV1,
+  LogValueV1,
+  PluginLogProvenanceV1,
+  LogErrorV1,
+  LogTruncationReasonV1,
+  LogTruncationV1,
+  LogRecordV1,
+  LoggingWriterStateV1,
+  LoggingBufferHealthV1,
+  LoggingCountersV1,
+  LoggingFailureV1,
+  LoggingHealthV1,
+  DiagnosticProducerStateV1,
+  DiagnosticCursorV1,
+} as const;
+
+const ALL_SHARED = { ...BASE_SHARED, ...LOGGING_SHARED } as const;
+
 const ENTRIES: Record<string, ZodTypeAny> = {
   hello: Hello,
   "hello-ack": HelloAck,
@@ -97,29 +158,62 @@ const ENTRIES: Record<string, ZodTypeAny> = {
   "store-snapshot": StoreSnapshot,
   "serve-config": ServeConfig,
   "serve-entry": ServeEntry,
+  "log-record-v1": LogRecordV1,
+  "logging-health-v1": LoggingHealthV1,
+  "diagnostic-log-snapshot-v1": DiagnosticLogSnapshotV1,
+  "diagnostic-log-delta-v1": DiagnosticLogDeltaV1,
 };
+
+const LOGGING_ENTRIES = new Set([
+  "log-record-v1",
+  "logging-health-v1",
+  "diagnostic-log-snapshot-v1",
+  "diagnostic-log-delta-v1",
+]);
+
+function tightenLoggingWireSchema<T>(schema: T): T {
+  const definitions = (schema as { definitions?: Record<string, unknown> }).definitions;
+  if (definitions?.LogLevelV1 !== undefined) {
+    definitions.LogLevelV1 = {
+      type: "integer",
+      enum: [...LOG_LEVEL_VALUES_V1],
+    };
+  }
+  if (definitions?.LogAttributesV1 !== undefined) {
+    definitions.LogAttributesV1 = {
+      type: "object",
+      additionalProperties: { $ref: "#/definitions/LogValueV1" },
+    };
+  }
+  return schema;
+}
 
 for (const [name, schema] of Object.entries(ENTRIES)) {
   const titled = name
     .split("-")
     .map((p) => p[0]!.toUpperCase() + p.slice(1))
     .join("");
-  const js = zodToJsonSchema(schema, { name: titled, definitions: SHARED });
+  const definitions = LOGGING_ENTRIES.has(name) ? LOGGING_SHARED : BASE_SHARED;
+  const js = tightenLoggingWireSchema(zodToJsonSchema(schema, { name: titled, definitions }));
   writeFileSync(join(OUT, `${name}.json`), JSON.stringify(js, null, 2) + "\n");
 }
 
 // One bundle with every type as a named definition — the single typify input
 // (per-type files would each duplicate the shared definitions).
-const bundle = zodToJsonSchema(Hello, {
-  name: "Hello",
-  definitions: {
-    ...SHARED,
-    HelloAck,
-    RpcRequest,
-    RpcNotification,
-    RpcResponse,
-  },
-});
+const bundle = tightenLoggingWireSchema(
+  zodToJsonSchema(Hello, {
+    name: "Hello",
+    definitions: {
+      ...ALL_SHARED,
+      HelloAck,
+      RpcRequest,
+      RpcNotification,
+      RpcResponse,
+      DiagnosticLogSnapshotV1,
+      DiagnosticLogDeltaV1,
+    },
+  }),
+);
 writeFileSync(join(OUT, "bundle.json"), JSON.stringify(bundle, null, 2) + "\n");
 console.log("wrote bundle.json (typify input)");
 console.log(`wrote ${Object.keys(ENTRIES).length} schemas -> gen/jsonschema/`);

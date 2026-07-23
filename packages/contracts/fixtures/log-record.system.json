@@ -1,0 +1,46 @@
+{
+  "v": 1,
+  "time": 1784852400123,
+  "level": 50,
+  "severity": "ERROR",
+  "event": "field_native.process.spawn_failed",
+  "msg": "Native process spawn failed",
+  "service": "field-native",
+  "role": "daemon",
+  "component": "process.supervisor",
+  "pid": 4821,
+  "bootId": "boot_native_01",
+  "instanceId": "field-native_01",
+  "seq": 18294,
+  "traceId": "trace_01",
+  "operationId": "operation_01",
+  "sessionId": "session_01",
+  "err": {
+    "type": "SpawnError",
+    "message": "Executable was unavailable",
+    "code": "ENOENT",
+    "stack": "SpawnError: Executable was unavailable\n  at process.supervisor",
+    "causes": [
+      {
+        "type": "IoError",
+        "message": "No such file",
+        "code": "ENOENT"
+      }
+    ]
+  },
+  "attrs": {
+    "attempt": 3,
+    "durationMs": 183,
+    "recoverable": true,
+    "labels": ["native", "spawn"],
+    "detail": {
+      "adapter": "terminal"
+    }
+  },
+  "truncation": {
+    "reasons": ["string-bytes"],
+    "originalBytes": 70000,
+    "droppedBytes": 4464,
+    "fields": ["err.stack"]
+  }
+}

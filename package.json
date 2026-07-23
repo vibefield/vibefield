@@ -10,6 +10,7 @@
     "dev": "pnpm --filter @vibefield/desktop dev",
     "smoke": "pnpm --filter @vibefield/desktop smoke",
     "smoke:canvas": "pnpm --filter @vibefield/desktop smoke:canvas",
+    "bench:logging-baseline": "node scripts/bench-logging-baseline.mjs",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

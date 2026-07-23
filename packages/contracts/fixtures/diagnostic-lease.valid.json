@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "leaseId": "lease_01",
+  "selector": {
+    "kind": "component",
+    "service": "fieldd",
+    "component": "docs.reconciler"
+  },
+  "level": "debug",
+  "createdAt": 1784852400000,
+  "expiresAt": 1784856000000,
+  "createdBy": {
+    "kind": "shell-main",
+    "id": "shell_01"
+  }
+}

@@ -5,6 +5,13 @@ import { describe, expect, it } from "vitest";
 import type { ZodTypeAny } from "zod";
 import { DeviceInfo, DeviceSlice } from "../src/devices";
 import {
+  AuditRecordV1,
+  DiagnosticLeaseV1,
+  DiagnosticLogDeltaV1,
+  DiagnosticLogSnapshotV1,
+  SupportBundleManifestV1,
+} from "../src/diagnostics";
+import {
   DocMeta,
   DocOpenResult,
   DocRegistryEntry,
@@ -16,6 +23,7 @@ import {
 } from "../src/docs";
 import { Hello, HelloAck, RpcRequest, RpcResponse } from "../src/envelope";
 import { ErrorData } from "../src/errors";
+import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
 import {
   DesiredState,
   NativeHealth,
@@ -56,6 +64,13 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "device-info": DeviceInfo,
   "plugin-manifest": PluginManifestV1,
   "plugin-registry-snapshot": PluginRegistrySnapshot,
+  "log-record": LogRecordV1,
+  "logging-health": LoggingHealthV1,
+  "diagnostic-snapshot": DiagnosticLogSnapshotV1,
+  "diagnostic-delta": DiagnosticLogDeltaV1,
+  "diagnostic-lease": DiagnosticLeaseV1,
+  "audit-record": AuditRecordV1,
+  "support-manifest": SupportBundleManifestV1,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

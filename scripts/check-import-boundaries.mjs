@@ -231,6 +231,59 @@ const RULES = [
         prefixes: ["node:"],
       }),
   },
+  {
+    id: "R11",
+    // LOG-L0 report-only inventory; LOG-L3 flips this after first-party runtime
+    // callsites have a real sink. The smoke artifact is an explicit console
+    // program and remains allowlisted by file.
+    enforce: false,
+    description: "no runtime console.* outside explicit smoke/test/development adapters",
+    applies: (p) =>
+      SOURCE_EXT.test(p) &&
+      (under(p, "packages") || under(p, "plugins") || under(p, "examples/plugins")) &&
+      !isTestPath(p) &&
+      !/(^|\/)scripts\//.test(p) &&
+      !under(p, "packages/field-app/src/spike") &&
+      p !== "packages/electron-shell/src/testing/smoke.ts",
+    linePattern: /\bconsole\.(?:debug|info|log|warn|error|trace)\s*\(/g,
+  },
+  {
+    id: "R12",
+    // Pino is the private Node implementation, never a product/package API.
+    enforce: false,
+    description: "Pino imports stay inside @vibefield/logging",
+    applies: (p) => SOURCE_EXT.test(p) && !under(p, "packages/logging"),
+    importTest: (s) => importsModule(s, "pino"),
+  },
+  {
+    id: "R13",
+    // Textual first version: catches invalid literal first arguments on the
+    // first-party event-first Logger. PluginLogger is message-first, so plugin
+    // code and the plugin host/SDK are outside this rule.
+    enforce: false,
+    description: "first-party logger event literals use a dotted static namespace",
+    applies: (p) =>
+      SOURCE_EXT.test(p) &&
+      under(p, "packages") &&
+      !underAny(p, [
+        "packages/field-app/src/plugin-host",
+        "packages/plugin-runtime",
+        "packages/plugin-sdk",
+      ]) &&
+      !isTestPath(p),
+    linePattern:
+      /\b(?:log|logger)\.(?:trace|debug|info|warn|error|fatal)\(\s*["'`](?![a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+["'`])[^"'`]*/g,
+  },
+  {
+    id: "R14",
+    enforce: false,
+    stripComments: true,
+    description: "physical log stream names come only from contracts registries.ts",
+    applies: (p) =>
+      SOURCE_EXT.test(p) && p !== "packages/contracts/src/registries.ts" && !isTestPath(p),
+    linePattern:
+      /["'`](?:system\/(?:desktop|renderer|utility|fieldd|field-native)|plugins\/(?:renderer|service|utility)|(?:desktop|renderer|utility|fieldd|field-native|service)\.ndjson)["'`]/g,
+  },
 ];
 
 // Enforce map (spec §8.3 slice 2): --enforce gates ONLY on enforce-true rules.
@@ -519,6 +572,26 @@ function runSelfTest() {
       file: "examples/plugins/widgetlab/src/uses-electron.ts",
       body: 'import { app } from "electron";\nimport { CardShell } from "@vibefield/shell-ui";\n',
     },
+    {
+      id: "R11",
+      file: "packages/fieldd/src/raw-console.ts",
+      body: 'console.warn("not persisted");\n',
+    },
+    {
+      id: "R12",
+      file: "packages/fieldd/src/imports-pino.ts",
+      body: 'import pino from "pino";\n',
+    },
+    {
+      id: "R13",
+      file: "packages/fieldd/src/invalid-event.ts",
+      body: 'log.info("ready", "fieldd ready");\n',
+    },
+    {
+      id: "R14",
+      file: "packages/fieldd/src/hardcoded-log-stream.ts",
+      body: 'const stream = "system/fieldd";\n',
+    },
   ];
   const cleans = [
     // react + a /host entry import + plain code: proves R1/R2/R9 don't overfire and
@@ -530,7 +603,10 @@ function runSelfTest() {
     // the R7 single-file and R6 whole-package contract exclusions, together.
     {
       file: "packages/contracts/src/registries.ts",
-      body: 'export const PRODUCT_PORT = 9410;\nexport const CHANNEL = "vibefield:connection";\n',
+      body:
+        "export const PRODUCT_PORT = 9410;\n" +
+        'export const CHANNEL = "vibefield:connection";\n' +
+        'export const LOG_STREAM = "system/fieldd";\n',
     },
     // R6 excludes ALL of contracts, not just registries.ts.
     {
@@ -581,6 +657,24 @@ function runSelfTest() {
       file: "plugins/note/test/uses-node.test.ts",
       body: 'import { readFileSync } from "node:fs";\nimport { PluginRegistry } from "@vibefield/plugin-runtime";\nexport const t = readFileSync;\n',
     },
+    // LOG walls: sanctioned console adapter, contained Pino, valid event, and
+    // the single stream-name registry are all clean.
+    {
+      file: "packages/electron-shell/src/testing/smoke.ts",
+      body: 'console.log("SMOKE");\n',
+    },
+    {
+      file: "plugins/note/scripts/emit-manifest.ts",
+      body: 'console.log("generated manifest");\n',
+    },
+    {
+      file: "packages/logging/src/pino-root.ts",
+      body: 'import pino from "pino";\nexport const root = pino;\n',
+    },
+    {
+      file: "packages/fieldd/src/valid-event.ts",
+      body: 'log.info("fieldd.lifecycle.ready", "fieldd ready");\n',
+    },
   ];
 
   const tmp = mkdtempSync(join(tmpdir(), "vf-import-walls-"));
@@ -617,7 +711,7 @@ function runSelfTest() {
     // three slices). Every rule is enforced — R10's pending era ended when
     // slice P3 landed the SDK (2026-07-23); adding a new pending rule means
     // editing THIS set, a deliberate act.
-    const EXPECTED_PENDING = new Set([]);
+    const EXPECTED_PENDING = new Set(["R11", "R12", "R13", "R14"]);
     const tableOk = RULES.every((r) => r.enforce === !EXPECTED_PENDING.has(r.id));
     console.log(
       `  ${tableOk ? "PASS" : "FAIL"}  enforce table: every rule enforced except {${[...EXPECTED_PENDING].join(", ")}}`,

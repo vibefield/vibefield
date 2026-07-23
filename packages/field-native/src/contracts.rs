@@ -259,6 +259,260 @@ impl DesiredWorker {
         Default::default()
     }
 }
+#[doc = "`DiagnosticCursorV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 16384,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct DiagnosticCursorV1(::std::string::String);
+impl ::std::ops::Deref for DiagnosticCursorV1 {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<DiagnosticCursorV1> for ::std::string::String {
+    fn from(value: DiagnosticCursorV1) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for DiagnosticCursorV1 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 16384usize {
+            return Err("longer than 16384 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for DiagnosticCursorV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for DiagnosticCursorV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DiagnosticCursorV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for DiagnosticCursorV1 {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "vibefield.diagnostics.delta.contract.v1"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"description\": \"vibefield.diagnostics.delta.contract.v1\","]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"cursor\","]
+#[doc = "    \"droppedSincePrevious\","]
+#[doc = "    \"records\","]
+#[doc = "    \"v\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"cursor\": {"]
+#[doc = "      \"$ref\": \"#/definitions/DiagnosticCursorV1\""]
+#[doc = "    },"]
+#[doc = "    \"droppedSincePrevious\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"records\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/LogRecordV1\""]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 2000"]
+#[doc = "    },"]
+#[doc = "    \"v\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSchemaVersionV1\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct DiagnosticLogDeltaV1 {
+    pub cursor: DiagnosticCursorV1,
+    #[serde(rename = "droppedSincePrevious")]
+    pub dropped_since_previous: LogSafeIntegerV1,
+    pub records: ::std::vec::Vec<LogRecordV1>,
+    pub v: LogSchemaVersionV1,
+}
+impl DiagnosticLogDeltaV1 {
+    pub fn builder() -> builder::DiagnosticLogDeltaV1 {
+        Default::default()
+    }
+}
+#[doc = "vibefield.diagnostics.contract.v1"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"description\": \"vibefield.diagnostics.contract.v1\","]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"droppedBefore\","]
+#[doc = "    \"nextCursor\","]
+#[doc = "    \"producers\","]
+#[doc = "    \"records\","]
+#[doc = "    \"v\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"droppedBefore\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"nextCursor\": {"]
+#[doc = "      \"$ref\": \"#/definitions/DiagnosticCursorV1\""]
+#[doc = "    },"]
+#[doc = "    \"producers\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/DiagnosticProducerStateV1\""]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 16"]
+#[doc = "    },"]
+#[doc = "    \"records\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/LogRecordV1\""]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 2000"]
+#[doc = "    },"]
+#[doc = "    \"v\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSchemaVersionV1\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct DiagnosticLogSnapshotV1 {
+    #[serde(rename = "droppedBefore")]
+    pub dropped_before: LogSafeIntegerV1,
+    #[serde(rename = "nextCursor")]
+    pub next_cursor: DiagnosticCursorV1,
+    pub producers: ::std::vec::Vec<DiagnosticProducerStateV1>,
+    pub records: ::std::vec::Vec<LogRecordV1>,
+    pub v: LogSchemaVersionV1,
+}
+impl DiagnosticLogSnapshotV1 {
+    pub fn builder() -> builder::DiagnosticLogSnapshotV1 {
+        Default::default()
+    }
+}
+#[doc = "`DiagnosticProducerStateV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"bootId\","]
+#[doc = "    \"droppedBefore\","]
+#[doc = "    \"health\","]
+#[doc = "    \"instanceId\","]
+#[doc = "    \"newestCursor\","]
+#[doc = "    \"oldestCursor\","]
+#[doc = "    \"producerId\","]
+#[doc = "    \"service\","]
+#[doc = "    \"stream\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"droppedBefore\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"health\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LoggingHealthV1\""]
+#[doc = "    },"]
+#[doc = "    \"instanceId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"newestCursor\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"oldestCursor\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"producerId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"service\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogServiceV1\""]
+#[doc = "    },"]
+#[doc = "    \"stream\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogStreamV1\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct DiagnosticProducerStateV1 {
+    #[serde(rename = "bootId")]
+    pub boot_id: LogBoundedIdentityV1,
+    #[serde(rename = "droppedBefore")]
+    pub dropped_before: LogSafeIntegerV1,
+    pub health: LoggingHealthV1,
+    #[serde(rename = "instanceId")]
+    pub instance_id: LogBoundedIdentityV1,
+    #[serde(rename = "newestCursor")]
+    pub newest_cursor: LogSafeIntegerV1,
+    #[serde(rename = "oldestCursor")]
+    pub oldest_cursor: LogSafeIntegerV1,
+    #[serde(rename = "producerId")]
+    pub producer_id: LogBoundedIdentityV1,
+    pub service: LogServiceV1,
+    pub stream: LogStreamV1,
+}
+impl DiagnosticProducerStateV1 {
+    pub fn builder() -> builder::DiagnosticProducerStateV1 {
+        Default::default()
+    }
+}
 #[doc = "`ErrorData`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -534,6 +788,2352 @@ pub enum HelloCredential {
 impl ::std::convert::From<PairingMac> for HelloCredential {
     fn from(value: PairingMac) -> Self {
         Self::PairingMac(value)
+    }
+}
+#[doc = "`LogAttributesV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"additionalProperties\": {"]
+#[doc = "    \"$ref\": \"#/definitions/LogValueV1\""]
+#[doc = "  }"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct LogAttributesV1(pub ::std::collections::HashMap<::std::string::String, LogValueV1>);
+impl ::std::ops::Deref for LogAttributesV1 {
+    type Target = ::std::collections::HashMap<::std::string::String, LogValueV1>;
+    fn deref(&self) -> &::std::collections::HashMap<::std::string::String, LogValueV1> {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogAttributesV1>
+    for ::std::collections::HashMap<::std::string::String, LogValueV1>
+{
+    fn from(value: LogAttributesV1) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<::std::collections::HashMap<::std::string::String, LogValueV1>>
+    for LogAttributesV1
+{
+    fn from(value: ::std::collections::HashMap<::std::string::String, LogValueV1>) -> Self {
+        Self(value)
+    }
+}
+#[doc = "`LogBoundedIdentityV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 256,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LogBoundedIdentityV1(::std::string::String);
+impl ::std::ops::Deref for LogBoundedIdentityV1 {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogBoundedIdentityV1> for ::std::string::String {
+    fn from(value: LogBoundedIdentityV1) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LogBoundedIdentityV1 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 256usize {
+            return Err("longer than 256 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogBoundedIdentityV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogBoundedIdentityV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogBoundedIdentityV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogBoundedIdentityV1 {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`LogErrorV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"message\","]
+#[doc = "    \"type\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"causes\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/LogErrorV1\""]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 4"]
+#[doc = "    },"]
+#[doc = "    \"code\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 256"]
+#[doc = "    },"]
+#[doc = "    \"message\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 16384"]
+#[doc = "    },"]
+#[doc = "    \"stack\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 32768"]
+#[doc = "    },"]
+#[doc = "    \"type\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 256,"]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct LogErrorV1 {
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub causes: ::std::vec::Vec<LogErrorV1>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub code: ::std::option::Option<LogErrorV1Code>,
+    pub message: LogErrorV1Message,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub stack: ::std::option::Option<LogErrorV1Stack>,
+    #[serde(rename = "type")]
+    pub type_: LogErrorV1Type,
+}
+impl LogErrorV1 {
+    pub fn builder() -> builder::LogErrorV1 {
+        Default::default()
+    }
+}
+#[doc = "`LogErrorV1Code`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 256"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LogErrorV1Code(::std::string::String);
+impl ::std::ops::Deref for LogErrorV1Code {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogErrorV1Code> for ::std::string::String {
+    fn from(value: LogErrorV1Code) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LogErrorV1Code {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 256usize {
+            return Err("longer than 256 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogErrorV1Code {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogErrorV1Code {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogErrorV1Code {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogErrorV1Code {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`LogErrorV1Message`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 16384"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LogErrorV1Message(::std::string::String);
+impl ::std::ops::Deref for LogErrorV1Message {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogErrorV1Message> for ::std::string::String {
+    fn from(value: LogErrorV1Message) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LogErrorV1Message {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 16384usize {
+            return Err("longer than 16384 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogErrorV1Message {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogErrorV1Message {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogErrorV1Message {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogErrorV1Message {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`LogErrorV1Stack`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 32768"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LogErrorV1Stack(::std::string::String);
+impl ::std::ops::Deref for LogErrorV1Stack {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogErrorV1Stack> for ::std::string::String {
+    fn from(value: LogErrorV1Stack) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LogErrorV1Stack {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 32768usize {
+            return Err("longer than 32768 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogErrorV1Stack {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogErrorV1Stack {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogErrorV1Stack {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogErrorV1Stack {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`LogErrorV1Type`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 256,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LogErrorV1Type(::std::string::String);
+impl ::std::ops::Deref for LogErrorV1Type {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogErrorV1Type> for ::std::string::String {
+    fn from(value: LogErrorV1Type) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LogErrorV1Type {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 256usize {
+            return Err("longer than 256 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogErrorV1Type {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogErrorV1Type {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogErrorV1Type {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogErrorV1Type {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`LogLevelNameV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"trace\","]
+#[doc = "    \"debug\","]
+#[doc = "    \"info\","]
+#[doc = "    \"warn\","]
+#[doc = "    \"error\","]
+#[doc = "    \"fatal\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LogLevelNameV1 {
+    #[serde(rename = "trace")]
+    Trace,
+    #[serde(rename = "debug")]
+    Debug,
+    #[serde(rename = "info")]
+    Info,
+    #[serde(rename = "warn")]
+    Warn,
+    #[serde(rename = "error")]
+    Error,
+    #[serde(rename = "fatal")]
+    Fatal,
+}
+impl ::std::fmt::Display for LogLevelNameV1 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Trace => f.write_str("trace"),
+            Self::Debug => f.write_str("debug"),
+            Self::Info => f.write_str("info"),
+            Self::Warn => f.write_str("warn"),
+            Self::Error => f.write_str("error"),
+            Self::Fatal => f.write_str("fatal"),
+        }
+    }
+}
+impl ::std::str::FromStr for LogLevelNameV1 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "trace" => Ok(Self::Trace),
+            "debug" => Ok(Self::Debug),
+            "info" => Ok(Self::Info),
+            "warn" => Ok(Self::Warn),
+            "error" => Ok(Self::Error),
+            "fatal" => Ok(Self::Fatal),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogLevelNameV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogLevelNameV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogLevelNameV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`LogLevelV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"integer\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    10,"]
+#[doc = "    20,"]
+#[doc = "    30,"]
+#[doc = "    40,"]
+#[doc = "    50,"]
+#[doc = "    60"]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct LogLevelV1(i64);
+impl ::std::ops::Deref for LogLevelV1 {
+    type Target = i64;
+    fn deref(&self) -> &i64 {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogLevelV1> for i64 {
+    fn from(value: LogLevelV1) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::TryFrom<i64> for LogLevelV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: i64) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if ![10_i64, 20_i64, 30_i64, 40_i64, 50_i64, 60_i64].contains(&value) {
+            Err("invalid value".into())
+        } else {
+            Ok(Self(value))
+        }
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogLevelV1 {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        Self::try_from(<i64>::deserialize(deserializer)?)
+            .map_err(|e| <D::Error as ::serde::de::Error>::custom(e.to_string()))
+    }
+}
+#[doc = "vibefield.logging.contract.v1"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"description\": \"vibefield.logging.contract.v1\","]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"bootId\","]
+#[doc = "    \"component\","]
+#[doc = "    \"event\","]
+#[doc = "    \"instanceId\","]
+#[doc = "    \"level\","]
+#[doc = "    \"msg\","]
+#[doc = "    \"pid\","]
+#[doc = "    \"role\","]
+#[doc = "    \"seq\","]
+#[doc = "    \"service\","]
+#[doc = "    \"severity\","]
+#[doc = "    \"time\","]
+#[doc = "    \"v\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"attrs\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogAttributesV1\""]
+#[doc = "    },"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"component\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 160,"]
+#[doc = "      \"minLength\": 1,"]
+#[doc = "      \"pattern\": \"^[a-z][a-z0-9_-]*(?:[.:][a-z][a-z0-9_-]*)*$\""]
+#[doc = "    },"]
+#[doc = "    \"deviceId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"docId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"err\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogErrorV1\""]
+#[doc = "    },"]
+#[doc = "    \"event\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 192,"]
+#[doc = "      \"minLength\": 3,"]
+#[doc = "      \"pattern\": \"^[a-z][a-z0-9_]*(?:\\\\.[a-z][a-z0-9_]*)+$\""]
+#[doc = "    },"]
+#[doc = "    \"instanceId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"level\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogLevelV1\""]
+#[doc = "    },"]
+#[doc = "    \"msg\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 16384"]
+#[doc = "    },"]
+#[doc = "    \"observedTime\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"operationId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"pid\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"plugin\": {"]
+#[doc = "      \"$ref\": \"#/definitions/PluginLogProvenanceV1\""]
+#[doc = "    },"]
+#[doc = "    \"requestId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"role\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogRoleV1\""]
+#[doc = "    },"]
+#[doc = "    \"seq\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"service\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogServiceV1\""]
+#[doc = "    },"]
+#[doc = "    \"sessionId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"severity\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSeverityV1\""]
+#[doc = "    },"]
+#[doc = "    \"spanId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"time\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"traceId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"truncation\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogTruncationV1\""]
+#[doc = "    },"]
+#[doc = "    \"v\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSchemaVersionV1\""]
+#[doc = "    },"]
+#[doc = "    \"windowId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct LogRecordV1 {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub attrs: ::std::option::Option<LogAttributesV1>,
+    #[serde(rename = "bootId")]
+    pub boot_id: LogBoundedIdentityV1,
+    pub component: LogRecordV1Component,
+    #[serde(
+        rename = "deviceId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub device_id: ::std::option::Option<LogBoundedIdentityV1>,
+    #[serde(
+        rename = "docId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub doc_id: ::std::option::Option<LogBoundedIdentityV1>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub err: ::std::option::Option<LogErrorV1>,
+    pub event: LogRecordV1Event,
+    #[serde(rename = "instanceId")]
+    pub instance_id: LogBoundedIdentityV1,
+    pub level: LogLevelV1,
+    pub msg: LogRecordV1Msg,
+    #[serde(
+        rename = "observedTime",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub observed_time: ::std::option::Option<LogSafeIntegerV1>,
+    #[serde(
+        rename = "operationId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub operation_id: ::std::option::Option<LogBoundedIdentityV1>,
+    pub pid: LogSafeIntegerV1,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub plugin: ::std::option::Option<PluginLogProvenanceV1>,
+    #[serde(
+        rename = "requestId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub request_id: ::std::option::Option<LogBoundedIdentityV1>,
+    pub role: LogRoleV1,
+    pub seq: LogSafeIntegerV1,
+    pub service: LogServiceV1,
+    #[serde(
+        rename = "sessionId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub session_id: ::std::option::Option<LogBoundedIdentityV1>,
+    pub severity: LogSeverityV1,
+    #[serde(
+        rename = "spanId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub span_id: ::std::option::Option<LogBoundedIdentityV1>,
+    pub time: LogSafeIntegerV1,
+    #[serde(
+        rename = "traceId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub trace_id: ::std::option::Option<LogBoundedIdentityV1>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub truncation: ::std::option::Option<LogTruncationV1>,
+    pub v: LogSchemaVersionV1,
+    #[serde(
+        rename = "windowId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub window_id: ::std::option::Option<LogBoundedIdentityV1>,
+}
+impl LogRecordV1 {
+    pub fn builder() -> builder::LogRecordV1 {
+        Default::default()
+    }
+}
+#[doc = "`LogRecordV1Component`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 160,"]
+#[doc = "  \"minLength\": 1,"]
+#[doc = "  \"pattern\": \"^[a-z][a-z0-9_-]*(?:[.:][a-z][a-z0-9_-]*)*$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LogRecordV1Component(::std::string::String);
+impl ::std::ops::Deref for LogRecordV1Component {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogRecordV1Component> for ::std::string::String {
+    fn from(value: LogRecordV1Component) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LogRecordV1Component {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 160usize {
+            return Err("longer than 160 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new("^[a-z][a-z0-9_-]*(?:[.:][a-z][a-z0-9_-]*)*$").unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err(
+                "doesn't match pattern \"^[a-z][a-z0-9_-]*(?:[.:][a-z][a-z0-9_-]*)*$\"".into(),
+            );
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogRecordV1Component {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogRecordV1Component {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogRecordV1Component {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogRecordV1Component {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`LogRecordV1Event`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 192,"]
+#[doc = "  \"minLength\": 3,"]
+#[doc = "  \"pattern\": \"^[a-z][a-z0-9_]*(?:\\\\.[a-z][a-z0-9_]*)+$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LogRecordV1Event(::std::string::String);
+impl ::std::ops::Deref for LogRecordV1Event {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogRecordV1Event> for ::std::string::String {
+    fn from(value: LogRecordV1Event) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LogRecordV1Event {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 192usize {
+            return Err("longer than 192 characters".into());
+        }
+        if value.chars().count() < 3usize {
+            return Err("shorter than 3 characters".into());
+        }
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new("^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$").unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err(
+                "doesn't match pattern \"^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$\"".into(),
+            );
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogRecordV1Event {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogRecordV1Event {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogRecordV1Event {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogRecordV1Event {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`LogRecordV1Msg`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 16384"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LogRecordV1Msg(::std::string::String);
+impl ::std::ops::Deref for LogRecordV1Msg {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogRecordV1Msg> for ::std::string::String {
+    fn from(value: LogRecordV1Msg) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LogRecordV1Msg {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 16384usize {
+            return Err("longer than 16384 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogRecordV1Msg {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogRecordV1Msg {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogRecordV1Msg {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogRecordV1Msg {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`LogRoleV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"main\","]
+#[doc = "    \"renderer\","]
+#[doc = "    \"utility\","]
+#[doc = "    \"daemon\","]
+#[doc = "    \"worker\","]
+#[doc = "    \"sidecar\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LogRoleV1 {
+    #[serde(rename = "main")]
+    Main,
+    #[serde(rename = "renderer")]
+    Renderer,
+    #[serde(rename = "utility")]
+    Utility,
+    #[serde(rename = "daemon")]
+    Daemon,
+    #[serde(rename = "worker")]
+    Worker,
+    #[serde(rename = "sidecar")]
+    Sidecar,
+}
+impl ::std::fmt::Display for LogRoleV1 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Main => f.write_str("main"),
+            Self::Renderer => f.write_str("renderer"),
+            Self::Utility => f.write_str("utility"),
+            Self::Daemon => f.write_str("daemon"),
+            Self::Worker => f.write_str("worker"),
+            Self::Sidecar => f.write_str("sidecar"),
+        }
+    }
+}
+impl ::std::str::FromStr for LogRoleV1 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "main" => Ok(Self::Main),
+            "renderer" => Ok(Self::Renderer),
+            "utility" => Ok(Self::Utility),
+            "daemon" => Ok(Self::Daemon),
+            "worker" => Ok(Self::Worker),
+            "sidecar" => Ok(Self::Sidecar),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogRoleV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogRoleV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogRoleV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`LogSafeIntegerV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"integer\","]
+#[doc = "  \"maximum\": 9007199254740991.0,"]
+#[doc = "  \"minimum\": 0.0"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct LogSafeIntegerV1(pub i64);
+impl ::std::ops::Deref for LogSafeIntegerV1 {
+    type Target = i64;
+    fn deref(&self) -> &i64 {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogSafeIntegerV1> for i64 {
+    fn from(value: LogSafeIntegerV1) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<i64> for LogSafeIntegerV1 {
+    fn from(value: i64) -> Self {
+        Self(value)
+    }
+}
+impl ::std::str::FromStr for LogSafeIntegerV1 {
+    type Err = <i64 as ::std::str::FromStr>::Err;
+    fn from_str(value: &str) -> ::std::result::Result<Self, Self::Err> {
+        Ok(Self(value.parse()?))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogSafeIntegerV1 {
+    type Error = <i64 as ::std::str::FromStr>::Err;
+    fn try_from(value: &str) -> ::std::result::Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<String> for LogSafeIntegerV1 {
+    type Error = <i64 as ::std::str::FromStr>::Err;
+    fn try_from(value: String) -> ::std::result::Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+impl ::std::fmt::Display for LogSafeIntegerV1 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+#[doc = "`LogSchemaVersionV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"integer\","]
+#[doc = "  \"maximum\": 1.0,"]
+#[doc = "  \"minimum\": 1.0"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct LogSchemaVersionV1(pub ::std::num::NonZeroU64);
+impl ::std::ops::Deref for LogSchemaVersionV1 {
+    type Target = ::std::num::NonZeroU64;
+    fn deref(&self) -> &::std::num::NonZeroU64 {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogSchemaVersionV1> for ::std::num::NonZeroU64 {
+    fn from(value: LogSchemaVersionV1) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<::std::num::NonZeroU64> for LogSchemaVersionV1 {
+    fn from(value: ::std::num::NonZeroU64) -> Self {
+        Self(value)
+    }
+}
+impl ::std::str::FromStr for LogSchemaVersionV1 {
+    type Err = <::std::num::NonZeroU64 as ::std::str::FromStr>::Err;
+    fn from_str(value: &str) -> ::std::result::Result<Self, Self::Err> {
+        Ok(Self(value.parse()?))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogSchemaVersionV1 {
+    type Error = <::std::num::NonZeroU64 as ::std::str::FromStr>::Err;
+    fn try_from(value: &str) -> ::std::result::Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<String> for LogSchemaVersionV1 {
+    type Error = <::std::num::NonZeroU64 as ::std::str::FromStr>::Err;
+    fn try_from(value: String) -> ::std::result::Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+impl ::std::fmt::Display for LogSchemaVersionV1 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+#[doc = "`LogServiceV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"desktop\","]
+#[doc = "    \"renderer\","]
+#[doc = "    \"utility\","]
+#[doc = "    \"fieldd\","]
+#[doc = "    \"field-native\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LogServiceV1 {
+    #[serde(rename = "desktop")]
+    Desktop,
+    #[serde(rename = "renderer")]
+    Renderer,
+    #[serde(rename = "utility")]
+    Utility,
+    #[serde(rename = "fieldd")]
+    Fieldd,
+    #[serde(rename = "field-native")]
+    FieldNative,
+}
+impl ::std::fmt::Display for LogServiceV1 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Desktop => f.write_str("desktop"),
+            Self::Renderer => f.write_str("renderer"),
+            Self::Utility => f.write_str("utility"),
+            Self::Fieldd => f.write_str("fieldd"),
+            Self::FieldNative => f.write_str("field-native"),
+        }
+    }
+}
+impl ::std::str::FromStr for LogServiceV1 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "desktop" => Ok(Self::Desktop),
+            "renderer" => Ok(Self::Renderer),
+            "utility" => Ok(Self::Utility),
+            "fieldd" => Ok(Self::Fieldd),
+            "field-native" => Ok(Self::FieldNative),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogServiceV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogServiceV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogServiceV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`LogSeverityV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"TRACE\","]
+#[doc = "    \"DEBUG\","]
+#[doc = "    \"INFO\","]
+#[doc = "    \"WARN\","]
+#[doc = "    \"ERROR\","]
+#[doc = "    \"FATAL\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LogSeverityV1 {
+    #[serde(rename = "TRACE")]
+    Trace,
+    #[serde(rename = "DEBUG")]
+    Debug,
+    #[serde(rename = "INFO")]
+    Info,
+    #[serde(rename = "WARN")]
+    Warn,
+    #[serde(rename = "ERROR")]
+    Error,
+    #[serde(rename = "FATAL")]
+    Fatal,
+}
+impl ::std::fmt::Display for LogSeverityV1 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Trace => f.write_str("TRACE"),
+            Self::Debug => f.write_str("DEBUG"),
+            Self::Info => f.write_str("INFO"),
+            Self::Warn => f.write_str("WARN"),
+            Self::Error => f.write_str("ERROR"),
+            Self::Fatal => f.write_str("FATAL"),
+        }
+    }
+}
+impl ::std::str::FromStr for LogSeverityV1 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "TRACE" => Ok(Self::Trace),
+            "DEBUG" => Ok(Self::Debug),
+            "INFO" => Ok(Self::Info),
+            "WARN" => Ok(Self::Warn),
+            "ERROR" => Ok(Self::Error),
+            "FATAL" => Ok(Self::Fatal),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogSeverityV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogSeverityV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogSeverityV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`LogStreamV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"system/desktop\","]
+#[doc = "    \"system/renderer\","]
+#[doc = "    \"system/utility\","]
+#[doc = "    \"system/fieldd\","]
+#[doc = "    \"system/field-native\","]
+#[doc = "    \"plugins/renderer\","]
+#[doc = "    \"plugins/service\","]
+#[doc = "    \"plugins/utility\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LogStreamV1 {
+    #[serde(rename = "system/desktop")]
+    SystemDesktop,
+    #[serde(rename = "system/renderer")]
+    SystemRenderer,
+    #[serde(rename = "system/utility")]
+    SystemUtility,
+    #[serde(rename = "system/fieldd")]
+    SystemFieldd,
+    #[serde(rename = "system/field-native")]
+    SystemFieldNative,
+    #[serde(rename = "plugins/renderer")]
+    PluginsRenderer,
+    #[serde(rename = "plugins/service")]
+    PluginsService,
+    #[serde(rename = "plugins/utility")]
+    PluginsUtility,
+}
+impl ::std::fmt::Display for LogStreamV1 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::SystemDesktop => f.write_str("system/desktop"),
+            Self::SystemRenderer => f.write_str("system/renderer"),
+            Self::SystemUtility => f.write_str("system/utility"),
+            Self::SystemFieldd => f.write_str("system/fieldd"),
+            Self::SystemFieldNative => f.write_str("system/field-native"),
+            Self::PluginsRenderer => f.write_str("plugins/renderer"),
+            Self::PluginsService => f.write_str("plugins/service"),
+            Self::PluginsUtility => f.write_str("plugins/utility"),
+        }
+    }
+}
+impl ::std::str::FromStr for LogStreamV1 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "system/desktop" => Ok(Self::SystemDesktop),
+            "system/renderer" => Ok(Self::SystemRenderer),
+            "system/utility" => Ok(Self::SystemUtility),
+            "system/fieldd" => Ok(Self::SystemFieldd),
+            "system/field-native" => Ok(Self::SystemFieldNative),
+            "plugins/renderer" => Ok(Self::PluginsRenderer),
+            "plugins/service" => Ok(Self::PluginsService),
+            "plugins/utility" => Ok(Self::PluginsUtility),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogStreamV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogStreamV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogStreamV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`LogTruncationReasonV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"record-bytes\","]
+#[doc = "    \"message-bytes\","]
+#[doc = "    \"string-bytes\","]
+#[doc = "    \"object-depth\","]
+#[doc = "    \"object-keys\","]
+#[doc = "    \"array-items\","]
+#[doc = "    \"error-causes\","]
+#[doc = "    \"partial-line\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LogTruncationReasonV1 {
+    #[serde(rename = "record-bytes")]
+    RecordBytes,
+    #[serde(rename = "message-bytes")]
+    MessageBytes,
+    #[serde(rename = "string-bytes")]
+    StringBytes,
+    #[serde(rename = "object-depth")]
+    ObjectDepth,
+    #[serde(rename = "object-keys")]
+    ObjectKeys,
+    #[serde(rename = "array-items")]
+    ArrayItems,
+    #[serde(rename = "error-causes")]
+    ErrorCauses,
+    #[serde(rename = "partial-line")]
+    PartialLine,
+}
+impl ::std::fmt::Display for LogTruncationReasonV1 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::RecordBytes => f.write_str("record-bytes"),
+            Self::MessageBytes => f.write_str("message-bytes"),
+            Self::StringBytes => f.write_str("string-bytes"),
+            Self::ObjectDepth => f.write_str("object-depth"),
+            Self::ObjectKeys => f.write_str("object-keys"),
+            Self::ArrayItems => f.write_str("array-items"),
+            Self::ErrorCauses => f.write_str("error-causes"),
+            Self::PartialLine => f.write_str("partial-line"),
+        }
+    }
+}
+impl ::std::str::FromStr for LogTruncationReasonV1 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "record-bytes" => Ok(Self::RecordBytes),
+            "message-bytes" => Ok(Self::MessageBytes),
+            "string-bytes" => Ok(Self::StringBytes),
+            "object-depth" => Ok(Self::ObjectDepth),
+            "object-keys" => Ok(Self::ObjectKeys),
+            "array-items" => Ok(Self::ArrayItems),
+            "error-causes" => Ok(Self::ErrorCauses),
+            "partial-line" => Ok(Self::PartialLine),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogTruncationReasonV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogTruncationReasonV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogTruncationReasonV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`LogTruncationV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"reasons\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"droppedBytes\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"droppedItems\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"fields\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"type\": \"string\","]
+#[doc = "        \"maxLength\": 160,"]
+#[doc = "        \"minLength\": 1"]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 32"]
+#[doc = "    },"]
+#[doc = "    \"originalBytes\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"originalItems\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"reasons\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/LogTruncationReasonV1\""]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 8,"]
+#[doc = "      \"minItems\": 1"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct LogTruncationV1 {
+    #[serde(
+        rename = "droppedBytes",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub dropped_bytes: ::std::option::Option<LogSafeIntegerV1>,
+    #[serde(
+        rename = "droppedItems",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub dropped_items: ::std::option::Option<LogSafeIntegerV1>,
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub fields: ::std::vec::Vec<LogTruncationV1FieldsItem>,
+    #[serde(
+        rename = "originalBytes",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub original_bytes: ::std::option::Option<LogSafeIntegerV1>,
+    #[serde(
+        rename = "originalItems",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub original_items: ::std::option::Option<LogSafeIntegerV1>,
+    pub reasons: ::std::vec::Vec<LogTruncationReasonV1>,
+}
+impl LogTruncationV1 {
+    pub fn builder() -> builder::LogTruncationV1 {
+        Default::default()
+    }
+}
+#[doc = "`LogTruncationV1FieldsItem`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 160,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LogTruncationV1FieldsItem(::std::string::String);
+impl ::std::ops::Deref for LogTruncationV1FieldsItem {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogTruncationV1FieldsItem> for ::std::string::String {
+    fn from(value: LogTruncationV1FieldsItem) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LogTruncationV1FieldsItem {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 160usize {
+            return Err("longer than 160 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LogTruncationV1FieldsItem {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LogTruncationV1FieldsItem {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LogTruncationV1FieldsItem {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LogTruncationV1FieldsItem {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`LogValueV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct LogValueV1(pub ::serde_json::Value);
+impl ::std::ops::Deref for LogValueV1 {
+    type Target = ::serde_json::Value;
+    fn deref(&self) -> &::serde_json::Value {
+        &self.0
+    }
+}
+impl ::std::convert::From<LogValueV1> for ::serde_json::Value {
+    fn from(value: LogValueV1) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<::serde_json::Value> for LogValueV1 {
+    fn from(value: ::serde_json::Value) -> Self {
+        Self(value)
+    }
+}
+#[doc = "`LoggingBufferHealthV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"bytes\","]
+#[doc = "    \"capacityBytes\","]
+#[doc = "    \"capacityRecords\","]
+#[doc = "    \"highWaterBytes\","]
+#[doc = "    \"highWaterRecords\","]
+#[doc = "    \"records\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"bytes\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"capacityBytes\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"capacityRecords\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"highWaterBytes\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"highWaterRecords\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"records\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct LoggingBufferHealthV1 {
+    pub bytes: LogSafeIntegerV1,
+    #[serde(rename = "capacityBytes")]
+    pub capacity_bytes: LogSafeIntegerV1,
+    #[serde(rename = "capacityRecords")]
+    pub capacity_records: LogSafeIntegerV1,
+    #[serde(rename = "highWaterBytes")]
+    pub high_water_bytes: LogSafeIntegerV1,
+    #[serde(rename = "highWaterRecords")]
+    pub high_water_records: LogSafeIntegerV1,
+    pub records: LogSafeIntegerV1,
+}
+impl LoggingBufferHealthV1 {
+    pub fn builder() -> builder::LoggingBufferHealthV1 {
+        Default::default()
+    }
+}
+#[doc = "`LoggingCountersV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"accepted\","]
+#[doc = "    \"bytesWritten\","]
+#[doc = "    \"cleanupDeletions\","]
+#[doc = "    \"droppedDebug\","]
+#[doc = "    \"droppedError\","]
+#[doc = "    \"droppedInfo\","]
+#[doc = "    \"droppedTrace\","]
+#[doc = "    \"droppedWarn\","]
+#[doc = "    \"emergencyFallbacks\","]
+#[doc = "    \"rejected\","]
+#[doc = "    \"rotations\","]
+#[doc = "    \"truncated\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"accepted\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"bytesWritten\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"cleanupDeletions\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"droppedDebug\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"droppedError\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"droppedInfo\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"droppedTrace\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"droppedWarn\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"emergencyFallbacks\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"rejected\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"rotations\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"truncated\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct LoggingCountersV1 {
+    pub accepted: LogSafeIntegerV1,
+    #[serde(rename = "bytesWritten")]
+    pub bytes_written: LogSafeIntegerV1,
+    #[serde(rename = "cleanupDeletions")]
+    pub cleanup_deletions: LogSafeIntegerV1,
+    #[serde(rename = "droppedDebug")]
+    pub dropped_debug: LogSafeIntegerV1,
+    #[serde(rename = "droppedError")]
+    pub dropped_error: LogSafeIntegerV1,
+    #[serde(rename = "droppedInfo")]
+    pub dropped_info: LogSafeIntegerV1,
+    #[serde(rename = "droppedTrace")]
+    pub dropped_trace: LogSafeIntegerV1,
+    #[serde(rename = "droppedWarn")]
+    pub dropped_warn: LogSafeIntegerV1,
+    #[serde(rename = "emergencyFallbacks")]
+    pub emergency_fallbacks: LogSafeIntegerV1,
+    pub rejected: LogSafeIntegerV1,
+    pub rotations: LogSafeIntegerV1,
+    pub truncated: LogSafeIntegerV1,
+}
+impl LoggingCountersV1 {
+    pub fn builder() -> builder::LoggingCountersV1 {
+        Default::default()
+    }
+}
+#[doc = "`LoggingFailureV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"kind\","]
+#[doc = "    \"message\","]
+#[doc = "    \"time\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"kind\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"enum\": ["]
+#[doc = "        \"enospc\","]
+#[doc = "        \"eacces\","]
+#[doc = "        \"read-only\","]
+#[doc = "        \"rename\","]
+#[doc = "        \"write\","]
+#[doc = "        \"flush\","]
+#[doc = "        \"close\","]
+#[doc = "        \"writer-conflict\","]
+#[doc = "        \"unknown\""]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"message\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 500"]
+#[doc = "    },"]
+#[doc = "    \"time\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct LoggingFailureV1 {
+    pub kind: LoggingFailureV1Kind,
+    pub message: LoggingFailureV1Message,
+    pub time: LogSafeIntegerV1,
+}
+impl LoggingFailureV1 {
+    pub fn builder() -> builder::LoggingFailureV1 {
+        Default::default()
+    }
+}
+#[doc = "`LoggingFailureV1Kind`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"enospc\","]
+#[doc = "    \"eacces\","]
+#[doc = "    \"read-only\","]
+#[doc = "    \"rename\","]
+#[doc = "    \"write\","]
+#[doc = "    \"flush\","]
+#[doc = "    \"close\","]
+#[doc = "    \"writer-conflict\","]
+#[doc = "    \"unknown\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LoggingFailureV1Kind {
+    #[serde(rename = "enospc")]
+    Enospc,
+    #[serde(rename = "eacces")]
+    Eacces,
+    #[serde(rename = "read-only")]
+    ReadOnly,
+    #[serde(rename = "rename")]
+    Rename,
+    #[serde(rename = "write")]
+    Write,
+    #[serde(rename = "flush")]
+    Flush,
+    #[serde(rename = "close")]
+    Close,
+    #[serde(rename = "writer-conflict")]
+    WriterConflict,
+    #[serde(rename = "unknown")]
+    Unknown,
+}
+impl ::std::fmt::Display for LoggingFailureV1Kind {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Enospc => f.write_str("enospc"),
+            Self::Eacces => f.write_str("eacces"),
+            Self::ReadOnly => f.write_str("read-only"),
+            Self::Rename => f.write_str("rename"),
+            Self::Write => f.write_str("write"),
+            Self::Flush => f.write_str("flush"),
+            Self::Close => f.write_str("close"),
+            Self::WriterConflict => f.write_str("writer-conflict"),
+            Self::Unknown => f.write_str("unknown"),
+        }
+    }
+}
+impl ::std::str::FromStr for LoggingFailureV1Kind {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "enospc" => Ok(Self::Enospc),
+            "eacces" => Ok(Self::Eacces),
+            "read-only" => Ok(Self::ReadOnly),
+            "rename" => Ok(Self::Rename),
+            "write" => Ok(Self::Write),
+            "flush" => Ok(Self::Flush),
+            "close" => Ok(Self::Close),
+            "writer-conflict" => Ok(Self::WriterConflict),
+            "unknown" => Ok(Self::Unknown),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LoggingFailureV1Kind {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LoggingFailureV1Kind {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LoggingFailureV1Kind {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`LoggingFailureV1Message`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 500"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct LoggingFailureV1Message(::std::string::String);
+impl ::std::ops::Deref for LoggingFailureV1Message {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<LoggingFailureV1Message> for ::std::string::String {
+    fn from(value: LoggingFailureV1Message) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for LoggingFailureV1Message {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 500usize {
+            return Err("longer than 500 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for LoggingFailureV1Message {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LoggingFailureV1Message {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LoggingFailureV1Message {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for LoggingFailureV1Message {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "vibefield.logging.health.contract.v1"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"description\": \"vibefield.logging.health.contract.v1\","]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"activeLeaseCount\","]
+#[doc = "    \"activeSegmentBytes\","]
+#[doc = "    \"bootId\","]
+#[doc = "    \"counters\","]
+#[doc = "    \"currentLevel\","]
+#[doc = "    \"instanceId\","]
+#[doc = "    \"queue\","]
+#[doc = "    \"ring\","]
+#[doc = "    \"service\","]
+#[doc = "    \"stream\","]
+#[doc = "    \"v\","]
+#[doc = "    \"writerState\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"activeLeaseCount\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"activeSegmentBytes\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"counters\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LoggingCountersV1\""]
+#[doc = "    },"]
+#[doc = "    \"currentLevel\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogLevelNameV1\""]
+#[doc = "    },"]
+#[doc = "    \"instanceId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"lastFailure\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LoggingFailureV1\""]
+#[doc = "    },"]
+#[doc = "    \"lastWriteAt\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"queue\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LoggingBufferHealthV1\""]
+#[doc = "    },"]
+#[doc = "    \"ring\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LoggingBufferHealthV1\""]
+#[doc = "    },"]
+#[doc = "    \"service\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogServiceV1\""]
+#[doc = "    },"]
+#[doc = "    \"stream\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogStreamV1\""]
+#[doc = "    },"]
+#[doc = "    \"v\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSchemaVersionV1\""]
+#[doc = "    },"]
+#[doc = "    \"writerState\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LoggingWriterStateV1\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct LoggingHealthV1 {
+    #[serde(rename = "activeLeaseCount")]
+    pub active_lease_count: LogSafeIntegerV1,
+    #[serde(rename = "activeSegmentBytes")]
+    pub active_segment_bytes: LogSafeIntegerV1,
+    #[serde(rename = "bootId")]
+    pub boot_id: LogBoundedIdentityV1,
+    pub counters: LoggingCountersV1,
+    #[serde(rename = "currentLevel")]
+    pub current_level: LogLevelNameV1,
+    #[serde(rename = "instanceId")]
+    pub instance_id: LogBoundedIdentityV1,
+    #[serde(
+        rename = "lastFailure",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub last_failure: ::std::option::Option<LoggingFailureV1>,
+    #[serde(
+        rename = "lastWriteAt",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub last_write_at: ::std::option::Option<LogSafeIntegerV1>,
+    pub queue: LoggingBufferHealthV1,
+    pub ring: LoggingBufferHealthV1,
+    pub service: LogServiceV1,
+    pub stream: LogStreamV1,
+    pub v: LogSchemaVersionV1,
+    #[serde(rename = "writerState")]
+    pub writer_state: LoggingWriterStateV1,
+}
+impl LoggingHealthV1 {
+    pub fn builder() -> builder::LoggingHealthV1 {
+        Default::default()
+    }
+}
+#[doc = "`LoggingWriterStateV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"starting\","]
+#[doc = "    \"healthy\","]
+#[doc = "    \"degraded\","]
+#[doc = "    \"closed\","]
+#[doc = "    \"writer-conflict\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum LoggingWriterStateV1 {
+    #[serde(rename = "starting")]
+    Starting,
+    #[serde(rename = "healthy")]
+    Healthy,
+    #[serde(rename = "degraded")]
+    Degraded,
+    #[serde(rename = "closed")]
+    Closed,
+    #[serde(rename = "writer-conflict")]
+    WriterConflict,
+}
+impl ::std::fmt::Display for LoggingWriterStateV1 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Starting => f.write_str("starting"),
+            Self::Healthy => f.write_str("healthy"),
+            Self::Degraded => f.write_str("degraded"),
+            Self::Closed => f.write_str("closed"),
+            Self::WriterConflict => f.write_str("writer-conflict"),
+        }
+    }
+}
+impl ::std::str::FromStr for LoggingWriterStateV1 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "starting" => Ok(Self::Starting),
+            "healthy" => Ok(Self::Healthy),
+            "degraded" => Ok(Self::Degraded),
+            "closed" => Ok(Self::Closed),
+            "writer-conflict" => Ok(Self::WriterConflict),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for LoggingWriterStateV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for LoggingWriterStateV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for LoggingWriterStateV1 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
     }
 }
 #[doc = "`MeshConfig`"]
@@ -923,6 +3523,476 @@ pub struct PeerInfo {
 impl PeerInfo {
     pub fn builder() -> builder::PeerInfo {
         Default::default()
+    }
+}
+#[doc = "`PluginLogProvenanceV1`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"entry\","]
+#[doc = "    \"id\","]
+#[doc = "    \"installRevision\","]
+#[doc = "    \"installSource\","]
+#[doc = "    \"trust\","]
+#[doc = "    \"version\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"entry\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"enum\": ["]
+#[doc = "        \"renderer\","]
+#[doc = "        \"service\","]
+#[doc = "        \"utility\""]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"id\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    },"]
+#[doc = "    \"installRevision\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 128,"]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"installSource\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"enum\": ["]
+#[doc = "        \"bundled\","]
+#[doc = "        \"registry\","]
+#[doc = "        \"peer\","]
+#[doc = "        \"dev-link\""]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"trust\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"enum\": ["]
+#[doc = "        \"r0-bundled\","]
+#[doc = "        \"r1-registry\","]
+#[doc = "        \"r2-peer\","]
+#[doc = "        \"r3-dev\""]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"version\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 64,"]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"windowId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogBoundedIdentityV1\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct PluginLogProvenanceV1 {
+    pub entry: PluginLogProvenanceV1Entry,
+    pub id: LogBoundedIdentityV1,
+    #[serde(rename = "installRevision")]
+    pub install_revision: PluginLogProvenanceV1InstallRevision,
+    #[serde(rename = "installSource")]
+    pub install_source: PluginLogProvenanceV1InstallSource,
+    pub trust: PluginLogProvenanceV1Trust,
+    pub version: PluginLogProvenanceV1Version,
+    #[serde(
+        rename = "windowId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub window_id: ::std::option::Option<LogBoundedIdentityV1>,
+}
+impl PluginLogProvenanceV1 {
+    pub fn builder() -> builder::PluginLogProvenanceV1 {
+        Default::default()
+    }
+}
+#[doc = "`PluginLogProvenanceV1Entry`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"renderer\","]
+#[doc = "    \"service\","]
+#[doc = "    \"utility\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum PluginLogProvenanceV1Entry {
+    #[serde(rename = "renderer")]
+    Renderer,
+    #[serde(rename = "service")]
+    Service,
+    #[serde(rename = "utility")]
+    Utility,
+}
+impl ::std::fmt::Display for PluginLogProvenanceV1Entry {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Renderer => f.write_str("renderer"),
+            Self::Service => f.write_str("service"),
+            Self::Utility => f.write_str("utility"),
+        }
+    }
+}
+impl ::std::str::FromStr for PluginLogProvenanceV1Entry {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "renderer" => Ok(Self::Renderer),
+            "service" => Ok(Self::Service),
+            "utility" => Ok(Self::Utility),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for PluginLogProvenanceV1Entry {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for PluginLogProvenanceV1Entry {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PluginLogProvenanceV1Entry {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`PluginLogProvenanceV1InstallRevision`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 128,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct PluginLogProvenanceV1InstallRevision(::std::string::String);
+impl ::std::ops::Deref for PluginLogProvenanceV1InstallRevision {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<PluginLogProvenanceV1InstallRevision> for ::std::string::String {
+    fn from(value: PluginLogProvenanceV1InstallRevision) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for PluginLogProvenanceV1InstallRevision {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 128usize {
+            return Err("longer than 128 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for PluginLogProvenanceV1InstallRevision {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for PluginLogProvenanceV1InstallRevision {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PluginLogProvenanceV1InstallRevision {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for PluginLogProvenanceV1InstallRevision {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`PluginLogProvenanceV1InstallSource`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"bundled\","]
+#[doc = "    \"registry\","]
+#[doc = "    \"peer\","]
+#[doc = "    \"dev-link\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum PluginLogProvenanceV1InstallSource {
+    #[serde(rename = "bundled")]
+    Bundled,
+    #[serde(rename = "registry")]
+    Registry,
+    #[serde(rename = "peer")]
+    Peer,
+    #[serde(rename = "dev-link")]
+    DevLink,
+}
+impl ::std::fmt::Display for PluginLogProvenanceV1InstallSource {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Bundled => f.write_str("bundled"),
+            Self::Registry => f.write_str("registry"),
+            Self::Peer => f.write_str("peer"),
+            Self::DevLink => f.write_str("dev-link"),
+        }
+    }
+}
+impl ::std::str::FromStr for PluginLogProvenanceV1InstallSource {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "bundled" => Ok(Self::Bundled),
+            "registry" => Ok(Self::Registry),
+            "peer" => Ok(Self::Peer),
+            "dev-link" => Ok(Self::DevLink),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for PluginLogProvenanceV1InstallSource {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for PluginLogProvenanceV1InstallSource {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PluginLogProvenanceV1InstallSource {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`PluginLogProvenanceV1Trust`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"r0-bundled\","]
+#[doc = "    \"r1-registry\","]
+#[doc = "    \"r2-peer\","]
+#[doc = "    \"r3-dev\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum PluginLogProvenanceV1Trust {
+    #[serde(rename = "r0-bundled")]
+    R0Bundled,
+    #[serde(rename = "r1-registry")]
+    R1Registry,
+    #[serde(rename = "r2-peer")]
+    R2Peer,
+    #[serde(rename = "r3-dev")]
+    R3Dev,
+}
+impl ::std::fmt::Display for PluginLogProvenanceV1Trust {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::R0Bundled => f.write_str("r0-bundled"),
+            Self::R1Registry => f.write_str("r1-registry"),
+            Self::R2Peer => f.write_str("r2-peer"),
+            Self::R3Dev => f.write_str("r3-dev"),
+        }
+    }
+}
+impl ::std::str::FromStr for PluginLogProvenanceV1Trust {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "r0-bundled" => Ok(Self::R0Bundled),
+            "r1-registry" => Ok(Self::R1Registry),
+            "r2-peer" => Ok(Self::R2Peer),
+            "r3-dev" => Ok(Self::R3Dev),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for PluginLogProvenanceV1Trust {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for PluginLogProvenanceV1Trust {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PluginLogProvenanceV1Trust {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`PluginLogProvenanceV1Version`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 64,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct PluginLogProvenanceV1Version(::std::string::String);
+impl ::std::ops::Deref for PluginLogProvenanceV1Version {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<PluginLogProvenanceV1Version> for ::std::string::String {
+    fn from(value: PluginLogProvenanceV1Version) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for PluginLogProvenanceV1Version {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 64usize {
+            return Err("longer than 64 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for PluginLogProvenanceV1Version {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for PluginLogProvenanceV1Version {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for PluginLogProvenanceV1Version {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for PluginLogProvenanceV1Version {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
     }
 }
 #[doc = "`RpcError`"]
@@ -2065,6 +5135,342 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct DiagnosticLogDeltaV1 {
+        cursor: ::std::result::Result<super::DiagnosticCursorV1, ::std::string::String>,
+        dropped_since_previous:
+            ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        records: ::std::result::Result<::std::vec::Vec<super::LogRecordV1>, ::std::string::String>,
+        v: ::std::result::Result<super::LogSchemaVersionV1, ::std::string::String>,
+    }
+    impl ::std::default::Default for DiagnosticLogDeltaV1 {
+        fn default() -> Self {
+            Self {
+                cursor: Err("no value supplied for cursor".to_string()),
+                dropped_since_previous: Err(
+                    "no value supplied for dropped_since_previous".to_string()
+                ),
+                records: Err("no value supplied for records".to_string()),
+                v: Err("no value supplied for v".to_string()),
+            }
+        }
+    }
+    impl DiagnosticLogDeltaV1 {
+        pub fn cursor<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::DiagnosticCursorV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cursor = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cursor: {e}"));
+            self
+        }
+        pub fn dropped_since_previous<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_since_previous = value.try_into().map_err(|e| {
+                format!("error converting supplied value for dropped_since_previous: {e}")
+            });
+            self
+        }
+        pub fn records<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::LogRecordV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.records = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for records: {e}"));
+            self
+        }
+        pub fn v<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSchemaVersionV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.v = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for v: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<DiagnosticLogDeltaV1> for super::DiagnosticLogDeltaV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: DiagnosticLogDeltaV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                cursor: value.cursor?,
+                dropped_since_previous: value.dropped_since_previous?,
+                records: value.records?,
+                v: value.v?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::DiagnosticLogDeltaV1> for DiagnosticLogDeltaV1 {
+        fn from(value: super::DiagnosticLogDeltaV1) -> Self {
+            Self {
+                cursor: Ok(value.cursor),
+                dropped_since_previous: Ok(value.dropped_since_previous),
+                records: Ok(value.records),
+                v: Ok(value.v),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct DiagnosticLogSnapshotV1 {
+        dropped_before: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        next_cursor: ::std::result::Result<super::DiagnosticCursorV1, ::std::string::String>,
+        producers: ::std::result::Result<
+            ::std::vec::Vec<super::DiagnosticProducerStateV1>,
+            ::std::string::String,
+        >,
+        records: ::std::result::Result<::std::vec::Vec<super::LogRecordV1>, ::std::string::String>,
+        v: ::std::result::Result<super::LogSchemaVersionV1, ::std::string::String>,
+    }
+    impl ::std::default::Default for DiagnosticLogSnapshotV1 {
+        fn default() -> Self {
+            Self {
+                dropped_before: Err("no value supplied for dropped_before".to_string()),
+                next_cursor: Err("no value supplied for next_cursor".to_string()),
+                producers: Err("no value supplied for producers".to_string()),
+                records: Err("no value supplied for records".to_string()),
+                v: Err("no value supplied for v".to_string()),
+            }
+        }
+    }
+    impl DiagnosticLogSnapshotV1 {
+        pub fn dropped_before<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_before = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped_before: {e}"));
+            self
+        }
+        pub fn next_cursor<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::DiagnosticCursorV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.next_cursor = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for next_cursor: {e}"));
+            self
+        }
+        pub fn producers<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::DiagnosticProducerStateV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.producers = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for producers: {e}"));
+            self
+        }
+        pub fn records<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::LogRecordV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.records = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for records: {e}"));
+            self
+        }
+        pub fn v<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSchemaVersionV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.v = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for v: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<DiagnosticLogSnapshotV1> for super::DiagnosticLogSnapshotV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: DiagnosticLogSnapshotV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                dropped_before: value.dropped_before?,
+                next_cursor: value.next_cursor?,
+                producers: value.producers?,
+                records: value.records?,
+                v: value.v?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::DiagnosticLogSnapshotV1> for DiagnosticLogSnapshotV1 {
+        fn from(value: super::DiagnosticLogSnapshotV1) -> Self {
+            Self {
+                dropped_before: Ok(value.dropped_before),
+                next_cursor: Ok(value.next_cursor),
+                producers: Ok(value.producers),
+                records: Ok(value.records),
+                v: Ok(value.v),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct DiagnosticProducerStateV1 {
+        boot_id: ::std::result::Result<super::LogBoundedIdentityV1, ::std::string::String>,
+        dropped_before: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        health: ::std::result::Result<super::LoggingHealthV1, ::std::string::String>,
+        instance_id: ::std::result::Result<super::LogBoundedIdentityV1, ::std::string::String>,
+        newest_cursor: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        oldest_cursor: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        producer_id: ::std::result::Result<super::LogBoundedIdentityV1, ::std::string::String>,
+        service: ::std::result::Result<super::LogServiceV1, ::std::string::String>,
+        stream: ::std::result::Result<super::LogStreamV1, ::std::string::String>,
+    }
+    impl ::std::default::Default for DiagnosticProducerStateV1 {
+        fn default() -> Self {
+            Self {
+                boot_id: Err("no value supplied for boot_id".to_string()),
+                dropped_before: Err("no value supplied for dropped_before".to_string()),
+                health: Err("no value supplied for health".to_string()),
+                instance_id: Err("no value supplied for instance_id".to_string()),
+                newest_cursor: Err("no value supplied for newest_cursor".to_string()),
+                oldest_cursor: Err("no value supplied for oldest_cursor".to_string()),
+                producer_id: Err("no value supplied for producer_id".to_string()),
+                service: Err("no value supplied for service".to_string()),
+                stream: Err("no value supplied for stream".to_string()),
+            }
+        }
+    }
+    impl DiagnosticProducerStateV1 {
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogBoundedIdentityV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
+        pub fn dropped_before<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_before = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped_before: {e}"));
+            self
+        }
+        pub fn health<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LoggingHealthV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.health = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for health: {e}"));
+            self
+        }
+        pub fn instance_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogBoundedIdentityV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.instance_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for instance_id: {e}"));
+            self
+        }
+        pub fn newest_cursor<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.newest_cursor = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for newest_cursor: {e}"));
+            self
+        }
+        pub fn oldest_cursor<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.oldest_cursor = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for oldest_cursor: {e}"));
+            self
+        }
+        pub fn producer_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogBoundedIdentityV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.producer_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for producer_id: {e}"));
+            self
+        }
+        pub fn service<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogServiceV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.service = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for service: {e}"));
+            self
+        }
+        pub fn stream<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogStreamV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.stream = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for stream: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<DiagnosticProducerStateV1> for super::DiagnosticProducerStateV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: DiagnosticProducerStateV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                boot_id: value.boot_id?,
+                dropped_before: value.dropped_before?,
+                health: value.health?,
+                instance_id: value.instance_id?,
+                newest_cursor: value.newest_cursor?,
+                oldest_cursor: value.oldest_cursor?,
+                producer_id: value.producer_id?,
+                service: value.service?,
+                stream: value.stream?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::DiagnosticProducerStateV1> for DiagnosticProducerStateV1 {
+        fn from(value: super::DiagnosticProducerStateV1) -> Self {
+            Self {
+                boot_id: Ok(value.boot_id),
+                dropped_before: Ok(value.dropped_before),
+                health: Ok(value.health),
+                instance_id: Ok(value.instance_id),
+                newest_cursor: Ok(value.newest_cursor),
+                oldest_cursor: Ok(value.oldest_cursor),
+                producer_id: Ok(value.producer_id),
+                service: Ok(value.service),
+                stream: Ok(value.stream),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct ErrorData {
         details: ::std::result::Result<
             ::std::option::Option<::serde_json::Value>,
@@ -2299,6 +5705,1262 @@ pub mod builder {
                 contracts_version: Ok(value.contracts_version),
                 granted_scopes: Ok(value.granted_scopes),
                 server_kind: Ok(value.server_kind),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct LogErrorV1 {
+        causes: ::std::result::Result<::std::vec::Vec<super::LogErrorV1>, ::std::string::String>,
+        code: ::std::result::Result<
+            ::std::option::Option<super::LogErrorV1Code>,
+            ::std::string::String,
+        >,
+        message: ::std::result::Result<super::LogErrorV1Message, ::std::string::String>,
+        stack: ::std::result::Result<
+            ::std::option::Option<super::LogErrorV1Stack>,
+            ::std::string::String,
+        >,
+        type_: ::std::result::Result<super::LogErrorV1Type, ::std::string::String>,
+    }
+    impl ::std::default::Default for LogErrorV1 {
+        fn default() -> Self {
+            Self {
+                causes: Ok(Default::default()),
+                code: Ok(Default::default()),
+                message: Err("no value supplied for message".to_string()),
+                stack: Ok(Default::default()),
+                type_: Err("no value supplied for type_".to_string()),
+            }
+        }
+    }
+    impl LogErrorV1 {
+        pub fn causes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::LogErrorV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.causes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for causes: {e}"));
+            self
+        }
+        pub fn code<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogErrorV1Code>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.code = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for code: {e}"));
+            self
+        }
+        pub fn message<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogErrorV1Message>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.message = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for message: {e}"));
+            self
+        }
+        pub fn stack<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogErrorV1Stack>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.stack = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for stack: {e}"));
+            self
+        }
+        pub fn type_<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogErrorV1Type>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.type_ = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for type_: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<LogErrorV1> for super::LogErrorV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: LogErrorV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                causes: value.causes?,
+                code: value.code?,
+                message: value.message?,
+                stack: value.stack?,
+                type_: value.type_?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::LogErrorV1> for LogErrorV1 {
+        fn from(value: super::LogErrorV1) -> Self {
+            Self {
+                causes: Ok(value.causes),
+                code: Ok(value.code),
+                message: Ok(value.message),
+                stack: Ok(value.stack),
+                type_: Ok(value.type_),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct LogRecordV1 {
+        attrs: ::std::result::Result<
+            ::std::option::Option<super::LogAttributesV1>,
+            ::std::string::String,
+        >,
+        boot_id: ::std::result::Result<super::LogBoundedIdentityV1, ::std::string::String>,
+        component: ::std::result::Result<super::LogRecordV1Component, ::std::string::String>,
+        device_id: ::std::result::Result<
+            ::std::option::Option<super::LogBoundedIdentityV1>,
+            ::std::string::String,
+        >,
+        doc_id: ::std::result::Result<
+            ::std::option::Option<super::LogBoundedIdentityV1>,
+            ::std::string::String,
+        >,
+        err: ::std::result::Result<::std::option::Option<super::LogErrorV1>, ::std::string::String>,
+        event: ::std::result::Result<super::LogRecordV1Event, ::std::string::String>,
+        instance_id: ::std::result::Result<super::LogBoundedIdentityV1, ::std::string::String>,
+        level: ::std::result::Result<super::LogLevelV1, ::std::string::String>,
+        msg: ::std::result::Result<super::LogRecordV1Msg, ::std::string::String>,
+        observed_time: ::std::result::Result<
+            ::std::option::Option<super::LogSafeIntegerV1>,
+            ::std::string::String,
+        >,
+        operation_id: ::std::result::Result<
+            ::std::option::Option<super::LogBoundedIdentityV1>,
+            ::std::string::String,
+        >,
+        pid: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        plugin: ::std::result::Result<
+            ::std::option::Option<super::PluginLogProvenanceV1>,
+            ::std::string::String,
+        >,
+        request_id: ::std::result::Result<
+            ::std::option::Option<super::LogBoundedIdentityV1>,
+            ::std::string::String,
+        >,
+        role: ::std::result::Result<super::LogRoleV1, ::std::string::String>,
+        seq: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        service: ::std::result::Result<super::LogServiceV1, ::std::string::String>,
+        session_id: ::std::result::Result<
+            ::std::option::Option<super::LogBoundedIdentityV1>,
+            ::std::string::String,
+        >,
+        severity: ::std::result::Result<super::LogSeverityV1, ::std::string::String>,
+        span_id: ::std::result::Result<
+            ::std::option::Option<super::LogBoundedIdentityV1>,
+            ::std::string::String,
+        >,
+        time: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        trace_id: ::std::result::Result<
+            ::std::option::Option<super::LogBoundedIdentityV1>,
+            ::std::string::String,
+        >,
+        truncation: ::std::result::Result<
+            ::std::option::Option<super::LogTruncationV1>,
+            ::std::string::String,
+        >,
+        v: ::std::result::Result<super::LogSchemaVersionV1, ::std::string::String>,
+        window_id: ::std::result::Result<
+            ::std::option::Option<super::LogBoundedIdentityV1>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for LogRecordV1 {
+        fn default() -> Self {
+            Self {
+                attrs: Ok(Default::default()),
+                boot_id: Err("no value supplied for boot_id".to_string()),
+                component: Err("no value supplied for component".to_string()),
+                device_id: Ok(Default::default()),
+                doc_id: Ok(Default::default()),
+                err: Ok(Default::default()),
+                event: Err("no value supplied for event".to_string()),
+                instance_id: Err("no value supplied for instance_id".to_string()),
+                level: Err("no value supplied for level".to_string()),
+                msg: Err("no value supplied for msg".to_string()),
+                observed_time: Ok(Default::default()),
+                operation_id: Ok(Default::default()),
+                pid: Err("no value supplied for pid".to_string()),
+                plugin: Ok(Default::default()),
+                request_id: Ok(Default::default()),
+                role: Err("no value supplied for role".to_string()),
+                seq: Err("no value supplied for seq".to_string()),
+                service: Err("no value supplied for service".to_string()),
+                session_id: Ok(Default::default()),
+                severity: Err("no value supplied for severity".to_string()),
+                span_id: Ok(Default::default()),
+                time: Err("no value supplied for time".to_string()),
+                trace_id: Ok(Default::default()),
+                truncation: Ok(Default::default()),
+                v: Err("no value supplied for v".to_string()),
+                window_id: Ok(Default::default()),
+            }
+        }
+    }
+    impl LogRecordV1 {
+        pub fn attrs<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogAttributesV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.attrs = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for attrs: {e}"));
+            self
+        }
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogBoundedIdentityV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
+        pub fn component<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogRecordV1Component>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.component = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for component: {e}"));
+            self
+        }
+        pub fn device_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogBoundedIdentityV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_id: {e}"));
+            self
+        }
+        pub fn doc_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogBoundedIdentityV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.doc_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for doc_id: {e}"));
+            self
+        }
+        pub fn err<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogErrorV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.err = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for err: {e}"));
+            self
+        }
+        pub fn event<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogRecordV1Event>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.event = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for event: {e}"));
+            self
+        }
+        pub fn instance_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogBoundedIdentityV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.instance_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for instance_id: {e}"));
+            self
+        }
+        pub fn level<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogLevelV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.level = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for level: {e}"));
+            self
+        }
+        pub fn msg<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogRecordV1Msg>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.msg = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for msg: {e}"));
+            self
+        }
+        pub fn observed_time<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogSafeIntegerV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.observed_time = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for observed_time: {e}"));
+            self
+        }
+        pub fn operation_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogBoundedIdentityV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.operation_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for operation_id: {e}"));
+            self
+        }
+        pub fn pid<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pid = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pid: {e}"));
+            self
+        }
+        pub fn plugin<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::PluginLogProvenanceV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.plugin = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for plugin: {e}"));
+            self
+        }
+        pub fn request_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogBoundedIdentityV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.request_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for request_id: {e}"));
+            self
+        }
+        pub fn role<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogRoleV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.role = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for role: {e}"));
+            self
+        }
+        pub fn seq<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.seq = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for seq: {e}"));
+            self
+        }
+        pub fn service<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogServiceV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.service = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for service: {e}"));
+            self
+        }
+        pub fn session_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogBoundedIdentityV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.session_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for session_id: {e}"));
+            self
+        }
+        pub fn severity<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSeverityV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.severity = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for severity: {e}"));
+            self
+        }
+        pub fn span_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogBoundedIdentityV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.span_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for span_id: {e}"));
+            self
+        }
+        pub fn time<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.time = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for time: {e}"));
+            self
+        }
+        pub fn trace_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogBoundedIdentityV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.trace_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for trace_id: {e}"));
+            self
+        }
+        pub fn truncation<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogTruncationV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.truncation = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for truncation: {e}"));
+            self
+        }
+        pub fn v<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSchemaVersionV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.v = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for v: {e}"));
+            self
+        }
+        pub fn window_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogBoundedIdentityV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.window_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for window_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<LogRecordV1> for super::LogRecordV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: LogRecordV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                attrs: value.attrs?,
+                boot_id: value.boot_id?,
+                component: value.component?,
+                device_id: value.device_id?,
+                doc_id: value.doc_id?,
+                err: value.err?,
+                event: value.event?,
+                instance_id: value.instance_id?,
+                level: value.level?,
+                msg: value.msg?,
+                observed_time: value.observed_time?,
+                operation_id: value.operation_id?,
+                pid: value.pid?,
+                plugin: value.plugin?,
+                request_id: value.request_id?,
+                role: value.role?,
+                seq: value.seq?,
+                service: value.service?,
+                session_id: value.session_id?,
+                severity: value.severity?,
+                span_id: value.span_id?,
+                time: value.time?,
+                trace_id: value.trace_id?,
+                truncation: value.truncation?,
+                v: value.v?,
+                window_id: value.window_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::LogRecordV1> for LogRecordV1 {
+        fn from(value: super::LogRecordV1) -> Self {
+            Self {
+                attrs: Ok(value.attrs),
+                boot_id: Ok(value.boot_id),
+                component: Ok(value.component),
+                device_id: Ok(value.device_id),
+                doc_id: Ok(value.doc_id),
+                err: Ok(value.err),
+                event: Ok(value.event),
+                instance_id: Ok(value.instance_id),
+                level: Ok(value.level),
+                msg: Ok(value.msg),
+                observed_time: Ok(value.observed_time),
+                operation_id: Ok(value.operation_id),
+                pid: Ok(value.pid),
+                plugin: Ok(value.plugin),
+                request_id: Ok(value.request_id),
+                role: Ok(value.role),
+                seq: Ok(value.seq),
+                service: Ok(value.service),
+                session_id: Ok(value.session_id),
+                severity: Ok(value.severity),
+                span_id: Ok(value.span_id),
+                time: Ok(value.time),
+                trace_id: Ok(value.trace_id),
+                truncation: Ok(value.truncation),
+                v: Ok(value.v),
+                window_id: Ok(value.window_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct LogTruncationV1 {
+        dropped_bytes: ::std::result::Result<
+            ::std::option::Option<super::LogSafeIntegerV1>,
+            ::std::string::String,
+        >,
+        dropped_items: ::std::result::Result<
+            ::std::option::Option<super::LogSafeIntegerV1>,
+            ::std::string::String,
+        >,
+        fields: ::std::result::Result<
+            ::std::vec::Vec<super::LogTruncationV1FieldsItem>,
+            ::std::string::String,
+        >,
+        original_bytes: ::std::result::Result<
+            ::std::option::Option<super::LogSafeIntegerV1>,
+            ::std::string::String,
+        >,
+        original_items: ::std::result::Result<
+            ::std::option::Option<super::LogSafeIntegerV1>,
+            ::std::string::String,
+        >,
+        reasons: ::std::result::Result<
+            ::std::vec::Vec<super::LogTruncationReasonV1>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for LogTruncationV1 {
+        fn default() -> Self {
+            Self {
+                dropped_bytes: Ok(Default::default()),
+                dropped_items: Ok(Default::default()),
+                fields: Ok(Default::default()),
+                original_bytes: Ok(Default::default()),
+                original_items: Ok(Default::default()),
+                reasons: Err("no value supplied for reasons".to_string()),
+            }
+        }
+    }
+    impl LogTruncationV1 {
+        pub fn dropped_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogSafeIntegerV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped_bytes: {e}"));
+            self
+        }
+        pub fn dropped_items<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogSafeIntegerV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_items = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped_items: {e}"));
+            self
+        }
+        pub fn fields<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::LogTruncationV1FieldsItem>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.fields = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for fields: {e}"));
+            self
+        }
+        pub fn original_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogSafeIntegerV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.original_bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for original_bytes: {e}"));
+            self
+        }
+        pub fn original_items<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogSafeIntegerV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.original_items = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for original_items: {e}"));
+            self
+        }
+        pub fn reasons<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::LogTruncationReasonV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.reasons = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for reasons: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<LogTruncationV1> for super::LogTruncationV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: LogTruncationV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                dropped_bytes: value.dropped_bytes?,
+                dropped_items: value.dropped_items?,
+                fields: value.fields?,
+                original_bytes: value.original_bytes?,
+                original_items: value.original_items?,
+                reasons: value.reasons?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::LogTruncationV1> for LogTruncationV1 {
+        fn from(value: super::LogTruncationV1) -> Self {
+            Self {
+                dropped_bytes: Ok(value.dropped_bytes),
+                dropped_items: Ok(value.dropped_items),
+                fields: Ok(value.fields),
+                original_bytes: Ok(value.original_bytes),
+                original_items: Ok(value.original_items),
+                reasons: Ok(value.reasons),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct LoggingBufferHealthV1 {
+        bytes: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        capacity_bytes: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        capacity_records: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        high_water_bytes: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        high_water_records: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        records: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+    }
+    impl ::std::default::Default for LoggingBufferHealthV1 {
+        fn default() -> Self {
+            Self {
+                bytes: Err("no value supplied for bytes".to_string()),
+                capacity_bytes: Err("no value supplied for capacity_bytes".to_string()),
+                capacity_records: Err("no value supplied for capacity_records".to_string()),
+                high_water_bytes: Err("no value supplied for high_water_bytes".to_string()),
+                high_water_records: Err("no value supplied for high_water_records".to_string()),
+                records: Err("no value supplied for records".to_string()),
+            }
+        }
+    }
+    impl LoggingBufferHealthV1 {
+        pub fn bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for bytes: {e}"));
+            self
+        }
+        pub fn capacity_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.capacity_bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for capacity_bytes: {e}"));
+            self
+        }
+        pub fn capacity_records<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.capacity_records = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for capacity_records: {e}"));
+            self
+        }
+        pub fn high_water_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.high_water_bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for high_water_bytes: {e}"));
+            self
+        }
+        pub fn high_water_records<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.high_water_records = value.try_into().map_err(|e| {
+                format!("error converting supplied value for high_water_records: {e}")
+            });
+            self
+        }
+        pub fn records<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.records = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for records: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<LoggingBufferHealthV1> for super::LoggingBufferHealthV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: LoggingBufferHealthV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                bytes: value.bytes?,
+                capacity_bytes: value.capacity_bytes?,
+                capacity_records: value.capacity_records?,
+                high_water_bytes: value.high_water_bytes?,
+                high_water_records: value.high_water_records?,
+                records: value.records?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::LoggingBufferHealthV1> for LoggingBufferHealthV1 {
+        fn from(value: super::LoggingBufferHealthV1) -> Self {
+            Self {
+                bytes: Ok(value.bytes),
+                capacity_bytes: Ok(value.capacity_bytes),
+                capacity_records: Ok(value.capacity_records),
+                high_water_bytes: Ok(value.high_water_bytes),
+                high_water_records: Ok(value.high_water_records),
+                records: Ok(value.records),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct LoggingCountersV1 {
+        accepted: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        bytes_written: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        cleanup_deletions: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        dropped_debug: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        dropped_error: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        dropped_info: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        dropped_trace: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        dropped_warn: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        emergency_fallbacks: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        rejected: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        rotations: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        truncated: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+    }
+    impl ::std::default::Default for LoggingCountersV1 {
+        fn default() -> Self {
+            Self {
+                accepted: Err("no value supplied for accepted".to_string()),
+                bytes_written: Err("no value supplied for bytes_written".to_string()),
+                cleanup_deletions: Err("no value supplied for cleanup_deletions".to_string()),
+                dropped_debug: Err("no value supplied for dropped_debug".to_string()),
+                dropped_error: Err("no value supplied for dropped_error".to_string()),
+                dropped_info: Err("no value supplied for dropped_info".to_string()),
+                dropped_trace: Err("no value supplied for dropped_trace".to_string()),
+                dropped_warn: Err("no value supplied for dropped_warn".to_string()),
+                emergency_fallbacks: Err("no value supplied for emergency_fallbacks".to_string()),
+                rejected: Err("no value supplied for rejected".to_string()),
+                rotations: Err("no value supplied for rotations".to_string()),
+                truncated: Err("no value supplied for truncated".to_string()),
+            }
+        }
+    }
+    impl LoggingCountersV1 {
+        pub fn accepted<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.accepted = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for accepted: {e}"));
+            self
+        }
+        pub fn bytes_written<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.bytes_written = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for bytes_written: {e}"));
+            self
+        }
+        pub fn cleanup_deletions<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cleanup_deletions = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cleanup_deletions: {e}"));
+            self
+        }
+        pub fn dropped_debug<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_debug = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped_debug: {e}"));
+            self
+        }
+        pub fn dropped_error<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_error = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped_error: {e}"));
+            self
+        }
+        pub fn dropped_info<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_info = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped_info: {e}"));
+            self
+        }
+        pub fn dropped_trace<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_trace = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped_trace: {e}"));
+            self
+        }
+        pub fn dropped_warn<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped_warn = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped_warn: {e}"));
+            self
+        }
+        pub fn emergency_fallbacks<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.emergency_fallbacks = value.try_into().map_err(|e| {
+                format!("error converting supplied value for emergency_fallbacks: {e}")
+            });
+            self
+        }
+        pub fn rejected<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.rejected = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for rejected: {e}"));
+            self
+        }
+        pub fn rotations<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.rotations = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for rotations: {e}"));
+            self
+        }
+        pub fn truncated<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.truncated = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for truncated: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<LoggingCountersV1> for super::LoggingCountersV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: LoggingCountersV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                accepted: value.accepted?,
+                bytes_written: value.bytes_written?,
+                cleanup_deletions: value.cleanup_deletions?,
+                dropped_debug: value.dropped_debug?,
+                dropped_error: value.dropped_error?,
+                dropped_info: value.dropped_info?,
+                dropped_trace: value.dropped_trace?,
+                dropped_warn: value.dropped_warn?,
+                emergency_fallbacks: value.emergency_fallbacks?,
+                rejected: value.rejected?,
+                rotations: value.rotations?,
+                truncated: value.truncated?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::LoggingCountersV1> for LoggingCountersV1 {
+        fn from(value: super::LoggingCountersV1) -> Self {
+            Self {
+                accepted: Ok(value.accepted),
+                bytes_written: Ok(value.bytes_written),
+                cleanup_deletions: Ok(value.cleanup_deletions),
+                dropped_debug: Ok(value.dropped_debug),
+                dropped_error: Ok(value.dropped_error),
+                dropped_info: Ok(value.dropped_info),
+                dropped_trace: Ok(value.dropped_trace),
+                dropped_warn: Ok(value.dropped_warn),
+                emergency_fallbacks: Ok(value.emergency_fallbacks),
+                rejected: Ok(value.rejected),
+                rotations: Ok(value.rotations),
+                truncated: Ok(value.truncated),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct LoggingFailureV1 {
+        kind: ::std::result::Result<super::LoggingFailureV1Kind, ::std::string::String>,
+        message: ::std::result::Result<super::LoggingFailureV1Message, ::std::string::String>,
+        time: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+    }
+    impl ::std::default::Default for LoggingFailureV1 {
+        fn default() -> Self {
+            Self {
+                kind: Err("no value supplied for kind".to_string()),
+                message: Err("no value supplied for message".to_string()),
+                time: Err("no value supplied for time".to_string()),
+            }
+        }
+    }
+    impl LoggingFailureV1 {
+        pub fn kind<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LoggingFailureV1Kind>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.kind = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for kind: {e}"));
+            self
+        }
+        pub fn message<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LoggingFailureV1Message>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.message = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for message: {e}"));
+            self
+        }
+        pub fn time<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.time = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for time: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<LoggingFailureV1> for super::LoggingFailureV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: LoggingFailureV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                kind: value.kind?,
+                message: value.message?,
+                time: value.time?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::LoggingFailureV1> for LoggingFailureV1 {
+        fn from(value: super::LoggingFailureV1) -> Self {
+            Self {
+                kind: Ok(value.kind),
+                message: Ok(value.message),
+                time: Ok(value.time),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct LoggingHealthV1 {
+        active_lease_count: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        active_segment_bytes: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        boot_id: ::std::result::Result<super::LogBoundedIdentityV1, ::std::string::String>,
+        counters: ::std::result::Result<super::LoggingCountersV1, ::std::string::String>,
+        current_level: ::std::result::Result<super::LogLevelNameV1, ::std::string::String>,
+        instance_id: ::std::result::Result<super::LogBoundedIdentityV1, ::std::string::String>,
+        last_failure: ::std::result::Result<
+            ::std::option::Option<super::LoggingFailureV1>,
+            ::std::string::String,
+        >,
+        last_write_at: ::std::result::Result<
+            ::std::option::Option<super::LogSafeIntegerV1>,
+            ::std::string::String,
+        >,
+        queue: ::std::result::Result<super::LoggingBufferHealthV1, ::std::string::String>,
+        ring: ::std::result::Result<super::LoggingBufferHealthV1, ::std::string::String>,
+        service: ::std::result::Result<super::LogServiceV1, ::std::string::String>,
+        stream: ::std::result::Result<super::LogStreamV1, ::std::string::String>,
+        v: ::std::result::Result<super::LogSchemaVersionV1, ::std::string::String>,
+        writer_state: ::std::result::Result<super::LoggingWriterStateV1, ::std::string::String>,
+    }
+    impl ::std::default::Default for LoggingHealthV1 {
+        fn default() -> Self {
+            Self {
+                active_lease_count: Err("no value supplied for active_lease_count".to_string()),
+                active_segment_bytes: Err("no value supplied for active_segment_bytes".to_string()),
+                boot_id: Err("no value supplied for boot_id".to_string()),
+                counters: Err("no value supplied for counters".to_string()),
+                current_level: Err("no value supplied for current_level".to_string()),
+                instance_id: Err("no value supplied for instance_id".to_string()),
+                last_failure: Ok(Default::default()),
+                last_write_at: Ok(Default::default()),
+                queue: Err("no value supplied for queue".to_string()),
+                ring: Err("no value supplied for ring".to_string()),
+                service: Err("no value supplied for service".to_string()),
+                stream: Err("no value supplied for stream".to_string()),
+                v: Err("no value supplied for v".to_string()),
+                writer_state: Err("no value supplied for writer_state".to_string()),
+            }
+        }
+    }
+    impl LoggingHealthV1 {
+        pub fn active_lease_count<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.active_lease_count = value.try_into().map_err(|e| {
+                format!("error converting supplied value for active_lease_count: {e}")
+            });
+            self
+        }
+        pub fn active_segment_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.active_segment_bytes = value.try_into().map_err(|e| {
+                format!("error converting supplied value for active_segment_bytes: {e}")
+            });
+            self
+        }
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogBoundedIdentityV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
+        pub fn counters<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LoggingCountersV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.counters = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for counters: {e}"));
+            self
+        }
+        pub fn current_level<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogLevelNameV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.current_level = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for current_level: {e}"));
+            self
+        }
+        pub fn instance_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogBoundedIdentityV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.instance_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for instance_id: {e}"));
+            self
+        }
+        pub fn last_failure<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LoggingFailureV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.last_failure = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for last_failure: {e}"));
+            self
+        }
+        pub fn last_write_at<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogSafeIntegerV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.last_write_at = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for last_write_at: {e}"));
+            self
+        }
+        pub fn queue<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LoggingBufferHealthV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.queue = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for queue: {e}"));
+            self
+        }
+        pub fn ring<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LoggingBufferHealthV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.ring = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for ring: {e}"));
+            self
+        }
+        pub fn service<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogServiceV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.service = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for service: {e}"));
+            self
+        }
+        pub fn stream<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogStreamV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.stream = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for stream: {e}"));
+            self
+        }
+        pub fn v<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSchemaVersionV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.v = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for v: {e}"));
+            self
+        }
+        pub fn writer_state<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LoggingWriterStateV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.writer_state = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for writer_state: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<LoggingHealthV1> for super::LoggingHealthV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: LoggingHealthV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                active_lease_count: value.active_lease_count?,
+                active_segment_bytes: value.active_segment_bytes?,
+                boot_id: value.boot_id?,
+                counters: value.counters?,
+                current_level: value.current_level?,
+                instance_id: value.instance_id?,
+                last_failure: value.last_failure?,
+                last_write_at: value.last_write_at?,
+                queue: value.queue?,
+                ring: value.ring?,
+                service: value.service?,
+                stream: value.stream?,
+                v: value.v?,
+                writer_state: value.writer_state?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::LoggingHealthV1> for LoggingHealthV1 {
+        fn from(value: super::LoggingHealthV1) -> Self {
+            Self {
+                active_lease_count: Ok(value.active_lease_count),
+                active_segment_bytes: Ok(value.active_segment_bytes),
+                boot_id: Ok(value.boot_id),
+                counters: Ok(value.counters),
+                current_level: Ok(value.current_level),
+                instance_id: Ok(value.instance_id),
+                last_failure: Ok(value.last_failure),
+                last_write_at: Ok(value.last_write_at),
+                queue: Ok(value.queue),
+                ring: Ok(value.ring),
+                service: Ok(value.service),
+                stream: Ok(value.stream),
+                v: Ok(value.v),
+                writer_state: Ok(value.writer_state),
             }
         }
     }
@@ -2793,6 +7455,137 @@ pub mod builder {
                 name: Ok(value.name),
                 online: Ok(value.online),
                 whois: Ok(value.whois),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct PluginLogProvenanceV1 {
+        entry: ::std::result::Result<super::PluginLogProvenanceV1Entry, ::std::string::String>,
+        id: ::std::result::Result<super::LogBoundedIdentityV1, ::std::string::String>,
+        install_revision: ::std::result::Result<
+            super::PluginLogProvenanceV1InstallRevision,
+            ::std::string::String,
+        >,
+        install_source:
+            ::std::result::Result<super::PluginLogProvenanceV1InstallSource, ::std::string::String>,
+        trust: ::std::result::Result<super::PluginLogProvenanceV1Trust, ::std::string::String>,
+        version: ::std::result::Result<super::PluginLogProvenanceV1Version, ::std::string::String>,
+        window_id: ::std::result::Result<
+            ::std::option::Option<super::LogBoundedIdentityV1>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for PluginLogProvenanceV1 {
+        fn default() -> Self {
+            Self {
+                entry: Err("no value supplied for entry".to_string()),
+                id: Err("no value supplied for id".to_string()),
+                install_revision: Err("no value supplied for install_revision".to_string()),
+                install_source: Err("no value supplied for install_source".to_string()),
+                trust: Err("no value supplied for trust".to_string()),
+                version: Err("no value supplied for version".to_string()),
+                window_id: Ok(Default::default()),
+            }
+        }
+    }
+    impl PluginLogProvenanceV1 {
+        pub fn entry<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::PluginLogProvenanceV1Entry>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.entry = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for entry: {e}"));
+            self
+        }
+        pub fn id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogBoundedIdentityV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for id: {e}"));
+            self
+        }
+        pub fn install_revision<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::PluginLogProvenanceV1InstallRevision>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.install_revision = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for install_revision: {e}"));
+            self
+        }
+        pub fn install_source<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::PluginLogProvenanceV1InstallSource>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.install_source = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for install_source: {e}"));
+            self
+        }
+        pub fn trust<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::PluginLogProvenanceV1Trust>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.trust = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for trust: {e}"));
+            self
+        }
+        pub fn version<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::PluginLogProvenanceV1Version>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.version = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for version: {e}"));
+            self
+        }
+        pub fn window_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogBoundedIdentityV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.window_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for window_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<PluginLogProvenanceV1> for super::PluginLogProvenanceV1 {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: PluginLogProvenanceV1,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                entry: value.entry?,
+                id: value.id?,
+                install_revision: value.install_revision?,
+                install_source: value.install_source?,
+                trust: value.trust?,
+                version: value.version?,
+                window_id: value.window_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::PluginLogProvenanceV1> for PluginLogProvenanceV1 {
+        fn from(value: super::PluginLogProvenanceV1) -> Self {
+            Self {
+                entry: Ok(value.entry),
+                id: Ok(value.id),
+                install_revision: Ok(value.install_revision),
+                install_source: Ok(value.install_source),
+                trust: Ok(value.trust),
+                version: Ok(value.version),
+                window_id: Ok(value.window_id),
             }
         }
     }

@@ -1,0 +1,36 @@
+{
+  "v": 1,
+  "bundleId": "bundle_01",
+  "createdAt": 1784852405123,
+  "range": {
+    "from": 1784766000000,
+    "to": 1784852400000
+  },
+  "sources": ["system/desktop", "system/fieldd", "system/field-native"],
+  "pluginAliases": [],
+  "includesAudit": false,
+  "crashArtifacts": [],
+  "sanitizerVersion": "1",
+  "omittedRecords": 2,
+  "truncatedRecords": 1,
+  "files": [
+    {
+      "path": "system/fieldd.ndjson",
+      "category": "system",
+      "bytes": 4096,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "path": "manifest.json",
+      "category": "manifest",
+      "bytes": 1024,
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "totalBytes": 5120,
+  "versions": {
+    "vibefield": "0.1.0",
+    "contracts": "0.1.0",
+    "electron": "43.1.1"
+  }
+}

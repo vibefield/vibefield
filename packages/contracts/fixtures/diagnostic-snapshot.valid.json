@@ -1,0 +1,79 @@
+{
+  "v": 1,
+  "producers": [
+    {
+      "producerId": "producer_fieldd_01",
+      "service": "fieldd",
+      "stream": "system/fieldd",
+      "bootId": "boot_fieldd_01",
+      "instanceId": "fieldd_01",
+      "oldestCursor": 100,
+      "newestCursor": 1024,
+      "droppedBefore": 8,
+      "health": {
+        "v": 1,
+        "stream": "system/fieldd",
+        "service": "fieldd",
+        "bootId": "boot_fieldd_01",
+        "instanceId": "fieldd_01",
+        "writerState": "healthy",
+        "currentLevel": "info",
+        "activeLeaseCount": 0,
+        "activeSegmentBytes": 8192,
+        "queue": {
+          "records": 0,
+          "bytes": 0,
+          "highWaterRecords": 18,
+          "highWaterBytes": 4096,
+          "capacityRecords": 8192,
+          "capacityBytes": 8388608
+        },
+        "ring": {
+          "records": 120,
+          "bytes": 48000,
+          "highWaterRecords": 300,
+          "highWaterBytes": 120000,
+          "capacityRecords": 2000,
+          "capacityBytes": 2097152
+        },
+        "counters": {
+          "accepted": 1024,
+          "rejected": 1,
+          "truncated": 2,
+          "droppedTrace": 0,
+          "droppedDebug": 4,
+          "droppedInfo": 0,
+          "droppedWarn": 0,
+          "droppedError": 0,
+          "bytesWritten": 456789,
+          "rotations": 1,
+          "cleanupDeletions": 1,
+          "emergencyFallbacks": 0
+        },
+        "lastWriteAt": 1784852402123
+      }
+    }
+  ],
+  "records": [
+    {
+      "v": 1,
+      "time": 1784852402123,
+      "level": 30,
+      "severity": "INFO",
+      "event": "fieldd.lifecycle.ready",
+      "msg": "fieldd is ready",
+      "service": "fieldd",
+      "role": "daemon",
+      "component": "lifecycle",
+      "pid": 4822,
+      "bootId": "boot_fieldd_01",
+      "instanceId": "fieldd_01",
+      "seq": 1024,
+      "attrs": {
+        "controlPort": 9410
+      }
+    }
+  ],
+  "nextCursor": "cursor:v1:fieldd:boot_fieldd_01:1024",
+  "droppedBefore": 8
+}

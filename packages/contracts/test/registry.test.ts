@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LOCALITIES, METHODS, SURFACES } from "../src/methods";
-import { PORTS, SCOPES } from "../src/registries";
+import { LOG_STREAMS, PORTS, SCOPES, TAILNET_SCOPES } from "../src/registries";
 
 describe("method registry lint (design-01 §9.2 + D36)", () => {
   it("every method is fully declared", () => {
@@ -22,5 +22,22 @@ describe("port registry", () => {
   it("no port is assigned twice", () => {
     const values = Object.values(PORTS);
     expect(new Set(values).size).toBe(values.length);
+  });
+});
+
+describe("logging registries (LOG-43/LOG-44)", () => {
+  it("declares unique, fixed category/basename pairs", () => {
+    const streams = Object.values(LOG_STREAMS);
+    expect(new Set(streams).size).toBe(streams.length);
+    for (const stream of streams) {
+      expect(stream).toMatch(/^(?:system|plugins)\/[a-z][a-z-]*$/);
+    }
+  });
+
+  it("keeps diagnostics and audit scopes local-only", () => {
+    for (const scope of ["diagnostics.read", "diagnostics.manage", "audit.append"] as const) {
+      expect(SCOPES).toContain(scope);
+      expect(TAILNET_SCOPES).not.toContain(scope);
+    }
   });
 });

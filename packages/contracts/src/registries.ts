@@ -43,6 +43,22 @@ export const NAMESPACES = {
  * Note: "FIELDD_" does NOT match the "FIELD_" prefix (5th char) and needs its own entry. */
 export const ENV_PREFIXES = ["FIELD_", "FIELDD_"] as const;
 
+/** LOG-44 — physical diagnostic streams. The value is the ONLY category /
+ * basename pair callers may resolve beneath the platform log root. Dynamic
+ * component, window, session, and plugin identities belong in record fields,
+ * never in filenames. */
+export const LOG_STREAMS = {
+  SYSTEM_DESKTOP: "system/desktop",
+  SYSTEM_RENDERER: "system/renderer",
+  SYSTEM_UTILITY: "system/utility",
+  SYSTEM_FIELDD: "system/fieldd",
+  SYSTEM_FIELD_NATIVE: "system/field-native",
+  PLUGINS_RENDERER: "plugins/renderer",
+  PLUGINS_SERVICE: "plugins/service",
+  PLUGINS_UTILITY: "plugins/utility",
+} as const;
+export type LogStream = (typeof LOG_STREAMS)[keyof typeof LOG_STREAMS];
+
 /** Every grantable capability (design-01 §7 + design-03 §8 + design-04). */
 export const SCOPES = [
   "canvas.read",
@@ -74,6 +90,9 @@ export const SCOPES = [
   "shell.webcontents",
   "plugins.read", // registry snapshot (plugins.list/get/subscribe) — local-only like plugins.manage
   "plugins.manage",
+  "diagnostics.read", // LOG §14 — trusted shell only; excluded from every federated preset
+  "diagnostics.manage", // diagnostic leases/support mutations; trusted shell only
+  "audit.append", // shell-originated audit actions; local-only
   "tokens.mint", // shell-main only: mint per-window renderer tokens (Track A bootstrap)
 ] as const;
 export type Scope = (typeof SCOPES)[number];

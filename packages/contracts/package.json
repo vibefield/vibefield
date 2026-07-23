@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./diagnostics": "./src/diagnostics.ts",
+    "./logging": "./src/logging.ts"
   },
   "scripts": {
     "test": "vitest run",

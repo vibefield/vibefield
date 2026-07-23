@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "cursor": "cursor:v1:fieldd:boot_fieldd_01:1025",
+  "records": [
+    {
+      "v": 1,
+      "time": 1784852403123,
+      "level": 40,
+      "severity": "WARN",
+      "event": "fieldd.native_link.reconnecting",
+      "msg": "Native management link is reconnecting",
+      "service": "fieldd",
+      "role": "daemon",
+      "component": "native_link",
+      "pid": 4822,
+      "bootId": "boot_fieldd_01",
+      "instanceId": "fieldd_01",
+      "seq": 1025,
+      "attrs": {
+        "attempt": 2
+      }
+    }
+  ],
+  "droppedSincePrevious": 0
+}

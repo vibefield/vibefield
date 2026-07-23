@@ -1,0 +1,525 @@
+{
+  "$ref": "#/definitions/LoggingHealthV1",
+  "definitions": {
+    "LogAttributesV1": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/LogValueV1"
+      }
+    },
+    "LogBoundedIdentityV1": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "LogSafeIntegerV1": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "LogSchemaVersionV1": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
+    },
+    "LogLevelV1": {
+      "type": "integer",
+      "enum": [
+        10,
+        20,
+        30,
+        40,
+        50,
+        60
+      ]
+    },
+    "LogLevelNameV1": {
+      "type": "string",
+      "enum": [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "error",
+        "fatal"
+      ]
+    },
+    "LogSeverityV1": {
+      "type": "string",
+      "enum": [
+        "TRACE",
+        "DEBUG",
+        "INFO",
+        "WARN",
+        "ERROR",
+        "FATAL"
+      ]
+    },
+    "LogServiceV1": {
+      "type": "string",
+      "enum": [
+        "desktop",
+        "renderer",
+        "utility",
+        "fieldd",
+        "field-native"
+      ]
+    },
+    "LogRoleV1": {
+      "type": "string",
+      "enum": [
+        "main",
+        "renderer",
+        "utility",
+        "daemon",
+        "worker",
+        "sidecar"
+      ]
+    },
+    "LogStreamV1": {
+      "type": "string",
+      "enum": [
+        "system/desktop",
+        "system/renderer",
+        "system/utility",
+        "system/fieldd",
+        "system/field-native",
+        "plugins/renderer",
+        "plugins/service",
+        "plugins/utility"
+      ]
+    },
+    "LogValueV1": {},
+    "PluginLogProvenanceV1": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "installRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "entry": {
+          "type": "string",
+          "enum": [
+            "renderer",
+            "service",
+            "utility"
+          ]
+        },
+        "windowId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "installSource": {
+          "type": "string",
+          "enum": [
+            "bundled",
+            "registry",
+            "peer",
+            "dev-link"
+          ]
+        },
+        "trust": {
+          "type": "string",
+          "enum": [
+            "r0-bundled",
+            "r1-registry",
+            "r2-peer",
+            "r3-dev"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "installRevision",
+        "entry",
+        "installSource",
+        "trust"
+      ],
+      "additionalProperties": true
+    },
+    "LogErrorV1": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 16384
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "stack": {
+          "type": "string",
+          "maxLength": 32768
+        },
+        "causes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LogErrorV1"
+          },
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "additionalProperties": true
+    },
+    "LogTruncationReasonV1": {
+      "type": "string",
+      "enum": [
+        "record-bytes",
+        "message-bytes",
+        "string-bytes",
+        "object-depth",
+        "object-keys",
+        "array-items",
+        "error-causes",
+        "partial-line"
+      ]
+    },
+    "LogTruncationV1": {
+      "type": "object",
+      "properties": {
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LogTruncationReasonV1"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "originalBytes": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "droppedBytes": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "originalItems": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "droppedItems": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "reasons"
+      ],
+      "additionalProperties": true
+    },
+    "LogRecordV1": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "$ref": "#/definitions/LogSchemaVersionV1"
+        },
+        "time": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "observedTime": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "level": {
+          "$ref": "#/definitions/LogLevelV1"
+        },
+        "severity": {
+          "$ref": "#/definitions/LogSeverityV1"
+        },
+        "event": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 192,
+          "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"
+        },
+        "msg": {
+          "type": "string",
+          "maxLength": 16384
+        },
+        "service": {
+          "$ref": "#/definitions/LogServiceV1"
+        },
+        "role": {
+          "$ref": "#/definitions/LogRoleV1"
+        },
+        "component": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[a-z][a-z0-9_-]*(?:[.:][a-z][a-z0-9_-]*)*$"
+        },
+        "pid": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "bootId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "instanceId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "seq": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "traceId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "spanId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "operationId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "requestId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "sessionId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "docId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "deviceId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "windowId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "plugin": {
+          "$ref": "#/definitions/PluginLogProvenanceV1"
+        },
+        "err": {
+          "$ref": "#/definitions/LogErrorV1"
+        },
+        "attrs": {
+          "$ref": "#/definitions/LogAttributesV1"
+        },
+        "truncation": {
+          "$ref": "#/definitions/LogTruncationV1"
+        }
+      },
+      "required": [
+        "v",
+        "time",
+        "level",
+        "severity",
+        "event",
+        "msg",
+        "service",
+        "role",
+        "component",
+        "pid",
+        "bootId",
+        "instanceId",
+        "seq"
+      ],
+      "additionalProperties": true,
+      "description": "vibefield.logging.contract.v1"
+    },
+    "LoggingWriterStateV1": {
+      "type": "string",
+      "enum": [
+        "starting",
+        "healthy",
+        "degraded",
+        "closed",
+        "writer-conflict"
+      ]
+    },
+    "LoggingBufferHealthV1": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "bytes": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "highWaterRecords": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "highWaterBytes": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "capacityRecords": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "capacityBytes": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        }
+      },
+      "required": [
+        "records",
+        "bytes",
+        "highWaterRecords",
+        "highWaterBytes",
+        "capacityRecords",
+        "capacityBytes"
+      ],
+      "additionalProperties": true
+    },
+    "LoggingCountersV1": {
+      "type": "object",
+      "properties": {
+        "accepted": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "rejected": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "truncated": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "droppedTrace": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "droppedDebug": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "droppedInfo": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "droppedWarn": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "droppedError": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "bytesWritten": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "rotations": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "cleanupDeletions": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "emergencyFallbacks": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        }
+      },
+      "required": [
+        "accepted",
+        "rejected",
+        "truncated",
+        "droppedTrace",
+        "droppedDebug",
+        "droppedInfo",
+        "droppedWarn",
+        "droppedError",
+        "bytesWritten",
+        "rotations",
+        "cleanupDeletions",
+        "emergencyFallbacks"
+      ],
+      "additionalProperties": true
+    },
+    "LoggingFailureV1": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "enospc",
+            "eacces",
+            "read-only",
+            "rename",
+            "write",
+            "flush",
+            "close",
+            "writer-conflict",
+            "unknown"
+          ]
+        },
+        "time": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "kind",
+        "time",
+        "message"
+      ],
+      "additionalProperties": true
+    },
+    "LoggingHealthV1": {
+      "$ref": "#/definitions/LoggingHealthV1"
+    },
+    "DiagnosticProducerStateV1": {
+      "type": "object",
+      "properties": {
+        "producerId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "service": {
+          "$ref": "#/definitions/LogServiceV1"
+        },
+        "stream": {
+          "$ref": "#/definitions/LogStreamV1"
+        },
+        "bootId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "instanceId": {
+          "$ref": "#/definitions/LogBoundedIdentityV1"
+        },
+        "oldestCursor": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "newestCursor": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "droppedBefore": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "health": {
+          "$ref": "#/definitions/LoggingHealthV1"
+        }
+      },
+      "required": [
+        "producerId",
+        "service",
+        "stream",
+        "bootId",
+        "instanceId",
+        "oldestCursor",
+        "newestCursor",
+        "droppedBefore",
+        "health"
+      ],
+      "additionalProperties": true
+    },
+    "DiagnosticCursorV1": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
