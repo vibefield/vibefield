@@ -12,7 +12,7 @@ import type { ReactElement } from "react";
 /** v1 iOS "small" preset — the app seeds Size at spawn. */
 export const BATTERY_SIZE = { w: 155, h: 155 };
 
-const TYPE = "widgetlab.battery";
+const TYPE = "vibefield.widgetlab.battery";
 
 type BatteryProps = {
   readonly phone: number;

@@ -17,7 +17,7 @@ import { type ReactElement, useEffect, useState } from "react";
 /** v1 iOS "small" preset — the app seeds Size at spawn. */
 export const CALENDAR_SIZE = { w: 155, h: 155 };
 
-const TYPE = "widgetlab.calendar";
+const TYPE = "vibefield.widgetlab.calendar";
 
 type CalendarProps = {
   readonly dateIso: string;

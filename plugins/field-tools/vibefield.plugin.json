@@ -1,7 +1,7 @@
 {
   "activation": [
-    "onWidget:field.folder",
-    "onWidget:field.comment"
+    "onWidget:vibefield.field-tools.folder",
+    "onWidget:vibefield.field-tools.comment"
   ],
   "capabilities": [],
   "contributes": {
@@ -47,7 +47,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Folder",
-        "type": "field.folder"
+        "type": "vibefield.field-tools.folder"
       },
       {
         "category": "Tools",
@@ -86,7 +86,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Comment",
-        "type": "field.comment"
+        "type": "vibefield.field-tools.comment"
       }
     ]
   },
@@ -97,7 +97,7 @@
   "entries": {
     "renderer": "./dist/renderer.js"
   },
-  "id": "field",
+  "id": "vibefield.field-tools",
   "manifestVersion": 1,
   "title": "Field tools",
   "version": "0.1.0"

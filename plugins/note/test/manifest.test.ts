@@ -16,15 +16,15 @@ describe("plugin-note", () => {
     const registry = new PluginRegistry();
     const impls = Object.fromEntries(Object.keys(noteBindings).map((t) => [t, {}]));
     registry.registerV1(noteManifest, impls);
-    expect(registry.hasWidget("note.card")).toBe(true);
-    expect(registry.ownerOf("note.card")).toBe("note");
+    expect(registry.hasWidget("vibefield.note")).toBe(true);
+    expect(registry.ownerOf("vibefield.note")).toBe("vibefield.note");
     expect([...registry.allWidgets().keys()]).toEqual(
       (noteManifest.contributes?.widgets ?? []).map((w) => w.type),
     );
     // tray silhouette CSS derives straight from the SafePreview (C1c)
-    expect(safePreviewToCss(registry.plugin("note")?.v1.contributes?.widgets?.[0]?.preview)).toBe(
-      "#f6e7a9",
-    );
+    expect(
+      safePreviewToCss(registry.plugin("vibefield.note")?.v1.contributes?.widgets?.[0]?.preview),
+    ).toBe("#f6e7a9");
   });
 
   it("the committed vibefield.plugin.json is the canonical emission (regen: pnpm gen:manifest)", () => {

@@ -1,23 +1,23 @@
 {
   "activation": [
-    "onWidget:widgetlab.clock",
-    "onWidget:widgetlab.battery",
-    "onWidget:widgetlab.calendar",
-    "onWidget:widgetlab.weather",
-    "onWidget:widgetlab.stocks",
-    "onWidget:widgetlab.fitness",
-    "onWidget:widgetlab.photos",
-    "onWidget:widgetlab.todo",
-    "onWidget:widgetlab.sphere",
-    "onWidget:widgetlab.crystal",
-    "onWidget:widgetlab.torus-knot",
-    "onWidget:widgetlab.cube",
-    "onWidget:widgetlab.gold-knot",
-    "onWidget:widgetlab.shapes",
-    "onWidget:widgetlab.orbit-cube",
-    "onWidget:widgetlab.signal",
-    "onWidget:widgetlab.filter",
-    "onWidget:widgetlab.scope"
+    "onWidget:vibefield.widgetlab.clock",
+    "onWidget:vibefield.widgetlab.battery",
+    "onWidget:vibefield.widgetlab.calendar",
+    "onWidget:vibefield.widgetlab.weather",
+    "onWidget:vibefield.widgetlab.stocks",
+    "onWidget:vibefield.widgetlab.fitness",
+    "onWidget:vibefield.widgetlab.photos",
+    "onWidget:vibefield.widgetlab.todo",
+    "onWidget:vibefield.widgetlab.sphere",
+    "onWidget:vibefield.widgetlab.crystal",
+    "onWidget:vibefield.widgetlab.torus-knot",
+    "onWidget:vibefield.widgetlab.cube",
+    "onWidget:vibefield.widgetlab.gold-knot",
+    "onWidget:vibefield.widgetlab.shapes",
+    "onWidget:vibefield.widgetlab.orbit-cube",
+    "onWidget:vibefield.widgetlab.signal",
+    "onWidget:vibefield.widgetlab.filter",
+    "onWidget:vibefield.widgetlab.scope"
   ],
   "capabilities": [],
   "contributes": {
@@ -49,7 +49,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Clock",
-        "type": "widgetlab.clock"
+        "type": "vibefield.widgetlab.clock"
       },
       {
         "category": "Cards",
@@ -92,7 +92,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Battery",
-        "type": "widgetlab.battery"
+        "type": "vibefield.widgetlab.battery"
       },
       {
         "category": "Cards",
@@ -133,7 +133,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Calendar",
-        "type": "widgetlab.calendar"
+        "type": "vibefield.widgetlab.calendar"
       },
       {
         "category": "Cards",
@@ -188,7 +188,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Weather",
-        "type": "widgetlab.weather"
+        "type": "vibefield.widgetlab.weather"
       },
       {
         "category": "Cards",
@@ -296,7 +296,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Stocks",
-        "type": "widgetlab.stocks"
+        "type": "vibefield.widgetlab.stocks"
       },
       {
         "category": "Cards",
@@ -379,7 +379,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Fitness",
-        "type": "widgetlab.fitness"
+        "type": "vibefield.widgetlab.fitness"
       },
       {
         "category": "Cards",
@@ -430,7 +430,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Photos",
-        "type": "widgetlab.photos"
+        "type": "vibefield.widgetlab.photos"
       },
       {
         "category": "Cards",
@@ -505,7 +505,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "To-do",
-        "type": "widgetlab.todo"
+        "type": "vibefield.widgetlab.todo"
       },
       {
         "category": "3D",
@@ -543,7 +543,7 @@
         "sizeMode": "fixed",
         "surface": "gl",
         "title": "Sphere",
-        "type": "widgetlab.sphere"
+        "type": "vibefield.widgetlab.sphere"
       },
       {
         "category": "3D",
@@ -577,7 +577,7 @@
         "sizeMode": "fixed",
         "surface": "gl",
         "title": "Crystal",
-        "type": "widgetlab.crystal"
+        "type": "vibefield.widgetlab.crystal"
       },
       {
         "category": "3D",
@@ -617,7 +617,7 @@
         "sizeMode": "fixed",
         "surface": "gl",
         "title": "Torus knot",
-        "type": "widgetlab.torus-knot"
+        "type": "vibefield.widgetlab.torus-knot"
       },
       {
         "category": "3D",
@@ -651,7 +651,7 @@
         "sizeMode": "fixed",
         "surface": "gl",
         "title": "Cube",
-        "type": "widgetlab.cube"
+        "type": "vibefield.widgetlab.cube"
       },
       {
         "category": "3D",
@@ -694,7 +694,7 @@
         "sizeMode": "fixed",
         "surface": "gl",
         "title": "Gold knot",
-        "type": "widgetlab.gold-knot"
+        "type": "vibefield.widgetlab.gold-knot"
       },
       {
         "category": "3D",
@@ -734,7 +734,7 @@
         "sizeMode": "fixed",
         "surface": "gl",
         "title": "Shapes",
-        "type": "widgetlab.shapes"
+        "type": "vibefield.widgetlab.shapes"
       },
       {
         "category": "3D",
@@ -774,7 +774,7 @@
         "sizeMode": "fixed",
         "surface": "gl",
         "title": "Orbit cube",
-        "type": "widgetlab.orbit-cube"
+        "type": "vibefield.widgetlab.orbit-cube"
       },
       {
         "category": "Nodes",
@@ -822,7 +822,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Signal",
-        "type": "widgetlab.signal"
+        "type": "vibefield.widgetlab.signal"
       },
       {
         "category": "Nodes",
@@ -880,7 +880,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Filter",
-        "type": "widgetlab.filter"
+        "type": "vibefield.widgetlab.filter"
       },
       {
         "category": "Nodes",
@@ -928,7 +928,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Scope",
-        "type": "widgetlab.scope"
+        "type": "vibefield.widgetlab.scope"
       }
     ]
   },
@@ -939,7 +939,7 @@
   "entries": {
     "renderer": "./dist/renderer.js"
   },
-  "id": "widgetlab",
+  "id": "vibefield.widgetlab",
   "manifestVersion": 1,
   "title": "Widgetlab",
   "version": "0.1.0"

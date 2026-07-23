@@ -44,7 +44,7 @@ import {
   useState,
 } from "react";
 
-const TYPE = "field.folder";
+const TYPE = "vibefield.field-tools.folder";
 
 export const FOLDER_SIZE = { w: 329, h: 345 };
 /** The folder card's own surface (the design-006 mock's --panel; manifest `preview` mirrors it). */

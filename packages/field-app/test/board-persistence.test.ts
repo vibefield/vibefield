@@ -35,8 +35,8 @@ describe("board persistence (headless)", () => {
     const c = census(ce);
     expect(c.widgets).toBe(21);
     expect(c.wires).toBe(2);
-    expect(c.types["field.folder"]).toBe(2);
-    expect(c.types["note.card"]).toBe(1);
+    expect(c.types["vibefield.field-tools.folder"]).toBe(2);
+    expect(c.types["vibefield.note"]).toBe(1);
     ce.dispose();
   });
 

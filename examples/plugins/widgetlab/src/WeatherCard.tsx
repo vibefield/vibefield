@@ -9,7 +9,7 @@ import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import type { ReactElement } from "react";
 
-const TYPE = "widgetlab.weather";
+const TYPE = "vibefield.widgetlab.weather";
 
 /** v1 iOS "medium" preset — the app seeds Size at spawn. */
 export const WEATHER_SIZE = { w: 329, h: 155 };

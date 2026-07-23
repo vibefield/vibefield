@@ -64,9 +64,9 @@ function NodeBody({
 
 /** Node shell tints by widget type — exported for the folder preview minis. */
 export const NODE_BG = {
-  "widgetlab.signal": "#1C2540",
-  "widgetlab.filter": "#1F3327",
-  "widgetlab.scope": "#33231C",
+  "vibefield.widgetlab.signal": "#1C2540",
+  "vibefield.widgetlab.filter": "#1F3327",
+  "vibefield.widgetlab.scope": "#33231C",
 } as const;
 
 // --- signal-node: a source. One "out" port (east). --------------------------
@@ -75,7 +75,7 @@ export const NODE_BG = {
 // builds each prefab from the canonical manifest (§12.2). These modules ship
 // only the components; each TYPE const replaces what used to be an inline
 // string literal repeated at the call site and in useWidgetProps.
-export const SIGNAL_TYPE = "widgetlab.signal";
+export const SIGNAL_TYPE = "vibefield.widgetlab.signal";
 
 type SignalProps = { readonly hz: number };
 
@@ -94,7 +94,7 @@ export { SignalNodeView };
 
 // --- filter-node: in (west) → out (east). ------------------------------------
 
-export const FILTER_TYPE = "widgetlab.filter";
+export const FILTER_TYPE = "vibefield.widgetlab.filter";
 
 type FilterProps = { readonly mode: "lowpass" | "highpass" | "bandpass" };
 
@@ -114,7 +114,7 @@ export { FilterNodeView };
 
 // --- scope-node: a sink with TWO inputs (even side distribution). -------------
 
-export const SCOPE_TYPE = "widgetlab.scope";
+export const SCOPE_TYPE = "vibefield.widgetlab.scope";
 
 function ScopeNodeView({ entity, world }: WidgetComponentProps): ReactElement {
   return (

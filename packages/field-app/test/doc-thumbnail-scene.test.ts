@@ -10,8 +10,10 @@ describe("document thumbnail scene", () => {
     const scene = captureDocThumbnailScene(ce);
     expect(scene.widgets).toHaveLength(21);
     expect(scene.wires).toHaveLength(2);
-    expect(scene.widgets.some((widget) => widget.type === "note.card")).toBe(true);
-    expect(scene.widgets.some((widget) => widget.type === "field.folder")).toBe(true);
+    expect(scene.widgets.some((widget) => widget.type === "vibefield.note")).toBe(true);
+    expect(scene.widgets.some((widget) => widget.type === "vibefield.field-tools.folder")).toBe(
+      true,
+    );
     for (const widget of scene.widgets) {
       expect(Number.isFinite(widget.x)).toBe(true);
       expect(Number.isFinite(widget.y)).toBe(true);

@@ -9,7 +9,7 @@ import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import type { ReactElement } from "react";
 
-const TYPE = "widgetlab.photos";
+const TYPE = "vibefield.widgetlab.photos";
 
 /** v1 iOS "xl" preset — the app seeds Size at spawn. */
 export const PHOTOS_SIZE = { w: 329, h: 535 };

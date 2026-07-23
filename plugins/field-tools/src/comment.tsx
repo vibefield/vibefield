@@ -31,7 +31,7 @@ import {
   useState,
 } from "react";
 
-const TYPE = "field.comment";
+const TYPE = "vibefield.field-tools.comment";
 
 const HEADER = 44;
 

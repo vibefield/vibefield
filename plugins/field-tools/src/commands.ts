@@ -49,7 +49,7 @@ export function spawnCommentAroundSelection(ce: CanvasEngine): boolean {
   // 8 — retires the minZ−1 scan; each new comment prepends under the previous
   // ones too).
   const color = COMMENT_PALETTE[Math.floor(Math.random() * COMMENT_PALETTE.length)] as string;
-  const comment = ce.ops.spawnWidget("field.comment", {
+  const comment = ce.ops.spawnWidget("vibefield.field-tools.comment", {
     x: minX - COMMENT_PAD,
     y: minY - COMMENT_HEADER - COMMENT_GAP,
     w: maxX - minX + COMMENT_PAD * 2,

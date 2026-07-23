@@ -3,9 +3,9 @@ import type { JsonShape, PluginManifestV1 } from "@vibefield/contracts";
 // The widgetlab demo pack (Track D3): the eighteen iOS-style DOM/GL/node cards
 // ported verbatim from infinite-canvas-engine/apps/widgetlab — the SDK dogfood
 // (thinking-widgetlab-port §1: if the plugin system can express these, the API
-// is right). Sizes are the iOS presets (155/329 grid, DESIGN.md §4). widgetlab
-// stays the dev alias until C2 ratifies a durable id (P-2: the TYPE strings
-// are forever — they live in boards).
+// is right). Sizes are the iOS presets (155/329 grid, DESIGN.md §4). id
+// RATIFIED at C2 (2026-07-23): vibefield.widgetlab — the demo pack is
+// first-party; its types are forever, they live in boards (§21.2).
 //
 // C1b·2 — canonical V1: the retired defineWidget calls verbatim (props/sizes/
 // interaction/ports/provides). `sizeMode` is "fixed" for every widget below —
@@ -27,36 +27,36 @@ const GOAL_SHAPE: JsonShape = {
 
 export const widgetlabManifest: PluginManifestV1 = {
   manifestVersion: 1,
-  id: "widgetlab",
+  id: "vibefield.widgetlab",
   version: "0.1.0",
   title: "Widgetlab",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
   activation: [
-    "onWidget:widgetlab.clock",
-    "onWidget:widgetlab.battery",
-    "onWidget:widgetlab.calendar",
-    "onWidget:widgetlab.weather",
-    "onWidget:widgetlab.stocks",
-    "onWidget:widgetlab.fitness",
-    "onWidget:widgetlab.photos",
-    "onWidget:widgetlab.todo",
-    "onWidget:widgetlab.sphere",
-    "onWidget:widgetlab.crystal",
-    "onWidget:widgetlab.torus-knot",
-    "onWidget:widgetlab.cube",
-    "onWidget:widgetlab.gold-knot",
-    "onWidget:widgetlab.shapes",
-    "onWidget:widgetlab.orbit-cube",
-    "onWidget:widgetlab.signal",
-    "onWidget:widgetlab.filter",
-    "onWidget:widgetlab.scope",
+    "onWidget:vibefield.widgetlab.clock",
+    "onWidget:vibefield.widgetlab.battery",
+    "onWidget:vibefield.widgetlab.calendar",
+    "onWidget:vibefield.widgetlab.weather",
+    "onWidget:vibefield.widgetlab.stocks",
+    "onWidget:vibefield.widgetlab.fitness",
+    "onWidget:vibefield.widgetlab.photos",
+    "onWidget:vibefield.widgetlab.todo",
+    "onWidget:vibefield.widgetlab.sphere",
+    "onWidget:vibefield.widgetlab.crystal",
+    "onWidget:vibefield.widgetlab.torus-knot",
+    "onWidget:vibefield.widgetlab.cube",
+    "onWidget:vibefield.widgetlab.gold-knot",
+    "onWidget:vibefield.widgetlab.shapes",
+    "onWidget:vibefield.widgetlab.orbit-cube",
+    "onWidget:vibefield.widgetlab.signal",
+    "onWidget:vibefield.widgetlab.filter",
+    "onWidget:vibefield.widgetlab.scope",
   ],
   capabilities: [], // pure-canvas demo pack: no fabric access
   contributes: {
     widgets: [
       {
-        type: "widgetlab.clock",
+        type: "vibefield.widgetlab.clock",
         title: "Clock",
         description: "Analog clock with a live second hand",
         category: "Cards",
@@ -72,7 +72,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.battery",
+        type: "vibefield.widgetlab.battery",
         title: "Battery",
         description: "Battery ring",
         category: "Cards",
@@ -90,7 +90,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.calendar",
+        type: "vibefield.widgetlab.calendar",
         title: "Calendar",
         description: "Today + the next event",
         category: "Cards",
@@ -109,7 +109,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.weather",
+        type: "vibefield.widgetlab.weather",
         title: "Weather",
         description: "Temperature, hi/lo, condition glyph",
         category: "Cards",
@@ -137,7 +137,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.stocks",
+        type: "vibefield.widgetlab.stocks",
         title: "Stocks",
         description: "Tickers with sparklines",
         category: "Cards",
@@ -188,7 +188,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.fitness",
+        type: "vibefield.widgetlab.fitness",
         title: "Fitness",
         description: "Activity rings",
         category: "Cards",
@@ -207,7 +207,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.photos",
+        type: "vibefield.widgetlab.photos",
         title: "Photos",
         description: "A photo stack",
         category: "Cards",
@@ -232,7 +232,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.todo",
+        type: "vibefield.widgetlab.todo",
         title: "To-do",
         description: "Checklist",
         category: "Cards",
@@ -272,7 +272,7 @@ export const widgetlabManifest: PluginManifestV1 = {
       // each card's exported BACKPLATE through gradientCss, or DROPPED for the
       // chromeless pair — see the header note) ---
       {
-        type: "widgetlab.sphere",
+        type: "vibefield.widgetlab.sphere",
         title: "Sphere",
         description: "A matte sphere",
         category: "3D",
@@ -299,7 +299,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.crystal",
+        type: "vibefield.widgetlab.crystal",
         title: "Crystal",
         description: "A floating crystal — chromeless island",
         category: "3D",
@@ -326,7 +326,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.torus-knot",
+        type: "vibefield.widgetlab.torus-knot",
         title: "Torus knot",
         description: "A spinning torus knot",
         category: "3D",
@@ -353,7 +353,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.cube",
+        type: "vibefield.widgetlab.cube",
         title: "Cube",
         description: "A floating rounded cube — chromeless island",
         category: "3D",
@@ -378,7 +378,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.gold-knot",
+        type: "vibefield.widgetlab.gold-knot",
         title: "Gold knot",
         description: "A gilded knot",
         category: "3D",
@@ -405,7 +405,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.shapes",
+        type: "vibefield.widgetlab.shapes",
         title: "Shapes",
         description: "A repelling shape swarm — drag inside it",
         category: "3D",
@@ -432,7 +432,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.orbit-cube",
+        type: "vibefield.widgetlab.orbit-cube",
         title: "Orbit cube",
         description: "Drag the cube itself — the mesh claims the gesture",
         category: "3D",
@@ -460,7 +460,7 @@ export const widgetlabManifest: PluginManifestV1 = {
       },
       // --- the node trio (wire-able: ports accept "signal"; previews = NODE_BG) ---
       {
-        type: "widgetlab.signal",
+        type: "vibefield.widgetlab.signal",
         title: "Signal",
         description: "A source node — one out port",
         category: "Nodes",
@@ -479,7 +479,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.filter",
+        type: "vibefield.widgetlab.filter",
         title: "Filter",
         description: "A transform node — in and out",
         category: "Nodes",
@@ -501,7 +501,7 @@ export const widgetlabManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "widgetlab.scope",
+        type: "vibefield.widgetlab.scope",
         title: "Scope",
         description: "A sink node — two inputs",
         category: "Nodes",

@@ -19,21 +19,21 @@ describe("plugin-widgetlab", () => {
     expect([...registry.allWidgets().keys()].sort()).toEqual(
       (widgetlabManifest.contributes?.widgets ?? []).map((w) => w.type).sort(),
     );
-    expect(registry.ownerOf("widgetlab.clock")).toBe("widgetlab");
+    expect(registry.ownerOf("vibefield.widgetlab.clock")).toBe("vibefield.widgetlab");
 
     // node ports survive to v1 (the wire-editor trio's whole reason for being)
-    const widgets = registry.plugin("widgetlab")?.v1.contributes?.widgets ?? [];
-    expect(widgets.find((w) => w.type === "widgetlab.filter")?.ports).toEqual([
+    const widgets = registry.plugin("vibefield.widgetlab")?.v1.contributes?.widgets ?? [];
+    expect(widgets.find((w) => w.type === "vibefield.widgetlab.filter")?.ports).toEqual([
       { id: "in", side: "w", accepts: ["signal"] },
       { id: "out", side: "e", accepts: ["signal"] },
     ]);
 
     // silhouette CSS derives straight from the SafePreview (C1c)
-    expect(safePreviewToCss(widgets.find((w) => w.type === "widgetlab.calendar")?.preview)).toBe(
-      "#ffffff",
-    );
     expect(
-      safePreviewToCss(widgets.find((w) => w.type === "widgetlab.weather")?.preview),
+      safePreviewToCss(widgets.find((w) => w.type === "vibefield.widgetlab.calendar")?.preview),
+    ).toBe("#ffffff");
+    expect(
+      safePreviewToCss(widgets.find((w) => w.type === "vibefield.widgetlab.weather")?.preview),
     ).toContain("linear-gradient");
   });
 

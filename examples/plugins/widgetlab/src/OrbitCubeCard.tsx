@@ -43,7 +43,7 @@ import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/she
 import { type ReactElement, useCallback, useEffect, useRef, useState } from "react";
 import type { Mesh } from "three";
 
-const TYPE = "widgetlab.orbit-cube";
+const TYPE = "vibefield.widgetlab.orbit-cube";
 
 /** v1 `medium` preset. */
 export const SIZE = { w: 329, h: 155 } as const;

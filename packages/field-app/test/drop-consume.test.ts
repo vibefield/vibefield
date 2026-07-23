@@ -53,7 +53,7 @@ function ev(kind: InputEvent["kind"], x: number, y: number, buttons: number): In
 }
 
 describe("field drop-to-consume", () => {
-  it("drag widgetlab.clock onto the Widgets folder → adopted (ChildOf)", () => {
+  it("drag vibefield.widgetlab.clock onto the Widgets folder → adopted (ChildOf)", () => {
     const ce = makeEngine();
     ce.world.setResource(Viewport, { w: 1900, h: 1100, dpr: 1 });
     let now = 0;
@@ -65,8 +65,8 @@ describe("field drop-to-consume", () => {
     };
     step(3); // index warm-up
 
-    const clock = findByType(ce.world, "widgetlab.clock")[0] as Entity;
-    const folder = findByType(ce.world, "field.folder")[0] as Entity; // "Widgets" at (1153, 270)
+    const clock = findByType(ce.world, "vibefield.widgetlab.clock")[0] as Entity;
+    const folder = findByType(ce.world, "vibefield.field-tools.folder")[0] as Entity; // "Widgets" at (1153, 270)
     expect(clock).toBeDefined();
     expect(folder).toBeDefined();
 
@@ -88,7 +88,7 @@ describe("field drop-to-consume", () => {
 });
 
 describe("field card-on-card reject (v1 iOS contract)", () => {
-  it("drop widgetlab.clock onto widgetlab.battery → OverlapRejected hover, then fly-back home", () => {
+  it("drop vibefield.widgetlab.clock onto vibefield.widgetlab.battery → OverlapRejected hover, then fly-back home", () => {
     const ce = makeEngine();
     ce.world.setResource(Viewport, { w: 1900, h: 1100, dpr: 1 });
     let now = 0;
@@ -100,8 +100,8 @@ describe("field card-on-card reject (v1 iOS contract)", () => {
     };
     step(3);
 
-    const clock = findByType(ce.world, "widgetlab.clock")[0] as Entity;
-    const battery = findByType(ce.world, "widgetlab.battery")[0] as Entity;
+    const clock = findByType(ce.world, "vibefield.widgetlab.clock")[0] as Entity;
+    const battery = findByType(ce.world, "vibefield.widgetlab.battery")[0] as Entity;
     const home = { ...ce.world.read(clock, Position) };
 
     // clock center (127,127) → battery center (301,127). Press-drag: move

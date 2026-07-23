@@ -1,6 +1,6 @@
 {
   "activation": [
-    "onWidget:note.card"
+    "onWidget:vibefield.note"
   ],
   "capabilities": [],
   "contributes": {
@@ -44,7 +44,7 @@
         "sizeMode": "fixed",
         "surface": "dom",
         "title": "Note",
-        "type": "note.card"
+        "type": "vibefield.note"
       }
     ]
   },
@@ -55,7 +55,7 @@
   "entries": {
     "renderer": "./dist/renderer.js"
   },
-  "id": "note",
+  "id": "vibefield.note",
   "manifestVersion": 1,
   "title": "Notes",
   "version": "0.1.0"

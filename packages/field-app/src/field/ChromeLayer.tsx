@@ -323,7 +323,7 @@ export function ChromeLayer({
           onOverlapGlowChange={chrome.setOverlapGlow}
           overlapGlowThemeColors={overlapGlowThemeColors}
           onOverlapGlowThemeColorsChange={chrome.setOverlapGlowThemeColors}
-          stressWidgetType="widgetlab.clock"
+          stressWidgetType="vibefield.widgetlab.clock"
           onClose={() => chrome.setShowSettings(false)}
         />
       )}

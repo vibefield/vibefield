@@ -20,7 +20,7 @@ import { GlLiftGroup } from "@vibefield/shell-ui";
 import { type ReactElement, useRef } from "react";
 import type { Group } from "three";
 
-const TYPE = "widgetlab.cube";
+const TYPE = "vibefield.widgetlab.cube";
 
 /** v1 `medium` preset. */
 export const SIZE = { w: 329, h: 155 } as const;

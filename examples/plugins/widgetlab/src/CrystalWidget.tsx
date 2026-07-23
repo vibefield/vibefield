@@ -22,7 +22,7 @@ import { GlLiftGroup } from "@vibefield/shell-ui";
 import { type ReactElement, useRef } from "react";
 import type { Mesh } from "three";
 
-const TYPE = "widgetlab.crystal";
+const TYPE = "vibefield.widgetlab.crystal";
 
 /** v1 `small` preset. */
 export const SIZE = { w: 155, h: 155 } as const;

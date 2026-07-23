@@ -24,7 +24,7 @@ import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/she
 import { type ReactElement, useRef } from "react";
 import type { Mesh } from "three";
 
-const TYPE = "widgetlab.gold-knot";
+const TYPE = "vibefield.widgetlab.gold-knot";
 
 /** v1 `large` preset. */
 export const SIZE = { w: 329, h: 345 } as const;

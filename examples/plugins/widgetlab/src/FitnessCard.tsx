@@ -12,7 +12,7 @@ import type { ReactElement } from "react";
 /** v1 iOS "large" preset — the app seeds Size at spawn. */
 export const FITNESS_SIZE = { w: 329, h: 345 };
 
-const TYPE = "widgetlab.fitness";
+const TYPE = "vibefield.widgetlab.fitness";
 
 type Goal = { readonly current: number; readonly goal: number };
 type FitnessProps = {

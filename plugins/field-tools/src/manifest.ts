@@ -2,9 +2,9 @@ import type { PluginManifestV1 } from "@vibefield/contracts";
 
 // The field tools (Track D3): organizational actors — not demos. Containers
 // are the product's workstream primitive (design-00 §3.3); comments are the
-// UE-Blueprint spatial grouping. Plugin id "field" stays the dev alias until
-// C2 ratifies vibefield.field-tools (P-2: the TYPE strings are forever —
-// they live in boards).
+// UE-Blueprint spatial grouping. Plugin id RATIFIED at C2 (2026-07-23):
+// vibefield.field-tools — types vibefield.field-tools.folder/.comment are
+// forever, they live in boards (§21.2).
 //
 // C1b — canonical V1: the retired defineWidget calls verbatim. Folder is the
 // one CONTAINER (accepts/provides reparent via ChildOf); the comment is NOT a
@@ -14,17 +14,17 @@ import type { PluginManifestV1 } from "@vibefield/contracts";
 
 export const fieldToolsManifest: PluginManifestV1 = {
   manifestVersion: 1,
-  id: "field",
+  id: "vibefield.field-tools",
   version: "0.1.0",
   title: "Field tools",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: ["onWidget:field.folder", "onWidget:field.comment"],
+  activation: ["onWidget:vibefield.field-tools.folder", "onWidget:vibefield.field-tools.comment"],
   capabilities: [], // pure-canvas plugin: no fabric access
   contributes: {
     widgets: [
       {
-        type: "field.folder",
+        type: "vibefield.field-tools.folder",
         title: "Folder",
         description: "A container — drop cards in, double-click to enter",
         category: "Tools",
@@ -51,7 +51,7 @@ export const fieldToolsManifest: PluginManifestV1 = {
         groups: {},
       },
       {
-        type: "field.comment",
+        type: "vibefield.field-tools.comment",
         title: "Comment",
         description: "Wrap widgets in a tinted group — C wraps the selection",
         category: "Tools",

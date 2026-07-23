@@ -18,7 +18,7 @@ import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/she
 import { type ReactElement, useRef } from "react";
 import type { Mesh } from "three";
 
-const TYPE = "widgetlab.sphere";
+const TYPE = "vibefield.widgetlab.sphere";
 
 /** v1 `small` preset. */
 export const SIZE = { w: 155, h: 155 } as const;

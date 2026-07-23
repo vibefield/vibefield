@@ -18,7 +18,7 @@ import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/she
 import { type ReactElement, useRef } from "react";
 import type { Mesh } from "three";
 
-const TYPE = "widgetlab.torus-knot";
+const TYPE = "vibefield.widgetlab.torus-knot";
 
 /** v1 `medium` preset. */
 export const SIZE = { w: 329, h: 155 } as const;

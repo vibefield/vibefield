@@ -9,7 +9,7 @@ import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
 import { CardShell } from "@vibefield/shell-ui";
 import { type ReactElement, useEffect, useState } from "react";
 
-const TYPE = "widgetlab.clock";
+const TYPE = "vibefield.widgetlab.clock";
 
 /** v1 iOS "small" preset — the app seeds Size at spawn. */
 export const CLOCK_SIZE = { w: 155, h: 155 };

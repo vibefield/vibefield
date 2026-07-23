@@ -15,22 +15,24 @@ describe("plugin-field-tools", () => {
     const registry = new PluginRegistry();
     const impls = Object.fromEntries(Object.keys(fieldToolsBindings).map((t) => [t, {}]));
     registry.registerV1(fieldToolsManifest, impls);
-    expect(registry.hasWidget("field.folder")).toBe(true);
-    expect(registry.hasWidget("field.comment")).toBe(true);
-    expect(registry.ownerOf("field.folder")).toBe("field");
-    const widgets = registry.plugin("field")?.v1.contributes?.widgets ?? [];
-    expect(widgets.find((w) => w.type === "field.folder")?.container).toEqual({
+    expect(registry.hasWidget("vibefield.field-tools.folder")).toBe(true);
+    expect(registry.hasWidget("vibefield.field-tools.comment")).toBe(true);
+    expect(registry.ownerOf("vibefield.field-tools.folder")).toBe("vibefield.field-tools");
+    const widgets = registry.plugin("vibefield.field-tools")?.v1.contributes?.widgets ?? [];
+    expect(widgets.find((w) => w.type === "vibefield.field-tools.folder")?.container).toEqual({
       accepts: ["widget"],
       provides: ["widget"],
     });
-    expect(widgets.find((w) => w.type === "field.comment")?.interaction?.sweepContained).toBe(true);
+    expect(
+      widgets.find((w) => w.type === "vibefield.field-tools.comment")?.interaction?.sweepContained,
+    ).toBe(true);
     // silhouette CSS derives straight from the SafePreview (C1c)
-    expect(safePreviewToCss(widgets.find((w) => w.type === "field.folder")?.preview)).toBe(
-      "#1D1D2B",
-    );
-    expect(safePreviewToCss(widgets.find((w) => w.type === "field.comment")?.preview)).toContain(
-      "linear-gradient",
-    );
+    expect(
+      safePreviewToCss(widgets.find((w) => w.type === "vibefield.field-tools.folder")?.preview),
+    ).toBe("#1D1D2B");
+    expect(
+      safePreviewToCss(widgets.find((w) => w.type === "vibefield.field-tools.comment")?.preview),
+    ).toContain("linear-gradient");
   });
 
   it("the committed vibefield.plugin.json is the canonical emission (regen: pnpm gen:manifest)", () => {

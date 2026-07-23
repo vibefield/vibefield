@@ -11,6 +11,7 @@ import { setBoardStatus } from "../board-status";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
+import { migrateTypeRenames } from "../plugin-host/migrate-type-renames";
 import { bindPersistence } from "./persistence-controller";
 
 // WorkspaceSession (§5.4.3): exactly ONE ICE engine generation and ONE
@@ -57,7 +58,23 @@ export function useWorkspaceSession(
     if (pending === null) return;
     const lane = pending.lane;
     if (pending.initialBytes !== null) {
-      const res = ce.docs.open(pending.initialBytes);
+      // C2 — the durable-ID migration: fold the journal and rename ONCE,
+      // pre-attach (a pre-rename journal entry replayed post-rewrite would
+      // resurrect old cells). Migration failure falls through to the untouched
+      // bytes — the quarantine path below stays the honest catch.
+      let bytes = pending.initialBytes;
+      let updates: readonly Uint8Array[] = pending.initialUpdates;
+      try {
+        const migration = migrateTypeRenames(pending.initialBytes, pending.initialUpdates);
+        if (migration.migrated) {
+          console.log(`[board] C2 type-rename migration: ${migration.renamedCells} cell(s)`);
+          bytes = migration.bytes;
+          updates = []; // the journal is folded into the migrated snapshot
+        }
+      } catch (error) {
+        console.warn(`[board] type-rename migration skipped: ${String(error)}`);
+      }
+      const res = ce.docs.open(bytes);
       if (!res.ok) {
         // Honest quarantine (the M5 law): the at-rest bytes stay untouched on
         // disk; a blank board + surfaced state beats autosaving over them.
@@ -69,7 +86,7 @@ export function useWorkspaceSession(
         return () => ce.docs.close();
       }
       try {
-        for (const update of pending.initialUpdates) res.session.applyRemote(update);
+        for (const update of updates) res.session.applyRemote(update);
       } catch (error) {
         ce.docs.close();
         const detail = error instanceof Error ? error.message : String(error);

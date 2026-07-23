@@ -24,7 +24,7 @@ import { type ReactElement, useState } from "react";
 /** v1 iOS "large" preset — the app seeds Size at spawn. */
 export const TODO_SIZE = { w: 329, h: 345 };
 
-const TYPE = "widgetlab.todo";
+const TYPE = "vibefield.widgetlab.todo";
 
 type TodoItem = { id: string; text: string; done: boolean };
 type TodoListProps = {

@@ -14,7 +14,7 @@ import { type ReactElement, useRef, useState } from "react";
 //   widgets today — I4 will make it a predicate).
 // Durable text commits ONCE on blur (undo-stack hygiene), never per keystroke.
 
-const TYPE = "note.card";
+const TYPE = "vibefield.note";
 
 interface NoteProps extends Record<string, unknown> {
   text: string;

@@ -71,7 +71,7 @@ const G6X = G3X + PITCH * 2 + 40 + 329 + 30; // 1512
 /** type id → [x, y, w, h, props?] in v1 spawn (zIndex) order. */
 const SCENE: Array<[string, number, number, number, number, Record<string, unknown>?]> = [
   [
-    "note.card",
+    "vibefield.note",
     GX,
     GY - 240,
     420,
@@ -80,10 +80,10 @@ const SCENE: Array<[string, number, number, number, number, Record<string, unkno
       text: "Welcome to your field.\n\nDrag to move · scroll to pan · ⌘/ctrl+wheel to zoom · B opens the widget tray · select cards and press C to wrap them in a comment · double-click a folder to enter it.",
     },
   ],
-  ["widgetlab.clock", GX, GY, 155, 155],
-  ["widgetlab.battery", GX + PITCH, GY, 155, 155],
+  ["vibefield.widgetlab.clock", GX, GY, 155, 155],
+  ["vibefield.widgetlab.battery", GX + PITCH, GY, 155, 155],
   [
-    "widgetlab.calendar",
+    "vibefield.widgetlab.calendar",
     GX,
     GY + PITCH,
     155,
@@ -91,23 +91,23 @@ const SCENE: Array<[string, number, number, number, number, Record<string, unkno
     { dateIso: "", nextEvent: "Design review", nextEventTime: "3:30 PM" },
   ],
   [
-    "widgetlab.weather",
+    "vibefield.widgetlab.weather",
     GX,
     GY + PITCH * 2,
     329,
     155,
     { location: "Cupertino", temp: 72, high: 78, low: 60, condition: "sunny" },
   ],
-  ["widgetlab.stocks", GX, GY + PITCH * 3, 329, 155],
-  ["widgetlab.fitness", GX, GY + PITCH * 4, 329, 345],
-  ["widgetlab.photos", GX + PITCH * 2 + 19, GY, 329, 535],
-  ["widgetlab.sphere", G3X, GY, 155, 155],
-  ["widgetlab.crystal", G3X + PITCH, GY, 155, 155],
-  ["widgetlab.torus-knot", G3X, GY + PITCH, 329, 155],
-  ["widgetlab.cube", G3X, GY + PITCH * 2, 329, 155],
-  ["widgetlab.gold-knot", G3X, GY + PITCH * 3, 329, 345],
+  ["vibefield.widgetlab.stocks", GX, GY + PITCH * 3, 329, 155],
+  ["vibefield.widgetlab.fitness", GX, GY + PITCH * 4, 329, 345],
+  ["vibefield.widgetlab.photos", GX + PITCH * 2 + 19, GY, 329, 535],
+  ["vibefield.widgetlab.sphere", G3X, GY, 155, 155],
+  ["vibefield.widgetlab.crystal", G3X + PITCH, GY, 155, 155],
+  ["vibefield.widgetlab.torus-knot", G3X, GY + PITCH, 329, 155],
+  ["vibefield.widgetlab.cube", G3X, GY + PITCH * 2, 329, 155],
+  ["vibefield.widgetlab.gold-knot", G3X, GY + PITCH * 3, 329, 345],
   [
-    "field.folder",
+    "vibefield.field-tools.folder",
     G3X + PITCH * 2 + 40,
     GY + 220,
     329,
@@ -115,16 +115,16 @@ const SCENE: Array<[string, number, number, number, number, Record<string, unkno
     { title: "Widgets", accent: "#6366F1" },
   ],
   [
-    "field.folder",
+    "vibefield.field-tools.folder",
     G3X + PITCH * 2 + 40,
     GY + 220 + 345 + 19,
     329,
     345,
     { title: "Saved", accent: "#EC4899" },
   ],
-  ["widgetlab.todo", G6X, GY, 329, 345],
-  ["widgetlab.shapes", G6X, GY + 345 + 19, 329, 345],
-  ["widgetlab.orbit-cube", G6X, GY + (345 + 19) * 2, 329, 155],
+  ["vibefield.widgetlab.todo", G6X, GY, 329, 345],
+  ["vibefield.widgetlab.shapes", G6X, GY + 345 + 19, 329, 345],
+  ["vibefield.widgetlab.orbit-cube", G6X, GY + (345 + 19) * 2, 329, 155],
 ];
 
 /**
@@ -186,21 +186,21 @@ export function seedField(ce: CanvasEngine, session: DocSession): void {
   // materialize its port dots, drag dot-to-dot to connect (ports accept
   // "signal"; the dashed preview goes solid on a compatible target).
   const NX = G6X + 329 + 39; // 1880 — the next column in the v1 grid rhythm
-  const signal = ce.ops.spawnWidget("widgetlab.signal", {
+  const signal = ce.ops.spawnWidget("vibefield.widgetlab.signal", {
     x: NX,
     y: 50,
     w: 170,
     h: 96,
     undoable: false,
   });
-  const filter = ce.ops.spawnWidget("widgetlab.filter", {
+  const filter = ce.ops.spawnWidget("vibefield.widgetlab.filter", {
     x: NX + 240,
     y: 170,
     w: 170,
     h: 96,
     undoable: false,
   });
-  const scope = ce.ops.spawnWidget("widgetlab.scope", {
+  const scope = ce.ops.spawnWidget("vibefield.widgetlab.scope", {
     x: NX + 480,
     y: 62,
     w: 170,
