@@ -66,7 +66,8 @@ function managerFor(daemon: FielddDaemon): DocManager {
 function applyPending(manager: DocManager): ReturnType<typeof createFieldEngine> {
   const pending = manager.getState().pending;
   if (pending === null) throw new Error("no pending session");
-  const ce = createFieldEngine(buildRegistry());
+  const registry = buildRegistry();
+  const ce = createFieldEngine(registry);
   cleanup.push(() => ce.dispose());
   if (pending.initialBytes !== null) {
     const res = ce.docs.open(pending.initialBytes);
@@ -75,7 +76,7 @@ function applyPending(manager: DocManager): ReturnType<typeof createFieldEngine>
     ce.world.sync();
   } else {
     const session = ce.docs.create();
-    if (pending.seed) seedField(ce, session);
+    if (pending.seed) seedField(ce, session, registry);
     else ce.world.sync();
   }
   manager.contentApplied(pending.generation);

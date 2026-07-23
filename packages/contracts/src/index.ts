@@ -10,6 +10,7 @@ export * from "./envelope";
 export * from "./errors";
 export * from "./methods";
 export * from "./mgmt";
+export * from "./plugin-registry";
 export * from "./plugins";
 export * from "./registries";
 export * from "./shell";

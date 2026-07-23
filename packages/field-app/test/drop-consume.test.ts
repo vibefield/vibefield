@@ -24,8 +24,9 @@ const idQ = defineQuery([Position, PrefabId]);
 
 function makeEngine() {
   // B3 split: the engine boots doc-less; this suite drives the seeded board.
-  const ce = createFieldEngine(buildRegistry());
-  seedField(ce, ce.docs.create());
+  const registry = buildRegistry();
+  const ce = createFieldEngine(registry);
+  seedField(ce, ce.docs.create(), registry);
   return ce;
 }
 

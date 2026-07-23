@@ -30,8 +30,9 @@ function census(ce: ReturnType<typeof createFieldEngine>) {
 
 describe("board persistence (headless)", () => {
   it("seedField produces the named census: 21 widgets, 2 wires", () => {
-    const ce = createFieldEngine(buildRegistry());
-    seedField(ce, ce.docs.create());
+    const registry = buildRegistry();
+    const ce = createFieldEngine(registry);
+    seedField(ce, ce.docs.create(), registry);
     const c = census(ce);
     expect(c.widgets).toBe(21);
     expect(c.wires).toBe(2);
@@ -41,9 +42,10 @@ describe("board persistence (headless)", () => {
   });
 
   it("an exported envelope reopens on a fresh engine with an identical census", () => {
-    const seeder = createFieldEngine(buildRegistry());
+    const registry = buildRegistry();
+    const seeder = createFieldEngine(registry);
     const session = seeder.docs.create();
-    seedField(seeder, session);
+    seedField(seeder, session, registry);
     const before = census(seeder);
     const bytes = session.exportEnvelope(1_753_142_400_000);
     seeder.dispose();

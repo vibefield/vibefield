@@ -7,6 +7,7 @@ export type BoardPersistenceState =
   | "live" // attached, last save acknowledged
   | "saving" // a PUT is in flight
   | "detached" // no lane (degraded boot / reconnecting) — edits are in-memory only
+  | "readonly" // engine version gate: doc carries packs/schema this build lacks (P2: a disabled plugin's boards land here)
   | "quarantined"; // at-rest bytes unreadable by this build — left untouched on disk
 
 export interface BoardStatus {

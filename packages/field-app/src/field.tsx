@@ -15,6 +15,7 @@ import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { hexToRgb01 } from "./field/theme-constants";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
+import { usePluginRegistryFeed } from "./plugin-host/plugin-registry-store";
 import { useTheme } from "./theme";
 
 // The Field (B2 + Track D1–D4), decomposed per ESR §5.4.3 (slice 3b):
@@ -37,6 +38,10 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   // publishes the live devtools handle for the stage's GL profiling lanes.
   const stageDisposeRef = useRef<(() => void) | null>(null);
   const devtoolsRef = useRef<DevtoolsHandle | null>(null);
+
+  // PLUG-P2: stream the fieldd plugin-registry snapshot into the module store
+  // (session sampling + Settings section read it; daemon-away stays honest).
+  usePluginRegistryFeed();
 
   const { ce, registry, generation, docState } = useWorkspaceSession(manager, stageDisposeRef);
   usePreviewWarmup(manager, registry);

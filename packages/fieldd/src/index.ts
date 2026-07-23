@@ -12,5 +12,11 @@ export { MeshClient, type ServeSpec, type ServeState } from "./mesh-client";
 export { NativeLink, RpcCallError } from "./native-link";
 export { computePairingMac } from "./pairing";
 export { PeerLink, type PeerLinkOptions, type PeerLinkState } from "./peer-link";
+export {
+  contractsRangeSatisfied,
+  type PluginRegistryConfig,
+  type PluginRegistryHealth,
+  PluginRegistryService,
+} from "./plugin-registry";
 export { ProductApi } from "./product-api";
 export { type TokenGrant, TokenService } from "./token-service";

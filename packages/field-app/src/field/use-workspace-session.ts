@@ -12,6 +12,7 @@ import type { DocManager, DocManagerState } from "../doc-manager";
 import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
 import { migrateTypeRenames } from "../plugin-host/migrate-type-renames";
+import { getEnabledPluginIds } from "../plugin-host/plugin-registry-store";
 import { bindPersistence } from "./persistence-controller";
 
 // WorkspaceSession (§5.4.3): exactly ONE ICE engine generation and ONE
@@ -44,10 +45,24 @@ export function useWorkspaceSession(
    * FIRST — the GL disposal order invariant, structural. */
   stageDisposeRef: MutableRefObject<(() => void) | null>,
 ): WorkspaceSession {
-  const registry = useMemo(buildRegistry, []);
   const docState = useSyncExternalStore(manager.subscribe, manager.getState);
   const pending = docState.pending;
   const generation = pending?.generation ?? 0;
+  // PLUG-P2: the fieldd registry snapshot picks which bundled plugins build.
+  // SAMPLED at doc-generation boundaries only — a snapshot arriving mid-session
+  // never hot-rips widgets from a live engine; enable/disable takes effect on
+  // the next board (re)open. The key is a stable string so an UNCHANGED set
+  // keeps the memoized registry (and the preview-warmup keyed on it) intact.
+  // No snapshot yet (booting / daemon away) ⇒ null ⇒ all bundled plugins — the
+  // honest degraded default (two-plane law: the canvas never waits on fieldd).
+  const enabledKey = useMemo(() => {
+    const ids = getEnabledPluginIds();
+    return ids === null ? null : JSON.stringify([...ids].sort());
+  }, [generation]);
+  const registry = useMemo(
+    () => buildRegistry(enabledKey === null ? null : new Set<string>(JSON.parse(enabledKey))),
+    [enabledKey],
+  );
   const ce = useMemo(() => createFieldEngine(registry), [registry, generation]);
 
   // B3 law carried into B4 — the doc attaches to the COMMITTED engine only,
@@ -98,11 +113,25 @@ export function useWorkspaceSession(
         return () => ce.docs.close();
       }
       ce.world.sync();
+      if (res.session.readOnly) {
+        // P2 — the engine's pack-marker gate (ghost probe 2026-07-23): a board
+        // carrying widgets of an UNREGISTERED plugin (or a newer schema) opens
+        // READ-ONLY — never quarantined, never lossy; re-enabling the plugin
+        // restores write, and P3's missing faces (spec §12.4) are the planned
+        // lift. No persistence bind: nothing can commit, and autosave's
+        // dirty-start PUT would stomp this honest status row.
+        const missing = res.session.report?.newerInDoc ?? [];
+        const detail = missing.length > 0 ? `needs ${missing.join(", ")}` : "newer doc schema";
+        console.warn(`[board] read-only: ${detail}`);
+        setBoardStatus({ state: "readonly", detail });
+        manager.contentApplied(pending.generation);
+        return () => ce.docs.close();
+      }
     } else {
       const session = ce.docs.create();
       // The demo scene belongs to the bootstrap default doc alone (seed flag);
       // user-created docs open as an empty field.
-      if (pending.seed) seedField(ce, session);
+      if (pending.seed) seedField(ce, session, registry);
       else ce.world.sync();
     }
     if (lane === null) {
@@ -116,7 +145,7 @@ export function useWorkspaceSession(
       unbindPersistence();
       ce.docs.close();
     };
-  }, [ce, manager, pending]);
+  }, [ce, manager, pending, registry]);
 
   // Natural boot framing (widgetlab, 2026-07-18: "zoom to fit, but with an
   // upper and bottom cap"): frame the content once the viewport is measured

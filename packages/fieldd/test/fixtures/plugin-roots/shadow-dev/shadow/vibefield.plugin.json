@@ -1,0 +1,32 @@
+{
+  "activation": [
+    "onWidget:vibefield.fixture.alpha.card"
+  ],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "defaultSize": {
+          "h": 120,
+          "w": 200
+        },
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Card",
+        "type": "vibefield.fixture.alpha.card"
+      }
+    ]
+  },
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./renderer.js"
+  },
+  "id": "vibefield.fixture.alpha",
+  "manifestVersion": 1,
+  "title": "vibefield.fixture.alpha",
+  "version": "0.1.0"
+}

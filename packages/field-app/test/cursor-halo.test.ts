@@ -41,8 +41,9 @@ function ev(partial: Partial<InputEvent> & Pick<InputEvent, "kind">): InputEvent
 }
 
 function setup() {
-  const ce = createFieldEngine(buildRegistry());
-  seedField(ce, ce.docs.create()); // B3 split: engine boots doc-less
+  const registry = buildRegistry();
+  const ce = createFieldEngine(registry);
+  seedField(ce, ce.docs.create(), registry); // B3 split: engine boots doc-less
   ce.world.setResource(Viewport, { w: 1900, h: 1100, dpr: 1 }); // identity camera — screen == world
   const container = document.createElement("div");
   document.body.appendChild(container);

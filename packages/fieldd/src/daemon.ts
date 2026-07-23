@@ -11,6 +11,9 @@ import {
   DocRenameParams,
   METHODS,
   type NativeHealth,
+  PluginsDisableParams,
+  PluginsEnableParams,
+  PluginsGetParams,
   PORTS,
   type ProductInfo,
   SCOPES,
@@ -23,6 +26,7 @@ import { DocumentService } from "./doc-service";
 import { MeshClient } from "./mesh-client";
 import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
+import { PluginRegistryService } from "./plugin-registry";
 import { ProductApi } from "./product-api";
 import { TokenService } from "./token-service";
 
@@ -52,6 +56,9 @@ export interface FielddConfig {
   peerWebSocket?: WsCtor;
   /** pid of a field-native the caller spawned (recorded in product.json for cleanup tooling) */
   nativePid?: number;
+  /** PLUG-P2 — plugin discovery roots (§9.1): dirs whose children are plugin
+   * dirs. Unset ⇒ an empty registry (honest, never a scan of guessed paths). */
+  pluginRoots?: { bundled?: string[]; devLinked?: string[] };
 }
 
 export interface FielddHealth {
@@ -59,6 +66,7 @@ export interface FielddHealth {
   nativeConnected: boolean;
   native: NativeHealth | null;
   docs: { state: string; docCount: number };
+  plugins: { count: number; enabled: number; invalid: number };
   /** C3: the declared serves with their fused reconcile+runtime state. `url`
    * is the full CAPABILITY URL (base serve URL + the secret route path) —
    * the Settings mesh section is where the user reads it; never log it. */
@@ -76,6 +84,7 @@ export interface FielddDaemon {
   docs: DocumentService;
   devices: DeviceService;
   peers: PeerLink;
+  plugins: PluginRegistryService;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
   health(): FielddHealth;
@@ -102,6 +111,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   try {
     const mesh = new MeshClient(native);
     const docs = new DocumentService({ dataDir: config.dataDir });
+    // PLUG-P2 — the plugin registry (§9): manifest-only discovery, pre-listen
+    // so the first snapshot is warm. No module code loads here (§19.1).
+    const plugins = new PluginRegistryService({
+      dataDir: config.dataDir,
+      roots: {
+        bundled: config.pluginRoots?.bundled ?? [],
+        devLinked: config.pluginRoots?.devLinked ?? [],
+      },
+    });
+    await plugins.refresh();
     // C3 — the serve route secret (thinking-c3 §1): the provenance proof
     // shared by exactly two parties, this process and the sidecar's route
     // config. 192-bit; base64url is path-safe. Never logged, never in
@@ -123,6 +142,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       nativeConnected: native.connected,
       native: latestHealth,
       docs: docs.health(),
+      plugins: plugins.health(),
       mesh: {
         // serves() is the FUSED view (reconcile ∘ runtime — mesh-client C3)
         serves: mesh.serves().map((s) => {
@@ -287,6 +307,39 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return { snapshot: devices.list(), dispose: () => devices.off("changed", fn) };
     });
 
+    // -- PluginRegistry (PLUG-P2, plugin spec §21.3/§22.1) --
+    api.register("plugins.list", () => plugins.snapshot());
+    api.register("plugins.get", (_ctx, params) => {
+      const parsed = PluginsGetParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { id: pluginId }", false);
+      const record = plugins.get(parsed.data.id);
+      if (!record) throw new RpcCallError("NOT_FOUND", `no such plugin: ${parsed.data.id}`, false);
+      return record;
+    });
+    api.registerSubscription("plugins.subscribe", (_ctx, _params, emit) => {
+      const fn = (snap: unknown) => emit(snap);
+      plugins.on("changed", fn);
+      return { snapshot: plugins.snapshot(), dispose: () => plugins.off("changed", fn) };
+    });
+    api.register("plugins.enable", async (_ctx, params) => {
+      const parsed = PluginsEnableParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { id: pluginId }", false);
+      return plugins.enable(parsed.data.id);
+    });
+    api.register("plugins.disable", async (_ctx, params) => {
+      const parsed = PluginsDisableParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { id: pluginId }", false);
+      return plugins.disable(parsed.data.id);
+    });
+    api.register("plugins.reload", async () => {
+      await plugins.refresh();
+      return plugins.snapshot();
+    });
+    plugins.on("changed", emitHealth); // plugin counts fold into the aggregated stream
+
     // -- PeerLink (C5, design-04 D32): the device?-routing substrate --
     const peers = new PeerLink({
       ownDeviceId: () => devices.currentDeviceId(),
@@ -312,6 +365,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs.dispose();
       peers.dispose();
       devices.dispose();
+      plugins.dispose();
       native.close();
       config.onFatal?.(fatalReason);
     };
@@ -329,6 +383,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docLane.close(); // release the lane port before the outer rollback runs
       docs.dispose();
       devices.dispose();
+      plugins.dispose();
       throw e;
     }
 
@@ -385,6 +440,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs,
       devices,
       peers,
+      plugins,
       shellToken: shellGrant.token,
       health,
       nativeHealth: () => latestHealth,
@@ -394,6 +450,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         docs.dispose();
         peers.dispose();
         devices.dispose();
+        plugins.dispose();
         native.close();
         // a superseding fieldd rewrites these for the same dataDir — never
         // delete what is no longer ours

@@ -1,0 +1,32 @@
+{
+  "activation": [
+    "onWidget:vibefield.fixture.badengines.card"
+  ],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "defaultSize": {
+          "h": 120,
+          "w": 200
+        },
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Card",
+        "type": "vibefield.fixture.badengines.card"
+      }
+    ]
+  },
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^99.0.0"
+  },
+  "entries": {
+    "renderer": "./renderer.js"
+  },
+  "id": "vibefield.fixture.badengines",
+  "manifestVersion": 1,
+  "title": "vibefield.fixture.badengines",
+  "version": "0.1.0"
+}

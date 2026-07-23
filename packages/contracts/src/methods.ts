@@ -254,4 +254,53 @@ export const METHODS: MethodDef[] = [
     locality: "sync",
     subscription: true,
   }),
+
+  // PLUG-P2 — PluginRegistry (plugin spec §21.3/§22.1). Registry truth is
+  // per-device (install-set sync is P7's D29 doc, not method federation), so
+  // every method is local; reads and writes split plugins.read/plugins.manage
+  // like doc.*. The rest of the §22.1 catalog (openRendererSession, install/
+  // uninstall/updates.check) is deferred and deliberately undeclared.
+  defineMethod({
+    surface: "product",
+    method: "plugins.list",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.get",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.subscribe",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.enable",
+    scope: "plugins.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.disable",
+    scope: "plugins.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.reload",
+    scope: "plugins.manage",
+    idempotent: true,
+    locality: "local",
+  }),
 ];

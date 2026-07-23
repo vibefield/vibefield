@@ -34,6 +34,13 @@ async function main(): Promise<void> {
     "file://",
     ...(process.env["FIELDD_ALLOWED_ORIGINS"]?.split(",").filter(Boolean) ?? []),
   ];
+  // PLUG-P2 — plugin discovery roots, PATH-style lists. The spawner (shell in
+  // dev, packaged app later) decides them; unset ⇒ an empty registry, honestly.
+  const splitRoots = (v: string | undefined): string[] => v?.split(":").filter(Boolean) ?? [];
+  const pluginRoots = {
+    bundled: splitRoots(process.env["FIELDD_PLUGIN_ROOTS"]),
+    devLinked: splitRoots(process.env["FIELDD_PLUGIN_DEV_ROOTS"]),
+  };
 
   let nativePid: number | undefined;
   const socketPath = join(dataDir, "native", "run", "mgmt.sock");
@@ -54,6 +61,7 @@ async function main(): Promise<void> {
     ...(portEnv !== undefined ? { controlPort: Number(portEnv) } : {}),
     dataPort: dataPortEnv !== undefined ? Number(dataPortEnv) : PORTS.FIELDD_WS_DATA,
     allowedOrigins,
+    pluginRoots,
     ...(nativePid !== undefined ? { nativePid } : {}),
     onFatal: (reason) => {
       process.stderr.write(`fieldd fatal: ${reason}\n`);

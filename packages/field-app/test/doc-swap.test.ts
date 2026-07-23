@@ -26,9 +26,10 @@ function census(ce: ReturnType<typeof createFieldEngine>) {
 
 describe("in-place doc swap on one engine", () => {
   it("close → create empties the world; close → open restores", () => {
-    const ce = createFieldEngine(buildRegistry());
+    const registry = buildRegistry();
+    const ce = createFieldEngine(registry);
     const a = ce.docs.create();
-    seedField(ce, a);
+    seedField(ce, a, registry);
     expect(census(ce)).toEqual({ widgets: 21, wires: 2 });
     const bytesA = a.exportEnvelope(Date.now());
 

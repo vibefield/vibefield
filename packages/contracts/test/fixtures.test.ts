@@ -25,6 +25,7 @@ import {
   ServeEntry,
   StoreSnapshot,
 } from "../src/mgmt";
+import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
@@ -54,6 +55,7 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "device-slice": DeviceSlice,
   "device-info": DeviceInfo,
   "plugin-manifest": PluginManifestV1,
+  "plugin-registry-snapshot": PluginRegistrySnapshot,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

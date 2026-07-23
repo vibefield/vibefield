@@ -244,6 +244,9 @@ importers:
       '@vibefield/fieldd-client':
         specifier: workspace:*
         version: link:../fieldd-client
+      '@vibefield/plugin-build':
+        specifier: workspace:*
+        version: link:../../tooling/plugin-build
       ws:
         specifier: ^8.18.0
         version: 8.21.1

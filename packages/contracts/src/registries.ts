@@ -72,6 +72,7 @@ export const SCOPES = [
   "shell.clipboard",
   "shell.open",
   "shell.webcontents",
+  "plugins.read", // registry snapshot (plugins.list/get/subscribe) — local-only like plugins.manage
   "plugins.manage",
   "tokens.mint", // shell-main only: mint per-window renderer tokens (Track A bootstrap)
 ] as const;
@@ -80,7 +81,7 @@ export type Scope = (typeof SCOPES)[number];
 /** The D32 tailnet-caller preset (C3): the scopes a WhoIs-authenticated tailnet
  * principal is granted on a served product surface. Broad product access MINUS
  * D32's local-only-forever set (doc.*, tokens.mint, native.admin, push.manage,
- * plugins.manage) and MINUS plugin-runtime/shell powers — those are capability
+ * plugins.*) and MINUS plugin-runtime/shell powers — those are capability
  * grants for local runtimes, meaningless (and dangerous) as remote-caller
  * scopes. Document replication uses its dedicated authenticated sync protocol;
  * the renderer's persistence API and lane tickets never federate. */

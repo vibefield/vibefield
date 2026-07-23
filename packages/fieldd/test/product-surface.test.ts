@@ -184,3 +184,98 @@ describe("system.health.subscribe (aggregated stream)", () => {
     expect(again.removed).toBe(false);
   });
 });
+
+describe("plugins.* (PLUG-P2 registry surface)", () => {
+  // a self-contained bundled root: one minimal-valid plugin, written inline
+  async function setupWithPlugins() {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-plug-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    await mock.start();
+    cleanup.push(() => mock.stop());
+    const root = join(dataDir, "bundled-root");
+    mkdirSync(join(root, "alpha"), { recursive: true });
+    writeFileSync(
+      join(root, "alpha", "vibefield.plugin.json"),
+      JSON.stringify({
+        manifestVersion: 1,
+        id: "vibefield.fixture.alpha",
+        version: "0.1.0",
+        title: "Alpha Fixture",
+        engines: { app: ">=0.0.0", contracts: "^0.1.0" },
+        activation: [],
+        capabilities: [],
+      }),
+    );
+    const daemon = await bootstrap({
+      dataDir,
+      controlPort: 0,
+      pluginRoots: { bundled: [root] },
+    });
+    cleanup.push(() => daemon.stop());
+    return { daemon };
+  }
+
+  it("lists and subscribes; enable/disable round-trips as deltas; health folds counts", async () => {
+    const { daemon } = await setupWithPlugins();
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+
+    const list = (await rpc.call("plugins.list", {})) as {
+      generation: number;
+      plugins: Array<{ id: string; state: string; enabled: boolean }>;
+      problems: unknown[];
+    };
+    expect(list.generation).toBeGreaterThanOrEqual(1);
+    expect(list.problems).toEqual([]);
+    expect(list.plugins.map((p) => p.id)).toEqual(["vibefield.fixture.alpha"]);
+    expect(list.plugins[0]!.state).toBe("enabled");
+
+    const health = (await rpc.call("system.health", {})) as FielddHealth;
+    expect(health.plugins).toEqual({ count: 1, enabled: 1, invalid: 0 });
+
+    const sub = (await rpc.call("plugins.subscribe", {})) as {
+      subId: string;
+      snapshot: { generation: number };
+    };
+    const disabled = (await rpc.call("plugins.disable", { id: "vibefield.fixture.alpha" })) as {
+      state: string;
+      enabled: boolean;
+    };
+    expect(disabled.state).toBe("disabled");
+    expect(disabled.enabled).toBe(false);
+    await until(() =>
+      rpc.notifications.some(
+        (n) =>
+          n.method === "plugins.delta" &&
+          n.params.subId === sub.subId &&
+          (n.params.payload as { plugins: Array<{ state: string }> }).plugins[0]?.state ===
+            "disabled",
+      ),
+    );
+
+    // the flag persists in install records — a reload keeps it disabled
+    const reloaded = (await rpc.call("plugins.reload", {})) as {
+      plugins: Array<{ state: string }>;
+    };
+    expect(reloaded.plugins[0]!.state).toBe("disabled");
+
+    const missing = await rpc.callErr("plugins.get", { id: "vibefield.fixture.ghost" });
+    expect(missing.data?.kind).toBe("NOT_FOUND");
+  });
+
+  it("gates writes behind plugins.manage while reads ride plugins.read", async () => {
+    const { daemon } = await setupWithPlugins();
+    const readOnly = daemon.tokens.mint(["plugins.read"], "reader");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, readOnly.token);
+
+    const list = (await rpc.call("plugins.list", {})) as { plugins: unknown[] };
+    expect(list.plugins.length).toBe(1);
+
+    const denied = await rpc.callErr("plugins.disable", { id: "vibefield.fixture.alpha" });
+    expect(denied.data?.kind).toBe("FORBIDDEN_SCOPE");
+  });
+});

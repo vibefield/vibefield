@@ -43,11 +43,22 @@ function registerCanonical(
   registry.registerV1(manifest, widgets);
 }
 
-export function buildRegistry(): PluginRegistry<WidgetType> {
+/** The statically bundled set — the code the shell ships either way. P2: the
+ * fieldd registry snapshot picks WHICH of these register (`enabledIds`);
+ * null/omitted = no snapshot yet (booting or daemon away) = all of them, the
+ * honest degraded default. P3's lazy loader replaces the static list itself. */
+const BUNDLED: Array<[PluginManifestV1, Record<string, WidgetBinding>]> = [
+  [noteManifest, noteBindings],
+  [fieldToolsManifest, fieldToolsBindings],
+  [widgetlabManifest, widgetlabBindings],
+];
+
+export function buildRegistry(enabledIds?: ReadonlySet<string> | null): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
-  registerCanonical(registry, noteManifest, noteBindings);
-  registerCanonical(registry, fieldToolsManifest, fieldToolsBindings);
-  registerCanonical(registry, widgetlabManifest, widgetlabBindings);
+  for (const [manifest, bindings] of BUNDLED) {
+    if (enabledIds != null && !enabledIds.has(manifest.id)) continue;
+    registerCanonical(registry, manifest, bindings);
+  }
   // Spine wiring: manifest SafePreview data → shell-ui's silhouette registry
   // (folder minis + tray fallbacks read previewBackground — one source, P-3).
   for (const plugin of registry.all()) {
@@ -169,9 +180,17 @@ export function createFieldEngine(registry: PluginRegistry<WidgetType>): CanvasE
   });
 }
 
-/** The first-run board (widgetlab demo scene). Requires a live doc session. */
-export function seedField(ce: CanvasEngine, session: DocSession): void {
+/** The first-run board (widgetlab demo scene). Requires a live doc session.
+ * Seeds only REGISTERED types: with a plugin disabled at first boot, its demo
+ * widgets are skipped rather than thrown on (the scene degrades honestly). */
+export function seedField(
+  ce: CanvasEngine,
+  session: DocSession,
+  registry: PluginRegistry<WidgetType>,
+): void {
+  const registered = new Set(registry.allWidgets().keys());
   for (const [type, x, y, w, h, props] of SCENE) {
+    if (!registered.has(type)) continue;
     ce.ops.spawnWidget(type, {
       x,
       y,
@@ -186,28 +205,30 @@ export function seedField(ce: CanvasEngine, session: DocSession): void {
   // materialize its port dots, drag dot-to-dot to connect (ports accept
   // "signal"; the dashed preview goes solid on a compatible target).
   const NX = G6X + 329 + 39; // 1880 — the next column in the v1 grid rhythm
-  const signal = ce.ops.spawnWidget("vibefield.widgetlab.signal", {
-    x: NX,
-    y: 50,
-    w: 170,
-    h: 96,
-    undoable: false,
-  });
-  const filter = ce.ops.spawnWidget("vibefield.widgetlab.filter", {
-    x: NX + 240,
-    y: 170,
-    w: 170,
-    h: 96,
-    undoable: false,
-  });
-  const scope = ce.ops.spawnWidget("vibefield.widgetlab.scope", {
-    x: NX + 480,
-    y: 62,
-    w: 170,
-    h: 96,
-    undoable: false,
-  });
-  seedWire(session, signal, "out", filter, "in");
-  seedWire(session, filter, "out", scope, "in-a");
+  if (["signal", "filter", "scope"].every((n) => registered.has(`vibefield.widgetlab.${n}`))) {
+    const signal = ce.ops.spawnWidget("vibefield.widgetlab.signal", {
+      x: NX,
+      y: 50,
+      w: 170,
+      h: 96,
+      undoable: false,
+    });
+    const filter = ce.ops.spawnWidget("vibefield.widgetlab.filter", {
+      x: NX + 240,
+      y: 170,
+      w: 170,
+      h: 96,
+      undoable: false,
+    });
+    const scope = ce.ops.spawnWidget("vibefield.widgetlab.scope", {
+      x: NX + 480,
+      y: 62,
+      w: 170,
+      h: 96,
+      undoable: false,
+    });
+    seedWire(session, signal, "out", filter, "in");
+    seedWire(session, filter, "out", scope, "in-a");
+  }
   ce.world.sync(); // project the seeds before the first frame
 }

@@ -33,6 +33,7 @@ const BOARD_DOT: Record<string, string> = {
   saving: "saving", // transitional → orange
   booting: "booting",
   detached: "detached",
+  readonly: "detached", // same edits-don't-persist tone (P2: disabled-plugin boards)
   quarantined: "failed",
 };
 

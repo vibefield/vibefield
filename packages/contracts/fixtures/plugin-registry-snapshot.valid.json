@@ -1,0 +1,79 @@
+{
+  "generation": 3,
+  "plugins": [
+    {
+      "id": "vibefield.note",
+      "version": "0.1.0",
+      "title": "Notes",
+      "source": "bundled",
+      "manifestHash": "sha256:9f2b1c8d3e4a5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4",
+      "installRevision": "9f2b1c8d3e4a",
+      "state": "enabled",
+      "compatible": true,
+      "enabled": true,
+      "requestedCapabilities": [],
+      "grantedCapabilities": [],
+      "contributions": {
+        "widgets": [
+          {
+            "category": "Cards",
+            "defaultSize": { "h": 180, "w": 260 },
+            "description": "A sticky note — double-click to edit",
+            "groups": {},
+            "interaction": {
+              "movable": true,
+              "resizable": true,
+              "selectable": true,
+              "snap": "target"
+            },
+            "minSize": { "h": 80, "w": 120 },
+            "preview": { "kind": "color", "value": "#f6e7a9" },
+            "props": {
+              "color": { "default": "#f6e7a9", "kind": "string" },
+              "text": { "default": "", "kind": "string" }
+            },
+            "provides": ["widget"],
+            "schemaVersion": 1,
+            "sizeMode": "fixed",
+            "surface": "dom",
+            "title": "Note",
+            "type": "vibefield.note"
+          }
+        ],
+        "commands": [],
+        "surfaces": []
+      },
+      "renderer": "inactive",
+      "service": "none"
+    },
+    {
+      "id": "vibefield.fixture.broken",
+      "version": "0.2.1",
+      "title": "Broken Fixture",
+      "source": "dev-linked",
+      "manifestHash": "sha256:0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5",
+      "installRevision": "0a1b2c3d4e5f",
+      "state": "invalid",
+      "compatible": true,
+      "enabled": false,
+      "requestedCapabilities": ["canvas.read"],
+      "grantedCapabilities": [],
+      "contributions": { "widgets": [], "commands": [], "surfaces": [] },
+      "renderer": "none",
+      "service": "none",
+      "lastError": {
+        "kind": "PLUGIN_INVALID",
+        "message": "widgets/commands require entries.renderer"
+      }
+    }
+  ],
+  "problems": [
+    {
+      "root": "half-written-plugin",
+      "error": {
+        "kind": "PLUGIN_INVALID",
+        "message": "vibefield.plugin.json is not valid JSON"
+      }
+    }
+  ]
+}

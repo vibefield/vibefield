@@ -4,8 +4,9 @@ import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine
 
 describe("document thumbnail scene", () => {
   it("projects the seeded canvas into sanitized root-level silhouettes and wires", () => {
-    const ce = createFieldEngine(buildRegistry());
-    seedField(ce, ce.docs.create());
+    const registry = buildRegistry();
+    const ce = createFieldEngine(registry);
+    seedField(ce, ce.docs.create(), registry);
 
     const scene = captureDocThumbnailScene(ce);
     expect(scene.widgets).toHaveLength(21);

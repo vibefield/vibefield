@@ -33,6 +33,7 @@ import {
 } from "@vibecook/ice";
 import { useState } from "react";
 import { MeshSection } from "./MeshSection";
+import { PluginsSection } from "./PluginsSection";
 import { SystemSection } from "./SystemSection";
 import type { OverlapGlowConfig, OverlapGlowThemeColors, ThemeColors } from "./types";
 
@@ -688,6 +689,8 @@ export function SettingsPanel({
         <SystemSection />
         {/* Mesh diagnostics — the tailnet section, sibling to System (C3). */}
         <MeshSection />
+        {/* Plugin registry — sibling to System/Mesh (PLUG-P2 UI). */}
+        <PluginsSection />
       </div>
     </div>
   );

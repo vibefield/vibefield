@@ -5,7 +5,8 @@
   "type": "module",
   "main": "../../packages/electron-shell/dist/main/index.cjs",
   "scripts": {
-    "build:shell": "pnpm --filter @vibefield/electron-shell build",
+    "build:fieldd": "pnpm --filter @vibefield/fieldd build",
+    "build:shell": "pnpm build:fieldd && pnpm --filter @vibefield/electron-shell build",
     "build:renderer": "pnpm --filter @vibefield/electron-shell build:renderer",
     "build": "pnpm build:shell && pnpm build:renderer",
     "dev": "pnpm build:shell && concurrently -k -s first \"pnpm --filter @vibefield/electron-shell dev:renderer\" \"electron . --dev\"",

@@ -1,0 +1,27 @@
+{
+  "activation": [],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "defaultSize": {
+          "h": 120,
+          "w": 200
+        },
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Card",
+        "type": "vibefield.fixture.badschema.card"
+      }
+    ]
+  },
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "id": "vibefield.fixture.badschema",
+  "manifestVersion": 1,
+  "title": "Bad Schema Fixture",
+  "version": "0.1.0"
+}

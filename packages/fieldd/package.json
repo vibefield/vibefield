@@ -15,6 +15,7 @@
   "dependencies": {
     "@vibefield/contracts": "workspace:*",
     "@vibefield/fieldd-client": "workspace:*",
+    "@vibefield/plugin-build": "workspace:*",
     "ws": "^8.18.0"
   },
   "devDependencies": {

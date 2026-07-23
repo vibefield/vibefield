@@ -33,7 +33,16 @@ export function buildSupervisor(opts: {
   return createFielddSupervisor({
     dataRoot: opts.root,
     spawn: { command: process.execPath, args: [fielddBin] },
-    environment: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    environment: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
+      // PLUG-P2 — plugin discovery roots (§9.1). The app runs from the repo
+      // today; packaged bundled-roots arrive with the packaging pipeline.
+      // Explicit env always wins (PATH-style lists, see fieldd bin.ts).
+      FIELDD_PLUGIN_ROOTS: process.env["FIELDD_PLUGIN_ROOTS"] ?? join(opts.repoRoot, "plugins"),
+      FIELDD_PLUGIN_DEV_ROOTS:
+        process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? join(opts.repoRoot, "examples", "plugins"),
+    },
     ...(existsSync(nativeBin) ? { nativeExecutable: nativeBin } : {}),
     ...(opts.mode === "dev" ? { allowedOrigins: [new URL(opts.viteUrl).origin] } : {}),
     ...(smokeLike ? { controlPort: 0, dataPort: 0 } : {}),
