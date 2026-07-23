@@ -11,6 +11,8 @@ export interface TokenGrant {
   token: string;
   scopes: Scope[];
   label: string;
+  /** epoch ms — present only for TTL'd mints (renderer leases, P3b) */
+  expiresAt?: number;
 }
 
 export interface TokenEvent {
@@ -26,6 +28,8 @@ interface TokenRecord {
   scopes: Scope[];
   label: string;
   createdAt: number;
+  /** epoch ms — expired records verify null and are dropped (leases, P3b) */
+  expiresAt?: number;
 }
 
 export class TokenService {
@@ -34,22 +38,42 @@ export class TokenService {
 
   constructor(private readonly onEvent?: (e: TokenEvent) => void) {}
 
-  mint(scopes: Scope[], label: string): TokenGrant {
+  mint(scopes: Scope[], label: string, opts?: { ttlMs?: number }): TokenGrant {
     for (const s of scopes) {
       if (!(SCOPES as readonly string[]).includes(s)) throw new Error(`unknown scope: ${s}`);
     }
     const tokenId = `tk_${randomBytes(6).toString("hex")}`;
     const token = `tok_${randomBytes(24).toString("hex")}`;
-    this.byToken.set(token, { tokenId, scopes: [...scopes], label, createdAt: Date.now() });
+    const expiresAt = opts?.ttlMs !== undefined ? Date.now() + opts.ttlMs : undefined;
+    this.byToken.set(token, {
+      tokenId,
+      scopes: [...scopes],
+      label,
+      createdAt: Date.now(),
+      ...(expiresAt !== undefined ? { expiresAt } : {}),
+    });
     this.byId.set(tokenId, token);
     this.onEvent?.({ kind: "mint", tokenId, label, scopes, at: Date.now() });
-    return { tokenId, token, scopes: [...scopes], label };
+    return {
+      tokenId,
+      token,
+      scopes: [...scopes],
+      label,
+      ...(expiresAt !== undefined ? { expiresAt } : {}),
+    };
   }
 
   verify(token: string): { tokenId: string; scopes: Scope[]; label: string } | null {
     const rec = this.byToken.get(token); // token is 192-bit random — map lookup is fine
     if (!rec) {
       this.onEvent?.({ kind: "verify-failed", at: Date.now() });
+      return null;
+    }
+    if (rec.expiresAt !== undefined && Date.now() > rec.expiresAt) {
+      // a dead lease is indistinguishable from no token — drop and refuse
+      this.byToken.delete(token);
+      this.byId.delete(rec.tokenId);
+      this.onEvent?.({ kind: "verify-failed", tokenId: rec.tokenId, at: Date.now() });
       return null;
     }
     return { tokenId: rec.tokenId, scopes: rec.scopes, label: rec.label };

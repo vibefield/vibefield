@@ -1,4 +1,4 @@
-import type { CanvasEngine, WidgetType } from "@vibecook/ice";
+import { type CanvasEngine, decodeEnvelope, type WidgetType } from "@vibecook/ice";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type MutableRefObject,
@@ -11,8 +11,8 @@ import { setBoardStatus } from "../board-status";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
+import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import { migrateTypeRenames } from "../plugin-host/migrate-type-renames";
-import { getEnabledPluginIds } from "../plugin-host/plugin-registry-store";
 import { bindPersistence } from "./persistence-controller";
 
 // WorkspaceSession (§5.4.3): exactly ONE ICE engine generation and ONE
@@ -48,22 +48,28 @@ export function useWorkspaceSession(
   const docState = useSyncExternalStore(manager.subscribe, manager.getState);
   const pending = docState.pending;
   const generation = pending?.generation ?? 0;
-  // PLUG-P2: the fieldd registry snapshot picks which bundled plugins build.
-  // SAMPLED at doc-generation boundaries only — a snapshot arriving mid-session
-  // never hot-rips widgets from a live engine; enable/disable takes effect on
-  // the next board (re)open. The key is a stable string so an UNCHANGED set
-  // keeps the memoized registry (and the preview-warmup keyed on it) intact.
-  // No snapshot yet (booting / daemon away) ⇒ null ⇒ all bundled plugins — the
-  // honest degraded default (two-plane law: the canvas never waits on fieldd).
-  const enabledKey = useMemo(() => {
-    const ids = getEnabledPluginIds();
-    return ids === null ? null : JSON.stringify([...ids].sort());
-  }, [generation]);
-  const registry = useMemo(
-    () => buildRegistry(enabledKey === null ? null : new Set<string>(JSON.parse(enabledKey))),
-    [enabledKey],
-  );
-  const ce = useMemo(() => createFieldEngine(registry), [registry, generation]);
+  // P3c: every PRESENT plugin registers unconditionally (ICE's catalog is
+  // process-permanent — the only way enable/disable round-trips in-session);
+  // disabled plugins swap FACES live (faces.tsx), never registrations. The
+  // registry is therefore stable for the whole mount again.
+  const registry = useMemo(buildRegistry, []);
+  // Ghost stubs (§12.4 absent case): the pending doc's envelope header names
+  // every widget type + pack version pre-open; types NO present plugin owns
+  // register as preserving placeholders AT THE DOC'S VERSION, so the engine's
+  // pack-marker gate stays satisfied and the board opens writable. Sampled per
+  // generation — ghosts are doc-shaped. Unreadable envelopes yield no stubs;
+  // docs.open's own quarantine stays the honest catch.
+  const ghosts = useMemo(() => {
+    const bytes = pending?.initialBytes ?? null;
+    if (bytes === null) return [];
+    try {
+      const { header } = decodeEnvelope(bytes);
+      return buildGhostWidgetTypes(header.prefabVersions, new Set(registry.allWidgets().keys()));
+    } catch {
+      return [];
+    }
+  }, [pending, registry]);
+  const ce = useMemo(() => createFieldEngine(registry, ghosts), [registry, ghosts, generation]);
 
   // B3 law carried into B4 — the doc attaches to the COMMITTED engine only,
   // never in the memo factory. Keyed on the manager's pending session: a doc

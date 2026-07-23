@@ -14,6 +14,8 @@ import {
   PluginsDisableParams,
   PluginsEnableParams,
   PluginsGetParams,
+  PluginsOpenRendererSessionParams,
+  type PluginsOpenRendererSessionResult,
   PORTS,
   type ProductInfo,
   SCOPES,
@@ -337,6 +339,69 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.register("plugins.reload", async () => {
       await plugins.refresh();
       return plugins.snapshot();
+    });
+    // P3b — the renderer principal lease (§11.2): the scope gate above is
+    // necessary, never sufficient. Only a LOCAL renderer/shell principal may
+    // open plugin sessions — clientKind is a hello CLAIM, so it can only
+    // RESTRICT here (an agent claiming "renderer" still needs plugins.read,
+    // which agent tokens never carry).
+    const LEASE_TTL_MS = 10 * 60_000;
+    api.register("plugins.openRendererSession", (ctx, params) => {
+      const parsed = PluginsOpenRendererSessionParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { pluginId, manifestHash? }",
+          false,
+        );
+      if (
+        ctx.transport !== "ws-loopback" ||
+        ctx.principal.kind !== "local-token" ||
+        (ctx.clientKind !== "renderer" && ctx.clientKind !== "shell-main")
+      )
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "renderer sessions open only for local renderer/shell principals (§11.2)",
+          false,
+        );
+      const record = plugins.get(parsed.data.pluginId);
+      if (!record)
+        throw new RpcCallError("NOT_FOUND", `no such plugin: ${parsed.data.pluginId}`, false);
+      if (record.state === "invalid")
+        throw new RpcCallError("PRECONDITION_FAILED", `${record.id} failed validation`, false, {
+          pluginKind: "PLUGIN_INVALID",
+        });
+      if (record.state === "incompatible")
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `${record.id} is incompatible with this device`,
+          false,
+          { pluginKind: "PLUGIN_INCOMPATIBLE" },
+        );
+      if (!record.enabled)
+        throw new RpcCallError("PRECONDITION_FAILED", `${record.id} is disabled`, false, {
+          pluginKind: "PLUGIN_DISABLED",
+        });
+      if (
+        parsed.data.manifestHash !== undefined &&
+        parsed.data.manifestHash !== record.manifestHash
+      )
+        throw new RpcCallError("CONFLICT", `manifest hash mismatch for ${record.id}`, false, {
+          pluginKind: "PLUGIN_ARTIFACT_MISMATCH",
+        });
+      // token scopes = the plugin's granted CORE capabilities (custom x.* ids
+      // are service-fabric grants, never bearer-token scopes)
+      const scopes = record.grantedCapabilities.filter((c): c is Scope =>
+        (SCOPES as readonly string[]).includes(c),
+      );
+      const grant = tokens.mint(scopes, `plugin:${record.id}`, { ttlMs: LEASE_TTL_MS });
+      const result: PluginsOpenRendererSessionResult = {
+        token: grant.token,
+        scopes: grant.scopes,
+        pluginId: record.id,
+        expiresAt: grant.expiresAt ?? Date.now() + LEASE_TTL_MS,
+      };
+      return result;
     });
     plugins.on("changed", emitHealth); // plugin counts fold into the aggregated stream
 

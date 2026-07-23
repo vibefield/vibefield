@@ -32,15 +32,16 @@
  * Frame math: v1 `dt` (seconds) → `dtMs / 1000`. Accent write: v1
  * `useUpdateWidget` → `useCommit` (the sanctioned durable widget-write path).
  */
-import { Size, widgets } from "@vibecook/ice";
-import { useIslandFrame } from "@vibecook/ice/r3f";
 import {
+  getWidgetType,
+  Size,
   useCommit,
+  useIslandFrame,
   useWidgetProps,
   useWorldComponent,
   type WidgetComponentProps,
-} from "@vibecook/ice/react";
-import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/shell-ui";
+} from "@vibefield/plugin-sdk/canvas";
+import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useMemo, useRef } from "react";
 import { type Mesh, Vector3 } from "three";
 
@@ -172,7 +173,7 @@ function ShapesView({ entity, world }: WidgetComponentProps): ReactElement {
     if (movedRef.current > CLICK_MOVE_THRESHOLD) return; // a drag, not a click
     // host registration precedes any mount at runtime, so the lookup is safe
     // here; still guarded because groups.find always returns T | undefined.
-    const group = widgets.get(TYPE)?.groups.find((g) => g.name === "props");
+    const group = getWidgetType(TYPE)?.groups.find((g) => g.name === "props");
     if (group === undefined) return;
     // A durable-write failure (e.g. no active doc) must never break the handler
     // or the router — the repel keeps working even if the accent can't persist.

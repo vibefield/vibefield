@@ -136,4 +136,8 @@ export interface CallerContext {
   principal: Principal;
   transport: Transport;
   receivedAt: number;
+  /** the hello's self-declared client kind (P3b — the §11.2 principal-kind
+   * gate reads it; a CLAIM, so it may only ever RESTRICT, never grant). Absent
+   * on tailnet/peer principals — those doors never carry local client kinds. */
+  clientKind?: ClientKind;
 }

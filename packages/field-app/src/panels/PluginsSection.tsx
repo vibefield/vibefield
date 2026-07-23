@@ -113,12 +113,12 @@ export function PluginsSection(): ReactElement {
                 </span>
               </div>
             ))}
-            {/* both consequences, honestly (ghost probe 2026-07-23): the set
-                applies at the next board open, and a board already holding a
-                disabled plugin's widgets opens read-only — never lossy. */}
+            {/* P3c truth: faces + tray follow the toggle LIVE; boards stay
+                writable — a disabled plugin's widgets become preserving
+                placeholders (never lossy) and return on re-enable. */}
             <div className={labelCls}>
-              changes apply when a board is next opened · boards holding a disabled plugin's widgets
-              open read-only until it returns
+              takes effect immediately · a disabled plugin's widgets show as placeholders and return
+              on re-enable
             </div>
           </>
         )}

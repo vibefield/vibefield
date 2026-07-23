@@ -44,6 +44,7 @@ import { useStageHold, WidgetPreview } from "@vibecook/ice/react";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import { CARD_BG, CARD_RADIUS } from "@vibefield/shell-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import { buildCatalog, CATEGORIES, type CatalogEntry } from "./tray-catalog";
 import { useReactiveResource } from "./use-reactive";
 
@@ -526,7 +527,21 @@ export function WidgetTray({
   const panelRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  const entries = useMemo(() => buildCatalog(registry), [registry]);
+  // P3c: disabled plugins keep their schemas (existing boards render
+  // placeholders) but never offer NEW spawns — the tray follows the live
+  // fieldd snapshot; null snapshot (daemon away) hides nothing, honestly.
+  const pluginSnapshot = usePluginRegistrySnapshot();
+  const disabledPlugins = useMemo(
+    () =>
+      pluginSnapshot === null
+        ? undefined
+        : new Set(pluginSnapshot.plugins.filter((p) => !p.enabled).map((p) => p.id)),
+    [pluginSnapshot],
+  );
+  const entries = useMemo(
+    () => buildCatalog(registry, disabledPlugins),
+    [registry, disabledPlugins],
+  );
   const shown = category === "All" ? entries : entries.filter((e) => e.category === category);
 
   // HANDOFF must release the pointer path SYNCHRONOUSLY: until React

@@ -1,5 +1,6 @@
 import type { GridConfig } from "@vibecook/ice";
 import type { DevtoolsHandle } from "@vibecook/ice/devtools";
+import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type ReactElement,
   useCallback,
@@ -15,6 +16,7 @@ import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { hexToRgb01 } from "./field/theme-constants";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
+import { setPluginClientBackend } from "./plugin-host/plugin-client";
 import { usePluginRegistryFeed } from "./plugin-host/plugin-registry-store";
 import { useTheme } from "./theme";
 
@@ -42,6 +44,13 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   // PLUG-P2: stream the fieldd plugin-registry snapshot into the module store
   // (session sampling + Settings section read it; daemon-away stays honest).
   usePluginRegistryFeed();
+  // PLUG-P3b: hand the plugin-client module its backend — plugin-bound leases
+  // dial the same daemon this window reached (cleared on unmount, honestly).
+  const fielddClient = useFielddClient();
+  useEffect(() => {
+    setPluginClientBackend({ windowClient: fielddClient });
+    return () => setPluginClientBackend(null);
+  }, [fielddClient]);
 
   const { ce, registry, generation, docState } = useWorkspaceSession(manager, stageDisposeRef);
   usePreviewWarmup(manager, registry);

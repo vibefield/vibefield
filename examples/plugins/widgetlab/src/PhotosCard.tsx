@@ -5,8 +5,8 @@
  *
  * size: xl
  */
-import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
-import { CardShell } from "@vibefield/shell-ui";
+import { useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
+import { CardShell } from "@vibefield/plugin-sdk/ui";
 import type { ReactElement } from "react";
 
 const TYPE = "vibefield.widgetlab.photos";

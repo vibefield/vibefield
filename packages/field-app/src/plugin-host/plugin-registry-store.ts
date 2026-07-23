@@ -35,12 +35,6 @@ export function subscribePluginRegistry(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** ids the registry reports enabled, or null while no snapshot exists. */
-export function getEnabledPluginIds(): ReadonlySet<string> | null {
-  if (current === null) return null;
-  return new Set(current.plugins.filter((p) => p.enabled).map((p) => p.id));
-}
-
 /** Mount once inside FielddProvider: streams plugins.subscribe into the store.
  * Reconnect replays with a fresh snapshot (client P5 law), so the store heals. */
 export function usePluginRegistryFeed(): void {

@@ -1,5 +1,5 @@
-import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
-import { CardShell } from "@vibefield/shell-ui";
+import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
+import { CardShell } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useRef, useState } from "react";
 
 // The note card (B2's proof widget; Track D1: first CardShell conversion —

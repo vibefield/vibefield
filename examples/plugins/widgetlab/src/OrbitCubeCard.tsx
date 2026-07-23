@@ -36,10 +36,14 @@
  * regardless of move distance, so the log is guarded by a move threshold to
  * keep v1's "a drag is not a click".
  */
-import { Size } from "@vibecook/ice";
-import { useIslandInvalidate } from "@vibecook/ice/r3f";
-import { useWidgetProps, useWorldComponent, type WidgetComponentProps } from "@vibecook/ice/react";
-import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/shell-ui";
+import {
+  Size,
+  useIslandInvalidate,
+  useWidgetProps,
+  useWorldComponent,
+  type WidgetComponentProps,
+} from "@vibefield/plugin-sdk/canvas";
+import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useCallback, useEffect, useRef, useState } from "react";
 import type { Mesh } from "three";
 

@@ -13,10 +13,14 @@
  * material) is verbatim; size comes from the live `Size`.
  */
 import { RoundedBox } from "@react-three/drei";
-import { Size } from "@vibecook/ice";
-import { useIslandFrame } from "@vibecook/ice/r3f";
-import { useWidgetProps, useWorldComponent, type WidgetComponentProps } from "@vibecook/ice/react";
-import { GlLiftGroup } from "@vibefield/shell-ui";
+import {
+  Size,
+  useIslandFrame,
+  useWidgetProps,
+  useWorldComponent,
+  type WidgetComponentProps,
+} from "@vibefield/plugin-sdk/canvas";
+import { GlLiftGroup } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useRef } from "react";
 import type { Group } from "three";
 

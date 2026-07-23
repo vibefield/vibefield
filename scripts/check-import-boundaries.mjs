@@ -202,16 +202,18 @@ const RULES = [
   },
   {
     id: "R10",
-    // Slice L0 (plugin-architecture spec §11.3): plugins depend on the plugin SDK
-    // only — no host implementation, platform packages, raw ICE, or Electron.
-    // REPORT-ONLY until slice P3 lands @vibefield/plugin-sdk: the walking
-    // skeleton's direct ice/plugin-runtime/shell-ui imports legitimately trip it,
-    // and the reports are the P3 migration worklist. Flipping enforce also means
-    // removing R10 from EXPECTED_PENDING in the self-test — a deliberate act.
-    enforce: false,
+    // Plugin-architecture spec §11.3, ENFORCED since slice P3 (the SDK is the
+    // door): plugin RUNTIME code imports only @vibefield/plugin-sdk (+ contracts
+    // types, react, PA-29 singleton bare specifiers). scripts/ (manifest emit —
+    // plugin-build's Node-side caller) and test/ (vitest) are authoring-time
+    // subtrees, never part of the renderer artifact graph, and stay exempt.
+    enforce: true,
     description:
       "plugins import only the plugin SDK (no host/platform/ICE/Electron under plugins/, examples/plugins/)",
-    applies: (p) => SOURCE_EXT.test(p) && underAny(p, ["plugins", "examples/plugins"]),
+    applies: (p) =>
+      SOURCE_EXT.test(p) &&
+      underAny(p, ["plugins", "examples/plugins"]) &&
+      !/(^|\/)(scripts|test)\//.test(p),
     importTest: (s) =>
       matchesForbid(s, {
         modules: [
@@ -569,6 +571,16 @@ function runSelfTest() {
       file: "plugins/note/src/clean-sdk.ts",
       body: 'import { defineRendererPlugin } from "@vibefield/plugin-sdk";\nimport type { Scope } from "@vibefield/contracts";\nimport React from "react";\nexport const ok = 1;\n',
     },
+    // R10 exempts authoring-time subtrees: emit scripts and tests are Node-side
+    // by design, never part of the renderer artifact graph (§11.3 scope).
+    {
+      file: "plugins/note/scripts/emit-something.ts",
+      body: 'import { writeFileSync } from "node:fs";\nexport const emit = () => writeFileSync;\n',
+    },
+    {
+      file: "plugins/note/test/uses-node.test.ts",
+      body: 'import { readFileSync } from "node:fs";\nimport { PluginRegistry } from "@vibefield/plugin-runtime";\nexport const t = readFileSync;\n',
+    },
   ];
 
   const tmp = mkdtempSync(join(tmpdir(), "vf-import-walls-"));
@@ -602,10 +614,10 @@ function runSelfTest() {
 
     // Enforce semantics: the expected table is EXPLICIT so rot stays visible
     // (the 2026-07-23 lesson: a loose "only X pending" assertion sat stale for
-    // three slices). Every rule is enforced EXCEPT the named pending set — R10
-    // is pending by design until plugin-architecture slice P3 lands the SDK;
-    // flipping it to enforce requires editing THIS set, a deliberate act.
-    const EXPECTED_PENDING = new Set(["R10"]);
+    // three slices). Every rule is enforced — R10's pending era ended when
+    // slice P3 landed the SDK (2026-07-23); adding a new pending rule means
+    // editing THIS set, a deliberate act.
+    const EXPECTED_PENDING = new Set([]);
     const tableOk = RULES.every((r) => r.enforce === !EXPECTED_PENDING.has(r.id));
     console.log(
       `  ${tableOk ? "PASS" : "FAIL"}  enforce table: every rule enforced except {${[...EXPECTED_PENDING].join(", ")}}`,
@@ -616,10 +628,10 @@ function runSelfTest() {
     console.log(`  ${r4Gated ? "PASS" : "FAIL"}  R4 detected and gated by --enforce`);
     if (!r4Gated) ok = false;
 
-    // R10 must be DETECTED but never gate --enforce while pending.
-    const r10Pending = found.some((v) => v.id === "R10" && !ENFORCE_BY_ID.get(v.id));
-    console.log(`  ${r10Pending ? "PASS" : "FAIL"}  R10 detected and NOT gated (pending until P3)`);
-    if (!r10Pending) ok = false;
+    // R10 is enforced since P3: detected violations must also GATE --enforce.
+    const r10Gated = found.some((v) => v.id === "R10" && ENFORCE_BY_ID.get(v.id) === true);
+    console.log(`  ${r10Gated ? "PASS" : "FAIL"}  R10 detected and GATED (enforced since P3)`);
+    if (!r10Gated) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

@@ -26,16 +26,17 @@ import {
   ChildOf,
   type Entity,
   FIT_DEFAULTS,
+  getWidgetType,
   MeasuredSize,
   Position,
   PrefabId,
   Size,
+  useOps,
+  useWidgetProps,
   Viewport,
   type World,
-  widgets,
-} from "@vibecook/ice";
-import { useOps, useWidgetProps } from "@vibecook/ice/react";
-import { CARD_RADIUS, CardShell, previewBackground } from "@vibefield/shell-ui";
+} from "@vibefield/plugin-sdk/canvas";
+import { CARD_RADIUS, CardShell, previewBackground } from "@vibefield/plugin-sdk/ui";
 import {
   type ReactElement,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -71,7 +72,7 @@ function childrenSnapshot(world: World, entity: Entity): Mini[] {
     const s = m !== undefined && m.w > 0 ? m : world.get(c, Size);
     if (pos === undefined || s === undefined) continue;
     const type = world.get(c, PrefabId)?.id;
-    const def = typeof type === "string" ? widgets.get(type) : undefined;
+    const def = typeof type === "string" ? getWidgetType(type) : undefined;
     const bg = previewBackground(typeof type === "string" ? type : undefined, def?.surface);
     out.push({ x: pos.x, y: pos.y, w: s.w, h: s.h, bg });
   }

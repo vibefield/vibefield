@@ -17,10 +17,14 @@
  * v1-verbatim AND v1-lit. (An interim two-point studio rig lived here before
  * the seam existed; removed with it.)
  */
-import { Size } from "@vibecook/ice";
-import { useIslandFrame } from "@vibecook/ice/r3f";
-import { useWidgetProps, useWorldComponent, type WidgetComponentProps } from "@vibecook/ice/react";
-import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/shell-ui";
+import {
+  Size,
+  useIslandFrame,
+  useWidgetProps,
+  useWorldComponent,
+  type WidgetComponentProps,
+} from "@vibefield/plugin-sdk/canvas";
+import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useRef } from "react";
 import type { Mesh } from "three";
 

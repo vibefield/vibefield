@@ -12,9 +12,13 @@
  * sphere, material) is verbatim; the only adaptation is reading the widget's
  * live size from the world (`Size`) instead of v1's width/height render props.
  */
-import { Size } from "@vibecook/ice";
-import { useWidgetProps, useWorldComponent, type WidgetComponentProps } from "@vibecook/ice/react";
-import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/shell-ui";
+import {
+  Size,
+  useWidgetProps,
+  useWorldComponent,
+  type WidgetComponentProps,
+} from "@vibefield/plugin-sdk/canvas";
+import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useRef } from "react";
 import type { Mesh } from "three";
 

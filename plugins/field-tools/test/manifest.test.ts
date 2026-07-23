@@ -3,22 +3,29 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validatePluginManifest } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
-import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
+import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
-import { fieldToolsBindings, fieldToolsManifest } from "../src";
+import { fieldToolsManifest, fieldToolsRenderer } from "../src";
 
-// C1b: the canonical manifest V1-validates at registration; container and
-// sweepContained ride as DATA; the derived legacy view keeps tray/mini
-// silhouettes whole (folder color, comment gradient) until C1c.
+// C1b/P3a: the canonical manifest V1-validates; container and sweepContained
+// ride as DATA on the manifest itself (no registry round-trip needed);
+// ACTIVATION binds exactly the declared widget types (§12.1, proven against
+// the SDK's mock host — no engine, no registry). Host-side integration
+// (prefab building, tray silhouettes) lives in field-app's own suites.
 describe("plugin-field-tools", () => {
-  it("registers the canonical manifest and serves both tools", () => {
-    const registry = new PluginRegistry();
-    const impls = Object.fromEntries(Object.keys(fieldToolsBindings).map((t) => [t, {}]));
-    registry.registerV1(fieldToolsManifest, impls);
-    expect(registry.hasWidget("vibefield.field-tools.folder")).toBe(true);
-    expect(registry.hasWidget("vibefield.field-tools.comment")).toBe(true);
-    expect(registry.ownerOf("vibefield.field-tools.folder")).toBe("vibefield.field-tools");
-    const widgets = registry.plugin("vibefield.field-tools")?.v1.contributes?.widgets ?? [];
+  it("activation binds exactly the manifest's declared widget types", async () => {
+    const declared = (fieldToolsManifest.contributes?.widgets ?? []).map((w) => w.type);
+    const session = await activateWithMockHost(fieldToolsRenderer, {
+      id: fieldToolsManifest.id,
+      version: fieldToolsManifest.version,
+      declaredWidgets: declared,
+    });
+    expect([...session.bindings.keys()]).toEqual(declared);
+    for (const binding of session.bindings.values()) expect(binding.component).toBeDefined();
+  });
+
+  it("folder is the one container; comment's membership is spatial (sweepContained)", () => {
+    const widgets = fieldToolsManifest.contributes?.widgets ?? [];
     expect(widgets.find((w) => w.type === "vibefield.field-tools.folder")?.container).toEqual({
       accepts: ["widget"],
       provides: ["widget"],
@@ -26,13 +33,6 @@ describe("plugin-field-tools", () => {
     expect(
       widgets.find((w) => w.type === "vibefield.field-tools.comment")?.interaction?.sweepContained,
     ).toBe(true);
-    // silhouette CSS derives straight from the SafePreview (C1c)
-    expect(
-      safePreviewToCss(widgets.find((w) => w.type === "vibefield.field-tools.folder")?.preview),
-    ).toBe("#1D1D2B");
-    expect(
-      safePreviewToCss(widgets.find((w) => w.type === "vibefield.field-tools.comment")?.preview),
-    ).toContain("linear-gradient");
   });
 
   it("the committed vibefield.plugin.json is the canonical emission (regen: pnpm gen:manifest)", () => {

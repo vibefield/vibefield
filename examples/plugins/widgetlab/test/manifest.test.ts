@@ -3,38 +3,51 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validatePluginManifest } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
-import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
+import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
-import { widgetlabBindings, widgetlabManifest } from "../src";
+import { widgetlabManifest, widgetlabRenderer } from "../src";
 
-// C1b·2: the canonical manifest V1-validates at registration; node ports ride
-// as DATA; the derived legacy view keeps tray/mini silhouettes whole (a color,
-// a gradient) until C1c converts the consumers.
+// C1b·2/P3a: the canonical manifest V1-validates; node ports ride as DATA on
+// the manifest itself; ACTIVATION binds exactly the declared widget types
+// (§12.1, proven against the SDK's mock host — no engine, no registry).
+// Host-side integration (prefab building, tray silhouettes) lives in
+// field-app's own suites.
 describe("plugin-widgetlab", () => {
-  it("registers the canonical manifest and serves all declared widget types", () => {
-    const registry = new PluginRegistry();
-    const impls = Object.fromEntries(Object.keys(widgetlabBindings).map((t) => [t, {}]));
-    registry.registerV1(widgetlabManifest, impls);
-    expect(widgetlabManifest.contributes?.widgets).toHaveLength(18); // 8 cards + 7 GL + 3 nodes
-    expect([...registry.allWidgets().keys()].sort()).toEqual(
-      (widgetlabManifest.contributes?.widgets ?? []).map((w) => w.type).sort(),
-    );
-    expect(registry.ownerOf("vibefield.widgetlab.clock")).toBe("vibefield.widgetlab");
+  it("activation binds exactly the manifest's declared widget types", async () => {
+    const declared = (widgetlabManifest.contributes?.widgets ?? []).map((w) => w.type);
+    expect(declared).toHaveLength(18); // 8 cards + 7 GL + 3 nodes
+    const session = await activateWithMockHost(widgetlabRenderer, {
+      id: widgetlabManifest.id,
+      version: widgetlabManifest.version,
+      declaredWidgets: declared,
+    });
+    expect([...session.bindings.keys()]).toEqual(declared);
+    for (const binding of session.bindings.values()) expect(binding.component).toBeDefined();
 
-    // node ports survive to v1 (the wire-editor trio's whole reason for being)
-    const widgets = registry.plugin("vibefield.widgetlab")?.v1.contributes?.widgets ?? [];
+    // the 7 GL islands: chrome + animated flags survive activation verbatim
+    // (the two chromeless islands — crystal, cube — carry no chrome binding).
+    expect(session.bindings.get("vibefield.widgetlab.sphere")?.chrome).toBeDefined();
+    expect(session.bindings.get("vibefield.widgetlab.sphere")?.animated).toBe(false);
+    expect(session.bindings.get("vibefield.widgetlab.crystal")?.chrome).toBeUndefined();
+    expect(session.bindings.get("vibefield.widgetlab.crystal")?.animated).toBe(true);
+    expect(session.bindings.get("vibefield.widgetlab.torus-knot")?.chrome).toBeDefined();
+    expect(session.bindings.get("vibefield.widgetlab.torus-knot")?.animated).toBe(true);
+    expect(session.bindings.get("vibefield.widgetlab.cube")?.chrome).toBeUndefined();
+    expect(session.bindings.get("vibefield.widgetlab.cube")?.animated).toBe(true);
+    expect(session.bindings.get("vibefield.widgetlab.gold-knot")?.chrome).toBeDefined();
+    expect(session.bindings.get("vibefield.widgetlab.gold-knot")?.animated).toBe(true);
+    expect(session.bindings.get("vibefield.widgetlab.shapes")?.chrome).toBeDefined();
+    expect(session.bindings.get("vibefield.widgetlab.shapes")?.animated).toBe(true);
+    expect(session.bindings.get("vibefield.widgetlab.orbit-cube")?.chrome).toBeDefined();
+    expect(session.bindings.get("vibefield.widgetlab.orbit-cube")?.animated).toBe(false);
+  });
+
+  it("node ports survive to v1 (the wire-editor trio's whole reason for being)", () => {
+    const widgets = widgetlabManifest.contributes?.widgets ?? [];
     expect(widgets.find((w) => w.type === "vibefield.widgetlab.filter")?.ports).toEqual([
       { id: "in", side: "w", accepts: ["signal"] },
       { id: "out", side: "e", accepts: ["signal"] },
     ]);
-
-    // silhouette CSS derives straight from the SafePreview (C1c)
-    expect(
-      safePreviewToCss(widgets.find((w) => w.type === "vibefield.widgetlab.calendar")?.preview),
-    ).toBe("#ffffff");
-    expect(
-      safePreviewToCss(widgets.find((w) => w.type === "vibefield.widgetlab.weather")?.preview),
-    ).toContain("linear-gradient");
   });
 
   it("the committed vibefield.plugin.json is the canonical emission (regen: pnpm gen:manifest)", () => {

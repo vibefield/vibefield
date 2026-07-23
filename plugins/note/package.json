@@ -12,10 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vibecook/ice": "*",
     "@vibefield/contracts": "workspace:*",
-    "@vibefield/plugin-runtime": "workspace:*",
-    "@vibefield/shell-ui": "workspace:*"
+    "@vibefield/plugin-sdk": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.0.0"

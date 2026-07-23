@@ -14,10 +14,8 @@
   "dependencies": {
     "@react-three/drei": "^10.0.0",
     "@react-three/fiber": "^9.6.1",
-    "@vibecook/ice": "*",
     "@vibefield/contracts": "workspace:*",
-    "@vibefield/plugin-runtime": "workspace:*",
-    "@vibefield/shell-ui": "workspace:*",
+    "@vibefield/plugin-sdk": "workspace:*",
     "three": "^0.185.0"
   },
   "peerDependencies": {

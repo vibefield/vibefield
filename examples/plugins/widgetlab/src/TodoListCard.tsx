@@ -16,9 +16,13 @@
  *
  * size: large
  */
-import { widgets } from "@vibecook/ice";
-import { useCommit, useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
-import { CardShell } from "@vibefield/shell-ui";
+import {
+  getWidgetType,
+  useCommit,
+  useWidgetProps,
+  type WidgetComponentProps,
+} from "@vibefield/plugin-sdk/canvas";
+import { CardShell } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useState } from "react";
 
 /** v1 iOS "large" preset — the app seeds Size at spawn. */
@@ -49,7 +53,7 @@ function TodoListView({ entity, world }: WidgetComponentProps): ReactElement {
   // One guarded transaction; the whole "props" group written absolutely, with
   // `items` serialized into its json string cell.
   const writeItems = (nextItems: TodoItem[]): void => {
-    const group = widgets.get(TYPE)?.groups.find((g) => g.name === "props");
+    const group = getWidgetType(TYPE)?.groups.find((g) => g.name === "props");
     if (group === undefined) return;
     commit((tx) =>
       tx.edit(entity).set(group.component, {

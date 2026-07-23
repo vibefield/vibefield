@@ -21,9 +21,14 @@
  * commits ONE setWidgetProps tx on blur/Enter — per-keystroke transactions
  * would shred the undo stack.
  */
-import { type Entity, Selected, type World } from "@vibecook/ice";
-import { useOps, useWidgetProps } from "@vibecook/ice/react";
-import { CARD_RADIUS, useDragLift } from "@vibefield/shell-ui";
+import {
+  type Entity,
+  Selected,
+  useOps,
+  useWidgetProps,
+  type World,
+} from "@vibefield/plugin-sdk/canvas";
+import { CARD_RADIUS, useDragLift } from "@vibefield/plugin-sdk/ui";
 import {
   type ReactElement,
   type KeyboardEvent as ReactKeyboardEvent,

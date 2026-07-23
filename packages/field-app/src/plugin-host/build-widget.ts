@@ -1,5 +1,7 @@
 import { defineWidget, p, type WidgetType } from "@vibecook/ice";
 import type { PropSpec, WidgetContribution } from "@vibefield/contracts";
+import type { WidgetBinding } from "@vibefield/plugin-sdk";
+import { withPluginFace } from "./faces";
 
 // §12.2 — the HOST builds every prefab from manifest data; plugins export
 // components, never call defineWidget (thinking-p1-canonical-manifests.md).
@@ -9,16 +11,10 @@ import type { PropSpec, WidgetContribution } from "@vibefield/contracts";
 // vocabulary is the engine's verbatim (PLUG-P1a), so mapping is 1:1; anything
 // the engine can't express refuses loudly rather than approximating.
 
-/** The opaque code-side params (view registration, never durable data). */
-export interface WidgetBinding {
-  component: unknown;
-  /** GL-only: DOM chrome portaled UNDER the canvas (CardChrome sandwich). */
-  chrome?: unknown;
-  /** GL-only: per-frame island repaint opt-in (design-004 §3). */
-  animated?: boolean;
-  /** tray preview override (tri-tier: absent → sandbox-mounted component). */
-  preview?: unknown;
-}
+/** The opaque code-side params (view registration, never durable data) —
+ * OWNED by the SDK since P3a (plugins author against it); re-exported here for
+ * the host-side callers that predate the split. */
+export type { WidgetBinding };
 
 function buildProp(type: string, name: string, spec: PropSpec) {
   switch (spec.kind) {
@@ -49,18 +45,36 @@ function buildProp(type: string, name: string, spec: PropSpec) {
 // buildRegistry() calls (tests, multiple windows in one renderer).
 const built = new Map<string, WidgetType>();
 
-export function buildWidgetType(w: WidgetContribution, binding: WidgetBinding): WidgetType {
+export function buildWidgetType(
+  w: WidgetContribution,
+  binding: WidgetBinding,
+  owner?: { pluginId: string; pluginTitle: string },
+): WidgetType {
   const cached = built.get(w.type);
   if (cached !== undefined) return cached;
 
   const props = Object.fromEntries(
     Object.entries(w.props).map(([name, spec]) => [name, buildProp(w.type, name, spec)]),
   );
+  // P3c — the face policy wraps every owned widget component: live
+  // disabled-placeholder swap + the §11.4 per-widget failure boundary. The
+  // cast is the same attested seam as the def below (components are opaque to
+  // this builder; the engine validates at definition).
+  const component =
+    owner !== undefined
+      ? withPluginFace({
+          pluginId: owner.pluginId,
+          pluginTitle: owner.pluginTitle,
+          type: w.type,
+          surface: w.surface,
+          component: binding.component as Parameters<typeof withPluginFace>[0]["component"],
+        })
+      : binding.component;
   const def = {
     type: w.type,
     version: w.schemaVersion,
     surface: w.surface,
-    component: binding.component,
+    component,
     ...(binding.chrome !== undefined ? { chrome: binding.chrome } : {}),
     ...(binding.animated !== undefined ? { animated: binding.animated } : {}),
     ...(binding.preview !== undefined ? { preview: binding.preview } : {}),

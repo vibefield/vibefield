@@ -100,6 +100,12 @@ export class FielddClient {
 
   constructor(private readonly opts: FielddClientOptions) {}
 
+  /** The dial target — P3b: plugin-bound sibling clients connect to the same
+   * daemon this client reached (never a credential, just the address). */
+  get url(): string {
+    return this.opts.url;
+  }
+
   /** Idempotent: starts (or resumes) connecting. */
   connect(): void {
     if (this.closedByUser || this.status === "failed") return;

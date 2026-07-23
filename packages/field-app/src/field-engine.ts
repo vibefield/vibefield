@@ -11,12 +11,15 @@ import {
   WireTo,
 } from "@vibecook/ice";
 import type { PluginManifestV1 } from "@vibefield/contracts";
-import { fieldToolsBindings, fieldToolsManifest } from "@vibefield/plugin-field-tools";
-import { noteBindings, noteManifest } from "@vibefield/plugin-note";
+import { fieldToolsManifest, fieldToolsRenderer } from "@vibefield/plugin-field-tools";
+import { noteManifest, noteRenderer } from "@vibefield/plugin-note";
 import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
-import { widgetlabBindings, widgetlabManifest } from "@vibefield/plugin-widgetlab";
+import type { RendererPluginModule, WidgetBinding } from "@vibefield/plugin-sdk";
+import { widgetlabManifest, widgetlabRenderer } from "@vibefield/plugin-widgetlab";
 import { setPreviewBackground } from "@vibefield/shell-ui";
-import { buildWidgetType, type WidgetBinding } from "./plugin-host/build-widget";
+import { buildWidgetType } from "./plugin-host/build-widget";
+import { failedFaceComponent } from "./plugin-host/faces";
+import { type ActivatedRenderer, activateRenderer } from "./plugin-host/renderer-harness";
 
 // The field's engine + seed, React-free (Track D3/D4): FieldView renders it,
 // the headless contract tests (drop-consume) drive it. B3 split the two —
@@ -27,37 +30,57 @@ import { buildWidgetType, type WidgetBinding } from "./plugin-host/build-widget"
 
 /** The canonical path (§12.2): build every declared prefab from manifest data
  * with its code-side binding, then register manifest + implementations as one
- * unit. Every converted plugin rides this; widgetlab converts at C1b's tail. */
+ * unit. P3c: every owned component is wrapped in the face policy (live
+ * disabled-placeholder + the §11.4 boundary), and a declared type the
+ * activation did NOT bind gets a failed face instead of failing the plugin —
+ * the schema always registers, so boards stay writable and honest. */
 function registerCanonical(
   registry: PluginRegistry<WidgetType>,
   manifest: PluginManifestV1,
-  bindings: Record<string, WidgetBinding>,
+  activation: ActivatedRenderer,
 ): void {
+  const owner = { pluginId: manifest.id, pluginTitle: manifest.title };
+  const activationError = activation.state === "failed" ? (activation.error ?? "failed") : null;
   const widgets = Object.fromEntries(
     (manifest.contributes?.widgets ?? []).map((w) => {
-      const binding = bindings[w.type];
-      if (binding === undefined) throw new Error(`no binding for declared widget ${w.type}`);
-      return [w.type, buildWidgetType(w, binding)];
+      const bound = activationError === null ? activation.bindings.get(w.type) : undefined;
+      const binding =
+        bound ??
+        ({
+          component: failedFaceComponent(
+            manifest.title,
+            activationError ?? `no binding registered for ${w.type}`,
+            w.surface,
+          ),
+        } satisfies WidgetBinding);
+      return [w.type, buildWidgetType(w, binding, owner)];
     }),
   );
   registry.registerV1(manifest, widgets);
 }
 
-/** The statically bundled set — the code the shell ships either way. P2: the
- * fieldd registry snapshot picks WHICH of these register (`enabledIds`);
- * null/omitted = no snapshot yet (booting or daemon away) = all of them, the
- * honest degraded default. P3's lazy loader replaces the static list itself. */
-const BUNDLED: Array<[PluginManifestV1, Record<string, WidgetBinding>]> = [
-  [noteManifest, noteBindings],
-  [fieldToolsManifest, fieldToolsBindings],
-  [widgetlabManifest, widgetlabBindings],
+/** The statically bundled set — the code the shell ships either way. P3a:
+ * each entry is a renderer MODULE (§10.1) — bindings come from activation
+ * through the harness, not from exports. P3c: EVERY present plugin registers
+ * its real schema unconditionally (ICE's catalog is process-permanent — the
+ * only way enable/disable can round-trip in one session); what changes with
+ * registry state is the FACE (live, faces.tsx) and the tray/seed surfaces.
+ * The staged import-map loader (§19.2) later replaces the static list. */
+const BUNDLED: Array<[PluginManifestV1, RendererPluginModule]> = [
+  [noteManifest, noteRenderer],
+  [fieldToolsManifest, fieldToolsRenderer],
+  [widgetlabManifest, widgetlabRenderer],
 ];
 
-export function buildRegistry(enabledIds?: ReadonlySet<string> | null): PluginRegistry<WidgetType> {
+export function buildRegistry(): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
-  for (const [manifest, bindings] of BUNDLED) {
-    if (enabledIds != null && !enabledIds.has(manifest.id)) continue;
-    registerCanonical(registry, manifest, bindings);
+  for (const [manifest, mod] of BUNDLED) {
+    const activation = activateRenderer(manifest, mod);
+    if (activation.state === "failed")
+      console.error(`[plugins] ${manifest.id} renderer activation failed: ${activation.error}`);
+    // §11.4: a failed plugin registers face-only widgets — its boards render
+    // honest failed faces; peers and the canvas are untouched.
+    registerCanonical(registry, manifest, activation);
   }
   // Spine wiring: manifest SafePreview data → shell-ui's silhouette registry
   // (folder minis + tray fallbacks read previewBackground — one source, P-3).
@@ -167,9 +190,13 @@ function seedWire(
   );
 }
 
-export function createFieldEngine(registry: PluginRegistry<WidgetType>): CanvasEngine {
+export function createFieldEngine(
+  registry: PluginRegistry<WidgetType>,
+  /** P3c — envelope-derived ghost stubs for the pending doc (absent plugins) */
+  ghosts: readonly WidgetType[] = [],
+): CanvasEngine {
   return createCanvasEngine({
-    widgets: [...registry.allWidgets().values()],
+    widgets: [...registry.allWidgets().values(), ...ghosts],
     settings: {
       zoom: { min: 0.25, max: 3 },
       snap: { enabled: true, thresholdPx: 5 },

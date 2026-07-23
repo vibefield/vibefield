@@ -3,28 +3,25 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validatePluginManifest } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
-import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
+import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
-import { noteBindings, noteManifest } from "../src";
+import { noteManifest, noteRenderer } from "../src";
 
-// The plugin contract in miniature, C1a edition: the CANONICAL manifest
-// V1-validates at registration, declared types match provided bindings
-// exactly, and the derived legacy view keeps tray consumers whole (preview
-// CSS from SafePreview) until C1c converts them.
+// The plugin contract in miniature, P3a edition: the CANONICAL manifest
+// V1-validates, ACTIVATION binds exactly the declared widget types (§12.1,
+// proven against the SDK's mock host — no engine, no registry), and the
+// committed artifact is the canonical emission. Host-side integration
+// (prefab building, tray silhouettes) lives in field-app's own suites.
 describe("plugin-note", () => {
-  it("registers the canonical manifest and serves its declared widget types", () => {
-    const registry = new PluginRegistry();
-    const impls = Object.fromEntries(Object.keys(noteBindings).map((t) => [t, {}]));
-    registry.registerV1(noteManifest, impls);
-    expect(registry.hasWidget("vibefield.note")).toBe(true);
-    expect(registry.ownerOf("vibefield.note")).toBe("vibefield.note");
-    expect([...registry.allWidgets().keys()]).toEqual(
-      (noteManifest.contributes?.widgets ?? []).map((w) => w.type),
-    );
-    // tray silhouette CSS derives straight from the SafePreview (C1c)
-    expect(
-      safePreviewToCss(registry.plugin("vibefield.note")?.v1.contributes?.widgets?.[0]?.preview),
-    ).toBe("#f6e7a9");
+  it("activation binds exactly the manifest's declared widget types", async () => {
+    const declared = (noteManifest.contributes?.widgets ?? []).map((w) => w.type);
+    const session = await activateWithMockHost(noteRenderer, {
+      id: noteManifest.id,
+      version: noteManifest.version,
+      declaredWidgets: declared,
+    });
+    expect([...session.bindings.keys()]).toEqual(declared);
+    for (const binding of session.bindings.values()) expect(binding.component).toBeDefined();
   });
 
   it("the committed vibefield.plugin.json is the canonical emission (regen: pnpm gen:manifest)", () => {

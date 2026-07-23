@@ -5,8 +5,8 @@
  *
  * size: small
  */
-import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
-import { CardShell } from "@vibefield/shell-ui";
+import { useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
+import { CardShell } from "@vibefield/plugin-sdk/ui";
 import type { ReactElement } from "react";
 
 /** v1 iOS "small" preset — the app seeds Size at spawn. */

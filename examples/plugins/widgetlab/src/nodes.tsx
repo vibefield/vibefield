@@ -13,8 +13,8 @@
  * snap sources+targets like every widgetlab card, and NOT solid (nodes may
  * rest overlapping — rejecting drops would fight dense graph layouts).
  */
-import { useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
-import { CardShell } from "@vibefield/shell-ui";
+import { useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
+import { CardShell } from "@vibefield/plugin-sdk/ui";
 import type { CSSProperties, ReactElement } from "react";
 
 /** Node preset (between the iOS "small" card and nodeboard's 150×84). */

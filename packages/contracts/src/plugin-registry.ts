@@ -137,3 +137,31 @@ export type PluginsReloadParams = z.infer<typeof PluginsReloadParams>;
  * plugins.get/enable/disable return the single PluginRecord. */
 export const PluginsListResult = PluginRegistrySnapshot;
 export type PluginsListResult = z.infer<typeof PluginsListResult>;
+
+// --- the renderer principal lease (§11.2, P3b) --------------------------------
+
+/** The trusted renderer spine asks for a plugin-bound session. manifestHash,
+ * when supplied, must match the registered record (artifact-mismatch law). */
+export const PluginsOpenRendererSessionParams = z
+  .object({
+    pluginId: PluginId,
+    manifestHash: z
+      .string()
+      .regex(/^sha256:[0-9a-f]{64}$/)
+      .optional(),
+  })
+  .passthrough();
+export type PluginsOpenRendererSessionParams = z.infer<typeof PluginsOpenRendererSessionParams>;
+
+/** A short-lived, plugin-bound bearer lease. The credential lives only in the
+ * client closure that redeems it (§11.2) — never persisted, dead on restart. */
+export const PluginsOpenRendererSessionResult = z
+  .object({
+    token: z.string().min(1),
+    scopes: z.array(z.string()),
+    pluginId: PluginId,
+    /** epoch ms; the client re-leases before this passes */
+    expiresAt: z.number().int().positive(),
+  })
+  .passthrough();
+export type PluginsOpenRendererSessionResult = z.infer<typeof PluginsOpenRendererSessionResult>;

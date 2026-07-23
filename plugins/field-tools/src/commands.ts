@@ -6,7 +6,13 @@
  * spawn. Exported as a command function — the spine binds the key (P0; the
  * design-03 commands contribution replaces the direct import later).
  */
-import { type CanvasEngine, MeasuredSize, Position, Size, selectedEntities } from "@vibecook/ice";
+import {
+  type CanvasEngine,
+  MeasuredSize,
+  Position,
+  Size,
+  selectedEntities,
+} from "@vibefield/plugin-sdk/canvas";
 
 /** Curated accents (the lab's card palette) — random pick per C-spawn. */
 export const COMMENT_PALETTE = [

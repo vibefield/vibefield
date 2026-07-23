@@ -255,6 +255,7 @@ export class ProductApi extends EventEmitter {
           principal: { kind: "local-token", tokenId: grant.tokenId, scopes: grant.scopes },
           transport: state.tailnetLogin !== null ? "ws-tailnet" : "ws-loopback",
           receivedAt: Date.now(),
+          clientKind: parsed.data.clientKind, // §11.2 kind gate reads it (restrict-only)
         };
       } else if (state.tailnetLogin !== null) {
         // the sidecar-proxied door: identity is the WhoIs-verified login; the
