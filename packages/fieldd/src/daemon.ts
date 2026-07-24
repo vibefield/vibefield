@@ -38,6 +38,7 @@ import {
   SettingsSetParams,
   SettingsSubscribeParams,
 } from "@vibefield/contracts";
+import type { AuditHealthV1 } from "@vibefield/contracts/diagnostics";
 import type { LoggingHealthV1 } from "@vibefield/contracts/logging";
 import type { WsCtor } from "@vibefield/fieldd-client";
 import {
@@ -47,6 +48,7 @@ import {
   PluginLogRouter,
   pluginLogProvenance,
 } from "@vibefield/logging";
+import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -112,6 +114,8 @@ export interface FielddConfig {
   /** Test seam for observing the service host boundary without opening a
    * plugin writer. Production resolves install provenance and persists. */
   pluginLog?: (record: PluginServiceLogRecord) => void;
+  /** LOG-L6 fault seam. Never configured by the production composition root. */
+  auditTestHooks?: AuditWriterTestHooks;
 }
 
 export interface FielddHealth {
@@ -121,6 +125,7 @@ export interface FielddHealth {
   docs: { state: string; docCount: number };
   plugins: { count: number; enabled: number; invalid: number };
   logging: LoggingHealthV1 | null;
+  audit: AuditHealthV1;
   /** C3: the declared serves with their fused reconcile+runtime state. `url`
    * is the full CAPABILITY URL (base serve URL + the secret route path) —
    * the Settings mesh section is where the user reads it; never log it. */
@@ -142,6 +147,7 @@ export interface FielddDaemon {
   services: ServiceRegistry;
   logging: NodeLogging | null;
   pluginLogging: NodeLogging | null;
+  audit: AuditService;
   diagnostics: DiagnosticsService;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
@@ -204,6 +210,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   };
   logger.info("fieldd.lifecycle.boot_started", "fieldd boot started");
   const tokens = new TokenService();
+  const audit = new AuditService({
+    dataDir: config.dataDir,
+    bootId,
+    aliases: {
+      home: homedir(),
+      temp: tmpdir(),
+      ...(config.logRoot !== undefined ? { logs: config.logRoot } : {}),
+      data: config.dataDir,
+    },
+    ...(config.auditTestHooks !== undefined ? { hooks: config.auditTestHooks } : {}),
+  });
+  await audit.start();
+  let detachHealthSources: (() => void) | null = null;
 
   const native = new NativeLink({
     socketPath: join(config.dataDir, "native", "run", "mgmt.sock"),
@@ -384,6 +403,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs: docs.health(),
       plugins: plugins.health(),
       logging: logging?.health() ?? null,
+      audit: audit.health(),
       mesh: {
         // serves() is the FUSED view (reconcile ∘ runtime — mesh-client C3)
         serves: mesh.serves().map((s) => {
@@ -401,6 +421,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const h = health();
       for (const fn of healthListeners) fn(h);
     };
+    audit.on("health", emitHealth);
 
     const { snapshot } = await native.subscribe(
       "native.lifecycle.health.subscribe",
@@ -414,6 +435,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // link down/up flips stream immediately (each backoff attempt re-emits; cheap and honest)
     native.on("reconnecting", emitHealth);
     native.on("connected", emitHealth);
+    detachHealthSources = () => {
+      audit.off("health", emitHealth);
+      native.off("reconnecting", emitHealth);
+      native.off("connected", emitHealth);
+      mesh.off("reconciled", emitHealth);
+      mesh.off("serves-changed", emitHealth);
+      plugins.off("changed", emitHealth);
+    };
 
     const api = new ProductApi({
       port: config.controlPort ?? PORTS.FIELDD_WS_CONTROL,
@@ -422,6 +451,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       tailnetPathSecret: servePathSecret,
     });
     diagnosticsService.register(api);
+    api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));
 
     api.register("system.health", () => health());
     api.register("system.capabilities", () => ({
@@ -432,7 +462,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       healthListeners.add(fn);
       return { snapshot: health(), dispose: () => healthListeners.delete(fn) };
     });
-    api.register("system.mintWindowToken", (ctx, params) => {
+    api.register("system.mintWindowToken", async (ctx, params) => {
       const p = params as { scopes?: unknown; label?: unknown } | undefined;
       const scopes = p?.scopes;
       const label = p?.label;
@@ -459,7 +489,25 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             outside,
           },
         );
-      const grant = tokens.mint(scopes as Scope[], label);
+      const tokenId = tokens.reserveTokenId();
+      const grant = await audit.required(
+        ctx,
+        {
+          action: "token.window.mint",
+          target: { kind: "token", id: tokenId },
+          attrs: { scopes: scopes as string[], scopeCount: scopes.length },
+        },
+        () => tokens.mint(scopes as Scope[], label, { tokenId }),
+        (minted) => ({
+          attrs: {
+            grantId: minted.tokenId,
+            scopeCount: minted.scopes.length,
+          },
+        }),
+        (minted) => {
+          tokens.revoke(minted.tokenId);
+        },
+      );
       return { token: grant.token, tokenId: grant.tokenId, scopes: grant.scopes };
     });
 
@@ -568,66 +616,129 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       plugins.on("changed", fn);
       return { snapshot: plugins.snapshot(), dispose: () => plugins.off("changed", fn) };
     });
-    api.register("plugins.enable", async (_ctx, params) => {
+    api.register("plugins.enable", async (ctx, params) => {
       const parsed = PluginsEnableParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id: pluginId }", false);
-      const record = await plugins.enable(parsed.data.id);
-      void reconciler?.publish(record, "enable"); // §16.6
-      // §18.3 — an explicit re-enable clears quarantine and restarts fresh
-      void serviceHost?.restartFresh(parsed.data.id).catch((e) => {
-        logger
-          .child({ component: "plugin.service.host" })
-          .error(
-            "fieldd.plugin_service.enable_restart_failed",
-            "Enabled plugin service failed to restart",
-            e,
-            { pluginId: parsed.data.id },
-          );
-      });
-      return record;
+      return await audit.required(
+        ctx,
+        {
+          action: "plugin.enable",
+          target: { kind: "plugin", id: parsed.data.id },
+        },
+        async () => {
+          const record = await plugins.enable(parsed.data.id);
+          void reconciler?.publish(record, "enable"); // §16.6
+          // §18.3 — an explicit re-enable clears quarantine and restarts fresh
+          void serviceHost?.restartFresh(parsed.data.id).catch((e) => {
+            logger
+              .child({ component: "plugin.service.host" })
+              .error(
+                "fieldd.plugin_service.enable_restart_failed",
+                "Enabled plugin service failed to restart",
+                e,
+                { pluginId: parsed.data.id },
+              );
+          });
+          return record;
+        },
+        (record) => ({
+          attrs: {
+            enabled: record.enabled,
+            source: record.source,
+            manifestHash: record.manifestHash,
+          },
+        }),
+      );
     });
-    api.register("plugins.disable", async (_ctx, params) => {
+    api.register("plugins.disable", async (ctx, params) => {
       const parsed = PluginsDisableParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id: pluginId }", false);
-      const record = await plugins.disable(parsed.data.id);
-      await serviceHost?.stop(parsed.data.id); // §16.5 — deactivates providers, data untouched
-      // §15.4 — revocation is LIVE: leases die at the mint table, live
-      // plugin-principal connections sever; data stays (§16.5). P6 — the
-      // plugin's supervised children die with it (§17.1).
-      tokens.revokeByPlugin(parsed.data.id);
-      api.dropPluginConnections(parsed.data.id);
-      await processes.killPlugin(parsed.data.id);
-      endpoints.withdrawPlugin(parsed.data.id);
-      mcp.withdrawPlugin(parsed.data.id);
-      const after = plugins.get(parsed.data.id) ?? record;
-      void reconciler?.publish(after, "disable"); // §16.6
-      return after;
+      const result = await audit.required(
+        ctx,
+        {
+          action: "plugin.disable",
+          target: { kind: "plugin", id: parsed.data.id },
+        },
+        async () => {
+          const record = await plugins.disable(parsed.data.id);
+          await serviceHost?.stop(parsed.data.id); // §16.5 — deactivates providers, data untouched
+          // §15.4 — revocation is LIVE: leases die at the mint table, live
+          // plugin-principal connections sever; data stays (§16.5). P6 — the
+          // plugin's supervised children die with it (§17.1).
+          const revoked = tokens.revokeByPlugin(parsed.data.id);
+          api.dropPluginConnections(parsed.data.id);
+          await processes.killPlugin(parsed.data.id);
+          endpoints.withdrawPlugin(parsed.data.id);
+          mcp.withdrawPlugin(parsed.data.id);
+          const after = plugins.get(parsed.data.id) ?? record;
+          void reconciler?.publish(after, "disable"); // §16.6
+          return { record: after, revoked };
+        },
+        ({ record, revoked }) => ({
+          attrs: {
+            enabled: record.enabled,
+            source: record.source,
+            revokedGrantCount: revoked.count,
+            revokedGrantIds: revoked.tokenIds,
+          },
+        }),
+      );
+      return result.record;
     });
-    api.register("plugins.reload", async (_ctx, params) => {
+    api.register("plugins.reload", async (ctx, params) => {
       const parsed = PluginsReloadParams.safeParse(params ?? {});
       if (!parsed.success) throw new RpcCallError("PRECONDITION_FAILED", "expected { id? }", false);
       // no id — the legacy whole-registry rescan (dev convenience)
       if (parsed.data.id === undefined) {
-        await plugins.refresh();
-        return plugins.snapshot();
+        return await audit.required(
+          ctx,
+          {
+            action: "plugin.registry.reload",
+            target: { kind: "plugin-registry", id: "all" },
+          },
+          async () => {
+            await plugins.refresh();
+            return plugins.snapshot();
+          },
+          (snapshot) => ({ attrs: { generation: snapshot.generation } }),
+        );
       }
       // §18.5 — the dev-linked reload sequence. Step order is the law:
       // validate WITHOUT disturbing the live version; only then deactivate,
       // recycle principals (no stale token survives a fresh module — §18.3),
       // swap the registry generation atomically, and reactivate.
       const id = parsed.data.id;
-      const candidate = await plugins.validateReload(id);
-      await serviceHost?.stop(id);
-      tokens.revokeByPlugin(id);
-      api.dropPluginConnections(id);
-      await processes.killPlugin(id);
-      endpoints.withdrawPlugin(id);
-      mcp.withdrawPlugin(id); // fresh module ⇒ fresh declarations re-project
-      const record = plugins.applyReload(id, candidate);
-      if (record.enabled) void serviceHost?.restartFresh(id).catch(() => undefined);
-      return plugins.get(id) ?? record;
+      const result = await audit.required(
+        ctx,
+        {
+          action: "plugin.reload",
+          target: { kind: "plugin", id },
+        },
+        async () => {
+          const candidate = await plugins.validateReload(id);
+          await serviceHost?.stop(id);
+          const revoked = tokens.revokeByPlugin(id);
+          api.dropPluginConnections(id);
+          await processes.killPlugin(id);
+          endpoints.withdrawPlugin(id);
+          mcp.withdrawPlugin(id); // fresh module ⇒ fresh declarations re-project
+          const record = plugins.applyReload(id, candidate);
+          if (record.enabled) void serviceHost?.restartFresh(id).catch(() => undefined);
+          return { record: plugins.get(id) ?? record, revoked };
+        },
+        ({ record, revoked }) => ({
+          attrs: {
+            version: record.version,
+            source: record.source,
+            manifestHash: record.manifestHash,
+            revokedGrantCount: revoked.count,
+            revokedGrantIds: revoked.tokenIds,
+          },
+        }),
+      );
+      return result.record;
     });
     // P3b — the renderer principal lease (§11.2): the scope gate above is
     // necessary, never sufficient. Only a LOCAL renderer/shell principal may
@@ -635,7 +746,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // RESTRICT here (an agent claiming "renderer" still needs plugins.read,
     // which agent tokens never carry).
     const LEASE_TTL_MS = 10 * 60_000;
-    api.register("plugins.openRendererSession", (ctx, params) => {
+    api.register("plugins.openRendererSession", async (ctx, params) => {
       const parsed = PluginsOpenRendererSessionParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError(
@@ -685,10 +796,36 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
       // P4: the lease is a PLUGIN-BOUND grant — hello with it derives the
       // {kind:"plugin"} principal, so custom-capability gates bind (D20).
-      const grant = tokens.mint(scopes, `plugin:${record.id}`, {
-        ttlMs: LEASE_TTL_MS,
-        pluginId: record.id,
-      });
+      const tokenId = tokens.reserveTokenId();
+      const grant = await audit.required(
+        ctx,
+        {
+          action: "token.plugin_renderer.mint",
+          target: { kind: "token", id: tokenId, parentId: record.id },
+          attrs: {
+            pluginId: record.id,
+            manifestHash: record.manifestHash,
+            scopeCount: scopes.length,
+            ttlMs: LEASE_TTL_MS,
+          },
+        },
+        () =>
+          tokens.mint(scopes, `plugin:${record.id}`, {
+            ttlMs: LEASE_TTL_MS,
+            pluginId: record.id,
+            tokenId,
+          }),
+        (minted) => ({
+          attrs: {
+            grantId: minted.tokenId,
+            pluginId: record.id,
+            expiresAt: minted.expiresAt ?? Date.now() + LEASE_TTL_MS,
+          },
+        }),
+        (minted) => {
+          tokens.revoke(minted.tokenId);
+        },
+      );
       const result: PluginsOpenRendererSessionResult = {
         token: grant.token,
         scopes: grant.scopes,
@@ -783,34 +920,100 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // -- distribution (PLUG-P7, §5.3.1/§22.1): install/uninstall recycle every
     // principal exactly like reload — a new module version never inherits a
     // stale token (§18.3), and an uninstalled plugin's runtime dies whole. --
-    const teardownPlugin = async (id: string): Promise<void> => {
+    const teardownPluginWithResult = async (id: string) => {
       await serviceHost?.stop(id);
-      tokens.revokeByPlugin(id);
+      const revoked = tokens.revokeByPlugin(id);
       api.dropPluginConnections(id);
       await processes.killPlugin(id);
       endpoints.withdrawPlugin(id);
       mcp.withdrawPlugin(id);
+      return revoked;
     };
-    api.register("plugins.install", async (_ctx, params) => {
+    const teardownPlugin = async (id: string): Promise<void> => {
+      await teardownPluginWithResult(id);
+    };
+    api.register("plugins.install", async (ctx, params) => {
       const parsed = PluginsInstallParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id, version? }", false);
       const upgrading = parsed.data.id !== undefined && plugins.get(parsed.data.id) !== undefined;
-      if (upgrading) await teardownPlugin(parsed.data.id as string);
-      const { id } = await installer.install(parsed.data); // refresh() inside
-      const record = plugins.get(id);
-      if (record?.enabled === true && record.service !== "none")
-        void serviceHost?.restartFresh(id).catch(() => undefined);
-      if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
-      return record ?? { id };
+      const targetId = parsed.data.id ?? "sideload-request";
+      const result = await audit.required(
+        ctx,
+        {
+          action: upgrading ? "plugin.update" : "plugin.install",
+          target: { kind: "plugin", id: targetId },
+          attrs: {
+            requestedVersion: parsed.data.version ?? "latest",
+            source: parsed.data.artifactPath === undefined ? "registry" : "sideload",
+          },
+        },
+        async () => {
+          const revoked =
+            upgrading && parsed.data.id !== undefined
+              ? await teardownPluginWithResult(parsed.data.id)
+              : { count: 0, tokenIds: [] };
+          const { id } = await installer.install(parsed.data); // refresh() inside
+          const record = plugins.get(id);
+          if (record?.enabled === true && record.service !== "none")
+            void serviceHost?.restartFresh(id).catch(() => undefined);
+          if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
+          return { record: record ?? { id }, revoked };
+        },
+        ({ record, revoked }) => {
+          const installed = record as {
+            id: string;
+            version?: string;
+            source?: string;
+            manifestHash?: string;
+            registry?: { artifactSha256?: string; publisher?: string };
+          };
+          return {
+            attrs: {
+              version: installed.version ?? "unknown",
+              source: installed.source ?? "registry",
+              manifestHash: installed.manifestHash ?? "unknown",
+              artifactSha256: installed.registry?.artifactSha256 ?? "unknown",
+              publisher: installed.registry?.publisher ?? "unknown",
+              revokedGrantCount: revoked.count,
+              revokedGrantIds: revoked.tokenIds,
+            },
+          };
+        },
+      );
+      return result.record;
     });
-    api.register("plugins.uninstall", async (_ctx, params) => {
+    api.register("plugins.uninstall", async (ctx, params) => {
       const parsed = PluginsUninstallParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id, removeData? }", false);
-      await teardownPlugin(parsed.data.id);
-      await installer.uninstall(parsed.data.id, parsed.data.removeData === true);
-      void reconciler?.unpublish(parsed.data.id, "uninstall"); // §16.6 — everywhere
+      const before = plugins.get(parsed.data.id);
+      await audit.required(
+        ctx,
+        {
+          action: "plugin.uninstall",
+          target: { kind: "plugin", id: parsed.data.id },
+          attrs: {
+            removeData: parsed.data.removeData === true,
+            source: before?.source ?? "unknown",
+            manifestHash: before?.manifestHash ?? "unknown",
+            artifactSha256: before?.registry?.artifactSha256 ?? "unknown",
+          },
+        },
+        async () => {
+          const revoked = await teardownPluginWithResult(parsed.data.id);
+          await installer.uninstall(parsed.data.id, parsed.data.removeData === true);
+          void reconciler?.unpublish(parsed.data.id, "uninstall"); // §16.6 — everywhere
+          return revoked;
+        },
+        (revoked) => ({
+          attrs: {
+            removeData: parsed.data.removeData === true,
+            revokedGrantCount: revoked.count,
+            revokedGrantIds: revoked.tokenIds,
+          },
+        }),
+      );
       return { ok: true };
     });
     api.register("plugins.updates.check", () => installer.updatesCheck());
@@ -991,27 +1194,50 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           false,
         );
       const { id, capability, granted } = parsed.data;
-      const { record, changed } = await plugins.setGrant(id, capability, granted);
-      if (changed) {
-        tokens.revokeByPlugin(id);
-        api.dropPluginConnections(id);
-        await processes.killPlugin(id);
-        await serviceHost?.stop(id);
-        endpoints.withdrawPlugin(id); // §15.4 — endpoints/MCP tools withdraw
-        mcp.refreshContributed();
-        if (record.enabled) void serviceHost?.restartFresh(id).catch(() => undefined);
-        logger
-          .child({ component: "plugin.grants" })
-          .info("fieldd.plugin_grants.changed", "Plugin grant changed; principals recycled", {
+      const result = await audit.required(
+        ctx,
+        {
+          action: granted ? "capability.grant" : "capability.revoke",
+          target: { kind: "capability", id: capability, parentId: id },
+          attrs: { pluginId: id, granted },
+        },
+        async () => {
+          const { record, changed } = await plugins.setGrant(id, capability, granted);
+          let revoked = { count: 0, tokenIds: [] as string[] };
+          if (changed) {
+            revoked = tokens.revokeByPlugin(id);
+            api.dropPluginConnections(id);
+            await processes.killPlugin(id);
+            await serviceHost?.stop(id);
+            endpoints.withdrawPlugin(id); // §15.4 — endpoints/MCP tools withdraw
+            mcp.refreshContributed();
+            if (record.enabled) void serviceHost?.restartFresh(id).catch(() => undefined);
+            logger
+              .child({ component: "plugin.grants" })
+              .info("fieldd.plugin_grants.changed", "Plugin grant changed; principals recycled", {
+                pluginId: id,
+                capability,
+                granted,
+                grantGeneration: record.grantGeneration,
+              });
+          }
+          const latest = plugins.get(id) ?? record;
+          void reconciler?.publish(latest, "grants"); // §16.6 — decisions sync
+          return { record: latest, changed, revoked };
+        },
+        ({ record, changed, revoked }) => ({
+          attrs: {
             pluginId: id,
             capability,
             granted,
+            changed,
             grantGeneration: record.grantGeneration,
-          });
-      }
-      const latest = plugins.get(id) ?? record;
-      void reconciler?.publish(latest, "grants"); // §16.6 — decisions sync
-      return latest;
+            revokedGrantCount: revoked.count,
+            revokedGrantIds: revoked.tokenIds,
+          },
+        }),
+      );
+      return result.record;
     });
 
     // -- dynamic services (PLUG-P4, §14/§22.2) --
@@ -1052,24 +1278,28 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         "fieldd.lifecycle.superseded",
         "fieldd was superseded by another native-plane owner",
       );
-      void serviceHost?.stopAll();
-      void processes.stopAll(); // §17.1 — children die no later than fieldd
+      // Refuse new work immediately, then preserve teardown audit ordering:
+      // service leases revoke before the audit writer and logger close.
       api.close();
       docLane.close();
-      docs.dispose();
-      peers.dispose();
-      devices.dispose();
-      services.dispose();
-      settings.dispose();
-      plugins.dispose();
-      diagnosticsService.dispose();
-      native.close();
       const reason = fatalReason;
-      if (logging) {
-        void closeLogging().finally(() => config.onFatal?.(reason));
-      } else {
-        config.onFatal?.(reason);
-      }
+      void (async () => {
+        await Promise.allSettled([
+          serviceHost?.stopAll() ?? Promise.resolve(),
+          processes.stopAll(),
+        ]);
+        detachHealthSources?.();
+        docs.dispose();
+        peers.dispose();
+        devices.dispose();
+        services.dispose();
+        settings.dispose();
+        plugins.dispose();
+        diagnosticsService.dispose();
+        native.close();
+        await audit.close().catch(() => undefined);
+        await closeLogging();
+      })().finally(() => config.onFatal?.(reason));
     };
     native.on("superseded", stopForSupersession);
     if (native.superseded) stopForSupersession();
@@ -1081,6 +1311,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (fatalReason || native.superseded || native.closed)
         throw new Error(fatalReason ?? "native link closed during Product API startup");
     } catch (e) {
+      detachHealthSources?.();
       api.close();
       docLane.close(); // release the lane port before the outer rollback runs
       docs.dispose();
@@ -1120,6 +1351,53 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.serviceHarnessPath !== undefined
         ? { harnessPath: config.serviceHarnessPath }
         : {}),
+      mintServiceLease: async (pluginId, scopes) => {
+        const tokenId = tokens.reserveTokenId();
+        return await audit.requiredSystem(
+          {
+            action: "token.plugin_service.mint",
+            target: { kind: "token", id: tokenId, parentId: pluginId },
+            attrs: { pluginId, scopeCount: scopes.length },
+          },
+          () =>
+            tokens.mint(scopes, `plugin:${pluginId}:service`, {
+              pluginId,
+              tokenId,
+            }),
+          (grant) => ({
+            attrs: {
+              pluginId,
+              grantId: grant.tokenId,
+              scopeCount: grant.scopes.length,
+            },
+          }),
+          (grant) => {
+            tokens.revoke(grant.tokenId);
+          },
+        );
+      },
+      revokeServiceLease: async (pluginId, tokenId, reason) => {
+        try {
+          await audit.requiredSystem(
+            {
+              action: "token.plugin_service.revoke",
+              target: { kind: "token", id: tokenId, parentId: pluginId },
+              attrs: { pluginId, reason },
+            },
+            () => tokens.revoke(tokenId),
+            (revoked) => ({
+              outcome: revoked ? "succeeded" : "cancelled",
+              ...(revoked ? {} : { reasonCode: "TOKEN_ALREADY_REVOKED" }),
+              attrs: { pluginId, revoked, reason },
+            }),
+          );
+        } catch (error) {
+          // Revocation is safety-preserving: audit failure may never keep a
+          // service credential live. The writer health still reports the gap.
+          tokens.revoke(tokenId);
+          throw error;
+        }
+      },
       logger: logger.child({ component: "plugin.service.host" }),
       pluginLog: emitPluginLog,
     });
@@ -1133,6 +1411,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       installer,
       teardown: teardownPlugin,
       restart: (id) => void serviceHost?.restartFresh(id).catch(() => undefined),
+      audit,
       logger: logger.child({ component: "plugin.install.reconciler" }),
     });
     reconciler.attach();
@@ -1141,7 +1420,24 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // -- run files (shell bootstrap contract) --
     const runDir = join(config.dataDir, "fieldd", "run");
     mkdirSync(runDir, { recursive: true });
-    const shellGrant = tokens.mint([...SCOPES], "shell");
+    const shellTokenId = tokens.reserveTokenId();
+    const shellGrant = await audit.requiredSystem(
+      {
+        action: "token.shell.mint",
+        target: { kind: "token", id: shellTokenId },
+        attrs: { scopeCount: SCOPES.length },
+      },
+      () => tokens.mint([...SCOPES], "shell", { tokenId: shellTokenId }),
+      (grant) => ({
+        attrs: {
+          grantId: grant.tokenId,
+          scopeCount: grant.scopes.length,
+        },
+      }),
+      (grant) => {
+        tokens.revoke(grant.tokenId);
+      },
+    );
     const tokenPath = join(runDir, "shell.token");
     const productPath = join(runDir, "product.json");
     writeFileSync(tokenPath, shellGrant.token, { mode: 0o600 });
@@ -1170,6 +1466,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         try {
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
+          detachHealthSources?.();
           endpoints.dispose();
           mcp.dispose();
           await settingsDoc.dispose(); // D29′ — the doc's writes are already durable
@@ -1189,6 +1486,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             rmSync(tokenPath, { force: true });
             rmSync(productPath, { force: true });
           }
+          await audit.close();
           logger.info("fieldd.lifecycle.stopped", "fieldd stopped");
         } catch (error) {
           logger.error("fieldd.lifecycle.stop_failed", "fieldd resource shutdown failed", error);
@@ -1214,6 +1512,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       services,
       logging,
       pluginLogging,
+      audit,
       diagnostics: diagnosticsService,
       shellToken: shellGrant.token,
       health,
@@ -1221,10 +1520,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       stop,
     };
   } catch (e) {
+    detachHealthSources?.();
     diagnostics?.dispose();
     native.close(); // rollback: release the mgmt client slot
     logger.fatal("fieldd.lifecycle.bootstrap_failed", "fieldd bootstrap failed", e);
-    await closeLogging();
+    await Promise.allSettled([audit.close(), closeLogging()]);
     throw e;
   }
 }

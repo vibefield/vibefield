@@ -26,6 +26,19 @@ export interface TokenEvent {
   at: number;
 }
 
+export interface TokenMintOptions {
+  ttlMs?: number;
+  pluginId?: string;
+  /** A caller may reserve the safe public id so a mandatory audit attempt can
+   * name it before the bearer token is generated. */
+  tokenId?: string;
+}
+
+export interface TokenRevocationResult {
+  count: number;
+  tokenIds: string[];
+}
+
 interface TokenRecord {
   tokenId: string;
   scopes: Scope[];
@@ -43,11 +56,22 @@ export class TokenService {
 
   constructor(private readonly onEvent?: (e: TokenEvent) => void) {}
 
-  mint(scopes: Scope[], label: string, opts?: { ttlMs?: number; pluginId?: string }): TokenGrant {
+  reserveTokenId(): string {
+    for (let attempt = 0; attempt < 1_000; attempt += 1) {
+      const tokenId = `tk_${randomBytes(6).toString("hex")}`;
+      if (!this.byId.has(tokenId)) return tokenId;
+    }
+    throw new Error("could not reserve a unique token id");
+  }
+
+  mint(scopes: Scope[], label: string, opts?: TokenMintOptions): TokenGrant {
     for (const s of scopes) {
       if (!(SCOPES as readonly string[]).includes(s)) throw new Error(`unknown scope: ${s}`);
     }
-    const tokenId = `tk_${randomBytes(6).toString("hex")}`;
+    const tokenId = opts?.tokenId ?? this.reserveTokenId();
+    if (!/^tk_[0-9a-f]{12}$/.test(tokenId) || this.byId.has(tokenId)) {
+      throw new Error("invalid or already-used reserved token id");
+    }
     const token = `tok_${randomBytes(24).toString("hex")}`;
     const expiresAt = opts?.ttlMs !== undefined ? Date.now() + opts.ttlMs : undefined;
     this.byToken.set(token, {
@@ -95,16 +119,16 @@ export class TokenService {
 
   /** P5/§15.4 — revoke every live grant bound to a plugin (disable path).
    * Returns how many grants died; the caller drops live connections. */
-  revokeByPlugin(pluginId: string): number {
-    let count = 0;
+  revokeByPlugin(pluginId: string): TokenRevocationResult {
+    const tokenIds: string[] = [];
     for (const [token, rec] of [...this.byToken]) {
       if (rec.pluginId !== pluginId) continue;
       this.byToken.delete(token);
       this.byId.delete(rec.tokenId);
       this.onEvent?.({ kind: "revoke", tokenId: rec.tokenId, at: Date.now() });
-      count += 1;
+      tokenIds.push(rec.tokenId);
     }
-    return count;
+    return { count: tokenIds.length, tokenIds };
   }
 
   revoke(tokenId: string): boolean {

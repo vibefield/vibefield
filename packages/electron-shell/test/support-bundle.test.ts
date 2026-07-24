@@ -2,6 +2,7 @@ import { access, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
+import { AuditLedgerWriter } from "@vibefield/audit";
 import { LOG_STREAMS, PORTS } from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
@@ -214,7 +215,7 @@ describe("previewed support bundles", () => {
         includeAudit: true,
       }),
     ).rejects.toMatchObject({
-      kind: "PRECONDITION_FAILED",
+      kind: "NOT_FOUND",
     });
 
     const dump = join(root, "dumps", "changed.dmp");
@@ -233,6 +234,60 @@ describe("previewed support bundles", () => {
     );
     await expect(access(destination)).rejects.toMatchObject({ code: "ENOENT" });
     expect((await crashes.refresh()).artifacts[0]?.exported).toBe(false);
+
+    await crashes.markClean();
+    await logging.close();
+  });
+
+  it("includes only explicitly selected, verified, second-scrubbed audit projections", async () => {
+    const { root, logging, crashes, service } = await fixture();
+    const now = Date.now();
+    const writer = new AuditLedgerWriter({
+      dataDir: root,
+      bootId: "fieldd-support-audit",
+      now: () => now,
+    });
+    await writer.initialize();
+    await writer.append({
+      v: 1,
+      eventId: "audit_support_raw",
+      time: now,
+      actor: { kind: "shell-main", id: "tk_sensitive_actor" },
+      action: "support.bundle.export",
+      target: { kind: "support-bundle", id: "real-bundle-id" },
+      phase: "outcome",
+      outcome: "succeeded",
+      operationId: "real-operation-id",
+      transportProvenance: "ws-loopback",
+      attrs: {
+        token: "tok_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        note: "VIBEFIELD_SUPPORT_CANARY_audit_second_scrub",
+      },
+    });
+    await writer.close();
+
+    const preview = await service.preview({
+      range: { from: now - 1_000, to: now + 1_000 },
+      sources: [LOG_STREAMS.SYSTEM_DESKTOP],
+      includeAudit: true,
+    });
+    expect(preview.manifest.includesAudit).toBe(true);
+    expect(preview.manifest.files).toContainEqual(
+      expect.objectContaining({ path: "audit/own-actions.jsonl", category: "audit" }),
+    );
+    expect(preview.warnings.join(" ")).toContain("audit records");
+
+    const destination = join(root, "support-with-audit.tar.gz");
+    await service.export(preview.previewId, destination);
+    const files = unpackTarGz(await readFile(destination));
+    const audit = files.get("audit/own-actions.jsonl")?.toString("utf8") ?? "";
+    expect(audit).toContain("support.bundle.export");
+    expect(audit).not.toContain("tk_sensitive_actor");
+    expect(audit).not.toContain("real-bundle-id");
+    expect(audit).not.toContain("real-operation-id");
+    expect(audit).not.toContain("tok_aaaaaaaa");
+    expect(audit).not.toContain("VIBEFIELD_SUPPORT_CANARY");
+    expect(audit).not.toContain("integrity");
 
     await crashes.markClean();
     await logging.close();

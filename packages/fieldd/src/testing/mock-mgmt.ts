@@ -40,6 +40,7 @@ export class MockMgmtServer {
   meshPeers: unknown[] = [];
   /** Schema-valid field-native ring used by LOG-L5 product projection tests. */
   diagnosticRecords: unknown[] = [];
+  diagnosticLeases = new Map<string, unknown>();
   diagnosticBootId = "mock-native-boot";
   diagnosticCursor = 0;
   private storeVersion = 0;
@@ -134,6 +135,36 @@ export class MockMgmtServer {
           result: { subId, snapshot: this.diagnosticSnapshot() },
         }) + "\n",
       );
+      return;
+    }
+    if (msg.method === "native.diagnostics.lease.create") {
+      const lease = msg.params?.["lease"];
+      const leaseId =
+        typeof lease === "object" && lease !== null && "leaseId" in lease
+          ? lease.leaseId
+          : undefined;
+      if (typeof leaseId === "string") this.diagnosticLeases.set(leaseId, lease);
+      sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: lease ?? {} })}\n`);
+      return;
+    }
+    if (msg.method === "native.diagnostics.lease.list") {
+      sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: {
+            v: 1,
+            observedAt: Date.now(),
+            leases: [...this.diagnosticLeases.values()],
+          },
+        })}\n`,
+      );
+      return;
+    }
+    if (msg.method === "native.diagnostics.lease.revoke") {
+      const leaseId = msg.params?.["leaseId"];
+      const revoked = typeof leaseId === "string" ? this.diagnosticLeases.delete(leaseId) : false;
+      sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { revoked } })}\n`);
       return;
     }
     if (msg.method.endsWith(".subscribe")) {
@@ -406,8 +437,8 @@ export class MockMgmtServer {
         bootId: this.diagnosticBootId,
         instanceId: this.diagnosticBootId,
         writerState: "healthy",
-        currentLevel: "info",
-        activeLeaseCount: 0,
+        currentLevel: this.diagnosticLeases.size > 0 ? "debug" : "info",
+        activeLeaseCount: this.diagnosticLeases.size,
         activeSegmentBytes: 0,
         queue: { ...zeroBuffer, capacityRecords: 8_192, capacityBytes: 8 * 1024 * 1024 },
         ring: { ...zeroBuffer, records: this.diagnosticRecords.length },

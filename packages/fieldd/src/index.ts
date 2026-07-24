@@ -1,4 +1,18 @@
 // @vibefield/fieldd — the product-plane daemon (design-02 §3).
+
+export {
+  AUDIT_LEDGERS,
+  type AuditIntegrityResult,
+  type AuditLedger,
+  type AuditMutation,
+  type AuditMutationOutcome,
+  AuditService,
+  type AuditServiceOptions,
+  AuditUnavailableError,
+  type AuditWriterOperation,
+  type AuditWriterTestHooks,
+  verifyAuditSegment,
+} from "./audit-service";
 export { bootstrap, type FielddConfig, type FielddDaemon, type FielddHealth } from "./daemon";
 export { DeviceService, type DeviceServiceOptions } from "./device-service";
 export {
@@ -30,4 +44,9 @@ export {
   type ServiceProviderHandlers,
   ServiceRegistry,
 } from "./service-registry";
-export { type TokenGrant, TokenService } from "./token-service";
+export {
+  type TokenGrant,
+  type TokenMintOptions,
+  type TokenRevocationResult,
+  TokenService,
+} from "./token-service";

@@ -403,7 +403,7 @@ export class DiagnosticsService {
     }
   }
 
-  createLease(ctx: CallerContext, raw: unknown): DiagnosticLease {
+  async createLease(ctx: CallerContext, raw: unknown): Promise<DiagnosticLease> {
     this.assertLocalDiagnosticCaller(ctx);
     const parsed = DiagnosticLeaseCreateV1.safeParse(raw);
     if (!parsed.success) {
@@ -415,7 +415,7 @@ export class DiagnosticsService {
       );
     }
     const input: DiagnosticLeaseCreate = parsed.data;
-    this.assertLeaseTarget(input);
+    const owner = this.leaseOwner(input);
     const createdAt = this.now();
     const expiresAt =
       input.duration === "15m"
@@ -436,21 +436,31 @@ export class DiagnosticsService {
         ...(principal.kind === "local-token" ? { id: principal.tokenId } : {}),
       },
     });
+    if (owner === "native") {
+      return DiagnosticLeaseV1.parse(
+        await this.options.native.request("native.diagnostics.lease.create", { lease }),
+      );
+    }
     this.leases.set(lease.leaseId, lease);
     this.applyLeases();
     return lease;
   }
 
-  listLeases(): DiagnosticLeaseList {
+  async listLeases(): Promise<DiagnosticLeaseList> {
     this.pruneLeases();
+    const native = DiagnosticLeaseListV1.parse(
+      await this.options.native.request("native.diagnostics.lease.list", {}),
+    );
     return DiagnosticLeaseListV1.parse({
       v: 1,
       observedAt: this.now(),
-      leases: [...this.leases.values()].sort((left, right) => left.expiresAt - right.expiresAt),
+      leases: [...this.leases.values(), ...native.leases].sort(
+        (left, right) => left.expiresAt - right.expiresAt,
+      ),
     });
   }
 
-  revokeLease(ctx: CallerContext, raw: unknown): { revoked: boolean } {
+  async revokeLease(ctx: CallerContext, raw: unknown): Promise<{ revoked: boolean }> {
     this.assertLocalDiagnosticCaller(ctx);
     const parsed = DiagnosticLeaseRevokeV1.safeParse(raw);
     if (!parsed.success) {
@@ -459,9 +469,21 @@ export class DiagnosticsService {
       });
     }
     const input: DiagnosticLeaseRevoke = parsed.data;
-    const revoked = this.leases.delete(input.leaseId);
-    if (revoked) this.applyLeases();
-    return { revoked };
+    const localRevoked = this.leases.delete(input.leaseId);
+    if (localRevoked) {
+      this.applyLeases();
+      return { revoked: true };
+    }
+    const result = await this.options.native.request("native.diagnostics.lease.revoke", input);
+    if (
+      typeof result !== "object" ||
+      result === null ||
+      !("revoked" in result) ||
+      typeof result.revoked !== "boolean"
+    ) {
+      throw new RpcCallError("INTERNAL", "native returned an invalid lease revoke result");
+    }
+    return { revoked: result.revoked };
   }
 
   dispose(): void {
@@ -824,20 +846,21 @@ export class DiagnosticsService {
     return parsed.data;
   }
 
-  private assertLeaseTarget(input: DiagnosticLeaseCreate): void {
+  private leaseOwner(input: DiagnosticLeaseCreate): "local" | "native" {
     const selector = input.selector;
-    const supported =
-      selector.kind === "plugin"
-        ? selector.entry === undefined || selector.entry === "service"
-        : selector.service === "fieldd";
-    if (!supported) {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "this producer does not own the selected diagnostic target",
-        false,
-        { selector },
-      );
+    if (selector.kind === "plugin") {
+      if (selector.entry === undefined || selector.entry === "service") return "local";
+    } else if (selector.service === "fieldd") {
+      return "local";
+    } else if (selector.kind === "service" && selector.service === "field-native") {
+      return "native";
     }
+    throw new RpcCallError(
+      "PRECONDITION_FAILED",
+      "this producer does not own the selected diagnostic target",
+      false,
+      { selector },
+    );
   }
 
   private applyLeases(): void {

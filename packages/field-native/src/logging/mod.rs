@@ -10,7 +10,7 @@ use segment::{
     WriterResult,
 };
 use serde_json::{json, Value};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::str::FromStr;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
@@ -41,9 +41,19 @@ type Emergency = Arc<dyn Fn(&str) + Send + Sync>;
 pub struct NativeLogging {
     core: Arc<Core>,
     filter: Arc<FilterHandle>,
+    base_targets: Arc<Mutex<Targets>>,
+    base_level: Arc<Mutex<String>>,
+    leases: Arc<Mutex<HashMap<String, NativeDiagnosticLease>>>,
     worker: Arc<Mutex<Option<JoinHandle<()>>>>,
     stderr_route: Arc<Mutex<Option<stderr::StderrRoute>>>,
     active_path: Arc<std::path::PathBuf>,
+}
+
+#[derive(Clone)]
+struct NativeDiagnosticLease {
+    value: Value,
+    level: String,
+    expires_at: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -141,6 +151,7 @@ struct State {
     flush_completed: u64,
     writer_state: WriterState,
     current_level: String,
+    active_lease_count: usize,
     active_segment_bytes: u64,
     last_write_at: Option<u64>,
     last_failure: Option<LastFailure>,
@@ -210,16 +221,109 @@ impl NativeLogging {
 
     pub fn set_level(&self, level: &str) -> Result<()> {
         let filter_level = parse_level(level)?;
-        self.filter
-            .reload(Targets::new().with_default(filter_level))
-            .map_err(|error| anyhow!("reload field-native log filter: {error}"))?;
-        let mut state = lock_recover(&self.core.state);
-        state.current_level = level.to_ascii_lowercase();
-        Ok(())
+        *lock_recover(&self.base_targets) = Targets::new().with_default(filter_level);
+        *lock_recover(&self.base_level) = level.to_ascii_lowercase();
+        self.refresh_diagnostic_filter()
     }
 
     pub fn health(&self) -> Value {
+        let _ = self.refresh_diagnostic_filter();
         self.core.health()
+    }
+
+    pub fn create_diagnostic_lease(&self, raw: &Value) -> std::result::Result<Value, String> {
+        let (lease_id, level, expires_at) = parse_native_diagnostic_lease(raw)?;
+        {
+            let mut leases = lock_recover(&self.leases);
+            prune_native_leases(&mut leases, epoch_millis());
+            if leases.len() >= 256 {
+                return Err("native diagnostic lease limit reached".into());
+            }
+            if leases.contains_key(&lease_id) {
+                return Err("native diagnostic lease id already exists".into());
+            }
+            leases.insert(
+                lease_id.clone(),
+                NativeDiagnosticLease {
+                    value: raw.clone(),
+                    level,
+                    expires_at,
+                },
+            );
+        }
+        if let Err(error) = self.refresh_diagnostic_filter() {
+            lock_recover(&self.leases).remove(&lease_id);
+            let _ = self.refresh_diagnostic_filter();
+            return Err(error.to_string());
+        }
+        Ok(raw.clone())
+    }
+
+    pub fn list_diagnostic_leases(&self) -> std::result::Result<Vec<Value>, String> {
+        self.refresh_diagnostic_filter()
+            .map_err(|error| error.to_string())?;
+        let mut leases = lock_recover(&self.leases)
+            .values()
+            .map(|lease| lease.value.clone())
+            .collect::<Vec<_>>();
+        leases.sort_by(|left, right| {
+            left.get("expiresAt")
+                .and_then(Value::as_u64)
+                .cmp(&right.get("expiresAt").and_then(Value::as_u64))
+                .then_with(|| {
+                    left.get("leaseId")
+                        .and_then(Value::as_str)
+                        .cmp(&right.get("leaseId").and_then(Value::as_str))
+                })
+        });
+        Ok(leases)
+    }
+
+    pub fn revoke_diagnostic_lease(&self, lease_id: &str) -> std::result::Result<bool, String> {
+        let removed = lock_recover(&self.leases).remove(lease_id).is_some();
+        self.refresh_diagnostic_filter()
+            .map_err(|error| error.to_string())?;
+        Ok(removed)
+    }
+
+    pub fn prune_diagnostic_leases(&self) -> std::result::Result<(), String> {
+        self.refresh_diagnostic_filter()
+            .map_err(|error| error.to_string())
+    }
+
+    fn refresh_diagnostic_filter(&self) -> Result<()> {
+        let now = epoch_millis();
+        let (active_count, leased_level) = {
+            let mut leases = lock_recover(&self.leases);
+            prune_native_leases(&mut leases, now);
+            let minimum = leases
+                .values()
+                .filter_map(|lease| level_number(&lease.level).map(|level| (level, &lease.level)))
+                .min_by_key(|(level, _)| *level)
+                .map(|(_, level)| level.clone());
+            (leases.len(), minimum)
+        };
+        let base_level = lock_recover(&self.base_level).clone();
+        let effective_level = match leased_level {
+            Some(level)
+                if level_number(&level).unwrap_or(30) < level_number(&base_level).unwrap_or(30) =>
+            {
+                level
+            }
+            _ => base_level,
+        };
+        let targets = if active_count == 0 {
+            lock_recover(&self.base_targets).clone()
+        } else {
+            Targets::new().with_default(parse_level(&effective_level)?)
+        };
+        self.filter
+            .reload(targets)
+            .map_err(|error| anyhow!("reload field-native diagnostic lease filter: {error}"))?;
+        let mut state = lock_recover(&self.core.state);
+        state.current_level = effective_level;
+        state.active_lease_count = active_count;
+        Ok(())
     }
 
     pub fn parse_query(params: &Value) -> std::result::Result<NativeLogQuery, String> {
@@ -724,6 +828,7 @@ fn build_logging(
         flush_completed: 0,
         writer_state: WriterState::Starting,
         current_level,
+        active_lease_count: 0,
         active_segment_bytes: 0,
         last_write_at: None,
         last_failure: None,
@@ -768,6 +873,18 @@ fn build_logging(
         .context("spawn field-native logging worker")?;
 
     let (filter_layer, filter_handle) = reload::Layer::new(targets);
+    let filter_handle = Arc::new(filter_handle);
+    let base_targets = Arc::new(Mutex::new(
+        filter
+            .map(Targets::from_str)
+            .transpose()
+            .map_err(|error| anyhow!("invalid field-native log filter: {error}"))?
+            .unwrap_or_else(|| Targets::new().with_default(LevelFilter::INFO)),
+    ));
+    let base_level = Arc::new(Mutex::new(
+        filter.map_or_else(|| "info".to_owned(), most_verbose_level),
+    ));
+    let leases = Arc::new(Mutex::new(HashMap::new()));
     let layer = NativeLayer {
         core: core.clone(),
         boot_id: boot_id.to_owned(),
@@ -785,7 +902,10 @@ fn build_logging(
     Ok((
         NativeLogging {
             core,
-            filter: Arc::new(filter_handle),
+            filter: filter_handle,
+            base_targets,
+            base_level,
+            leases,
             worker: Arc::new(Mutex::new(Some(worker))),
             stderr_route: Arc::new(Mutex::new(None)),
             active_path,
@@ -1027,7 +1147,7 @@ fn health_value(state: &State, boot_id: &str, instance_id: &str) -> Value {
         "instanceId": instance_id,
         "writerState": state.writer_state.as_str(),
         "currentLevel": state.current_level,
-        "activeLeaseCount": 0,
+        "activeLeaseCount": state.active_lease_count,
         "activeSegmentBytes": safe_integer(state.active_segment_bytes),
         "queue": {
             "records": safe_integer(state.total_queue_records() as u64),
@@ -1160,6 +1280,69 @@ fn optional_safe_integer(
 
 fn safe_integer(value: u64) -> u64 {
     value.min(MAX_SAFE_INTEGER)
+}
+
+fn parse_native_diagnostic_lease(
+    raw: &Value,
+) -> std::result::Result<(String, String, u64), String> {
+    if serde_json::to_vec(raw).map_or(true, |bytes| bytes.len() > 16 * 1024) {
+        return Err("native diagnostic lease exceeds its byte limit".into());
+    }
+    let object = raw
+        .as_object()
+        .ok_or_else(|| "expected a diagnostic lease object".to_owned())?;
+    if object.get("v").and_then(Value::as_u64) != Some(1) {
+        return Err("native diagnostic lease version must be 1".into());
+    }
+    let lease_id = object
+        .get("leaseId")
+        .and_then(Value::as_str)
+        .filter(|value| {
+            !value.is_empty()
+                && value.len() <= 256
+                && !value.chars().any(|character| character.is_control())
+        })
+        .ok_or_else(|| "native diagnostic lease id is invalid".to_owned())?
+        .to_owned();
+    let selector = object
+        .get("selector")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "native diagnostic lease selector is invalid".to_owned())?;
+    if selector.get("kind").and_then(Value::as_str) != Some("service")
+        || selector.get("service").and_then(Value::as_str) != Some("field-native")
+    {
+        return Err("field-native supports only its service-wide diagnostic lease".into());
+    }
+    let level = object
+        .get("level")
+        .and_then(Value::as_str)
+        .filter(|value| matches!(*value, "trace" | "debug" | "info" | "warn" | "error"))
+        .ok_or_else(|| "native diagnostic lease level is invalid".to_owned())?
+        .to_owned();
+    let created_at = object
+        .get("createdAt")
+        .and_then(Value::as_u64)
+        .filter(|value| *value <= MAX_SAFE_INTEGER)
+        .ok_or_else(|| "native diagnostic lease createdAt is invalid".to_owned())?;
+    let expires_at = object
+        .get("expiresAt")
+        .and_then(Value::as_u64)
+        .filter(|value| *value <= MAX_SAFE_INTEGER && *value > created_at)
+        .ok_or_else(|| "native diagnostic lease expiresAt is invalid".to_owned())?;
+    if expires_at <= epoch_millis() {
+        return Err("native diagnostic lease is already expired".into());
+    }
+    if !object
+        .get("createdBy")
+        .is_some_and(|value| value.is_object())
+    {
+        return Err("native diagnostic lease principal is invalid".into());
+    }
+    Ok((lease_id, level, expires_at))
+}
+
+fn prune_native_leases(leases: &mut HashMap<String, NativeDiagnosticLease>, now: u64) {
+    leases.retain(|_, lease| lease.expires_at > now);
 }
 
 fn parse_level(level: &str) -> Result<LevelFilter> {
@@ -1605,6 +1788,74 @@ mod tests {
         assert_eq!(fatal["level"], 60);
         assert_eq!(fatal["severity"], "FATAL");
         assert_eq!(fatal["err"]["message"], "fatal cause");
+    }
+
+    #[test]
+    fn native_diagnostic_leases_widen_and_restore_the_producer_filter() {
+        let root = tempfile::tempdir().unwrap();
+        let (logging, subscriber) =
+            test_logging(&root, WriterHooks::default(), Arc::new(|_| {})).unwrap();
+        let lease = |id: &str, expires_at: u64| {
+            json!({
+                "v": 1,
+                "leaseId": id,
+                "selector": {"kind":"service","service":"field-native"},
+                "level": "debug",
+                "createdAt": epoch_millis(),
+                "expiresAt": expires_at,
+                "createdBy": {"kind":"shell-main","id":"fieldd-test"}
+            })
+        };
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug!(
+                event = "field_native.test.before_lease",
+                component = "test",
+                "not admitted"
+            );
+            let active = lease("lease-native-active", epoch_millis() + 60_000);
+            logging.create_diagnostic_lease(&active).unwrap();
+            assert_eq!(logging.health()["currentLevel"], "debug");
+            assert_eq!(logging.health()["activeLeaseCount"], 1);
+            tracing::debug!(
+                event = "field_native.test.during_lease",
+                component = "test",
+                "admitted"
+            );
+            assert!(logging
+                .revoke_diagnostic_lease("lease-native-active")
+                .unwrap());
+            assert_eq!(logging.health()["currentLevel"], "info");
+            tracing::debug!(
+                event = "field_native.test.after_revoke",
+                component = "test",
+                "not admitted"
+            );
+
+            let expiring = lease("lease-native-expiring", epoch_millis() + 20);
+            logging.create_diagnostic_lease(&expiring).unwrap();
+            std::thread::sleep(Duration::from_millis(30));
+            assert_eq!(logging.health()["activeLeaseCount"], 0);
+            assert_eq!(logging.health()["currentLevel"], "info");
+            tracing::debug!(
+                event = "field_native.test.after_expiry",
+                component = "test",
+                "not admitted"
+            );
+        });
+
+        let query =
+            NativeLogging::parse_query(&json!({"sources":["system/field-native"],"limit":1000}))
+                .unwrap();
+        let snapshot = logging.snapshot(&query);
+        let events = snapshot["records"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|record| record["event"].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(events, vec!["field_native.test.during_lease"]);
+        assert!(logging.close(Duration::from_secs(2)));
     }
 
     #[test]

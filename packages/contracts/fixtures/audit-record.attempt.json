@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "eventId": "audit_attempt_01",
+  "time": 1784852404000,
+  "actor": {
+    "kind": "local-token",
+    "id": "tk_0123456789ab"
+  },
+  "action": "plugin.enable",
+  "target": {
+    "kind": "plugin",
+    "id": "vibefield.example"
+  },
+  "phase": "attempt",
+  "operationId": "operation_plugin_01",
+  "transportProvenance": "ws-loopback",
+  "attrs": {
+    "source": "registry"
+  }
+}

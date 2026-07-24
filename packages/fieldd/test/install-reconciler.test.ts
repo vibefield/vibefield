@@ -1,14 +1,15 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import {
   buildFixtureRegistry,
   generateRegistryKeypair,
   packVfplugin,
 } from "@vibefield/plugin-build";
 import { afterEach, describe, expect, it } from "vitest";
-import { bootstrap, type FielddDaemon } from "../src/index";
+import { bootstrap, type FielddDaemon, verifyAuditSegment } from "../src/index";
 import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { until } from "./ws-rpc";
@@ -59,6 +60,17 @@ async function boot(
   return daemon;
 }
 
+async function auditRecords(dataDir: string): Promise<AuditRecordV1[]> {
+  const root = join(dataDir, "audit");
+  const records: AuditRecordV1[] = [];
+  for (const name of readdirSync(root).filter((entry) => entry.endsWith(".jsonl"))) {
+    const verified = await verifyAuditSegment(join(root, name));
+    expect(verified.valid, `${name}: ${verified.reason}`).toBe(true);
+    records.push(...verified.records);
+  }
+  return records;
+}
+
 describe("install-set reconciliation (§16.6)", () => {
   it("a desired registry entry seeded in the doc installs, activates, and honors its grants", {
     timeout: 40_000,
@@ -103,6 +115,32 @@ describe("install-set reconciliation (§16.6)", () => {
       reason: "revoked",
     });
     expect(record()?.grantedCapabilities).toContain("services.provide");
+    const audit = await auditRecords(dataDir);
+    expect(audit).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actor: { kind: "system", id: "fieldd" },
+          action: "plugin.install",
+          target: expect.objectContaining({ id: KV_ID }),
+          phase: "outcome",
+          outcome: "succeeded",
+        }),
+        expect.objectContaining({
+          actor: { kind: "system", id: "fieldd" },
+          action: "capability.revoke",
+          target: expect.objectContaining({ id: "storage.self", parentId: KV_ID }),
+          phase: "outcome",
+          outcome: "succeeded",
+        }),
+        expect.objectContaining({
+          actor: { kind: "system", id: "fieldd" },
+          action: "token.plugin_service.mint",
+          target: expect.objectContaining({ parentId: KV_ID }),
+          phase: "outcome",
+          outcome: "succeeded",
+        }),
+      ]),
+    );
   });
 
   it("reconcile is idempotent and parks an unsatisfiable entry honestly", async () => {

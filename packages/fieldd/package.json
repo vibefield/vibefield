@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@vibefield/audit": "workspace:*",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/fieldd-client": "workspace:*",
     "@vibefield/logging": "workspace:*",

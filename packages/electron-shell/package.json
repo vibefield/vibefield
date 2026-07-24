@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.renderer.json"
   },
   "dependencies": {
+    "@vibefield/audit": "workspace:*",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/field-app": "workspace:*",
     "@vibefield/fieldd-supervisor": "workspace:*",

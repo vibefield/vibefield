@@ -211,7 +211,7 @@ export function DiagnosticsSection(): ReactElement {
   const [leases, setLeases] = useState<LeaseRow[]>([]);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [leaseTarget, setLeaseTarget] = useState<
-    "desktop" | "renderer" | "utility" | "fieldd" | "plugin"
+    "desktop" | "renderer" | "utility" | "fieldd" | "field-native" | "plugin"
   >("fieldd");
   const [leaseComponent, setLeaseComponent] = useState("");
   const [leasePlugin, setLeasePlugin] = useState("");
@@ -221,6 +221,7 @@ export function DiagnosticsSection(): ReactElement {
   const [leaseBusy, setLeaseBusy] = useState(false);
   const [crashes, setCrashes] = useState<CrashArtifactListV1 | null>(null);
   const [selectedCrashes, setSelectedCrashes] = useState<Set<string>>(new Set());
+  const [includeAudit, setIncludeAudit] = useState(false);
   const [supportPreview, setSupportPreview] = useState<SupportBundlePreviewV1 | null>(null);
   const [supportStatus, setSupportStatus] = useState<string | null>(null);
   const [supportBusy, setSupportBusy] = useState(false);
@@ -457,10 +458,6 @@ export function DiagnosticsSection(): ReactElement {
     records.filter((record) => record.truncation !== undefined).length + transportTruncation;
 
   const createLease = async (): Promise<void> => {
-    if (host === undefined && leaseTarget !== "fieldd") {
-      setLeaseError("Electron diagnostics are unavailable");
-      return;
-    }
     let request: DiagnosticLeaseCreateV1;
     let local = false;
     let remote = false;
@@ -493,8 +490,12 @@ export function DiagnosticsSection(): ReactElement {
         level: leaseLevel,
         duration: leaseDuration,
       };
-      local = leaseTarget !== "fieldd";
-      remote = leaseTarget === "fieldd";
+      local = leaseTarget !== "fieldd" && leaseTarget !== "field-native";
+      remote = leaseTarget === "fieldd" || leaseTarget === "field-native";
+    }
+    if (local && host === undefined) {
+      setLeaseError("Electron diagnostics are unavailable");
+      return;
     }
 
     setLeaseBusy(true);
@@ -549,7 +550,7 @@ export function DiagnosticsSection(): ReactElement {
         range: { from: now - duration, to: now },
         sources,
         pluginIds: sources.some((entry) => entry.startsWith("plugins/")) ? [pluginId.trim()] : [],
-        includeAudit: false,
+        includeAudit,
         crashArtifactIds: [...selectedCrashes],
       });
       setSupportPreview(preview);
@@ -848,11 +849,13 @@ export function DiagnosticsSection(): ReactElement {
                         | "renderer"
                         | "utility"
                         | "fieldd"
+                        | "field-native"
                         | "plugin",
                     )
                   }
                 >
                   <option value="fieldd">fieldd</option>
+                  <option value="field-native">field-native</option>
                   <option value="desktop">desktop</option>
                   <option value="renderer">renderer</option>
                   <option value="utility">utility</option>
@@ -1009,6 +1012,17 @@ export function DiagnosticsSection(): ReactElement {
                 <div className={labelCls}>
                   No upload. “All sources” defaults to first-party system logs only.
                 </div>
+                <label className="mt-1 flex items-center gap-1 text-neutral-500">
+                  <input
+                    type="checkbox"
+                    checked={includeAudit}
+                    onChange={(change) => {
+                      setIncludeAudit(change.target.checked);
+                      setSupportPreview(null);
+                    }}
+                  />
+                  Include second-scrubbed audit records
+                </label>
               </div>
               <button
                 type="button"
@@ -1028,6 +1042,9 @@ export function DiagnosticsSection(): ReactElement {
                   {supportPreview.manifest.truncatedRecords} truncated
                 </div>
                 <div className={labelCls}>{supportPreview.manifest.sources.join(", ")}</div>
+                {supportPreview.manifest.includesAudit && (
+                  <div className={labelCls}>Includes audit records by explicit selection.</div>
+                )}
                 {supportPreview.warnings.map((warning) => (
                   <div key={warning} className="text-orange-700 dark:text-orange-300">
                     {warning}

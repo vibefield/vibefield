@@ -136,6 +136,15 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
             "native.diagnostics.subscribe" => {
                 diagnostics::subscribe(&state, &tx, &params, id);
             }
+            "native.diagnostics.lease.create" => {
+                send(&tx, diagnostics::lease_create(&state, &params, id));
+            }
+            "native.diagnostics.lease.list" => {
+                send(&tx, diagnostics::lease_list(&state, id));
+            }
+            "native.diagnostics.lease.revoke" => {
+                send(&tx, diagnostics::lease_revoke(&state, &params, id));
+            }
             m if m.starts_with("native.mesh.") => {
                 mesh::handle(&state, &tx, m, &params, id).await;
             }
@@ -206,7 +215,7 @@ async fn handle_hello(
             err(
                 id,
                 "INCOMPATIBLE",
-                -32008,
+                -32009,
                 "contracts major mismatch",
                 false,
                 Some(json!({"server": CONTRACTS_VERSION, "client": theirs})),

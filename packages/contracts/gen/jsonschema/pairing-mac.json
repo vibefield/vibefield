@@ -38,6 +38,7 @@
         "CONFLICT",
         "PRECONDITION_FAILED",
         "UNAVAILABLE",
+        "AUDIT_UNAVAILABLE",
         "TIMEOUT",
         "INCOMPATIBLE",
         "INTERNAL"

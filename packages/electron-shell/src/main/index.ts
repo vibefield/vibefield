@@ -6,6 +6,7 @@ import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
 import { app, clipboard, crashReporter, dialog, shell } from "electron";
+import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
@@ -73,6 +74,15 @@ async function main(
   support: SupportBundleService,
 ): Promise<void> {
   const logger = shellLogging.logger;
+  const appendShellAudit = async (record: Record<string, unknown>): Promise<void> => {
+    const handle = await getSupervisor()?.ensure();
+    if (handle === undefined) {
+      throw Object.assign(new Error("fieldd audit service is unavailable"), {
+        kind: "AUDIT_UNAVAILABLE",
+      });
+    }
+    await handle.client.request("audit.append", record);
+  };
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
     let supportDialogOpen = false;
     installLocalDiagnosticsPort({
@@ -115,20 +125,22 @@ async function main(
           }
           supportDialogOpen = true;
           try {
-            const selected = await dialog.showSaveDialog(window, {
-              title: "Export VibeField Support Bundle",
-              defaultPath: join(
-                app.getPath("downloads"),
-                `VibeField-support-${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`,
-              ),
-              buttonLabel: "Export",
-              filters: [{ name: "Compressed support bundle", extensions: ["gz"] }],
-              properties: ["createDirectory", "showOverwriteConfirmation"],
+            return await runAuditedSupportExport({
+              previewId: request.data.previewId,
+              support,
+              appendAudit: appendShellAudit,
+              chooseDestination: () =>
+                dialog.showSaveDialog(window, {
+                  title: "Export VibeField Support Bundle",
+                  defaultPath: join(
+                    app.getPath("downloads"),
+                    `VibeField-support-${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`,
+                  ),
+                  buttonLabel: "Export",
+                  filters: [{ name: "Compressed support bundle", extensions: ["gz"] }],
+                  properties: ["createDirectory", "showOverwriteConfirmation"],
+                }),
             });
-            if (selected.canceled || selected.filePath === undefined) {
-              return support.cancelled(request.data.previewId);
-            }
-            return await support.export(request.data.previewId, selected.filePath);
           } finally {
             supportDialogOpen = false;
           }

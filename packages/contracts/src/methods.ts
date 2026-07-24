@@ -87,6 +87,17 @@ export const METHODS: MethodDef[] = [
     locality: "local",
   }),
 
+  // LOG-L6 — append-only audit ingress for shell-owned actions. The scope is
+  // absent from every federated/plugin preset, and fieldd additionally proves
+  // a loopback shell-main caller before accepting a record.
+  defineMethod({
+    surface: "product",
+    method: "audit.append",
+    scope: "audit.append",
+    idempotent: false,
+    locality: "local",
+  }),
+
   // LOG-L5 — trusted local diagnostics. These scopes are absent from every
   // tailnet/plugin/MCP preset; Electron mints them only for its host viewer.
   defineMethod({
@@ -171,6 +182,27 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
     subscription: true,
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.diagnostics.lease.create",
+    scope: null,
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.diagnostics.lease.list",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.diagnostics.lease.revoke",
+    scope: null,
+    idempotent: true,
+    locality: "local",
   }),
   defineMethod({
     surface: "mgmt",

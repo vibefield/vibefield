@@ -2,25 +2,110 @@ use super::{err, ok, send_raw};
 use crate::state::{DaemonState, OutMsg};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
+
+const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(MAX_SAFE_INTEGER as u128) as u64
+}
+
+fn unavailable(id: Option<Value>) -> Value {
+    err(
+        id,
+        "UNAVAILABLE",
+        -32006,
+        "native diagnostics are not configured",
+        true,
+        Some(json!({"service":"field-native","state":"unavailable"})),
+    )
+}
 
 pub fn query(state: &Arc<DaemonState>, params: &Value, id: Option<Value>) -> Value {
     let Some(logging) = state.logging.as_ref() else {
-        return err(
-            id,
-            "UNAVAILABLE",
-            -32006,
-            "native diagnostics are not configured",
-            true,
-            Some(json!({"service":"field-native","state":"unavailable"})),
-        );
+        return unavailable(id);
     };
     let query = match crate::logging::NativeLogging::parse_query(params) {
         Ok(query) => query,
         Err(message) => return err(id, "PRECONDITION_FAILED", -32005, &message, false, None),
     };
     ok(id, logging.snapshot(&query))
+}
+
+pub fn lease_create(state: &Arc<DaemonState>, params: &Value, id: Option<Value>) -> Value {
+    let Some(logging) = state.logging.as_ref().cloned() else {
+        return unavailable(id);
+    };
+    let Some(lease) = params.get("lease") else {
+        return err(
+            id,
+            "PRECONDITION_FAILED",
+            -32005,
+            "expected { lease }",
+            false,
+            None,
+        );
+    };
+    let created = match logging.create_diagnostic_lease(lease) {
+        Ok(created) => created,
+        Err(message) => return err(id, "PRECONDITION_FAILED", -32005, &message, false, None),
+    };
+    if let Some(expires_at) = created.get("expiresAt").and_then(Value::as_u64) {
+        if expires_at < MAX_SAFE_INTEGER {
+            let delay = Duration::from_millis(expires_at.saturating_sub(now_millis()));
+            tokio::spawn(async move {
+                tokio::time::sleep(delay).await;
+                if let Err(error) = logging.prune_diagnostic_leases() {
+                    tracing::warn!(
+                        event = "field_native.diagnostics.lease_expiry_failed",
+                        component = "diagnostics",
+                        error = %error,
+                        "A native diagnostic lease expired but its filter could not be restored"
+                    );
+                }
+            });
+        }
+    }
+    ok(id, created)
+}
+
+pub fn lease_list(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
+    let Some(logging) = state.logging.as_ref() else {
+        return unavailable(id);
+    };
+    match logging.list_diagnostic_leases() {
+        Ok(leases) => ok(id, json!({"v":1,"observedAt":now_millis(),"leases":leases})),
+        Err(message) => err(id, "INTERNAL", -32000, &message, false, None),
+    }
+}
+
+pub fn lease_revoke(state: &Arc<DaemonState>, params: &Value, id: Option<Value>) -> Value {
+    let Some(logging) = state.logging.as_ref() else {
+        return unavailable(id);
+    };
+    let Some(lease_id) = params
+        .get("leaseId")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty() && value.len() <= 256)
+    else {
+        return err(
+            id,
+            "PRECONDITION_FAILED",
+            -32005,
+            "expected { leaseId }",
+            false,
+            None,
+        );
+    };
+    match logging.revoke_diagnostic_lease(lease_id) {
+        Ok(revoked) => ok(id, json!({"revoked":revoked})),
+        Err(message) => err(id, "INTERNAL", -32000, &message, false, None),
+    }
 }
 
 pub fn subscribe(
@@ -30,20 +115,7 @@ pub fn subscribe(
     id: Option<Value>,
 ) {
     let Some(logging) = state.logging.as_ref().cloned() else {
-        send_raw(
-            tx,
-            OutMsg::Line(
-                err(
-                    id,
-                    "UNAVAILABLE",
-                    -32006,
-                    "native diagnostics are not configured",
-                    true,
-                    Some(json!({"service":"field-native","state":"unavailable"})),
-                )
-                .to_string(),
-            ),
-        );
+        send_raw(tx, OutMsg::Line(unavailable(id).to_string()));
         return;
     };
     let query = match crate::logging::NativeLogging::parse_query(params) {

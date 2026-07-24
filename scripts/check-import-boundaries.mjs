@@ -250,7 +250,7 @@ const RULES = [
   {
     id: "R12",
     // Pino is the private Node implementation, never a product/package API.
-    enforce: false,
+    enforce: true,
     description: "Pino imports stay inside @vibefield/logging",
     applies: (p) => SOURCE_EXT.test(p) && !under(p, "packages/logging"),
     importTest: (s) => importsModule(s, "pino"),
@@ -260,7 +260,7 @@ const RULES = [
     // Textual first version: catches invalid literal first arguments on the
     // first-party event-first Logger. PluginLogger is message-first, so plugin
     // code and the plugin host/SDK are outside this rule.
-    enforce: false,
+    enforce: true,
     description: "first-party logger event literals use a dotted static namespace",
     applies: (p) =>
       SOURCE_EXT.test(p) &&
@@ -277,7 +277,7 @@ const RULES = [
   },
   {
     id: "R14",
-    enforce: false,
+    enforce: true,
     stripComments: true,
     description: "physical log stream names come only from contracts registries.ts",
     applies: (p) =>
@@ -298,6 +298,35 @@ const RULES = [
       (underAny(p, ["plugins", "examples/plugins"]) ||
         ["packages/field-app/src/plugin-host/renderer-harness.ts"].includes(p)),
     linePattern: /\bconsole\.(?:debug|info|log|warn|error|trace)\s*\(/g,
+  },
+  {
+    id: "R16",
+    enforce: true,
+    description: "@vibefield/audit has filesystem authority only, never network/process authority",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/audit/src"),
+    importTest: (s) =>
+      matchesForbid(s, {
+        modules: ["electron", "undici", "ws"],
+        prefixes: [
+          "node:child_process",
+          "node:dgram",
+          "node:http",
+          "node:https",
+          "node:http2",
+          "node:net",
+          "node:tls",
+          "node:worker_threads",
+        ],
+      }),
+  },
+  {
+    id: "R17",
+    enforce: true,
+    description:
+      "audit writer authority stays in fieldd; other production packages may import verifier only",
+    applies: (p) =>
+      SOURCE_EXT.test(p) && !underAny(p, ["packages/audit", "packages/fieldd"]) && !isTestPath(p),
+    importTest: (s) => importsModule(s, "@vibefield/audit") && s !== "@vibefield/audit/verify",
   },
 ];
 
@@ -612,6 +641,16 @@ function runSelfTest() {
       file: "plugins/note/src/raw-console.ts",
       body: 'console.info("plugin-origin");\n',
     },
+    {
+      id: "R16",
+      file: "packages/audit/src/network-writer.ts",
+      body: 'import { request } from "node:https";\n',
+    },
+    {
+      id: "R17",
+      file: "packages/electron-shell/src/main/audit-writer.ts",
+      body: 'import { AuditLedgerWriter } from "@vibefield/audit";\n',
+    },
   ];
   const cleans = [
     // react + a /host entry import + plain code: proves R1/R2/R9 don't overfire and
@@ -703,6 +742,14 @@ function runSelfTest() {
       file: "packages/fieldd/src/service-worker-harness.mjs",
       body: 'logger.warn("plugin message first");\n',
     },
+    {
+      file: "packages/audit/src/private-writer.ts",
+      body: 'import { open } from "node:fs/promises";\nexport const writer = open;\n',
+    },
+    {
+      file: "packages/electron-shell/src/main/audit-reader.ts",
+      body: 'import { verifyAuditSegment } from "@vibefield/audit/verify";\nexport const verify = verifyAuditSegment;\n',
+    },
   ];
 
   const tmp = mkdtempSync(join(tmpdir(), "vf-import-walls-"));
@@ -739,7 +786,7 @@ function runSelfTest() {
     // three slices). Every rule is enforced — R10's pending era ended when
     // slice P3 landed the SDK (2026-07-23); adding a new pending rule means
     // editing THIS set, a deliberate act.
-    const EXPECTED_PENDING = new Set(["R12", "R13", "R14"]);
+    const EXPECTED_PENDING = new Set();
     const tableOk = RULES.every((r) => r.enforce === !EXPECTED_PENDING.has(r.id));
     console.log(
       `  ${tableOk ? "PASS" : "FAIL"}  enforce table: every rule enforced except {${[...EXPECTED_PENDING].join(", ")}}`,
@@ -762,6 +809,12 @@ function runSelfTest() {
     const r15Gated = found.some((v) => v.id === "R15" && ENFORCE_BY_ID.get(v.id) === true);
     console.log(`  ${r15Gated ? "PASS" : "FAIL"}  R15 detected and GATED (enforced since LOG-L4)`);
     if (!r15Gated) ok = false;
+
+    for (const id of ["R16", "R17"]) {
+      const gated = found.some((v) => v.id === id && ENFORCE_BY_ID.get(v.id) === true);
+      console.log(`  ${gated ? "PASS" : "FAIL"}  ${id} detected and GATED (LOG-L6)`);
+      if (!gated) ok = false;
+    }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

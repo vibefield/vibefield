@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { constants, createWriteStream } from "node:fs";
+import { constants, createWriteStream, type Dirent } from "node:fs";
 import {
   chmod,
   copyFile,
@@ -15,6 +15,7 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
+import { verifyAuditSegment } from "@vibefield/audit/verify";
 import {
   type SupportBundleExportResultV1 as SupportBundleExportResult,
   SupportBundleExportResultV1,
@@ -38,6 +39,8 @@ const SANITIZER_VERSION = "support-v1";
 const PREVIEW_TTL_MS = 5 * 60 * 1_000;
 const MAX_SCAN_BYTES = 64 * 1024 * 1024;
 const MAX_LOG_PAYLOAD_BYTES = 32 * 1024 * 1024;
+const MAX_AUDIT_SCAN_BYTES = 16 * 1024 * 1024;
+const MAX_AUDIT_PAYLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_UNCOMPRESSED_BYTES = 320 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 320 * 1024 * 1024;
 const HISTORY_RECORDS_PER_SOURCE = 1_000;
@@ -48,6 +51,8 @@ const SECRET_KEYS =
 const CANARY_PATTERN = /VIBEFIELD_(?:LOG|SUPPORT)_CANARY_[A-Za-z0-9_-]+/i;
 const PRIVATE_KEY_HEADER = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i;
 const URL_PATTERN = /\b(?:https?|wss?):\/\/[^\s"'<>]+/gi;
+const AUDIT_SEGMENT_NAME =
+  /^(approvals|grants|plugins|own-actions)\.\d{4}-\d{2}\.[A-Za-z0-9_-]+(?:\.\d{4})?\.jsonl$/;
 
 interface MemoryPlanFile {
   kind: "memory";
@@ -74,6 +79,15 @@ interface BundlePlan {
   preview: SupportBundlePreview;
   files: PlanFile[];
   crashArtifactIds: string[];
+}
+
+export interface SupportBundleAuditContext {
+  bundleId: string;
+  rangeHours: number;
+  sourceCount: number;
+  pluginCount: number;
+  crashCount: number;
+  includesAudit: boolean;
 }
 
 export class SupportBundleError extends Error {
@@ -494,12 +508,6 @@ export class SupportBundleService {
           "support range cannot extend into the future",
         );
       }
-      if (selection.includeAudit) {
-        throw new SupportBundleError(
-          "PRECONDITION_FAILED",
-          "audit export is unavailable until the audit ledger lands",
-        );
-      }
       const plan = await this.buildPlan(selection, signal);
       this.setPlan(plan);
       return plan.preview;
@@ -566,6 +574,28 @@ export class SupportBundleService {
         archiveBytes,
       });
     });
+  }
+
+  auditContext(previewId: string): SupportBundleAuditContext {
+    this.requireInitialized();
+    const plan = this.plan;
+    if (plan === null || plan.preview.previewId !== previewId) {
+      throw new SupportBundleError("NOT_FOUND", "support preview is unavailable");
+    }
+    if (plan.preview.expiresAt <= this.now()) {
+      this.clearPlan();
+      throw new SupportBundleError("PRECONDITION_FAILED", "support preview expired");
+    }
+    return {
+      bundleId: plan.preview.manifest.bundleId,
+      rangeHours: Math.ceil(
+        (plan.preview.manifest.range.to - plan.preview.manifest.range.from) / (60 * 60 * 1_000),
+      ),
+      sourceCount: plan.preview.manifest.sources.length,
+      pluginCount: plan.preview.manifest.pluginAliases.length,
+      crashCount: plan.preview.manifest.crashArtifacts.length,
+      includesAudit: plan.preview.manifest.includesAudit,
+    };
   }
 
   cancelled(previewId: string): SupportBundleExportResult {
@@ -658,6 +688,74 @@ export class SupportBundleService {
       }
     }
 
+    if (selection.includeAudit) {
+      const auditRoot = join(this.options.dataRoot, "audit");
+      let entries: Dirent<string>[];
+      try {
+        const rootInfo = await lstat(auditRoot);
+        if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
+          throw new SupportBundleError(
+            "PRECONDITION_FAILED",
+            "the audit ledger root is not a safe directory",
+          );
+        }
+        entries = await readdir(auditRoot, { withFileTypes: true });
+      } catch (error) {
+        if (isNotFound(error)) {
+          throw new SupportBundleError("NOT_FOUND", "audit evidence is unavailable");
+        }
+        throw error;
+      }
+      const byLedger = new Map<string, Buffer[]>();
+      let auditScanBytes = 0;
+      let auditPayloadBytes = 0;
+      for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+        signal?.throwIfAborted();
+        const match = AUDIT_SEGMENT_NAME.exec(entry.name);
+        if (match === null) continue;
+        if (!entry.isFile() || entry.isSymbolicLink()) {
+          omittedRecords += 1;
+          continue;
+        }
+        const remainingScan = MAX_AUDIT_SCAN_BYTES - auditScanBytes;
+        if (remainingScan <= 0) {
+          truncatedRecords += 1;
+          break;
+        }
+        const verified = await verifyAuditSegment(join(auditRoot, entry.name), remainingScan);
+        auditScanBytes += Math.min(verified.bytes, remainingScan);
+        if (!verified.valid) {
+          omittedRecords += Math.max(1, verified.records.length);
+          if (verified.reason === "scan-cap") truncatedRecords += 1;
+          continue;
+        }
+        const ledger = match[1] as string;
+        const lines = byLedger.get(ledger) ?? [];
+        for (const record of verified.records) {
+          if (record.time < selection.range.from || record.time > selection.range.to) continue;
+          const { integrity: _integrity, ...projected } = record;
+          const scrubbed = scrubSupportValue(projected, {
+            aliases: this.options.aliases,
+            pseudonyms,
+            key: "auditRecord",
+          });
+          const line = Buffer.from(`${JSON.stringify(scrubbed)}\n`, "utf8");
+          if (auditPayloadBytes + line.byteLength > MAX_AUDIT_PAYLOAD_BYTES) {
+            truncatedRecords += 1;
+            break;
+          }
+          lines.push(line);
+          auditPayloadBytes += line.byteLength;
+        }
+        byLedger.set(ledger, lines);
+      }
+      scannedBytes += auditScanBytes;
+      for (const [ledger, lines] of byLedger) {
+        const bytes = lines.reduce((total, line) => total + line.byteLength, 0);
+        files.push(memoryFile(`audit/${ledger}.jsonl`, "audit", Buffer.concat(lines, bytes)));
+      }
+    }
+
     const context = await this.options.collectContext?.();
     const runtime = scrubSupportValue(
       {
@@ -736,7 +834,7 @@ export class SupportBundleService {
       range: selection.range,
       sources: selection.sources,
       pluginAliases: pseudonyms.values("plugin"),
-      includesAudit: false,
+      includesAudit: selection.includeAudit,
       crashArtifacts: crashAliases,
       sanitizerVersion: SANITIZER_VERSION,
       omittedRecords,
@@ -760,6 +858,11 @@ export class SupportBundleService {
         : []),
       ...(selectedCrashes.length > 0
         ? ["Selected crash dumps are binary and may contain sensitive process memory."]
+        : []),
+      ...(selection.includeAudit
+        ? [
+            "Selected audit records are included as a second-scrubbed projection; integrity fields are omitted.",
+          ]
         : []),
       ...(omittedRecords > 0 || truncatedRecords > 0
         ? ["Some records were omitted or truncated; see the manifest counters."]

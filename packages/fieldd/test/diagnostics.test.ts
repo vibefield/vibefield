@@ -231,6 +231,30 @@ describe("LOG-L5 privileged diagnostics surface", () => {
         .records.some((record) => record.event === "fieldd.diagnostics.revoked_debug"),
     ).toBe(false);
 
+    const nativeLease = (await client.call("diagnostics.lease.create", {
+      selector: { kind: "service", service: "field-native" },
+      level: "debug",
+      duration: "15m",
+    })) as DiagnosticLeaseV1;
+    expect(fixture.native.diagnosticLeases.has(nativeLease.leaseId)).toBe(true);
+    const withNative = (await client.call("diagnostics.lease.list", {})) as DiagnosticLeaseListV1;
+    expect(withNative.leases).toContainEqual(nativeLease);
+    expect(await client.call("diagnostics.lease.revoke", { leaseId: nativeLease.leaseId })).toEqual(
+      { revoked: true },
+    );
+    expect(fixture.native.diagnosticLeases.has(nativeLease.leaseId)).toBe(false);
+
+    const nativeComponent = await client.callErr("diagnostics.lease.create", {
+      selector: {
+        kind: "component",
+        service: "field-native",
+        component: "native.mesh",
+      },
+      level: "debug",
+      duration: "15m",
+    });
+    expect(nativeComponent.data?.kind).toBe("PRECONDITION_FAILED");
+
     const wrongOwner = await client.callErr("diagnostics.lease.create", {
       selector: { kind: "service", service: "renderer" },
       level: "debug",

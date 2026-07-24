@@ -645,6 +645,7 @@ impl ErrorData {
 #[doc = "    \"CONFLICT\","]
 #[doc = "    \"PRECONDITION_FAILED\","]
 #[doc = "    \"UNAVAILABLE\","]
+#[doc = "    \"AUDIT_UNAVAILABLE\","]
 #[doc = "    \"TIMEOUT\","]
 #[doc = "    \"INCOMPATIBLE\","]
 #[doc = "    \"INTERNAL\""]
@@ -677,6 +678,8 @@ pub enum ErrorKind {
     PreconditionFailed,
     #[serde(rename = "UNAVAILABLE")]
     Unavailable,
+    #[serde(rename = "AUDIT_UNAVAILABLE")]
+    AuditUnavailable,
     #[serde(rename = "TIMEOUT")]
     Timeout,
     #[serde(rename = "INCOMPATIBLE")]
@@ -693,6 +696,7 @@ impl ::std::fmt::Display for ErrorKind {
             Self::Conflict => f.write_str("CONFLICT"),
             Self::PreconditionFailed => f.write_str("PRECONDITION_FAILED"),
             Self::Unavailable => f.write_str("UNAVAILABLE"),
+            Self::AuditUnavailable => f.write_str("AUDIT_UNAVAILABLE"),
             Self::Timeout => f.write_str("TIMEOUT"),
             Self::Incompatible => f.write_str("INCOMPATIBLE"),
             Self::Internal => f.write_str("INTERNAL"),
@@ -709,6 +713,7 @@ impl ::std::str::FromStr for ErrorKind {
             "CONFLICT" => Ok(Self::Conflict),
             "PRECONDITION_FAILED" => Ok(Self::PreconditionFailed),
             "UNAVAILABLE" => Ok(Self::Unavailable),
+            "AUDIT_UNAVAILABLE" => Ok(Self::AuditUnavailable),
             "TIMEOUT" => Ok(Self::Timeout),
             "INCOMPATIBLE" => Ok(Self::Incompatible),
             "INTERNAL" => Ok(Self::Internal),

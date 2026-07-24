@@ -1,5 +1,6 @@
 import type { InstallSetEntry, PluginRecord } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type { AuditService } from "./audit-service";
 import type { RegistryInstallService } from "./plugin-install";
 import type { PluginRegistryService } from "./plugin-registry";
 import type { SettingsDocService } from "./settings-doc";
@@ -33,6 +34,8 @@ export interface InstallReconcilerConfig {
   teardown: (pluginId: string) => Promise<void>;
   /** fire-and-forget service (re)start for an enabled plugin */
   restart: (pluginId: string) => void;
+  /** LOG-L6: synced intent is still a real mutation on this device. */
+  audit: Pick<AuditService, "requiredSystem">;
   logger?: Logger;
 }
 
@@ -91,12 +94,39 @@ export class InstallSetReconciler {
     // app's own (enablement-only sync)
     if (record === undefined) {
       if (entry.source !== "registry") return;
-      await this.cfg.installer.install({
-        id: entry.pluginId,
-        ...(entry.version !== undefined ? { version: entry.version } : {}),
-      });
-      record = this.cfg.plugins.get(entry.pluginId);
-      if (record === undefined) return;
+      record = await this.cfg.audit.requiredSystem(
+        {
+          action: "plugin.install",
+          target: { kind: "plugin", id: entry.pluginId },
+          attrs: {
+            origin: "settings-doc",
+            source: entry.source,
+            requestedVersion: entry.version ?? "latest",
+            artifactSha256: entry.artifactSha256 ?? "unknown",
+          },
+        },
+        async () => {
+          await this.cfg.installer.install({
+            id: entry.pluginId,
+            ...(entry.version !== undefined ? { version: entry.version } : {}),
+          });
+          const installed = this.cfg.plugins.get(entry.pluginId);
+          if (installed === undefined) {
+            throw new Error(`${entry.pluginId}: install completed without a registry record`);
+          }
+          return installed;
+        },
+        (installed) => ({
+          attrs: {
+            origin: "settings-doc",
+            version: installed.version,
+            source: installed.source,
+            manifestHash: installed.manifestHash,
+            artifactSha256: installed.registry?.artifactSha256 ?? "unknown",
+            publisher: installed.registry?.publisher ?? "unknown",
+          },
+        }),
+      );
     }
     // dev-linked/sideload rows never take doc-driven state (§16.6)
     if (record.source === "dev-linked" || record.source === "sideload") return;
@@ -104,11 +134,44 @@ export class InstallSetReconciler {
     // enablement (desire only — effective stays per-device)
     if (record.enabled !== entry.enabled) {
       if (entry.enabled) {
-        await this.cfg.plugins.enable(entry.pluginId);
+        record = await this.cfg.audit.requiredSystem(
+          {
+            action: "plugin.enable",
+            target: { kind: "plugin", id: entry.pluginId },
+            attrs: { origin: "settings-doc" },
+          },
+          () => this.cfg.plugins.enable(entry.pluginId),
+          (enabled) => ({
+            attrs: {
+              origin: "settings-doc",
+              enabled: enabled.enabled,
+              source: enabled.source,
+              manifestHash: enabled.manifestHash,
+            },
+          }),
+        );
         this.cfg.restart(entry.pluginId);
       } else {
-        await this.cfg.plugins.disable(entry.pluginId);
-        await this.cfg.teardown(entry.pluginId);
+        record = await this.cfg.audit.requiredSystem(
+          {
+            action: "plugin.disable",
+            target: { kind: "plugin", id: entry.pluginId },
+            attrs: { origin: "settings-doc" },
+          },
+          async () => {
+            const disabled = await this.cfg.plugins.disable(entry.pluginId);
+            await this.cfg.teardown(entry.pluginId);
+            return disabled;
+          },
+          (disabled) => ({
+            attrs: {
+              origin: "settings-doc",
+              enabled: disabled.enabled,
+              source: disabled.source,
+              manifestHash: disabled.manifestHash,
+            },
+          }),
+        );
       }
       record = this.cfg.plugins.get(entry.pluginId) ?? record;
     }
@@ -124,10 +187,28 @@ export class InstallSetReconciler {
       const matches = wantGranted ? isGranted || !isDeniedRevoked : !isGranted && isDeniedRevoked;
       if (matches) continue;
       if (!record.requestedCapabilities.includes(g.capability)) continue; // never grant the unrequested
-      const { changed } = await this.cfg.plugins.setGrant(
-        entry.pluginId,
-        g.capability,
-        wantGranted,
+      const { changed } = await this.cfg.audit.requiredSystem(
+        {
+          action: wantGranted ? "capability.grant" : "capability.revoke",
+          target: { kind: "capability", id: g.capability, parentId: entry.pluginId },
+          attrs: {
+            origin: "settings-doc",
+            pluginId: entry.pluginId,
+            granted: wantGranted,
+            decisionAt: g.at,
+          },
+        },
+        () => this.cfg.plugins.setGrant(entry.pluginId, g.capability, wantGranted),
+        (result) => ({
+          attrs: {
+            origin: "settings-doc",
+            pluginId: entry.pluginId,
+            capability: g.capability,
+            granted: wantGranted,
+            changed: result.changed,
+            grantGeneration: result.record.grantGeneration,
+          },
+        }),
       );
       moved = moved || changed;
     }
@@ -182,16 +263,47 @@ export class InstallSetReconciler {
           })),
       ],
     };
-    await this.cfg.settingsDoc.setInstallSetEntry(entry, by);
+    await this.cfg.audit.requiredSystem(
+      {
+        action: "plugin.install_set.publish",
+        target: { kind: "install-set", id: record.id },
+        attrs: {
+          by,
+          source: entry.source,
+          version: entry.version ?? "bundled",
+          enabled: entry.enabled,
+          grantDecisionCount: entry.grants.length,
+        },
+      },
+      () => this.cfg.settingsDoc.setInstallSetEntry(entry, by),
+      () => ({
+        attrs: {
+          by,
+          source: entry.source,
+          enabled: entry.enabled,
+          grantDecisionCount: entry.grants.length,
+        },
+      }),
+    );
   }
 
   async unpublish(pluginId: string, by: string): Promise<void> {
-    await this.cfg.settingsDoc.removeInstallSetEntry(pluginId, by).catch((e) => {
-      this.log.warn(
-        "fieldd.install_reconciler.publish_parked",
-        "An install-set removal failed to publish; the next mutation republishes",
-        { pluginId, error: e instanceof Error ? e.message : String(e) },
-      );
-    });
+    await this.cfg.audit
+      .requiredSystem(
+        {
+          action: "plugin.install_set.remove",
+          target: { kind: "install-set", id: pluginId },
+          attrs: { by },
+        },
+        () => this.cfg.settingsDoc.removeInstallSetEntry(pluginId, by),
+        () => ({ attrs: { by } }),
+      )
+      .catch((e) => {
+        this.log.warn(
+          "fieldd.install_reconciler.publish_parked",
+          "An install-set removal failed to publish; the next mutation republishes",
+          { pluginId, error: e instanceof Error ? e.message : String(e) },
+        );
+      });
   }
 }

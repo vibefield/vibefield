@@ -12,7 +12,7 @@ import {
 import { createBoundedLineFramer, createNoopLogger, type Logger } from "@vibefield/logging";
 import type { PluginRegistryService } from "./plugin-registry";
 import type { ServiceCallerInfo, ServiceRegistry } from "./service-registry";
-import type { TokenService } from "./token-service";
+import type { TokenGrant, TokenService } from "./token-service";
 
 // ServiceHost (plugin spec §14.2/§18, P4): one worker thread per plugin
 // service entry, host-owned harness, §10.4 deadlines, the §18.3 crash ladder,
@@ -59,6 +59,10 @@ export interface ServiceHostConfig {
   deadlines?: { activateMs?: number; deactivateMs?: number };
   /** test seam — production defaults are the §18.3 ladder constants */
   ladder?: { baseMs?: number; maxMs?: number; windowMs?: number; quarantineAt?: number };
+  /** LOG-L6 authority seam: production mints service leases through audit. */
+  mintServiceLease?: (pluginId: string, scopes: Scope[]) => Promise<TokenGrant>;
+  /** LOG-L6 authority seam: crash/stop revocation is audited by safe token ID. */
+  revokeServiceLease?: (pluginId: string, tokenId: string, reason: string) => Promise<void>;
   logger?: Logger;
   pluginLog?: (record: PluginServiceLogRecord) => void;
 }
@@ -91,6 +95,8 @@ interface Entry {
   stopping: boolean;
   generation: number;
   detachOutput: (() => void) | null;
+  leaseTokenId: string | null;
+  leaseRelease: Promise<void> | null;
 }
 
 export class ServiceHost {
@@ -117,6 +123,8 @@ export class ServiceHost {
         stopping: false,
         generation: 0,
         detachOutput: null,
+        leaseTokenId: null,
+        leaseRelease: null,
       };
       this.entries.set(pluginId, e);
     }
@@ -188,37 +196,56 @@ export class ServiceHost {
     const scopes = record.grantedCapabilities.filter((c): c is Scope =>
       (SERVICE_ELIGIBLE_SCOPES as readonly string[]).includes(c),
     );
-    const lease = this.cfg.tokens.mint(scopes, `plugin:${pluginId}:service`, { pluginId });
+    await e.leaseRelease;
+    e.leaseRelease = null;
+    let lease: TokenGrant;
+    try {
+      lease =
+        this.cfg.mintServiceLease !== undefined
+          ? await this.cfg.mintServiceLease(pluginId, scopes)
+          : this.cfg.tokens.mint(scopes, `plugin:${pluginId}:service`, { pluginId });
+      e.leaseTokenId = lease.tokenId;
+    } catch (error) {
+      this.setState(pluginId, e, "degraded");
+      throw error;
+    }
 
     const harness =
       this.cfg.harnessPath ?? new URL("./service-worker-harness.mjs", import.meta.url).pathname;
-    const worker = new Worker(harness, {
-      workerData: {
-        pluginId,
-        version: record.version,
-        entryPath,
-        leaseUrl: `ws://127.0.0.1:${this.cfg.controlPort()}`,
-        leaseToken: lease.token,
-        scopes: lease.scopes, // presence-gates ctx.settings/storage (§10.2)
-        logLimits: {
-          recordBytes: LOG_TRANSPORT_LIMITS.PLUGIN_RECORD_BYTES,
-          messageBytes: LOG_TRANSPORT_LIMITS.PLUGIN_MESSAGE_BYTES,
-          stringBytes: LOG_TRANSPORT_LIMITS.PLUGIN_STRING_BYTES,
-          objectDepth: LOG_TRANSPORT_LIMITS.PLUGIN_OBJECT_DEPTH,
-          objectKeys: LOG_TRANSPORT_LIMITS.PLUGIN_OBJECT_KEYS,
-          arrayItems: LOG_TRANSPORT_LIMITS.PLUGIN_ARRAY_ITEMS,
+    let worker: Worker;
+    try {
+      worker = new Worker(harness, {
+        workerData: {
+          pluginId,
+          version: record.version,
+          entryPath,
+          leaseUrl: `ws://127.0.0.1:${this.cfg.controlPort()}`,
+          leaseToken: lease.token,
+          scopes: lease.scopes, // presence-gates ctx.settings/storage (§10.2)
+          logLimits: {
+            recordBytes: LOG_TRANSPORT_LIMITS.PLUGIN_RECORD_BYTES,
+            messageBytes: LOG_TRANSPORT_LIMITS.PLUGIN_MESSAGE_BYTES,
+            stringBytes: LOG_TRANSPORT_LIMITS.PLUGIN_STRING_BYTES,
+            objectDepth: LOG_TRANSPORT_LIMITS.PLUGIN_OBJECT_DEPTH,
+            objectKeys: LOG_TRANSPORT_LIMITS.PLUGIN_OBJECT_KEYS,
+            arrayItems: LOG_TRANSPORT_LIMITS.PLUGIN_ARRAY_ITEMS,
+          },
         },
-      },
-      env: {}, // EL7 — a minimal environment, daemon secrets stripped
-      // a CLEAN node CLI for the worker: no inherited loaders/debug flags
-      // (vitest's tinypool execArgv otherwise leaks in and wedges module
-      // loading; production hygiene wants this anyway)
-      execArgv: [],
-      // worker stdio flows through the HOST's log surface — a dying worker's
-      // last words must never vanish into a parent runner's void (§23)
-      stdout: true,
-      stderr: true,
-    });
+        env: {}, // EL7 — a minimal environment, daemon secrets stripped
+        // a CLEAN node CLI for the worker: no inherited loaders/debug flags
+        // (vitest's tinypool execArgv otherwise leaks in and wedges module
+        // loading; production hygiene wants this anyway)
+        execArgv: [],
+        // worker stdio flows through the HOST's log surface — a dying worker's
+        // last words must never vanish into a parent runner's void (§23)
+        stdout: true,
+        stderr: true,
+      });
+    } catch (error) {
+      await this.releaseServiceLease(pluginId, e, "worker-construction-failed");
+      this.setState(pluginId, e, "degraded");
+      throw error;
+    }
     e.detachOutput?.();
     e.detachOutput = this.capturePluginOutput(worker, pluginId);
     e.worker = worker;
@@ -371,6 +398,7 @@ export class ServiceHost {
         e.detachOutput?.();
         e.detachOutput = null;
         e.worker = null;
+        void this.releaseServiceLease(pluginId, e, "worker-exit");
         this.failAllInflight(e, "provider gone");
         this.cfg.registry.withdrawPlugin(pluginId);
         e.unregisters.clear();
@@ -443,6 +471,7 @@ export class ServiceHost {
       e.detachOutput = null;
       e.worker = null;
     }
+    await this.releaseServiceLease(pluginId, e, "service-stop");
     this.failAllInflight(e, "provider deactivated");
     this.cfg.registry.withdrawPlugin(pluginId);
     e.unregisters.clear();
@@ -467,6 +496,28 @@ export class ServiceHost {
   private setState(pluginId: string, e: Entry, state: PublicEntryState): void {
     e.state = state;
     this.cfg.plugins.setServiceEntryState(pluginId, state);
+  }
+
+  private releaseServiceLease(pluginId: string, e: Entry, reason: string): Promise<void> {
+    const tokenId = e.leaseTokenId;
+    if (tokenId === null) return e.leaseRelease ?? Promise.resolve();
+    e.leaseTokenId = null;
+    const release = Promise.resolve(
+      this.cfg.revokeServiceLease !== undefined
+        ? this.cfg.revokeServiceLease(pluginId, tokenId, reason)
+        : this.cfg.tokens.revoke(tokenId),
+    )
+      .then(() => undefined)
+      .catch((error) => {
+        this.logger.error(
+          "fieldd.plugin_service.lease_revoke_failed",
+          "Plugin service lease revocation could not be durably audited",
+          error,
+          { pluginId, tokenId, reason },
+        );
+      });
+    e.leaseRelease = release;
+    return release;
   }
 
   /** Plugin-owned stdout/stderr must never enter system/fieldd. Consume both

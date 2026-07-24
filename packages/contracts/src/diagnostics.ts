@@ -224,12 +224,41 @@ export type AuditPrincipalV1 = z.infer<typeof AuditPrincipalV1>;
 
 export const AuditTargetV1 = z
   .object({
-    kind: z.string().min(1).max(96),
+    kind: z
+      .string()
+      .min(1)
+      .max(96)
+      .regex(/^[a-z][a-z0-9-]*$/),
     id: LogBoundedIdentityV1,
     parentId: LogBoundedIdentityV1.optional(),
   })
   .passthrough();
 export type AuditTargetV1 = z.infer<typeof AuditTargetV1>;
+
+export const AuditActionV1 = z
+  .string()
+  .min(3)
+  .max(192)
+  .regex(/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/);
+export type AuditActionV1 = z.infer<typeof AuditActionV1>;
+
+export const AuditPhaseV1 = z.enum(["attempt", "outcome"]);
+export type AuditPhaseV1 = z.infer<typeof AuditPhaseV1>;
+
+export const AuditOutcomeV1 = z.enum(["allowed", "denied", "succeeded", "failed", "cancelled"]);
+export type AuditOutcomeV1 = z.infer<typeof AuditOutcomeV1>;
+
+export const AuditIntegrityV1 = z
+  .object({
+    algorithm: z.literal("sha256-chain-v1"),
+    previousHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .nullable(),
+    recordHash: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strip();
+export type AuditIntegrityV1 = z.infer<typeof AuditIntegrityV1>;
 
 export const AuditRecordV1 = z
   .object({
@@ -237,23 +266,115 @@ export const AuditRecordV1 = z
     eventId: LogBoundedIdentityV1,
     time: LogSafeIntegerV1,
     actor: AuditPrincipalV1,
-    action: z
-      .string()
-      .min(3)
-      .max(192)
-      .regex(/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/),
+    action: AuditActionV1,
     target: AuditTargetV1,
-    phase: z.enum(["attempt", "outcome"]),
-    outcome: z.enum(["allowed", "denied", "succeeded", "failed", "cancelled"]).optional(),
-    reasonCode: z.string().min(1).max(128).optional(),
+    phase: AuditPhaseV1,
+    outcome: AuditOutcomeV1.optional(),
+    reasonCode: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Z][A-Z0-9_]*$/)
+      .optional(),
     traceId: LogBoundedIdentityV1.optional(),
     operationId: LogBoundedIdentityV1.optional(),
     sessionId: LogBoundedIdentityV1.optional(),
     transportProvenance: z.string().min(1).max(128).optional(),
     attrs: LogAttributesV1.optional(),
+    integrity: AuditIntegrityV1.optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((record, context) => {
+    if (record.phase === "attempt" && record.outcome !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["outcome"],
+        message: "attempt records cannot declare an outcome",
+      });
+    }
+    if (record.phase === "outcome" && record.outcome === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["outcome"],
+        message: "outcome records require an outcome",
+      });
+    }
+  });
 export type AuditRecordV1 = z.infer<typeof AuditRecordV1>;
+
+/** Shell-to-fieldd audit ingress. Actor, event/time, transport provenance, and
+ * integrity are intentionally absent: fieldd derives every one of them from
+ * the authenticated connection and its writer. `.strip()` discards attempts
+ * to smuggle those authority fields in as unknown keys. */
+export const AuditAppendV1 = z
+  .object({
+    action: AuditActionV1,
+    target: AuditTargetV1,
+    phase: AuditPhaseV1,
+    outcome: AuditOutcomeV1.optional(),
+    reasonCode: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Z][A-Z0-9_]*$/)
+      .optional(),
+    traceId: LogBoundedIdentityV1.optional(),
+    operationId: LogBoundedIdentityV1,
+    sessionId: LogBoundedIdentityV1.optional(),
+    attrs: LogAttributesV1.optional(),
+  })
+  .strip()
+  .superRefine((record, context) => {
+    if (record.phase === "attempt" && record.outcome !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["outcome"],
+        message: "attempt records cannot declare an outcome",
+      });
+    }
+    if (record.phase === "outcome" && record.outcome === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["outcome"],
+        message: "outcome records require an outcome",
+      });
+    }
+  });
+export type AuditAppendV1 = z.infer<typeof AuditAppendV1>;
+
+export const AuditAppendResultV1 = z
+  .object({
+    v: LogSchemaVersionV1,
+    eventId: LogBoundedIdentityV1,
+    time: LogSafeIntegerV1,
+    operationId: LogBoundedIdentityV1,
+    durable: z.literal(true),
+  })
+  .strip();
+export type AuditAppendResultV1 = z.infer<typeof AuditAppendResultV1>;
+
+export const AuditHealthV1 = z
+  .object({
+    v: LogSchemaVersionV1,
+    state: z.enum(["healthy", "degraded", "closed"]),
+    records: LogSafeIntegerV1,
+    bytes: LogSafeIntegerV1,
+    syncs: LogSafeIntegerV1,
+    openSegments: LogSafeIntegerV1,
+    pendingRecoveryMarkers: LogSafeIntegerV1,
+    integrityFailures: LogSafeIntegerV1,
+    lastSuccessAt: LogSafeIntegerV1.optional(),
+    lastFailure: z
+      .object({
+        time: LogSafeIntegerV1,
+        operation: z.enum(["root", "open", "write", "sync", "checkpoint", "close"]),
+        code: z.string().min(1).max(64),
+      })
+      .strip()
+      .optional(),
+  })
+  .strip();
+export type AuditHealthV1 = z.infer<typeof AuditHealthV1>;
 
 export const SupportBundleFileV1 = z
   .object({

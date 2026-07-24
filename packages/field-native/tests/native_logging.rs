@@ -11,7 +11,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::time::timeout;
@@ -49,6 +49,14 @@ impl NativeProcess {
             .try_wait()
             .expect("query child")
             .is_none()
+    }
+
+    fn exited_output(&mut self) -> Output {
+        self.child
+            .take()
+            .expect("child available")
+            .wait_with_output()
+            .expect("collect exited field-native output")
     }
 
     async fn terminate(mut self) -> Output {
@@ -138,7 +146,15 @@ async fn wait_for_native(data_dir: &Path, process: &mut NativeProcess) -> PathBu
     let socket = data_dir.join("native/run/mgmt.sock");
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        assert!(process.is_running(), "field-native exited before readiness");
+        if !process.is_running() {
+            let output = process.exited_output();
+            panic!(
+                "field-native exited before readiness: status={}; stdout={}; stderr={}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
         if socket.exists()
             && data_dir.join("native/pairing").exists()
             && UnixStream::connect(&socket).await.is_ok()
@@ -216,6 +232,69 @@ async fn fieldd_link_death_does_not_stop_native_evidence_or_diagnostics() {
         .unwrap()
         .iter()
         .any(|record| record["event"] == "field_native.lifecycle.boot_started"));
+
+    let lease_created_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    first
+        .send(json!({
+            "jsonrpc":"2.0",
+            "id":20,
+            "method":"native.diagnostics.lease.create",
+            "params":{"lease":{
+                "v":1,
+                "leaseId":"lease-native-production-test",
+                "selector":{"kind":"service","service":"field-native"},
+                "level":"debug",
+                "createdAt":lease_created_at,
+                "expiresAt":lease_created_at + 60_000,
+                "createdBy":{"kind":"shell-main","id":"fieldd-production-test"}
+            }}
+        }))
+        .await;
+    assert_eq!(
+        first.receive().await["result"]["leaseId"],
+        "lease-native-production-test"
+    );
+    first
+        .send(json!({
+            "jsonrpc":"2.0",
+            "id":21,
+            "method":"native.diagnostics.lease.list",
+            "params":{}
+        }))
+        .await;
+    assert_eq!(
+        first.receive().await["result"]["leases"][0]["leaseId"],
+        "lease-native-production-test"
+    );
+    first
+        .send(json!({
+            "jsonrpc":"2.0",
+            "id":22,
+            "method":"native.diagnostics.query",
+            "params":diagnostic_query()
+        }))
+        .await;
+    let leased_health = first.receive().await;
+    assert_eq!(
+        leased_health["result"]["producers"][0]["health"]["currentLevel"],
+        "debug"
+    );
+    assert_eq!(
+        leased_health["result"]["producers"][0]["health"]["activeLeaseCount"],
+        1
+    );
+    first
+        .send(json!({
+            "jsonrpc":"2.0",
+            "id":23,
+            "method":"native.diagnostics.lease.revoke",
+            "params":{"leaseId":"lease-native-production-test"}
+        }))
+        .await;
+    assert_eq!(first.receive().await["result"]["revoked"], true);
 
     first
         .send(json!({
