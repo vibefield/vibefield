@@ -547,6 +547,70 @@ describe("node logging writer lifecycle", () => {
     await service.close();
   });
 
+  it("streams predicate-aware deltas without skipping filtered or backlogged records", async () => {
+    const logRoot = await root();
+    const service = await logging(logRoot, {
+      buffers: { ringRecords: 4, ringBytes: 16 * 1024 },
+    });
+    let updates = 0;
+    const unsubscribe = service.subscribeUpdates(() => {
+      updates += 1;
+    });
+    for (let index = 1; index <= 4; index += 1) {
+      service.logger.info("fieldd.test.delta", `record ${index}`, { index });
+    }
+
+    const first = service.readSince(0, 1, (record) => Number(record.attrs?.["index"]) % 2 === 0);
+    expect(first.records.map((record) => record.attrs?.["index"])).toEqual([2]);
+    expect(first.cursor).toBe(2);
+    expect(first.hasMore).toBe(true);
+
+    const second = service.readSince(
+      first.cursor,
+      1,
+      (record) => Number(record.attrs?.["index"]) % 2 === 0,
+    );
+    expect(second.records.map((record) => record.attrs?.["index"])).toEqual([4]);
+    expect(second.cursor).toBe(4);
+    expect(second.hasMore).toBe(false);
+    expect(updates).toBe(4);
+    unsubscribe();
+  });
+
+  it("enforces component diagnostic leases at the producer and expires them", async () => {
+    const logRoot = await root();
+    let now = 1_000;
+    const service = await logging(logRoot, { now: () => now });
+    const target = service.logger.child({ component: "docs.fold" });
+    const other = service.logger.child({ component: "mesh.reconcile" });
+
+    target.debug("fieldd.test.before_lease", "not admitted");
+    service.replaceDiagnosticLeases([
+      {
+        v: 1,
+        leaseId: "lease-1",
+        selector: { kind: "component", service: "fieldd", component: "docs.fold" },
+        level: "debug",
+        createdAt: now,
+        expiresAt: 2_000,
+        createdBy: { kind: "shell-main", id: "test" },
+      },
+    ]);
+    expect(target.isLevelEnabled("debug")).toBe(true);
+    expect(other.isLevelEnabled("debug")).toBe(false);
+    target.debug("fieldd.test.during_lease", "admitted");
+    other.debug("fieldd.test.wrong_component", "not admitted");
+    expect(service.health().activeLeaseCount).toBe(1);
+
+    now = 2_001;
+    expect(target.isLevelEnabled("debug")).toBe(false);
+    target.debug("fieldd.test.after_lease", "not admitted");
+    expect(service.health().activeLeaseCount).toBe(0);
+    expect(service.recent().records.map((record) => record.event)).toEqual([
+      "fieldd.test.during_lease",
+    ]);
+  });
+
   it("does not follow an unsafe active-file symlink", async () => {
     if (process.platform === "win32") return;
     const logRoot = await root();

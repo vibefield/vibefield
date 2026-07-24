@@ -22,6 +22,9 @@ export const DocRegistryEntry = z
     sizeBytes: z.number().int(),
     /** tombstone (doc.delete is deferred; the field is contract-stable now). */
     deletedAt: z.number().int().optional(),
+    /** P7/D29 — system docs (the settings doc) are hidden from every doc
+     * picker and never enter last-open/most-recent launch decisions. */
+    system: z.boolean().optional(),
   })
   .passthrough();
 export type DocRegistryEntry = z.infer<typeof DocRegistryEntry>;

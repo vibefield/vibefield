@@ -58,6 +58,11 @@ function captureSink(records: TrustedLogIngress[]): NodeLogging {
     recent: () => {
       throw new Error("not used");
     },
+    readSince: () => {
+      throw new Error("not used");
+    },
+    subscribeUpdates: () => () => undefined,
+    replaceDiagnosticLeases() {},
     setLevel() {},
     flush: () => Promise.resolve(),
     close: () => Promise.resolve(),

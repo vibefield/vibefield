@@ -1,3 +1,4 @@
+export { diagnosticRecordMatches, readLogHistory } from "./history-reader";
 export {
   FIRST_PARTY_BUFFERS,
   FIRST_PARTY_RETENTION,
@@ -23,6 +24,8 @@ export {
 export { serializeError } from "./sanitize";
 export type {
   CreateNodeLoggingOptions,
+  HistoricalLogPage,
+  HistoricalLogReadOptions,
   LogBufferLimits,
   LogFields,
   Logger,
@@ -31,6 +34,7 @@ export type {
   LogSanitizerAliases,
   NodeLogging,
   NodeLoggingTestHooks,
+  RecentLogDelta,
   RecentLogSnapshot,
   TrustedLogIngress,
 } from "./types";

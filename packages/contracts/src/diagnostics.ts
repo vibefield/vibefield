@@ -56,6 +56,16 @@ export const DiagnosticLogSnapshotV1 = z
     records: z.array(LogRecordV1).max(2_000),
     nextCursor: DiagnosticCursorV1,
     droppedBefore: LogSafeIntegerV1,
+    history: z
+      .object({
+        scannedBytes: LogSafeIntegerV1,
+        scannedSegments: LogSafeIntegerV1,
+        parseFailures: LogSafeIntegerV1,
+        skippedUnsafeSegments: LogSafeIntegerV1,
+        truncated: z.boolean(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough()
   .describe("vibefield.diagnostics.contract.v1");
@@ -134,6 +144,34 @@ export const DiagnosticLeaseV1 = z
   })
   .passthrough();
 export type DiagnosticLeaseV1 = z.infer<typeof DiagnosticLeaseV1>;
+
+export const DiagnosticLeaseDurationV1 = z.enum(["15m", "1h", "until-restart"]);
+export type DiagnosticLeaseDurationV1 = z.infer<typeof DiagnosticLeaseDurationV1>;
+
+export const DiagnosticLeaseCreateV1 = z
+  .object({
+    selector: DiagnosticLeaseSelectorV1,
+    level: z.enum(["trace", "debug", "info", "warn", "error"]),
+    duration: DiagnosticLeaseDurationV1,
+  })
+  .strip();
+export type DiagnosticLeaseCreateV1 = z.infer<typeof DiagnosticLeaseCreateV1>;
+
+export const DiagnosticLeaseListV1 = z
+  .object({
+    v: LogSchemaVersionV1,
+    observedAt: LogSafeIntegerV1,
+    leases: z.array(DiagnosticLeaseV1).max(256),
+  })
+  .passthrough();
+export type DiagnosticLeaseListV1 = z.infer<typeof DiagnosticLeaseListV1>;
+
+export const DiagnosticLeaseRevokeV1 = z
+  .object({
+    leaseId: LogBoundedIdentityV1,
+  })
+  .strip();
+export type DiagnosticLeaseRevokeV1 = z.infer<typeof DiagnosticLeaseRevokeV1>;
 
 export const AuditPrincipalV1 = z
   .object({

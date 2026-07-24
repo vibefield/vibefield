@@ -87,6 +87,45 @@ export const METHODS: MethodDef[] = [
     locality: "local",
   }),
 
+  // LOG-L5 — trusted local diagnostics. These scopes are absent from every
+  // tailnet/plugin/MCP preset; Electron mints them only for its host viewer.
+  defineMethod({
+    surface: "product",
+    method: "diagnostics.query",
+    scope: "diagnostics.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "diagnostics.subscribe",
+    scope: "diagnostics.read",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "diagnostics.lease.create",
+    scope: "diagnostics.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "diagnostics.lease.list",
+    scope: "diagnostics.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "diagnostics.lease.revoke",
+    scope: "diagnostics.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+
   // M2 — management channel (auth = D8 pairing hello; no scope system on this surface)
   defineMethod({
     surface: "mgmt",
@@ -520,6 +559,47 @@ export const METHODS: MethodDef[] = [
     method: "plugins.grants.set",
     scope: "plugins.manage",
     idempotent: true,
+    locality: "local",
+  }),
+
+  // PLUG-P7 — distribution (§5.3.1/§22.1) + the D29′ undo surface. Install
+  // mutations are plugins.manage; fetches are user-initiated only (no push
+  // feed, no phone-home — §5.3.1). undo/redo are scope:null with the P5
+  // caller matrix (plugin principals self-scoped; the pane path needs
+  // plugins.manage) and NEVER touch grants or the install-set (D29′ law 2).
+  defineMethod({
+    surface: "product",
+    method: "plugins.install",
+    scope: "plugins.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.uninstall",
+    scope: "plugins.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.updates.check",
+    scope: "plugins.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.settings.undo",
+    scope: null,
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.settings.redo",
+    scope: null,
+    idempotent: false,
     locality: "local",
   }),
 ];

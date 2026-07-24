@@ -281,6 +281,9 @@ importers:
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
+      loro-crdt:
+        specifier: ^1.13.6
+        version: 1.13.7
       ws:
         specifier: ^8.18.0
         version: 8.21.1

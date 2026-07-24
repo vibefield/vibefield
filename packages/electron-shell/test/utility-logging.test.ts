@@ -29,6 +29,11 @@ function sink(records: TrustedLogIngress[]): NodeLogging {
     recent: () => {
       throw new Error("not used");
     },
+    readSince: () => {
+      throw new Error("not used");
+    },
+    subscribeUpdates: () => () => undefined,
+    replaceDiagnosticLeases: () => undefined,
     setLevel: () => undefined,
     flush: () => Promise.resolve(),
     close: () => Promise.resolve(),

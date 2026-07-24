@@ -23,6 +23,13 @@ registerHooks({
     try {
       return nextResolve(specifier, context);
     } catch (error) {
+      // PA-36/§11.6 — the SDK runtime is a HOST-provided singleton: an
+      // INSTALLED artifact (unpacked .vfplugin, no node_modules above it)
+      // imports it bare, and the harness binds it to the daemon's own copy.
+      // This is the worker half of the singleton law, not a fallback hack.
+      if (specifier === "@vibefield/plugin-sdk" || specifier.startsWith("@vibefield/plugin-sdk/")) {
+        return nextResolve(specifier, { ...context, parentURL: import.meta.url });
+      }
       if (
         (specifier.startsWith("./") || specifier.startsWith("../")) &&
         !specifier.endsWith(".ts") &&

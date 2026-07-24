@@ -45,7 +45,8 @@ export type Handler = (ctx: CallerContext, params: unknown) => Promise<unknown> 
 export type SubscriptionHandler = (
   ctx: CallerContext,
   params: unknown,
-  emit: (payload: unknown) => void,
+  /** A producer reboot may replace the stream with a fresh snapshot. */
+  emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
 ) =>
   | { snapshot: unknown; dispose: () => void }
   | Promise<{ snapshot: unknown; dispose: () => void }>;
@@ -493,12 +494,12 @@ export class ProductApi extends EventEmitter {
       const subId = `ps-${this.nextSubId++}`;
       const base = method.replace(/\.subscribe$/, "");
       let active = true;
-      const emit = (payload: unknown) => {
+      const emit = (payload: unknown, kind: "delta" | "snapshot" = "delta") => {
         if (active && ws.readyState === WS_OPEN)
           ws.send(
             JSON.stringify({
               jsonrpc: "2.0",
-              method: `${base}.delta`,
+              method: `${base}.${kind}`,
               params: { subId, payload },
             }),
           );

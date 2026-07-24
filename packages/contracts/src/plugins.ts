@@ -826,7 +826,10 @@ export interface EffectiveGrantsInput {
   requested: readonly string[];
   hasRenderer: boolean;
   hasService: boolean;
-  source: "bundled" | "dev-linked";
+  /** v1 source policy grants every source its requests (bundled/registry are
+   * reviewed presets §15.3; dev-linked/sideload are developer-mode explicit
+   * visibility) — the ceiling hook lands as data with rung policy (§20.5). */
+  source: "bundled" | "dev-linked" | "registry" | "sideload";
   /** device-local persisted decisions; `false` is an explicit revocation,
    * absent/true means granted (v1 default-grant with UX visibility — §15.3) */
   persisted?: Readonly<Record<string, boolean>>;

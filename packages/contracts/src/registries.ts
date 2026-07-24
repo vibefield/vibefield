@@ -86,6 +86,8 @@ export const LOG_TRANSPORT_LIMITS = {
   PLUGIN_RATE_BURST: 100,
   PLUGIN_RATE_HIGH_SEVERITY_RESERVE: 20,
   PLUGIN_RATE_TRACKED_ENTRIES: 1_024,
+  DIAGNOSTIC_PORT_REQUEST_BYTES: 64 * 1024,
+  DIAGNOSTIC_PORT_RESPONSE_BYTES: 8 * 1024 * 1024,
 } as const;
 
 /** Every grantable capability (design-01 §7 + design-03 §8 + design-04). */
@@ -154,7 +156,7 @@ export const SOCKETS = {
   MESHDATA: "meshdata.sock",
 } as const;
 
-/** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4): four channels, nothing
+/** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): five channels, nothing
  * else. Payload schemas live in shell.ts; call sites import these names — a raw
  * `vibefield:` literal outside contracts is a boundary violation (wall R6). */
 export const IPC_CHANNELS = {
@@ -166,4 +168,6 @@ export const IPC_CHANNELS = {
   closeResult: "vibefield:shell:close-result",
   /** main → preload, one transferred MessagePort per WebContents generation */
   rendererLogPort: "vibefield:logging:renderer-port",
+  /** main ↔ preload, one host-only diagnostics MessagePort per generation */
+  diagnosticsPort: "vibefield:diagnostics:host-port",
 } as const;

@@ -1,5 +1,5 @@
 import type { LogRecordV1 } from "@vibefield/contracts/logging";
-import type { RecentLogSnapshot } from "./types";
+import type { RecentLogDelta, RecentLogSnapshot } from "./types";
 
 interface RingEntry {
   cursor: number;
@@ -46,6 +46,37 @@ export class BoundedLogRing {
       oldestCursor: selected[0]?.cursor ?? this.cursor,
       newestCursor: selected.at(-1)?.cursor ?? this.cursor,
       droppedBefore: this.droppedBefore,
+    };
+  }
+
+  readSince(
+    afterCursor: number,
+    limit = this.capacityRecords,
+    predicate: (record: LogRecordV1) => boolean = () => true,
+  ): RecentLogDelta {
+    const bounded = Math.max(0, Math.min(limit, this.capacityRecords));
+    const oldest = this.entries[0]?.cursor ?? this.cursor + 1;
+    const droppedSincePrevious = Math.max(0, oldest - (afterCursor + 1));
+    let scannedCursor = Math.max(afterCursor, oldest - 1);
+    const records: LogRecordV1[] = [];
+    let hasMore = false;
+
+    for (const entry of this.entries) {
+      if (entry.cursor <= afterCursor) continue;
+      if (records.length >= bounded) {
+        hasMore = true;
+        break;
+      }
+      scannedCursor = entry.cursor;
+      if (predicate(entry.record)) records.push(structuredClone(entry.record));
+    }
+
+    if (!hasMore) scannedCursor = this.cursor;
+    return {
+      records,
+      cursor: scannedCursor,
+      droppedSincePrevious,
+      hasMore,
     };
   }
 

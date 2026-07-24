@@ -1214,6 +1214,34 @@
         },
         "droppedBefore": {
           "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "history": {
+          "type": "object",
+          "properties": {
+            "scannedBytes": {
+              "$ref": "#/definitions/LogSafeIntegerV1"
+            },
+            "scannedSegments": {
+              "$ref": "#/definitions/LogSafeIntegerV1"
+            },
+            "parseFailures": {
+              "$ref": "#/definitions/LogSafeIntegerV1"
+            },
+            "skippedUnsafeSegments": {
+              "$ref": "#/definitions/LogSafeIntegerV1"
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "scannedBytes",
+            "scannedSegments",
+            "parseFailures",
+            "skippedUnsafeSegments",
+            "truncated"
+          ],
+          "additionalProperties": true
         }
       },
       "required": [

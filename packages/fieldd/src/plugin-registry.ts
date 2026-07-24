@@ -12,6 +12,7 @@ import {
   type PluginRecord,
   type PluginRegistryProblem,
   type PluginRegistrySnapshot,
+  RegistryProvenance,
   SemverString,
   validatePluginManifest,
 } from "@vibefield/contracts";
@@ -35,8 +36,10 @@ import { RpcCallError } from "./native-link";
 
 export interface PluginRegistryConfig {
   dataDir: string;
-  /** dirs whose CHILDREN are plugin dirs (each child holds vibefield.plugin.json) */
-  roots: { bundled: string[]; devLinked: string[] };
+  /** dirs whose CHILDREN are plugin dirs (each child holds vibefield.plugin.json).
+   * P7 — `installed` is the registry-install root (source:"registry"); its
+   * children carry a `.vf-registry.json` provenance sidecar (§6.3). */
+  roots: { bundled: string[]; devLinked: string[]; installed?: string[] };
 }
 
 interface InstallRecordsFile {
@@ -125,10 +128,14 @@ export class PluginRegistryService extends EventEmitter {
     const nextDecls = new Map<string, PluginManifestV1["contributes"]>();
     const problems: PluginRegistryProblem[] = [];
 
-    // bundled roots scan first — no source may shadow a bundled id (§9.1)
-    const walks: Array<{ source: "bundled" | "dev-linked"; root: string }> = [
+    // bundled roots scan first — no source may shadow a bundled id (§9.1).
+    // dev links outrank registry installs of the SAME id: a dev link exists
+    // only in developer mode and is the developer's deliberate local override
+    // of the published copy (the working-on-my-own-plugin loop).
+    const walks: Array<{ source: "bundled" | "dev-linked" | "registry"; root: string }> = [
       ...this.cfg.roots.bundled.map((root) => ({ source: "bundled" as const, root })),
       ...this.cfg.roots.devLinked.map((root) => ({ source: "dev-linked" as const, root })),
+      ...(this.cfg.roots.installed ?? []).map((root) => ({ source: "registry" as const, root })),
     ];
     for (const { source, root } of walks) {
       let children: string[];
@@ -174,9 +181,23 @@ export class PluginRegistryService extends EventEmitter {
           });
           continue;
         }
-        const row = this.buildRow(parsed, raw, source, records, (id, contributes) =>
+        let row = this.buildRow(parsed, raw, source, records, (id, contributes) =>
           nextDecls.set(id, contributes),
         );
+        if (row !== null && source === "registry") {
+          // §6.3 — verified provenance rides a fieldd-written sidecar; a
+          // missing/invalid sidecar leaves the row provenance-less (visible
+          // in the manager as an anomaly, never fatal)
+          try {
+            const sidecar = JSON.parse(
+              await readFile(join(root, dir, ".vf-registry.json"), "utf8"),
+            );
+            const prov = RegistryProvenance.safeParse(sidecar);
+            if (prov.success) row = { ...row, registry: prov.data };
+          } catch {
+            // absent sidecar — the honest state is simply no provenance block
+          }
+        }
         if (row === null) {
           problems.push({
             root: dir,
@@ -220,7 +241,7 @@ export class PluginRegistryService extends EventEmitter {
   private buildRow(
     parsed: unknown,
     raw: string,
-    source: "bundled" | "dev-linked",
+    source: "bundled" | "dev-linked" | "registry",
     records: InstallRecordsFile,
     collectContributes?: (id: string, contributes: PluginManifestV1["contributes"]) => void,
   ): PluginRecord | null {

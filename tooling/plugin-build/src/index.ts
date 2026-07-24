@@ -5,3 +5,6 @@
 export * from "./canonical";
 export * from "./emit";
 export * from "./externals";
+export * from "./fixture-registry";
+export * from "./pack";
+export * from "./registry-sign";

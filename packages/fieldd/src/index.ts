@@ -2,6 +2,10 @@
 export { bootstrap, type FielddConfig, type FielddDaemon, type FielddHealth } from "./daemon";
 export { DeviceService, type DeviceServiceOptions } from "./device-service";
 export {
+  DiagnosticsService,
+  type DiagnosticsServiceOptions,
+} from "./diagnostics-service";
+export {
   type DocOpenGrant,
   type DocServiceHealth,
   DocumentService,

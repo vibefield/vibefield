@@ -399,6 +399,34 @@ impl DiagnosticLogDeltaV1 {
 #[doc = "    \"droppedBefore\": {"]
 #[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
 #[doc = "    },"]
+#[doc = "    \"history\": {"]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"required\": ["]
+#[doc = "        \"parseFailures\","]
+#[doc = "        \"scannedBytes\","]
+#[doc = "        \"scannedSegments\","]
+#[doc = "        \"skippedUnsafeSegments\","]
+#[doc = "        \"truncated\""]
+#[doc = "      ],"]
+#[doc = "      \"properties\": {"]
+#[doc = "        \"parseFailures\": {"]
+#[doc = "          \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "        },"]
+#[doc = "        \"scannedBytes\": {"]
+#[doc = "          \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "        },"]
+#[doc = "        \"scannedSegments\": {"]
+#[doc = "          \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "        },"]
+#[doc = "        \"skippedUnsafeSegments\": {"]
+#[doc = "          \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "        },"]
+#[doc = "        \"truncated\": {"]
+#[doc = "          \"type\": \"boolean\""]
+#[doc = "        }"]
+#[doc = "      },"]
+#[doc = "      \"additionalProperties\": true"]
+#[doc = "    },"]
 #[doc = "    \"nextCursor\": {"]
 #[doc = "      \"$ref\": \"#/definitions/DiagnosticCursorV1\""]
 #[doc = "    },"]
@@ -428,6 +456,8 @@ impl DiagnosticLogDeltaV1 {
 pub struct DiagnosticLogSnapshotV1 {
     #[serde(rename = "droppedBefore")]
     pub dropped_before: LogSafeIntegerV1,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub history: ::std::option::Option<DiagnosticLogSnapshotV1History>,
     #[serde(rename = "nextCursor")]
     pub next_cursor: DiagnosticCursorV1,
     pub producers: ::std::vec::Vec<DiagnosticProducerStateV1>,
@@ -436,6 +466,58 @@ pub struct DiagnosticLogSnapshotV1 {
 }
 impl DiagnosticLogSnapshotV1 {
     pub fn builder() -> builder::DiagnosticLogSnapshotV1 {
+        Default::default()
+    }
+}
+#[doc = "`DiagnosticLogSnapshotV1History`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"parseFailures\","]
+#[doc = "    \"scannedBytes\","]
+#[doc = "    \"scannedSegments\","]
+#[doc = "    \"skippedUnsafeSegments\","]
+#[doc = "    \"truncated\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"parseFailures\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"scannedBytes\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"scannedSegments\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"skippedUnsafeSegments\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
+#[doc = "    \"truncated\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct DiagnosticLogSnapshotV1History {
+    #[serde(rename = "parseFailures")]
+    pub parse_failures: LogSafeIntegerV1,
+    #[serde(rename = "scannedBytes")]
+    pub scanned_bytes: LogSafeIntegerV1,
+    #[serde(rename = "scannedSegments")]
+    pub scanned_segments: LogSafeIntegerV1,
+    #[serde(rename = "skippedUnsafeSegments")]
+    pub skipped_unsafe_segments: LogSafeIntegerV1,
+    pub truncated: bool,
+}
+impl DiagnosticLogSnapshotV1History {
+    pub fn builder() -> builder::DiagnosticLogSnapshotV1History {
         Default::default()
     }
 }
@@ -5222,6 +5304,10 @@ pub mod builder {
     #[derive(Clone, Debug)]
     pub struct DiagnosticLogSnapshotV1 {
         dropped_before: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        history: ::std::result::Result<
+            ::std::option::Option<super::DiagnosticLogSnapshotV1History>,
+            ::std::string::String,
+        >,
         next_cursor: ::std::result::Result<super::DiagnosticCursorV1, ::std::string::String>,
         producers: ::std::result::Result<
             ::std::vec::Vec<super::DiagnosticProducerStateV1>,
@@ -5234,6 +5320,7 @@ pub mod builder {
         fn default() -> Self {
             Self {
                 dropped_before: Err("no value supplied for dropped_before".to_string()),
+                history: Ok(Default::default()),
                 next_cursor: Err("no value supplied for next_cursor".to_string()),
                 producers: Err("no value supplied for producers".to_string()),
                 records: Err("no value supplied for records".to_string()),
@@ -5250,6 +5337,18 @@ pub mod builder {
             self.dropped_before = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for dropped_before: {e}"));
+            self
+        }
+        pub fn history<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<
+                ::std::option::Option<super::DiagnosticLogSnapshotV1History>,
+            >,
+            T::Error: ::std::fmt::Display,
+        {
+            self.history = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for history: {e}"));
             self
         }
         pub fn next_cursor<T>(mut self, value: T) -> Self
@@ -5300,6 +5399,7 @@ pub mod builder {
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 dropped_before: value.dropped_before?,
+                history: value.history?,
                 next_cursor: value.next_cursor?,
                 producers: value.producers?,
                 records: value.records?,
@@ -5311,10 +5411,114 @@ pub mod builder {
         fn from(value: super::DiagnosticLogSnapshotV1) -> Self {
             Self {
                 dropped_before: Ok(value.dropped_before),
+                history: Ok(value.history),
                 next_cursor: Ok(value.next_cursor),
                 producers: Ok(value.producers),
                 records: Ok(value.records),
                 v: Ok(value.v),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct DiagnosticLogSnapshotV1History {
+        parse_failures: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        scanned_bytes: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        scanned_segments: ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        skipped_unsafe_segments:
+            ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
+        truncated: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for DiagnosticLogSnapshotV1History {
+        fn default() -> Self {
+            Self {
+                parse_failures: Err("no value supplied for parse_failures".to_string()),
+                scanned_bytes: Err("no value supplied for scanned_bytes".to_string()),
+                scanned_segments: Err("no value supplied for scanned_segments".to_string()),
+                skipped_unsafe_segments: Err(
+                    "no value supplied for skipped_unsafe_segments".to_string()
+                ),
+                truncated: Err("no value supplied for truncated".to_string()),
+            }
+        }
+    }
+    impl DiagnosticLogSnapshotV1History {
+        pub fn parse_failures<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.parse_failures = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for parse_failures: {e}"));
+            self
+        }
+        pub fn scanned_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.scanned_bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for scanned_bytes: {e}"));
+            self
+        }
+        pub fn scanned_segments<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.scanned_segments = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for scanned_segments: {e}"));
+            self
+        }
+        pub fn skipped_unsafe_segments<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::LogSafeIntegerV1>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.skipped_unsafe_segments = value.try_into().map_err(|e| {
+                format!("error converting supplied value for skipped_unsafe_segments: {e}")
+            });
+            self
+        }
+        pub fn truncated<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.truncated = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for truncated: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<DiagnosticLogSnapshotV1History>
+        for super::DiagnosticLogSnapshotV1History
+    {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: DiagnosticLogSnapshotV1History,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                parse_failures: value.parse_failures?,
+                scanned_bytes: value.scanned_bytes?,
+                scanned_segments: value.scanned_segments?,
+                skipped_unsafe_segments: value.skipped_unsafe_segments?,
+                truncated: value.truncated?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::DiagnosticLogSnapshotV1History>
+        for DiagnosticLogSnapshotV1History
+    {
+        fn from(value: super::DiagnosticLogSnapshotV1History) -> Self {
+            Self {
+                parse_failures: Ok(value.parse_failures),
+                scanned_bytes: Ok(value.scanned_bytes),
+                scanned_segments: Ok(value.scanned_segments),
+                skipped_unsafe_segments: Ok(value.skipped_unsafe_segments),
+                truncated: Ok(value.truncated),
             }
         }
     }

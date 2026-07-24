@@ -1,4 +1,4 @@
-import type { SettingsContribution } from "@vibefield/contracts";
+import type { SettingsContribution, SettingsUndoResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
 import { labelCls } from "./SettingsPanel";
@@ -63,10 +63,14 @@ function SettingRow({
   pluginId,
   settingKey,
   prop,
+  externalReload,
 }: {
   pluginId: string;
   settingKey: string;
   prop: SettingsContribution["properties"][string];
+  /** bumped by the form after an undo/redo applies — the doc changed under us,
+   * so every row re-gets its key (no optimistic state; the daemon is truth). */
+  externalReload: number;
 }): ReactElement {
   const client = useFielddClient();
   const schema = prop.schema as SchemaView;
@@ -115,7 +119,8 @@ function SettingRow({
       cancelled = true;
     };
     // schema/kind/options derive from `prop`; keying on prop covers a schema swap.
-  }, [client, pluginId, settingKey, prop, kind, reloadNonce, schema.default]);
+    // externalReload re-gets after an undo/redo mutates the doc out-of-band.
+  }, [client, pluginId, settingKey, prop, kind, reloadNonce, externalReload, schema.default]);
 
   const commit = async (v: unknown) => {
     setBusy(true);
@@ -283,6 +288,88 @@ function SettingRow({
   );
 }
 
+// D29′ UI — the settings undo/redo affordance (spec §16.6 D29′ + design-03 §7.2).
+// Compact undo/redo over storage.settings.undo/redo {pluginId} (per-peer Loro
+// local-undo — your ops, remote edits preserved). Three laws surfaced honestly:
+//  - law 1 (honest partial coverage): undo covers USER-scope keys ONLY; the row
+//    says so, and when a plugin declares no user-scope key the affordance reads
+//    "no user-scope keys to undo" and stays disabled (the form knows each scope);
+//  - law 2 (undo never re-escalates): grants/install-set live OUTSIDE the stack —
+//    not this form's concern (it only touches settings values), but a server
+//    "not-undoable" outcome still renders honestly rather than as a silent no-op;
+//  - law 3 (bounded reach): reason "horizon" reads "history horizon reached".
+// No optimistic state — an applied undo bumps the form's reload nonce so every
+// row re-gets from the daemon (DESIGN.md §9: say the truth with the real value).
+// No ⌘Z global this slice (pane-focus routing is a later nicety).
+
+/** §16.6 D29′ outcomes → one honest line each (DESIGN.md §9). */
+function undoReason(dir: "undo" | "redo", reason: SettingsUndoResult["reason"]): string {
+  if (reason === "horizon") return "history horizon reached";
+  if (reason === "not-undoable") return "not undoable";
+  return dir === "undo" ? "nothing to undo" : "nothing to redo";
+}
+
+function SettingsUndo({
+  pluginId,
+  hasUserScope,
+  onApplied,
+}: {
+  pluginId: string;
+  hasUserScope: boolean;
+  onApplied: () => void;
+}): ReactElement {
+  const client = useFielddClient();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const run = async (dir: "undo" | "redo") => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = (await client.request(`storage.settings.${dir}`, {
+        pluginId,
+      })) as SettingsUndoResult;
+      if (res.applied) {
+        setNote(null);
+        onApplied(); // the doc changed under us — re-get every row
+      } else {
+        setNote(undoReason(dir, res.reason));
+      }
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const status = note ?? (hasUserScope ? "covers user-scope keys only" : "no user-scope keys");
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="flex flex-none items-center gap-2">
+        <button
+          type="button"
+          disabled={busy || !hasUserScope}
+          onClick={() => void run("undo")}
+          className={`flex-none ${labelCls} hover:text-neutral-600 disabled:opacity-40 dark:hover:text-neutral-300`}
+        >
+          undo
+        </button>
+        <button
+          type="button"
+          disabled={busy || !hasUserScope}
+          onClick={() => void run("redo")}
+          className={`flex-none ${labelCls} hover:text-neutral-600 disabled:opacity-40 dark:hover:text-neutral-300`}
+        >
+          redo
+        </button>
+      </span>
+      <span className={`min-w-0 truncate text-right ${labelCls}`} title={status}>
+        {status}
+      </span>
+    </div>
+  );
+}
+
 export function PluginSettingsForm({
   pluginId,
   properties,
@@ -291,14 +378,31 @@ export function PluginSettingsForm({
   properties: SettingsContribution["properties"];
 }): ReactElement {
   const entries = Object.entries(properties);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  // The form knows each key's scope (§16.6 D29′ law 1): undo reaches user-scope
+  // keys only — device/secret keys are never on the stack.
+  const hasUserScope = entries.some(([, prop]) => prop.scope === "user");
   return (
     <div className="mt-1.5 space-y-1.5 border-l border-neutral-100 pl-2 dark:border-neutral-700">
       {entries.length === 0 ? (
         <div className={labelCls}>no settings</div>
       ) : (
-        entries.map(([k, prop]) => (
-          <SettingRow key={k} pluginId={pluginId} settingKey={k} prop={prop} />
-        ))
+        <>
+          <SettingsUndo
+            pluginId={pluginId}
+            hasUserScope={hasUserScope}
+            onApplied={() => setReloadNonce((n) => n + 1)}
+          />
+          {entries.map(([k, prop]) => (
+            <SettingRow
+              key={k}
+              pluginId={pluginId}
+              settingKey={k}
+              prop={prop}
+              externalReload={reloadNonce}
+            />
+          ))}
+        </>
       )}
     </div>
   );

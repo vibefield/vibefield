@@ -136,6 +136,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "prepareClose",
       "closeResult",
       "rendererLogPort",
+      "diagnosticsPort",
     ]);
   });
 
@@ -145,6 +146,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       prepareClose: "vibefield:shell:prepare-close",
       closeResult: "vibefield:shell:close-result",
       rendererLogPort: "vibefield:logging:renderer-port",
+      diagnosticsPort: "vibefield:diagnostics:host-port",
     });
   });
 });

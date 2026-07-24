@@ -1,6 +1,10 @@
 import { isAbsolute } from "node:path";
 import { LOG_STREAMS } from "@vibefield/contracts";
 import {
+  type DiagnosticLeaseV1 as DiagnosticLease,
+  DiagnosticLeaseV1,
+} from "@vibefield/contracts/diagnostics";
+import {
   type LoggingHealthV1 as LoggingHealth,
   LoggingHealthV1,
   type LogLevelNameV1,
@@ -44,6 +48,24 @@ interface QueuedLine {
 }
 
 type FailureKind = NonNullable<LoggingHealth["lastFailure"]>["kind"];
+
+const LEVEL_NUMBER: Readonly<Record<LogLevelNameV1, number>> = {
+  trace: 10,
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  fatal: 60,
+};
+
+const LEVEL_AT_NUMBER: Readonly<Record<number, LogLevelNameV1>> = {
+  10: "trace",
+  20: "debug",
+  30: "info",
+  40: "warn",
+  50: "error",
+  60: "fatal",
+};
 
 function classifyFailure(error: unknown, operation: WriterOperation): FailureKind {
   if (error instanceof WriterConflictError) return "writer-conflict";
@@ -175,7 +197,7 @@ class FirstPartyLogger implements Logger {
   }
 
   isLevelEnabled(level: LogLevelNameV1): boolean {
-    return this.owner.isLevelEnabled(level);
+    return this.owner.isLevelEnabled(level, this.bindings);
   }
 }
 
@@ -204,7 +226,10 @@ class NodeLoggingService implements NodeLogging {
   private retryTimer: NodeJS.Timeout | null = null;
   private emergencyEmitted = false;
   private idleWaiters = new Set<() => void>();
+  private readonly updateListeners = new Set<() => void>();
   private lastWriterError: unknown;
+  private leases: DiagnosticLease[] = [];
+  private leaseTimer: NodeJS.Timeout | null = null;
 
   private state: LoggingHealth["writerState"] = "starting";
   private level: LogLevelNameV1;
@@ -303,8 +328,11 @@ class NodeLoggingService implements NodeLogging {
     }
   }
 
-  isLevelEnabled(level: LogLevelNameV1): boolean {
-    return this.pino.isLevelEnabled(level);
+  isLevelEnabled(
+    level: LogLevelNameV1,
+    bindings: LoggerBindings = { component: this.options.component ?? "root" },
+  ): boolean {
+    return this.shouldAccept(level, bindings);
   }
 
   emit(
@@ -360,7 +388,7 @@ class NodeLoggingService implements NodeLogging {
     truncation?: TrustedLogIngress["truncation"];
     plugin?: TrustedLogIngress["plugin"];
   }): void {
-    if (!this.accepting || !this.pino.isLevelEnabled(input.level)) return;
+    if (!this.accepting || !this.shouldAccept(input.level, input.bindings, input.plugin)) return;
     if (
       (this.pluginEntry === null && input.plugin !== undefined) ||
       (this.pluginEntry !== null &&
@@ -423,7 +451,7 @@ class NodeLoggingService implements NodeLogging {
       instanceId: this.options.instanceId,
       writerState: this.state,
       currentLevel: this.level,
-      activeLeaseCount: 0,
+      activeLeaseCount: this.activeLeases().length,
       activeSegmentBytes: this.activeSegmentBytes,
       queue: {
         records: this.queue.length,
@@ -445,9 +473,27 @@ class NodeLoggingService implements NodeLogging {
     return this.ring.snapshot(limit);
   }
 
+  readSince(cursor: number, limit?: number, predicate?: (record: LogRecord) => boolean) {
+    return this.ring.readSince(cursor, limit, predicate);
+  }
+
+  subscribeUpdates(listener: () => void): () => void {
+    if (this.closed) return () => undefined;
+    this.updateListeners.add(listener);
+    return () => this.updateListeners.delete(listener);
+  }
+
+  replaceDiagnosticLeases(leases: readonly DiagnosticLease[]): void {
+    this.leases = leases
+      .map((lease) => DiagnosticLeaseV1.parse(lease))
+      .filter((lease) => this.leaseTargetsProducer(lease));
+    this.scheduleLeaseExpiry();
+    this.recomputePinoLevel();
+  }
+
   setLevel(level: LogLevelNameV1): void {
     this.level = level;
-    this.pino.level = level;
+    this.recomputePinoLevel();
   }
 
   async flush(): Promise<void> {
@@ -469,6 +515,11 @@ class NodeLoggingService implements NodeLogging {
     if (this.closed) return;
     this.accepting = false;
     this.cancelRetry();
+    if (this.leaseTimer) {
+      clearTimeout(this.leaseTimer);
+      this.leaseTimer = null;
+    }
+    this.updateListeners.clear();
     this.scheduleDrain();
     try {
       await this.waitForIdle(2_000);
@@ -504,10 +555,92 @@ class NodeLoggingService implements NodeLogging {
       this.counters.accepted += 1;
       if (parsed.data.truncation) this.counters.truncated += 1;
       this.ring.push(parsed.data, line.byteLength);
+      for (const listener of [...this.updateListeners]) {
+        try {
+          listener();
+        } catch {
+          // Diagnostic observation is best-effort and cannot affect admission.
+        }
+      }
       this.scheduleDrain();
     } catch {
       this.counters.rejected += 1;
     }
+  }
+
+  private shouldAccept(
+    level: LogLevelNameV1,
+    bindings: LoggerBindings,
+    plugin?: TrustedLogIngress["plugin"],
+  ): boolean {
+    const numericLevel = LEVEL_NUMBER[level];
+    if (numericLevel >= LEVEL_NUMBER[this.level]) return true;
+    return this.activeLeases().some(
+      (lease) =>
+        numericLevel >= LEVEL_NUMBER[lease.level] && this.leaseMatches(lease, bindings, plugin),
+    );
+  }
+
+  private activeLeases(): DiagnosticLease[] {
+    const now = this.now();
+    return this.leases.filter((lease) => lease.expiresAt > now);
+  }
+
+  private leaseTargetsProducer(lease: DiagnosticLease): boolean {
+    const selector = lease.selector;
+    if (selector.kind === "plugin") {
+      return (
+        this.pluginEntry !== null &&
+        (selector.entry === undefined || selector.entry === this.pluginEntry)
+      );
+    }
+    return selector.service === this.options.service && this.pluginEntry === null;
+  }
+
+  private leaseMatches(
+    lease: DiagnosticLease,
+    bindings: LoggerBindings,
+    plugin?: TrustedLogIngress["plugin"],
+  ): boolean {
+    const selector = lease.selector;
+    if (selector.kind === "service") return selector.service === this.options.service;
+    if (selector.kind === "component") {
+      return (
+        selector.service === this.options.service &&
+        selector.component === (bindings.component ?? this.options.component ?? "root")
+      );
+    }
+    return (
+      plugin?.id === selector.pluginId &&
+      (selector.entry === undefined || selector.entry === plugin.entry)
+    );
+  }
+
+  private recomputePinoLevel(): void {
+    let minimum = LEVEL_NUMBER[this.level];
+    for (const lease of this.activeLeases()) minimum = Math.min(minimum, LEVEL_NUMBER[lease.level]);
+    this.pino.level = LEVEL_AT_NUMBER[minimum] ?? this.level;
+  }
+
+  private scheduleLeaseExpiry(): void {
+    if (this.leaseTimer) {
+      clearTimeout(this.leaseTimer);
+      this.leaseTimer = null;
+    }
+    const now = this.now();
+    this.leases = this.leases.filter((lease) => lease.expiresAt > now);
+    const nearest = this.leases.reduce(
+      (minimum, lease) => Math.min(minimum, lease.expiresAt),
+      Number.MAX_SAFE_INTEGER,
+    );
+    if (nearest === Number.MAX_SAFE_INTEGER) return;
+    const delay = Math.min(Math.max(1, nearest - now), 2_147_483_647);
+    this.leaseTimer = setTimeout(() => {
+      this.leaseTimer = null;
+      this.scheduleLeaseExpiry();
+      this.recomputePinoLevel();
+    }, delay);
+    this.leaseTimer.unref();
   }
 
   private admit(line: Buffer, level: LogRecord["level"]): boolean {

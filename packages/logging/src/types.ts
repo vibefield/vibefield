@@ -1,5 +1,10 @@
 import type { LogStream } from "@vibefield/contracts";
 import type {
+  DiagnosticLeaseV1,
+  DiagnosticLogQueryV1,
+  DiagnosticParseFailureV1,
+} from "@vibefield/contracts/diagnostics";
+import type {
   LoggingHealthV1,
   LogLevelNameV1,
   LogRecordV1,
@@ -118,12 +123,44 @@ export interface RecentLogSnapshot {
   droppedBefore: number;
 }
 
+export interface RecentLogDelta {
+  records: LogRecordV1[];
+  cursor: number;
+  droppedSincePrevious: number;
+  hasMore: boolean;
+}
+
+export interface HistoricalLogReadOptions {
+  logRoot: string;
+  query: DiagnosticLogQueryV1;
+  /** Shared scan budget across every selected stream. */
+  maxScanBytes?: number;
+  /** Abort is checked between chunks and segments. */
+  signal?: AbortSignal;
+}
+
+export interface HistoricalLogPage {
+  records: LogRecordV1[];
+  failures: DiagnosticParseFailureV1[];
+  scannedBytes: number;
+  scannedSegments: number;
+  skippedUnsafeSegments: number;
+  truncated: boolean;
+}
+
 export interface NodeLogging {
   readonly logger: Logger;
   readonly filePath: string;
   ingest(record: TrustedLogIngress): void;
   health(): LoggingHealthV1;
   recent(limit?: number): RecentLogSnapshot;
+  readSince(
+    cursor: number,
+    limit?: number,
+    predicate?: (record: LogRecordV1) => boolean,
+  ): RecentLogDelta;
+  subscribeUpdates(listener: () => void): () => void;
+  replaceDiagnosticLeases(leases: readonly DiagnosticLeaseV1[]): void;
   setLevel(level: LogLevelNameV1): void;
   flush(): Promise<void>;
   close(): Promise<void>;

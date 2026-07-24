@@ -272,6 +272,37 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
   pill for drop affordances ("Release here to put it back"), progress with numbers
   ("index rebuilding · 42%"), placeholder faces for missing plugins (A6/A8). Empty
   screens invite the next action.
+- **The plugin source badge** (P7; spec §20.5 / §5.3): every plugin row labels its
+  source and rung as a FACT in the muted text ramp (`labelCls`), never a warning — no
+  hue (§2.5: color is for honest state, and a source is not a state of concern). A
+  `rounded px-1` chip with no fill, so it reads as a label, not a status. Words:
+  bundled → "built-in", dev-linked → "dev", registry → "registry · reviewed" with the
+  publisher appended ("reviewed names who reviewed" — the registry publisher is the
+  reviewer), sideload → "sideload" (honest, not alarmed — the word IS the caution).
+- **The updates flow** (P7; spec §5.3.1): a section-top "updates ▸" disclosure that
+  NEVER checks on its own — opening it reveals a "check for updates" action and nothing
+  fetches on mount, on expand, or on a timer (no push feed, no polling; a fetch is a
+  deliberate act). Results render honestly (the empty/degraded rule): a compatible
+  update reads "id · installedVersion → latest.version" (`tabular-nums`) with an
+  "install" action; an incompatible one says WHY from the release's own engine range
+  ("needs app X · contracts Y"), no action; a vanished entry lists "dropped from
+  registry"; an all-clear reads "everything current". The checked time is stated
+  ("checked HH:MM:SS"), never implied fresh.
+- **The destructive uninstall affordance** (P7; spec §16.5): registry/sideload rows
+  carry a "···" overflow revealing two acts — "uninstall" (muted, keeps data) and
+  "remove data too" (the destructive variant: `--vf-red` text, visually distinct BEFORE
+  any confirm, §2.5 red = destructive). Each is a two-step confirm — a narrow-panel
+  click is never irreversible. The keep-data confirm says "keeps its data"; the
+  destructive confirm names the object and states exactly what dies ("deletes its
+  settings and stored data — canvas cards it made are kept"). Red is text-only, never a
+  filled alarm — honesty over dread.
+- **The settings undo affordance** (P7 D29′; spec §16.6): compact "undo · redo" text
+  buttons at the head of a plugin's settings form, in the muted ramp, `disabled:opacity-40`
+  when there is nothing to reach. A right-aligned caption tells the coverage truth at all
+  times — "covers user-scope keys only" when live, "no user-scope keys" when the plugin
+  declares none (device/secret keys are never on the stack), and the honest outcome when
+  an action no-ops ("nothing to undo", "history horizon reached"). No optimistic echo — an
+  applied undo re-gets every row from the daemon.
 
 ---
 

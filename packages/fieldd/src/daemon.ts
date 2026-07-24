@@ -22,9 +22,11 @@ import {
   PluginsEnableParams,
   PluginsGetParams,
   PluginsGrantsSetParams,
+  PluginsInstallParams,
   PluginsOpenRendererSessionParams,
   type PluginsOpenRendererSessionResult,
   PluginsReloadParams,
+  PluginsUninstallParams,
   PORTS,
   ProcessStatParams,
   type ProcessSubEvent,
@@ -46,13 +48,16 @@ import {
   pluginLogProvenance,
 } from "@vibefield/logging";
 import { DeviceService } from "./device-service";
+import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
 import { EndpointService } from "./endpoint-service";
+import { InstallSetReconciler } from "./install-reconciler";
 import { McpService } from "./mcp-service";
 import { MeshClient } from "./mesh-client";
 import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
+import { RegistryInstallService } from "./plugin-install";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
@@ -60,6 +65,7 @@ import { ProcessService, pluginChildEnv } from "./process-service";
 import { ProductApi } from "./product-api";
 import { type PluginServiceLogRecord, ServiceHost } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
+import { SettingsDocService } from "./settings-doc";
 import { TokenService } from "./token-service";
 
 // fieldd bootstrap (design-02 §3.6, P0 slice): tokens → NativeLink (pair +
@@ -99,6 +105,10 @@ export interface FielddConfig {
   serviceHarnessPath?: string;
   /** P5 test seam — secret-scope settings backend (default: darwin keychain). */
   secretStore?: SecretStore;
+  /** P7 §5.3.1 — the registry index.json location (file:// or https://) and
+   * the shipped maintainer verify key. Unset ⇒ installs refuse honestly. */
+  registryUrl?: string;
+  registryPublicKey?: string;
   /** Test seam for observing the service host boundary without opening a
    * plugin writer. Production resolves install provenance and persists. */
   pluginLog?: (record: PluginServiceLogRecord) => void;
@@ -132,6 +142,7 @@ export interface FielddDaemon {
   services: ServiceRegistry;
   logging: NodeLogging | null;
   pluginLogging: NodeLogging | null;
+  diagnostics: DiagnosticsService;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
   health(): FielddHealth;
@@ -200,11 +211,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     bootId,
     logger: logger.child({ component: "native_link" }),
   });
+  let diagnostics: DiagnosticsService | null = null;
 
   // everything past pairing is transactional — never leak the client slot
   try {
     await native.connect();
     logger.info("fieldd.native_link.connected", "The native management link connected");
+    const diagnosticsService = new DiagnosticsService({
+      native,
+      logging,
+      pluginLogging,
+      ...(config.logRoot !== undefined ? { logRoot: config.logRoot } : {}),
+      logger: logger.child({ component: "diagnostics" }),
+    });
+    diagnostics = diagnosticsService;
+    await diagnosticsService.start();
     const mesh = new MeshClient(native);
     const docs = new DocumentService({
       dataDir: config.dataDir,
@@ -212,14 +233,29 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // PLUG-P2 — the plugin registry (§9): manifest-only discovery, pre-listen
     // so the first snapshot is warm. No module code loads here (§19.1).
+    // P7 — the installed root is fieldd-OWNED: absent on first boot is the
+    // normal empty state, so create it rather than report it as a problem
+    const installedRoot = join(config.dataDir, "plugins", "installed");
+    mkdirSync(installedRoot, { recursive: true });
     const plugins = new PluginRegistryService({
       dataDir: config.dataDir,
       roots: {
         bundled: config.pluginRoots?.bundled ?? [],
         devLinked: config.pluginRoots?.devLinked ?? [],
+        installed: [installedRoot],
       },
     });
     await plugins.refresh();
+    // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
+    const installer = new RegistryInstallService({
+      dataDir: config.dataDir,
+      plugins,
+      ...(config.registryUrl !== undefined ? { registryUrl: config.registryUrl } : {}),
+      ...(config.registryPublicKey !== undefined
+        ? { registryPublicKey: config.registryPublicKey }
+        : {}),
+      logger: logger.child({ component: "plugin.install" }),
+    });
     const emitPluginLog =
       config.pluginLog ??
       ((record: PluginServiceLogRecord): void => {
@@ -242,10 +278,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // assigned after listen (workers dial the bound port); handlers guard null
     let serviceHost: ServiceHost | null = null;
-    // P5 — settings + KV storage (§16.2/§16.3)
+    // P7 §16.6 — assigned at the bootstrap tail (needs serviceHost for
+    // restarts); handlers guard null and publish local truth into the doc
+    let reconciler: InstallSetReconciler | null = null;
+    // P7/D29′ — the system settings doc: fieldd's first live Loro doc (user-
+    // scope settings + spine preferences + the §16.6 install-set; provenance-
+    // stamped, undoable, install-set outside the undo stack).
+    const settingsDoc = new SettingsDocService({
+      dataDir: config.dataDir,
+      logger: logger.child({ component: "plugin.settings.doc" }),
+    });
+    // P5 — settings + KV storage (§16.2/§16.3); user scope rides the doc
     const settings = new PluginSettingsService({
       dataDir: config.dataDir,
       plugins,
+      settingsDoc,
       logger: logger.child({ component: "plugin.settings" }),
       ...(config.secretStore !== undefined ? { secretStore: config.secretStore } : {}),
     });
@@ -374,6 +421,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.allowedOrigins ? { allowedOrigins: config.allowedOrigins } : {}),
       tailnetPathSecret: servePathSecret,
     });
+    diagnosticsService.register(api);
 
     api.register("system.health", () => health());
     api.register("system.capabilities", () => ({
@@ -525,6 +573,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id: pluginId }", false);
       const record = await plugins.enable(parsed.data.id);
+      void reconciler?.publish(record, "enable"); // §16.6
       // §18.3 — an explicit re-enable clears quarantine and restarts fresh
       void serviceHost?.restartFresh(parsed.data.id).catch((e) => {
         logger
@@ -552,7 +601,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       await processes.killPlugin(parsed.data.id);
       endpoints.withdrawPlugin(parsed.data.id);
       mcp.withdrawPlugin(parsed.data.id);
-      return plugins.get(parsed.data.id) ?? record;
+      const after = plugins.get(parsed.data.id) ?? record;
+      void reconciler?.publish(after, "disable"); // §16.6
+      return after;
     });
     api.register("plugins.reload", async (_ctx, params) => {
       const parsed = PluginsReloadParams.safeParse(params ?? {});
@@ -708,7 +759,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { pluginId?, key, value }", false);
       const caller = settingsCaller(ctx, parsed.data.pluginId);
-      await settings.set(caller.pluginId, parsed.data.key, parsed.data.value);
+      // D29′ — provenance rides every write ("who turned this knob")
+      await settings.set(
+        caller.pluginId,
+        parsed.data.key,
+        parsed.data.value,
+        caller.ownerPlugin ? `plugin:${caller.pluginId}` : "pane",
+      );
       return { ok: true };
     });
     api.register("storage.settings.reset", async (ctx, params) => {
@@ -716,8 +773,58 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { pluginId?, key }", false);
       const caller = settingsCaller(ctx, parsed.data.pluginId);
-      await settings.reset(caller.pluginId, parsed.data.key);
+      await settings.reset(
+        caller.pluginId,
+        parsed.data.key,
+        caller.ownerPlugin ? `plugin:${caller.pluginId}` : "pane",
+      );
       return { ok: true };
+    });
+    // -- distribution (PLUG-P7, §5.3.1/§22.1): install/uninstall recycle every
+    // principal exactly like reload — a new module version never inherits a
+    // stale token (§18.3), and an uninstalled plugin's runtime dies whole. --
+    const teardownPlugin = async (id: string): Promise<void> => {
+      await serviceHost?.stop(id);
+      tokens.revokeByPlugin(id);
+      api.dropPluginConnections(id);
+      await processes.killPlugin(id);
+      endpoints.withdrawPlugin(id);
+      mcp.withdrawPlugin(id);
+    };
+    api.register("plugins.install", async (_ctx, params) => {
+      const parsed = PluginsInstallParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { id, version? }", false);
+      const upgrading = parsed.data.id !== undefined && plugins.get(parsed.data.id) !== undefined;
+      if (upgrading) await teardownPlugin(parsed.data.id as string);
+      const { id } = await installer.install(parsed.data); // refresh() inside
+      const record = plugins.get(id);
+      if (record?.enabled === true && record.service !== "none")
+        void serviceHost?.restartFresh(id).catch(() => undefined);
+      if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
+      return record ?? { id };
+    });
+    api.register("plugins.uninstall", async (_ctx, params) => {
+      const parsed = PluginsUninstallParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { id, removeData? }", false);
+      await teardownPlugin(parsed.data.id);
+      await installer.uninstall(parsed.data.id, parsed.data.removeData === true);
+      void reconciler?.unpublish(parsed.data.id, "uninstall"); // §16.6 — everywhere
+      return { ok: true };
+    });
+    api.register("plugins.updates.check", () => installer.updatesCheck());
+
+    // D29′ — the undo surface. A USER affordance: pane-only in v1 (plugin
+    // principals refused honestly; per-section stacks are a later
+    // refinement). The doc enforces law 2 — install-set/grants never move.
+    api.register("storage.settings.undo", (ctx, _params) => {
+      manageCaller(ctx);
+      return settings.undoUser();
+    });
+    api.register("storage.settings.redo", (ctx, _params) => {
+      manageCaller(ctx);
+      return settings.redoUser();
     });
     api.registerSubscription("storage.settings.subscribe", async (ctx, params, emit) => {
       const parsed = SettingsSubscribeParams.safeParse(params);
@@ -902,7 +1009,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             grantGeneration: record.grantGeneration,
           });
       }
-      return plugins.get(id) ?? record;
+      const latest = plugins.get(id) ?? record;
+      void reconciler?.publish(latest, "grants"); // §16.6 — decisions sync
+      return latest;
     });
 
     // -- dynamic services (PLUG-P4, §14/§22.2) --
@@ -953,6 +1062,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       services.dispose();
       settings.dispose();
       plugins.dispose();
+      diagnosticsService.dispose();
       native.close();
       const reason = fatalReason;
       if (logging) {
@@ -978,6 +1088,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       services.dispose();
       settings.dispose();
       plugins.dispose();
+      diagnosticsService.dispose();
       throw e;
     }
 
@@ -1014,6 +1125,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // fire-and-forget: activation states surface honestly through the registry
     void serviceHost.startEligible();
+    // P7 §16.6 — converge toward the doc's desired set (idempotent; a failed
+    // entry parks honestly and retries on the next movement)
+    reconciler = new InstallSetReconciler({
+      settingsDoc,
+      plugins,
+      installer,
+      teardown: teardownPlugin,
+      restart: (id) => void serviceHost?.restartFresh(id).catch(() => undefined),
+      logger: logger.child({ component: "plugin.install.reconciler" }),
+    });
+    reconciler.attach();
+    void reconciler.reconcile();
 
     // -- run files (shell bootstrap contract) --
     const runDir = join(config.dataDir, "fieldd", "run");
@@ -1049,6 +1172,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
           endpoints.dispose();
           mcp.dispose();
+          await settingsDoc.dispose(); // D29′ — the doc's writes are already durable
           api.close();
           docLane.close();
           docs.dispose();
@@ -1057,6 +1181,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           services.dispose();
           settings.dispose();
           plugins.dispose();
+          diagnosticsService.dispose();
           native.close();
           // a superseding fieldd rewrites these for the same dataDir — never
           // delete what is no longer ours
@@ -1089,12 +1214,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       services,
       logging,
       pluginLogging,
+      diagnostics: diagnosticsService,
       shellToken: shellGrant.token,
       health,
       nativeHealth: () => latestHealth,
       stop,
     };
   } catch (e) {
+    diagnostics?.dispose();
     native.close(); // rollback: release the mgmt client slot
     logger.fatal("fieldd.lifecycle.bootstrap_failed", "fieldd bootstrap failed", e);
     await closeLogging();

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SemverString } from "./envelope";
+import { RegistryProvenance } from "./plugin-distribution";
 import { DeniedCapability } from "./plugin-runtime";
 import {
   CommandContribution,
@@ -20,8 +21,8 @@ import {
 // from validated manifests, copying only the public sections; problems name
 // roots by BASENAME only.
 
-/** §9.1 sources shipping in P2. Registry installs and sideloads arrive at P7. */
-export const PluginSource = z.enum(["bundled", "dev-linked"]);
+/** §9.1 sources. P7 adds registry installs and sideloads to P2's pair. */
+export const PluginSource = z.enum(["bundled", "dev-linked", "registry", "sideload"]);
 export type PluginSource = z.infer<typeof PluginSource>;
 
 /** §9.3 entry states, declared in full for forward compatibility. P2 never
@@ -130,6 +131,8 @@ export const PluginRecord = z
     manifestHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
     /** P2: derived from the manifest hash (installs proper arrive at P7). */
     installRevision: z.string().min(1).max(64),
+    /** P7 §6.3 — registry-source rows carry verified provenance (no paths). */
+    registry: RegistryProvenance.optional(),
     state: PluginRecordState,
     compatible: z.boolean(),
     enabled: z.boolean(),

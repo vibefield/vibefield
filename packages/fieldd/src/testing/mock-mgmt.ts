@@ -37,6 +37,10 @@ export class MockMgmtServer {
   storeWrites: unknown[] = [];
   /** scripted tailnet peers answered by native.mesh.peers.list (default: none) */
   meshPeers: unknown[] = [];
+  /** Schema-valid field-native ring used by LOG-L5 product projection tests. */
+  diagnosticRecords: unknown[] = [];
+  diagnosticBootId = "mock-native-boot";
+  diagnosticCursor = 0;
   private storeVersion = 0;
   private lastStoreId = "";
   private nextSub = 1;
@@ -105,6 +109,28 @@ export class MockMgmtServer {
           jsonrpc: "2.0",
           id: msg.id,
           result: { contractsVersion: "0.1.0", serverKind: "field-native", grantedScopes: [] },
+        }) + "\n",
+      );
+      return;
+    }
+    if (msg.method === "native.diagnostics.query") {
+      sock.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: this.diagnosticSnapshot(),
+        }) + "\n",
+      );
+      return;
+    }
+    if (msg.method === "native.diagnostics.subscribe") {
+      const subId = `s${this.nextSub++}`;
+      this.issued.push({ sock, subId, method: msg.method });
+      sock.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: { subId, snapshot: this.diagnosticSnapshot() },
         }) + "\n",
       );
       return;
@@ -270,6 +296,31 @@ export class MockMgmtServer {
     }
   }
 
+  pushDiagnosticRecord(record: unknown): void {
+    this.diagnosticCursor += 1;
+    this.diagnosticRecords.push(record);
+    if (this.diagnosticRecords.length > 1_000) this.diagnosticRecords.shift();
+    this.pushDelta("diagnostics.subscribe", {
+      v: 1,
+      cursor: `native:${this.diagnosticBootId}:${this.diagnosticCursor}`,
+      records: [record],
+      droppedSincePrevious: 0,
+    });
+  }
+
+  pushDiagnosticSnapshot(): void {
+    for (const entry of this.issued) {
+      if (!entry.method.endsWith("diagnostics.subscribe") || entry.sock.destroyed) continue;
+      entry.sock.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          method: "native.diagnostics.snapshot",
+          params: { subId: entry.subId, payload: this.diagnosticSnapshot() },
+        }) + "\n",
+      );
+    }
+  }
+
   /** Push a serve runtime delta — a PARTIAL entry {name, status, url?, error?}
    * (native.mesh.serve.subscribe → native.mesh.serve.delta). */
   pushServeDelta(entry: unknown): void {
@@ -324,6 +375,64 @@ export class MockMgmtServer {
     const slices: Record<string, unknown> = {};
     for (const [dev, data] of this.storeSlices) slices[dev] = { data, version: 1 };
     return { storeId, slices };
+  }
+
+  private diagnosticSnapshot(): unknown {
+    const zeroBuffer = {
+      records: 0,
+      bytes: 0,
+      highWaterRecords: 0,
+      highWaterBytes: 0,
+      capacityRecords: 2_000,
+      capacityBytes: 2 * 1024 * 1024,
+    };
+    const producer = {
+      producerId: `field-native:${this.diagnosticBootId}`,
+      service: "field-native",
+      stream: "system/field-native",
+      bootId: this.diagnosticBootId,
+      instanceId: this.diagnosticBootId,
+      oldestCursor:
+        this.diagnosticRecords.length === 0
+          ? this.diagnosticCursor
+          : Math.max(0, this.diagnosticCursor - this.diagnosticRecords.length + 1),
+      newestCursor: this.diagnosticCursor,
+      droppedBefore: 0,
+      health: {
+        v: 1,
+        stream: "system/field-native",
+        service: "field-native",
+        bootId: this.diagnosticBootId,
+        instanceId: this.diagnosticBootId,
+        writerState: "healthy",
+        currentLevel: "info",
+        activeLeaseCount: 0,
+        activeSegmentBytes: 0,
+        queue: { ...zeroBuffer, capacityRecords: 8_192, capacityBytes: 8 * 1024 * 1024 },
+        ring: { ...zeroBuffer, records: this.diagnosticRecords.length },
+        counters: {
+          accepted: this.diagnosticCursor,
+          rejected: 0,
+          truncated: 0,
+          droppedTrace: 0,
+          droppedDebug: 0,
+          droppedInfo: 0,
+          droppedWarn: 0,
+          droppedError: 0,
+          bytesWritten: 0,
+          rotations: 0,
+          cleanupDeletions: 0,
+          emergencyFallbacks: 0,
+        },
+      },
+    };
+    return {
+      v: 1,
+      producers: [producer],
+      records: [...this.diagnosticRecords],
+      nextCursor: `native:${this.diagnosticBootId}:${this.diagnosticCursor}`,
+      droppedBefore: 0,
+    };
   }
 
   killClients(): void {

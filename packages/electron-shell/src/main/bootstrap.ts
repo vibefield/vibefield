@@ -75,7 +75,17 @@ async function mint(
     // C4: workspace.read lets the Settings mesh section read the device roster.
     // P2: plugins.read feeds the registry snapshot; plugins.manage backs the
     // Settings plugin toggles (both local-only scopes — never in the tailnet preset).
-    scopes: ["doc.read", "doc.write", "workspace.read", "plugins.read", "plugins.manage"],
+    // LOG-L5: the host-owned Settings diagnostics surface reads records and
+    // manages time-bounded leases. Plugin-bound tokens never receive either.
+    scopes: [
+      "doc.read",
+      "doc.write",
+      "workspace.read",
+      "plugins.read",
+      "plugins.manage",
+      "diagnostics.read",
+      "diagnostics.manage",
+    ],
     label: `window-${senderId}`,
   })) as { token: string };
   return { port: handle.info.port, token: minted.token };
