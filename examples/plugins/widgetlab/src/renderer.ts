@@ -19,6 +19,7 @@ import {
 import { ORBIT_CUBE_CHROME, ORBIT_CUBE_TYPE, OrbitCubeView } from "./OrbitCubeCard";
 import { PHOTOS_TYPE, PhotosView } from "./PhotosCard";
 import { SHAPES_CHROME, SHAPES_TYPE, ShapesView } from "./ShapesCard";
+import { StatusSurface } from "./StatusSurface";
 import { STOCKS_TYPE, StocksView } from "./StocksCard";
 import { TODO_TYPE, TodoListView } from "./TodoListCard";
 import { TORUS_KNOT_CHROME, TORUS_KNOT_TYPE, TorusKnotView } from "./TorusKnotCard";
@@ -73,5 +74,8 @@ export default defineRendererPlugin({
     ctx.widgets.register({ type: SIGNAL_TYPE, binding: { component: SignalNodeView } });
     ctx.widgets.register({ type: FILTER_TYPE, binding: { component: FilterNodeView } });
     ctx.widgets.register({ type: SCOPE_TYPE, binding: { component: ScopeNodeView } });
+    // P6 dogfood (§13.2) — bind the hud.panel status surface. ctx.surfaces is
+    // present because the manifest declares the surfaces contribution (§10.2).
+    ctx.surfaces?.register("vibefield.widgetlab.status", StatusSurface);
   },
 });

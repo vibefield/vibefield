@@ -1,10 +1,24 @@
 {
   "activation": [
     "onWidget:vibefield.field-tools.folder",
-    "onWidget:vibefield.field-tools.comment"
+    "onWidget:vibefield.field-tools.comment",
+    "onCommand:vibefield.field-tools.comment-around-selection"
   ],
-  "capabilities": [],
+  "capabilities": [
+    "canvas.write"
+  ],
   "contributes": {
+    "commands": [
+      {
+        "description": "Wrap the selected widgets in a tinted comment",
+        "id": "vibefield.field-tools.comment-around-selection",
+        "placements": [
+          "palette",
+          "canvas-context"
+        ],
+        "title": "Comment around selection"
+      }
+    ],
     "widgets": [
       {
         "category": "Tools",

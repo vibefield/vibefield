@@ -24,7 +24,10 @@ afterEach(async () => {
 });
 
 // the exact minimal-valid manifest shape product-surface uses, varying only id
-// + capabilities so token-scope derivation is observable
+// + capabilities so token-scope derivation is observable. entries.renderer is
+// load-bearing since P6: §15.2 entry-kind eligibility grants nothing to a
+// manifest with no entries (no runtime, no grant) — a renderer entry makes
+// these fixtures realistic lease consumers (the module is never loaded here).
 function manifest(id: string, capabilities: string[]): string {
   return JSON.stringify({
     manifestVersion: 1,
@@ -32,6 +35,7 @@ function manifest(id: string, capabilities: string[]): string {
     version: "0.1.0",
     title: id,
     engines: { app: ">=0.0.0", contracts: "^0.1.0" },
+    entries: { renderer: "./renderer.js" },
     activation: [],
     capabilities,
   });

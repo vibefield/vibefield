@@ -2,6 +2,7 @@ import type { PluginRecord, SettingsContribution } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useState } from "react";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
+import { PluginCapabilities } from "./PluginCapabilities";
 import { PluginSettingsForm } from "./PluginSettingsForm";
 import { borderCls, labelCls, sectionCls } from "./SettingsPanel";
 
@@ -28,11 +29,18 @@ function Dot({ state }: { state: string }): ReactElement {
   );
 }
 
-function PluginRow({ plugin }: { plugin: PluginRecord }): ReactElement {
+function PluginRow({
+  plugin,
+  plugins,
+}: {
+  plugin: PluginRecord;
+  plugins: readonly PluginRecord[];
+}): ReactElement {
   const client = useFielddClient();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [capsOpen, setCapsOpen] = useState(false);
   const toggleable = plugin.state === "enabled" || plugin.state === "disabled";
   const widgetCount = plugin.contributions.widgets.length;
   // contributions.settings (§8.5) lands in parallel; read it through a typed
@@ -40,6 +48,9 @@ function PluginRow({ plugin }: { plugin: PluginRecord }): ReactElement {
   const settingsProps = (plugin.contributions as { settings?: SettingsContribution }).settings
     ?.properties;
   const hasSettings = settingsProps !== undefined && Object.keys(settingsProps).length > 0;
+  // P6 — the grants pane shows one row per REQUESTED capability, i.e. the union
+  // of the record's granted + denied lists (§15.2). No requests ⇒ no disclosure.
+  const hasCapabilities = plugin.grantedCapabilities.length + plugin.deniedCapabilities.length > 0;
 
   const toggle = async () => {
     setPending(true);
@@ -79,6 +90,16 @@ function PluginRow({ plugin }: { plugin: PluginRecord }): ReactElement {
           <span className={labelCls}>
             {widgetCount} widget{widgetCount === 1 ? "" : "s"}
           </span>
+          {hasCapabilities && (
+            <button
+              type="button"
+              onClick={() => setCapsOpen((v) => !v)}
+              aria-expanded={capsOpen}
+              className={`flex-none ${labelCls} hover:text-neutral-600 dark:hover:text-neutral-300`}
+            >
+              capabilities {capsOpen ? "▾" : "▸"}
+            </button>
+          )}
           {hasSettings && (
             <button
               type="button"
@@ -104,6 +125,7 @@ function PluginRow({ plugin }: { plugin: PluginRecord }): ReactElement {
           </div>
         )
       )}
+      {hasCapabilities && capsOpen && <PluginCapabilities plugin={plugin} plugins={plugins} />}
       {hasSettings && settingsOpen && settingsProps !== undefined && (
         <PluginSettingsForm pluginId={plugin.id} properties={settingsProps} />
       )}
@@ -123,7 +145,7 @@ export function PluginsSection(): ReactElement {
           <>
             {snapshot.plugins.length === 0 && <div className={labelCls}>no plugins</div>}
             {snapshot.plugins.map((p) => (
-              <PluginRow key={p.id} plugin={p} />
+              <PluginRow key={p.id} plugin={p} plugins={snapshot.plugins} />
             ))}
             {snapshot.problems.map((prob) => (
               <div key={prob.root} className="flex items-center justify-between gap-2 pl-2">

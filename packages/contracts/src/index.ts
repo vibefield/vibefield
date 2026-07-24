@@ -11,6 +11,7 @@ export * from "./errors";
 export * from "./methods";
 export * from "./mgmt";
 export * from "./plugin-registry";
+export * from "./plugin-runtime";
 export * from "./plugins";
 export * from "./registries";
 export * from "./shell";

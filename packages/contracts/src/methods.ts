@@ -415,4 +415,111 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+
+  // PLUG-P6 — remaining powers (§17/§22.4). The P5 pattern holds: scope null
+  // means the HANDLER enforces the caller matrix. process.* and the endpoint
+  // pair are plugin-principal surfaces (self-scoped, gated on the granted
+  // capability); plugins.manage callers get read access for doctor/UX.
+  // storage.file.* remains undeclared (ticketed lane, its own slice — D36).
+  defineMethod({
+    surface: "product",
+    method: "services.registerEndpoint",
+    scope: null, // plugin principal owning the serviceId, services.provide granted
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "services.unregisterEndpoint",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "services.health",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "process.spawn",
+    scope: null, // service-entry plugin principal with process.spawn granted
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "process.signal",
+    scope: null,
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "process.stat",
+    scope: null, // owner sees self; plugins.manage sees all
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "process.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "mcp.servers.add",
+    scope: null, // local shell with plugins.manage — user policy surface (§17.4)
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "mcp.servers.remove",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "mcp.servers.list",
+    scope: "mcp.consume",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "mcp.tools.list",
+    scope: "mcp.consume",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "mcp.tools.call",
+    scope: "mcp.consume",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "mcp.contribute.set",
+    scope: null, // plugin principal with mcp.contribute — narrows its own tools
+    idempotent: true,
+    locality: "local",
+  }),
+  // §15.3 — v1 grants are device-local fieldd state; plugins.* is already in
+  // D32's local-only-forever set, so this can never federate.
+  defineMethod({
+    surface: "product",
+    method: "plugins.grants.set",
+    scope: "plugins.manage",
+    idempotent: true,
+    locality: "local",
+  }),
 ];

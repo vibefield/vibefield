@@ -1,3 +1,4 @@
+import { spawn as spawnChild } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -20,9 +21,13 @@ import {
   PluginsDisableParams,
   PluginsEnableParams,
   PluginsGetParams,
+  PluginsGrantsSetParams,
   PluginsOpenRendererSessionParams,
   type PluginsOpenRendererSessionResult,
+  PluginsReloadParams,
   PORTS,
+  ProcessStatParams,
+  type ProcessSubEvent,
   type ProductInfo,
   SCOPES,
   type Scope,
@@ -43,12 +48,15 @@ import {
 import { DeviceService } from "./device-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
+import { EndpointService } from "./endpoint-service";
+import { McpService } from "./mcp-service";
 import { MeshClient } from "./mesh-client";
 import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
+import { ProcessService, pluginChildEnv } from "./process-service";
 import { ProductApi } from "./product-api";
 import { type PluginServiceLogRecord, ServiceHost } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
@@ -242,6 +250,70 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.secretStore !== undefined ? { secretStore: config.secretStore } : {}),
     });
     const kvStore = new PluginKvStore(config.dataDir);
+    // P6 — §17.1 supervised children: fieldd owns the group, the env strip,
+    // and the ladder; cwd stays inside the plugin's own directories.
+    const processes = new ProcessService({
+      logger: logger.child({ component: "plugin.process" }),
+      allowedCwdRoots: (pluginId) => {
+        const roots = [join(config.dataDir, "plugins", pluginId)];
+        const install = plugins.rootPath(pluginId);
+        if (install !== undefined) roots.push(install);
+        return roots;
+      },
+    });
+    // P6 — §17.3 endpoint adoption: mandatory health, dead = visible.
+    const endpoints = new EndpointService({
+      logger: logger.child({ component: "plugin.endpoints" }),
+    });
+    // P6 — §17.4 MCP: contribute projects DECLARED methods (schemas from the
+    // daemon-internal declaration map — sanitized snapshots never carry them);
+    // consume runs client sessions. Stdio children get the same env law as
+    // every plugin-adjacent child (EL7), spawned daemon-side with pipes.
+    const mcp = new McpService({
+      logger: logger.child({ component: "plugin.mcp" }),
+      registry: {
+        get: (pluginId) => {
+          const record = plugins.get(pluginId);
+          if (record === undefined) return undefined;
+          const contributes = plugins.declaredContributes(pluginId);
+          const declaredMethods = new Map<
+            string,
+            { kind: string; input: object; output?: object }
+          >();
+          for (const svc of contributes?.services ?? [])
+            for (const mth of svc.methods)
+              declaredMethods.set(`${svc.namespace}.${mth.name}`, {
+                kind: mth.kind,
+                input: mth.input,
+                ...(mth.kind !== "subscription" ? { output: mth.output } : {}),
+              });
+          const tools = contributes?.mcp?.tools;
+          return {
+            enabled: record.enabled,
+            grantedCapabilities: record.grantedCapabilities,
+            ...(tools !== undefined ? { mcp: { tools } } : {}),
+            declaredMethods,
+          };
+        },
+        list: () => plugins.list().map((r) => r.id),
+      },
+      callDynamic: (method, params) => services.callProjected(method, params),
+      providerUp: (ns) => services.providerUp(ns),
+      spawn: (req) => {
+        const child = spawnChild(req.executable, req.args, {
+          ...(req.cwd !== undefined ? { cwd: req.cwd } : {}),
+          env: pluginChildEnv(req.env),
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+        return {
+          stdin: child.stdin as NodeJS.WritableStream,
+          stdout: child.stdout as NodeJS.ReadableStream,
+          stderr: child.stderr as NodeJS.ReadableStream,
+          kill: () => void child.kill(),
+          onExit: (cb: (code: number | null) => void) => void child.on("exit", cb),
+        };
+      },
+    });
     // C3 — the serve route secret (thinking-c3 §1): the provenance proof
     // shared by exactly two parties, this process and the sidecar's route
     // config. 192-bit; base64url is path-safe. Never logged, never in
@@ -473,14 +545,38 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const record = await plugins.disable(parsed.data.id);
       await serviceHost?.stop(parsed.data.id); // §16.5 — deactivates providers, data untouched
       // §15.4 — revocation is LIVE: leases die at the mint table, live
-      // plugin-principal connections sever; data stays (§16.5).
+      // plugin-principal connections sever; data stays (§16.5). P6 — the
+      // plugin's supervised children die with it (§17.1).
       tokens.revokeByPlugin(parsed.data.id);
       api.dropPluginConnections(parsed.data.id);
+      await processes.killPlugin(parsed.data.id);
+      endpoints.withdrawPlugin(parsed.data.id);
+      mcp.withdrawPlugin(parsed.data.id);
       return plugins.get(parsed.data.id) ?? record;
     });
-    api.register("plugins.reload", async () => {
-      await plugins.refresh();
-      return plugins.snapshot();
+    api.register("plugins.reload", async (_ctx, params) => {
+      const parsed = PluginsReloadParams.safeParse(params ?? {});
+      if (!parsed.success) throw new RpcCallError("PRECONDITION_FAILED", "expected { id? }", false);
+      // no id — the legacy whole-registry rescan (dev convenience)
+      if (parsed.data.id === undefined) {
+        await plugins.refresh();
+        return plugins.snapshot();
+      }
+      // §18.5 — the dev-linked reload sequence. Step order is the law:
+      // validate WITHOUT disturbing the live version; only then deactivate,
+      // recycle principals (no stale token survives a fresh module — §18.3),
+      // swap the registry generation atomically, and reactivate.
+      const id = parsed.data.id;
+      const candidate = await plugins.validateReload(id);
+      await serviceHost?.stop(id);
+      tokens.revokeByPlugin(id);
+      api.dropPluginConnections(id);
+      await processes.killPlugin(id);
+      endpoints.withdrawPlugin(id);
+      mcp.withdrawPlugin(id); // fresh module ⇒ fresh declarations re-project
+      const record = plugins.applyReload(id, candidate);
+      if (record.enabled) void serviceHost?.restartFresh(id).catch(() => undefined);
+      return plugins.get(id) ?? record;
     });
     // P3b — the renderer principal lease (§11.2): the scope gate above is
     // necessary, never sufficient. Only a LOCAL renderer/shell principal may
@@ -662,6 +758,153 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return { keys: await kvStore.list(kvCaller(ctx), parsed.data.prefix) };
     });
 
+    // -- supervised processes (PLUG-P6, §17.1/§22.4): spawn/signal are plugin
+    // surfaces gated on the process.spawn lease scope; stat/subscribe add a
+    // plugins.manage read view (owner=null sees every plugin) for doctor/UX. --
+    const pluginCaller = (
+      ctx: { principal: { kind: string; id?: string; scopes?: string[] } },
+      capability: Scope,
+    ): string => {
+      if (ctx.principal.kind !== "plugin")
+        throw new RpcCallError("FORBIDDEN_SCOPE", `${capability} is a plugin surface`, false);
+      const principal = ctx.principal as { id: string; scopes: string[] };
+      if (!principal.scopes.includes(capability))
+        throw new RpcCallError("FORBIDDEN_SCOPE", `requires ${capability}`, false, {
+          pluginKind: "PLUGIN_CAPABILITY_DENIED",
+        });
+      const record = plugins.get(principal.id);
+      if (record === undefined || !record.enabled)
+        throw new RpcCallError("PRECONDITION_FAILED", `${principal.id} is disabled`, false, {
+          pluginKind: "PLUGIN_DISABLED",
+        });
+      return principal.id;
+    };
+    const processViewer = (ctx: {
+      principal: { kind: string; id?: string; scopes?: string[] };
+    }): string | null => {
+      if (ctx.principal.kind === "plugin") return pluginCaller(ctx, "process.spawn");
+      const scopes = (ctx.principal as { scopes?: string[] }).scopes ?? [];
+      if (ctx.principal.kind === "local-token" && scopes.includes("plugins.manage")) return null;
+      throw new RpcCallError("FORBIDDEN_SCOPE", "process views are owner or plugins.manage", false);
+    };
+    api.register("process.spawn", (ctx, params) => {
+      const pluginId = pluginCaller(ctx, "process.spawn");
+      return { proc: processes.spawnFor(pluginId, params) };
+    });
+    api.register("process.signal", (ctx, params) => {
+      return { proc: processes.signal(processViewer(ctx), params) };
+    });
+    api.register("process.stat", (ctx, params) => {
+      const parsed = ProcessStatParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { procId? }", false);
+      return { processes: processes.stat(processViewer(ctx), parsed.data.procId) };
+    });
+    api.registerSubscription("process.subscribe", (ctx, _params, emit) => {
+      const owner = processViewer(ctx);
+      const fn = (ev: ProcessSubEvent): void => {
+        if (ev.kind === "delta" && owner !== null && ev.proc.pluginId !== owner) return;
+        emit(ev);
+      };
+      processes.on("changed", fn);
+      return {
+        snapshot: processes.snapshotFor(owner),
+        dispose: () => {
+          processes.off("changed", fn);
+        },
+      };
+    });
+
+    // -- endpoint adoption (PLUG-P6, §17.3) + MCP (§17.4/§22.4) --
+    const manageCaller = (ctx: { principal: { kind: string; scopes?: string[] } }): void => {
+      const scopes = (ctx.principal as { scopes?: string[] }).scopes ?? [];
+      if (ctx.principal.kind !== "local-token" || !scopes.includes("plugins.manage"))
+        throw new RpcCallError("FORBIDDEN_SCOPE", "requires a local plugins.manage caller", false);
+    };
+    api.register("services.registerEndpoint", (ctx, params) =>
+      endpoints.register(pluginCaller(ctx, "services.provide"), params),
+    );
+    api.register("services.unregisterEndpoint", (ctx, params) =>
+      endpoints.unregister(pluginCaller(ctx, "services.provide"), params),
+    );
+    api.register("services.health", () => endpoints.snapshot());
+    api.register("mcp.servers.add", (ctx, params) => {
+      manageCaller(ctx); // §17.4 — user policy surface, never an agent's
+      return mcp.serversAdd(params);
+    });
+    api.register("mcp.servers.remove", (ctx, params) => {
+      manageCaller(ctx);
+      mcp.serversRemove(params);
+      return { ok: true };
+    });
+    api.register("mcp.servers.list", () => mcp.serversList());
+    api.register("mcp.tools.list", () => mcp.toolsList());
+    api.register("mcp.tools.call", (_ctx, params) => mcp.toolsCall(params));
+    api.register("mcp.contribute.set", (ctx, params) => {
+      mcp.contributeSet(pluginCaller(ctx, "mcp.contribute"), params);
+      return { ok: true };
+    });
+    // provider liveness drives tool availability; registry changes drive
+    // projection, endpoint withdrawal (a worker that left "active" took its
+    // registrations with it — re-activation re-registers), and declared-server
+    // presence for enabled plugins.
+    services.on("changed", () => mcp.refreshContributed());
+    plugins.on("changed", () => {
+      for (const record of plugins.list()) {
+        const workerGone =
+          !record.enabled || (record.service !== "none" && record.service !== "active");
+        if (workerGone) endpoints.withdrawPlugin(record.id);
+        if (!record.enabled) {
+          mcp.withdrawPlugin(record.id);
+          continue;
+        }
+        const declared = plugins.declaredContributes(record.id)?.mcp?.servers ?? [];
+        const live = new Set(mcp.serversList().servers.map((s) => s.serverKey));
+        for (const server of declared) {
+          if (live.has(`${record.id}/${server.id}`)) continue;
+          // resolveSetting bridge is sync; plugin settings are async — until a
+          // first-party plugin declares an MCP server, an unset reference
+          // fails the START honestly (visible state), never a silent guess.
+          mcp.addDeclaredServer(record.id, server, () => undefined);
+        }
+      }
+      mcp.refreshContributed();
+    });
+
+    // -- per-capability grants (PLUG-P6, §15.2/§15.4): one device-local
+    // decision, then the LIVE cascade — old leases die at the mint table,
+    // plugin connections sever, children die, the service restarts fresh so
+    // its new lease carries exactly the post-decision scopes. --
+    api.register("plugins.grants.set", async (ctx, params) => {
+      const parsed = PluginsGrantsSetParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { id, capability, granted }",
+          false,
+        );
+      const { id, capability, granted } = parsed.data;
+      const { record, changed } = await plugins.setGrant(id, capability, granted);
+      if (changed) {
+        tokens.revokeByPlugin(id);
+        api.dropPluginConnections(id);
+        await processes.killPlugin(id);
+        await serviceHost?.stop(id);
+        endpoints.withdrawPlugin(id); // §15.4 — endpoints/MCP tools withdraw
+        mcp.refreshContributed();
+        if (record.enabled) void serviceHost?.restartFresh(id).catch(() => undefined);
+        logger
+          .child({ component: "plugin.grants" })
+          .info("fieldd.plugin_grants.changed", "Plugin grant changed; principals recycled", {
+            pluginId: id,
+            capability,
+            granted,
+            grantGeneration: record.grantGeneration,
+          });
+      }
+      return plugins.get(id) ?? record;
+    });
+
     // -- dynamic services (PLUG-P4, §14/§22.2) --
     api.setDynamicRouter(services);
     api.register("services.list", () => services.snapshot());
@@ -701,6 +944,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         "fieldd was superseded by another native-plane owner",
       );
       void serviceHost?.stopAll();
+      void processes.stopAll(); // §17.1 — children die no later than fieldd
       api.close();
       docLane.close();
       docs.dispose();
@@ -802,6 +1046,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         logger.info("fieldd.lifecycle.stopping", "fieldd is stopping");
         try {
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
+          await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
+          endpoints.dispose();
+          mcp.dispose();
           api.close();
           docLane.close();
           docs.dispose();

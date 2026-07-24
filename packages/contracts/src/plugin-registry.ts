@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { SemverString } from "./envelope";
+import { DeniedCapability } from "./plugin-runtime";
 import {
   CommandContribution,
+  PluginCapabilityContribution,
   PluginId,
   SettingsContribution,
   SurfaceContribution,
@@ -62,8 +64,40 @@ export const PluginErrorSummary = z
   .passthrough();
 export type PluginErrorSummary = z.infer<typeof PluginErrorSummary>;
 
-/** The public, path-free contribution sections. Services/MCP declarations stay
- * out until their runtime exists (stdio transports name executables). */
+/** P6 — sanitized MCP section: tool projections verbatim (public data) plus
+ * server ROWS stripped to id/kind/autoStart. Executables, urls, and setting
+ * keys never leave fieldd through the snapshot. */
+export const SanitizedMcp = z
+  .object({
+    tools: z
+      .array(
+        z
+          .object({
+            name: z.string(),
+            title: z.string(),
+            description: z.string(),
+            method: z.string(),
+          })
+          .passthrough(),
+      )
+      .default([]),
+    servers: z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            transportKind: z.enum(["stdio", "http"]),
+            autoStart: z.boolean(),
+          })
+          .passthrough(),
+      )
+      .default([]),
+  })
+  .passthrough();
+export type SanitizedMcp = z.infer<typeof SanitizedMcp>;
+
+/** The public, path-free contribution sections. Full MCP server transports
+ * stay out (they name executables); SanitizedMcp is the visible slice. */
 export const SanitizedContributions = z
   .object({
     widgets: z.array(WidgetContribution).default([]),
@@ -72,6 +106,11 @@ export const SanitizedContributions = z
     /** P5 — the §8.5 declaration (scalar form-subset schemas; PUBLIC data —
      * the generated pane renders from it; values live behind storage.settings) */
     settings: SettingsContribution.optional(),
+    /** P6 — custom capability declarations (§15.1: title/description/risk are
+     * exactly what the grants UX renders) */
+    capabilities: z.array(PluginCapabilityContribution).default([]),
+    /** P6 — §8.7 sanitized */
+    mcp: SanitizedMcp.optional(),
   })
   .passthrough();
 export type SanitizedContributions = z.infer<typeof SanitizedContributions>;
@@ -95,8 +134,14 @@ export const PluginRecord = z
     compatible: z.boolean(),
     enabled: z.boolean(),
     requestedCapabilities: z.array(z.string()),
-    /** P2: requested verbatim for valid plugins (policy ceilings land at P6). */
+    /** P6 — computeEffectiveGrants output (§15.2): requested ∩ eligibility ∩
+     * persisted device-local decisions. Ineligible/revoked requests surface in
+     * deniedCapabilities instead of silently thinning this list. */
     grantedCapabilities: z.array(z.string()),
+    deniedCapabilities: z.array(DeniedCapability).default([]),
+    /** §15.4 — bumps on every grant change; leases minted under an older
+     * generation are dead at the mint table. */
+    grantGeneration: z.number().int().nonnegative().default(0),
     contributions: SanitizedContributions,
     renderer: PublicEntryState,
     service: PublicEntryState,
@@ -141,8 +186,10 @@ export type PluginsEnableParams = z.infer<typeof PluginsEnableParams>;
 export const PluginsDisableParams = z.object({ id: PluginId }).passthrough();
 export type PluginsDisableParams = z.infer<typeof PluginsDisableParams>;
 
-/** Full §9.2 re-scan of every root. Per-plugin developer reload is §18.5 (P3). */
-export const PluginsReloadParams = z.object({}).passthrough();
+/** P6 — §18.5: with an id, the full dev-reload sequence for that plugin;
+ * without one, the P2-era whole-registry rescan (dev convenience — the empty
+ * shape this declaration superseded). */
+export const PluginsReloadParams = z.object({ id: PluginId.optional() }).passthrough();
 export type PluginsReloadParams = z.infer<typeof PluginsReloadParams>;
 
 /** plugins.list and plugins.reload return the snapshot; plugins.subscribe's

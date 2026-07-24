@@ -1,4 +1,5 @@
 import type { PluginManifestV1 } from "@vibefield/contracts";
+import { COMMENT_COMMAND } from "./commands";
 
 // The field tools (Track D3): organizational actors — not demos. Containers
 // are the product's workstream primitive (design-00 §3.3); comments are the
@@ -19,9 +20,27 @@ export const fieldToolsManifest: PluginManifestV1 = {
   title: "Field tools",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: ["onWidget:vibefield.field-tools.folder", "onWidget:vibefield.field-tools.comment"],
-  capabilities: [], // pure-canvas plugin: no fabric access
+  activation: [
+    "onWidget:vibefield.field-tools.folder",
+    "onWidget:vibefield.field-tools.comment",
+    // P6 — invoking the comment command activates the plugin (bundled, so it is
+    // already live at boot; the event documents the lazy-loader contract §19.2).
+    `onCommand:${COMMENT_COMMAND}`,
+  ],
+  // P6 — the comment command spawns a widget: that is a canvas WRITE (§12.7 —
+  // mutations ride canvas.write). No fabric access otherwise.
+  capabilities: ["canvas.write"],
   contributes: {
+    // P6 — the comment command (§8.3): C wraps the selection (canvas-context)
+    // and it lists in the ⌘K palette. The handler binds in renderer.ts.
+    commands: [
+      {
+        id: COMMENT_COMMAND,
+        title: "Comment around selection",
+        description: "Wrap the selected widgets in a tinted comment",
+        placements: ["palette", "canvas-context"],
+      },
+    ],
     widgets: [
       {
         type: "vibefield.field-tools.folder",

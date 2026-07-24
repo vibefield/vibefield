@@ -270,6 +270,49 @@ export class ServiceRegistry extends EventEmitter {
     return value;
   }
 
+  /** P6 §17.4 — is a namespace's provider live right now (MCP availability)? */
+  providerUp(namespace: string): boolean {
+    return this.providers.has(namespace);
+  }
+
+  /** P6 §17.4 — an MCP tool projection invoking its declared method. The
+   * tool's existence was gated by McpService (declaration + mcp.contribute +
+   * the caller's mcp.consume at the product method); the projection executes
+   * as the daemon's own "mcp" caller. Input/output validation binds exactly
+   * as for any caller; the custom-cap gate does not — DECLARING the tool is
+   * the plugin's opt-in (§17.4), and user policy sits above in McpService. */
+  async callProjected(method: string, params: unknown): Promise<unknown> {
+    const entry = this.methods.get(method);
+    if (entry === undefined)
+      throw new RpcCallError("NOT_FOUND", `no live provider for ${method}`, false, {
+        pluginKind: "PLUGIN_PROVIDER_GONE",
+      });
+    if (entry.decl.kind === "subscription")
+      throw new RpcCallError("PRECONDITION_FAILED", `${method} is a subscription`, false);
+    const args = params ?? {};
+    if (!entry.input(args))
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${method}: arguments failed the declared schema`,
+        false,
+        { pluginKind: "PLUGIN_SCHEMA_VIOLATION" },
+      );
+    let value: unknown;
+    try {
+      value = await entry.handlers.call(entry.decl.name, args, { kind: "mcp" });
+    } catch (e) {
+      if (e instanceof RpcCallError) throw e;
+      throw new RpcCallError(
+        "INTERNAL",
+        `provider error in ${method}: ${e instanceof Error ? e.message : "unknown"}`,
+        false,
+      );
+    }
+    if (entry.output !== undefined && !entry.output(value))
+      throw new RpcCallError("INTERNAL", `${method}: provider returned schema-invalid data`, false);
+    return value;
+  }
+
   async subscribe(
     ctx: CallerContext,
     method: string,

@@ -51,9 +51,15 @@ export const widgetlabManifest: PluginManifestV1 = {
     "onWidget:vibefield.widgetlab.signal",
     "onWidget:vibefield.widgetlab.filter",
     "onWidget:vibefield.widgetlab.scope",
+    // P6 dogfood — the hud.panel status surface activates the pack too.
+    "onSurface:vibefield.widgetlab.status",
   ],
   capabilities: [], // pure-canvas demo pack: no fabric access
   contributes: {
+    // P6 dogfood (§8.4): a fixed surface bound to hud.panel — proof a plugin
+    // contributes chrome, not just canvas widgets. The component binds in
+    // renderer.ts (StatusSurface).
+    surfaces: [{ id: "vibefield.widgetlab.status", title: "Widgetlab status", slot: "hud.panel" }],
     widgets: [
       {
         type: "vibefield.widgetlab.clock",

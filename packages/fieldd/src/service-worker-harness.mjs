@@ -252,6 +252,15 @@ if (scopes.includes("storage.self")) {
   ctx.storage = surfaces.storage;
 }
 
+// P6 — ctx.process (§17.1) iff process.spawn; ctx.endpoints (§17.3) iff
+// services.provide. Same law, same one shared SDK implementation.
+if (scopes.includes("process.spawn") || scopes.includes("services.provide")) {
+  const { createProcessSurfaces } = await import("@vibefield/plugin-sdk");
+  const surfaces = createProcessSurfaces(ctx.client);
+  if (scopes.includes("process.spawn")) ctx.process = surfaces.process;
+  if (scopes.includes("services.provide")) ctx.endpoints = surfaces.endpoints;
+}
+
 function errorShape(e) {
   return { kind: "INTERNAL", message: e instanceof Error ? e.message : String(e) };
 }

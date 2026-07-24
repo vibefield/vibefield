@@ -5,7 +5,8 @@
   "backgroundReason": "fixture: activates at startup to serve the P4 host tests",
   "capabilities": [
     "services.provide",
-    "background"
+    "background",
+    "process.spawn"
   ],
   "contributes": {
     "capabilities": [
@@ -83,6 +84,33 @@
               },
               "required": [
                 "dying"
+              ],
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.fixture.svc.use"
+          },
+          {
+            "idempotent": false,
+            "input": {
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "kind": "mutation",
+            "locality": "local",
+            "name": "spawnproc",
+            "output": {
+              "additionalProperties": false,
+              "properties": {
+                "pid": {
+                  "type": "number"
+                },
+                "procId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "procId",
+                "pid"
               ],
               "type": "object"
             },

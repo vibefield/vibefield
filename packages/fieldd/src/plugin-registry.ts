@@ -4,6 +4,7 @@ import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promi
 import { basename, join } from "node:path";
 import {
   CONTRACTS_VERSION,
+  computeEffectiveGrants,
   isWellFormedPluginId,
   PLUGIN_LIMITS,
   type PluginErrorSummary,
@@ -40,7 +41,9 @@ export interface PluginRegistryConfig {
 
 interface InstallRecordsFile {
   version: 1;
-  plugins: Record<string, { enabled: boolean }>;
+  /** P6 — `grants` is the §15.3 device-local decision store: absent/true =
+   * granted, explicit false = revoked. Same atomic file as enable intent. */
+  plugins: Record<string, { enabled: boolean; grants?: Record<string, boolean> }>;
 }
 
 export interface PluginRegistryHealth {
@@ -96,6 +99,14 @@ export class PluginRegistryService extends EventEmitter {
   /** P4 — live service-entry states asserted by the ServiceHost; an overlay so
    * a refresh() rebuild never erases runtime truth (§9.3 states). */
   private serviceStates = new Map<string, PluginRecord["service"]>();
+  /** P6 — §15.4 grant generations: bump on every effective-grant change; an
+   * overlay for the same reason serviceStates is (refresh never resets it). */
+  private grantGenerations = new Map<string, number>();
+  /** P6 — DAEMON-INTERNAL manifest sections the SANITIZED snapshot must not
+   * carry (service method schemas; MCP server transports name executables and
+   * setting keys). McpService and the projection read from here. */
+  private serviceDecls = new Map<string, PluginManifestV1["contributes"]>();
+  private pendingReloadDecls = new Map<string, PluginManifestV1["contributes"]>();
   private problems: PluginRegistryProblem[] = [];
   private records: InstallRecordsFile | null = null;
   private readonly recordsPath: string;
@@ -111,6 +122,7 @@ export class PluginRegistryService extends EventEmitter {
     const records = await this.loadRecords();
     const rows = new Map<string, PluginRecord>();
     const rootPaths = new Map<string, string>();
+    const nextDecls = new Map<string, PluginManifestV1["contributes"]>();
     const problems: PluginRegistryProblem[] = [];
 
     // bundled roots scan first — no source may shadow a bundled id (§9.1)
@@ -162,7 +174,9 @@ export class PluginRegistryService extends EventEmitter {
           });
           continue;
         }
-        const row = this.buildRow(parsed, raw, source, records);
+        const row = this.buildRow(parsed, raw, source, records, (id, contributes) =>
+          nextDecls.set(id, contributes),
+        );
         if (row === null) {
           problems.push({
             root: dir,
@@ -188,16 +202,27 @@ export class PluginRegistryService extends EventEmitter {
 
     this.rows = rows;
     this.rootPaths = rootPaths;
+    this.serviceDecls = nextDecls;
     this.problems = problems;
     this.publish();
   }
 
-  /** id-keyed record from a parsed manifest, or null when no trustworthy id. */
+  /** DAEMON-INTERNAL (never snapshot data): the plugin's raw manifest
+   * contributes — dynamic-service method schemas and full MCP server entries
+   * for the runtimes that need them (§8.6/§8.7). */
+  declaredContributes(id: string): PluginManifestV1["contributes"] | undefined {
+    return this.serviceDecls.get(id);
+  }
+
+  /** id-keyed record from a parsed manifest, or null when no trustworthy id.
+   * `collectContributes` receives the VALID manifest's raw contributes (the
+   * daemon-internal declaration capture — never snapshot data). */
   private buildRow(
     parsed: unknown,
     raw: string,
     source: "bundled" | "dev-linked",
     records: InstallRecordsFile,
+    collectContributes?: (id: string, contributes: PluginManifestV1["contributes"]) => void,
   ): PluginRecord | null {
     const idCandidate =
       typeof parsed === "object" && parsed !== null
@@ -228,7 +253,9 @@ export class PluginRegistryService extends EventEmitter {
         enabled: false,
         requestedCapabilities: [],
         grantedCapabilities: [],
-        contributions: { widgets: [], commands: [], surfaces: [] },
+        deniedCapabilities: [],
+        grantGeneration: this.grantGenerations.get(idCandidate) ?? 0,
+        contributions: { widgets: [], commands: [], surfaces: [], capabilities: [] },
         renderer: "none",
         service: "none",
         lastError: summary("PLUGIN_INVALID", validation.issues[0] ?? "manifest is invalid"),
@@ -236,6 +263,7 @@ export class PluginRegistryService extends EventEmitter {
     }
 
     const m: PluginManifestV1 = validation.manifest;
+    collectContributes?.(m.id, m.contributes);
     const hash = sha256(canonicalJson(m)); // §9.2 canonicalize-then-hash, the emitter's own form
     const platforms = m.engines.platforms;
     const platformOk = platforms === undefined || platforms.includes(process.platform as "darwin");
@@ -246,6 +274,18 @@ export class PluginRegistryService extends EventEmitter {
     const wantEnabled = records.plugins[m.id]?.enabled ?? true;
     const registered = compatible;
     const enabled = registered && wantEnabled;
+    // P6 — §15.2: effective = requested ∩ eligibility ∩ persisted decisions.
+    // The algorithm lives in contracts (§15.1); this service feeds it state.
+    // deniedCapabilities stays computed even while disabled — it describes the
+    // CALCULATION; `enabled` gates the effective list (§16.5 disable revokes).
+    const persisted = records.plugins[m.id]?.grants;
+    const grants = computeEffectiveGrants({
+      requested: m.capabilities,
+      hasRenderer: m.entries?.renderer !== undefined,
+      hasService: m.entries?.service !== undefined,
+      source,
+      ...(persisted !== undefined ? { persisted } : {}),
+    });
     const base = {
       id: m.id,
       version: m.version,
@@ -256,9 +296,9 @@ export class PluginRegistryService extends EventEmitter {
       compatible,
       enabled,
       requestedCapabilities: [...m.capabilities],
-      // P2: requested verbatim while enabled (policy ceilings land at P6);
-      // disable revokes (§16.5)
-      grantedCapabilities: enabled ? [...m.capabilities] : [],
+      grantedCapabilities: enabled ? grants.granted : [],
+      deniedCapabilities: grants.denied,
+      grantGeneration: this.grantGenerations.get(m.id) ?? 0,
       contributions: {
         widgets: m.contributes?.widgets ?? [],
         commands: m.contributes?.commands ?? [],
@@ -266,6 +306,27 @@ export class PluginRegistryService extends EventEmitter {
         // P5 — the §8.5 declaration is PUBLIC pane data; values stay behind
         // storage.settings (the delegated suite caught this omission)
         ...(m.contributes?.settings !== undefined ? { settings: m.contributes.settings } : {}),
+        // P6 — §15.1: custom-capability declarations are exactly what the
+        // grants UX renders (title/description/risk); §8.7 sanitized MCP —
+        // tools verbatim, servers stripped to id/kind (executables/urls stay in)
+        capabilities: m.contributes?.capabilities ?? [],
+        ...(m.contributes?.mcp !== undefined
+          ? {
+              mcp: {
+                tools: (m.contributes.mcp.tools ?? []).map((t) => ({
+                  name: t.name,
+                  title: t.title,
+                  description: t.description,
+                  method: t.method,
+                })),
+                servers: (m.contributes.mcp.servers ?? []).map((s) => ({
+                  id: s.id,
+                  transportKind: s.transport.kind,
+                  autoStart: s.autoStart === true,
+                })),
+              },
+            }
+          : {}),
       },
       renderer: (m.entries?.renderer !== undefined ? "inactive" : "none") as "inactive" | "none",
       service: (m.entries?.service !== undefined ? "inactive" : "none") as "inactive" | "none",
@@ -330,18 +391,165 @@ export class PluginRegistryService extends EventEmitter {
     const row = this.rows.get(id);
     if (row === undefined) throw new RpcCallError("NOT_FOUND", `no such plugin: ${id}`, false);
     const records = await this.loadRecords();
-    records.plugins[id] = { enabled };
+    records.plugins[id] = { ...(records.plugins[id] ?? {}), enabled };
     await this.saveRecords(records);
     const registered = row.state === "enabled" || row.state === "disabled";
+    const grants = this.effectiveGrantsFor(row, records);
     const next: PluginRecord = {
       ...row,
       enabled: registered && enabled,
-      grantedCapabilities: registered && enabled ? [...row.requestedCapabilities] : [],
+      // §15.2 through the same algorithm as buildRow — enable never resurrects
+      // an ineligible or revoked capability
+      grantedCapabilities: registered && enabled ? grants.granted : [],
+      deniedCapabilities: grants.denied,
       state: registered ? (enabled ? "enabled" : "disabled") : row.state,
     };
     this.rows.set(id, next);
     this.publish();
     return next;
+  }
+
+  /** P6 — §15.2/§15.4: persist one device-local grant decision and recompute.
+   * Returns whether the EFFECTIVE grant set moved — the daemon cascades
+   * (lease revocation, connection drops, service restart) only on movement. */
+  async setGrant(
+    id: string,
+    capability: string,
+    granted: boolean,
+  ): Promise<{ record: PluginRecord; changed: boolean }> {
+    const row = this.rows.get(id);
+    if (row === undefined) throw new RpcCallError("NOT_FOUND", `no such plugin: ${id}`, false);
+    if (!row.requestedCapabilities.includes(capability))
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `plugin ${id} does not request capability ${capability}`,
+        false,
+        { pluginKind: "PLUGIN_CAPABILITY_DENIED" },
+      );
+    const records = await this.loadRecords();
+    const prior = records.plugins[id] ?? { enabled: row.enabled };
+    records.plugins[id] = {
+      ...prior,
+      grants: { ...(prior.grants ?? {}), [capability]: granted },
+    };
+    await this.saveRecords(records);
+    const grants = this.effectiveGrantsFor(row, records);
+    const effective = row.enabled ? grants.granted : [];
+    const changed =
+      JSON.stringify(effective) !== JSON.stringify(row.grantedCapabilities) ||
+      JSON.stringify(grants.denied) !== JSON.stringify(row.deniedCapabilities);
+    const generation = (this.grantGenerations.get(id) ?? 0) + (changed ? 1 : 0);
+    this.grantGenerations.set(id, generation);
+    const next: PluginRecord = {
+      ...row,
+      grantedCapabilities: effective,
+      deniedCapabilities: grants.denied,
+      grantGeneration: generation,
+    };
+    this.rows.set(id, next);
+    this.publish();
+    return { record: next, changed };
+  }
+
+  /** §18.5 step 1-2 — validate a dev-linked plugin's CURRENT on-disk manifest
+   * without disturbing the live version. Throws on every refusal (not dev-
+   * linked, unreadable, invalid, id change, incompatible, durable-schema
+   * regression); returns the candidate row on success. The live row is
+   * untouched either way — that IS the v1 rollback story for dev-linked
+   * sources, whose artifacts live in the developer's own tree. */
+  async validateReload(id: string): Promise<PluginRecord> {
+    const row = this.rows.get(id);
+    if (row === undefined) throw new RpcCallError("NOT_FOUND", `no such plugin: ${id}`, false);
+    if (row.source !== "dev-linked")
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "plugins.reload is for dev-linked sources only (§18.5); bundled plugins update with the app",
+        false,
+        { pluginKind: "PLUGIN_INVALID" },
+      );
+    const dir = this.rootPaths.get(id);
+    if (dir === undefined)
+      throw new RpcCallError("UNAVAILABLE", "plugin directory is no longer known", false);
+    const manifestPath = join(dir, "vibefield.plugin.json");
+    let raw: string;
+    let parsed: unknown;
+    try {
+      const size = (await stat(manifestPath)).size;
+      if (size > PLUGIN_LIMITS.MANIFEST_MAX_BYTES) throw new Error("manifest exceeds size cap");
+      raw = await readFile(manifestPath, "utf8");
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `new manifest is unreadable (${(e as Error).message}); live version untouched`,
+        false,
+        { pluginKind: "PLUGIN_INVALID" },
+      );
+    }
+    const records = await this.loadRecords();
+    const candidate = this.buildRow(parsed, raw, "dev-linked", records, (mid, contributes) => {
+      // staged: promoted to the live decls map only by applyReload (and only
+      // when the id held — an id-change refusal must not pollute the map)
+      if (mid === id) this.pendingReloadDecls.set(id, contributes);
+    });
+    if (candidate === null || candidate.id !== id)
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "reload may not change the plugin id (§18.5) — uninstall and install instead",
+        false,
+        { pluginKind: "PLUGIN_INVALID" },
+      );
+    if (candidate.state === "invalid" || candidate.state === "incompatible")
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `new manifest refused (${candidate.lastError?.message ?? candidate.state}); live version untouched`,
+        false,
+        { pluginKind: candidate.state === "invalid" ? "PLUGIN_INVALID" : "PLUGIN_INCOMPATIBLE" },
+      );
+    // §18.5 — durable widget schemas may only move forward
+    const oldVersions = new Map(
+      row.contributions.widgets.map((w) => [w.type, w.schemaVersion] as const),
+    );
+    for (const w of candidate.contributions.widgets) {
+      const prior = oldVersions.get(w.type);
+      if (prior !== undefined && w.schemaVersion < prior)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `widget ${w.type} regresses schemaVersion ${prior} → ${w.schemaVersion} (§18.5); live version untouched`,
+          false,
+          { pluginKind: "PLUGIN_SCHEMA_VIOLATION" },
+        );
+    }
+    return candidate;
+  }
+
+  /** §18.5 step 6 — the atomic registry replacement, applied only after the
+   * daemon has deactivated the old module instance. */
+  applyReload(id: string, candidate: PluginRecord): PluginRecord {
+    const staged = this.pendingReloadDecls.get(id);
+    if (staged !== undefined) {
+      this.serviceDecls.set(id, staged);
+      this.pendingReloadDecls.delete(id);
+    }
+    this.rows.set(id, candidate);
+    this.publish();
+    return this.snapshot().plugins.find((p) => p.id === id) ?? candidate;
+  }
+
+  /** The row-shaped view of computeEffectiveGrants — entry kinds come from the
+   * row ("none" means the manifest declared no such entry). */
+  private effectiveGrantsFor(
+    row: PluginRecord,
+    records: InstallRecordsFile,
+  ): ReturnType<typeof computeEffectiveGrants> {
+    const persisted = records.plugins[row.id]?.grants;
+    return computeEffectiveGrants({
+      requested: row.requestedCapabilities,
+      hasRenderer: row.renderer !== "none",
+      hasService: row.service !== "none",
+      source: row.source,
+      ...(persisted !== undefined ? { persisted } : {}),
+    });
   }
 
   health(): PluginRegistryHealth {

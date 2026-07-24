@@ -12,6 +12,7 @@ import type { DocManager, DocManagerState } from "../doc-manager";
 import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
 import { getRendererLogger } from "../logging";
+import { setActiveCanvasEngine } from "../plugin-host/canvas-engine-ref";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import { migrateTypeRenames } from "../plugin-host/migrate-type-renames";
 import { bindPersistence } from "./persistence-controller";
@@ -221,7 +222,9 @@ export function useWorkspaceSession(
   // the stage's GL/halo teardown runs FIRST via the shared ref (idempotent —
   // the stage's own unmount cleanups may already have run it).
   useEffect(() => {
+    setActiveCanvasEngine(ce); // P6 §12.7 — publish the live engine for ctx.canvas
     return () => {
+      setActiveCanvasEngine(null); // cleared first — never hand out a disposed engine
       stageDisposeRef.current?.();
       ce.dispose();
     };

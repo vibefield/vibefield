@@ -42,6 +42,22 @@ describe("plugin-widgetlab", () => {
     expect(session.bindings.get("vibefield.widgetlab.orbit-cube")?.animated).toBe(false);
   });
 
+  it("dogfoods the hud.panel status surface; activation binds it (§8.4/§13.2)", async () => {
+    const surfaces = widgetlabManifest.contributes?.surfaces ?? [];
+    expect(surfaces).toEqual([
+      { id: "vibefield.widgetlab.status", title: "Widgetlab status", slot: "hud.panel" },
+    ]);
+    const declaredWidgets = (widgetlabManifest.contributes?.widgets ?? []).map((w) => w.type);
+    const session = await activateWithMockHost(widgetlabRenderer, {
+      id: widgetlabManifest.id,
+      version: widgetlabManifest.version,
+      declaredWidgets,
+      declaredSurfaces: surfaces.map((s) => s.id),
+    });
+    expect([...session.surfaces.keys()]).toEqual(["vibefield.widgetlab.status"]);
+    expect(session.surfaces.get("vibefield.widgetlab.status")).toBeDefined();
+  });
+
   it("node ports survive to v1 (the wire-editor trio's whole reason for being)", () => {
     const widgets = widgetlabManifest.contributes?.widgets ?? [];
     expect(widgets.find((w) => w.type === "vibefield.widgetlab.filter")?.ports).toEqual([

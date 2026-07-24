@@ -1,7 +1,10 @@
+import type { ComponentType } from "react";
 import type {
+  CommandInvocation,
   Disposable,
   DynamicMethodHandler,
   PluginLogger,
+  PluginSurfaceProps,
   RendererPluginContext,
   RendererPluginModule,
   ServicePluginContext,
@@ -10,12 +13,21 @@ import type {
   WidgetRegistration,
 } from "./index";
 
+type MockCommandHandler = (args: unknown, invocation: CommandInvocation) => void | Promise<void>;
+type MockSurfaceComponent = ComponentType<PluginSurfaceProps>;
+
 // §5.4.4 — the mock host lives WITH the SDK contract it mocks. Runs a renderer
 // module's activate against a collecting context: no engine, no daemon, no
 // React. Widget-state fixture rendering (the playground) builds on this later.
 
 export interface MockActivation {
   bindings: Map<string, WidgetBinding>;
+  /** command id → bound handler (§13.1) — ctx.commands is present iff the
+   * options DECLARE the commands contribution (declaredCommands supplied) */
+  commands: Map<string, MockCommandHandler>;
+  /** surface id → bound component (§13.2) — ctx.surfaces is present iff the
+   * options DECLARE the surfaces contribution (declaredSurfaces supplied) */
+  surfaces: Map<string, MockSurfaceComponent>;
   logs: Array<{ level: "debug" | "info" | "warn" | "error"; message: string }>;
   disposables: Disposable[];
   /** abort the mock session (fires ctx.signal; further registers throw) */
@@ -27,6 +39,16 @@ export interface MockPluginHostOptions {
   version?: string;
   /** widget types the manifest declares — register() enforces §12.1 against it */
   declaredWidgets?: readonly string[];
+  /** command ids the manifest declares. Supplying this (even empty) makes
+   * ctx.commands present (the manifest declares the kind); register() accepts
+   * declared ids and refuses undeclared ones + double-binds (§8.3/§13.1). */
+  declaredCommands?: readonly string[];
+  /** surface ids the manifest declares. Supplying this makes ctx.surfaces
+   * present; register() enforces declared-id + no-double-bind (§8.4/§13.2). */
+  declaredSurfaces?: readonly string[];
+  /** the opaque canvas handle ctx.canvas.engine() returns. Supplying this makes
+   * ctx.canvas present (mirrors canvas.read/write being granted — §12.7). */
+  canvasEngine?: unknown;
 }
 
 /** Activate a module against a mock context; returns the collected surface.
@@ -36,8 +58,12 @@ export async function activateWithMockHost(
   opts: MockPluginHostOptions = {},
 ): Promise<MockActivation> {
   const declared = opts.declaredWidgets;
+  const declaredCommands = opts.declaredCommands;
+  const declaredSurfaces = opts.declaredSurfaces;
   const controller = new AbortController();
   const bindings = new Map<string, WidgetBinding>();
+  const commands = new Map<string, MockCommandHandler>();
+  const surfaces = new Map<string, MockSurfaceComponent>();
   const logs: MockActivation["logs"] = [];
   const disposables: Disposable[] = [];
   const log =
@@ -78,6 +104,49 @@ export async function activateWithMockHost(
         return Promise.reject(new Error("mock host: no product connection"));
       },
     },
+    // §10.2 absent-API law: the three P6 surfaces are present iff their
+    // contribution/capability is declared (mirrors the real renderer harness).
+    ...(declaredCommands !== undefined
+      ? {
+          commands: {
+            register(commandId: string, handler: MockCommandHandler): Disposable {
+              if (controller.signal.aborted) throw new Error("mock host: register after abort");
+              if (!declaredCommands.includes(commandId))
+                throw new Error(`mock host: ${commandId} is not declared by this plugin`);
+              if (commands.has(commandId))
+                throw new Error(`mock host: ${commandId} already bound in this entry`);
+              commands.set(commandId, handler);
+              return {
+                dispose() {
+                  commands.delete(commandId);
+                },
+              };
+            },
+          },
+        }
+      : {}),
+    ...(declaredSurfaces !== undefined
+      ? {
+          surfaces: {
+            register(surfaceId: string, component: MockSurfaceComponent): Disposable {
+              if (controller.signal.aborted) throw new Error("mock host: register after abort");
+              if (!declaredSurfaces.includes(surfaceId))
+                throw new Error(`mock host: ${surfaceId} is not declared by this plugin`);
+              if (surfaces.has(surfaceId))
+                throw new Error(`mock host: ${surfaceId} already bound in this entry`);
+              surfaces.set(surfaceId, component);
+              return {
+                dispose() {
+                  surfaces.delete(surfaceId);
+                },
+              };
+            },
+          },
+        }
+      : {}),
+    ...(opts.canvasEngine !== undefined
+      ? { canvas: { engine: () => opts.canvasEngine ?? null } }
+      : {}),
     track<T extends Disposable>(resource: T): T {
       disposables.push(resource);
       return resource;
@@ -85,7 +154,7 @@ export async function activateWithMockHost(
   };
   const result = await mod.activate(ctx);
   if (result !== undefined && result !== null) disposables.push(result);
-  return { bindings, logs, disposables, abort: () => controller.abort() };
+  return { bindings, commands, surfaces, logs, disposables, abort: () => controller.abort() };
 }
 
 // --- the service-side twin (P4) ----------------------------------------------

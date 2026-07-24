@@ -3,8 +3,9 @@
  * The comment spawns at the BOTTOM of the frame (order "first" — ONE undoable
  * tx) so members render and pick above it, sized to the selection bbox
  * (measured-when-real sizes) plus header + padding. Random palette accent per
- * spawn. Exported as a command function — the spine binds the key (P0; the
- * design-03 commands contribution replaces the direct import later).
+ * spawn. Exported as a command function — since P6 the spine invokes it through
+ * the §13 commands contribution (renderer.ts binds it via ctx.commands.register
+ * on the §12.7 canvas handle); the former direct field-app import is retired.
  */
 import {
   type CanvasEngine,
@@ -13,6 +14,10 @@ import {
   Size,
   selectedEntities,
 } from "@vibefield/plugin-sdk/canvas";
+
+/** The declared command id (§8.3) — one source of truth for the manifest, the
+ * renderer binding, and the spine's canvas-context/palette invocations. */
+export const COMMENT_COMMAND = "vibefield.field-tools.comment-around-selection";
 
 /** Curated accents (the lab's card palette) — random pick per C-spawn. */
 export const COMMENT_PALETTE = [

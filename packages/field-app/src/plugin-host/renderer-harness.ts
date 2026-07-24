@@ -1,15 +1,21 @@
 import { PLUGIN_LIMITS, type PluginManifestV1 } from "@vibefield/contracts";
 import {
+  type CommandInvocation,
   createStorageSurfaces,
   type Disposable,
   type PluginLogger,
+  type PluginSurfaceProps,
   type RendererPluginContext,
   type RendererPluginModule,
   type WidgetBinding,
   type WidgetRegistration,
 } from "@vibefield/plugin-sdk";
+import type { ComponentType } from "react";
 import { getRendererLogger } from "../logging";
+import { getActiveCanvasEngine } from "./canvas-engine-ref";
+import * as commandRegistry from "./command-registry";
 import { createPluginProductClient } from "./plugin-client";
+import * as surfaceRegistry from "./surface-registry";
 
 // The host-owned renderer harness (spec §10.3, P3a): construct the context,
 // invoke activate, validate registrations (§12.1 — declared-by-this-plugin,
@@ -57,6 +63,24 @@ export function activateRenderer(
   if (cached !== undefined) return cached;
 
   const declared = new Set((manifest.contributes?.widgets ?? []).map((w) => w.type));
+  // §8.3/§8.4 declared contributions — the manifest is the always-available
+  // authority (the fieldd snapshot may be null at boot; two-plane law). Commands
+  // and surfaces bind only ids the manifest declares; a surface's SLOT is
+  // manifest truth (a component cannot choose its slot — §13.2).
+  const declaredCommands = new Set((manifest.contributes?.commands ?? []).map((c) => c.id));
+  const declaredSurfaces = new Map(
+    (manifest.contributes?.surfaces ?? []).map((s) => [
+      s.id,
+      { slot: s.slot, order: s.order ?? 0 },
+    ]),
+  );
+  // §12.7 STOPGAP gate: mirror the storage.self pattern — key on the REQUESTED
+  // capability (the manifest ceiling). The daemon's caller matrix enforces the
+  // granted set for fabric calls; the canvas handle is an in-renderer direct
+  // engine reference with no daemon behind it, so requested-capability is the
+  // honest v1 signal (recorded — the curated PA-27 tier will gate on grants).
+  const hasCanvas =
+    manifest.capabilities.includes("canvas.read") || manifest.capabilities.includes("canvas.write");
   const client = createPluginProductClient(manifest.id);
   const bindings = new Map<string, WidgetBinding>();
   const resources: Disposable[] = [];
@@ -85,6 +109,55 @@ export function activateRenderer(
     // §11.2: every call this plugin makes rides its own leased connection —
     // the plugin principal, not the window's. Lazy: idle plugins cost nothing.
     client,
+    // P6 §8.3/§13.1 — commands present iff the manifest declares them (§10.2).
+    // The handler table is spine-owned (command-registry); each registration is
+    // tracked so deactivation disposes it (§18.1).
+    ...(declaredCommands.size > 0
+      ? {
+          commands: {
+            register(
+              commandId: string,
+              handler: (args: unknown, invocation: CommandInvocation) => void | Promise<void>,
+            ): Disposable {
+              if (controller.signal.aborted)
+                throw new Error(`${manifest.id}: register after activation ended`);
+              if (!declaredCommands.has(commandId))
+                throw new Error(`${commandId} is not declared by ${manifest.id} (§8.3)`);
+              const disp = commandRegistry.register(manifest.id, commandId, handler);
+              resources.push(disp);
+              return disp;
+            },
+          },
+        }
+      : {}),
+    // P6 §8.4/§13.2 — surfaces present iff declared. The harness resolves the
+    // manifest-declared slot; the registry owns slot policy (godview refused).
+    ...(declaredSurfaces.size > 0
+      ? {
+          surfaces: {
+            register(surfaceId: string, component: ComponentType<PluginSurfaceProps>): Disposable {
+              if (controller.signal.aborted)
+                throw new Error(`${manifest.id}: register after activation ended`);
+              const decl = declaredSurfaces.get(surfaceId);
+              if (decl === undefined)
+                throw new Error(`${surfaceId} is not declared by ${manifest.id} (§8.4)`);
+              const disp = surfaceRegistry.register(
+                manifest.id,
+                surfaceId,
+                decl.slot,
+                component,
+                decl.order,
+              );
+              resources.push(disp);
+              return disp;
+            },
+          },
+        }
+      : {}),
+    // P6 §12.7 STOPGAP — the least-power canvas handle, present iff canvas.read
+    // or canvas.write is requested. Reads the live engine ref lazily (never
+    // captured — a doc switch swaps the engine underneath).
+    ...(hasCanvas ? { canvas: { engine: () => getActiveCanvasEngine() } } : {}),
     // P5 — present iff the manifest requests storage.self (§10.2 absent-API law)
     ...(manifest.capabilities.includes("storage.self") ? createStorageSurfaces(client) : {}),
     track<T extends Disposable>(resource: T): T {

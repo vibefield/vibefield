@@ -7,7 +7,6 @@ import {
 } from "@vibecook/ice";
 import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useStageHold } from "@vibecook/ice/react";
-import { spawnCommentAroundSelection } from "@vibefield/plugin-field-tools";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type Dispatch,
@@ -19,9 +18,11 @@ import {
   useState,
 } from "react";
 import type { DocManager, DocManagerState } from "../doc-manager";
+import { CommandPalette } from "../hud/CommandPalette";
 import { FilePill } from "../hud/FilePill";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { NavigationBreadcrumbs } from "../hud/NavigationBreadcrumbs";
+import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
 import { WidgetTray } from "../hud/WidgetTray";
 import { ZoomPill } from "../hud/ZoomPill";
 import {
@@ -30,6 +31,7 @@ import {
   SettingsPanel,
   type ThemeColors,
 } from "../panels";
+import * as commandRegistry from "../plugin-host/command-registry";
 import {
   DEFAULT_OVERLAP_GLOW,
   DEFAULT_OVERLAP_GLOW_THEME_COLORS,
@@ -45,6 +47,11 @@ import {
 // and the sheet/loading stage holds. Sheet open/close STATE stays in FieldView
 // (the canvas recede transform derives from it in the same render — a
 // callback-up would land the recede one frame late).
+
+// §13.1 windowId: the renderer has no per-window identity yet (v1 is one field
+// window). A stable constant names it honestly; the id becomes real when
+// multi-window lands (recorded delta).
+const FIELD_WINDOW_ID = "field";
 
 /** The chrome-owned settings state, bundled so FieldView can thread it to the
  * canvas (grid dot color, ECS profiling) without a dozen loose props. */
@@ -118,6 +125,7 @@ export function ChromeLayer({
   devtoolsRef: MutableRefObject<DevtoolsHandle | null>;
 }): ReactElement {
   const { themeColors, overlapGlow, overlapGlowThemeColors, showSettings, showEcs } = chrome;
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // The docs sheet + the loading veil quiesce the stage exactly like the tray
   // (WidgetTray holds for itself).
@@ -171,10 +179,20 @@ export function ChromeLayer({
     const onKeyDownCapture = (e: KeyboardEvent) => {
       if ((e.key !== "c" && e.key !== "C") || e.metaKey || e.ctrlKey || e.altKey) return;
       if (isEditableTarget(e.target)) return;
-      if (selectedEntities(ce.world).length === 0) return; // fall through → connect tool
+      const sel = selectedEntities(ce.world);
+      if (sel.length === 0) return; // fall through → connect tool
       e.preventDefault();
       e.stopPropagation();
-      spawnCommentAroundSelection(ce);
+      // §13 — the C-key is a canvas-context invocation of field-tools' declared
+      // command through the SPINE registry, not a direct plugin import (R10 — the
+      // field-app must import nothing from plugins/*). The registry carries
+      // provenance and the {source:"canvas-context"} invocation.
+      void commandRegistry.invoke("vibefield.field-tools.comment-around-selection", undefined, {
+        source: "canvas-context",
+        windowId: FIELD_WINDOW_ID,
+        selection: sel.map((en) => String(en)),
+        userGesture: true,
+      });
     };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keydown", onKeyDownCapture, true);
@@ -183,6 +201,26 @@ export function ChromeLayer({
       window.removeEventListener("keydown", onKeyDownCapture, true);
     };
   }, [ce]);
+
+  // ⌘K / Ctrl+K toggles the command palette (§8.3). ⌘K is free — the ICE keymap
+  // and the tray's B/Esc/C additions never claim it. Opening it closes the tray
+  // and docs sheets (one modal at a time — the FieldView mutual-exclusion rule).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key !== "k" && e.key !== "K") || (!e.metaKey && !e.ctrlKey) || e.altKey) return;
+      e.preventDefault();
+      setPaletteOpen((v) => {
+        const next = !v;
+        if (next) {
+          onTrayOpenChange(false);
+          onDocsOpenChange(false);
+        }
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onTrayOpenChange, onDocsOpenChange]);
 
   // ECS devtools while the button is active (v1's EcsDevtools panel slot).
   // The FACADE goes in (not ce.engine): the strata observer's durable tab
@@ -266,6 +304,17 @@ export function ChromeLayer({
           </svg>
         )}
       </button>
+
+      {/* hud.attention (§8.4): the top-right attention stack, below the theme
+          fab. pointer-events-none wrapper so an empty slot never blocks the
+          canvas; the host restores pointer-events on its own content. */}
+      <div
+        data-hud-flight="top-right"
+        className="hud-flight pointer-events-none absolute top-16 right-4 z-40 flex w-72 max-w-[80vw] flex-col"
+      >
+        <PluginSurfaceHost slot="hud.attention" windowId={FIELD_WINDOW_ID} />
+      </div>
+
       <WidgetTray ce={ce} registry={registry} open={trayOpen} onOpenChange={onTrayOpenChange} />
 
       <button
@@ -327,6 +376,24 @@ export function ChromeLayer({
           onClose={() => chrome.setShowSettings(false)}
         />
       )}
+
+      {/* hud.panel (§8.4): the bottom-anchored panel area, above the settings
+          fab and clear of the centered tray. Empty → invisible (host null). */}
+      <div
+        data-hud-flight="bottom-left"
+        className="hud-flight pointer-events-none absolute bottom-20 left-4 z-40 flex w-72 max-w-[80vw] flex-col"
+      >
+        <PluginSurfaceHost slot="hud.panel" windowId={FIELD_WINDOW_ID} />
+      </div>
+
+      {/* The ⌘K command palette (§8.3) — a floating overlay above the field
+          chrome, below the modal loading veil. */}
+      <CommandPalette
+        ce={ce}
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        windowId={FIELD_WINDOW_ID}
+      />
 
       {/* The loading veil rides ABOVE all chrome — loading is modal (B4 §2). */}
       <LoadingVeil loading={docState.loading} />

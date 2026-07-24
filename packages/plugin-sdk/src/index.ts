@@ -8,9 +8,11 @@
 //
 // P3 SUBSET, honest by omission (§10.2 — unavailable APIs are ABSENT, never
 // stubs): ctx carries plugin/logger/signal/track/widgets/client. Commands,
-// surfaces, canvas mutations (ctx.canvas), pool, settings, storage arrive with
-// their runtimes (P4+). ctx.plugin omits manifestHash/installRevision until
-// the staged loader supplies them (recorded delta, thinking-p3).
+// surfaces, and the canvas handle (ctx.canvas) arrive at P6; pool arrives with
+// its runtime. ctx.plugin omits manifestHash/installRevision until the staged
+// loader supplies them (recorded delta, thinking-p3).
+
+import type { ComponentType } from "react";
 
 export interface Disposable {
   dispose(): void | Promise<void>;
@@ -68,6 +70,13 @@ export interface RendererPluginContext {
   readonly logger: PluginLogger;
   readonly widgets: RendererWidgetAPI;
   readonly client: PluginProductClient;
+  /** present iff the manifest DECLARES contributes.commands (§8.3/§10.2 — the
+   * absent-API law: no contribution, no API surface) */
+  readonly commands?: RendererCommandAPI;
+  /** present iff the manifest DECLARES contributes.surfaces (§8.4/§10.2) */
+  readonly surfaces?: RendererSurfaceAPI;
+  /** present iff canvas.read or canvas.write is granted (§12.7 stopgap/§10.2) */
+  readonly canvas?: PluginCanvasAPI;
   /** present iff the manifest requests storage.self (§16.3 — absent, not stubbed) */
   readonly settings?: PluginSettingsAPI;
   readonly storage?: PluginStorageAPI;
@@ -123,8 +132,8 @@ export interface PluginServiceProviderAPI {
   }): Disposable;
 }
 
-/** §14.1, the P4 subset — settings/storage/process/endpoints/mcp/net arrive
- * with their runtimes (P5/P6); absent APIs are ABSENT, never stubs. */
+/** §14.1 — the absent-API law (§10.2) throughout: every optional surface is
+ * present iff its capability is granted; mcp/net still await their slices. */
 export interface ServicePluginContext {
   readonly plugin: { readonly id: string; readonly version: string };
   readonly signal: AbortSignal;
@@ -134,6 +143,10 @@ export interface ServicePluginContext {
   /** present iff the manifest requests storage.self (§16.3 — absent, not stubbed) */
   readonly settings?: PluginSettingsAPI;
   readonly storage?: PluginStorageAPI;
+  /** P6 — present iff process.spawn is granted (§17.1) */
+  readonly process?: PluginProcessAPI;
+  /** P6 — present iff services.provide is granted (§17.3) */
+  readonly endpoints?: PluginEndpointAPI;
   track<T extends Disposable>(resource: T): T;
 }
 
@@ -143,6 +156,88 @@ export interface ServicePluginModule {
 
 export function defineServicePlugin(mod: ServicePluginModule): ServicePluginModule {
   return mod;
+}
+
+// --- processes + endpoints (P6, spec §17.1/§17.3) ------------------------------
+
+/** §17.1 — fieldd owns the child: policy, env stripping, the process group,
+ * the termination ladder, provenance. Plugin code MUST NOT reach for ambient
+ * child_process (the import wall enforces it). */
+export interface PluginProcessHandle extends Disposable {
+  readonly procId: string;
+  /** term = group SIGTERM then SIGKILL after grace; kill = group SIGKILL now */
+  signal(sig: "term" | "kill"): Promise<void>;
+  stat(): Promise<unknown>;
+}
+
+export interface PluginProcessAPI {
+  spawn(request: {
+    executable: string;
+    args?: string[];
+    cwd?: string;
+    env?: Record<string, string>;
+    restart: "never" | "on-crash";
+  }): Promise<PluginProcessHandle>;
+}
+
+/** §17.3 — adopt a local server under a declared service id. Health is
+ * mandatory; v1 exposure is app-only (mesh/mcp exposure refuse honestly until
+ * their runtimes land). */
+export interface PluginEndpointAPI {
+  register(request: {
+    serviceId: string;
+    endpoint: { protocol: "http"; port: number };
+    health: { path: string; intervalMs: number };
+    expose: { app: boolean; mesh: boolean; mcp: boolean };
+  }): Promise<Disposable>;
+}
+
+/** ONE implementation for the worker harness (the renderer never spawns):
+ * everything rides the plugin's product client — the daemon's caller matrix
+ * is the enforcement, this is a veneer. */
+export function createProcessSurfaces(client: PluginProductClient): {
+  process: PluginProcessAPI;
+  endpoints: PluginEndpointAPI;
+} {
+  const process: PluginProcessAPI = {
+    async spawn(request) {
+      const res = (await client.request("process.spawn", request)) as {
+        proc: { procId: string };
+      };
+      const procId = res.proc.procId;
+      return {
+        procId,
+        async signal(sig) {
+          await client.request("process.signal", { procId, signal: sig });
+        },
+        async stat() {
+          const stat = (await client.request("process.stat", { procId })) as {
+            processes: unknown[];
+          };
+          return stat.processes[0];
+        },
+        dispose() {
+          void client.request("process.signal", { procId, signal: "term" }).catch(() => {
+            // already gone — dispose is best-effort by contract (§18.1)
+          });
+        },
+      };
+    },
+  };
+  const endpoints: PluginEndpointAPI = {
+    async register(request) {
+      await client.request("services.registerEndpoint", request);
+      const serviceId = request.serviceId;
+      return {
+        dispose() {
+          void client.request("services.unregisterEndpoint", { serviceId }).catch(() => {
+            // withdrawal on disable already removed it — best-effort (§18.1)
+          });
+        },
+      };
+    },
+  };
+  return { process, endpoints };
 }
 
 // --- settings + storage (P5, spec §16.2/§16.3) --------------------------------
@@ -236,4 +331,57 @@ export function createStorageSurfaces(client: PluginProductClient): {
     },
   };
   return { settings, storage };
+}
+
+// --- commands + surfaces at runtime (P6, spec §8.3/§8.4/§13) -------------------
+
+/** §13.1 verbatim — what a command handler learns about its invocation. The
+ * SPINE sets every field; a handler cannot claim a different source or user
+ * gesture (§13.1). `selection` is the current canvas selection at invoke time;
+ * `windowId` names the invoking window. */
+export interface CommandInvocation {
+  source: "palette" | "widget-context" | "canvas-context" | "hud" | "godview";
+  windowId: string;
+  selection: string[];
+  userGesture: boolean;
+}
+
+/** §13.1 — bind a handler to a command THIS plugin's manifest declares. The
+ * spine owns palette ordering, args validation, provenance, and invocation
+ * (§8.3); a handler for an undeclared id or a double-bind is refused. Returns
+ * the un-bind handle (auto-tracked by the host — §18.1). */
+export interface RendererCommandAPI {
+  register(
+    commandId: string,
+    handler: (args: unknown, invocation: CommandInvocation) => void | Promise<void>,
+  ): Disposable;
+}
+
+/** §8.4/§13.2 — the props the spine supplies to a bound surface component.
+ * Typed loosely on purpose: the spine owns slot layout/props/subscriptions, and
+ * a component cannot move itself to another slot or escape its boundary. */
+export interface PluginSurfaceProps {
+  slot: string;
+  windowId: string;
+}
+
+/** §13.2 — bind a React component to a surface THIS plugin's manifest declares.
+ * Undeclared ids are refused; forward-declared-but-not-yet-live slots
+ * (godview.*) are refused honestly at bind time (§8.4). Returns the un-bind
+ * handle (auto-tracked — §18.1). */
+export interface RendererSurfaceAPI {
+  register(surfaceId: string, component: ComponentType<PluginSurfaceProps>): Disposable;
+}
+
+/** §12.7 A2-tier STOPGAP: the curated canvas tier (PA-27 — a provenance-
+ * stamping, write-gated view speaking ICE's own vocabulary) supersedes this;
+ * this is the least-power v1 handle so declared commands can act on the canvas
+ * — a recorded delta (thinking-p3). The raw mutable World stays unreachable
+ * (PA-22); callers cast the opaque handle through the SDK ./canvas CanvasEngine
+ * door. Present on ctx iff canvas.read or canvas.write is granted (§10.2). */
+export interface PluginCanvasAPI {
+  /** The active canvas engine, or null when none is mounted (daemon-away boot,
+   * between doc switches). Opaque `unknown` — the SDK ./canvas re-export types
+   * the cast; a command reads a null return as "no canvas, no-op". */
+  engine(): unknown | null;
 }

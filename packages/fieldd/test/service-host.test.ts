@@ -183,6 +183,43 @@ describe("ServiceHost — the worker end-to-end (§14.2)", () => {
   }, 60_000);
 });
 
+describe("supervised processes through the worker (§17.1, P6)", () => {
+  it("ctx.process spawns via the product surface; disable kills the child", async () => {
+    const { daemon } = await setup();
+    await until(() => serviceState(daemon) === "active", 8000);
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+
+    // plugin code → ctx.process.spawn → process.spawn (plugin principal,
+    // process.spawn lease scope) → ProcessService
+    const spawned = (await rpc.call(`${NS}.spawnproc`, {})) as { procId: string; pid: number };
+    expect(spawned.procId).toContain(ID);
+    expect(spawned.pid).toBeGreaterThan(0);
+
+    // the plugins.manage view (shell) sees it with full provenance
+    const stat = (await rpc.call("process.stat", {})) as {
+      processes: Array<{ procId: string; pluginId: string; state: string }>;
+    };
+    const row = stat.processes.find((p) => p.procId === spawned.procId);
+    expect(row?.pluginId).toBe(ID);
+    expect(row?.state).toBe("running");
+
+    // §16.5/§17.1 — disable deactivates the worker AND kills its children
+    await rpc.call("plugins.disable", { id: ID });
+    await until(() => serviceState(daemon) === "inactive", 8000);
+    await until(() => {
+      try {
+        process.kill(spawned.pid, 0);
+        return false;
+      } catch {
+        return true; // ESRCH — the child is gone
+      }
+    });
+    const after = (await rpc.call("process.stat", {})) as { processes: unknown[] };
+    expect(after.processes).toEqual([]);
+  });
+});
+
 describe("the example KV service — a real plugin through the real host", () => {
   // the one seam the SDK mock cannot prove: the WORKER importing service.js
   // from examples/plugins resolves @vibefield/plugin-sdk via the package's own

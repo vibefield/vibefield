@@ -17,10 +17,18 @@
     "onWidget:vibefield.widgetlab.orbit-cube",
     "onWidget:vibefield.widgetlab.signal",
     "onWidget:vibefield.widgetlab.filter",
-    "onWidget:vibefield.widgetlab.scope"
+    "onWidget:vibefield.widgetlab.scope",
+    "onSurface:vibefield.widgetlab.status"
   ],
   "capabilities": [],
   "contributes": {
+    "surfaces": [
+      {
+        "id": "vibefield.widgetlab.status",
+        "slot": "hud.panel",
+        "title": "Widgetlab status"
+      }
+    ],
     "widgets": [
       {
         "category": "Cards",

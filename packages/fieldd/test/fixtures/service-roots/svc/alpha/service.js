@@ -30,6 +30,21 @@ export default {
             return { dying: true };
           },
         },
+        // P6 — the §17.1 chain end-to-end: lease scope → ctx.process →
+        // product method → ProcessService. The child outlives this call so
+        // the suite can prove the disable cascade kills it.
+        spawnproc: {
+          kind: "mutation",
+          handle: async () => {
+            const handle = await ctx.process.spawn({
+              executable: "/bin/sh",
+              args: ["-c", "sleep 30"],
+              restart: "never",
+            });
+            const rec = await handle.stat();
+            return { procId: handle.procId, pid: rec.pid };
+          },
+        },
         ticks: {
           kind: "subscription",
           subscribe(_params, _call, sink) {

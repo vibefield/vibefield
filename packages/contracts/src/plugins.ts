@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { SemverString } from "./envelope";
-import { SCOPES } from "./registries";
+import { SCOPES, type Scope } from "./registries";
 
 // Plugin manifest contracts (plugin-architecture spec §7/§8, slice P0 — PA-3:
 // the canonical schema lives HERE; plugin-runtime must not own a hand-written
@@ -780,6 +780,96 @@ export function validatePluginManifest(raw: unknown): PluginManifestValidation {
     };
   }
   return { ok: true, manifest: parsed.data, unknownKeys: findUnknownManifestKeys(raw) };
+}
+
+// --- grant calculation (spec §15.1/§15.2 — the ALGORITHM lives in contracts;
+// fieldd feeds it persisted device-local state and applies the result) --------
+
+/** Which entry kinds may hold each core scope (§15.2). ABSENT means never
+ * plugin-eligible (native.admin, tokens.mint, plugins.*, diagnostics.*,
+ * audit.append, agent.bless, push.manage — the safe default is silence).
+ * Custom x.* capabilities are eligible for both kinds: they gate calls INTO
+ * the owner's methods, and callers of either kind may hold them. */
+export const PLUGIN_CAPABILITY_ELIGIBILITY: Readonly<
+  Partial<Record<Scope, { renderer?: true; service?: true }>>
+> = {
+  "canvas.read": { renderer: true, service: true },
+  "canvas.write": { renderer: true, service: true },
+  "doc.read": { renderer: true, service: true },
+  "doc.write": { renderer: true, service: true },
+  "workspace.read": { renderer: true, service: true },
+  "index.read": { renderer: true, service: true },
+  "artifact.publish": { renderer: true, service: true },
+  "agent.observe": { renderer: true, service: true },
+  "approval.respond": { renderer: true, service: true },
+  "storage.self": { renderer: true, service: true },
+  "mcp.consume": { renderer: true, service: true },
+  // service-eligible (§15.2 examples verbatim)
+  "services.provide": { service: true },
+  "process.spawn": { service: true },
+  background: { service: true },
+  "net.outbound": { service: true },
+  "mcp.contribute": { service: true },
+  // renderer-eligible (terminal via the pool; shell.* are window powers;
+  // agent spawn/control start renderer-side — service expansion is a decision)
+  "terminal.attach": { renderer: true },
+  "agent.spawn": { renderer: true },
+  "agent.control": { renderer: true },
+  "shell.windows": { renderer: true },
+  "shell.dialog": { renderer: true },
+  "shell.clipboard": { renderer: true },
+  "shell.open": { renderer: true },
+  "shell.webcontents": { renderer: true },
+} as const;
+
+export interface EffectiveGrantsInput {
+  requested: readonly string[];
+  hasRenderer: boolean;
+  hasService: boolean;
+  source: "bundled" | "dev-linked";
+  /** device-local persisted decisions; `false` is an explicit revocation,
+   * absent/true means granted (v1 default-grant with UX visibility — §15.3) */
+  persisted?: Readonly<Record<string, boolean>>;
+}
+
+export interface EffectiveGrants {
+  granted: string[];
+  denied: Array<{
+    capability: string;
+    reason: "entry-kind" | "revoked" | "source-policy" | "host";
+  }>;
+}
+
+/** §15.2: effective = requested ∩ source-policy ceiling ∩ persisted ∩
+ * entry-kind eligibility ∩ host capabilities. The manifest request is a
+ * ceiling, not a grant. v1 source policy grants both sources their requests
+ * (bundled = reviewed preset per §15.3; dev-linked = developer-mode explicit
+ * visibility) — the ceiling HOOK exists so distribution policy lands as data,
+ * not a new mechanism. Host-capability pruning is the caller's platform
+ * concern and enters as persisted=false today. */
+export function computeEffectiveGrants(input: EffectiveGrantsInput): EffectiveGrants {
+  const out: EffectiveGrants = { granted: [], denied: [] };
+  for (const cap of input.requested) {
+    const eligible = isCustomCapabilityId(cap)
+      ? input.hasRenderer || input.hasService
+      : (() => {
+          const e = PLUGIN_CAPABILITY_ELIGIBILITY[cap as Scope];
+          if (e === undefined) return false;
+          return (
+            (e.renderer === true && input.hasRenderer) || (e.service === true && input.hasService)
+          );
+        })();
+    if (!eligible) {
+      out.denied.push({ capability: cap, reason: "entry-kind" });
+      continue;
+    }
+    if (input.persisted?.[cap] === false) {
+      out.denied.push({ capability: cap, reason: "revoked" });
+      continue;
+    }
+    out.granted.push(cap);
+  }
+  return out;
 }
 
 // --- the legacy walking-skeleton shape (spec §21.1 bridge; retires at P1) -----
