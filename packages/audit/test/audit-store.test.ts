@@ -102,6 +102,85 @@ describe("@vibefield/audit storage", () => {
     },
   );
 
+  it("classifies root, segment-open, and close-checkpoint failures", async () => {
+    const rootFailureDir = await fixture();
+    const rootFailure = new AuditLedgerWriter({
+      dataDir: rootFailureDir,
+      bootId: "fieldd-root-failure-test",
+      hooks: {
+        beforeRoot: () => {
+          throw Object.assign(new Error("audit root denied"), { code: "EACCES" });
+        },
+      },
+    });
+    await expect(rootFailure.initialize()).rejects.toMatchObject({
+      operation: "root",
+      code: "EACCES",
+    });
+    await rootFailure.close();
+
+    const openFailureDir = await fixture();
+    const openFailure = new AuditLedgerWriter({
+      dataDir: openFailureDir,
+      bootId: "fieldd-open-failure-test",
+      hooks: {
+        beforeOpen: () => {
+          throw Object.assign(new Error("segment open denied"), { code: "EACCES" });
+        },
+      },
+    });
+    await openFailure.initialize();
+    await expect(
+      openFailure.append({
+        v: 1,
+        eventId: "audit_open_failure_01",
+        time: Date.now(),
+        actor: { kind: "system", id: "fieldd" },
+        action: "plugin.enable",
+        target: { kind: "plugin", id: "vibefield.example" },
+        phase: "attempt",
+        operationId: "op_open_failure_01",
+        transportProvenance: "in-process",
+      }),
+    ).rejects.toMatchObject({ operation: "open", code: "EACCES" });
+    expect(openFailure.openSegments()).toBe(0);
+    await openFailure.close();
+
+    const checkpointFailureDir = await fixture();
+    const checkpointFailure = new AuditLedgerWriter({
+      dataDir: checkpointFailureDir,
+      bootId: "fieldd-checkpoint-failure-test",
+      hooks: {
+        beforeCheckpoint: () => {
+          throw Object.assign(new Error("checkpoint denied"), { code: "EIO" });
+        },
+      },
+    });
+    await checkpointFailure.initialize();
+    await checkpointFailure.append({
+      v: 1,
+      eventId: "audit_checkpoint_failure_01",
+      time: Date.now(),
+      actor: { kind: "system", id: "fieldd" },
+      action: "plugin.enable",
+      target: { kind: "plugin", id: "vibefield.example" },
+      phase: "attempt",
+      operationId: "op_checkpoint_failure_01",
+      transportProvenance: "in-process",
+    });
+    await expect(checkpointFailure.close()).rejects.toMatchObject({
+      operation: "checkpoint",
+      code: "EIO",
+    });
+    const auditRoot = join(checkpointFailureDir, "audit");
+    const segment = (await readdir(auditRoot)).find((entry) => entry.endsWith(".jsonl"));
+    expect(segment).toBeDefined();
+    expect(await verifyAuditSegment(join(auditRoot, segment as string))).toMatchObject({
+      valid: true,
+      checkpointed: false,
+    });
+  });
+
   it("bounds and redacts attributes while refusing credential-shaped target ids", () => {
     const rawToken = `tok_${"a".repeat(48)}`;
     let getterCalled = false;
@@ -190,6 +269,12 @@ describe("@vibefield/audit storage", () => {
     expect(await verifyAuditSegment(path)).toMatchObject({
       valid: false,
       reason: "checkpoint-mismatch",
+    });
+
+    await writeFile(checkpointPath, "{");
+    expect(await verifyAuditSegment(path)).toMatchObject({
+      valid: false,
+      reason: "invalid-checkpoint",
     });
 
     await writeFile(checkpointPath, `${JSON.stringify(checkpoint)}\n`);
