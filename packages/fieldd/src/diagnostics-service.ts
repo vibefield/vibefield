@@ -298,7 +298,10 @@ export class DiagnosticsService {
   private leaseTimer: NodeJS.Timeout | null = null;
   private healthFingerprint = "";
   private readonly healthTimer: NodeJS.Timeout;
-  private readonly onNativeConnected = (): void => {
+  /** A successful NativeLink subscription replays itself across reconnects.
+   * This listener exists only for an initial attach failure, whose rejected
+   * subscription was removed and therefore needs a fresh subscribe attempt. */
+  private readonly retryInitialNativeProjectionAttach = (): void => {
     void this.attachNativeProjection();
   };
 
@@ -337,7 +340,7 @@ export class DiagnosticsService {
       }
     }, HEALTH_INTERVAL_MS);
     this.healthTimer.unref();
-    options.native.on("connected", this.onNativeConnected);
+    options.native.on("connected", this.retryInitialNativeProjectionAttach);
   }
 
   async start(): Promise<void> {
@@ -489,7 +492,7 @@ export class DiagnosticsService {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.options.native.off("connected", this.onNativeConnected);
+    this.options.native.off("connected", this.retryInitialNativeProjectionAttach);
     clearInterval(this.healthTimer);
     if (this.flushTimer) clearTimeout(this.flushTimer);
     if (this.leaseTimer) clearTimeout(this.leaseTimer);

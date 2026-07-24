@@ -359,6 +359,9 @@ impl<'de> ::serde::Deserialize<'de> for DiagnosticCursorV1 {
 #[doc = "      },"]
 #[doc = "      \"maxItems\": 2000"]
 #[doc = "    },"]
+#[doc = "    \"transportTruncatedRecords\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
 #[doc = "    \"v\": {"]
 #[doc = "      \"$ref\": \"#/definitions/LogSchemaVersionV1\""]
 #[doc = "    }"]
@@ -373,6 +376,12 @@ pub struct DiagnosticLogDeltaV1 {
     #[serde(rename = "droppedSincePrevious")]
     pub dropped_since_previous: LogSafeIntegerV1,
     pub records: ::std::vec::Vec<LogRecordV1>,
+    #[serde(
+        rename = "transportTruncatedRecords",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub transport_truncated_records: ::std::option::Option<LogSafeIntegerV1>,
     pub v: LogSchemaVersionV1,
 }
 impl DiagnosticLogDeltaV1 {
@@ -444,6 +453,9 @@ impl DiagnosticLogDeltaV1 {
 #[doc = "      },"]
 #[doc = "      \"maxItems\": 2000"]
 #[doc = "    },"]
+#[doc = "    \"transportTruncatedRecords\": {"]
+#[doc = "      \"$ref\": \"#/definitions/LogSafeIntegerV1\""]
+#[doc = "    },"]
 #[doc = "    \"v\": {"]
 #[doc = "      \"$ref\": \"#/definitions/LogSchemaVersionV1\""]
 #[doc = "    }"]
@@ -462,6 +474,12 @@ pub struct DiagnosticLogSnapshotV1 {
     pub next_cursor: DiagnosticCursorV1,
     pub producers: ::std::vec::Vec<DiagnosticProducerStateV1>,
     pub records: ::std::vec::Vec<LogRecordV1>,
+    #[serde(
+        rename = "transportTruncatedRecords",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub transport_truncated_records: ::std::option::Option<LogSafeIntegerV1>,
     pub v: LogSchemaVersionV1,
 }
 impl DiagnosticLogSnapshotV1 {
@@ -5227,6 +5245,10 @@ pub mod builder {
         dropped_since_previous:
             ::std::result::Result<super::LogSafeIntegerV1, ::std::string::String>,
         records: ::std::result::Result<::std::vec::Vec<super::LogRecordV1>, ::std::string::String>,
+        transport_truncated_records: ::std::result::Result<
+            ::std::option::Option<super::LogSafeIntegerV1>,
+            ::std::string::String,
+        >,
         v: ::std::result::Result<super::LogSchemaVersionV1, ::std::string::String>,
     }
     impl ::std::default::Default for DiagnosticLogDeltaV1 {
@@ -5237,6 +5259,7 @@ pub mod builder {
                     "no value supplied for dropped_since_previous".to_string()
                 ),
                 records: Err("no value supplied for records".to_string()),
+                transport_truncated_records: Ok(Default::default()),
                 v: Err("no value supplied for v".to_string()),
             }
         }
@@ -5272,6 +5295,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for records: {e}"));
             self
         }
+        pub fn transport_truncated_records<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogSafeIntegerV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.transport_truncated_records = value.try_into().map_err(|e| {
+                format!("error converting supplied value for transport_truncated_records: {e}")
+            });
+            self
+        }
         pub fn v<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<super::LogSchemaVersionV1>,
@@ -5292,6 +5325,7 @@ pub mod builder {
                 cursor: value.cursor?,
                 dropped_since_previous: value.dropped_since_previous?,
                 records: value.records?,
+                transport_truncated_records: value.transport_truncated_records?,
                 v: value.v?,
             })
         }
@@ -5302,6 +5336,7 @@ pub mod builder {
                 cursor: Ok(value.cursor),
                 dropped_since_previous: Ok(value.dropped_since_previous),
                 records: Ok(value.records),
+                transport_truncated_records: Ok(value.transport_truncated_records),
                 v: Ok(value.v),
             }
         }
@@ -5319,6 +5354,10 @@ pub mod builder {
             ::std::string::String,
         >,
         records: ::std::result::Result<::std::vec::Vec<super::LogRecordV1>, ::std::string::String>,
+        transport_truncated_records: ::std::result::Result<
+            ::std::option::Option<super::LogSafeIntegerV1>,
+            ::std::string::String,
+        >,
         v: ::std::result::Result<super::LogSchemaVersionV1, ::std::string::String>,
     }
     impl ::std::default::Default for DiagnosticLogSnapshotV1 {
@@ -5329,6 +5368,7 @@ pub mod builder {
                 next_cursor: Err("no value supplied for next_cursor".to_string()),
                 producers: Err("no value supplied for producers".to_string()),
                 records: Err("no value supplied for records".to_string()),
+                transport_truncated_records: Ok(Default::default()),
                 v: Err("no value supplied for v".to_string()),
             }
         }
@@ -5386,6 +5426,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for records: {e}"));
             self
         }
+        pub fn transport_truncated_records<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::LogSafeIntegerV1>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.transport_truncated_records = value.try_into().map_err(|e| {
+                format!("error converting supplied value for transport_truncated_records: {e}")
+            });
+            self
+        }
         pub fn v<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<super::LogSchemaVersionV1>,
@@ -5408,6 +5458,7 @@ pub mod builder {
                 next_cursor: value.next_cursor?,
                 producers: value.producers?,
                 records: value.records?,
+                transport_truncated_records: value.transport_truncated_records?,
                 v: value.v?,
             })
         }
@@ -5420,6 +5471,7 @@ pub mod builder {
                 next_cursor: Ok(value.next_cursor),
                 producers: Ok(value.producers),
                 records: Ok(value.records),
+                transport_truncated_records: Ok(value.transport_truncated_records),
                 v: Ok(value.v),
             }
         }

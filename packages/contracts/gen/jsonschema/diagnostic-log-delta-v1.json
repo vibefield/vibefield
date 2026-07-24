@@ -598,6 +598,9 @@
         },
         "droppedSincePrevious": {
           "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "transportTruncatedRecords": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
         }
       },
       "required": [

@@ -36,7 +36,7 @@ describe("diagnostic transport page bounds", () => {
     expect(bounded.records.length).toBeGreaterThan(0);
     expect(bounded.records.at(-1)?.seq).toBe(9);
     expect(bounded.droppedBefore).toBe(3 + (10 - bounded.records.length));
-    expect(bounded["transportTruncatedRecords"]).toBe(10 - bounded.records.length);
+    expect(bounded.transportTruncatedRecords).toBe(10 - bounded.records.length);
   });
 
   it("charges removed delta records to droppedSincePrevious", () => {
@@ -52,6 +52,6 @@ describe("diagnostic transport page bounds", () => {
     expect(Buffer.byteLength(JSON.stringify(bounded), "utf8")).toBeLessThanOrEqual(25_000);
     expect(bounded.records.at(-1)?.seq).toBe(9);
     expect(bounded.droppedSincePrevious).toBe(2 + (10 - bounded.records.length));
-    expect(bounded["transportTruncatedRecords"]).toBe(10 - bounded.records.length);
+    expect(bounded.transportTruncatedRecords).toBe(10 - bounded.records.length);
   });
 });

@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   AuditLedgerWriter,
+  type AuditRecordBase,
+  auditChainHash,
   cleanAuditTarget,
   sanitizeAuditAttrs,
   verifyAuditSegment,
@@ -55,11 +57,17 @@ describe("@vibefield/audit storage", () => {
     const path = join(auditRoot, name as string);
     expect((await stat(auditRoot)).mode & 0o777).toBe(0o700);
     expect((await stat(path)).mode & 0o777).toBe(0o600);
-    expect(await verifyAuditSegment(path)).toMatchObject({
+    const verified = await verifyAuditSegment(path);
+    expect(verified).toMatchObject({
       valid: true,
       checkpointed: true,
       records: [expect.objectContaining({ action: "plugin.enable" })],
     });
+    const persisted = verified.records[0]!;
+    const { integrity, ...persistedBase } = persisted;
+    expect(integrity?.recordHash).toBe(
+      auditChainHash(persistedBase as AuditRecordBase, integrity?.previousHash ?? null),
+    );
     if (process.platform !== "win32") {
       expect(directorySyncs).toEqual([auditRoot, dataDir, auditRoot, auditRoot]);
     }

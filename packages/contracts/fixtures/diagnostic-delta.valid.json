@@ -21,5 +21,6 @@
       }
     }
   ],
-  "droppedSincePrevious": 0
+  "droppedSincePrevious": 0,
+  "transportTruncatedRecords": 1
 }

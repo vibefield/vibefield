@@ -56,6 +56,7 @@ export const DiagnosticLogSnapshotV1 = z
     records: z.array(LogRecordV1).max(2_000),
     nextCursor: DiagnosticCursorV1,
     droppedBefore: LogSafeIntegerV1,
+    transportTruncatedRecords: LogSafeIntegerV1.optional(),
     history: z
       .object({
         scannedBytes: LogSafeIntegerV1,
@@ -77,6 +78,7 @@ export const DiagnosticLogDeltaV1 = z
     cursor: DiagnosticCursorV1,
     records: z.array(LogRecordV1).max(2_000),
     droppedSincePrevious: LogSafeIntegerV1,
+    transportTruncatedRecords: LogSafeIntegerV1.optional(),
   })
   .passthrough()
   .describe("vibefield.diagnostics.delta.contract.v1");

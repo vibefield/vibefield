@@ -21,6 +21,97 @@ function record(overrides: Partial<NormalizeRecordInput> = {}) {
   });
 }
 
+const FUZZ_SECRET = `tok_${"f".repeat(48)}`;
+
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+    return state / 4_294_967_296;
+  };
+}
+
+function fuzzScalar(random: () => number): unknown {
+  const values: unknown[] = [
+    null,
+    true,
+    false,
+    Math.floor(random() * Number.MAX_SAFE_INTEGER),
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    BigInt(Math.floor(random() * 1_000_000)),
+    undefined,
+    Symbol("fuzz"),
+    () => undefined,
+    `line\r\n${"\ud800".repeat(Math.floor(random() * 128))}`,
+    `Bearer ${FUZZ_SECRET}`,
+    "https://alice:password@example.test/private?token=canary#fragment",
+  ];
+  return values[Math.floor(random() * values.length)];
+}
+
+function fuzzValue(random: () => number, depth: number, pool: object[]): unknown {
+  if (depth >= 6 || random() < 0.35) return fuzzScalar(random);
+  if (pool.length > 0 && random() < 0.15) {
+    return pool[Math.floor(random() * pool.length)];
+  }
+
+  const kind = Math.floor(random() * 4);
+  if (kind === 0) {
+    const result: unknown[] = [];
+    pool.push(result);
+    const length = Math.floor(random() * 24);
+    for (let index = 0; index < length; index += 1) {
+      if (random() < 0.2) continue;
+      result[index] = fuzzValue(random, depth + 1, pool);
+    }
+    return result;
+  }
+  if (kind === 1) {
+    const result: Record<string, unknown> =
+      random() < 0.5 ? {} : (Object.create(null) as Record<string, unknown>);
+    pool.push(result);
+    const keys = Math.floor(random() * 24);
+    for (let index = 0; index < keys; index += 1) {
+      result[`field${index}`] = fuzzValue(random, depth + 1, pool);
+    }
+    if (random() < 0.25) {
+      Object.defineProperty(result, "hostileGetter", {
+        enumerable: true,
+        get() {
+          throw new Error("fuzz getter must not run");
+        },
+      });
+    }
+    return result;
+  }
+  if (kind === 2) {
+    return new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error("fuzz proxy trap");
+        },
+      },
+    );
+  }
+  const error = new Error(`fuzz failure ${Math.floor(random() * 1_000)}`);
+  if (pool.length > 0) error.cause = pool[Math.floor(random() * pool.length)];
+  return error;
+}
+
+function fuzzAttributes(seed: number): Record<string, unknown> {
+  const random = seededRandom(seed);
+  const result: Record<string, unknown> = {
+    seed,
+    authorization: `Bearer ${FUZZ_SECRET}`,
+  };
+  const pool: object[] = [result];
+  result.payload = fuzzValue(random, 0, pool);
+  if (seed % 7 === 0) result.self = result;
+  return result;
+}
+
 describe("logging sanitizer", () => {
   it("redacts explicit secret keys and known secret patterns at every depth", () => {
     const token = "vf-secret-token-1234567890";
@@ -194,6 +285,22 @@ describe("logging sanitizer", () => {
     expect(encoded.split("\n")).toHaveLength(1);
     expect(first?.truncation?.reasons).toContain("record-bytes");
     expect(LogRecordV1.safeParse(first).success).toBe(true);
+  });
+
+  it("seed-fuzzes arbitrary graphs without throwing, leaking, or exceeding the record cap", () => {
+    for (let seed = 1; seed <= 512; seed += 1) {
+      let result: ReturnType<typeof record> = null;
+      expect(() => {
+        result = record({ attrs: fuzzAttributes(seed) });
+      }).not.toThrow();
+      expect(result).not.toBeNull();
+      if (result === null) continue;
+      const encoded = JSON.stringify(result);
+      expect(Buffer.byteLength(encoded, "utf8")).toBeLessThanOrEqual(64 * 1024);
+      expect(encoded).not.toContain(FUZZ_SECRET);
+      expect(encoded).not.toContain("\n");
+      expect(LogRecordV1.safeParse(result).success).toBe(true);
+    }
   });
 
   it("drops invalid host-controlled event and component names", () => {

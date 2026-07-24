@@ -1216,6 +1216,9 @@
         "droppedBefore": {
           "$ref": "#/definitions/LogSafeIntegerV1"
         },
+        "transportTruncatedRecords": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
         "history": {
           "type": "object",
           "properties": {
@@ -1272,6 +1275,9 @@
           "maxItems": 2000
         },
         "droppedSincePrevious": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
+        "transportTruncatedRecords": {
           "$ref": "#/definitions/LogSafeIntegerV1"
         }
       },

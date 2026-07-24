@@ -1,11 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
 import {
+  type AuditLedger,
   AuditLedgerWriter,
   type AuditPathAliases,
   type AuditRecordBase,
   AuditWriterError,
   type AuditWriterTestHooks,
+  auditLedgerForAction,
   cleanAuditTarget,
   sanitizeAuditAttrs,
 } from "@vibefield/audit";
@@ -65,9 +67,11 @@ export interface AuditMutationOutcome {
 
 interface RecoveryMarker {
   action: string;
+  originalLedger: AuditLedger;
   operationId: string;
   target: AuditTargetV1;
   intendedOutcome: string;
+  effectResolution: "unknown" | "effect-threw" | "applied" | "rolled-back" | "rollback-failed";
   failedAt: number;
 }
 
@@ -166,8 +170,9 @@ export class AuditService extends EventEmitter {
       this.markHealthy();
     } catch (error) {
       this.markFailure(error);
-      // Read-only daemon functionality can remain available. Every marked
-      // mutation still fails closed when its required attempt reaches append.
+      // Preserve typed degraded health here rather than replacing the root
+      // failure. Daemon bootstrap still fails closed when its mandatory
+      // audited shell-token mint reaches append.
     }
   }
 
@@ -321,6 +326,15 @@ export class AuditService extends EventEmitter {
           authority,
         );
       } catch {
+        this.queueRecovery({
+          action: mutation.action,
+          originalLedger: auditLedgerForAction(mutation.action),
+          operationId,
+          target,
+          intendedOutcome: "failed",
+          effectResolution: "effect-threw",
+          failedAt: this.now(),
+        });
         // The action's own typed failure remains primary. Audit health and the
         // bounded recovery marker make the missing outcome visible.
       }
@@ -349,14 +363,25 @@ export class AuditService extends EventEmitter {
     } catch (error) {
       if (error instanceof AuditUnavailableError) {
         let rolledBack = false;
+        let effectResolution: RecoveryMarker["effectResolution"] = "applied";
         if (rollbackOnOutcomeFailure !== undefined) {
           try {
             await rollbackOnOutcomeFailure(value);
             rolledBack = true;
+            effectResolution = "rolled-back";
           } catch {
-            // Details below honestly retain actionApplied:true.
+            effectResolution = "rollback-failed";
           }
         }
+        this.queueRecovery({
+          action: mutation.action,
+          originalLedger: auditLedgerForAction(mutation.action),
+          operationId,
+          target,
+          intendedOutcome: described.outcome ?? "succeeded",
+          effectResolution,
+          failedAt: this.now(),
+        });
         const details =
           error.details !== null && typeof error.details === "object"
             ? (error.details as { operation?: unknown; code?: unknown })
@@ -419,9 +444,11 @@ export class AuditService extends EventEmitter {
       if (input.phase === "outcome" && input.action !== "audit.outcome.recovery") {
         this.queueRecovery({
           action: input.action,
+          originalLedger: auditLedgerForAction(input.action),
           operationId: input.operationId,
           target,
           intendedOutcome: input.outcome ?? "unknown",
+          effectResolution: "unknown",
           failedAt: time,
         });
       }
@@ -452,7 +479,9 @@ export class AuditService extends EventEmitter {
           operationId: marker.operationId,
           attrs: {
             originalAction: marker.action,
+            originalLedger: marker.originalLedger,
             intendedOutcome: marker.intendedOutcome,
+            effectResolution: marker.effectResolution,
             failedAt: marker.failedAt,
           },
         },
@@ -467,6 +496,18 @@ export class AuditService extends EventEmitter {
   }
 
   private queueRecovery(marker: RecoveryMarker): void {
+    const existing = this.recovery.find(
+      (candidate) =>
+        candidate.operationId === marker.operationId && candidate.action === marker.action,
+    );
+    if (existing !== undefined) {
+      existing.originalLedger = marker.originalLedger;
+      existing.target = marker.target;
+      existing.intendedOutcome = marker.intendedOutcome;
+      existing.effectResolution = marker.effectResolution;
+      this.emit("health");
+      return;
+    }
     if (this.recovery.length >= MAX_RECOVERY_MARKERS) this.recovery.shift();
     this.recovery.push(marker);
     this.emit("health");

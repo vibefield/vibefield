@@ -75,5 +75,6 @@
     }
   ],
   "nextCursor": "cursor:v1:fieldd:boot_fieldd_01:1024",
-  "droppedBefore": 8
+  "droppedBefore": 8,
+  "transportTruncatedRecords": 3
 }

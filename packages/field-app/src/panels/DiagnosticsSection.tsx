@@ -167,7 +167,7 @@ function remaining(expiresAt: number): string {
 }
 
 function transportTruncated(snapshot: DiagnosticLogSnapshotV1 | null): number {
-  const value = snapshot?.["transportTruncatedRecords"];
+  const value = snapshot?.transportTruncatedRecords;
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 

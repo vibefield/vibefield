@@ -606,6 +606,9 @@
         "droppedBefore": {
           "$ref": "#/definitions/LogSafeIntegerV1"
         },
+        "transportTruncatedRecords": {
+          "$ref": "#/definitions/LogSafeIntegerV1"
+        },
         "history": {
           "type": "object",
           "properties": {

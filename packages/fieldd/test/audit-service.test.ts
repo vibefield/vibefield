@@ -270,6 +270,82 @@ describe("LOG-L6 append-only audit ledger", () => {
         outcome: "failed",
         reasonCode: "OUTCOME_DURABILITY_UNCONFIRMED",
         actor: { kind: "system", id: "fieldd" },
+        attrs: expect.objectContaining({
+          originalAction: "plugin.disable",
+          originalLedger: "plugins",
+          intendedOutcome: "succeeded",
+          effectResolution: "applied",
+        }),
+      }),
+    );
+  });
+
+  it("retains missing-outcome evidence while recording a successful rollback", async () => {
+    const dataDir = await root();
+    let syncs = 0;
+    let failOutcome = true;
+    const service = new AuditService({
+      dataDir,
+      bootId: "fieldd-rollback-recovery",
+      hooks: {
+        beforeSync: () => {
+          syncs += 1;
+          if (failOutcome && syncs === 2) {
+            throw Object.assign(new Error("disk unavailable"), { code: "EIO" });
+          }
+        },
+      },
+    });
+    await service.start();
+    let applied = false;
+    let rolledBack = false;
+    await expect(
+      service.required(
+        shellContext(),
+        {
+          action: "token.window.mint",
+          target: { kind: "token", id: "tk_rollback_01" },
+        },
+        () => {
+          applied = true;
+          return { tokenId: "tk_rollback_01" };
+        },
+        () => ({ outcome: "succeeded" }),
+        () => {
+          applied = false;
+          rolledBack = true;
+        },
+      ),
+    ).rejects.toMatchObject({
+      kind: "AUDIT_UNAVAILABLE",
+      details: { operation: "sync", code: "EIO", actionApplied: false },
+    });
+    expect({ applied, rolledBack }).toEqual({ applied: false, rolledBack: true });
+    expect(service.health()).toMatchObject({
+      state: "degraded",
+      pendingRecoveryMarkers: 1,
+    });
+
+    failOutcome = false;
+    await service.appendFromCaller(shellContext(), {
+      action: "support.bundle.export",
+      target: { kind: "support-bundle", id: "bundle_after_rollback" },
+      phase: "attempt",
+      operationId: "op_after_rollback",
+    });
+    await service.close();
+
+    const persisted = await records(service.root);
+    expect(persisted).toContainEqual(
+      expect.objectContaining({
+        action: "audit.outcome.recovery",
+        reasonCode: "OUTCOME_DURABILITY_UNCONFIRMED",
+        attrs: expect.objectContaining({
+          originalAction: "token.window.mint",
+          originalLedger: "grants",
+          intendedOutcome: "succeeded",
+          effectResolution: "rolled-back",
+        }),
       }),
     );
   });

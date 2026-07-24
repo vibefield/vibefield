@@ -23,6 +23,7 @@ export const AUDIT_LEDGERS = ["approvals", "grants", "plugins", "own-actions"] a
 export type AuditLedger = (typeof AUDIT_LEDGERS)[number];
 
 export const MAX_AUDIT_ATTR_BYTES = 8 * 1024;
+const UNCOMPUTED_AUDIT_HASH = "0".repeat(64);
 
 const SECRET_KEY =
   /(?:authorization|cookie|token(?!id$)|credential|password|secret|private.?key|api.?key|environment|^env(?:vars?|values?)?$|command.?line|approval.?input)/i;
@@ -224,6 +225,25 @@ export function cleanAuditTarget(target: AuditTargetV1): AuditTargetV1 {
   };
 }
 
+function parsePersistedAuditBase(base: AuditRecordBase): AuditRecordBase {
+  // Parse exactly once before choosing the ledger or hashing. The placeholder
+  // satisfies the wire shape and is discarded; the returned object is the
+  // exact post-schema representation that will be persisted.
+  const parsed = AuditRecordSchemaV1.parse({
+    ...base,
+    integrity: {
+      algorithm: "sha256-chain-v1",
+      previousHash: null,
+      recordHash: UNCOMPUTED_AUDIT_HASH,
+    },
+  });
+  const { integrity: _placeholder, ...persistedBase } = parsed;
+  // AuditRecordV1 is passthrough, whose index signature makes TypeScript's
+  // Omit lose its named keys. The runtime object still retains every parsed
+  // passthrough field; this cast restores the narrower required base shape.
+  return persistedBase as unknown as AuditRecordBase;
+}
+
 export class AuditLedgerWriter {
   readonly root: string;
   private readonly now: () => number;
@@ -245,17 +265,18 @@ export class AuditLedgerWriter {
 
   async append(base: AuditRecordBase): Promise<{ record: AuditRecordV1; bytes: number }> {
     if (this.closed) throw new AuditWriterError("write", "CLOSED", new Error("writer closed"));
-    const ledger = auditLedgerForAction(base.action);
-    const segment = await this.segment(ledger, utcPeriod(base.time));
-    const recordHash = auditChainHash(base, segment.lastHash);
-    const record = AuditRecordSchemaV1.parse({
-      ...base,
+    const persistedBase = parsePersistedAuditBase(base);
+    const ledger = auditLedgerForAction(persistedBase.action);
+    const segment = await this.segment(ledger, utcPeriod(persistedBase.time));
+    const recordHash = auditChainHash(persistedBase, segment.lastHash);
+    const record: AuditRecordV1 = {
+      ...persistedBase,
       integrity: {
         algorithm: "sha256-chain-v1",
         previousHash: segment.lastHash,
         recordHash,
       },
-    });
+    };
     const line = Buffer.from(`${JSON.stringify(record)}\n`, "utf8");
     if (line.byteLength > MAX_AUDIT_RECORD_BYTES) {
       throw new AuditWriterError(
