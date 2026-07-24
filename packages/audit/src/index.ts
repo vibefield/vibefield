@@ -2,7 +2,7 @@ import { createHash, type Hash } from "node:crypto";
 import { constants } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import { chmod, lstat, mkdir, open, rename, unlink } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   AuditRecordV1 as AuditRecordSchemaV1,
   type AuditRecordV1,
@@ -47,6 +47,7 @@ export interface AuditWriterTestHooks {
   beforeOpen?: (path: string) => void | Promise<void>;
   beforeWrite?: (path: string, bytes: number) => void | Promise<void>;
   beforeSync?: (path: string) => void | Promise<void>;
+  beforeDirectorySync?: (path: string) => void | Promise<void>;
   beforeCheckpoint?: (path: string) => void | Promise<void>;
 }
 
@@ -318,8 +319,11 @@ export class AuditLedgerWriter {
         throw new Error("audit root is not a private regular directory");
       }
       await chmod(this.root, 0o700);
+      await this.syncDirectory(this.root);
+      await this.syncDirectory(dirname(this.root));
       this.rootReady = true;
     } catch (error) {
+      if (error instanceof AuditWriterError) throw error;
       throw new AuditWriterError("root", errorCode(error), error);
     }
   }
@@ -346,7 +350,16 @@ export class AuditLedgerWriter {
           constants.O_APPEND |
           (constants.O_NOFOLLOW ?? 0);
         const handle = await open(path, flags, 0o600);
-        await chmod(path, 0o600);
+        try {
+          await handle.chmod(0o600);
+          await handle.sync();
+          await this.syncDirectory(this.root);
+        } catch (error) {
+          await handle.close().catch(() => undefined);
+          throw error instanceof AuditWriterError
+            ? error
+            : new AuditWriterError("sync", errorCode(error), error);
+        }
         const segment: Segment = {
           ledger,
           period,
@@ -366,6 +379,7 @@ export class AuditLedgerWriter {
           sequence += 1;
           continue;
         }
+        if (error instanceof AuditWriterError) throw error;
         throw new AuditWriterError("open", errorCode(error), error);
       }
     }
@@ -382,6 +396,30 @@ export class AuditLedgerWriter {
       } catch (error) {
         throw new AuditWriterError("write", errorCode(error), error);
       }
+    }
+  }
+
+  private async syncDirectory(path: string): Promise<void> {
+    // Node cannot open directory handles with the flags Windows requires.
+    // File fsync + atomic rename remain in force there; installed Windows
+    // durability and ACL behavior are proven by the separate packaged gate.
+    if (process.platform === "win32") return;
+    let handle: FileHandle | null = null;
+    let failure: unknown;
+    try {
+      await this.options.hooks?.beforeDirectorySync?.(path);
+      handle = await open(path, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+      await handle.sync();
+    } catch (error) {
+      failure = error;
+    }
+    try {
+      await handle?.close();
+    } catch (error) {
+      failure ??= error;
+    }
+    if (failure !== undefined) {
+      throw new AuditWriterError("sync", errorCode(failure), failure);
     }
   }
 
@@ -431,13 +469,13 @@ export class AuditLedgerWriter {
       const flags =
         constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0);
       handle = await open(partialPath, flags, 0o600);
+      await handle.chmod(0o600);
       await handle.writeFile(`${JSON.stringify(checkpoint)}\n`, "utf8");
       await handle.sync();
       await handle.close();
       handle = null;
-      await chmod(partialPath, 0o600);
       await rename(partialPath, checkpointPath);
-      await chmod(checkpointPath, 0o600);
+      await this.syncDirectory(this.root);
     } catch (error) {
       try {
         await handle?.close();

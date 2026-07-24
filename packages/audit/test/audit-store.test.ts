@@ -24,10 +24,16 @@ async function fixture(): Promise<string> {
 describe("@vibefield/audit storage", () => {
   it("writes a private, chained, close-checkpointed segment", async () => {
     const dataDir = await fixture();
+    const directorySyncs: string[] = [];
     const writer = new AuditLedgerWriter({
       dataDir,
       bootId: "fieldd-store-test",
       now: () => 1_785_000_000_000,
+      hooks: {
+        beforeDirectorySync: (path) => {
+          directorySyncs.push(path);
+        },
+      },
     });
     await writer.initialize();
     await writer.append({
@@ -54,7 +60,47 @@ describe("@vibefield/audit storage", () => {
       checkpointed: true,
       records: [expect.objectContaining({ action: "plugin.enable" })],
     });
+    if (process.platform !== "win32") {
+      expect(directorySyncs).toEqual([auditRoot, dataDir, auditRoot, auditRoot]);
+    }
   });
+
+  it.skipIf(process.platform === "win32")(
+    "refuses an append when its new directory entry cannot be made durable",
+    async () => {
+      const dataDir = await fixture();
+      let auditRootSyncs = 0;
+      const writer = new AuditLedgerWriter({
+        dataDir,
+        bootId: "fieldd-directory-sync-test",
+        hooks: {
+          beforeDirectorySync: (path) => {
+            if (path !== join(dataDir, "audit")) return;
+            auditRootSyncs += 1;
+            if (auditRootSyncs === 2) {
+              throw Object.assign(new Error("directory sync failed"), { code: "EIO" });
+            }
+          },
+        },
+      });
+      await writer.initialize();
+      await expect(
+        writer.append({
+          v: 1,
+          eventId: "audit_dirsync_01",
+          time: Date.now(),
+          actor: { kind: "system", id: "fieldd" },
+          action: "plugin.enable",
+          target: { kind: "plugin", id: "vibefield.example" },
+          phase: "attempt",
+          operationId: "op_dirsync_01",
+          transportProvenance: "in-process",
+        }),
+      ).rejects.toMatchObject({ operation: "sync", code: "EIO" });
+      expect(writer.openSegments()).toBe(0);
+      await writer.close();
+    },
+  );
 
   it("bounds and redacts attributes while refusing credential-shaped target ids", () => {
     const rawToken = `tok_${"a".repeat(48)}`;

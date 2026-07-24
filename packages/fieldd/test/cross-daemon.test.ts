@@ -173,7 +173,18 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
   it("SUPERSEDED stops the whole product plane — no zombie API (review P1)", async () => {
     const dir = await spawnNative();
     let fatal = "";
-    const daemon = await bootstrap({ dataDir: dir, controlPort: 0, onFatal: (r) => (fatal = r) });
+    let fatalNotified: (reason: string) => void = () => undefined;
+    const fatalNotification = new Promise<string>((resolve) => {
+      fatalNotified = resolve;
+    });
+    const daemon = await bootstrap({
+      dataDir: dir,
+      controlPort: 0,
+      onFatal: (reason) => {
+        fatal = reason;
+        fatalNotified(reason);
+      },
+    });
     const grant = daemon.tokens.mint([], "client");
 
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
@@ -201,6 +212,9 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     await usurper.connect();
 
     await wsClosed; // the old product plane's API died with its native link
+    // The process-exit callback deliberately follows service-lease revocation
+    // and evidence close, so never infer it synchronously from socket close.
+    await expect(fatalNotification).resolves.toContain("superseded");
     expect(fatal).toContain("superseded");
     expect(daemon.native.superseded).toBe(true);
     usurper.close();

@@ -89,7 +89,8 @@ export interface FielddConfig {
   // a fixed port — the bound port always travels in doc.open's laneUrl anyway.
   dataPort?: number;
   allowedOrigins?: string[];
-  /** invoked when this fieldd must die (e.g. superseded by a newer boot) */
+  /** Invoked after fatal teardown has closed process-owned evidence. The
+   * standalone host may terminate the process from this callback. */
   onFatal?: (reason: string) => void;
   /** C5 test seam: the ws-ctor PeerLink dials peers with (tests inject a
    * sidecar-simulating wrapper — secret path + identity headers). */
