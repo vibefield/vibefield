@@ -405,6 +405,7 @@ export function installRendererLogging(options: {
   pluginRouter: PluginLogRouter;
   pluginResolver: RendererPluginResolver;
   desktopLogger: Logger;
+  onProcessGone?: (details: RenderProcessGoneDetails) => void;
 }): () => void {
   const win = options.window;
   const webContents = win.webContents;
@@ -489,6 +490,7 @@ export function installRendererLogging(options: {
         webContentsId: webContents.id,
       },
     );
+    options.onProcessGone?.(details);
   };
   const onUnresponsive = (): void => {
     logger.warn("desktop.renderer.unresponsive", "Renderer became unresponsive", {

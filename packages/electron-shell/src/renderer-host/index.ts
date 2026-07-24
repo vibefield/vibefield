@@ -17,6 +17,27 @@ mountFieldApp({
   container: root,
   host: {
     logger: logging.logger,
+    diagnostics: {
+      query: (query) => window.vibefield.diagnostics.query(query),
+      subscribe: async (query, onEvent) => {
+        const subscription = await window.vibefield.diagnostics.subscribe(query, onEvent);
+        return {
+          snapshot: subscription.snapshot,
+          dispose: async () => {
+            await window.vibefield.diagnostics.unsubscribe(subscription.subId);
+          },
+        };
+      },
+      createLease: (request) => window.vibefield.diagnostics.createLease(request),
+      listLeases: () => window.vibefield.diagnostics.listLeases(),
+      revokeLease: (request) => window.vibefield.diagnostics.revokeLease(request),
+      openLogs: () => window.vibefield.diagnostics.openLogs(),
+      listCrashes: () => window.vibefield.diagnostics.listCrashes(),
+      markCrashViewed: (request) => window.vibefield.diagnostics.markCrashViewed(request),
+      previewSupport: (selection) => window.vibefield.diagnostics.previewSupport(selection),
+      exportSupport: (request) => window.vibefield.diagnostics.exportSupport(request),
+      copyText: (text) => window.vibefield.diagnostics.copyText(text),
+    },
     getConnection: () => window.vibefield.getConnection(),
     onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
     completeClose: (result) => window.vibefield.completeClose(result),

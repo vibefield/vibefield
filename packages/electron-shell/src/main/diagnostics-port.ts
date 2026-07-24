@@ -1,6 +1,6 @@
 import { IPC_CHANNELS, LOG_TRANSPORT_LIMITS } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
-import { type BrowserWindow, MessageChannelMain, type MessagePortMain } from "electron";
+import { type BrowserWindow, MessageChannelMain } from "electron";
 import type { ElectronLocalDiagnostics } from "./local-diagnostics";
 
 const METHODS = new Set([
@@ -15,6 +15,7 @@ const METHODS = new Set([
   "support.export",
   "crashes.list",
   "crashes.viewed",
+  "clipboard.copy",
 ]);
 const MAX_INFLIGHT = 16;
 const MAX_SUBSCRIPTIONS = 4;
@@ -40,6 +41,7 @@ export interface DiagnosticsHostActions {
   exportSupport?(params: unknown): Promise<unknown> | unknown;
   listCrashes?(): Promise<unknown> | unknown;
   markCrashViewed?(params: unknown): Promise<unknown> | unknown;
+  copyText?(params: unknown): Promise<unknown> | unknown;
 }
 
 function parseRequest(raw: unknown): RequestEnvelope | null {
@@ -91,7 +93,15 @@ function recordsAt(message: Record<string, unknown>): {
       records: result["records"],
       replace: (records, removed) => ({
         ...message,
-        result: { ...result, records, transportTruncatedRecords: removed },
+        result: {
+          ...result,
+          records,
+          droppedBefore:
+            typeof result["droppedBefore"] === "number"
+              ? Math.min(Number.MAX_SAFE_INTEGER, result["droppedBefore"] + removed)
+              : removed,
+          transportTruncatedRecords: removed,
+        },
       }),
     };
   }
@@ -103,7 +113,15 @@ function recordsAt(message: Record<string, unknown>): {
         ...message,
         result: {
           ...result,
-          snapshot: { ...snapshot, records, transportTruncatedRecords: removed },
+          snapshot: {
+            ...snapshot,
+            records,
+            droppedBefore:
+              typeof snapshot["droppedBefore"] === "number"
+                ? Math.min(Number.MAX_SAFE_INTEGER, snapshot["droppedBefore"] + removed)
+                : removed,
+            transportTruncatedRecords: removed,
+          },
         },
       }),
     };
@@ -113,7 +131,24 @@ function recordsAt(message: Record<string, unknown>): {
       records: payload["records"],
       replace: (records, removed) => ({
         ...message,
-        payload: { ...payload, records, transportTruncatedRecords: removed },
+        payload: {
+          ...payload,
+          records,
+          ...(typeof payload["droppedSincePrevious"] === "number"
+            ? {
+                droppedSincePrevious: Math.min(
+                  Number.MAX_SAFE_INTEGER,
+                  payload["droppedSincePrevious"] + removed,
+                ),
+              }
+            : {
+                droppedBefore:
+                  typeof payload["droppedBefore"] === "number"
+                    ? Math.min(Number.MAX_SAFE_INTEGER, payload["droppedBefore"] + removed)
+                    : removed,
+              }),
+          transportTruncatedRecords: removed,
+        },
       }),
     };
   }
@@ -273,6 +308,9 @@ export class DiagnosticsPortSession {
       case "crashes.viewed":
         this.reply(request.id, await this.requireAction("markCrashViewed")(request.params));
         return;
+      case "clipboard.copy":
+        this.reply(request.id, await this.requireAction("copyText")(request.params));
+        return;
     }
   }
 
@@ -311,7 +349,6 @@ export function installLocalDiagnosticsPort(options: {
   logger: Logger;
 }): () => void {
   const webContents = options.window.webContents;
-  let port: MessagePortMain | null = null;
   let session: DiagnosticsPortSession | null = null;
   let disposed = false;
   let generation = 0;
@@ -319,14 +356,12 @@ export function installLocalDiagnosticsPort(options: {
   const closePort = (): void => {
     session?.close();
     session = null;
-    port = null;
   };
   const openPort = (): void => {
     if (disposed || webContents.isDestroyed()) return;
     closePort();
     generation += 1;
     const channel = new MessageChannelMain();
-    port = channel.port1;
     session = new DiagnosticsPortSession(
       channel.port1,
       options.diagnostics,

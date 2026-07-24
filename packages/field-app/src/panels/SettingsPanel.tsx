@@ -31,11 +31,17 @@ import {
   widgets,
   writeRuntimeResource,
 } from "@vibecook/ice";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { MeshSection } from "./MeshSection";
 import { PluginsSection } from "./PluginsSection";
 import { SystemSection } from "./SystemSection";
 import type { OverlapGlowConfig, OverlapGlowThemeColors, ThemeColors } from "./types";
+
+const LazyDiagnosticsSection = lazy(() =>
+  import("./DiagnosticsSection").then((module) => ({
+    default: module.DiagnosticsSection,
+  })),
+);
 
 interface SettingsPanelProps {
   engine: CanvasEngine;
@@ -94,6 +100,7 @@ export function SettingsPanel({
   const [bpNormal, setBpNormal] = useState(320);
   const [bpExpanded, setBpExpanded] = useState(640);
   const [glowOpen, setGlowOpen] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
 
   function setGlow<K extends keyof OverlapGlowConfig>(key: K, value: OverlapGlowConfig[K]) {
     onOverlapGlowChange({ ...overlapGlow, [key]: value });
@@ -170,7 +177,9 @@ export function SettingsPanel({
   return (
     <div
       data-hud-flight="bottom-left"
-      className="hud-flight absolute bottom-14 left-4 z-50 w-72 max-h-[80vh] overflow-y-auto rounded-lg border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-sm font-mono text-[11px] dark:border-neutral-700 dark:bg-neutral-900/95 dark:text-neutral-300"
+      className={`hud-flight absolute bottom-14 left-4 z-50 max-h-[80vh] overflow-y-auto rounded-lg border border-neutral-200 bg-white/95 shadow-lg backdrop-blur-sm font-mono text-[11px] transition-[width] dark:border-neutral-700 dark:bg-neutral-900/95 dark:text-neutral-300 ${
+        diagnosticsOpen ? "w-[min(52rem,calc(100vw-2rem))]" : "w-72"
+      }`}
     >
       <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-2 dark:border-neutral-700">
         <span className="font-semibold text-neutral-700 dark:text-neutral-200">Settings</span>
@@ -687,6 +696,21 @@ export function SettingsPanel({
 
         {/* System diagnostics — sections, never pages (2026-07-21). */}
         <SystemSection />
+        <div className={borderCls}>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between text-left"
+            onClick={() => setDiagnosticsOpen((value) => !value)}
+          >
+            <span className={sectionCls}>Diagnostics viewer</span>
+            <span className={labelCls}>{diagnosticsOpen ? "▾" : "▸"}</span>
+          </button>
+          {diagnosticsOpen && (
+            <Suspense fallback={<div className={labelCls}>Loading diagnostics…</div>}>
+              <LazyDiagnosticsSection />
+            </Suspense>
+          )}
+        </div>
         {/* Mesh diagnostics — the tailnet section, sibling to System (C3). */}
         <MeshSection />
         {/* Plugin registry — sibling to System/Mesh (PLUG-P2 UI). */}

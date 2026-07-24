@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { lstat, open, readdir } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { LOG_TRANSPORT_LIMITS } from "@vibefield/contracts";
+import { LOG_STREAMS, LOG_TRANSPORT_LIMITS } from "@vibefield/contracts";
 import {
   DiagnosticLogQueryV1,
   type DiagnosticParseFailureV1,
@@ -46,9 +46,9 @@ function closedSegmentPattern(streamName: string): RegExp {
 function expectedPluginEntry(
   source: DiagnosticLogQueryV1["sources"][number],
 ): "renderer" | "service" | "utility" | undefined {
-  if (source === "plugins/renderer") return "renderer";
-  if (source === "plugins/service") return "service";
-  if (source === "plugins/utility") return "utility";
+  if (source === LOG_STREAMS.PLUGINS_RENDERER) return "renderer";
+  if (source === LOG_STREAMS.PLUGINS_SERVICE) return "service";
+  if (source === LOG_STREAMS.PLUGINS_UTILITY) return "utility";
   return undefined;
 }
 
@@ -56,8 +56,23 @@ function recordBelongsToSource(
   source: DiagnosticLogQueryV1["sources"][number],
   record: LogRecordV1,
 ): boolean {
+  const systemService =
+    source === LOG_STREAMS.SYSTEM_DESKTOP
+      ? "desktop"
+      : source === LOG_STREAMS.SYSTEM_RENDERER
+        ? "renderer"
+        : source === LOG_STREAMS.SYSTEM_UTILITY
+          ? "utility"
+          : source === LOG_STREAMS.SYSTEM_FIELDD
+            ? "fieldd"
+            : source === LOG_STREAMS.SYSTEM_FIELD_NATIVE
+              ? "field-native"
+              : undefined;
+  if (systemService !== undefined) {
+    return record.plugin === undefined && record.service === systemService;
+  }
   const entry = expectedPluginEntry(source);
-  return entry === undefined ? record.plugin === undefined : record.plugin?.entry === entry;
+  return entry !== undefined && record.plugin?.entry === entry;
 }
 
 export function diagnosticRecordMatches(record: LogRecordV1, query: DiagnosticLogQueryV1): boolean {

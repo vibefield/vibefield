@@ -1,5 +1,6 @@
 import { CloseRequest, CloseResult, IPC_CHANNELS, WindowConnection } from "@vibefield/contracts";
 import { contextBridge, ipcRenderer } from "electron";
+import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
@@ -10,9 +11,14 @@ import { PreloadLogBridge, type RendererLogPort } from "./logging";
 // channel string, or Electron object escapes into the page.
 
 const logging = new PreloadLogBridge();
+const diagnostics = new PreloadDiagnosticsBridge();
 ipcRenderer.on(IPC_CHANNELS.rendererLogPort, (event) => {
   const port = event.ports[0] as RendererLogPort | undefined;
   if (port !== undefined) logging.attach(port);
+});
+ipcRenderer.on(IPC_CHANNELS.diagnosticsPort, (event) => {
+  const port = event.ports[0] as DiagnosticsRendererPort | undefined;
+  if (port !== undefined) diagnostics.attach(port);
 });
 
 contextBridge.exposeInMainWorld("vibefield", {
@@ -48,5 +54,20 @@ contextBridge.exposeInMainWorld("vibefield", {
   },
   completeClose: (result: { requestId: string; ok: boolean; error?: string }): void => {
     ipcRenderer.send(IPC_CHANNELS.closeResult, CloseResult.parse(result));
+  },
+  diagnostics: {
+    query: (query: unknown) => diagnostics.query(query),
+    subscribe: (query: unknown, onEvent: Parameters<typeof diagnostics.subscribe>[1]) =>
+      diagnostics.subscribe(query, onEvent),
+    unsubscribe: (subId: string) => diagnostics.unsubscribe(subId),
+    createLease: (request: unknown) => diagnostics.createLease(request),
+    listLeases: () => diagnostics.listLeases(),
+    revokeLease: (request: unknown) => diagnostics.revokeLease(request),
+    openLogs: () => diagnostics.openLogs(),
+    listCrashes: () => diagnostics.listCrashes(),
+    markCrashViewed: (request: unknown) => diagnostics.markCrashViewed(request),
+    previewSupport: (selection: unknown) => diagnostics.previewSupport(selection),
+    exportSupport: (request: unknown) => diagnostics.exportSupport(request),
+    copyText: (text: unknown) => diagnostics.copyText(text),
   },
 });

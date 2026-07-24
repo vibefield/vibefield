@@ -63,9 +63,20 @@ describe("bounded historical diagnostics reader", () => {
     const logRoot = await root();
     const service = await fieldd(logRoot);
     service.logger.info("fieldd.history.valid", "valid");
+    const valid = service.recent().records[0];
+    if (valid === undefined) throw new Error("expected the valid record in the live ring");
+    const mismatched = {
+      ...valid,
+      service: "desktop",
+      role: "main",
+      event: "desktop.history.misfiled",
+    };
     await service.close();
     services.delete(service);
-    await appendFile(service.filePath, `not-json\n${"x".repeat(70 * 1024)}\n{"v":1,"partial":`);
+    await appendFile(
+      service.filePath,
+      `${JSON.stringify(mismatched)}\nnot-json\n${"x".repeat(70 * 1024)}\n{"v":1,"partial":`,
+    );
 
     const page = await readLogHistory({
       logRoot,
@@ -73,6 +84,7 @@ describe("bounded historical diagnostics reader", () => {
     });
     expect(page.records.map((record) => record.event)).toEqual(["fieldd.history.valid"]);
     expect(page.failures.map((failure) => failure.reason)).toEqual([
+      "invalid-record",
       "invalid-json",
       "oversized-record",
       "partial-line",

@@ -598,6 +598,7 @@ describe("node logging writer lifecycle", () => {
     ]);
     expect(target.isLevelEnabled("debug")).toBe(true);
     expect(other.isLevelEnabled("debug")).toBe(false);
+    expect(service.health().currentLevel).toBe("debug");
     target.debug("fieldd.test.during_lease", "admitted");
     other.debug("fieldd.test.wrong_component", "not admitted");
     expect(service.health().activeLeaseCount).toBe(1);
@@ -606,6 +607,7 @@ describe("node logging writer lifecycle", () => {
     expect(target.isLevelEnabled("debug")).toBe(false);
     target.debug("fieldd.test.after_lease", "not admitted");
     expect(service.health().activeLeaseCount).toBe(0);
+    expect(service.health().currentLevel).toBe("info");
     expect(service.recent().records.map((record) => record.event)).toEqual([
       "fieldd.test.during_lease",
     ]);

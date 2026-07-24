@@ -4,6 +4,7 @@
 // protocol: hello, *.subscribe → {subId, snapshot}, everything else → {}.
 import { rmSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
+import { LOG_STREAMS } from "@vibefield/contracts";
 
 export class MockMgmtServer {
   server: Server | null = null;
@@ -389,7 +390,7 @@ export class MockMgmtServer {
     const producer = {
       producerId: `field-native:${this.diagnosticBootId}`,
       service: "field-native",
-      stream: "system/field-native",
+      stream: LOG_STREAMS.SYSTEM_FIELD_NATIVE,
       bootId: this.diagnosticBootId,
       instanceId: this.diagnosticBootId,
       oldestCursor:
@@ -400,7 +401,7 @@ export class MockMgmtServer {
       droppedBefore: 0,
       health: {
         v: 1,
-        stream: "system/field-native",
+        stream: LOG_STREAMS.SYSTEM_FIELD_NATIVE,
         service: "field-native",
         bootId: this.diagnosticBootId,
         instanceId: this.diagnosticBootId,

@@ -173,6 +173,46 @@ export const DiagnosticLeaseRevokeV1 = z
   .strip();
 export type DiagnosticLeaseRevokeV1 = z.infer<typeof DiagnosticLeaseRevokeV1>;
 
+export const CrashArtifactV1 = z
+  .object({
+    v: LogSchemaVersionV1,
+    artifactId: LogBoundedIdentityV1,
+    processRole: z.string().min(1).max(64),
+    createdAt: LogSafeIntegerV1,
+    bytes: LogSafeIntegerV1,
+    appVersion: z.string().min(1).max(64),
+    bootId: LogBoundedIdentityV1.optional(),
+    viewed: z.boolean(),
+    exported: z.boolean(),
+    cleanupResult: z.enum(["retained", "cleanup-failed"]),
+  })
+  .passthrough();
+export type CrashArtifactV1 = z.infer<typeof CrashArtifactV1>;
+
+export const CrashArtifactListV1 = z
+  .object({
+    v: LogSchemaVersionV1,
+    observedAt: LogSafeIntegerV1,
+    artifacts: z.array(CrashArtifactV1).max(32),
+    cleanup: z
+      .object({
+        deletedArtifacts: LogSafeIntegerV1,
+        deletedBytes: LogSafeIntegerV1,
+        failures: LogSafeIntegerV1,
+        skippedUnsafeEntries: LogSafeIntegerV1,
+      })
+      .passthrough(),
+  })
+  .passthrough();
+export type CrashArtifactListV1 = z.infer<typeof CrashArtifactListV1>;
+
+export const CrashArtifactViewedV1 = z
+  .object({
+    artifactId: LogBoundedIdentityV1,
+  })
+  .strip();
+export type CrashArtifactViewedV1 = z.infer<typeof CrashArtifactViewedV1>;
+
 export const AuditPrincipalV1 = z
   .object({
     kind: z.enum(["local-token", "tailnet", "mcp-agent", "peer-fieldd", "shell-main", "system"]),
@@ -254,3 +294,88 @@ export const SupportBundleManifestV1 = z
   .passthrough()
   .describe("vibefield.support.manifest.contract.v1");
 export type SupportBundleManifestV1 = z.infer<typeof SupportBundleManifestV1>;
+
+export const SupportBundleSelectionV1 = z
+  .object({
+    range: z
+      .object({
+        from: LogSafeIntegerV1,
+        to: LogSafeIntegerV1,
+      })
+      .strip(),
+    sources: z.array(LogStreamV1).min(1).max(8),
+    pluginIds: z.array(LogBoundedIdentityV1).max(64).default([]),
+    includeAudit: z.boolean().default(false),
+    crashArtifactIds: z.array(LogBoundedIdentityV1).max(5).default([]),
+  })
+  .strip()
+  .superRefine((selection, context) => {
+    for (const [field, values] of [
+      ["sources", selection.sources],
+      ["pluginIds", selection.pluginIds],
+      ["crashArtifactIds", selection.crashArtifactIds],
+    ] as const) {
+      if (new Set(values).size !== values.length) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message: `${field} must not contain duplicate selections`,
+        });
+      }
+    }
+    if (selection.range.to < selection.range.from) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["range", "to"],
+        message: "range.to must be at or after range.from",
+      });
+    }
+    if (selection.range.to - selection.range.from > 30 * 24 * 60 * 60 * 1_000) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["range"],
+        message: "support range cannot exceed 30 days",
+      });
+    }
+    if (
+      selection.sources.some((source) => source.startsWith("plugins/")) &&
+      selection.pluginIds.length === 0
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["pluginIds"],
+        message: "plugin log sources require an explicit plugin selection",
+      });
+    }
+  });
+export type SupportBundleSelectionV1 = z.infer<typeof SupportBundleSelectionV1>;
+
+export const SupportBundlePreviewV1 = z
+  .object({
+    v: LogSchemaVersionV1,
+    previewId: LogBoundedIdentityV1,
+    expiresAt: LogSafeIntegerV1,
+    estimatedUncompressedBytes: LogSafeIntegerV1,
+    estimatedArchiveBytes: LogSafeIntegerV1,
+    manifest: SupportBundleManifestV1,
+    warnings: z.array(z.string().min(1).max(256)).max(16),
+  })
+  .passthrough();
+export type SupportBundlePreviewV1 = z.infer<typeof SupportBundlePreviewV1>;
+
+export const SupportBundleExportV1 = z
+  .object({
+    previewId: LogBoundedIdentityV1,
+  })
+  .strip();
+export type SupportBundleExportV1 = z.infer<typeof SupportBundleExportV1>;
+
+export const SupportBundleExportResultV1 = z
+  .object({
+    v: LogSchemaVersionV1,
+    status: z.enum(["exported", "cancelled"]),
+    bundleId: LogBoundedIdentityV1,
+    archiveBytes: LogSafeIntegerV1.optional(),
+  })
+  .passthrough();
+export type SupportBundleExportResultV1 = z.infer<typeof SupportBundleExportResultV1>;

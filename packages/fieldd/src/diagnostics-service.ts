@@ -20,6 +20,8 @@ import {
 } from "@vibefield/contracts/diagnostics";
 import type { LogRecordV1 as LogRecord } from "@vibefield/contracts/logging";
 import {
+  boundDiagnosticDelta,
+  boundDiagnosticSnapshot,
   diagnosticRecordMatches,
   type HistoricalLogPage,
   type Logger,
@@ -29,7 +31,11 @@ import {
 import { type NativeLink, RpcCallError } from "./native-link";
 import type { ProductApi } from "./product-api";
 
-const LOCAL_STREAMS = new Set<LogStream>([LOG_STREAMS.SYSTEM_FIELDD, LOG_STREAMS.PLUGINS_SERVICE]);
+const HISTORICAL_STREAMS = new Set<LogStream>([
+  LOG_STREAMS.SYSTEM_FIELDD,
+  LOG_STREAMS.SYSTEM_FIELD_NATIVE,
+  LOG_STREAMS.PLUGINS_SERVICE,
+]);
 const NATIVE_STREAM = LOG_STREAMS.SYSTEM_FIELD_NATIVE;
 const NATIVE_PROJECTION_RECORDS = 1_000;
 const NATIVE_PROJECTION_BYTES = 2 * 1024 * 1024;
@@ -562,7 +568,7 @@ export class DiagnosticsService {
     const records = [...local.records];
     const vector = cloneVector(local.vector);
 
-    const localSources = query.sources.filter((source) => LOCAL_STREAMS.has(source));
+    const localSources = query.sources.filter((source) => HISTORICAL_STREAMS.has(source));
     const historyPromise: Promise<HistoricalLogPage | null> =
       includeHistory && this.options.logRoot !== undefined && localSources.length > 0
         ? readLogHistory({
@@ -611,24 +617,26 @@ export class DiagnosticsService {
 
     const history = await historyPromise;
     if (history !== null) records.push(...history.records);
-    const snapshot = DiagnosticLogSnapshotV1.parse({
-      v: 1,
-      producers,
-      records: dedupeAndLimit(records, query.limit),
-      nextCursor: encodeVector(vector),
-      droppedBefore: safeSum(producers.map((producer) => producer.droppedBefore)),
-      ...(history !== null
-        ? {
-            history: {
-              scannedBytes: history.scannedBytes,
-              scannedSegments: history.scannedSegments,
-              parseFailures: history.failures.length,
-              skippedUnsafeSegments: history.skippedUnsafeSegments,
-              truncated: history.truncated,
-            },
-          }
-        : {}),
-    });
+    const snapshot = boundDiagnosticSnapshot(
+      DiagnosticLogSnapshotV1.parse({
+        v: 1,
+        producers,
+        records: dedupeAndLimit(records, query.limit),
+        nextCursor: encodeVector(vector),
+        droppedBefore: safeSum(producers.map((producer) => producer.droppedBefore)),
+        ...(history !== null
+          ? {
+              history: {
+                scannedBytes: history.scannedBytes,
+                scannedSegments: history.scannedSegments,
+                parseFailures: history.failures.length,
+                skippedUnsafeSegments: history.skippedUnsafeSegments,
+                truncated: history.truncated,
+              },
+            }
+          : {}),
+      }),
+    );
     return { snapshot, vector };
   }
 
@@ -728,12 +736,14 @@ export class DiagnosticsService {
         return;
       }
       if (records.length > 0 || droppedSincePrevious > 0) {
-        const delta: DiagnosticLogDelta = DiagnosticLogDeltaV1.parse({
-          v: 1,
-          cursor: encodeVector(subscriber.vector),
-          records: dedupeAndLimit(records, subscriber.query.limit),
-          droppedSincePrevious,
-        });
+        const delta: DiagnosticLogDelta = boundDiagnosticDelta(
+          DiagnosticLogDeltaV1.parse({
+            v: 1,
+            cursor: encodeVector(subscriber.vector),
+            records: dedupeAndLimit(records, subscriber.query.limit),
+            droppedSincePrevious,
+          }),
+        );
         subscriber.emit(delta, "delta");
       }
       if (hasMore) subscriber.dirty = true;

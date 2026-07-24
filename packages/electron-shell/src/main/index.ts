@@ -1,18 +1,24 @@
 import { randomBytes } from "node:crypto";
+import { homedir, release, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { APP_ID } from "@vibefield/contracts";
+import { APP_ID, CONTRACTS_VERSION } from "@vibefield/contracts";
+import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
-import { app } from "electron";
+import { app, clipboard, crashReporter, dialog, shell } from "electron";
 import { installDurableClose } from "./close";
+import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
+import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { registerWindowBootstrap } from "./ipc";
 import { installLifecycle } from "./lifecycle";
+import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
 import { isSmokeLike, parseMode } from "./modes";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { installRendererLogging } from "./renderer-logging";
 import { installCsp, installNavigationPolicy } from "./security";
+import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
 
@@ -26,9 +32,13 @@ import { createMainWindow, loadRenderer } from "./windows";
 const MODE = parseMode(process.argv);
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 const PRELOAD_PATH = join(__dirname, "..", "preload", "index.cjs");
+const DESKTOP_BOOT_ID = `desktop-${randomBytes(8).toString("hex")}`;
 
 let supervisor: FielddSupervisor | null = null;
 let logging: ElectronLogging | null = null;
+let localDiagnostics: ElectronLocalDiagnostics | null = null;
+let crashArtifacts: CrashArtifactManager | null = null;
+let supportBundles: SupportBundleService | null = null;
 const getSupervisor = () => supervisor;
 const registry = new WindowRegistry();
 
@@ -37,10 +47,126 @@ const testing = () =>
   // build artifact (package.json build --external); types ride the cast.
   import("../testing/smoke.cjs") as Promise<typeof import("../testing/smoke")>;
 
-async function main(root: string, logRoot: string, shellLogging: ElectronLogging): Promise<void> {
+async function closeEvidence(): Promise<void> {
+  try {
+    await crashArtifacts?.markClean();
+  } catch (error) {
+    logging?.logger.error(
+      "desktop.crash.clean_marker_failed",
+      "Electron could not record its clean shutdown",
+      error,
+    );
+  }
+  crashArtifacts = null;
+  supportBundles = null;
+  localDiagnostics?.dispose();
+  localDiagnostics = null;
+  await logging?.close();
+}
+
+async function main(
+  root: string,
+  logRoot: string,
+  shellLogging: ElectronLogging,
+  diagnostics: ElectronLocalDiagnostics,
+  crashes: CrashArtifactManager,
+  support: SupportBundleService,
+): Promise<void> {
   const logger = shellLogging.logger;
+  const installDiagnostics = (window: Electron.BrowserWindow): void => {
+    let supportDialogOpen = false;
+    installLocalDiagnosticsPort({
+      window,
+      diagnostics,
+      logger: logger.child({
+        component: "diagnostics.port",
+        windowId: String(window.id),
+      }),
+      actions: {
+        openLogs: async () => {
+          const error = await shell.openPath(logRoot);
+          if (error !== "") {
+            throw Object.assign(new Error("the logs directory could not be opened"), {
+              kind: "INTERNAL",
+            });
+          }
+          logger.info(
+            "desktop.diagnostics.logs_opened",
+            "The user opened the local logs directory",
+          );
+          return { opened: true };
+        },
+        listCrashes: () => crashes.refresh(),
+        markCrashViewed: (request) => crashes.markViewed(request),
+        previewSupport: (selection) => support.preview(selection),
+        exportSupport: async (raw) => {
+          if (supportDialogOpen) {
+            throw new SupportBundleError(
+              "RESOURCE_EXHAUSTED",
+              "a support export is already active for this window",
+            );
+          }
+          const request = SupportBundleExportV1.safeParse(raw);
+          if (!request.success) {
+            throw new SupportBundleError(
+              "PRECONDITION_FAILED",
+              "expected a valid support preview id",
+            );
+          }
+          supportDialogOpen = true;
+          try {
+            const selected = await dialog.showSaveDialog(window, {
+              title: "Export VibeField Support Bundle",
+              defaultPath: join(
+                app.getPath("downloads"),
+                `VibeField-support-${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`,
+              ),
+              buttonLabel: "Export",
+              filters: [{ name: "Compressed support bundle", extensions: ["gz"] }],
+              properties: ["createDirectory", "showOverwriteConfirmation"],
+            });
+            if (selected.canceled || selected.filePath === undefined) {
+              return support.cancelled(request.data.previewId);
+            }
+            return await support.export(request.data.previewId, selected.filePath);
+          } finally {
+            supportDialogOpen = false;
+          }
+        },
+        copyText: (raw) => {
+          const text =
+            typeof raw === "object" && raw !== null && "text" in raw ? raw.text : undefined;
+          if (typeof text !== "string" || Buffer.byteLength(text, "utf8") > 64 * 1024) {
+            throw Object.assign(new Error("expected bounded clipboard text"), {
+              kind: "PRECONDITION_FAILED",
+            });
+          }
+          clipboard.writeText(text);
+          return { copied: true };
+        },
+      },
+    });
+  };
   await app.whenReady();
   logger.info("desktop.lifecycle.ready", "Electron app is ready");
+  try {
+    await crashes.initialize();
+  } catch (error) {
+    logger.error(
+      "desktop.crash.manifest_unavailable",
+      "Electron crash artifacts are unavailable",
+      error,
+    );
+  }
+  try {
+    await support.initialize();
+  } catch (error) {
+    logger.error(
+      "desktop.support.initialization_failed",
+      "Electron support bundle staging is unavailable",
+      error,
+    );
+  }
   installCsp(MODE);
   app.on("child-process-gone", (_event, details) => {
     logger.warn("desktop.process.child_gone", "An Electron child process exited", {
@@ -50,12 +176,20 @@ async function main(root: string, logRoot: string, shellLogging: ElectronLogging
       ...(details.serviceName !== undefined ? { serviceName: details.serviceName } : {}),
       ...(details.name !== undefined ? { name: details.name } : {}),
     });
+    void crashes.refresh(details.type).catch((error) => {
+      logger.error(
+        "desktop.crash.refresh_failed",
+        "Electron could not refresh crash evidence after a child exited",
+        error,
+        { type: details.type },
+      );
+    });
   });
 
   if (MODE === "spike-loro") {
     await (await testing()).runSpikeLoro({
       root,
-      beforeExit: () => shellLogging.close(),
+      beforeExit: closeEvidence,
     });
     return;
   }
@@ -122,9 +256,7 @@ async function main(root: string, logRoot: string, shellLogging: ElectronLogging
   );
 
   if (MODE === "smoke") {
-    await (await testing()).runSmoke(await fielddReady, supervisor, root, () =>
-      shellLogging.close(),
-    );
+    await (await testing()).runSmoke(await fielddReady, supervisor, root, closeEvidence);
     return;
   }
 
@@ -138,7 +270,7 @@ async function main(root: string, logRoot: string, shellLogging: ElectronLogging
       registry,
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
-      beforeExit: () => shellLogging.close(),
+      beforeExit: closeEvidence,
       onWindow: (window) => {
         installRendererLogging({
           window,
@@ -146,7 +278,17 @@ async function main(root: string, logRoot: string, shellLogging: ElectronLogging
           pluginRouter: shellLogging.pluginRendererRouter,
           pluginResolver: pluginProvenance,
           desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch((error) => {
+              logger.error(
+                "desktop.crash.refresh_failed",
+                "Electron could not refresh crash evidence after a renderer exited",
+                error,
+              );
+            });
+          },
         });
+        installDiagnostics(window);
       },
     });
     return;
@@ -161,7 +303,17 @@ async function main(root: string, logRoot: string, shellLogging: ElectronLogging
     pluginRouter: shellLogging.pluginRendererRouter,
     pluginResolver: pluginProvenance,
     desktopLogger: logger,
+    onProcessGone: () => {
+      void crashes.refresh("renderer").catch((error) => {
+        logger.error(
+          "desktop.crash.refresh_failed",
+          "Electron could not refresh crash evidence after a renderer exited",
+          error,
+        );
+      });
+    },
   });
+  installDiagnostics(win);
   installNavigationPolicy(win, MODE);
   installDurableClose(win, logger.child({ component: "window.close", windowId: String(win.id) }));
   await loadRenderer(win, MODE, VITE_URL);
@@ -173,6 +325,19 @@ async function main(root: string, logRoot: string, shellLogging: ElectronLogging
 
 app.setName("VibeField");
 if (process.platform === "win32") app.setAppUserModelId(APP_ID);
+if (!isSmokeLike(MODE)) {
+  try {
+    startLocalCrashReporter({
+      start: (config) => crashReporter.start(config),
+      bootId: DESKTOP_BOOT_ID,
+      appVersion: app.getVersion(),
+      contractsVersion: CONTRACTS_VERSION,
+      channel: MODE,
+    });
+  } catch {
+    process.stderr.write("VibeField local crash reporter failed to initialize\n");
+  }
+}
 
 // D10 — establish shell ownership synchronously, before any stream writer can
 // race. The primary logs both acquisition and the second-instance callback;
@@ -191,7 +356,58 @@ if (!hasInstanceLock) {
     logging = await createElectronLogging({
       logRoot,
       dataRoot: root,
-      bootId: `desktop-${randomBytes(8).toString("hex")}`,
+      bootId: DESKTOP_BOOT_ID,
+    });
+    localDiagnostics = new ElectronLocalDiagnostics(logging);
+    crashArtifacts = new CrashArtifactManager({
+      dataRoot: root,
+      crashDumpsRoot: isSmokeLike(MODE) ? join(root, "crashes") : app.getPath("crashDumps"),
+      bootId: DESKTOP_BOOT_ID,
+      appVersion: app.getVersion(),
+      logger: logging.logger.child({ component: "crash.artifacts" }),
+    });
+    const evidenceLogging = logging;
+    supportBundles = new SupportBundleService({
+      dataRoot: root,
+      logRoot,
+      crashArtifacts,
+      logger: logging.logger.child({ component: "support.bundle" }),
+      aliases: {
+        home: homedir(),
+        temp: tmpdir(),
+        logs: logRoot,
+        data: root,
+      },
+      versions: {
+        vibeField: app.getVersion(),
+        pluginHostBuild: app.getVersion(),
+        fielddBuild: app.getVersion(),
+        fieldNativeBuild: app.getVersion(),
+        electron: process.versions.electron ?? "unknown",
+        node: process.versions.node,
+        rustToolchain: "not-reported",
+        contracts: CONTRACTS_VERSION,
+        os: `${process.platform}-${release()}`,
+        arch: process.arch,
+      },
+      collectContext: async () => {
+        let fieldd: unknown = { state: "unavailable" };
+        try {
+          const handle = await supervisor?.ensure();
+          if (handle !== undefined) fieldd = await handle.client.request("system.health");
+        } catch {
+          fieldd = { state: "unavailable" };
+        }
+        return {
+          electronLogging: [
+            evidenceLogging.desktop.health(),
+            evidenceLogging.renderer.health(),
+            evidenceLogging.utility.health(),
+            evidenceLogging.pluginRenderer.health(),
+          ],
+          fieldd,
+        };
+      },
     });
     const logger = logging.logger;
     logger.info("desktop.lifecycle.boot_started", "Electron shell boot started", {
@@ -205,10 +421,10 @@ if (!hasInstanceLock) {
       registry,
       getSupervisor,
       logger,
-      closeLogging: () => logging?.close() ?? Promise.resolve(),
+      closeLogging: closeEvidence,
     });
     try {
-      await main(root, logRoot, logging);
+      await main(root, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles);
     } catch (error) {
       flow.fatal(error);
     }
@@ -216,7 +432,7 @@ if (!hasInstanceLock) {
     // Static emergency only: this path means the desktop writer itself could
     // not initialize, so it must never recurse through logging or echo errors.
     process.stderr.write("VibeField shell failed before logging initialized\n");
-    await logging?.close();
+    await closeEvidence();
     app.exit(1);
   });
 }

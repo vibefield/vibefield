@@ -19,6 +19,8 @@ import {
 } from "@vibefield/contracts/diagnostics";
 import type { LogRecordV1 as LogRecord } from "@vibefield/contracts/logging";
 import {
+  boundDiagnosticDelta,
+  boundDiagnosticSnapshot,
   diagnosticRecordMatches,
   type HistoricalLogPage,
   readLogHistory,
@@ -327,24 +329,26 @@ export class ElectronLocalDiagnostics {
           })
         : null;
     const records = [...live.records, ...(history?.records ?? [])];
-    const snapshot = DiagnosticLogSnapshotV1.parse({
-      v: 1,
-      producers: live.producers,
-      records: dedupeAndLimit(records, query.limit),
-      nextCursor: encodeVector(live.vector),
-      droppedBefore: safeSum(live.producers.map((producer) => producer.droppedBefore)),
-      ...(history !== null
-        ? {
-            history: {
-              scannedBytes: history.scannedBytes,
-              scannedSegments: history.scannedSegments,
-              parseFailures: history.failures.length,
-              skippedUnsafeSegments: history.skippedUnsafeSegments,
-              truncated: history.truncated,
-            },
-          }
-        : {}),
-    });
+    const snapshot = boundDiagnosticSnapshot(
+      DiagnosticLogSnapshotV1.parse({
+        v: 1,
+        producers: live.producers,
+        records: dedupeAndLimit(records, query.limit),
+        nextCursor: encodeVector(live.vector),
+        droppedBefore: safeSum(live.producers.map((producer) => producer.droppedBefore)),
+        ...(history !== null
+          ? {
+              history: {
+                scannedBytes: history.scannedBytes,
+                scannedSegments: history.scannedSegments,
+                parseFailures: history.failures.length,
+                skippedUnsafeSegments: history.skippedUnsafeSegments,
+                truncated: history.truncated,
+              },
+            }
+          : {}),
+      }),
+    );
     return { snapshot, vector: live.vector };
   }
 
@@ -429,12 +433,14 @@ export class ElectronLocalDiagnostics {
       }
       if (records.length > 0 || droppedSincePrevious > 0) {
         subscriber.emit(
-          DiagnosticLogDeltaV1.parse({
-            v: 1,
-            cursor: encodeVector(subscriber.vector),
-            records: dedupeAndLimit(records, subscriber.query.limit),
-            droppedSincePrevious,
-          }),
+          boundDiagnosticDelta(
+            DiagnosticLogDeltaV1.parse({
+              v: 1,
+              cursor: encodeVector(subscriber.vector),
+              records: dedupeAndLimit(records, subscriber.query.limit),
+              droppedSincePrevious,
+            }),
+          ),
           "delta",
         );
       }

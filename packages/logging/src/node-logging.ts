@@ -450,7 +450,7 @@ class NodeLoggingService implements NodeLogging {
       bootId: this.options.bootId,
       instanceId: this.options.instanceId,
       writerState: this.state,
-      currentLevel: this.level,
+      currentLevel: this.effectiveLevel(),
       activeLeaseCount: this.activeLeases().length,
       activeSegmentBytes: this.activeSegmentBytes,
       queue: {
@@ -617,9 +617,13 @@ class NodeLoggingService implements NodeLogging {
   }
 
   private recomputePinoLevel(): void {
+    this.pino.level = this.effectiveLevel();
+  }
+
+  private effectiveLevel(): LogLevelNameV1 {
     let minimum = LEVEL_NUMBER[this.level];
     for (const lease of this.activeLeases()) minimum = Math.min(minimum, LEVEL_NUMBER[lease.level]);
-    this.pino.level = LEVEL_AT_NUMBER[minimum] ?? this.level;
+    return LEVEL_AT_NUMBER[minimum] ?? this.level;
   }
 
   private scheduleLeaseExpiry(): void {

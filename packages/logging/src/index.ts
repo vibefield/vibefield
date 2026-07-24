@@ -1,3 +1,12 @@
+export {
+  boundDiagnosticDelta,
+  boundDiagnosticSnapshot,
+} from "./diagnostic-bounds";
+export {
+  ExportPseudonyms,
+  type ExportSanitizeResult,
+  sanitizeLogRecordForExport,
+} from "./export-sanitize";
 export { diagnosticRecordMatches, readLogHistory } from "./history-reader";
 export {
   FIRST_PARTY_BUFFERS,

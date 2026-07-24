@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { LOG_STREAMS } from "@vibefield/contracts";
 import type {
   DiagnosticLeaseListV1,
   DiagnosticLeaseV1,
@@ -95,10 +96,23 @@ describe("LOG-L5 privileged diagnostics surface", () => {
     fixture.native.diagnosticRecords = [
       nativeRecord(fixture, "field_native.diagnostics.native_record", 1),
     ];
+    const historicalNative = {
+      ...nativeRecord(fixture, "field_native.diagnostics.historical_record", 7),
+      time: Date.now() - 5_000,
+      bootId: "prior-native-boot",
+      instanceId: "prior-native-boot",
+    };
+    const nativeStreamName = LOG_STREAMS.SYSTEM_FIELD_NATIVE.split("/").at(-1);
+    expect(nativeStreamName).toBeDefined();
+    writeFileSync(
+      join(fixture.root, "logs", "system", `${nativeStreamName}.ndjson`),
+      `${JSON.stringify(historicalNative)}\n`,
+      { mode: 0o600 },
+    );
 
     const client = await rpc(fixture);
     const snapshot = (await client.call("diagnostics.query", {
-      sources: ["system/fieldd", "system/field-native"],
+      sources: [LOG_STREAMS.SYSTEM_FIELDD, LOG_STREAMS.SYSTEM_FIELD_NATIVE],
       text: "diagnostic",
       limit: 100,
     })) as DiagnosticLogSnapshotV1;
@@ -109,6 +123,7 @@ describe("LOG-L5 privileged diagnostics surface", () => {
       expect.arrayContaining([
         "fieldd.diagnostics.local_record",
         "field_native.diagnostics.native_record",
+        "field_native.diagnostics.historical_record",
       ]),
     );
     expect(snapshot.nextCursor.length).toBeGreaterThan(0);
