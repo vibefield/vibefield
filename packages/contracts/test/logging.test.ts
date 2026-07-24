@@ -66,6 +66,15 @@ describe("normalized record boundaries", () => {
           pid: 999,
           bootId: "claimed",
           windowId: "claimed",
+          pluginId: "vibefield.example.plugin",
+          plugin: {
+            id: "forged",
+            version: "9.9.9",
+            installRevision: "forged",
+            entry: "renderer",
+            installSource: "peer",
+            trust: "r2-peer",
+          },
           attrs: { frames: 12 },
         },
       ],
@@ -77,6 +86,7 @@ describe("normalized record boundaries", () => {
       event: "renderer.boot.stability_cap_reached",
       msg: "revealed with the bounded degraded path",
       component: "boot",
+      pluginId: "vibefield.example.plugin",
       attrs: { frames: 12 },
     });
   });

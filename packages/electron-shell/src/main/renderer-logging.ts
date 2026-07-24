@@ -1,19 +1,40 @@
 import { IPC_CHANNELS, LOG_TRANSPORT_LIMITS } from "@vibefield/contracts";
-import { RendererLogBatchV1 } from "@vibefield/contracts/logging";
-import type { Logger, NodeLogging } from "@vibefield/logging";
+import {
+  type LogIngressRecordV1,
+  type PluginLogProvenanceV1,
+  RendererLogBatchV1,
+} from "@vibefield/contracts/logging";
+import type { Logger, NodeLogging, PluginLogRouter } from "@vibefield/logging";
 import {
   type BrowserWindow,
   MessageChannelMain,
   type MessagePortMain,
   type RenderProcessGoneDetails,
 } from "electron";
+import type { RendererPluginResolver } from "./plugin-provenance";
 
-type RejectionReason = "non-string" | "oversized" | "invalid-json" | "invalid-batch" | "rate";
+type RejectionReason =
+  | "non-string"
+  | "oversized"
+  | "invalid-json"
+  | "invalid-batch"
+  | "rate"
+  | "plugin-route"
+  | "plugin-pending-overflow";
+
+interface PendingPluginRecord {
+  readonly record: LogIngressRecordV1;
+  readonly observedTime: number;
+  readonly rendererPid: number;
+  readonly bytes: number;
+}
 
 export interface RendererIngressHealth {
   readonly acceptedBatches: number;
   readonly acceptedRecords: number;
   readonly rendererDropped: number;
+  readonly pendingPluginRecords: number;
+  readonly pendingPluginBytes: number;
   readonly rejected: Readonly<Record<RejectionReason, number>>;
 }
 
@@ -29,7 +50,12 @@ export class RendererLogIngress {
     "invalid-json": 0,
     "invalid-batch": 0,
     rate: 0,
+    "plugin-route": 0,
+    "plugin-pending-overflow": 0,
   };
+  private readonly pendingPluginRecords: PendingPluginRecord[] = [];
+  private pendingPluginBytes = 0;
+  private readonly stopResolver: (() => void) | null;
   private lastRejectionLogAt = Number.NEGATIVE_INFINITY;
   private disposed = false;
 
@@ -40,10 +66,14 @@ export class RendererLogIngress {
       windowId: string;
       webContentsId: number;
       rendererPid: () => number;
+      pluginRouter?: PluginLogRouter;
+      pluginResolver?: RendererPluginResolver;
       now?: () => number;
     },
   ) {
     this.lastRefill = this.now();
+    this.stopResolver =
+      options.pluginResolver?.onChange(() => this.flushPendingPluginRecords()) ?? null;
   }
 
   accept(raw: unknown): void {
@@ -82,32 +112,7 @@ export class RendererLogIngress {
     const observedTime = this.now();
     const rendererPid = Math.max(0, this.options.rendererPid());
     for (const record of parsed.data.records) {
-      this.options.sink.ingest({
-        time: record.time,
-        observedTime,
-        level: record.level,
-        event: record.event,
-        message: record.msg,
-        component: record.component,
-        ...(record.err !== undefined ? { error: record.err } : {}),
-        attrs: {
-          ...(record.attrs ?? {}),
-          webContentsId: this.options.webContentsId,
-          rendererPid,
-        },
-        bindings: {
-          ...(record.traceId !== undefined ? { traceId: record.traceId } : {}),
-          ...(record.spanId !== undefined ? { spanId: record.spanId } : {}),
-          ...(record.operationId !== undefined ? { operationId: record.operationId } : {}),
-          ...(record.requestId !== undefined ? { requestId: record.requestId } : {}),
-          ...(record.sessionId !== undefined ? { sessionId: record.sessionId } : {}),
-          ...(record.docId !== undefined ? { docId: record.docId } : {}),
-          ...(record.deviceId !== undefined ? { deviceId: record.deviceId } : {}),
-        },
-        windowId: this.options.windowId,
-        pid: rendererPid,
-        ...(record.truncation !== undefined ? { truncation: record.truncation } : {}),
-      });
+      this.routeRecord(record, observedTime, rendererPid);
     }
     if (parsed.data.dropped !== undefined) {
       const count = Object.values(parsed.data.dropped).reduce((sum, value) => sum + value, 0);
@@ -134,6 +139,10 @@ export class RendererLogIngress {
 
   dispose(): void {
     this.disposed = true;
+    this.stopResolver?.();
+    this.pendingPluginRecords.length = 0;
+    this.pendingPluginBytes = 0;
+    this.options.pluginRouter?.releaseWindow(this.options.windowId);
   }
 
   health(): RendererIngressHealth {
@@ -141,8 +150,130 @@ export class RendererLogIngress {
       acceptedBatches: this.acceptedBatches,
       acceptedRecords: this.acceptedRecords,
       rendererDropped: this.rendererDropped,
+      pendingPluginRecords: this.pendingPluginRecords.length,
+      pendingPluginBytes: this.pendingPluginBytes,
       rejected: { ...this.rejected },
     };
+  }
+
+  private routeRecord(record: LogIngressRecordV1, observedTime: number, rendererPid: number): void {
+    if (record.pluginId === undefined) {
+      this.options.sink.ingest({
+        time: record.time,
+        observedTime,
+        level: record.level,
+        event: record.event,
+        message: record.msg,
+        component: record.component,
+        ...(record.err !== undefined ? { error: record.err } : {}),
+        attrs: {
+          ...(record.attrs ?? {}),
+          webContentsId: this.options.webContentsId,
+          rendererPid,
+        },
+        bindings: {
+          ...(record.traceId !== undefined ? { traceId: record.traceId } : {}),
+          ...(record.spanId !== undefined ? { spanId: record.spanId } : {}),
+          ...(record.operationId !== undefined ? { operationId: record.operationId } : {}),
+          ...(record.requestId !== undefined ? { requestId: record.requestId } : {}),
+          ...(record.sessionId !== undefined ? { sessionId: record.sessionId } : {}),
+          ...(record.docId !== undefined ? { docId: record.docId } : {}),
+          ...(record.deviceId !== undefined ? { deviceId: record.deviceId } : {}),
+        },
+        windowId: this.options.windowId,
+        pid: rendererPid,
+        ...(record.truncation !== undefined ? { truncation: record.truncation } : {}),
+      });
+      return;
+    }
+
+    const resolution = this.options.pluginResolver?.resolve(record.pluginId, this.options.windowId);
+    if (resolution === undefined) {
+      this.reject("plugin-route");
+      return;
+    }
+    if (resolution.kind === "pending") {
+      this.queuePendingPluginRecord(record, observedTime, rendererPid);
+      return;
+    }
+    if (resolution.kind === "rejected") {
+      this.reject("plugin-route");
+      return;
+    }
+    this.forwardPluginRecord(record, observedTime, rendererPid, resolution.provenance);
+  }
+
+  private forwardPluginRecord(
+    record: LogIngressRecordV1,
+    observedTime: number,
+    rendererPid: number,
+    provenance: PluginLogProvenanceV1,
+  ): void {
+    if (
+      this.options.pluginRouter === undefined ||
+      record.level === "trace" ||
+      record.level === "fatal"
+    ) {
+      this.reject("plugin-route");
+      return;
+    }
+    this.options.pluginRouter.accept(provenance, {
+      time: record.time,
+      observedTime,
+      level: record.level,
+      event: "plugin.log",
+      message: record.msg,
+      fields: {
+        ...(record.attrs ?? {}),
+        webContentsId: this.options.webContentsId,
+        rendererPid,
+      },
+      pid: rendererPid,
+      ...(record.truncation !== undefined ? { truncation: record.truncation } : {}),
+    });
+  }
+
+  private queuePendingPluginRecord(
+    record: LogIngressRecordV1,
+    observedTime: number,
+    rendererPid: number,
+  ): void {
+    const bytes = Buffer.byteLength(JSON.stringify(record), "utf8");
+    if (
+      this.pendingPluginRecords.length + 1 > LOG_TRANSPORT_LIMITS.RENDERER_QUEUE_RECORDS ||
+      this.pendingPluginBytes + bytes > LOG_TRANSPORT_LIMITS.RENDERER_QUEUE_BYTES
+    ) {
+      this.reject("plugin-pending-overflow");
+      return;
+    }
+    this.pendingPluginRecords.push({ record, observedTime, rendererPid, bytes });
+    this.pendingPluginBytes += bytes;
+  }
+
+  private flushPendingPluginRecords(): void {
+    if (this.disposed || this.options.pluginResolver === undefined) return;
+    const retained: PendingPluginRecord[] = [];
+    let retainedBytes = 0;
+    for (const pending of this.pendingPluginRecords) {
+      const pluginId = pending.record.pluginId;
+      if (pluginId === undefined) continue;
+      const resolution = this.options.pluginResolver.resolve(pluginId, this.options.windowId);
+      if (resolution.kind === "pending") {
+        retained.push(pending);
+        retainedBytes += pending.bytes;
+      } else if (resolution.kind === "rejected") {
+        this.reject("plugin-route");
+      } else {
+        this.forwardPluginRecord(
+          pending.record,
+          pending.observedTime,
+          pending.rendererPid,
+          resolution.provenance,
+        );
+      }
+    }
+    this.pendingPluginRecords.splice(0, this.pendingPluginRecords.length, ...retained);
+    this.pendingPluginBytes = retainedBytes;
   }
 
   private now(): number {
@@ -183,6 +314,8 @@ export class RendererLogIngress {
 export function installRendererLogging(options: {
   window: BrowserWindow;
   sink: NodeLogging;
+  pluginRouter: PluginLogRouter;
+  pluginResolver: RendererPluginResolver;
   desktopLogger: Logger;
 }): () => void {
   const win = options.window;
@@ -225,6 +358,8 @@ export function installRendererLogging(options: {
       windowId,
       webContentsId: webContents.id,
       rendererPid,
+      pluginRouter: options.pluginRouter,
+      pluginResolver: options.pluginResolver,
     });
     const currentIngress = ingress;
     channel.port1.on("message", (event) => currentIngress.accept(event.data));

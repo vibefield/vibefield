@@ -45,16 +45,13 @@
   },
   "overrides": [
     {
-      // LOG-L3: first-party runtime code must use the injected logger. Tests,
-      // smoke/dev protocols, and plugin-origin adapters have separate evidence
-      // contracts and remain outside this rule's scope.
+      // LOG-L3/LOG-L4: runtime code must use its injected system/plugin logger.
+      // Only tests and explicit smoke/development protocols remain exempt.
       "includes": [
         "packages/*/src/**/*.{ts,tsx,js,mjs,cjs}",
         "!packages/electron-shell/src/testing/smoke.ts",
         "!packages/field-app/src/spike/**",
-        "!packages/field-app/src/development-console.ts",
-        "!packages/field-app/src/plugin-host/renderer-harness.ts",
-        "!packages/fieldd/src/plugin-service-console.ts"
+        "!packages/field-app/src/development-console.ts"
       ],
       "linter": {
         "rules": {

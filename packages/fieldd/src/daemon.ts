@@ -33,7 +33,13 @@ import {
 } from "@vibefield/contracts";
 import type { LoggingHealthV1 } from "@vibefield/contracts/logging";
 import type { WsCtor } from "@vibefield/fieldd-client";
-import { createNodeLogging, createNoopLogger, type NodeLogging } from "@vibefield/logging";
+import {
+  createNodeLogging,
+  createNoopLogger,
+  type NodeLogging,
+  PluginLogRouter,
+  pluginLogProvenance,
+} from "@vibefield/logging";
 import { DeviceService } from "./device-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
@@ -41,11 +47,10 @@ import { MeshClient } from "./mesh-client";
 import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
 import { PluginRegistryService } from "./plugin-registry";
-import { emitPendingPluginServiceLog } from "./plugin-service-console";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
 import { ProductApi } from "./product-api";
-import { ServiceHost } from "./service-host";
+import { type PluginServiceLogRecord, ServiceHost } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
 import { TokenService } from "./token-service";
 
@@ -86,13 +91,9 @@ export interface FielddConfig {
   serviceHarnessPath?: string;
   /** P5 test seam — secret-scope settings backend (default: darwin keychain). */
   secretStore?: SecretStore;
-  /** LOG-L3/LOG-L4 test seam: production uses the explicit pending plugin
-   * adapter until plugins/service persistence replaces it. */
-  pluginLog?: (record: {
-    pluginId: string;
-    level: "debug" | "info" | "warn" | "error";
-    message: string;
-  }) => void;
+  /** Test seam for observing the service host boundary without opening a
+   * plugin writer. Production resolves install provenance and persists. */
+  pluginLog?: (record: PluginServiceLogRecord) => void;
 }
 
 export interface FielddHealth {
@@ -122,6 +123,7 @@ export interface FielddDaemon {
   plugins: PluginRegistryService;
   services: ServiceRegistry;
   logging: NodeLogging | null;
+  pluginLogging: NodeLogging | null;
   /** the all-scopes token written to run/shell.token (tests read it here) */
   shellToken: string;
   health(): FielddHealth;
@@ -135,29 +137,50 @@ const FIELDD_VERSION = "0.1.0";
 export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   const bootId = `fieldd-${randomBytes(8).toString("hex")}`;
   const startedAt = Date.now();
-  const logging =
+  const [logging, pluginLogging] =
     config.logRoot === undefined
-      ? null
-      : await createNodeLogging({
-          logRoot: config.logRoot,
-          stream: LOG_STREAMS.SYSTEM_FIELDD,
-          service: "fieldd",
-          role: "daemon",
-          bootId,
-          instanceId: bootId,
-          component: "bootstrap",
-          aliases: {
-            home: homedir(),
-            temp: tmpdir(),
-            logs: config.logRoot,
-            data: config.dataDir,
-          },
-        });
+      ? [null, null]
+      : await Promise.all([
+          createNodeLogging({
+            logRoot: config.logRoot,
+            stream: LOG_STREAMS.SYSTEM_FIELDD,
+            service: "fieldd",
+            role: "daemon",
+            bootId,
+            instanceId: bootId,
+            component: "bootstrap",
+            aliases: {
+              home: homedir(),
+              temp: tmpdir(),
+              logs: config.logRoot,
+              data: config.dataDir,
+            },
+          }),
+          createNodeLogging({
+            logRoot: config.logRoot,
+            stream: LOG_STREAMS.PLUGINS_SERVICE,
+            service: "fieldd",
+            role: "worker",
+            bootId,
+            instanceId: bootId,
+            component: "plugin.service",
+            aliases: {
+              home: homedir(),
+              temp: tmpdir(),
+              logs: config.logRoot,
+              data: config.dataDir,
+            },
+          }),
+        ]);
+  const pluginLogRouter =
+    pluginLogging === null ? null : new PluginLogRouter({ sink: pluginLogging });
   const logger = logging?.logger ?? createNoopLogger();
   let loggingClosePromise: Promise<void> | null = null;
   const closeLogging = (): Promise<void> => {
-    if (!logging) return Promise.resolve();
-    loggingClosePromise ??= logging.close();
+    loggingClosePromise ??= (async () => {
+      pluginLogRouter?.close();
+      await Promise.all([logging?.close(), pluginLogging?.close()]);
+    })();
     return loggingClosePromise;
   };
   logger.info("fieldd.lifecycle.boot_started", "fieldd boot started");
@@ -189,6 +212,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
     });
     await plugins.refresh();
+    const emitPluginLog =
+      config.pluginLog ??
+      ((record: PluginServiceLogRecord): void => {
+        const install = plugins.get(record.pluginId);
+        if (install === undefined || pluginLogRouter === null) return;
+        const provenance = pluginLogProvenance(install, "service");
+        if (provenance === null) return;
+        pluginLogRouter.accept(provenance, {
+          level: record.level,
+          message: record.message,
+          ...(record.fields !== undefined ? { fields: record.fields } : {}),
+          ...(record.event !== undefined ? { event: record.event } : {}),
+        });
+      });
     // P4 — the dynamic-method router (§14): grants resolve through the plugin
     // registry; providers arrive from the service host (worker port) below.
     const services = new ServiceRegistry({
@@ -729,7 +766,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ? { harnessPath: config.serviceHarnessPath }
         : {}),
       logger: logger.child({ component: "plugin.service.host" }),
-      pluginLog: config.pluginLog ?? emitPendingPluginServiceLog,
+      pluginLog: emitPluginLog,
     });
     // fire-and-forget: activation states surface honestly through the registry
     void serviceHost.startEligible();
@@ -804,6 +841,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       plugins,
       services,
       logging,
+      pluginLogging,
       shellToken: shellGrant.token,
       health,
       nativeHealth: () => latestHealth,

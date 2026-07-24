@@ -27,7 +27,13 @@ const ID = "vibefield.fixture.svc";
 
 async function setup(): Promise<{
   daemon: FielddDaemon;
-  pluginLogs: Array<{ pluginId: string; level: string; message: string }>;
+  pluginLogs: Array<{
+    pluginId: string;
+    level: string;
+    message: string;
+    fields?: Readonly<Record<string, unknown>>;
+    event?: string;
+  }>;
 }> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-svchost-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -36,7 +42,13 @@ async function setup(): Promise<{
   const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
   await mock.start();
   cleanup.push(() => mock.stop());
-  const pluginLogs: Array<{ pluginId: string; level: string; message: string }> = [];
+  const pluginLogs: Array<{
+    pluginId: string;
+    level: string;
+    message: string;
+    fields?: Readonly<Record<string, unknown>>;
+    event?: string;
+  }> = [];
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
@@ -68,8 +80,28 @@ describe("ServiceHost — the worker end-to-end (§14.2)", () => {
     expect(pluginLogs).toContainEqual({
       pluginId: ID,
       level: "info",
-      message: "[stdout] fixture service stdout",
+      message: "fixture service stdout",
+      fields: { source: "stdout", truncated: false },
+      event: "plugin.output",
     });
+    expect(pluginLogs).toContainEqual({
+      pluginId: ID,
+      level: "info",
+      message: "fixture service activated",
+      fields: {
+        source: "fixture",
+        bootstrapToken: "plugin-secret-canary-abcdefghijklmnopqrstuvwxyz",
+      },
+      event: "plugin.log",
+    });
+    const bounded = pluginLogs.find(
+      (record) => record.level === "warn" && record.fields?.["pluginLogTruncated"] === true,
+    );
+    expect(bounded).toBeDefined();
+    expect(Buffer.byteLength(bounded?.message ?? "", "utf8")).toBeLessThanOrEqual(4 * 1024);
+    expect(
+      Buffer.byteLength(String(bounded?.fields?.["payload"] ?? ""), "utf8"),
+    ).toBeLessThanOrEqual(4 * 1024);
     expect(daemon.services.snapshot().providers.map((p) => p.namespace)).toEqual([NS]);
 
     const rpc = await openRpc(daemon.controlPort);

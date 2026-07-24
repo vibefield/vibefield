@@ -44,6 +44,7 @@ import {
 import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useMemo, useRef } from "react";
 import { type Mesh, Vector3 } from "three";
+import { getWidgetlabLogger } from "./logging";
 
 const TYPE = "vibefield.widgetlab.shapes";
 
@@ -184,7 +185,7 @@ function ShapesView({ entity, world }: WidgetComponentProps): ReactElement {
         } as never);
       });
     } catch (err) {
-      console.warn("[ShapesCard] accent commit failed", err);
+      getWidgetlabLogger().warn("Accent commit failed", { error: err });
     }
   };
 

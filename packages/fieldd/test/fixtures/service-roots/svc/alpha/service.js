@@ -5,6 +5,11 @@
 export default {
   activate(ctx) {
     console.log("fixture service stdout");
+    ctx.logger.info("fixture service activated", {
+      source: "fixture",
+      bootstrapToken: "plugin-secret-canary-abcdefghijklmnopqrstuvwxyz",
+    });
+    ctx.logger.warn("m".repeat(10 * 1024), { payload: "x".repeat(50 * 1024) });
     ctx.services.provide({
       namespace: "x.vibefield.fixture.svc",
       methods: {

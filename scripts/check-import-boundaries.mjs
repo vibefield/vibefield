@@ -232,8 +232,7 @@ const RULES = [
   {
     id: "R11",
     // ENFORCED since LOG-L3: first-party runtime diagnostics must enter a
-    // process-owned sink. Plugin-origin console adapters remain visible under
-    // pending R15 until LOG-L4 gives them provenance-aware plugin sinks.
+    // process-owned sink. LOG-L4 removed the former plugin adapter exceptions.
     enforce: true,
     description: "no first-party runtime console.* outside explicit smoke/development adapters",
     applies: (p) =>
@@ -245,8 +244,6 @@ const RULES = [
       ![
         "packages/electron-shell/src/testing/smoke.ts",
         "packages/field-app/src/development-console.ts",
-        "packages/field-app/src/plugin-host/renderer-harness.ts",
-        "packages/fieldd/src/plugin-service-console.ts",
       ].includes(p),
     linePattern: /\bconsole\.(?:debug|info|log|warn|error|trace)\s*\(/g,
   },
@@ -290,20 +287,16 @@ const RULES = [
   },
   {
     id: "R15",
-    // LOG-L3 separates the plugin-origin migration ledger from the now-blocking
-    // first-party console wall. LOG-L4 replaces these adapters/calls with
-    // provenance-aware plugins/{renderer,service,utility} routes and enforces it.
-    enforce: false,
-    description: "plugin-origin runtime console.* awaits provenance-aware LOG-L4 sinks",
+    // ENFORCED since LOG-L4: plugin-origin runtime evidence must use ctx.logger
+    // and a provenance-aware plugins/{renderer,service,utility} route.
+    enforce: true,
+    description: "plugin-origin runtime console.* bypasses provenance-aware plugin sinks",
     applies: (p) =>
       SOURCE_EXT.test(p) &&
       !isTestPath(p) &&
       !/(^|\/)scripts\//.test(p) &&
       (underAny(p, ["plugins", "examples/plugins"]) ||
-        [
-          "packages/field-app/src/plugin-host/renderer-harness.ts",
-          "packages/fieldd/src/plugin-service-console.ts",
-        ].includes(p)),
+        ["packages/field-app/src/plugin-host/renderer-harness.ts"].includes(p)),
     linePattern: /\bconsole\.(?:debug|info|log|warn|error|trace)\s*\(/g,
   },
 ];
@@ -746,7 +739,7 @@ function runSelfTest() {
     // three slices). Every rule is enforced — R10's pending era ended when
     // slice P3 landed the SDK (2026-07-23); adding a new pending rule means
     // editing THIS set, a deliberate act.
-    const EXPECTED_PENDING = new Set(["R12", "R13", "R14", "R15"]);
+    const EXPECTED_PENDING = new Set(["R12", "R13", "R14"]);
     const tableOk = RULES.every((r) => r.enforce === !EXPECTED_PENDING.has(r.id));
     console.log(
       `  ${tableOk ? "PASS" : "FAIL"}  enforce table: every rule enforced except {${[...EXPECTED_PENDING].join(", ")}}`,
@@ -765,6 +758,10 @@ function runSelfTest() {
     const r11Gated = found.some((v) => v.id === "R11" && ENFORCE_BY_ID.get(v.id) === true);
     console.log(`  ${r11Gated ? "PASS" : "FAIL"}  R11 detected and GATED (enforced since LOG-L3)`);
     if (!r11Gated) ok = false;
+
+    const r15Gated = found.some((v) => v.id === "R15" && ENFORCE_BY_ID.get(v.id) === true);
+    console.log(`  ${r15Gated ? "PASS" : "FAIL"}  R15 detected and GATED (enforced since LOG-L4)`);
+    if (!r15Gated) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

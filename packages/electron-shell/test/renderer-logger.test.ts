@@ -100,4 +100,35 @@ describe("bounded renderer logging client", () => {
     expect(sent[0]?.dropped?.info).toBeGreaterThan(0);
     expect(sent[0]?.records.some((record) => record.level === "error")).toBe(true);
   });
+
+  it("marks plugin records with only an ID hint and applies the stricter browser-side cap", () => {
+    vi.useFakeTimers();
+    const sent: RendererLogBatchV1[] = [];
+    const client = createRendererLoggingClient({
+      send(raw) {
+        sent.push(JSON.parse(raw));
+        return true;
+      },
+    });
+    client.logger
+      .child({ component: "plugin.renderer", pluginId: "vibefield.example.plugin" })
+      .info("plugin.log", "m".repeat(12 * 1024), {
+        payload: "x".repeat(12 * 1024),
+      });
+    vi.advanceTimersByTime(100);
+
+    const record = sent[0]?.records[0];
+    expect(record).toBeDefined();
+    if (record === undefined) throw new Error("plugin record missing");
+    expect(record).toMatchObject({
+      event: "plugin.log",
+      component: "plugin.renderer",
+      pluginId: "vibefield.example.plugin",
+    });
+    expect(new TextEncoder().encode(record.msg).byteLength).toBeLessThanOrEqual(4 * 1024);
+    expect(new TextEncoder().encode(JSON.stringify(record)).byteLength).toBeLessThanOrEqual(
+      16 * 1024,
+    );
+    expect(record).not.toHaveProperty("plugin");
+  });
 });

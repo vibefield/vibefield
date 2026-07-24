@@ -6,6 +6,7 @@ import { CRYSTAL_TYPE, CrystalView } from "./CrystalWidget";
 import { FITNESS_TYPE, FitnessView } from "./FitnessCard";
 import { CUBE_TYPE, CubeView } from "./FloatingCubeWidget";
 import { GOLD_KNOT_CHROME, GOLD_KNOT_TYPE, GoldKnotView } from "./GoldKnotCard";
+import { setWidgetlabLogger } from "./logging";
 import { MatteSphereView, SPHERE_CHROME, SPHERE_TYPE } from "./MatteSphereCard";
 import {
   FILTER_TYPE,
@@ -33,6 +34,9 @@ import { WEATHER_TYPE, WeatherView } from "./WeatherCard";
 
 export default defineRendererPlugin({
   activate(ctx) {
+    setWidgetlabLogger(ctx.logger);
+    ctx.track({ dispose: () => setWidgetlabLogger(null) });
+    ctx.logger.info("Renderer plugin activated");
     ctx.widgets.register({ type: CLOCK_TYPE, binding: { component: ClockView } });
     ctx.widgets.register({ type: BATTERY_TYPE, binding: { component: BatteryView } });
     ctx.widgets.register({ type: CALENDAR_TYPE, binding: { component: CalendarView } });

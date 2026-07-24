@@ -9,6 +9,7 @@ import { FOLDER_TYPE, FolderView } from "./folder";
 
 export default defineRendererPlugin({
   activate(ctx) {
+    ctx.logger.info("Renderer plugin activated");
     ctx.widgets.register({ type: FOLDER_TYPE, binding: { component: FolderView } });
     ctx.widgets.register({ type: COMMENT_TYPE, binding: { component: CommentView } });
   },

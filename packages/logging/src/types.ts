@@ -6,6 +6,7 @@ import type {
   LogRoleV1,
   LogServiceV1,
   LogTruncationV1,
+  PluginLogProvenanceV1,
 } from "@vibefield/contracts/logging";
 
 export type LogFields = Readonly<Record<string, unknown>>;
@@ -105,6 +106,9 @@ export interface TrustedLogIngress {
   windowId?: string;
   pid?: number;
   truncation?: LogTruncationV1;
+  /** Host-resolved provenance. Plugin streams require this field; system
+   * streams reject it, preserving the physical category boundary. */
+  plugin?: PluginLogProvenanceV1;
 }
 
 export interface RecentLogSnapshot {

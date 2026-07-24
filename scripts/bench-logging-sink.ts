@@ -1,7 +1,7 @@
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { LOG_STREAMS } from "../packages/contracts/src/registries";
 import { createRendererLoggingClient } from "../packages/electron-shell/src/renderer-host/renderer-logger";
-import { createNodeLogging } from "../packages/logging/src/index";
+import { createNodeLogging, PluginLogRouter } from "../packages/logging/src/index";
 
 interface Scenario {
   name: string;
@@ -147,6 +147,88 @@ async function measureRenderer(iterations: number): Promise<{
   };
 }
 
+async function measurePluginFlood(
+  iterations: number,
+  logRoot: string,
+): Promise<{
+  scenario: Scenario;
+  attempted: number;
+  accepted: number;
+  droppedRate: number;
+  activeEntries: number;
+  dropSummaries: number;
+  queueHighWaterRecords: number;
+  queueHighWaterBytes: number;
+  ringHighWaterRecords: number;
+  ringHighWaterBytes: number;
+}> {
+  const sink = await createNodeLogging({
+    logRoot,
+    stream: LOG_STREAMS.PLUGINS_SERVICE,
+    service: "fieldd",
+    role: "worker",
+    bootId: "benchmark-boot",
+    instanceId: "benchmark-instance",
+    component: "plugin.service",
+    emergency: () => undefined,
+  });
+  const router = new PluginLogRouter({ sink });
+  const provenance = {
+    id: "vibefield.benchmark",
+    version: "1.0.0",
+    installRevision: "benchmark-revision",
+    entry: "service" as const,
+    installSource: "dev-link" as const,
+    trust: "r3-dev" as const,
+  };
+  const floodIterations = Math.max(2_000, iterations);
+  const samples = new Float64Array(floodIterations + 20);
+  let measuredNs = 0n;
+  for (let index = 0; index < floodIterations; index += 1) {
+    const started = process.hrtime.bigint();
+    router.accept(provenance, {
+      level: "info",
+      message: "plugin flood record",
+      fields: { index },
+    });
+    const elapsed = process.hrtime.bigint() - started;
+    measuredNs += elapsed;
+    samples[index] = Number(elapsed) / 1_000;
+  }
+  // Prove the low-severity flood cannot consume the warning/error reserve.
+  for (let index = 0; index < 20; index += 1) {
+    const started = process.hrtime.bigint();
+    router.accept(provenance, {
+      level: "error",
+      message: "plugin high-severity reserve record",
+      fields: { index },
+    });
+    const elapsed = process.hrtime.bigint() - started;
+    measuredNs += elapsed;
+    samples[floodIterations + index] = Number(elapsed) / 1_000;
+  }
+  const routeHealth = router.health();
+  router.close();
+  await sink.flush();
+  const sinkHealth = sink.health();
+  const dropSummaries = sink
+    .recent()
+    .records.filter((record) => record.event === "plugin.logging.records_dropped").length;
+  await sink.close();
+  return {
+    scenario: result("plugin-flood-route", samples, measuredNs),
+    attempted: samples.length,
+    accepted: routeHealth.accepted,
+    droppedRate: routeHealth.droppedRate,
+    activeEntries: routeHealth.activeEntries,
+    dropSummaries,
+    queueHighWaterRecords: sinkHealth.queue.highWaterRecords,
+    queueHighWaterBytes: sinkHealth.queue.highWaterBytes,
+    ringHighWaterRecords: sinkHealth.ring.highWaterRecords,
+    ringHighWaterBytes: sinkHealth.ring.highWaterBytes,
+  };
+}
+
 export async function measureLoggingSink(
   iterations: number,
   logRoot: string,
@@ -157,6 +239,7 @@ export async function measureLoggingSink(
   queueHighWaterRecords: number;
   ringHighWaterBytes: number;
   renderer: Awaited<ReturnType<typeof measureRenderer>>;
+  plugin: Awaited<ReturnType<typeof measurePluginFlood>>;
 }> {
   const sink = await createNodeLogging({
     logRoot,
@@ -203,12 +286,16 @@ export async function measureLoggingSink(
 
   const health = sink.health();
   await sink.close();
-  const renderer = await measureRenderer(iterations);
+  const [renderer, plugin] = await Promise.all([
+    measureRenderer(iterations),
+    measurePluginFlood(iterations, logRoot),
+  ]);
   return {
     scenarios: [
       result("disabled-node-debug", disabledSamples, disabledNs),
       result("accepted-node-enqueue", acceptedSamples, acceptedNs),
       ...renderer.scenarios,
+      plugin.scenario,
     ],
     accepted: health.counters.accepted - acceptedBefore,
     dropped:
@@ -220,5 +307,6 @@ export async function measureLoggingSink(
     queueHighWaterRecords: health.queue.highWaterRecords,
     ringHighWaterBytes: health.ring.highWaterBytes,
     renderer,
+    plugin,
   };
 }

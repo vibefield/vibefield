@@ -60,12 +60,15 @@ export interface ServiceHostConfig {
   /** test seam — production defaults are the §18.3 ladder constants */
   ladder?: { baseMs?: number; maxMs?: number; windowMs?: number; quarantineAt?: number };
   logger?: Logger;
-  /** LOG-L4 replaces this explicit pending adapter with plugins/service. */
-  pluginLog?: (record: {
-    pluginId: string;
-    level: "debug" | "info" | "warn" | "error";
-    message: string;
-  }) => void;
+  pluginLog?: (record: PluginServiceLogRecord) => void;
+}
+
+export interface PluginServiceLogRecord {
+  pluginId: string;
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
+  fields?: Readonly<Record<string, unknown>>;
+  event?: "plugin.log" | "plugin.output";
 }
 
 interface Entry {
@@ -197,6 +200,14 @@ export class ServiceHost {
         leaseUrl: `ws://127.0.0.1:${this.cfg.controlPort()}`,
         leaseToken: lease.token,
         scopes: lease.scopes, // presence-gates ctx.settings/storage (§10.2)
+        logLimits: {
+          recordBytes: LOG_TRANSPORT_LIMITS.PLUGIN_RECORD_BYTES,
+          messageBytes: LOG_TRANSPORT_LIMITS.PLUGIN_MESSAGE_BYTES,
+          stringBytes: LOG_TRANSPORT_LIMITS.PLUGIN_STRING_BYTES,
+          objectDepth: LOG_TRANSPORT_LIMITS.PLUGIN_OBJECT_DEPTH,
+          objectKeys: LOG_TRANSPORT_LIMITS.PLUGIN_OBJECT_KEYS,
+          arrayItems: LOG_TRANSPORT_LIMITS.PLUGIN_ARRAY_ITEMS,
+        },
       },
       env: {}, // EL7 — a minimal environment, daemon secrets stripped
       // a CLEAN node CLI for the worker: no inherited loaders/debug flags
@@ -314,12 +325,29 @@ export class ServiceHost {
             return;
           }
           case "log": {
-            const level = msg["level"] as "debug" | "info" | "warn" | "error";
+            const level = msg["level"];
+            if (level !== "debug" && level !== "info" && level !== "warn" && level !== "error") {
+              this.logger.warn(
+                "fieldd.plugin_service.log_rejected",
+                "Plugin service emitted an invalid log level",
+                { pluginId, reason: "level" },
+              );
+              return;
+            }
             const message =
               typeof msg["message"] === "string"
                 ? msg["message"]
                 : "[plugin emitted a non-string log message]";
-            this.cfg.pluginLog?.({ pluginId, level, message });
+            const fields = msg["fields"];
+            this.cfg.pluginLog?.({
+              pluginId,
+              level,
+              message,
+              ...(fields !== null && typeof fields === "object" && !Array.isArray(fields)
+                ? { fields: fields as Record<string, unknown> }
+                : {}),
+              event: "plugin.log",
+            });
             return;
           }
           default:
@@ -442,8 +470,8 @@ export class ServiceHost {
   }
 
   /** Plugin-owned stdout/stderr must never enter system/fieldd. Consume both
-   * streams through the shared bounded framer and keep them on the explicit
-   * LOG-L4 plugin adapter until plugins/service persistence lands. */
+   * streams through the shared bounded framer and route them through the same
+   * host-stamped plugins/service boundary as ctx.logger. */
   private capturePluginOutput(worker: Worker, pluginId: string): () => void {
     const detach: Array<() => void> = [];
     const attach = (stream: "stdout" | "stderr", level: "info" | "error"): void => {
@@ -456,7 +484,9 @@ export class ServiceHost {
           this.cfg.pluginLog?.({
             pluginId,
             level,
-            message: `[${stream}${line.truncated ? ":truncated" : ""}] ${line.line}`,
+            message: line.line,
+            fields: { source: stream, truncated: line.truncated },
+            event: "plugin.output",
           });
         },
       });

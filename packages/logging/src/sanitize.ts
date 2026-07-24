@@ -1,12 +1,14 @@
-import type {
-  LogErrorShapeV1,
-  LogLevelNameV1,
-  LogRecordV1,
-  LogTruncationReasonV1,
-  LogTruncationV1,
-  LogValueV1,
+import {
+  type LogErrorShapeV1,
+  type LogLevelNameV1,
+  type LogRecordV1,
+  type LogTruncationReasonV1,
+  type LogTruncationV1,
+  type LogValueV1,
+  PluginLogProvenanceV1 as PluginLogProvenanceSchemaV1,
+  type PluginLogProvenanceV1,
 } from "@vibefield/contracts/logging";
-import { FIRST_PARTY_VALUE_LIMITS } from "./limits";
+import { FIRST_PARTY_VALUE_LIMITS, type LogValueLimits } from "./limits";
 import type { LoggerBindings, LogSanitizerAliases } from "./types";
 
 const EVENT_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
@@ -63,7 +65,9 @@ export interface NormalizeRecordInput {
   time: number;
   observedTime?: number;
   truncation?: LogTruncationV1;
+  plugin?: PluginLogProvenanceV1;
   maxRecordBytes: number;
+  valueLimits?: Readonly<LogValueLimits>;
   aliases?: LogSanitizerAliases;
 }
 
@@ -197,14 +201,16 @@ export function serializeError(
     aliases?: LogSanitizerAliases | undefined;
     maxCauses?: number;
     seen?: WeakSet<object>;
+    limits?: Readonly<LogValueLimits>;
   } = {},
 ): LogErrorShapeV1 {
   const aliases = options.aliases;
+  const limits = options.limits ?? FIRST_PARTY_VALUE_LIMITS;
   const seen = options.seen ?? new WeakSet<object>();
   if (value === null || (typeof value !== "object" && typeof value !== "function")) {
     return {
       type: "ThrownValue",
-      message: truncateUtf8(redactPatterns(String(value), aliases), 16 * 1024),
+      message: truncateUtf8(redactPatterns(String(value), aliases), limits.messageBytes),
     };
   }
   if (typeof value === "object" && seen.has(value)) {
@@ -224,14 +230,14 @@ export function serializeError(
           ? truncateUtf8(value.name, 256)
           : "ErrorLike";
     const message =
-      safeString(rawMessage, 16 * 1024, aliases) ??
-      truncateUtf8(redactPatterns("[error details unavailable]", aliases), 16 * 1024);
+      safeString(rawMessage, limits.messageBytes, aliases) ??
+      truncateUtf8(redactPatterns("[error details unavailable]", aliases), limits.messageBytes);
     const code =
       typeof rawCode === "string" || typeof rawCode === "number"
         ? truncateUtf8(redactPatterns(String(rawCode), aliases), 256)
         : undefined;
-    const stack = safeString(rawStack, FIRST_PARTY_VALUE_LIMITS.stackBytes, aliases);
-    const maxCauses = options.maxCauses ?? FIRST_PARTY_VALUE_LIMITS.errorCauses;
+    const stack = safeString(rawStack, limits.stackBytes, aliases);
+    const maxCauses = options.maxCauses ?? limits.errorCauses;
     const causeValues: unknown[] = [];
     const cause = safeDataProperty(value, "cause");
     if (cause !== undefined) causeValues.push(cause);
@@ -245,7 +251,7 @@ export function serializeError(
     }
     const causes = causeValues
       .slice(0, maxCauses)
-      .map((entry) => serializeError(entry, { aliases, maxCauses: maxCauses - 1, seen }));
+      .map((entry) => serializeError(entry, { aliases, maxCauses: maxCauses - 1, seen, limits }));
     return {
       type,
       message,
@@ -278,13 +284,14 @@ function sanitizeValue(
   path: string,
   depth: number,
   aliases: LogSanitizerAliases | undefined,
+  limits: Readonly<LogValueLimits>,
   tracker: TruncationTracker,
   ancestors: WeakSet<object>,
 ): LogValueV1 {
   if (value === null || typeof value === "boolean") return value;
   if (typeof value === "string") {
     const redacted = redactPatterns(value, aliases);
-    const bounded = truncateUtf8(redacted, FIRST_PARTY_VALUE_LIMITS.stringBytes);
+    const bounded = truncateUtf8(redacted, limits.stringBytes);
     if (bounded !== redacted) {
       tracker.reasons.add("string-bytes");
       tracker.fields.add(path);
@@ -296,7 +303,7 @@ function sanitizeValue(
   if (typeof value === "undefined") return "[undefined]";
   if (typeof value === "function") return "[unsupported:function]";
   if (typeof value === "symbol") return "[unsupported:symbol]";
-  if (depth >= FIRST_PARTY_VALUE_LIMITS.objectDepth) {
+  if (depth >= limits.objectDepth) {
     tracker.reasons.add("object-depth");
     tracker.fields.add(path);
     return "[truncated:object-depth]";
@@ -306,7 +313,9 @@ function sanitizeValue(
   ancestors.add(value);
   try {
     if (Buffer.isBuffer(value)) return `[binary omitted:${value.byteLength} bytes]`;
-    if (value instanceof Error) return errorToLogValue(serializeError(value, { aliases }));
+    if (value instanceof Error) {
+      return errorToLogValue(serializeError(value, { aliases, limits }));
+    }
 
     const descriptors = Object.getOwnPropertyDescriptors(value);
     const ownKeys = Reflect.ownKeys(descriptors);
@@ -319,7 +328,7 @@ function sanitizeValue(
         typeof lengthDescriptor.value === "number"
           ? lengthDescriptor.value
           : 0;
-      const count = Math.min(length, FIRST_PARTY_VALUE_LIMITS.arrayItems);
+      const count = Math.min(length, limits.arrayItems);
       const result: LogValueV1[] = [];
       for (let index = 0; index < count; index += 1) {
         const descriptor = descriptors[String(index)];
@@ -330,6 +339,7 @@ function sanitizeValue(
                 `${path}[${index}]`,
                 depth + 1,
                 aliases,
+                limits,
                 tracker,
                 ancestors,
               )
@@ -352,7 +362,7 @@ function sanitizeValue(
       const descriptor = descriptors[key];
       if (!descriptor?.enumerable || !("value" in descriptor)) continue;
       if (PROTOTYPE_KEYS.has(key)) continue;
-      if (accepted >= FIRST_PARTY_VALUE_LIMITS.objectKeys) {
+      if (accepted >= limits.objectKeys) {
         tracker.reasons.add("object-keys");
         tracker.fields.add(path);
         break;
@@ -366,6 +376,7 @@ function sanitizeValue(
           `${path}.${safeKey}`,
           depth + 1,
           aliases,
+          limits,
           tracker,
           ancestors,
         );
@@ -486,8 +497,9 @@ export function normalizeLogRecord(input: NormalizeRecordInput): LogRecordV1 | n
       reasons: new Set(input.truncation?.reasons ?? []),
       fields: new Set(input.truncation?.fields ?? []),
     };
+    const limits = input.valueLimits ?? FIRST_PARTY_VALUE_LIMITS;
     const redactedMessage = redactPatterns(input.message, input.aliases);
-    const message = truncateUtf8(redactedMessage, FIRST_PARTY_VALUE_LIMITS.messageBytes);
+    const message = truncateUtf8(redactedMessage, limits.messageBytes);
     if (message !== redactedMessage) {
       tracker.reasons.add("message-bytes");
       tracker.fields.add("msg");
@@ -495,7 +507,7 @@ export function normalizeLogRecord(input: NormalizeRecordInput): LogRecordV1 | n
     const attrsValue =
       input.attrs === undefined
         ? undefined
-        : sanitizeValue(input.attrs, "attrs", 0, input.aliases, tracker, new WeakSet());
+        : sanitizeValue(input.attrs, "attrs", 0, input.aliases, limits, tracker, new WeakSet());
     const attrs =
       attrsValue !== null && typeof attrsValue === "object" && !Array.isArray(attrsValue)
         ? attrsValue
@@ -503,7 +515,7 @@ export function normalizeLogRecord(input: NormalizeRecordInput): LogRecordV1 | n
     const err =
       input.error === undefined
         ? undefined
-        : serializeError(input.error, { aliases: input.aliases });
+        : serializeError(input.error, { aliases: input.aliases, limits });
     const traceId = safeIdentity(input.bindings.traceId, input.aliases);
     const spanId = safeIdentity(input.bindings.spanId, input.aliases);
     const operationId = safeIdentity(input.bindings.operationId, input.aliases);
@@ -512,6 +524,23 @@ export function normalizeLogRecord(input: NormalizeRecordInput): LogRecordV1 | n
     const docId = safeIdentity(input.bindings.docId, input.aliases);
     const deviceId = safeIdentity(input.bindings.deviceId, input.aliases);
     const windowId = safeIdentity(input.bindings.windowId, input.aliases);
+    const parsedPlugin =
+      input.plugin === undefined ? undefined : PluginLogProvenanceSchemaV1.safeParse(input.plugin);
+    if (parsedPlugin !== undefined && !parsedPlugin.success) return null;
+    const plugin =
+      parsedPlugin?.success === true
+        ? {
+            id: parsedPlugin.data.id,
+            version: parsedPlugin.data.version,
+            installRevision: parsedPlugin.data.installRevision,
+            entry: parsedPlugin.data.entry,
+            ...(parsedPlugin.data.windowId !== undefined
+              ? { windowId: parsedPlugin.data.windowId }
+              : {}),
+            installSource: parsedPlugin.data.installSource,
+            trust: parsedPlugin.data.trust,
+          }
+        : undefined;
     const record: LogRecordV1 = {
       v: 1,
       time: safeNonnegativeInteger(input.time),
@@ -537,6 +566,7 @@ export function normalizeLogRecord(input: NormalizeRecordInput): LogRecordV1 | n
       ...(docId !== undefined ? { docId } : {}),
       ...(deviceId !== undefined ? { deviceId } : {}),
       ...(windowId !== undefined ? { windowId } : {}),
+      ...(plugin !== undefined ? { plugin } : {}),
       ...(attrs !== undefined ? { attrs } : {}),
       ...(err !== undefined ? { err } : {}),
     };

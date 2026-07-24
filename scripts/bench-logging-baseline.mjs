@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Versioned LOG-L0–LOG-L3 harness. It retains the direct-Console discard
+// Versioned LOG-L0–LOG-L4 harness. It retains the direct-Console discard
 // baseline, measures the real bounded Node sink, and exercises the renderer
-// queue/batcher plus a baseline-normalized 1,000-records/sec event-loop trial.
+// queue/batcher, plugin flood boundary, and a baseline-normalized
+// 1,000-records/sec event-loop trial.
 import { execFileSync } from "node:child_process";
 import { Console } from "node:console";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -10,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 
-const HARNESS_VERSION = 3;
+const HARNESS_VERSION = 4;
 const DEFAULT_ITERATIONS = 50_000;
 
 class ImmediateDiscard extends Writable {
@@ -122,6 +123,12 @@ process.stdout.write(
           batching: "up to 50 records / 256 KiB",
           persistence: "Electron host route measured separately by conformance tests",
         },
+        pluginSink: {
+          destination: "host-owned plugin category writer",
+          applicationQueue: "4,096 records / 4 MiB; 1,000 records / 1 MiB recent ring",
+          admission: "per execution entry: 20 records/sec, burst 100, 20 warning/error reserve",
+          persistence: "one category stream per execution host; no per-plugin writer",
+        },
       },
       nodeSinkHealth: {
         accepted: nodeSink.accepted,
@@ -139,6 +146,7 @@ process.stdout.write(
         floodDropped: nodeSink.renderer.floodDropped,
       },
       rendererEventLoop: nodeSink.renderer.eventLoop,
+      pluginFlood: nodeSink.plugin,
       scenarios,
     },
     null,

@@ -9,6 +9,9 @@ export interface RendererLoggerBindings {
   sessionId?: string | undefined;
   docId?: string | undefined;
   deviceId?: string | undefined;
+  /** Host-harness-only routing hint. Electron main resolves and stamps the
+   * active install; plugin code never receives this event-first logger. */
+  pluginId?: string | undefined;
 }
 
 /** Browser-safe mirror of the first-party event API. The Electron host owns

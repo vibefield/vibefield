@@ -8,6 +8,7 @@ import {
   type WidgetBinding,
   type WidgetRegistration,
 } from "@vibefield/plugin-sdk";
+import { getRendererLogger } from "../logging";
 import { createPluginProductClient } from "./plugin-client";
 
 // The host-owned renderer harness (spec §10.3, P3a): construct the context,
@@ -33,16 +34,12 @@ export interface ActivatedRenderer {
 const activated = new Map<string, ActivatedRenderer>();
 
 function makeLogger(id: string): PluginLogger {
-  const line =
-    (fn: (msg: string) => void) =>
-    (message: string, fields?: Record<string, unknown>): void => {
-      fn(`[plugin:${id}] ${message}${fields !== undefined ? ` ${JSON.stringify(fields)}` : ""}`);
-    };
+  const route = getRendererLogger().child({ component: "plugin.renderer", pluginId: id });
   return {
-    debug: line((m) => console.debug(m)),
-    info: line((m) => console.info(m)),
-    warn: line((m) => console.warn(m)),
-    error: line((m) => console.error(m)),
+    debug: (message, fields) => route.debug("plugin.log", message, fields),
+    info: (message, fields) => route.info("plugin.log", message, fields),
+    warn: (message, fields) => route.warn("plugin.log", message, fields),
+    error: (message, fields) => route.error("plugin.log", message, undefined, fields),
   };
 }
 

@@ -1,4 +1,5 @@
 import { isAbsolute } from "node:path";
+import { LOG_STREAMS } from "@vibefield/contracts";
 import {
   type LoggingHealthV1 as LoggingHealth,
   LoggingHealthV1,
@@ -8,7 +9,15 @@ import {
   LogStreamV1,
 } from "@vibefield/contracts/logging";
 import pino, { type DestinationStream, type Logger as PinoLogger } from "pino";
-import { FIRST_PARTY_BUFFERS, FIRST_PARTY_RETENTION } from "./limits";
+import {
+  FIRST_PARTY_BUFFERS,
+  FIRST_PARTY_RETENTION,
+  FIRST_PARTY_VALUE_LIMITS,
+  type LogValueLimits,
+  PLUGIN_BUFFERS,
+  PLUGIN_RETENTION,
+  PLUGIN_VALUE_LIMITS,
+} from "./limits";
 import { BoundedLogRing } from "./ring";
 import { normalizeLogRecord, serializeError } from "./sanitize";
 import type { WriterOperation } from "./segment-writer";
@@ -62,12 +71,18 @@ function droppedCounter(
   return "droppedError";
 }
 
-function mergeBuffers(overrides: Partial<LogBufferLimits> | undefined): LogBufferLimits {
-  return { ...FIRST_PARTY_BUFFERS, ...overrides };
+function mergeBuffers(
+  defaults: Readonly<LogBufferLimits>,
+  overrides: Partial<LogBufferLimits> | undefined,
+): LogBufferLimits {
+  return { ...defaults, ...overrides };
 }
 
-function mergeRetention(overrides: Partial<LogRetentionPolicy> | undefined): LogRetentionPolicy {
-  return { ...FIRST_PARTY_RETENTION, ...overrides };
+function mergeRetention(
+  defaults: Readonly<LogRetentionPolicy>,
+  overrides: Partial<LogRetentionPolicy> | undefined,
+): LogRetentionPolicy {
+  return { ...defaults, ...overrides };
 }
 
 function assertPositiveInteger(value: number, name: string): void {
@@ -170,6 +185,8 @@ class NodeLoggingService implements NodeLogging {
 
   private readonly now: () => number;
   private readonly buffers: LogBufferLimits;
+  private readonly valueLimits: Readonly<LogValueLimits>;
+  private readonly pluginEntry: "renderer" | "service" | "utility" | null;
   private readonly writer: SegmentWriter;
   private readonly ring: BoundedLogRing;
   private readonly pino: PinoLogger;
@@ -211,8 +228,23 @@ class NodeLoggingService implements NodeLogging {
 
   constructor(private readonly options: CreateNodeLoggingOptions) {
     this.now = options.now ?? Date.now;
-    this.buffers = mergeBuffers(options.buffers);
-    const retention = mergeRetention(options.retention);
+    this.pluginEntry =
+      options.stream === LOG_STREAMS.PLUGINS_RENDERER
+        ? "renderer"
+        : options.stream === LOG_STREAMS.PLUGINS_SERVICE
+          ? "service"
+          : options.stream === LOG_STREAMS.PLUGINS_UTILITY
+            ? "utility"
+            : null;
+    this.buffers = mergeBuffers(
+      this.pluginEntry === null ? FIRST_PARTY_BUFFERS : PLUGIN_BUFFERS,
+      options.buffers,
+    );
+    this.valueLimits = this.pluginEntry === null ? FIRST_PARTY_VALUE_LIMITS : PLUGIN_VALUE_LIMITS;
+    const retention = mergeRetention(
+      this.pluginEntry === null ? FIRST_PARTY_RETENTION : PLUGIN_RETENTION,
+      options.retention,
+    );
     validateOptions(options, this.buffers, retention);
     this.level = options.level ?? "info";
     this.emergency =
@@ -311,6 +343,7 @@ class NodeLoggingService implements NodeLogging {
       time: input.time,
       observedTime: input.observedTime ?? this.now(),
       ...(input.truncation !== undefined ? { truncation: input.truncation } : {}),
+      ...(input.plugin !== undefined ? { plugin: input.plugin } : {}),
     });
   }
 
@@ -325,8 +358,24 @@ class NodeLoggingService implements NodeLogging {
     time: number;
     observedTime?: number;
     truncation?: TrustedLogIngress["truncation"];
+    plugin?: TrustedLogIngress["plugin"];
   }): void {
     if (!this.accepting || !this.pino.isLevelEnabled(input.level)) return;
+    if (
+      (this.pluginEntry === null && input.plugin !== undefined) ||
+      (this.pluginEntry !== null &&
+        (input.plugin === undefined || input.plugin.entry !== this.pluginEntry))
+    ) {
+      this.counters.rejected += 1;
+      return;
+    }
+    if (
+      this.pluginEntry === "renderer" &&
+      (input.plugin?.windowId === undefined || input.plugin.windowId !== input.bindings.windowId)
+    ) {
+      this.counters.rejected += 1;
+      return;
+    }
     const record = normalizeLogRecord({
       level: input.level,
       event: input.event,
@@ -344,7 +393,9 @@ class NodeLoggingService implements NodeLogging {
       time: input.time,
       ...(input.observedTime !== undefined ? { observedTime: input.observedTime } : {}),
       ...(input.truncation !== undefined ? { truncation: input.truncation } : {}),
+      ...(input.plugin !== undefined ? { plugin: input.plugin } : {}),
       maxRecordBytes: this.buffers.maxRecordBytes,
+      valueLimits: this.valueLimits,
       ...(this.options.aliases !== undefined ? { aliases: this.options.aliases } : {}),
     });
     if (!record) {

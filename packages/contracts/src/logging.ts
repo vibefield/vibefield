@@ -269,6 +269,10 @@ export const LogIngressRecordV1 = z
     sessionId: LogBoundedIdentityV1.optional(),
     docId: LogBoundedIdentityV1.optional(),
     deviceId: LogBoundedIdentityV1.optional(),
+    /** Untrusted routing hint only. The accepting host resolves the active
+     * install and stamps PluginLogProvenanceV1; this value is never persisted
+     * as provenance and cannot select a physical filename. */
+    pluginId: LogBoundedIdentityV1.optional(),
     err: LogErrorV1.optional(),
     attrs: LogAttributesV1.optional(),
     truncation: LogTruncationV1.optional(),

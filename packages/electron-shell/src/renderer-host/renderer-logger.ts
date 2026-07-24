@@ -39,6 +39,39 @@ interface QueueEntry {
   readonly bytes: number;
 }
 
+interface RendererValueLimits {
+  readonly messageBytes: number;
+  readonly stringBytes: number;
+  readonly stackBytes: number;
+  readonly objectDepth: number;
+  readonly objectKeys: number;
+  readonly arrayItems: number;
+  readonly errorCauses: number;
+  readonly recordBytes: number;
+}
+
+const FIRST_PARTY_LIMITS: RendererValueLimits = {
+  messageBytes: 16 * 1024,
+  stringBytes: 16 * 1024,
+  stackBytes: 32 * 1024,
+  objectDepth: 6,
+  objectKeys: 100,
+  arrayItems: 100,
+  errorCauses: 4,
+  recordBytes: LOG_TRANSPORT_LIMITS.RENDERER_RECORD_BYTES,
+};
+
+const PLUGIN_LIMITS: RendererValueLimits = {
+  messageBytes: LOG_TRANSPORT_LIMITS.PLUGIN_MESSAGE_BYTES,
+  stringBytes: LOG_TRANSPORT_LIMITS.PLUGIN_STRING_BYTES,
+  stackBytes: LOG_TRANSPORT_LIMITS.PLUGIN_STACK_BYTES,
+  objectDepth: LOG_TRANSPORT_LIMITS.PLUGIN_OBJECT_DEPTH,
+  objectKeys: LOG_TRANSPORT_LIMITS.PLUGIN_OBJECT_KEYS,
+  arrayItems: LOG_TRANSPORT_LIMITS.PLUGIN_ARRAY_ITEMS,
+  errorCauses: LOG_TRANSPORT_LIMITS.PLUGIN_ERROR_CAUSES,
+  recordBytes: LOG_TRANSPORT_LIMITS.PLUGIN_RECORD_BYTES,
+};
+
 export interface RendererLoggerHealth {
   readonly queueRecords: number;
   readonly queueBytes: number;
@@ -100,13 +133,18 @@ function safeDataProperty(value: object, key: string): unknown {
   return undefined;
 }
 
-function safeError(value: unknown, seen = new WeakSet<object>(), depth = 0): LogErrorV1 {
+function safeError(
+  value: unknown,
+  limits: RendererValueLimits,
+  seen = new WeakSet<object>(),
+  depth = 0,
+): LogErrorV1 {
   if (value === null || (typeof value !== "object" && typeof value !== "function")) {
     const primitive =
       typeof value === "string" || typeof value === "number" || typeof value === "boolean"
         ? String(value)
         : "[non-serializable thrown value]";
-    return { type: "ThrownValue", message: truncateUtf8(primitive, 16 * 1024) };
+    return { type: "ThrownValue", message: truncateUtf8(primitive, limits.messageBytes) };
   }
   if (typeof value === "object" && seen.has(value)) {
     return { type: "CircularError", message: "[circular error cause]" };
@@ -123,24 +161,29 @@ function safeError(value: unknown, seen = new WeakSet<object>(), depth = 0): Log
         : "ErrorLike";
     const message =
       typeof rawMessage === "string"
-        ? truncateUtf8(rawMessage, 16 * 1024)
+        ? truncateUtf8(rawMessage, limits.messageBytes)
         : "[error details unavailable]";
     const code =
       typeof rawCode === "string" || typeof rawCode === "number"
         ? truncateUtf8(String(rawCode), 256, "…")
         : undefined;
-    const stack = typeof rawStack === "string" ? truncateUtf8(rawStack, 32 * 1024) : undefined;
+    const stack =
+      typeof rawStack === "string" ? truncateUtf8(rawStack, limits.stackBytes) : undefined;
     const causes: LogErrorV1[] = [];
-    if (depth < 4) {
+    if (depth < limits.errorCauses) {
       const cause = safeDataProperty(value, "cause");
-      if (cause !== undefined) causes.push(safeError(cause, seen, depth + 1));
+      if (cause !== undefined) causes.push(safeError(cause, limits, seen, depth + 1));
       const aggregate = safeDataProperty(value, "errors") ?? safeDataProperty(value, "causes");
       if (Array.isArray(aggregate)) {
         const descriptors = Object.getOwnPropertyDescriptors(aggregate);
-        for (let index = 0; index < aggregate.length && causes.length < 4; index += 1) {
+        for (
+          let index = 0;
+          index < aggregate.length && causes.length < limits.errorCauses;
+          index += 1
+        ) {
           const descriptor = descriptors[String(index)];
           if (descriptor && "value" in descriptor) {
-            causes.push(safeError(descriptor.value, seen, depth + 1));
+            causes.push(safeError(descriptor.value, limits, seen, depth + 1));
           }
         }
       }
@@ -163,12 +206,13 @@ function safeValue(
   value: unknown,
   path: string,
   depth: number,
+  limits: RendererValueLimits,
   tracker: TruncationTracker,
   ancestors: WeakSet<object>,
 ): LogValueV1 {
   if (value === null || typeof value === "boolean") return value;
   if (typeof value === "string") {
-    const bounded = truncateUtf8(value, 16 * 1024);
+    const bounded = truncateUtf8(value, limits.stringBytes);
     if (bounded !== value) {
       tracker.reasons.add("string-bytes");
       tracker.fields.add(path);
@@ -180,7 +224,7 @@ function safeValue(
   if (typeof value === "undefined") return "[undefined]";
   if (typeof value === "function") return "[unsupported:function]";
   if (typeof value === "symbol") return "[unsupported:symbol]";
-  if (depth >= 6) {
+  if (depth >= limits.objectDepth) {
     tracker.reasons.add("object-depth");
     tracker.fields.add(path);
     return "[truncated:object-depth]";
@@ -189,7 +233,7 @@ function safeValue(
   ancestors.add(value);
   try {
     if (value instanceof Error) {
-      const error = safeError(value);
+      const error = safeError(value, limits);
       return error as unknown as LogValueV1;
     }
     const descriptors = Object.getOwnPropertyDescriptors(value);
@@ -202,13 +246,20 @@ function safeValue(
         typeof descriptors.length.value === "number"
           ? descriptors.length.value
           : 0;
-      const count = Math.min(length, 100);
+      const count = Math.min(length, limits.arrayItems);
       const result: LogValueV1[] = [];
       for (let index = 0; index < count; index += 1) {
         const descriptor = descriptors[String(index)];
         result.push(
           descriptor && "value" in descriptor
-            ? safeValue(descriptor.value, `${path}[${index}]`, depth + 1, tracker, ancestors)
+            ? safeValue(
+                descriptor.value,
+                `${path}[${index}]`,
+                depth + 1,
+                limits,
+                tracker,
+                ancestors,
+              )
             : "[sparse]",
         );
       }
@@ -226,7 +277,7 @@ function safeValue(
       if (typeof key !== "string" || PROTOTYPE_KEYS.has(key)) continue;
       const descriptor = descriptors[key];
       if (!descriptor?.enumerable || !("value" in descriptor)) continue;
-      if (accepted >= 100) {
+      if (accepted >= limits.objectKeys) {
         tracker.reasons.add("object-keys");
         tracker.fields.add(path);
         break;
@@ -236,6 +287,7 @@ function safeValue(
         descriptor.value,
         `${path}.${safeKey}`,
         depth + 1,
+        limits,
         tracker,
         ancestors,
       );
@@ -445,14 +497,19 @@ class RendererLoggingOwner implements RendererLoggingClient {
     }
     const component = bindings.component ?? this.options.component;
     if (component.length > 160 || !COMPONENT_NAME.test(component)) return null;
+    const pluginId = safeIdentity(bindings.pluginId);
+    if (bindings.pluginId !== undefined && pluginId === undefined) return null;
+    const limits = pluginId === undefined ? FIRST_PARTY_LIMITS : PLUGIN_LIMITS;
     const tracker: TruncationTracker = { reasons: new Set(), fields: new Set() };
-    const msg = truncateUtf8(message, 16 * 1024);
+    const msg = truncateUtf8(message, limits.messageBytes);
     if (msg !== message) {
       tracker.reasons.add("message-bytes");
       tracker.fields.add("msg");
     }
     const attrsValue =
-      attrs === undefined ? undefined : safeValue(attrs, "attrs", 0, tracker, new WeakSet());
+      attrs === undefined
+        ? undefined
+        : safeValue(attrs, "attrs", 0, limits, tracker, new WeakSet());
     const normalizedAttrs =
       attrsValue !== null && typeof attrsValue === "object" && !Array.isArray(attrsValue)
         ? (attrsValue as Record<string, LogValueV1>)
@@ -492,13 +549,14 @@ class RendererLoggingOwner implements RendererLoggingClient {
       ...(safeIdentity(bindings.deviceId) !== undefined
         ? { deviceId: safeIdentity(bindings.deviceId) }
         : {}),
-      ...(error !== undefined ? { err: safeError(error) } : {}),
+      ...(pluginId !== undefined ? { pluginId } : {}),
+      ...(error !== undefined ? { err: safeError(error, limits) } : {}),
       ...(normalizedAttrs !== undefined ? { attrs: normalizedAttrs } : {}),
       ...(truncation !== undefined ? { truncation } : {}),
     };
 
     let serialized = JSON.stringify(record);
-    if (byteLength(serialized) <= LOG_TRANSPORT_LIMITS.RENDERER_RECORD_BYTES) return record;
+    if (byteLength(serialized) <= limits.recordBytes) return record;
     delete record.attrs;
     delete record.err;
     record.msg = truncateUtf8(record.msg, 1_024);
@@ -516,9 +574,7 @@ class RendererLoggingOwner implements RendererLoggingClient {
       0,
       (finalTruncation.originalBytes ?? 0) - byteLength(serialized),
     );
-    return byteLength(JSON.stringify(record)) <= LOG_TRANSPORT_LIMITS.RENDERER_RECORD_BYTES
-      ? record
-      : null;
+    return byteLength(JSON.stringify(record)) <= limits.recordBytes ? record : null;
   }
 
   private admit(entry: QueueEntry): boolean {

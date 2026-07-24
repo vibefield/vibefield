@@ -19,7 +19,7 @@ async function records(path: string): Promise<Array<Record<string, unknown>>> {
 }
 
 describe("Electron process-owned logging", () => {
-  it("persists desktop, renderer, and utility evidence with private permissions", async () => {
+  it("persists system and plugin evidence with private permissions and category separation", async () => {
     const root = await mkdtemp(join(tmpdir(), "vibefield-electron-logging-"));
     roots.push(root);
     const logRoot = join(root, "logs");
@@ -51,12 +51,30 @@ describe("Electron process-owned logging", () => {
       component: "utility.test",
       pid: 202,
     });
+    logging.pluginRendererRouter.accept(
+      {
+        id: "vibefield.example.plugin",
+        version: "1.2.3",
+        installRevision: "revision-1",
+        entry: "renderer",
+        windowId: "7",
+        installSource: "bundled",
+        trust: "r0-bundled",
+      },
+      {
+        level: "info",
+        message: "plugin evidence",
+        fields: { bootstrapToken: "abcdefghijklmnopqrstuvwxyz123456" },
+        pid: 101,
+      },
+    );
     await logging.close();
 
-    const [desktop, renderer, utility] = await Promise.all([
+    const [desktop, renderer, utility, pluginRenderer] = await Promise.all([
       records(logging.desktop.filePath),
       records(logging.renderer.filePath),
       records(logging.utility.filePath),
+      records(logging.pluginRenderer.filePath),
     ]);
     expect(desktop.map((record) => record.event)).toEqual([
       "desktop.test.started",
@@ -85,16 +103,37 @@ describe("Electron process-owned logging", () => {
         pid: 202,
       }),
     ]);
+    expect(pluginRenderer).toEqual([
+      expect.objectContaining({
+        service: "renderer",
+        role: "renderer",
+        event: "plugin.log",
+        windowId: "7",
+        pid: 101,
+        plugin: {
+          id: "vibefield.example.plugin",
+          version: "1.2.3",
+          installRevision: "revision-1",
+          entry: "renderer",
+          windowId: "7",
+          installSource: "bundled",
+          trust: "r0-bundled",
+        },
+        attrs: { bootstrapToken: "[redacted]" },
+      }),
+    ]);
+    expect(renderer).not.toContainEqual(expect.objectContaining({ msg: "plugin evidence" }));
 
     expect((await stat(logRoot)).mode & 0o777).toBe(0o700);
     for (const path of [
       logging.desktop.filePath,
       logging.renderer.filePath,
       logging.utility.filePath,
+      logging.pluginRenderer.filePath,
     ]) {
       expect((await stat(path)).mode & 0o777).toBe(0o600);
     }
-    expect(JSON.stringify({ desktop, renderer, utility })).not.toContain(
+    expect(JSON.stringify({ desktop, renderer, utility, pluginRenderer })).not.toContain(
       "abcdefghijklmnopqrstuvwxyz123456",
     );
   });

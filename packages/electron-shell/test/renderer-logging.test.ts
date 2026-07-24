@@ -1,6 +1,15 @@
 import { LOG_TRANSPORT_LIMITS } from "@vibefield/contracts";
-import type { Logger, NodeLogging, TrustedLogIngress } from "@vibefield/logging";
+import {
+  type Logger,
+  type NodeLogging,
+  PluginLogRouter,
+  type TrustedLogIngress,
+} from "@vibefield/logging";
 import { describe, expect, it } from "vitest";
+import type {
+  RendererPluginResolution,
+  RendererPluginResolver,
+} from "../src/main/plugin-provenance";
 import { RendererLogIngress } from "../src/main/renderer-logging";
 
 function captureLogger(events: Array<{ event: string; attrs?: unknown }>): Logger {
@@ -161,5 +170,98 @@ describe("Electron renderer log ingress", () => {
       "invalid-json": LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND,
       rate: 5,
     });
+  });
+
+  it("routes plugin hints only after the host resolves and stamps active-install provenance", () => {
+    const systemRecords: TrustedLogIngress[] = [];
+    const pluginRecords: TrustedLogIngress[] = [];
+    const listeners = new Set<() => void>();
+    let resolution: RendererPluginResolution = { kind: "pending" };
+    const resolver: RendererPluginResolver = {
+      resolve: () => resolution,
+      onChange(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    };
+    const pluginRouter = new PluginLogRouter({ sink: fakeSink(pluginRecords), now: () => 200 });
+    const ingress = new RendererLogIngress({
+      sink: fakeSink(systemRecords),
+      pluginRouter,
+      pluginResolver: resolver,
+      desktopLogger: captureLogger([]),
+      windowId: "7",
+      webContentsId: 11,
+      rendererPid: () => 22,
+      now: () => 200,
+    });
+    ingress.accept(
+      batch({
+        records: [
+          {
+            v: 1,
+            time: 100,
+            level: "info",
+            event: "forged.event",
+            msg: "plugin message",
+            component: "forged.component",
+            pluginId: "vibefield.example.plugin",
+            plugin: {
+              id: "attacker",
+              version: "9.9.9",
+              installRevision: "forged",
+              entry: "renderer",
+              installSource: "peer",
+              trust: "r2-peer",
+            },
+            attrs: { safe: true },
+          },
+        ],
+      }),
+    );
+    expect(systemRecords).toHaveLength(0);
+    expect(pluginRecords).toHaveLength(0);
+    expect(ingress.health()).toMatchObject({ pendingPluginRecords: 1 });
+
+    resolution = {
+      kind: "resolved",
+      provenance: {
+        id: "vibefield.example.plugin",
+        version: "1.2.3",
+        installRevision: "host-revision",
+        entry: "renderer",
+        windowId: "7",
+        installSource: "bundled",
+        trust: "r0-bundled",
+      },
+    };
+    for (const listener of listeners) listener();
+
+    expect(ingress.health()).toMatchObject({ pendingPluginRecords: 0, pendingPluginBytes: 0 });
+    expect(pluginRecords).toEqual([
+      expect.objectContaining({
+        time: 100,
+        observedTime: 200,
+        level: "info",
+        event: "plugin.log",
+        message: "plugin message",
+        component: "plugin.renderer",
+        windowId: "7",
+        pid: 22,
+        plugin: {
+          id: "vibefield.example.plugin",
+          version: "1.2.3",
+          installRevision: "host-revision",
+          entry: "renderer",
+          windowId: "7",
+          installSource: "bundled",
+          trust: "r0-bundled",
+        },
+        attrs: { safe: true, webContentsId: 11, rendererPid: 22 },
+      }),
+    ]);
+    expect(pluginRouter.health().activeEntries).toBe(1);
+    ingress.dispose();
+    expect(pluginRouter.health().activeEntries).toBe(0);
   });
 });

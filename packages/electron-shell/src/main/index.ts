@@ -10,6 +10,7 @@ import { registerWindowBootstrap } from "./ipc";
 import { installLifecycle } from "./lifecycle";
 import { createElectronLogging, type ElectronLogging } from "./logging";
 import { isSmokeLike, parseMode } from "./modes";
+import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { installRendererLogging } from "./renderer-logging";
 import { installCsp, installNavigationPolicy } from "./security";
 import { WindowRegistry } from "./window-policy";
@@ -71,13 +72,43 @@ async function main(root: string, logRoot: string, shellLogging: ElectronLogging
   // ensure() starts NOW; the window never waits for it (ESR-8 / design-03
   // §4.3 v0.3 — the splash is the honest face while the daemon comes up).
   const fielddReady = supervisor.ensure();
+  const pluginProvenance = new RendererPluginProvenanceCatalog();
+  let stopPluginObservation: (() => void) | null = null;
+  let stopFielddStatusObservation: (() => void) | null = null;
+  let pluginObservationClosed = false;
+  app.once("will-quit", () => {
+    pluginObservationClosed = true;
+    stopFielddStatusObservation?.();
+    stopFielddStatusObservation = null;
+    stopPluginObservation?.();
+    stopPluginObservation = null;
+  });
   fielddReady.then(
     (handle) => {
-      handle.client.onStatusChange(() => {
+      if (pluginObservationClosed) return;
+      stopFielddStatusObservation = handle.client.onStatusChange(() => {
+        if (handle.client.status !== "ready") pluginProvenance.invalidate();
         logger.info("desktop.fieldd.link_state_changed", "fieldd link state changed", {
           status: handle.client.status,
         });
       });
+      void pluginProvenance
+        .observe(handle.client)
+        .then((stop) => {
+          if (pluginObservationClosed) {
+            stop();
+            return;
+          }
+          stopPluginObservation?.();
+          stopPluginObservation = stop;
+        })
+        .catch((error) => {
+          logger.error(
+            "desktop.plugins.log_provenance_unavailable",
+            "Plugin log provenance could not follow the fieldd registry",
+            error,
+          );
+        });
     },
     (error) => {
       logger.error(
@@ -112,6 +143,8 @@ async function main(root: string, logRoot: string, shellLogging: ElectronLogging
         installRendererLogging({
           window,
           sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
           desktopLogger: logger,
         });
       },
@@ -125,6 +158,8 @@ async function main(root: string, logRoot: string, shellLogging: ElectronLogging
   installRendererLogging({
     window: win,
     sink: shellLogging.renderer,
+    pluginRouter: shellLogging.pluginRendererRouter,
+    pluginResolver: pluginProvenance,
     desktopLogger: logger,
   });
   installNavigationPolicy(win, MODE);

@@ -46,6 +46,7 @@ import {
 import { GlLiftGroup, type GradientStop, makeGlCardChrome } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useCallback, useEffect, useRef, useState } from "react";
 import type { Mesh } from "three";
+import { getWidgetlabLogger } from "./logging";
 
 const TYPE = "vibefield.widgetlab.orbit-cube";
 
@@ -132,7 +133,7 @@ function OrbitCubeView({ entity, world }: WidgetComponentProps): ReactElement {
 
   const onClick = useCallback(() => {
     if (moved.current > CLICK_MOVE_THRESHOLD) return; // a drag, not a click
-    console.debug("[OrbitCubeCard] mesh click", { hue });
+    getWidgetlabLogger().debug("Orbit cube clicked", { hue });
   }, [hue]);
 
   const onPointerOver = useCallback(() => setHovered(true), []);

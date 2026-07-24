@@ -1,9 +1,11 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { until } from "./ws-rpc";
 
 interface Fixture {
   root: string;
@@ -13,6 +15,9 @@ interface Fixture {
 }
 
 const fixtures: Fixture[] = [];
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SERVICE_ROOT = join(HERE, "fixtures", "service-roots", "svc");
+const SERVICE_ID = "vibefield.fixture.svc";
 
 afterEach(async () => {
   for (const fixture of fixtures.splice(0).reverse()) {
@@ -34,7 +39,13 @@ async function setup(): Promise<Fixture> {
   writeFileSync(join(dataDir, "registries", "field.docs.v1.json"), '[{"invalid":true}]\n');
   const native = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
   await native.start();
-  const daemon = await bootstrap({ dataDir, logRoot, controlPort: 0, dataPort: 0 });
+  const daemon = await bootstrap({
+    dataDir,
+    logRoot,
+    controlPort: 0,
+    dataPort: 0,
+    pluginRoots: { bundled: [SERVICE_ROOT] },
+  });
   const fixture = { root, logRoot, daemon, native };
   fixtures.push(fixture);
   return fixture;
@@ -47,11 +58,18 @@ describe("fieldd process-owned logging", () => {
     const pairingSecret = "ab".repeat(32);
 
     expect(daemon.logging).not.toBeNull();
+    expect(daemon.pluginLogging).not.toBeNull();
     expect(daemon.health().logging).toMatchObject({
       stream: "system/fieldd",
       service: "fieldd",
       writerState: "healthy",
     });
+    await until(
+      () =>
+        daemon.plugins.snapshot().plugins.find((plugin) => plugin.id === SERVICE_ID)?.service ===
+        "active",
+      8_000,
+    );
     await daemon.stop();
 
     const file = join(logRoot, "system", "fieldd.ndjson");
@@ -78,5 +96,43 @@ describe("fieldd process-owned logging", () => {
     expect(raw).not.toContain(shellToken);
     expect(raw).not.toContain(pairingSecret);
     expect(statSync(file).mode & 0o777).toBe(0o600);
-  });
+
+    const pluginFile = join(logRoot, "plugins", "service.ndjson");
+    const pluginRaw = readFileSync(pluginFile, "utf8");
+    const pluginRecords = pluginRaw
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    for (const line of pluginRaw.trim().split("\n")) {
+      expect(Buffer.byteLength(line, "utf8")).toBeLessThanOrEqual(16 * 1024);
+    }
+    expect(pluginRecords).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "plugin.output",
+          msg: "fixture service stdout",
+          service: "fieldd",
+          role: "worker",
+          component: "plugin.service",
+          plugin: {
+            id: SERVICE_ID,
+            version: "0.1.0",
+            installRevision: expect.stringMatching(/^[0-9a-f]{12}$/),
+            entry: "service",
+            installSource: "bundled",
+            trust: "r0-bundled",
+          },
+          attrs: { source: "stdout", truncated: false },
+        }),
+        expect.objectContaining({
+          event: "plugin.log",
+          msg: "fixture service activated",
+          attrs: { source: "fixture", bootstrapToken: "[redacted]" },
+        }),
+      ]),
+    );
+    expect(raw).not.toContain("fixture service stdout");
+    expect(pluginRaw).not.toContain("plugin-secret-canary-abcdefghijklmnopqrstuvwxyz");
+    expect(statSync(pluginFile).mode & 0o777).toBe(0o600);
+  }, 15_000);
 });

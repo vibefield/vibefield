@@ -39,7 +39,22 @@ registerHooks({
 const port = parentPort;
 if (port === null) throw new Error("service harness must run as a worker");
 
-const { pluginId, version, entryPath, leaseUrl, leaseToken, scopes = [] } = workerData;
+const {
+  pluginId,
+  version,
+  entryPath,
+  leaseUrl,
+  leaseToken,
+  scopes = [],
+  logLimits = {
+    recordBytes: 16 * 1024,
+    messageBytes: 4 * 1024,
+    stringBytes: 4 * 1024,
+    objectDepth: 4,
+    objectKeys: 50,
+    arrayItems: 50,
+  },
+} = workerData;
 
 const controller = new AbortController();
 const tracked = [];
@@ -48,9 +63,118 @@ const providedHandlers = new Map();
 /** live subscription id → un-subscribe fn */
 const liveSubs = new Map();
 
+const encoder = new TextEncoder();
+const decoder = new TextDecoder("utf-8", { fatal: true });
+const byteLength = (value) => encoder.encode(value).byteLength;
+function truncateUtf8(value, maxBytes) {
+  if (byteLength(value) <= maxBytes) return value;
+  const marker = "…[truncated]";
+  const markerBytes = encoder.encode(marker);
+  const source = encoder.encode(value);
+  for (let end = maxBytes - markerBytes.byteLength; end > 0; end -= 1) {
+    try {
+      return `${decoder.decode(source.subarray(0, end))}${marker}`;
+    } catch {
+      // Walk to the previous complete UTF-8 boundary.
+    }
+  }
+  return marker;
+}
+
+function safeLogValue(value, depth, ancestors, truncated) {
+  if (value === null || typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const bounded = truncateUtf8(value, logLimits.stringBytes);
+    if (bounded !== value) truncated.value = true;
+    return bounded;
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? value : "[non-finite]";
+  if (typeof value === "bigint") return `[bigint:${truncateUtf8(String(value), 128)}]`;
+  if (typeof value === "undefined") return "[undefined]";
+  if (typeof value === "function") return "[unsupported:function]";
+  if (typeof value === "symbol") return "[unsupported:symbol]";
+  if (depth >= logLimits.objectDepth) {
+    truncated.value = true;
+    return "[truncated:object-depth]";
+  }
+  if (ancestors.has(value)) return "[circular]";
+  ancestors.add(value);
+  try {
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const keys = Reflect.ownKeys(descriptors);
+    if (keys.some((key) => typeof key === "symbol")) return "[unsupported:symbol-keys]";
+    if (Array.isArray(value)) {
+      const result = [];
+      const length =
+        descriptors.length &&
+        "value" in descriptors.length &&
+        typeof descriptors.length.value === "number"
+          ? descriptors.length.value
+          : 0;
+      const count = Math.min(length, logLimits.arrayItems);
+      for (let index = 0; index < count; index += 1) {
+        const descriptor = descriptors[String(index)];
+        result.push(
+          descriptor && "value" in descriptor
+            ? safeLogValue(descriptor.value, depth + 1, ancestors, truncated)
+            : "[sparse]",
+        );
+      }
+      if (length > count) truncated.value = true;
+      return result;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return "[unsupported:object]";
+    const result = Object.create(null);
+    let accepted = 0;
+    for (const key of keys) {
+      if (typeof key !== "string" || key === "__proto__" || key === "constructor") continue;
+      const descriptor = descriptors[key];
+      if (!descriptor?.enumerable || !("value" in descriptor)) continue;
+      if (accepted >= logLimits.objectKeys) {
+        truncated.value = true;
+        break;
+      }
+      result[truncateUtf8(key, 160)] = safeLogValue(
+        descriptor.value,
+        depth + 1,
+        ancestors,
+        truncated,
+      );
+      accepted += 1;
+    }
+    return result;
+  } catch {
+    return "[unavailable]";
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+function boundedPluginLog(message, fields) {
+  const rawMessage =
+    typeof message === "string" ? message : "[plugin emitted a non-string log message]";
+  const boundedMessage = truncateUtf8(rawMessage, logLimits.messageBytes);
+  const truncated = { value: boundedMessage !== rawMessage };
+  const normalized =
+    fields !== null && typeof fields === "object" && !Array.isArray(fields)
+      ? safeLogValue(fields, 0, new WeakSet(), truncated)
+      : undefined;
+  const result = {
+    message: boundedMessage,
+    ...(normalized !== undefined ? { fields: normalized } : {}),
+  };
+  if (byteLength(JSON.stringify(result)) > logLimits.recordBytes) {
+    result.fields = { pluginLogTruncated: true };
+  } else if (truncated.value && result.fields && typeof result.fields === "object") {
+    result.fields.pluginLogTruncated = true;
+  }
+  return result;
+}
+
 const post = (msg) => port.postMessage(msg);
 const log = (level) => (message, fields) =>
-  post({ t: "log", level, message: String(message), fields });
+  post({ t: "log", level, ...boundedPluginLog(message, fields) });
 
 const logger = {
   debug: log("debug"),

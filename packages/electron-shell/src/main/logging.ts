@@ -1,6 +1,11 @@
 import { homedir, tmpdir } from "node:os";
 import { LOG_STREAMS } from "@vibefield/contracts";
-import { createNodeLogging, type Logger, type NodeLogging } from "@vibefield/logging";
+import {
+  createNodeLogging,
+  type Logger,
+  type NodeLogging,
+  PluginLogRouter,
+} from "@vibefield/logging";
 
 export interface ElectronLogging {
   readonly bootId: string;
@@ -8,6 +13,8 @@ export interface ElectronLogging {
   readonly desktop: NodeLogging;
   readonly renderer: NodeLogging;
   readonly utility: NodeLogging;
+  readonly pluginRenderer: NodeLogging;
+  readonly pluginRendererRouter: PluginLogRouter;
   readonly logger: Logger;
   close(): Promise<void>;
 }
@@ -31,7 +38,7 @@ export async function createElectronLogging(options: {
     aliases,
     ...(options.emergency !== undefined ? { emergency: options.emergency } : {}),
   };
-  const [desktop, renderer, utility] = await Promise.all([
+  const [desktop, renderer, utility, pluginRenderer] = await Promise.all([
     createNodeLogging({
       ...common,
       stream: LOG_STREAMS.SYSTEM_DESKTOP,
@@ -53,7 +60,15 @@ export async function createElectronLogging(options: {
       role: "utility",
       component: "utility.ingress",
     }),
+    createNodeLogging({
+      ...common,
+      stream: LOG_STREAMS.PLUGINS_RENDERER,
+      service: "renderer",
+      role: "renderer",
+      component: "plugin.renderer",
+    }),
   ]);
+  const pluginRendererRouter = new PluginLogRouter({ sink: pluginRenderer });
   let closePromise: Promise<void> | null = null;
   return {
     bootId: options.bootId,
@@ -61,10 +76,13 @@ export async function createElectronLogging(options: {
     desktop,
     renderer,
     utility,
+    pluginRenderer,
+    pluginRendererRouter,
     logger: desktop.logger,
     close() {
       closePromise ??= (async () => {
-        await Promise.all([renderer.close(), utility.close()]);
+        pluginRendererRouter.close();
+        await Promise.all([renderer.close(), utility.close(), pluginRenderer.close()]);
         desktop.logger.info(
           "desktop.lifecycle.logging_stopped",
           "Electron-owned logging streams stopped",

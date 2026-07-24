@@ -7,6 +7,7 @@ import { NOTE_TYPE, NoteView } from "./widget";
 
 export default defineRendererPlugin({
   activate(ctx) {
+    ctx.logger.info("Renderer plugin activated");
     ctx.widgets.register({ type: NOTE_TYPE, binding: { component: NoteView } });
   },
 });
