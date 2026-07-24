@@ -2,7 +2,9 @@ import { IPC_CHANNELS, LOG_TRANSPORT_LIMITS } from "@vibefield/contracts";
 import {
   type LogIngressRecordV1,
   type PluginLogProvenanceV1,
+  type RendererLogBatchV1 as RendererLogBatch,
   RendererLogBatchV1,
+  type RendererLogDropCountsV1,
 } from "@vibefield/contracts/logging";
 import type { Logger, NodeLogging, PluginLogRouter } from "@vibefield/logging";
 import {
@@ -29,8 +31,11 @@ interface PendingPluginRecord {
   readonly bytes: number;
 }
 
+type BatchAdmission = "normal" | "high-severity-reserve";
+
 export interface RendererIngressHealth {
   readonly acceptedBatches: number;
+  readonly acceptedHighSeverityReserveBatches: number;
   readonly acceptedRecords: number;
   readonly rendererDropped: number;
   readonly pendingPluginRecords: number;
@@ -39,9 +44,13 @@ export interface RendererIngressHealth {
 }
 
 export class RendererLogIngress {
-  private tokens: number = LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND;
+  private envelopeTokens: number = LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND;
+  private normalBatchTokens: number = LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND;
+  private highSeverityBatchTokens: number =
+    LOG_TRANSPORT_LIMITS.RENDERER_HIGH_SEVERITY_BATCHES_PER_SECOND;
   private lastRefill: number;
   private acceptedBatches = 0;
+  private acceptedHighSeverityReserveBatches = 0;
   private acceptedRecords = 0;
   private rendererDropped = 0;
   private rejected: Record<RejectionReason, number> = {
@@ -93,7 +102,7 @@ export class RendererLogIngress {
     }
     // Charge the envelope before JSON parsing/schema work. A compromised
     // renderer cannot bypass the host's CPU budget by flooding malformed JSON.
-    if (!this.takeRateToken()) {
+    if (!this.takeEnvelopeToken()) {
       this.reject("rate");
       return;
     }
@@ -109,23 +118,70 @@ export class RendererLogIngress {
       this.reject("invalid-batch");
       return;
     }
+    const admission = this.takeBatchAdmission(parsed.data);
+    if (admission === null) {
+      this.reject("rate");
+      return;
+    }
     const observedTime = this.now();
     const rendererPid = Math.max(0, this.options.rendererPid());
-    for (const record of parsed.data.records) {
+    const hostDropped: RendererLogDropCountsV1 = {
+      trace: 0,
+      debug: 0,
+      info: 0,
+      warn: 0,
+      error: 0,
+      fatal: 0,
+    };
+    const records =
+      admission === "normal"
+        ? parsed.data.records
+        : parsed.data.records.filter((record) => {
+            const preserved = record.level === "error" || record.level === "fatal";
+            if (!preserved) hostDropped[record.level] += 1;
+            return preserved;
+          });
+    for (const record of records) {
       this.routeRecord(record, observedTime, rendererPid);
     }
-    if (parsed.data.dropped !== undefined) {
-      const count = Object.values(parsed.data.dropped).reduce((sum, value) => sum + value, 0);
+    const dropped: RendererLogDropCountsV1 = {
+      trace: Math.min(
+        Number.MAX_SAFE_INTEGER,
+        (parsed.data.dropped?.trace ?? 0) + hostDropped.trace,
+      ),
+      debug: Math.min(
+        Number.MAX_SAFE_INTEGER,
+        (parsed.data.dropped?.debug ?? 0) + hostDropped.debug,
+      ),
+      info: Math.min(Number.MAX_SAFE_INTEGER, (parsed.data.dropped?.info ?? 0) + hostDropped.info),
+      warn: Math.min(Number.MAX_SAFE_INTEGER, (parsed.data.dropped?.warn ?? 0) + hostDropped.warn),
+      error: Math.min(
+        Number.MAX_SAFE_INTEGER,
+        (parsed.data.dropped?.error ?? 0) + hostDropped.error,
+      ),
+      fatal: Math.min(
+        Number.MAX_SAFE_INTEGER,
+        (parsed.data.dropped?.fatal ?? 0) + hostDropped.fatal,
+      ),
+    };
+    const count = Object.values(dropped).reduce(
+      (sum, value) => Math.min(Number.MAX_SAFE_INTEGER, sum + value),
+      0,
+    );
+    if (count > 0) {
       this.rendererDropped += count;
       this.options.sink.ingest({
         time: observedTime,
         observedTime,
         level: "warn",
         event: "renderer.logging.records_dropped",
-        message: "The renderer logging queue dropped records under pressure",
+        message: "The renderer logging transport dropped records under pressure",
         component: "renderer.transport",
         attrs: {
-          ...parsed.data.dropped,
+          ...dropped,
+          ...(admission === "high-severity-reserve"
+            ? { hostRateLimited: Object.values(hostDropped).reduce((sum, value) => sum + value, 0) }
+            : {}),
           webContentsId: this.options.webContentsId,
           rendererPid,
         },
@@ -134,7 +190,10 @@ export class RendererLogIngress {
       });
     }
     this.acceptedBatches += 1;
-    this.acceptedRecords += parsed.data.records.length;
+    if (admission === "high-severity-reserve") {
+      this.acceptedHighSeverityReserveBatches += 1;
+    }
+    this.acceptedRecords += records.length;
   }
 
   dispose(): void {
@@ -148,6 +207,7 @@ export class RendererLogIngress {
   health(): RendererIngressHealth {
     return {
       acceptedBatches: this.acceptedBatches,
+      acceptedHighSeverityReserveBatches: this.acceptedHighSeverityReserveBatches,
       acceptedRecords: this.acceptedRecords,
       rendererDropped: this.rendererDropped,
       pendingPluginRecords: this.pendingPluginRecords.length,
@@ -280,17 +340,45 @@ export class RendererLogIngress {
     return this.options.now?.() ?? Date.now();
   }
 
-  private takeRateToken(): boolean {
+  private refillRateTokens(): void {
     const now = this.now();
     const elapsed = Math.max(0, now - this.lastRefill);
-    this.tokens = Math.min(
+    this.envelopeTokens = Math.min(
+      LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND,
+      this.envelopeTokens +
+        (elapsed * LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND) / 1_000,
+    );
+    this.normalBatchTokens = Math.min(
       LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND,
-      this.tokens + (elapsed * LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND) / 1_000,
+      this.normalBatchTokens + (elapsed * LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND) / 1_000,
+    );
+    this.highSeverityBatchTokens = Math.min(
+      LOG_TRANSPORT_LIMITS.RENDERER_HIGH_SEVERITY_BATCHES_PER_SECOND,
+      this.highSeverityBatchTokens +
+        (elapsed * LOG_TRANSPORT_LIMITS.RENDERER_HIGH_SEVERITY_BATCHES_PER_SECOND) / 1_000,
     );
     this.lastRefill = now;
-    if (this.tokens < 1) return false;
-    this.tokens -= 1;
+  }
+
+  private takeEnvelopeToken(): boolean {
+    this.refillRateTokens();
+    if (this.envelopeTokens < 1) return false;
+    this.envelopeTokens -= 1;
     return true;
+  }
+
+  private takeBatchAdmission(batch: RendererLogBatch): BatchAdmission | null {
+    if (this.normalBatchTokens >= 1) {
+      this.normalBatchTokens -= 1;
+      return "normal";
+    }
+    const hasHighSeverity =
+      batch.records.some((record) => record.level === "error" || record.level === "fatal") ||
+      (batch.dropped?.error ?? 0) > 0 ||
+      (batch.dropped?.fatal ?? 0) > 0;
+    if (!hasHighSeverity || this.highSeverityBatchTokens < 1) return null;
+    this.highSeverityBatchTokens -= 1;
+    return "high-severity-reserve";
   }
 
   private reject(reason: RejectionReason): void {

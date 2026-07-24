@@ -163,12 +163,116 @@ describe("Electron renderer log ingress", () => {
       rendererPid: () => 22,
       now: () => 1_000,
     });
-    for (let index = 0; index < LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND + 5; index += 1) {
+    for (
+      let index = 0;
+      index < LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND + 5;
+      index += 1
+    ) {
       ingress.accept("{malformed");
     }
     expect(ingress.health().rejected).toMatchObject({
-      "invalid-json": LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND,
+      "invalid-json": LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND,
       rate: 5,
+    });
+  });
+
+  it("uses a bounded reserve for error batches after the normal budget is exhausted", () => {
+    const records: TrustedLogIngress[] = [];
+    const ingress = new RendererLogIngress({
+      sink: fakeSink(records),
+      desktopLogger: captureLogger([]),
+      windowId: "7",
+      webContentsId: 11,
+      rendererPid: () => 22,
+      now: () => 1_000,
+    });
+    expect(LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND).toBe(
+      LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND +
+        LOG_TRANSPORT_LIMITS.RENDERER_HIGH_SEVERITY_BATCHES_PER_SECOND,
+    );
+
+    for (let index = 0; index < LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND; index += 1) {
+      ingress.accept(
+        batch({
+          records: [
+            {
+              v: 1,
+              time: 100,
+              level: "info",
+              event: "renderer.test.normal",
+              msg: "normal",
+              component: "test",
+              attrs: { index },
+            },
+          ],
+        }),
+      );
+    }
+    for (
+      let index = 0;
+      index < LOG_TRANSPORT_LIMITS.RENDERER_HIGH_SEVERITY_BATCHES_PER_SECOND;
+      index += 1
+    ) {
+      ingress.accept(
+        batch({
+          records: [
+            {
+              v: 1,
+              time: 100,
+              level: "info",
+              event: "renderer.test.deprioritized",
+              msg: "deprioritized",
+              component: "test",
+            },
+            {
+              v: 1,
+              time: 100,
+              level: "error",
+              event: "renderer.test.failed",
+              msg: "failed",
+              component: "test",
+              attrs: { index },
+            },
+          ],
+        }),
+      );
+    }
+    ingress.accept(
+      batch({
+        records: [
+          {
+            v: 1,
+            time: 100,
+            level: "error",
+            event: "renderer.test.excess_error",
+            msg: "bounded",
+            component: "test",
+          },
+        ],
+      }),
+    );
+
+    expect(records.filter((record) => record.event === "renderer.test.normal")).toHaveLength(
+      LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND,
+    );
+    expect(records.filter((record) => record.event === "renderer.test.failed")).toHaveLength(
+      LOG_TRANSPORT_LIMITS.RENDERER_HIGH_SEVERITY_BATCHES_PER_SECOND,
+    );
+    expect(records.some((record) => record.event === "renderer.test.deprioritized")).toBe(false);
+    expect(records.some((record) => record.event === "renderer.test.excess_error")).toBe(false);
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        event: "renderer.logging.records_dropped",
+        attrs: expect.objectContaining({ info: 1, hostRateLimited: 1 }),
+      }),
+    );
+    expect(ingress.health()).toMatchObject({
+      acceptedBatches: LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND,
+      acceptedHighSeverityReserveBatches:
+        LOG_TRANSPORT_LIMITS.RENDERER_HIGH_SEVERITY_BATCHES_PER_SECOND,
+      acceptedRecords: LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND,
+      rendererDropped: LOG_TRANSPORT_LIMITS.RENDERER_HIGH_SEVERITY_BATCHES_PER_SECOND,
+      rejected: { rate: 1 },
     });
   });
 

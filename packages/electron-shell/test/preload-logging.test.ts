@@ -37,7 +37,11 @@ describe("preload renderer-log bridge", () => {
     const bridge = new PreloadLogBridge();
     expect(bridge.submit({})).toBe(false);
     expect(bridge.submit("🙂".repeat(LOG_TRANSPORT_LIMITS.RENDERER_BATCH_BYTES / 2))).toBe(false);
-    for (let index = 0; index < LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND * 2; index += 1) {
+    for (
+      let index = 0;
+      index < LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND * 2;
+      index += 1
+    ) {
       expect(bridge.submit(String(index))).toBe(true);
     }
     expect(bridge.submit("overflow")).toBe(false);

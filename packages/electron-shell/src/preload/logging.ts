@@ -28,7 +28,7 @@ export class PreloadLogBridge {
         this.detachPort();
       }
     }
-    const maxPendingBatches = LOG_TRANSPORT_LIMITS.RENDERER_BATCHES_PER_SECOND * 2;
+    const maxPendingBatches = LOG_TRANSPORT_LIMITS.RENDERER_ENVELOPE_BATCHES_PER_SECOND * 2;
     if (
       this.pending.length >= maxPendingBatches ||
       this.pendingBytes + bytes > LOG_TRANSPORT_LIMITS.RENDERER_QUEUE_BYTES

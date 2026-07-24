@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -378,9 +378,11 @@ impl SegmentWriter {
             .map_err(|error| from_io(WriterOperation::Write, error))?;
         for entry in entries {
             let entry = entry.map_err(|error| from_io(WriterOperation::Write, error))?;
-            let file_type = entry
-                .file_type()
-                .map_err(|error| from_io(WriterOperation::Write, error))?;
+            let file_type = match entry.file_type() {
+                Ok(file_type) => file_type,
+                Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                Err(error) => return Err(from_io(WriterOperation::Write, error)),
+            };
             if !file_type.is_file() {
                 continue;
             }
@@ -388,9 +390,11 @@ impl SegmentWriter {
             if !name.ends_with(".ndjson") {
                 continue;
             }
-            let metadata = entry
-                .metadata()
-                .map_err(|error| from_io(WriterOperation::Write, error))?;
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                Err(error) => return Err(from_io(WriterOperation::Write, error)),
+            };
             total_bytes = total_bytes.saturating_add(metadata.len());
             if is_closed_segment(&name) {
                 closed.push(ClosedSegment {
@@ -442,9 +446,13 @@ impl SegmentWriter {
             if !remove.contains(&segment.path) {
                 continue;
             }
-            call_path_hook(&self.options.hooks.before_remove, &segment.path)
+            match call_path_hook(&self.options.hooks.before_remove, &segment.path)
                 .and_then(|()| fs::remove_file(&segment.path))
-                .map_err(|error| from_io(WriterOperation::Write, error))?;
+            {
+                Ok(()) => {}
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => return Err(from_io(WriterOperation::Write, error)),
+            }
             deletions = deletions.saturating_add(1);
         }
         Ok(deletions)
@@ -932,6 +940,57 @@ mod tests {
         assert!(!old_closed.exists());
         assert_eq!(fs::read_to_string(&desktop_active).unwrap().len(), 400);
         assert!(writer.active_path.exists());
+        writer.close().unwrap();
+    }
+
+    #[test]
+    fn concurrent_janitor_deletion_is_successful_cleanup() {
+        let root = tempfile::tempdir().unwrap();
+        let log_root = root.path().join("logs");
+        let system = log_root.join("system");
+        fs::create_dir_all(&system).unwrap();
+        let old_closed = system.join("desktop.20200101T000000000Z.desktop-boot.0001.size.ndjson");
+        fs::write(&old_closed, "old").unwrap();
+        let old_time =
+            std::fs::FileTimes::new().set_modified(UNIX_EPOCH + std::time::Duration::from_secs(1));
+        OpenOptions::new()
+            .write(true)
+            .open(&old_closed)
+            .unwrap()
+            .set_times(old_time)
+            .unwrap();
+
+        let raced = Arc::new(AtomicBool::new(false));
+        let target = old_closed.clone();
+        let mut writer = make_writer(
+            &root,
+            Arc::new(AtomicU64::new(epoch_millis())),
+            RetentionPolicy {
+                max_segment_bytes: 100,
+                max_closed_segments: 20,
+                max_age_ms: 1_000,
+                ..RetentionPolicy::default()
+            },
+            WriterHooks {
+                before_remove: Some({
+                    let raced = raced.clone();
+                    Arc::new(move |path| {
+                        if path == target && !raced.swap(true, Ordering::Relaxed) {
+                            fs::remove_file(path)?;
+                        }
+                        Ok(())
+                    })
+                }),
+                ..WriterHooks::default()
+            },
+        );
+        writer.append(&[padded_line("one")]).unwrap();
+        let result = writer.append(&[padded_line("two")]).unwrap();
+
+        assert!(raced.load(Ordering::Relaxed));
+        assert!(!old_closed.exists());
+        assert!(result.cleanup_deletions >= 1);
+        writer.append(&[padded_line("still-healthy")]).unwrap();
         writer.close().unwrap();
     }
 
