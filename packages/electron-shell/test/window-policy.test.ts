@@ -1,6 +1,6 @@
-import type { BrowserWindow, WebContents } from "electron";
+import type { BrowserWindow, WebContents, WebPreferences } from "electron";
 import { describe, expect, it, type Mock, vi } from "vitest";
-import { WindowRegistry, webPreferences } from "../src/main/window-policy";
+import { assertSecurePreferences, WindowRegistry, webPreferences } from "../src/main/window-policy";
 
 // The PURE window policy (ESR §5.2.2–5.2.3). Electron appears as TYPES only: the
 // registry is driven by structural fakes cast through `unknown`, so this suite
@@ -68,13 +68,63 @@ describe("webPreferences", () => {
   it("pins the hardened production preferences and passes the preload path through", () => {
     const prefs = webPreferences("/abs/path/preload.cjs");
     expect(prefs.preload).toBe("/abs/path/preload.cjs");
+    // The ESP §7.1 set, asserted field by field rather than as a snapshot: a
+    // removed field must fail loudly here, not read as an incidental diff.
     expect(prefs.sandbox).toBe(true);
     expect(prefs.contextIsolation).toBe(true);
     expect(prefs.nodeIntegration).toBe(false);
+    expect(prefs.nodeIntegrationInWorker).toBe(false);
+    expect(prefs.webviewTag).toBe(false);
+    expect(prefs.webSecurity).toBe(true);
+    expect(prefs.allowRunningInsecureContent).toBe(false);
+    expect(prefs.experimentalFeatures).toBe(false);
+    expect(prefs.spellcheck).toBe(false);
     // Electron's hidden-renderer throttling restored to default (slice 5) —
     // safe because persistence is visibility-EXEMPT by law (§5.4.5; pinned by
     // field-app's persistence-exemption suite).
     expect(prefs.backgroundThrottling).toBe(true);
+  });
+
+  it("produces preferences that satisfy the assertion the factory runs", () => {
+    expect(() => assertSecurePreferences(webPreferences("/p.cjs"))).not.toThrow();
+  });
+});
+
+describe("assertSecurePreferences", () => {
+  // ESP §13.1 — "call-site overrides cannot weaken it." Each row is a real
+  // downgrade someone could write while adding a presentation option.
+  const WEAKENINGS: readonly (readonly [string, WebPreferences])[] = [
+    ["sandbox", { sandbox: false }],
+    ["contextIsolation", { contextIsolation: false }],
+    ["nodeIntegration", { nodeIntegration: true }],
+    ["nodeIntegrationInWorker", { nodeIntegrationInWorker: true }],
+    ["webviewTag", { webviewTag: true }],
+    ["webSecurity", { webSecurity: false }],
+    ["allowRunningInsecureContent", { allowRunningInsecureContent: true }],
+    ["experimentalFeatures", { experimentalFeatures: true }],
+    ["spellcheck", { spellcheck: true }],
+  ];
+
+  describe.each(WEAKENINGS)("refuses a relaxed %s", (field, override) => {
+    it("throws naming the offending field", () => {
+      const prefs = { ...webPreferences("/p.cjs"), ...override };
+      expect(() => assertSecurePreferences(prefs)).toThrow(new RegExp(field));
+    });
+  });
+
+  it("refuses preferences that simply omit a security field", () => {
+    const { sandbox: _dropped, ...withoutSandbox } = webPreferences("/p.cjs");
+    expect(() => assertSecurePreferences(withoutSandbox)).toThrow(/sandbox/);
+  });
+
+  it("permits presentation options alongside the hardened set", () => {
+    const prefs = { ...webPreferences("/p.cjs"), zoomFactor: 1.25, backgroundThrottling: false };
+    expect(() => assertSecurePreferences(prefs)).not.toThrow();
+  });
+
+  it("returns the same object so it can wrap the factory call inline", () => {
+    const prefs = webPreferences("/p.cjs");
+    expect(assertSecurePreferences(prefs)).toBe(prefs);
   });
 });
 

@@ -5,7 +5,7 @@ import { APP_ID, CONTRACTS_VERSION } from "@vibefield/contracts";
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
-import { app, clipboard, crashReporter, dialog, shell } from "electron";
+import { app, clipboard, crashReporter, dialog, session, shell } from "electron";
 import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
@@ -18,7 +18,12 @@ import { createElectronLogging, type ElectronLogging } from "./logging";
 import { isSmokeLike, parseMode } from "./modes";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { installRendererLogging } from "./renderer-logging";
-import { installCsp, installNavigationPolicy } from "./security";
+import {
+  installCsp,
+  installNavigationPolicy,
+  installPermissionPolicy,
+  installWebContentsBackstop,
+} from "./security";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
@@ -179,7 +184,24 @@ async function main(
       error,
     );
   }
+  // ESP §6.2 — every session gate and contents guard is armed BEFORE the first
+  // window exists, so no renderer can outrun its own policy.
   installCsp(MODE);
+  installPermissionPolicy(session.defaultSession, (permission) => {
+    logger.warn(
+      "desktop.security.permission_denied",
+      "A Chromium permission request was denied by policy",
+      { permission },
+    );
+  });
+  installWebContentsBackstop(MODE, (contents) => {
+    if (registry.owns(contents)) return;
+    logger.warn(
+      "desktop.security.unregistered_webcontents",
+      "A WebContents was created outside the window factory and received the backstop policy",
+      { webContentsId: contents.id, type: contents.getType() },
+    );
+  });
   app.on("child-process-gone", (_event, details) => {
     logger.warn("desktop.process.child_gone", "An Electron child process exited", {
       type: details.type,
@@ -337,6 +359,10 @@ async function main(
 
 app.setName("VibeField");
 if (process.platform === "win32") app.setAppUserModelId(APP_ID);
+// ESP-4/§6.1 — process-wide renderer sandboxing, before ready and before any
+// window policy runs. Independent of per-window `sandbox:true` (which stays)
+// and of the RunAsNode fuse: three controls, three surfaces, no substitutes.
+app.enableSandbox();
 if (!isSmokeLike(MODE)) {
   try {
     startLocalCrashReporter({

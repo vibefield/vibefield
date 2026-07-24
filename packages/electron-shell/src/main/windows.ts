@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { BrowserWindow, screen } from "electron";
 import { isSmokeLike, type ShellMode } from "./modes";
-import { webPreferences } from "./window-policy";
+import { assertSecurePreferences, webPreferences } from "./window-policy";
 
 // Runtime window construction (ESR §5.2.2–5.2.3): ALL BrowserWindow creation
 // flows through here with the one web-preferences policy. The registry lives in
@@ -25,7 +25,7 @@ export function createMainWindow(opts: {
     show: opts.show,
     title: "VibeField",
     backgroundColor: "#171717", // pre-paint = the dark canvas token (--vf-canvas-bg)
-    webPreferences: webPreferences(opts.preloadPath),
+    webPreferences: assertSecurePreferences(webPreferences(opts.preloadPath)),
   });
   if (fillWorkArea) win.setBounds(screen.getPrimaryDisplay().workArea);
   return win;

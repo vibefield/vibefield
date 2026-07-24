@@ -1,7 +1,12 @@
 import { PORTS } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import type { ShellMode } from "../src/main/modes";
-import { buildCsp, decideNavigation, decideWindowOpen } from "../src/main/security-policy";
+import {
+  buildCsp,
+  decideNavigation,
+  decidePermission,
+  decideWindowOpen,
+} from "../src/main/security-policy";
 
 // The PURE security policy (ESR §5.2.3–5.2.4). Ports come from the registry, not
 // literals (repository law / wall R7): the assertions read PORTS so a registry
@@ -113,5 +118,53 @@ describe("decideWindowOpen", () => {
       expect(decision).toStrictEqual({ action: "deny" });
       expect("openExternal" in decision).toBe(false);
     });
+  });
+});
+
+describe("decidePermission", () => {
+  // Electron's permission vocabulary as of the pinned major, enumerated rather
+  // than sampled: ESP §7.4 denies the shell session everything, so a Chromium
+  // upgrade that ADDS a permission must show up here as a deliberate row —
+  // never as an untested string that quietly takes the default path.
+  const CHROMIUM_PERMISSIONS: readonly string[] = [
+    "media", // camera + microphone
+    "display-capture",
+    "geolocation",
+    "notifications",
+    "midi",
+    "midiSysex",
+    "hid",
+    "serial",
+    "usb",
+    "bluetooth",
+    "fileSystem",
+    "pointerLock",
+    "keyboardLock",
+    "fullscreen",
+    "openExternal",
+    "clipboard-read",
+    "clipboard-sanitized-write",
+    "storage-access",
+    "top-level-storage-access",
+    "idle-detection",
+    "speaker-selection",
+    "window-management",
+    "unknown",
+  ];
+
+  describe.each(CHROMIUM_PERMISSIONS)("denies %s", (permission) => {
+    it("returns false — the shell session grants no Chromium permission", () => {
+      expect(decidePermission(permission)).toBe(false);
+    });
+  });
+
+  it("denies a permission string Chromium has not shipped yet", () => {
+    // The allowlist is a Set membership test, so an unknown future permission
+    // fails closed by construction rather than by an updated match arm.
+    expect(decidePermission("some-future-capability")).toBe(false);
+  });
+
+  it("denies the empty permission", () => {
+    expect(decidePermission("")).toBe(false);
   });
 });

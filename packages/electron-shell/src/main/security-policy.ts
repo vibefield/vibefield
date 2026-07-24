@@ -49,3 +49,18 @@ export function decideWindowOpen(url: string): WindowOpenDecision {
   }
   return { action: "deny" };
 }
+
+/** Chromium permissions the shell session grants. EMPTY BY LAW (ESP §7.4): a
+ * VibeField capability grant never implies a Chromium permission — they are two
+ * gates, and this one is closed. The set is data, not control flow, so the first
+ * legitimate grant is a one-line change that its own test must justify (declared
+ * in contracts · origin + gesture validated · decided at BOTH handlers).
+ * Camera and microphone arrive as "media"; screen capture as "display-capture". */
+const SHELL_GRANTED_PERMISSIONS: ReadonlySet<string> = new Set<string>();
+
+/** Deny-by-default for both `setPermissionCheckHandler` and
+ * `setPermissionRequestHandler` — one decision, so a check can never disagree
+ * with a request (the pair is how an ambient capability slips in). */
+export function decidePermission(permission: string): boolean {
+  return SHELL_GRANTED_PERMISSIONS.has(permission);
+}
