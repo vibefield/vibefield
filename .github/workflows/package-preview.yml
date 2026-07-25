@@ -1,0 +1,143 @@
+# Preview packaging lane (WP1 — EDP §12.1). The rail laid down BEFORE the packaging tool
+# arrives: there is no electron-builder config in this repo yet, so this workflow packages
+# NOTHING. It builds the TypeScript and inventories what a package would contain
+# (scripts/package-census.mjs). Its entire job at this stage is to EXIST, credential-free,
+# so that when packaging lands in WP4 it lands inside a lane that already cannot publish —
+# rather than into a lane that has to be de-fanged after the fact.
+#
+# PUBLISH-SAFETY INVARIANT — the WP1 exit criterion is "CI cannot accidentally publish",
+# and this file is where that is true or not (EDP §12.1, §12.2, EDP-30):
+#   - no `secrets` context is referenced anywhere in this file;
+#   - no signing identity, keychain, certificate, notarization or App Store credential;
+#   - no registry token, no GITHUB_TOKEN write scope, no `gh release`/upload/publish step;
+#   - `permissions: contents: read` is the entire grant, and read is all this job needs.
+# When a packaging step does land here it stays `--dir`-only — unsigned or ad-hoc — and any
+# artifact it uploads is labeled clearly non-release. Signing, notarization and the publish
+# transaction belong to the tag-triggered `release` workflow with its protected
+# environments (EDP §12.1/§12.4); this lane never grows into that one. EDP-30 is the reason
+# it can't fake its way there either: identity constants are injected configuration, never
+# inferred from a path or a developer username, so a preview build has no identity to sign
+# with and no origin to impersonate.
+#
+# This repo does NOT build standalone — it consumes two sibling checkouts pinned by
+# siblings.lock.json (EL8: deliberate pins, never drift), exactly as verify.yml does.
+name: package-preview
+
+on:
+  # PR-time and manual dispatch only — deliberately NOT `push: branches: [main]`.
+  # verify.yml owns main: it runs THE gate on every push there, and that is the check
+  # protecting the trunk. Preview packaging answers a PR-shaped question — "does this
+  # change what would ship?" — which is only actionable while there is still a diff to
+  # reject; re-running it on main spends minutes to re-confirm what the merged PR just
+  # proved. Release-time packaging is a tag-triggered workflow that does not exist yet.
+  #
+  # `pull_request` (NOT `pull_request_target`): fork PRs therefore run with a read-only
+  # token in the fork's context and receive no repository secrets — EDP §12.2's "fork pull
+  # requests never receive release secrets" holds structurally here, not by convention.
+  pull_request:
+  workflow_dispatch:
+
+# One live run per ref; cancel superseded pushes — verify.yml's idiom.
+concurrency:
+  group: package-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+# EDP §12.2: default workflow permissions are read-only. Nothing below writes to the repo,
+# comments on the PR, or touches a package registry, so read is the whole grant. A future
+# step that wants to post a census diff must ask for its own narrow scope at the JOB level
+# and justify it — never widen this default.
+permissions:
+  contents: read
+
+jobs:
+  package-preview:
+    # ubuntu-latest, NOT the macos-latest verify.yml pays for. verify.yml eats macOS's 10x
+    # minute multiplier deliberately: it launches Electron, runs the desktop tests and the
+    # native darwin sidecar bits, so green in CI must mean green on the dev machine. This
+    # job does none of that — `pnpm build` is esbuild + tsc across the workspace, and the
+    # census reads files off disk. No Electron launch, no cargo build, no darwin-only
+    # artifact, nothing whose result differs by OS. Linux is both correct and ~10x cheaper.
+    # WHEN THIS CHANGES: the first real `--dir` package of a macOS .app (WP4) must move
+    # this job to macos-latest — a .app bundle cannot be staged honestly from Linux — and
+    # that move should be made knowingly, as a cost decision, not by drift.
+    runs-on: ubuntu-latest
+    steps:
+      # First-party actions only, pinned by major tag exactly as verify.yml pins them.
+      # EDP §12.2 requires immutable-commit pinning for third-party actions *in the release
+      # workflow*; this lane carries no secrets, so a tag pin on actions/* and pnpm/* is the
+      # accepted posture. Do not introduce a new third-party action here without revisiting
+      # that clause.
+      - uses: actions/checkout@v4
+
+      # Siblings are separate PUBLIC repos on the same account — a plain HTTPS clone
+      # needs no token. Check out the EXACT pinned SHAs into the relative locations
+      # preflight resolves (../infinite-canvas-engine, ../p008/truffle). A fresh detached
+      # checkout is clean and at the pinned SHA, so preflight's revision + dirty checks
+      # both pass. No shallow clone: the pin may sit behind the branch tip.
+      # truffle is cloned here even though this lane compiles no Rust: the step stays
+      # byte-identical to verify.yml's so the two cannot drift apart on the lock format,
+      # and field-native staging (WP4) needs the [patch] path present anyway.
+      - name: Fetch sibling checkouts at pinned revisions (EL8)
+        run: |
+          set -euo pipefail
+          ice_sha=$(jq -r '.siblings["infinite-canvas-engine"]' siblings.lock.json)
+          truffle_sha=$(jq -r '.siblings.truffle' siblings.lock.json)
+          git clone --no-tags https://github.com/jamesyong-42/infinite-canvas-engine.git ../infinite-canvas-engine
+          git -C ../infinite-canvas-engine checkout --detach "$ice_sha"
+          mkdir -p ../p008
+          git clone --no-tags https://github.com/jamesyong-42/truffle.git ../p008/truffle
+          git -C ../p008/truffle checkout --detach "$truffle_sha"
+
+      # pnpm pinned from the packageManager field (pnpm@11.13.1); node from .nvmrc.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # No rust-toolchain / cargo-typify / rust-cache steps here, by design: nothing in this
+      # lane compiles Rust, and installing a toolchain to not use it is pure minutes.
+      # WHEN field-native staging lands (WP4 stages a `cargo build --release` binary into
+      # resources/bin/), this job needs dtolnay/rust-toolchain@stable and
+      # Swatinem/rust-cache@v2 restored — copy them from verify.yml; the truffle sibling for
+      # the [patch] path is already checked out above. cargo-typify stays verify.yml's
+      # business: it drives contracts codegen freshness, which is not a packaging concern.
+
+      # ice ships its dist/ as the file: dep's entry point; preflight FAILs when it's
+      # missing and WARNs when it's stale, so build it fresh before anything reads it.
+      # Root `build` there is `pnpm -r --if-present run build` (packages/ice: tsup + tsc dts).
+      - name: Build ice dist
+        run: |
+          pnpm -C ../infinite-canvas-engine install --frozen-lockfile
+          pnpm -C ../infinite-canvas-engine build
+
+      - run: pnpm install --frozen-lockfile
+
+      # Root `build` is `pnpm -r build`: esbuild bundles for electron-shell and fieldd plus
+      # the desktop renderer. The census inventories what this step produced, so it has to
+      # run first — a census over a stale or absent dist/ measures nothing.
+      - run: pnpm build
+
+      # The census is WP1's other half: it asserts the committed package manifest still
+      # describes what `pnpm build` produces — expected-present, unexpected-absent — so that
+      # content drift shows up as a diff to review here, long before it shows up inside a
+      # signed package. This is the seed of EDP §12.1's content/resource/package smoke.
+      #
+      # REPORT-FIRST LIVES INSIDE THE TOOL, not in a continue-on-error wrapper: manifest
+      # drift prints and exits 0 (WP1's "non-blocking report first"), while a §7.3
+      # must-never-ship class — a source map, a test tree, a stray secret — exits 1. Those
+      # are different severities, and `continue-on-error: true` here would flatten them,
+      # swallowing the single signal worth failing on. Hardening at WP4 is therefore a flag
+      # (`--strict`, which promotes drift to a failure too), not the removal of a wrapper.
+      - name: Package census (assert against the committed manifest)
+        run: node scripts/package-census.mjs --assert
+
+      # The identity ledger holds the values an installed VibeField is known by (EDP-30).
+      # Report-only by the same reasoning: before the first signed beta every field is an
+      # unresolved owner blocker, and that is an honest state rather than a defect — so the
+      # run is annotated, not failed. What DOES fail here is a malformed or dishonest ledger:
+      # a machine-derived value, a parked credential, or a frozen constant edited without a
+      # revision bump (`--enforce`). `--require-frozen` is the flag the first-signed-beta
+      # gate turns on (spec §16.1), when "undecided" stops being acceptable.
+      - name: Release identity ledger
+        run: node scripts/check-release-identity.mjs --enforce

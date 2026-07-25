@@ -1,0 +1,75 @@
+{
+  "note": "Baseline census of `pnpm build` output (WP1/EDP slice 0). Refresh deliberately with `node scripts/package-census.mjs --update`; asset hashes are normalized to [hash].",
+  "spec": "electron-distribution-and-tray.md §7.3 (allowlist) + §13.2 (stage-content checks)",
+  "blockSizeBytes": 4096,
+  "packages": {
+    "packages/electron-shell": {
+      "name": "@vibefield/electron-shell",
+      "files": {
+        "dist/main/index.cjs": {
+          "count": 1,
+          "bytes": [604515]
+        },
+        "dist/preload/index.cjs": {
+          "count": 1,
+          "bytes": [234450]
+        },
+        "dist/renderer/assets/DiagnosticsSection-[hash].js": {
+          "count": 1,
+          "bytes": [20413]
+        },
+        "dist/renderer/assets/doc-thumbnail-worker-[hash].js": {
+          "count": 1,
+          "bytes": [3050]
+        },
+        "dist/renderer/assets/main-[hash].css": {
+          "count": 1,
+          "bytes": [55735]
+        },
+        "dist/renderer/assets/main-[hash].js": {
+          "count": 2,
+          "bytes": [306429, 17075]
+        },
+        "dist/renderer/assets/react-[hash].js": {
+          "count": 1,
+          "bytes": [869]
+        },
+        "dist/renderer/assets/workspace-[hash].js": {
+          "count": 1,
+          "bytes": [6332073]
+        },
+        "dist/renderer/index.html": {
+          "count": 1,
+          "bytes": [317]
+        },
+        "dist/testing/smoke.cjs": {
+          "count": 1,
+          "bytes": [6991],
+          "neverShip": ["testing-tree", "smoke-or-spike-entry"]
+        }
+      },
+      "bytes": 7581917,
+      "installedBytes": 7602176
+    },
+    "packages/fieldd": {
+      "name": "@vibefield/fieldd",
+      "files": {
+        "dist/bin.cjs": {
+          "count": 1,
+          "bytes": [1158993]
+        },
+        "dist/service-harness.mjs": {
+          "count": 1,
+          "bytes": [251042]
+        }
+      },
+      "bytes": 1410035,
+      "installedBytes": 1413120
+    }
+  },
+  "totals": {
+    "files": 13,
+    "bytes": 8991952,
+    "installedBytes": 9015296
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "//": "The frozen release constants (distribution spec §7.6, EDP-30). These are the values an installed VibeField is KNOWN BY: bundle id, publisher, tray slot, update origin. Changing one after a public release is a migration — signatures, update feeds, taskbar pinning and notification routing all key off them — never a cosmetic edit. Two laws are enforced by scripts/check-release-identity.mjs: (1) nothing here may be inferred from a local path, username or hostname (EDP-30) — a value that differs per developer machine is not an identity; (2) a `frozen` field cannot change without bumping identityRevision in the same commit, so an identity edit is always a reviewable event rather than a silent drift.",
+  "identityRevision": 1,
+  "frozenAt": null,
+  "fields": {
+    "appId": {
+      "status": "blocker",
+      "value": null,
+      "format": "reverse-dns",
+      "blocker": "B-1",
+      "note": "The bundle/application identifier (CFBundleIdentifier on macOS, the NSIS application id on Windows). Owner input required. NOT the same thing as contracts' APP_ID ('vibefield'), which is the truffle mesh app id and data-root slug — see windowsAppUserModelId."
+    },
+    "productName": {
+      "status": "frozen",
+      "value": "VibeField",
+      "format": "literal",
+      "note": "Already load-bearing at runtime: app.setName('VibeField') in electron-shell's composition root, and the distribution spec §7.5 builder config."
+    },
+    "executableName": {
+      "status": "blocker",
+      "value": null,
+      "format": "executable-name",
+      "blocker": "B-2",
+      "note": "The on-disk executable name. Windows shortcuts, the desktop entry's StartupWMClass and the Linux .desktop filename must all agree with it (distribution spec §6.3)."
+    },
+    "macTeamId": {
+      "status": "blocker",
+      "value": null,
+      "format": "apple-team-id",
+      "blocker": "B-3",
+      "note": "Apple Developer Team ID — public information (it ships inside every signed app), unlike the signing certificate itself. A credential must NEVER be written here; the checker refuses anything shaped like one."
+    },
+    "windowsPublisher": {
+      "status": "blocker",
+      "value": null,
+      "format": "publisher-name",
+      "blocker": "B-2",
+      "note": "The Authenticode/Trusted Signing subject shown in the UAC prompt. Must match the signing certificate's subject exactly or verification reports a publisher mismatch."
+    },
+    "windowsAppUserModelId": {
+      "status": "blocker",
+      "value": null,
+      "format": "reverse-dns",
+      "blocker": "B-1",
+      "note": "app.setAppUserModelId() (distribution spec §5.6). MUST equal the installer's application id so taskbar pinning, shortcuts, notifications and updates agree. FINDING (2026-07-24): electron-shell currently passes contracts' APP_ID ('vibefield') here — the mesh slug, not a reverse-DNS id. Harmless while Windows is not a GA target (EDP-23), wrong the moment an installer exists. The runtime switches to this value in the slice that resolves B-1."
+    },
+    "trayGuid": {
+      "status": "blocker",
+      "value": null,
+      "format": "uuid",
+      "blocker": "B-3",
+      "note": "Windows notification-area GUID; preserves the user's chosen tray slot across updates. Distribution spec §5.6 admits it only once a signing identity exists, because Windows keys the reserved slot to the signed binary — an unsigned build burns the GUID."
+    },
+    "updateChannel": {
+      "status": "frozen",
+      "value": "beta",
+      "format": "update-channel",
+      "note": "First public channel. Stable clients never consume beta metadata (distribution spec §11.4); promotion to 'stable' is an identity event, hence the revision bump."
+    },
+    "updateOrigin": {
+      "status": "blocker",
+      "value": null,
+      "format": "https-url",
+      "blocker": "B-4",
+      "note": "Where electron-updater looks for metadata. Public GitHub Releases vs authenticated object storage is undecided; either way no end-user machine may carry a token (distribution spec §11.4)."
+    }
+  }
+}
