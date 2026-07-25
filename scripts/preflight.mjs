@@ -3,7 +3,7 @@
 // present (README "Getting started", CLAUDE.md "Machine setup"). Hard-fails on
 // missing pieces, warns on freshness/version drift. Run: `pnpm preflight`.
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
@@ -11,15 +11,17 @@ const problems = [];
 const warnings = [];
 
 // --- sibling revision pins (siblings.lock.json) ------------------------------
-// The ice file: dep and the truffle cargo [patch] point at WORKING TREES —
-// presence checks alone leave the build unreproducible: a green verify can't be
-// replayed without knowing which sibling revisions it ran against. The lock
-// records the SHAs; preflight verifies them. Updating the lock IS the deliberate
-// upgrade event (EL8 spirit): sync the sibling, then `pnpm siblings:pin`. Dirty
-// sibling trees only WARN — co-developing them is the normal state; the pin is
-// about the base revision.
+// The truffle cargo [patch] points at a WORKING TREE — a presence check alone
+// leaves the build unreproducible: a green verify can't be replayed without
+// knowing which revision it ran against. The lock records the SHA; preflight
+// verifies it. Updating the lock IS the deliberate upgrade event (EL8 spirit):
+// sync the sibling, then `pnpm siblings:pin`. A dirty sibling tree only WARNs —
+// co-developing it is the normal state; the pin is about the base revision.
+// ice left this map on 2026-07-25: it is now an exact registry pin
+// (@vibecook/ice 0.2.0), so its version is the lockfile's business and drifting
+// SHAs can no longer block the gate. Cargo has no such registry path for
+// truffle-core while [patch.crates-io] is how EL8 pins it.
 const SIBLINGS = {
-  "infinite-canvas-engine": resolve(root, "../infinite-canvas-engine"),
   truffle: resolve(root, "../p008/truffle"),
 };
 const SIBLINGS_LOCK = join(root, "siblings.lock.json");
@@ -58,38 +60,15 @@ if (process.argv.includes("--pin-siblings")) {
 }
 
 // --- sibling checkouts -------------------------------------------------------
-const ICE = resolve(root, "../infinite-canvas-engine/packages/ice");
+// ice is no longer here: it resolves from the registry, so npm ships its own
+// dist and the B2 stale-dist class (a src/ newer than the dist/ we consume,
+// famously a missing ground.js) cannot occur through this path at all. The
+// freshness walker that used to guard it retired with the file: dep. If you
+// `pnpm link` ice for co-development, its freshness becomes your business —
+// that link is deliberately local and uncommitted.
 const TRUFFLE = resolve(root, "../p008/truffle/crates/truffle-core");
-if (!existsSync(ICE)) {
-  problems.push(
-    `@vibecook/ice checkout missing at ${ICE} (file: dep in pnpm-workspace.yaml catalog)`,
-  );
-}
 if (!existsSync(TRUFFLE)) {
   problems.push(`truffle-core checkout missing at ${TRUFFLE} (Cargo.toml [patch.crates-io])`);
-}
-
-// --- ice dist freshness (the B2 stale-dist class: missing ground.js) ---------
-function newestMtime(dir) {
-  let newest = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
-    const p = join(dir, entry.name);
-    const t = entry.isDirectory() ? newestMtime(p) : statSync(p).mtimeMs;
-    if (t > newest) newest = t;
-  }
-  return newest;
-}
-if (existsSync(ICE)) {
-  const src = join(ICE, "src");
-  const dist = join(ICE, "dist");
-  if (!existsSync(dist)) {
-    problems.push(`ice has no dist/ — build it: cd ${ICE} && pnpm build`);
-  } else if (existsSync(src) && newestMtime(src) > newestMtime(dist)) {
-    warnings.push(
-      "ice dist/ is older than its src/ — rebuild ice or you'll consume stale-dist bugs",
-    );
-  }
 }
 
 // --- sibling revisions vs the lock -------------------------------------------

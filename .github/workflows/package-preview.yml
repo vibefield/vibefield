@@ -19,8 +19,10 @@
 # inferred from a path or a developer username, so a preview build has no identity to sign
 # with and no origin to impersonate.
 #
-# This repo does NOT build standalone — it consumes two sibling checkouts pinned by
+# This repo does NOT build standalone — it consumes ONE sibling checkout pinned by
 # siblings.lock.json (EL8: deliberate pins, never drift), exactly as verify.yml does.
+# @vibecook/ice is an exact registry pin (0.2.0) as of 2026-07-25, so nothing clones or
+# builds it here; truffle remains because cargo [patch.crates-io] has no registry path.
 name: package-preview
 
 on:
@@ -69,21 +71,18 @@ jobs:
       # that clause.
       - uses: actions/checkout@v4
 
-      # Siblings are separate PUBLIC repos on the same account — a plain HTTPS clone
-      # needs no token. Check out the EXACT pinned SHAs into the relative locations
-      # preflight resolves (../infinite-canvas-engine, ../p008/truffle). A fresh detached
-      # checkout is clean and at the pinned SHA, so preflight's revision + dirty checks
-      # both pass. No shallow clone: the pin may sit behind the branch tip.
-      # truffle is cloned here even though this lane compiles no Rust: the step stays
+      # truffle is a separate PUBLIC repo on the same account — a plain HTTPS clone
+      # needs no token. Check out the EXACT pinned SHA into the relative location
+      # preflight resolves (../p008/truffle). A fresh detached checkout is clean and at
+      # the pinned SHA, so preflight's revision + dirty checks both pass. No shallow
+      # clone: the pin may sit behind the branch tip.
+      # It is cloned here even though this lane compiles no Rust: the step stays
       # byte-identical to verify.yml's so the two cannot drift apart on the lock format,
       # and field-native staging (WP4) needs the [patch] path present anyway.
-      - name: Fetch sibling checkouts at pinned revisions (EL8)
+      - name: Fetch sibling checkout at pinned revision (EL8)
         run: |
           set -euo pipefail
-          ice_sha=$(jq -r '.siblings["infinite-canvas-engine"]' siblings.lock.json)
           truffle_sha=$(jq -r '.siblings.truffle' siblings.lock.json)
-          git clone --no-tags https://github.com/jamesyong-42/infinite-canvas-engine.git ../infinite-canvas-engine
-          git -C ../infinite-canvas-engine checkout --detach "$ice_sha"
           mkdir -p ../p008
           git clone --no-tags https://github.com/jamesyong-42/truffle.git ../p008/truffle
           git -C ../p008/truffle checkout --detach "$truffle_sha"
@@ -102,14 +101,6 @@ jobs:
       # Swatinem/rust-cache@v2 restored — copy them from verify.yml; the truffle sibling for
       # the [patch] path is already checked out above. cargo-typify stays verify.yml's
       # business: it drives contracts codegen freshness, which is not a packaging concern.
-
-      # ice ships its dist/ as the file: dep's entry point; preflight FAILs when it's
-      # missing and WARNs when it's stale, so build it fresh before anything reads it.
-      # Root `build` there is `pnpm -r --if-present run build` (packages/ice: tsup + tsc dts).
-      - name: Build ice dist
-        run: |
-          pnpm -C ../infinite-canvas-engine install --frozen-lockfile
-          pnpm -C ../infinite-canvas-engine build
 
       - run: pnpm install --frozen-lockfile
 

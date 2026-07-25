@@ -27,8 +27,9 @@ a private mesh across machines, and an iPhone companion.
 ## Getting started
 
 Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify` ·
-sibling checkouts `../infinite-canvas-engine` and `../p008/truffle` — this repo consumes both by
-path until `@vibecook/*` publishing is real (see `CLAUDE.md` "Machine setup").
+one sibling checkout, `../p008/truffle` — consumed by path because cargo `[patch.crates-io]` has no
+registry equivalent (see `CLAUDE.md` "Machine setup"). `@vibecook/ice` now comes from npm at an
+exact pin, so it needs no checkout.
 
 ```sh
 pnpm install

@@ -1,7 +1,6 @@
 {
   "//": "Machine-coupled sibling revisions. Verified by pnpm preflight; update deliberately via pnpm siblings:pin (EL8: upgrades are events, never drift).",
   "siblings": {
-    "infinite-canvas-engine": "9cc7184d17c7717d018df25c2170a0cef77f3657",
     "truffle": "09367f6ced4c0030ce1ca42c3ab762923e7529f3"
   }
 }

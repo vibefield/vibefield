@@ -13,13 +13,20 @@ allowBuilds:
   electron: true
 # EL8 — exactly ONE loro-crdt resolution across the whole tree (strata/ICE/app;
 # CRDT docs are only interoperable within a single wasm instance).
-# @vibecook/ice: the machine-coupled sibling checkout, declared ONCE here
-# (packages specify "*"; catalogs don't support file: yet). Verified by
-# scripts/preflight.mjs — see CLAUDE.md "Machine setup". Swap this line for a
-# registry version once @vibecook/* publishing is real.
+# @vibecook/ice: EXACT registry pin (EL8: "exact pins on all @vibecook/*"),
+# declared ONCE here — packages specify "*". Publishing became real at ice 0.2.0
+# (2026-07-25), retiring the machine-coupled `file:` checkout this line used to
+# carry: a SHA that drifted on every upstream commit, blocked preflight, and made
+# a stale sibling dist a live bug class. Upgrades are now an explicit version
+# edit. To co-develop ICE, link it locally and DO NOT commit that:
+#   pnpm link ../infinite-canvas-engine/packages/ice   (undo: pnpm unlink)
 overrides:
-  loro-crdt: ^1.13.6
-  "@vibecook/ice": file:../infinite-canvas-engine/packages/ice
+  # Floor tracks the highest floor any consumer declares — ICE 0.2.0 requires
+  # ^1.13.8 (ordered ChildOf / document schema 2). An override BELOW a consumer's
+  # floor silently wins, which is how the tree sat on 1.13.7 while ICE asked for
+  # 1.13.8: the single-version law held, at the wrong version.
+  loro-crdt: ^1.13.8
+  "@vibecook/ice": 0.2.0
 # Shared dependency versions, declared ONCE — packages reference "catalog:".
 catalog:
   "@tailwindcss/vite": ^4.0.0
@@ -33,3 +40,6 @@ catalog:
   tailwindcss: ^4.0.0
   typescript: ^5.6.0
   vitest: ^3.0.0
+minimumReleaseAgeExclude:
+  - '@vibecook/strata-ecs@0.11.0'
+  - '@vibecook/ice@0.2.0'

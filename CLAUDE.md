@@ -24,15 +24,21 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
 
 ## Machine setup (this repo does NOT build standalone)
 
-Required sibling checkouts, verified by `pnpm preflight`:
+Required sibling checkout, verified by `pnpm preflight`:
 
-- `../infinite-canvas-engine` — `@vibecook/ice` is a `file:` dep (single declaration in the
-  pnpm-workspace.yaml catalog). After editing ice, rebuild its dist — stale dist is a known
-  bug class (B2's missing ground.js).
 - `../p008/truffle` — Cargo `[patch.crates-io]` target for `truffle-core` (EL8 lockstep).
 
-Sibling REVISIONS are pinned in `siblings.lock.json` (preflight verifies the SHAs; dirty trees
-warn). After deliberately syncing a sibling, accept the new revision with `pnpm siblings:pin`.
+Its REVISION is pinned in `siblings.lock.json` (preflight verifies the SHA; a dirty tree warns).
+After deliberately syncing it, accept the new revision with `pnpm siblings:pin`.
+
+`@vibecook/ice` is an **exact registry pin** (`0.2.0`, declared once in the pnpm-workspace.yaml
+overrides — packages ask for `"*"`). It stopped being a `file:` sibling on 2026-07-25: npm ships
+its dist, so the B2 stale-dist class is gone and upgrading is a version edit, not a SHA chase.
+To co-develop ice against this repo, link it locally and never commit that:
+
+```sh
+pnpm link ../infinite-canvas-engine/packages/ice   # undo: pnpm unlink
+```
 
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
 (contracts codegen; preflight checks the version).
