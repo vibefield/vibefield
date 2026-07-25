@@ -8,6 +8,7 @@ export * from "./doclane";
 export * from "./docs";
 export * from "./envelope";
 export * from "./errors";
+export * from "./meshdata";
 export * from "./methods";
 export * from "./mgmt";
 export * from "./plugin-distribution";

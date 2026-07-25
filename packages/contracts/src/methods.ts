@@ -280,6 +280,37 @@ export const METHODS: MethodDef[] = [
     subscription: true,
   }),
 
+  // C6/D5 — MeshData lane CONTROL. The bytes ride meshdata.sock; nothing here
+  // carries a payload. `locality: "local"` is exact and not a copy-paste: the
+  // mgmt channel never leaves the device, even though the lane it negotiates is
+  // the one thing that does.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.lane.open",
+    scope: null,
+    // NOT idempotent: laneId is caller-minted, and re-opening a live lane is a
+    // collision to refuse, not a no-op to absorb.
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.lane.close",
+    scope: null,
+    // Idempotent by intent — closing an already-dead lane is the normal race
+    // when both ends hang up at once, and must not read as an error.
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.lane.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+
   // B3 — DocumentService, P0 local-only subset (design-01 §5.1, M4; design-02 §5 fence).
   // The rest of the doc.* catalog (subscribeRegistry/close/delete/compact/export/import)
   // is deferred and deliberately undeclared — the lint enforces declared == shipped.

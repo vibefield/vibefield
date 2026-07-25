@@ -1,5 +1,5 @@
 {
-  "$ref": "#/definitions/DesiredState",
+  "$ref": "#/definitions/MeshLaneCloseRequest",
   "definitions": {
     "SemverString": {
       "type": "string",
@@ -268,7 +268,33 @@
       "additionalProperties": true
     },
     "DesiredState": {
-      "$ref": "#/definitions/DesiredState"
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer"
+        },
+        "terminals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DesiredTerminal"
+          }
+        },
+        "workers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DesiredWorker"
+          }
+        },
+        "meshConfig": {
+          "$ref": "#/definitions/MeshConfig"
+        }
+      },
+      "required": [
+        "generation",
+        "terminals",
+        "workers"
+      ],
+      "additionalProperties": true
     },
     "ObservedTerminal": {
       "type": "object",
@@ -555,20 +581,7 @@
       "additionalProperties": true
     },
     "MeshLaneCloseRequest": {
-      "type": "object",
-      "properties": {
-        "laneId": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "reason": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "laneId"
-      ],
-      "additionalProperties": true
+      "$ref": "#/definitions/MeshLaneCloseRequest"
     },
     "MeshLanePeerOpened": {
       "type": "object",

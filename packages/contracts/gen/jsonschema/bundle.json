@@ -538,6 +538,120 @@
       ],
       "additionalProperties": true
     },
+    "MeshLaneClass": {
+      "type": "string",
+      "enum": [
+        "reliable",
+        "lossy"
+      ]
+    },
+    "MeshLaneProtocol": {
+      "type": "string",
+      "enum": [
+        "doc-sync",
+        "presence"
+      ]
+    },
+    "MeshLaneOpenRequest": {
+      "type": "object",
+      "properties": {
+        "laneId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "class": {
+          "$ref": "#/definitions/MeshLaneClass"
+        },
+        "peer": {
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/definitions/MeshLaneProtocol"
+        },
+        "docId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "laneId",
+        "class",
+        "peer",
+        "protocol"
+      ],
+      "additionalProperties": true
+    },
+    "MeshLaneCloseRequest": {
+      "type": "object",
+      "properties": {
+        "laneId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "laneId"
+      ],
+      "additionalProperties": true
+    },
+    "MeshLanePeerOpened": {
+      "type": "object",
+      "properties": {
+        "laneId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inbound": {
+          "type": "boolean",
+          "const": true
+        },
+        "class": {
+          "$ref": "#/definitions/MeshLaneClass"
+        },
+        "peer": {
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/definitions/MeshLaneProtocol"
+        },
+        "docId": {
+          "type": "string"
+        },
+        "whois": {
+          "$ref": "#/definitions/WhoIsIdentity"
+        }
+      },
+      "required": [
+        "laneId",
+        "inbound",
+        "class",
+        "peer",
+        "protocol"
+      ],
+      "additionalProperties": true
+    },
+    "MeshLaneClosed": {
+      "type": "object",
+      "properties": {
+        "laneId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inbound": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "laneId",
+        "reason"
+      ],
+      "additionalProperties": true
+    },
     "LogAttributesV1": {
       "type": "object",
       "additionalProperties": {

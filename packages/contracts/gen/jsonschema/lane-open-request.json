@@ -1,5 +1,5 @@
 {
-  "$ref": "#/definitions/DesiredState",
+  "$ref": "#/definitions/LaneOpenRequest",
   "definitions": {
     "SemverString": {
       "type": "string",
@@ -268,7 +268,33 @@
       "additionalProperties": true
     },
     "DesiredState": {
-      "$ref": "#/definitions/DesiredState"
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer"
+        },
+        "terminals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DesiredTerminal"
+          }
+        },
+        "workers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DesiredWorker"
+          }
+        },
+        "meshConfig": {
+          "$ref": "#/definitions/MeshConfig"
+        }
+      },
+      "required": [
+        "generation",
+        "terminals",
+        "workers"
+      ],
+      "additionalProperties": true
     },
     "ObservedTerminal": {
       "type": "object",
@@ -512,49 +538,24 @@
       ],
       "additionalProperties": true
     },
-    "MeshLaneClass": {
+    "LaneClass": {
       "type": "string",
       "enum": [
         "reliable",
         "lossy"
       ]
     },
-    "MeshLaneProtocol": {
+    "LaneProtocol": {
       "type": "string",
       "enum": [
         "doc-sync",
         "presence"
       ]
     },
-    "MeshLaneOpenRequest": {
-      "type": "object",
-      "properties": {
-        "laneId": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "class": {
-          "$ref": "#/definitions/MeshLaneClass"
-        },
-        "peer": {
-          "type": "string"
-        },
-        "protocol": {
-          "$ref": "#/definitions/MeshLaneProtocol"
-        },
-        "docId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "laneId",
-        "class",
-        "peer",
-        "protocol"
-      ],
-      "additionalProperties": true
+    "LaneOpenRequest": {
+      "$ref": "#/definitions/LaneOpenRequest"
     },
-    "MeshLaneCloseRequest": {
+    "LaneCloseRequest": {
       "type": "object",
       "properties": {
         "laneId": {
@@ -570,7 +571,7 @@
       ],
       "additionalProperties": true
     },
-    "MeshLanePeerOpened": {
+    "LanePeerOpened": {
       "type": "object",
       "properties": {
         "laneId": {
@@ -582,13 +583,13 @@
           "const": true
         },
         "class": {
-          "$ref": "#/definitions/MeshLaneClass"
+          "$ref": "#/definitions/LaneClass"
         },
         "peer": {
           "type": "string"
         },
         "protocol": {
-          "$ref": "#/definitions/MeshLaneProtocol"
+          "$ref": "#/definitions/LaneProtocol"
         },
         "docId": {
           "type": "string"
@@ -606,7 +607,7 @@
       ],
       "additionalProperties": true
     },
-    "MeshLaneClosed": {
+    "LaneClosed": {
       "type": "object",
       "properties": {
         "laneId": {

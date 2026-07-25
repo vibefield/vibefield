@@ -170,3 +170,81 @@ export const ServeEntry = z
   })
   .passthrough();
 export type ServeEntry = z.infer<typeof ServeEntry>;
+
+// ---- MeshData lanes (C6 / D5) ----
+//
+// CONTROL ONLY. Lane bytes ride native/run/meshdata.sock (see meshdata.ts);
+// nothing below ever carries a payload. That split is EL2 made structural: a
+// lane is negotiated on a contract surface and then gets out of the way, so
+// doc bytes never touch JSON-RPC and control never queues behind a snapshot.
+
+/** Delivery class, mapped 1:1 from strata's DeliveryClass by fieldd's Channel
+ * impl. `reliable` = one QUIC stream per lane (per-lane FIFO, flow control
+ * propagates); `lossy` = datagrams, drop-oldest, payload bounded by
+ * MESHDATA_LOSSY_MAX_PAYLOAD_BYTES. */
+export const MeshLaneClass = z.enum(["reliable", "lossy"]);
+export type MeshLaneClass = z.infer<typeof MeshLaneClass>;
+
+/** What the lane carries. The BRIDGE does not interpret this — it is dumb by
+ * design (D5) — but fieldd routes inbound lanes by it, and it is what makes a
+ * `lane.peerOpened` actionable without decoding a byte. */
+export const MeshLaneProtocol = z.enum(["doc-sync", "presence"]);
+export type MeshLaneProtocol = z.infer<typeof MeshLaneProtocol>;
+
+/** native.mesh.lane.open — fieldd asks the bridge for a lane to a peer.
+ * The caller mints laneId: it owns the numbering for lanes it opens, which
+ * removes a round-trip and lets it send DATA as soon as the call returns. */
+export const MeshLaneOpenRequest = z
+  .object({
+    laneId: z.number().int().nonnegative(),
+    class: MeshLaneClass,
+    /** truffle peer id, as carried by PeerInfo.id */
+    peer: z.string(),
+    protocol: MeshLaneProtocol,
+    /** doc-sync only: which document this lane is for. A snapshot takes its own
+     * short-lived lane (snapshot-per-stream), so this is not unique per doc. */
+    docId: z.string().optional(),
+  })
+  .passthrough();
+export type MeshLaneOpenRequest = z.infer<typeof MeshLaneOpenRequest>;
+
+export const MeshLaneCloseRequest = z
+  .object({
+    laneId: z.number().int().nonnegative(),
+    reason: z.string().optional(),
+  })
+  .passthrough();
+export type MeshLaneCloseRequest = z.infer<typeof MeshLaneCloseRequest>;
+
+/** Notification: a PEER opened a lane to us. Lane ids from the two directions
+ * share no space, so the `inbound` flag is what keeps them apart rather than a
+ * numbering convention nobody can enforce across a network. */
+export const MeshLanePeerOpened = z
+  .object({
+    laneId: z.number().int().nonnegative(),
+    inbound: z.literal(true),
+    class: MeshLaneClass,
+    peer: z.string(),
+    protocol: MeshLaneProtocol,
+    docId: z.string().optional(),
+    /** WhoIs-verified identity of the opening peer — every inbound delivery
+     * carries it (the v0.5 requirement), so authorization never rests on a
+     * self-declared id. */
+    whois: WhoIsIdentity.optional(),
+  })
+  .passthrough();
+export type MeshLanePeerOpened = z.infer<typeof MeshLanePeerOpened>;
+
+/** Notification: a lane ended, from either side. Lanes are cheap and mortal —
+ * D5's law is that a torn frame tears the LANE, never the daemon — so this is
+ * an ordinary event, not an error path. */
+export const MeshLaneClosed = z
+  .object({
+    laneId: z.number().int().nonnegative(),
+    inbound: z.boolean().optional(),
+    /** "peer-closed" | "peer-unreachable" | "torn-frame" | "local" | … —
+     * open vocabulary, logged verbatim (tolerant reader). */
+    reason: z.string(),
+  })
+  .passthrough();
+export type MeshLaneClosed = z.infer<typeof MeshLaneClosed>;

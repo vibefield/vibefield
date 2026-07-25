@@ -3275,6 +3275,344 @@ impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json:
         Self(value)
     }
 }
+#[doc = "`MeshLaneClass`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"reliable\","]
+#[doc = "    \"lossy\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum MeshLaneClass {
+    #[serde(rename = "reliable")]
+    Reliable,
+    #[serde(rename = "lossy")]
+    Lossy,
+}
+impl ::std::fmt::Display for MeshLaneClass {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Reliable => f.write_str("reliable"),
+            Self::Lossy => f.write_str("lossy"),
+        }
+    }
+}
+impl ::std::str::FromStr for MeshLaneClass {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "reliable" => Ok(Self::Reliable),
+            "lossy" => Ok(Self::Lossy),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshLaneClass {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshLaneClass {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshLaneClass {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`MeshLaneCloseRequest`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"laneId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"laneId\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"reason\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshLaneCloseRequest {
+    #[serde(rename = "laneId")]
+    pub lane_id: u64,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub reason: ::std::option::Option<::std::string::String>,
+}
+impl MeshLaneCloseRequest {
+    pub fn builder() -> builder::MeshLaneCloseRequest {
+        Default::default()
+    }
+}
+#[doc = "`MeshLaneClosed`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"laneId\","]
+#[doc = "    \"reason\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"inbound\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
+#[doc = "    \"laneId\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"reason\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshLaneClosed {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub inbound: ::std::option::Option<bool>,
+    #[serde(rename = "laneId")]
+    pub lane_id: u64,
+    pub reason: ::std::string::String,
+}
+impl MeshLaneClosed {
+    pub fn builder() -> builder::MeshLaneClosed {
+        Default::default()
+    }
+}
+#[doc = "`MeshLaneOpenRequest`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"class\","]
+#[doc = "    \"laneId\","]
+#[doc = "    \"peer\","]
+#[doc = "    \"protocol\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"class\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshLaneClass\""]
+#[doc = "    },"]
+#[doc = "    \"docId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"laneId\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"peer\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"protocol\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshLaneProtocol\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshLaneOpenRequest {
+    pub class: MeshLaneClass,
+    #[serde(
+        rename = "docId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub doc_id: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "laneId")]
+    pub lane_id: u64,
+    pub peer: ::std::string::String,
+    pub protocol: MeshLaneProtocol,
+}
+impl MeshLaneOpenRequest {
+    pub fn builder() -> builder::MeshLaneOpenRequest {
+        Default::default()
+    }
+}
+#[doc = "`MeshLanePeerOpened`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"class\","]
+#[doc = "    \"inbound\","]
+#[doc = "    \"laneId\","]
+#[doc = "    \"peer\","]
+#[doc = "    \"protocol\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"class\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshLaneClass\""]
+#[doc = "    },"]
+#[doc = "    \"docId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"inbound\": {"]
+#[doc = "      \"type\": \"boolean\","]
+#[doc = "      \"const\": true"]
+#[doc = "    },"]
+#[doc = "    \"laneId\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"peer\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"protocol\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshLaneProtocol\""]
+#[doc = "    },"]
+#[doc = "    \"whois\": {"]
+#[doc = "      \"$ref\": \"#/definitions/WhoIsIdentity\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshLanePeerOpened {
+    pub class: MeshLaneClass,
+    #[serde(
+        rename = "docId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub doc_id: ::std::option::Option<::std::string::String>,
+    pub inbound: bool,
+    #[serde(rename = "laneId")]
+    pub lane_id: u64,
+    pub peer: ::std::string::String,
+    pub protocol: MeshLaneProtocol,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub whois: ::std::option::Option<WhoIsIdentity>,
+}
+impl MeshLanePeerOpened {
+    pub fn builder() -> builder::MeshLanePeerOpened {
+        Default::default()
+    }
+}
+#[doc = "`MeshLaneProtocol`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"doc-sync\","]
+#[doc = "    \"presence\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum MeshLaneProtocol {
+    #[serde(rename = "doc-sync")]
+    DocSync,
+    #[serde(rename = "presence")]
+    Presence,
+}
+impl ::std::fmt::Display for MeshLaneProtocol {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::DocSync => f.write_str("doc-sync"),
+            Self::Presence => f.write_str("presence"),
+        }
+    }
+}
+impl ::std::str::FromStr for MeshLaneProtocol {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "doc-sync" => Ok(Self::DocSync),
+            "presence" => Ok(Self::Presence),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshLaneProtocol {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshLaneProtocol {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshLaneProtocol {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 #[doc = "`NativeHealth`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -7222,6 +7560,360 @@ pub mod builder {
                 stream: Ok(value.stream),
                 v: Ok(value.v),
                 writer_state: Ok(value.writer_state),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshLaneCloseRequest {
+        lane_id: ::std::result::Result<u64, ::std::string::String>,
+        reason: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for MeshLaneCloseRequest {
+        fn default() -> Self {
+            Self {
+                lane_id: Err("no value supplied for lane_id".to_string()),
+                reason: Ok(Default::default()),
+            }
+        }
+    }
+    impl MeshLaneCloseRequest {
+        pub fn lane_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.lane_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for lane_id: {e}"));
+            self
+        }
+        pub fn reason<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.reason = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for reason: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshLaneCloseRequest> for super::MeshLaneCloseRequest {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshLaneCloseRequest,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                lane_id: value.lane_id?,
+                reason: value.reason?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshLaneCloseRequest> for MeshLaneCloseRequest {
+        fn from(value: super::MeshLaneCloseRequest) -> Self {
+            Self {
+                lane_id: Ok(value.lane_id),
+                reason: Ok(value.reason),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshLaneClosed {
+        inbound: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
+        lane_id: ::std::result::Result<u64, ::std::string::String>,
+        reason: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshLaneClosed {
+        fn default() -> Self {
+            Self {
+                inbound: Ok(Default::default()),
+                lane_id: Err("no value supplied for lane_id".to_string()),
+                reason: Err("no value supplied for reason".to_string()),
+            }
+        }
+    }
+    impl MeshLaneClosed {
+        pub fn inbound<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.inbound = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for inbound: {e}"));
+            self
+        }
+        pub fn lane_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.lane_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for lane_id: {e}"));
+            self
+        }
+        pub fn reason<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.reason = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for reason: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshLaneClosed> for super::MeshLaneClosed {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshLaneClosed,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                inbound: value.inbound?,
+                lane_id: value.lane_id?,
+                reason: value.reason?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshLaneClosed> for MeshLaneClosed {
+        fn from(value: super::MeshLaneClosed) -> Self {
+            Self {
+                inbound: Ok(value.inbound),
+                lane_id: Ok(value.lane_id),
+                reason: Ok(value.reason),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshLaneOpenRequest {
+        class: ::std::result::Result<super::MeshLaneClass, ::std::string::String>,
+        doc_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        lane_id: ::std::result::Result<u64, ::std::string::String>,
+        peer: ::std::result::Result<::std::string::String, ::std::string::String>,
+        protocol: ::std::result::Result<super::MeshLaneProtocol, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshLaneOpenRequest {
+        fn default() -> Self {
+            Self {
+                class: Err("no value supplied for class".to_string()),
+                doc_id: Ok(Default::default()),
+                lane_id: Err("no value supplied for lane_id".to_string()),
+                peer: Err("no value supplied for peer".to_string()),
+                protocol: Err("no value supplied for protocol".to_string()),
+            }
+        }
+    }
+    impl MeshLaneOpenRequest {
+        pub fn class<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshLaneClass>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.class = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for class: {e}"));
+            self
+        }
+        pub fn doc_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.doc_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for doc_id: {e}"));
+            self
+        }
+        pub fn lane_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.lane_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for lane_id: {e}"));
+            self
+        }
+        pub fn peer<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.peer = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for peer: {e}"));
+            self
+        }
+        pub fn protocol<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshLaneProtocol>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.protocol = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for protocol: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshLaneOpenRequest> for super::MeshLaneOpenRequest {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshLaneOpenRequest,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                class: value.class?,
+                doc_id: value.doc_id?,
+                lane_id: value.lane_id?,
+                peer: value.peer?,
+                protocol: value.protocol?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshLaneOpenRequest> for MeshLaneOpenRequest {
+        fn from(value: super::MeshLaneOpenRequest) -> Self {
+            Self {
+                class: Ok(value.class),
+                doc_id: Ok(value.doc_id),
+                lane_id: Ok(value.lane_id),
+                peer: Ok(value.peer),
+                protocol: Ok(value.protocol),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshLanePeerOpened {
+        class: ::std::result::Result<super::MeshLaneClass, ::std::string::String>,
+        doc_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        inbound: ::std::result::Result<bool, ::std::string::String>,
+        lane_id: ::std::result::Result<u64, ::std::string::String>,
+        peer: ::std::result::Result<::std::string::String, ::std::string::String>,
+        protocol: ::std::result::Result<super::MeshLaneProtocol, ::std::string::String>,
+        whois: ::std::result::Result<
+            ::std::option::Option<super::WhoIsIdentity>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for MeshLanePeerOpened {
+        fn default() -> Self {
+            Self {
+                class: Err("no value supplied for class".to_string()),
+                doc_id: Ok(Default::default()),
+                inbound: Err("no value supplied for inbound".to_string()),
+                lane_id: Err("no value supplied for lane_id".to_string()),
+                peer: Err("no value supplied for peer".to_string()),
+                protocol: Err("no value supplied for protocol".to_string()),
+                whois: Ok(Default::default()),
+            }
+        }
+    }
+    impl MeshLanePeerOpened {
+        pub fn class<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshLaneClass>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.class = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for class: {e}"));
+            self
+        }
+        pub fn doc_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.doc_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for doc_id: {e}"));
+            self
+        }
+        pub fn inbound<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.inbound = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for inbound: {e}"));
+            self
+        }
+        pub fn lane_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.lane_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for lane_id: {e}"));
+            self
+        }
+        pub fn peer<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.peer = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for peer: {e}"));
+            self
+        }
+        pub fn protocol<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshLaneProtocol>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.protocol = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for protocol: {e}"));
+            self
+        }
+        pub fn whois<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::WhoIsIdentity>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.whois = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for whois: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshLanePeerOpened> for super::MeshLanePeerOpened {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshLanePeerOpened,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                class: value.class?,
+                doc_id: value.doc_id?,
+                inbound: value.inbound?,
+                lane_id: value.lane_id?,
+                peer: value.peer?,
+                protocol: value.protocol?,
+                whois: value.whois?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshLanePeerOpened> for MeshLanePeerOpened {
+        fn from(value: super::MeshLanePeerOpened) -> Self {
+            Self {
+                class: Ok(value.class),
+                doc_id: Ok(value.doc_id),
+                inbound: Ok(value.inbound),
+                lane_id: Ok(value.lane_id),
+                peer: Ok(value.peer),
+                protocol: Ok(value.protocol),
+                whois: Ok(value.whois),
             }
         }
     }

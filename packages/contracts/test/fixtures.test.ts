@@ -26,6 +26,10 @@ import { ErrorData } from "../src/errors";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
 import {
   DesiredState,
+  MeshLaneClosed,
+  MeshLaneCloseRequest,
+  MeshLaneOpenRequest,
+  MeshLanePeerOpened,
   NativeHealth,
   ObservedState,
   PeerInfo,
@@ -52,6 +56,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "store-snapshot": StoreSnapshot,
   "serve-config": ServeConfig,
   "serve-entry": ServeEntry,
+  "mesh-lane-open-request": MeshLaneOpenRequest,
+  "mesh-lane-close-request": MeshLaneCloseRequest,
+  "mesh-lane-peer-opened": MeshLanePeerOpened,
+  "mesh-lane-closed": MeshLaneClosed,
   "doc-registry-entry": DocRegistryEntry,
   "doc-open-result": DocOpenResult,
   "doc-rename-params": DocRenameParams,

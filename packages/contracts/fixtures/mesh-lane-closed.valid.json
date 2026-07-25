@@ -1,0 +1,5 @@
+{
+  "laneId": 12,
+  "inbound": true,
+  "reason": "peer-closed"
+}
