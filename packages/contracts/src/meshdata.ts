@@ -86,6 +86,15 @@ export function decodeMeshDataFrame(data: Uint8Array): MeshDataFrame {
   }
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const body = view.getUint32(0);
+  // The same floor the streaming reader enforces. Without it a hand-built frame
+  // declaring body = 5 decodes "successfully": the laneId is read from bytes
+  // past the declared body and the payload comes out empty. The reader never
+  // produces such a frame, but this function is the fixture and test path, so
+  // the one place a malformed frame can be introduced is the one place that was
+  // not checking.
+  if (body < 1 + 8) {
+    throw new Error(`meshdata frame declares ${body} bytes, shorter than its own header`);
+  }
   if (body + MESHDATA_LENGTH_PREFIX_BYTES > data.byteLength) {
     throw new Error(`meshdata frame truncated: declared ${body}, have ${data.byteLength - 4}`);
   }

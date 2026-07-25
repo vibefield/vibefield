@@ -506,6 +506,136 @@ async fn lane_open_refuses_a_malformed_request() {
     daemon.shutdown().await;
 }
 
+#[tokio::test]
+async fn a_lane_with_no_transport_says_so_instead_of_swallowing_the_bytes() {
+    // `lane.open` refuses while the mesh is down, so this needs a transport
+    // that went away UNDER a live lane. Rare — and exactly the case where
+    // silence would read as a peer that stopped listening.
+    let (_dir, daemon) = boot().await;
+    daemon
+        .bridge
+        .open_lane(lane(8, LaneClass::Reliable))
+        .await
+        .unwrap(); // no transport installed
+    let mut c = BridgeClient::connect(&daemon).await;
+    c.hello(&daemon, true).await;
+    assert_eq!(c.next().await.map(|f| f.kind), Some(FRAME_HELLO_OK));
+    c.write(&encode_frame(FRAME_DATA, 8, b"into-the-void").unwrap())
+        .await;
+    let err = c
+        .next()
+        .await
+        .expect("the bridge answers rather than eating it");
+    assert_eq!(err.kind, FRAME_ERR);
+    assert_eq!(err.lane_id, 8);
+    assert!(
+        String::from_utf8_lossy(&err.payload).contains("no-transport"),
+        "the reason names the cause: {:?}",
+        String::from_utf8_lossy(&err.payload)
+    );
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn lane_open_refuses_an_id_from_the_inbound_half() {
+    // The numbering split is a law, so the DOOR enforces it — leaving it to
+    // fieldd's discipline means the separation holds only while every caller
+    // remembers it exists.
+    let (_dir, daemon) = boot().await;
+    let mut c = MgmtClient::connect(&daemon).await;
+    c.hello(&daemon).await;
+    let resp = c
+        .call(
+            "native.mesh.lane.open",
+            json!({"laneId": INBOUND_LANE_ID_BASE, "class":"reliable","peer":"p","protocol":"doc-sync"}),
+        )
+        .await;
+    assert_eq!(resp["error"]["data"]["kind"], "PRECONDITION_FAILED");
+    assert!(
+        resp["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("reserved"),
+        "the refusal explains itself: {}",
+        resp["error"]["message"]
+    );
+    // …and it is refused BEFORE the mesh gate, so the reason is the id rather
+    // than the honest-but-unrelated UNAVAILABLE.
+    assert_eq!(daemon.bridge.open_lane_count(), 0);
+    daemon.shutdown().await;
+}
+
+// ---- supersession: two overlapping fieldds ---------------------------------
+// Not a corner case. field-native OUTLIVES fieldd (the two-plane law), so every
+// fieldd restart puts two connections on this socket at once — the new process
+// authenticates before the old task notices EOF.
+
+#[tokio::test]
+async fn a_superseded_connection_dying_does_not_silence_the_live_one() {
+    // The regression: teardown used to clear the delivery slot unconditionally,
+    // so the OLD connection's exit wiped the NEW one's path. Every inbound byte
+    // then vanished with no error, no log and no lane.closed — and asymmetric,
+    // because fieldd→peer kept working, so it read as "the peer went quiet".
+    let (_dir, daemon) = boot().await;
+    let mut first = BridgeClient::connect(&daemon).await;
+    first.hello(&daemon, true).await;
+    assert_eq!(first.next().await.map(|f| f.kind), Some(FRAME_HELLO_OK));
+
+    let mut second = BridgeClient::connect(&daemon).await;
+    second.hello(&daemon, true).await;
+    assert_eq!(second.next().await.map(|f| f.kind), Some(FRAME_HELLO_OK));
+
+    // The superseded connection goes away, as a restarted fieldd's old socket does.
+    drop(first);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    daemon.bridge.deliver_inbound(7, b"still-listening");
+    let got = second
+        .next()
+        .await
+        .expect("the live client must still receive");
+    assert_eq!(got.kind, FRAME_DATA);
+    assert_eq!(got.lane_id, 7);
+    assert_eq!(got.payload, b"still-listening");
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_superseded_connection_stops_being_the_product_plane() {
+    // It keeps its `authed` bit, so without an explicit check a stale fieldd
+    // goes on writing to lanes the new one now owns.
+    let (_dir, daemon) = boot().await;
+    daemon
+        .bridge
+        .open_lane(lane(1, LaneClass::Reliable))
+        .await
+        .unwrap();
+    let mut first = BridgeClient::connect(&daemon).await;
+    first.hello(&daemon, true).await;
+    assert_eq!(first.next().await.map(|f| f.kind), Some(FRAME_HELLO_OK));
+
+    let mut second = BridgeClient::connect(&daemon).await;
+    second.hello(&daemon, true).await;
+    assert_eq!(second.next().await.map(|f| f.kind), Some(FRAME_HELLO_OK));
+
+    // The stale connection tries to use a lane it no longer owns.
+    first
+        .write(&encode_frame(FRAME_DATA, 1, b"from-the-past").unwrap())
+        .await;
+    let refusal = first.next().await.expect("the stale client is told why");
+    assert_eq!(refusal.kind, FRAME_ERR);
+    assert!(
+        String::from_utf8_lossy(&refusal.payload).contains("superseded"),
+        "the refusal names the reason: {:?}",
+        String::from_utf8_lossy(&refusal.payload)
+    );
+    // …and the live connection is untouched by any of it.
+    daemon.bridge.deliver_inbound(1, b"for-the-live-one");
+    let got = second.next().await.expect("live client still receives");
+    assert_eq!(got.payload, b"for-the-live-one");
+    daemon.shutdown().await;
+}
+
 // ---- inbound lanes: adoption + announcement (C6-3) --------------------------
 // The transport's half of the lane table, exercised WITHOUT a tailnet. What
 // needs two real nodes is the QUIC carriage itself, and that lives in

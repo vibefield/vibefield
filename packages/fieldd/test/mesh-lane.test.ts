@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { encodeMeshDataFrame, MESHDATA_FRAME, MeshDataFrameReader } from "@vibefield/contracts";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { MeshLaneLink } from "../src/mesh-lane";
+import { MeshLaneLink, type MeshLaneLinkOptions } from "../src/mesh-lane";
 import { NativeLink } from "../src/native-link";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -65,12 +65,9 @@ async function spawnNative(): Promise<string> {
   return dir;
 }
 
-function link(opts: {
-  socketPath: string;
-  pairingFile: string;
-  orphanTtlMs?: number;
-  orphanMaxBytes?: number;
-}): MeshLaneLink {
+// Derived from the real options rather than restated, so a new knob does not
+// need this list edited to be reachable from a test.
+function link(opts: Omit<MeshLaneLinkOptions, "bootId">): MeshLaneLink {
   const l = new MeshLaneLink({ bootId: "fieldd-lane-test", ...opts });
   closers.push(() => l.close());
   return l;
@@ -272,6 +269,59 @@ describe("inbound lanes — the ordering hazard", () => {
     const seen: string[] = [];
     l.onLane(3, (p) => seen.push(text(p)));
     expect(seen).toEqual(["0123456789"]);
+  }, 30_000);
+
+  it("counts parked bytes as bytes it actually retains", async () => {
+    // A decoded payload is a VIEW over the reader's whole buffer. Parking the
+    // view retains the entire socket read for a handful of bytes, so `bytes`
+    // undercounts what is held and the watermark measures the wrong thing.
+    // Proof is in the backing store: a copy's ArrayBuffer is payload-sized, a
+    // view's is the size of everything that arrived with it.
+    const bridge = await fakeBridge();
+    const l = link({ ...bridge, orphanMaxBytes: 4096 });
+    await l.connect();
+    // A tiny record travelling alongside a large one, in one read.
+    bridge.sendData(4, bytes("tiny"));
+    bridge.sendData(5, new Uint8Array(2048));
+    await tick();
+
+    const held: Uint8Array[] = [];
+    l.onLane(4, (p) => held.push(p));
+    expect(held).toHaveLength(1);
+    expect(text(held[0] as Uint8Array)).toBe("tiny");
+    expect(held[0]?.buffer.byteLength).toBe(4);
+  }, 30_000);
+
+  it("refuses to queue past the outbound watermark instead of buffering forever", async () => {
+    // PF4's other half. Node buffers an ignored write() without limit, and this
+    // is the plane whole snapshots cross — an unbounded write buffer is how a
+    // stalled bridge becomes an OOM. Refuse loudly; never drop a doc update.
+    const bridge = await fakeBridge();
+    const l = link({ ...bridge, sendMaxBufferedBytes: 1024 });
+    await l.connect();
+    expect(l.bufferedBytes).toBe(0);
+    // The fake never reads, so the socket buffer only grows.
+    let refused: Error | null = null;
+    try {
+      for (let i = 0; i < 5_000; i++) l.send(1, new Uint8Array(4096));
+    } catch (error) {
+      refused = error as Error;
+    }
+    expect(refused).not.toBeNull();
+    expect(refused?.message).toMatch(/send buffer is full/);
+  }, 30_000);
+
+  it("does not leak a handshake listener per reconnect", async () => {
+    // `once` removes only the listener that fires; the other stays registered
+    // and accumulates — MaxListenersExceededWarning at 11, then a slow leak.
+    const bridge = await fakeBridge();
+    const l = link(bridge);
+    for (let i = 0; i < 12; i++) {
+      await l.connect();
+      l.connected = false; // force the next connect() through the handshake
+    }
+    expect(l.listenerCount("hello-ok")).toBe(0);
+    expect(l.listenerCount("hello-refused")).toBe(0);
   }, 30_000);
 
   it("sends opaque bytes through to the bridge unchanged", async () => {

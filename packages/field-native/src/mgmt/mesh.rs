@@ -10,7 +10,7 @@
 //! line before any forwarded event).
 
 use crate::services::mesh::{JsonStore, MeshNode};
-use crate::services::mesh_bridge::{Lane, LaneClass, LaneEvent};
+use crate::services::mesh_bridge::{Lane, LaneClass, LaneEvent, INBOUND_LANE_ID_BASE};
 use crate::state::{DaemonState, OutMsg};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -204,6 +204,27 @@ async fn handle_lane(
                 );
                 return;
             };
+            // The numbering split is a LAW, so the door enforces it rather than
+            // trusting fieldd's discipline. Above the base, a caller would be
+            // squatting in the space inbound lanes are minted from; past 2^53 it
+            // would get an id that does not survive JSON.parse on the way back.
+            if lane_id >= INBOUND_LANE_ID_BASE {
+                send(
+                    tx,
+                    err(
+                        id,
+                        "PRECONDITION_FAILED",
+                        -32005,
+                        &format!(
+                            "laneId {lane_id} is at or above {INBOUND_LANE_ID_BASE}, which is \
+                             reserved for lanes peers open toward us"
+                        ),
+                        false,
+                        None,
+                    ),
+                );
+                return;
+            }
             // A lane needs somewhere to go. Without a node the honest answer is
             // the mesh unit's real state, not a lane that silently goes nowhere.
             if state.mesh.node().is_none() {
@@ -832,6 +853,54 @@ mod tests {
         assert_eq!(entry["allow"][0], "*@corp.com");
         assert_eq!(entry["name"], "product");
         assert_eq!(entry["url"], "https://h.ts.net:9410");
+    }
+
+    /// EL9 where it actually bites. `lane_json` hand-builds the notification
+    /// payload, so the generated type is the only thing standing between a
+    /// contract rename and a producer that keeps emitting the old key —
+    /// the TS fixture test would go red while Rust stayed cheerfully wrong.
+    /// Parsing our own output with the generated struct closes that.
+    #[test]
+    fn an_inbound_lane_projects_to_the_contract_shape() {
+        let lane = Lane {
+            lane_id: crate::services::mesh_bridge::INBOUND_LANE_ID_BASE,
+            class: LaneClass::Reliable,
+            peer: "n4Kd8xQ2pLmR".into(),
+            protocol: "doc-sync".into(),
+            doc_id: Some("6b1f0e2a-5c3d-4a7b-8e91-0d2c4f6a8b13".into()),
+            inbound: true,
+        };
+        let projected = lane_json(&lane);
+        let parsed: crate::contracts::MeshLanePeerOpened =
+            serde_json::from_value(projected.clone()).unwrap_or_else(|e| {
+                panic!("lane_json drifted from MeshLanePeerOpened: {e}\n{projected}")
+            });
+        assert_eq!(parsed.lane_id, lane.lane_id);
+        assert!(parsed.inbound, "the contract types this as a literal true");
+        assert_eq!(parsed.peer, "n4Kd8xQ2pLmR");
+        assert!(
+            parsed.whois.is_none(),
+            "whois is absent, not fabricated (EL7)"
+        );
+    }
+
+    #[test]
+    fn an_outbound_lane_omits_the_inbound_literal() {
+        // `MeshLanePeerOpened.inbound` is a literal `true`, so an OUTBOUND lane
+        // must not claim that shape — the snapshot carries both directions and
+        // the flag is what keeps their id spaces apart.
+        let lane = Lane {
+            lane_id: 3,
+            class: LaneClass::Lossy,
+            peer: "p".into(),
+            protocol: "presence".into(),
+            doc_id: None,
+            inbound: false,
+        };
+        let projected = lane_json(&lane);
+        assert!(projected.get("inbound").is_none());
+        assert!(projected.get("docId").is_none());
+        assert_eq!(projected["class"], "lossy");
     }
 
     #[test]

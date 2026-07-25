@@ -59,6 +59,17 @@ describe("encodeMeshDataFrame / decodeMeshDataFrame", () => {
     );
   });
 
+  it("refuses a body shorter than its own header, as the reader does", () => {
+    // The reader enforces this floor; this function did not, and it is the one
+    // place a hand-built frame enters the system (fixtures, tests). A body of 5
+    // used to "decode": the laneId came from bytes past the declared body and
+    // the payload came out empty — a malformed frame answered with a plausible
+    // one, which is the worst shape of wrong.
+    const evil = new Uint8Array(MESHDATA_HEADER_BYTES);
+    new DataView(evil.buffer).setUint32(0, 5);
+    expect(() => decodeMeshDataFrame(evil)).toThrow(/shorter than its own header/);
+  });
+
   it("round-trips a JSON control payload", () => {
     const frame = encodeMeshDataJsonFrame(MESHDATA_FRAME.ERR, 4, { reason: "torn-frame" });
     const back = decodeMeshDataFrame(frame);

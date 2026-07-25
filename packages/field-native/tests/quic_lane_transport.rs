@@ -195,6 +195,7 @@ async fn a_lane_carries_document_bytes_between_two_daemons_over_the_mesh() {
         .bridge
         .set_transport(Arc::new(TruffleLaneTransport::new(
             alpha.clone(),
+            daemon_a.bridge.clone(),
             DOC_SYNC_QUIC_PORT,
         )));
 

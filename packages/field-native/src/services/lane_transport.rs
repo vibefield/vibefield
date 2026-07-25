@@ -111,20 +111,32 @@ struct LaneSink {
 
 pub struct TruffleLaneTransport {
     node: Arc<MeshNode>,
+    /// Held so a lane that dies OUT HERE can say so on the control plane. The
+    /// transport learns of a peer going away first — it is the only thing
+    /// holding the failing write — and without a way back to the bridge, a
+    /// lane's death is knowable only by accident: fieldd would keep believing
+    /// the lane is open, its id would stay permanently un-reopenable, and the
+    /// sole signal would be an ERR on the byte plane the next time it wrote.
+    /// That inverts the D5 split — control state corrected by a data-plane
+    /// side effect.
+    bridge: BridgeHandle,
     port: u16,
     /// One connection per peer, shared by every lane pointing at it. Streams are
     /// the cheap thing; connections are not.
     conns: Mutex<HashMap<String, Arc<QuicConnection>>>,
-    lanes: Mutex<HashMap<u64, LaneSink>>,
+    /// Shared with each lane's writer task, so a task that loses its stream can
+    /// evict itself rather than leaking its sink.
+    lanes: Arc<Mutex<HashMap<u64, LaneSink>>>,
 }
 
 impl TruffleLaneTransport {
-    pub fn new(node: Arc<MeshNode>, port: u16) -> Self {
+    pub fn new(node: Arc<MeshNode>, bridge: BridgeHandle, port: u16) -> Self {
         Self {
             node,
+            bridge,
             port,
             conns: Mutex::new(HashMap::new()),
-            lanes: Mutex::new(HashMap::new()),
+            lanes: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -191,21 +203,36 @@ impl LaneTransport for TruffleLaneTransport {
 
         let (tx, mut rx) = mpsc::channel::<Vec<u8>>(LANE_SEND_QUEUE);
         let lane_id = lane.lane_id;
+        let bridge = self.bridge.clone();
+        let lanes = self.lanes.clone();
         tokio::spawn(async move {
+            // Two ways out, and they must not be confused. The channel closing
+            // is a LOCAL close — `close()` dropped the sink, the bridge already
+            // forgot the lane, and announcing it again would report a death
+            // that already had a cause. A write failing is the peer going away,
+            // which nothing else in the daemon can observe.
+            let mut unreachable = None;
             while let Some(frame) = rx.recv().await {
                 if let Err(e) = stream.write(&frame).await {
-                    tracing::warn!(
-                        event = "field_native.lane_transport.write_failed",
-                        component = "lane_transport",
-                        lane_id,
-                        error = %e,
-                        "A lane stream write failed; the lane is finished"
-                    );
+                    unreachable = Some(e.to_string());
                     break;
                 }
             }
             // Clean EOF, so the peer reads a closed lane rather than an idle one.
             stream.finish();
+            if let Some(error) = unreachable {
+                tracing::warn!(
+                    event = "field_native.lane_transport.lane_unreachable",
+                    component = "lane_transport",
+                    lane_id,
+                    error = %error,
+                    "A lane stream write failed; announcing the lane closed"
+                );
+                lanes.lock().await.remove(&lane_id);
+                // "peer-unreachable" is already in MeshLaneClosed's documented
+                // vocabulary — this is the case it was named for.
+                bridge.forget_lane(lane_id, "peer-unreachable");
+            }
         });
         self.lanes.lock().await.insert(lane_id, LaneSink { tx });
         Ok(())
@@ -430,7 +457,11 @@ pub fn install_when_ready(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let node = mesh.wait_for_node().await;
-        bridge.set_transport(Arc::new(TruffleLaneTransport::new(node.clone(), port)));
+        bridge.set_transport(Arc::new(TruffleLaneTransport::new(
+            node.clone(),
+            bridge.clone(),
+            port,
+        )));
         tracing::info!(
             event = "field_native.lane_transport.installed",
             component = "lane_transport",

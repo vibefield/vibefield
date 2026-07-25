@@ -5,7 +5,8 @@
 // ignore-unknown IS the tolerant reader; field-native never echoes those shapes.
 use field_native::contracts::{
     DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, Hello, HelloAck,
-    LogRecordV1, LoggingHealthV1, NativeHealth, ObservedState, PeerInfo, RpcRequest, RpcResponse,
+    LogRecordV1, LoggingHealthV1, MeshLaneCloseRequest, MeshLaneClosed, MeshLaneOpenRequest,
+    MeshLanePeerOpened, NativeHealth, ObservedState, PeerInfo, RpcRequest, RpcResponse,
     ServeConfig, ServeEntry, StoreSnapshot,
 };
 use serde_json::Value;
@@ -72,6 +73,22 @@ fn mgmt_mesh_fixtures() {
     roundtrip::<StoreSnapshot>("store-snapshot.valid.json", true);
     roundtrip::<ServeConfig>("serve-config.valid.json", true);
     roundtrip::<ServeEntry>("serve-entry.valid.json", true);
+}
+
+#[test]
+fn mesh_lane_fixtures() {
+    // C6-1 pinned these on the TS side; without this they were parsed by zod
+    // alone. typify GENERATING a type is not the same as anything PARSING with
+    // it — until now `MeshLane*` appeared nowhere outside contracts.rs, so the
+    // Rust half of EL9 was nominal for this seam.
+    //
+    // Requests are inbound-only (fieldd → field-native), so tolerant parse is
+    // the whole obligation. The two notifications field-native EMITS are
+    // strict: it must produce exactly the shape the fixture pins.
+    roundtrip::<MeshLaneOpenRequest>("mesh-lane-open-request.valid.json", true);
+    roundtrip::<MeshLaneCloseRequest>("mesh-lane-close-request.valid.json", true);
+    roundtrip::<MeshLanePeerOpened>("mesh-lane-peer-opened.valid.json", true);
+    roundtrip::<MeshLaneClosed>("mesh-lane-closed.valid.json", true);
 }
 
 #[test]

@@ -254,12 +254,27 @@ impl LaneTransport for LoopbackTransport {
 
 // ---- the service ----------------------------------------------------------
 
+/// The connected fieldd client, and WHICH one it is.
+///
+/// The identity is load-bearing, not bookkeeping. Two connections overlap
+/// whenever fieldd restarts — the new process authenticates before the old
+/// task notices EOF — and field-native outliving fieldd is the two-plane law,
+/// so that is a first-class scenario rather than an edge case. Without the id,
+/// the OLD connection's teardown clears the NEW connection's delivery path and
+/// every inbound byte vanishes: no error, no log, no `lane.closed`. It is also
+/// asymmetric — fieldd→peer keeps working off the per-connection sender — so it
+/// presents as "the peer went quiet" rather than "our socket went deaf".
+struct ClientSlot {
+    conn_id: u64,
+    tx: UnboundedSender<Vec<u8>>,
+}
+
 struct Shared {
     health: Mutex<UnitHealth>,
     lanes: Mutex<HashMap<u64, Lane>>,
-    /// Frames bound for the connected fieldd client. None until HELLO succeeds;
-    /// dropping it is how a superseded connection dies.
-    out: Mutex<Option<UnboundedSender<Vec<u8>>>>,
+    /// Frames bound for the connected fieldd client. None until HELLO succeeds.
+    out: Mutex<Option<ClientSlot>>,
+    next_conn_id: AtomicU64,
     ping: UnboundedSender<()>,
     transport: Mutex<Option<Arc<dyn LaneTransport>>>,
     events: broadcast::Sender<LaneEvent>,
@@ -278,9 +293,20 @@ impl Shared {
     }
 
     fn send_to_client(&self, frame: Vec<u8>) {
-        if let Some(tx) = self.out.lock().unwrap().as_ref() {
-            let _ = tx.send(frame);
+        if let Some(slot) = self.out.lock().unwrap().as_ref() {
+            let _ = slot.tx.send(frame);
         }
+    }
+
+    /// Is this connection still the live one? A superseded connection must stop
+    /// acting like the product plane — otherwise a stale fieldd keeps pushing
+    /// DATA onto lanes the new one now owns.
+    fn is_current(&self, conn_id: u64) -> bool {
+        self.out
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|slot| slot.conn_id == conn_id)
     }
 }
 
@@ -297,18 +323,25 @@ impl BridgeHandle {
     /// silently reusing the lane would cross two byte streams.
     pub async fn open_lane(&self, lane: Lane) -> anyhow::Result<()> {
         let transport = self.shared.transport.lock().unwrap().clone();
+        // RESERVE, then open. Checking under the lock and inserting after the
+        // await leaves a window where two opens of one id both pass the check
+        // and both build a stream — one of which then leaks, unreachable. The
+        // window is narrow today (mgmt dispatch is serial per connection) and
+        // costs one line to close, which is the wrong trade to defer.
+        let lane_id = lane.lane_id;
         {
-            let lanes = self.shared.lanes.lock().unwrap();
-            anyhow::ensure!(
-                !lanes.contains_key(&lane.lane_id),
-                "lane {} already open",
-                lane.lane_id
-            );
+            let mut lanes = self.shared.lanes.lock().unwrap();
+            anyhow::ensure!(!lanes.contains_key(&lane_id), "lane {lane_id} already open");
+            lanes.insert(lane_id, lane.clone());
         }
         if let Some(t) = transport.as_ref() {
-            t.open(&lane).await?;
+            if let Err(e) = t.open(&lane).await {
+                // The reservation must not outlive the failure, or the id is
+                // burned for the lifetime of the daemon.
+                self.shared.lanes.lock().unwrap().remove(&lane_id);
+                return Err(e);
+            }
         }
-        self.shared.lanes.lock().unwrap().insert(lane.lane_id, lane);
         Ok(())
     }
 
@@ -461,6 +494,7 @@ impl MeshBridge {
                 }),
                 lanes: Mutex::new(HashMap::new()),
                 out: Mutex::new(None),
+                next_conn_id: AtomicU64::new(1),
                 ping,
                 transport: Mutex::new(None),
                 events: broadcast::channel(LANE_EVENT_CAPACITY).0,
@@ -541,6 +575,7 @@ impl NativeService for MeshBridge {
 /// per device); a new authenticated hello supersedes the old connection the way
 /// the mgmt channel does.
 async fn serve_client(stream: UnixStream, shared: Arc<Shared>, secret: [u8; 32]) {
+    let conn_id = shared.next_conn_id.fetch_add(1, Ordering::Relaxed);
     let (mut rd, mut wr) = stream.into_split();
     let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
     let writer = tokio::spawn(async move {
@@ -555,7 +590,7 @@ async fn serve_client(stream: UnixStream, shared: Arc<Shared>, secret: [u8; 32])
     let mut authed = false;
     let mut buf = vec![0u8; 64 * 1024];
 
-    loop {
+    'conn: loop {
         let n = match rd.read(&mut buf).await {
             Ok(0) | Err(_) => break,
             Ok(n) => n,
@@ -584,14 +619,41 @@ async fn serve_client(stream: UnixStream, shared: Arc<Shared>, secret: [u8; 32])
                     break;
                 }
                 authed = true;
-                *shared.out.lock().unwrap() = Some(tx.clone());
+                // REPLACE and drop, rather than overwrite: dropping the previous
+                // sender closes the old writer's channel, which ends its task and
+                // its write half. That is what makes "supersedes" true rather
+                // than merely stated.
+                let previous = shared.out.lock().unwrap().replace(ClientSlot {
+                    conn_id,
+                    tx: tx.clone(),
+                });
+                if previous.is_some() {
+                    tracing::info!(
+                        event = "field_native.mesh_bridge.client_superseded",
+                        component = "mesh_bridge",
+                        conn_id,
+                        "A new MeshData client superseded the previous one"
+                    );
+                }
+                drop(previous);
                 let _ = tx.send(encode_frame(FRAME_HELLO_OK, 0, b"{}").unwrap_or_default());
                 tracing::info!(
                     event = "field_native.mesh_bridge.client_authenticated",
                     component = "mesh_bridge",
+                    conn_id,
                     "A MeshData client authenticated"
                 );
                 continue;
+            }
+            // A superseded connection is no longer the product plane. It kept
+            // its `authed` bit, so without this a stale fieldd goes on writing
+            // to lanes the new one now owns.
+            if !shared.is_current(conn_id) {
+                let _ = tx.send(
+                    encode_frame(FRAME_ERR, frame.lane_id, b"{\"reason\":\"superseded\"}")
+                        .unwrap_or_default(),
+                );
+                break 'conn;
             }
             if frame.kind == FRAME_DATA {
                 let lane = shared.lanes.lock().unwrap().get(&frame.lane_id).cloned();
@@ -605,20 +667,29 @@ async fn serve_client(stream: UnixStream, shared: Arc<Shared>, secret: [u8; 32])
                     continue;
                 };
                 let transport = shared.transport.lock().unwrap().clone();
-                if let Some(t) = transport {
-                    if let Err(e) = t.send(&lane, &frame.payload).await {
-                        let _ = tx.send(
-                            encode_frame(FRAME_ERR, frame.lane_id, b"{\"reason\":\"send-failed\"}")
-                                .unwrap_or_default(),
-                        );
-                        tracing::warn!(
-                            event = "field_native.mesh_bridge.lane_send_failed",
-                            component = "mesh_bridge",
-                            lane_id = frame.lane_id,
-                            error = %e,
-                            "A lane send failed"
-                        );
-                    }
+                let Some(t) = transport else {
+                    // A lane with nowhere to go. `lane.open` refuses when the
+                    // mesh is down, so reaching here means the transport went
+                    // away UNDER a live lane — rare, and no reason to swallow
+                    // the bytes. Saying so is the whole point of this plane.
+                    let _ = tx.send(
+                        encode_frame(FRAME_ERR, frame.lane_id, b"{\"reason\":\"no-transport\"}")
+                            .unwrap_or_default(),
+                    );
+                    continue;
+                };
+                if let Err(e) = t.send(&lane, &frame.payload).await {
+                    let _ = tx.send(
+                        encode_frame(FRAME_ERR, frame.lane_id, b"{\"reason\":\"send-failed\"}")
+                            .unwrap_or_default(),
+                    );
+                    tracing::warn!(
+                        event = "field_native.mesh_bridge.lane_send_failed",
+                        component = "mesh_bridge",
+                        lane_id = frame.lane_id,
+                        error = %e,
+                        "A lane send failed"
+                    );
                 }
             }
             // Unknown kinds are ignored on purpose (tolerant reader): a newer
@@ -629,12 +700,21 @@ async fn serve_client(stream: UnixStream, shared: Arc<Shared>, secret: [u8; 32])
         }
     }
 
+    // Clear the slot ONLY if it is still ours. A superseded connection tearing
+    // down must not take its successor's delivery path with it — that is silent
+    // byte loss on the plane whose whole purpose is preventing exactly that.
+    {
+        let mut out = shared.out.lock().unwrap();
+        if out.as_ref().is_some_and(|slot| slot.conn_id == conn_id) {
+            *out = None;
+        }
+    }
+
     // DRAIN, don't abort. The refusal frame is queued on `tx`, and aborting the
     // writer here would drop it on the floor — the client would see a bare
     // disconnect and have to guess why. Dropping every sender ends the writer's
     // loop naturally, after it has written what is already queued; the timeout
     // is only there so a wedged peer socket cannot hold the task forever.
-    *shared.out.lock().unwrap() = None;
     drop(tx);
     let _ = tokio::time::timeout(std::time::Duration::from_secs(2), writer).await;
 }

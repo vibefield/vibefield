@@ -39,12 +39,21 @@ export interface MeshLaneLinkOptions {
   /** Cap on held bytes per unannounced lane — an announcement that never comes
    * must not become unbounded memory (PF4: every queue has a watermark). */
   orphanMaxBytes?: number;
+  /** Cap on bytes queued in the SOCKET toward the bridge. Node buffers an
+   * ignored `write()` without limit, and this is the plane whole document
+   * snapshots cross — so the outbound queue needs the watermark the inbound one
+   * already has (PF4). Shed strategy here is REFUSE, not drop: losing a doc
+   * update silently is the failure this plane exists to prevent. */
+  sendMaxBufferedBytes?: number;
 }
 
 type LaneHandler = (payload: Uint8Array) => void;
 
 const DEFAULT_ORPHAN_TTL_MS = 30_000;
 const DEFAULT_ORPHAN_MAX_BYTES = 4 * 1024 * 1024;
+/** Matches the inbound orphan cap: the same amount of unmoved data is the same
+ * amount of trouble whichever direction it is stuck in. */
+const DEFAULT_SEND_MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
 
 export class MeshLaneLink extends EventEmitter {
   #sock: Socket | null = null;
@@ -52,6 +61,9 @@ export class MeshLaneLink extends EventEmitter {
   #handlers = new Map<number, LaneHandler>();
   #orphans = new Map<number, { chunks: Uint8Array[]; bytes: number; timer: NodeJS.Timeout }>();
   #closed = false;
+  /** Whether the handshake has resolved one way or the other. Distinct from
+   * `connected`, which lands a microtask later — see the HELLO_OK branch. */
+  #helloSettled = false;
   readonly #logger: Logger;
 
   connected = false;
@@ -78,16 +90,27 @@ export class MeshLaneLink extends EventEmitter {
     const secretHex = readFileSync(this.opts.pairingFile, "utf8").trim();
     const ts = Math.floor(Date.now() / 1000);
     const mac = computePairingMac(secretHex, this.opts.bootId, ts);
+    // Both listeners are registered, so both must be removed — `once` only
+    // removes the one that fires, and every reconnect would otherwise leave the
+    // other behind (MaxListenersExceededWarning at 11, then a slow leak).
     const helloOk = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("meshdata hello timed out")), 5_000);
-      this.once("hello-ok", () => {
+      const onOk = () => {
         clearTimeout(timer);
+        cleanup();
         resolve();
-      });
-      this.once("hello-refused", (reason: string) => {
+      };
+      const onRefused = (reason: string) => {
         clearTimeout(timer);
+        cleanup();
         reject(new Error(`meshdata hello refused: ${reason}`));
-      });
+      };
+      const cleanup = () => {
+        this.off("hello-ok", onOk);
+        this.off("hello-refused", onRefused);
+      };
+      this.once("hello-ok", onOk);
+      this.once("hello-refused", onRefused);
     });
     sock.write(
       encodeMeshDataJsonFrame(MESHDATA_FRAME.HELLO, 0, {
@@ -102,12 +125,36 @@ export class MeshLaneLink extends EventEmitter {
 
   /** Write opaque bytes to a lane. The lane must already be open (NativeLink's
    * `native.mesh.lane.open`); the bridge answers an unknown lane with an ERR
-   * frame naming that lane, and the socket survives it. */
-  send(laneId: number, payload: Uint8Array): void {
+   * frame naming that lane, and the socket survives it.
+   *
+   * Returns FALSE when the socket has gone over its high-water mark — the
+   * caller should await `drain` before sending more. Ignoring the return is
+   * safe up to `sendMaxBufferedBytes`, past which this THROWS rather than
+   * queueing: an unbounded write buffer on the plane whole snapshots cross is
+   * how a stalled bridge becomes an out-of-memory crash, and a silently dropped
+   * document update is worse than a loud refusal. */
+  send(laneId: number, payload: Uint8Array): boolean {
     if (!this.connected || this.#sock === null) {
       throw new Error("meshdata link is not connected");
     }
-    this.#sock.write(encodeMeshDataFrame(MESHDATA_FRAME.DATA, laneId, payload));
+    const cap = this.opts.sendMaxBufferedBytes ?? DEFAULT_SEND_MAX_BUFFERED_BYTES;
+    if (this.#sock.writableLength > cap) {
+      this.#logger.error(
+        "fieldd.mesh_lane.send_buffer_full",
+        "The MeshData socket is not draining; refusing to queue more",
+        { laneId, bufferedBytes: this.#sock.writableLength, cap },
+      );
+      throw new Error(
+        `meshdata send buffer is full (${this.#sock.writableLength} > ${cap} bytes); the bridge is not draining`,
+      );
+    }
+    return this.#sock.write(encodeMeshDataFrame(MESHDATA_FRAME.DATA, laneId, payload));
+  }
+
+  /** Bytes queued in the socket toward the bridge — the outbound watermark's
+   * live reading, for callers pacing a large transfer. */
+  get bufferedBytes(): number {
+    return this.#sock?.writableLength ?? 0;
   }
 
   /** Register the consumer for a lane. Any bytes that arrived before the
@@ -130,6 +177,7 @@ export class MeshLaneLink extends EventEmitter {
   close(): void {
     this.#closed = true;
     this.connected = false;
+    this.#helloSettled = false;
     for (const held of this.#orphans.values()) clearTimeout(held.timer);
     this.#orphans.clear();
     this.#handlers.clear();
@@ -177,6 +225,13 @@ export class MeshLaneLink extends EventEmitter {
     for (const frame of frames) {
       switch (frame.kind) {
         case MESHDATA_FRAME.HELLO_OK:
+          // Settled SYNCHRONOUSLY, here, rather than by `connected` — which is
+          // assigned a microtask later, after `await helloOk` resumes. An ERR
+          // riding the same socket read as HELLO_OK would otherwise still see
+          // `connected === false` and be misrouted to `hello-refused`, where it
+          // lands on a promise that has already resolved and is swallowed. The
+          // frame that reported a real lane error would simply vanish.
+          this.#helloSettled = true;
           this.emit("hello-ok");
           break;
         case MESHDATA_FRAME.DATA:
@@ -184,7 +239,7 @@ export class MeshLaneLink extends EventEmitter {
           break;
         case MESHDATA_FRAME.ERR: {
           const reason = safeReason(frame.payload);
-          if (!this.connected) this.emit("hello-refused", reason);
+          if (!this.#helloSettled) this.emit("hello-refused", reason);
           else this.emit("lane-error", frame.laneId, reason);
           this.#logger.warn("fieldd.mesh_lane.error_frame", "The bridge reported a lane error", {
             laneId: frame.laneId,
@@ -208,11 +263,17 @@ export class MeshLaneLink extends EventEmitter {
     }
     const ttl = this.opts.orphanTtlMs ?? DEFAULT_ORPHAN_TTL_MS;
     const cap = this.opts.orphanMaxBytes ?? DEFAULT_ORPHAN_MAX_BYTES;
+    // COPY before parking. A decoded payload is a view over the reader's whole
+    // buffer, so holding one retains the entire socket read (up to 64 KB) for a
+    // handful of bytes — `held.bytes` would then undercount actual retention by
+    // orders of magnitude, and a watermark that measures the wrong thing is not
+    // a watermark. The copy is paid once, on the rare unclaimed path.
+    const parked = payload.slice();
     const held = this.#orphans.get(laneId);
     if (held === undefined) {
       const timer = setTimeout(() => this.#expireOrphan(laneId), ttl);
       timer.unref?.();
-      this.#orphans.set(laneId, { chunks: [payload], bytes: payload.byteLength, timer });
+      this.#orphans.set(laneId, { chunks: [parked], bytes: parked.byteLength, timer });
       return;
     }
     if (held.bytes + payload.byteLength > cap) {
@@ -225,8 +286,8 @@ export class MeshLaneLink extends EventEmitter {
       });
       return;
     }
-    held.chunks.push(payload);
-    held.bytes += payload.byteLength;
+    held.chunks.push(parked);
+    held.bytes += parked.byteLength;
   }
 
   #expireOrphan(laneId: number): void {
@@ -242,6 +303,7 @@ export class MeshLaneLink extends EventEmitter {
 
   #onClose(): void {
     this.connected = false;
+    this.#helloSettled = false; // a reconnect gets a fresh handshake
     this.#reader.reset();
     if (!this.#closed) this.emit("disconnected");
   }
