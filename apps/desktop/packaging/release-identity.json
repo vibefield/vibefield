@@ -23,18 +23,17 @@
       "note": "Frozen 2026-07-25. Matches productName and electron-builder's own default, so Windows shortcuts, the Linux .desktop StartupWMClass and the macOS binary name all agree without a rename (distribution spec §6.3)."
     },
     "macTeamId": {
-      "status": "blocker",
-      "value": null,
+      "status": "frozen",
+      "value": "9F79X9D26S",
       "format": "apple-team-id",
-      "blocker": "B-3",
-      "note": "Apple Developer Team ID — public information (it ships inside every signed app), unlike the signing certificate itself. A credential must NEVER be written here; the checker refuses anything shaped like one."
+      "note": "Frozen 2026-07-25 (James). Apple Developer Team ID — public information: it ships inside every signed app and appears in the Developer ID certificate's OU. The signing CERTIFICATE and its private key are a different matter entirely and live only in the login keychain locally and a protected CI environment (spec §9.4); the checker refuses anything credential-shaped in this file."
     },
     "windowsPublisher": {
       "status": "blocker",
       "value": null,
       "format": "publisher-name",
-      "blocker": "B-2",
-      "note": "The Authenticode/Trusted Signing subject shown in the UAC prompt. Must match the signing certificate's subject exactly or verification reports a publisher mismatch."
+      "blocker": "B-2′",
+      "note": "ROUTE DECIDED 2026-07-25: Azure Trusted Signing (no EV hardware token; the cert is short-lived and minted per signing operation). The VALUE still cannot be chosen, and that is not a delay we can shortcut: with Trusted Signing the certificate subject is the identity Microsoft VERIFIES during account setup — an individual or organisation validation that takes days and produces the exact CN string. Guessing it would guarantee a publisher mismatch in the UAC prompt. Fill this in by copying the subject from the first certificate the Trusted Signing account issues, then bump identityRevision."
     },
     "windowsAppUserModelId": {
       "status": "frozen",
@@ -56,11 +55,11 @@
       "note": "First public channel. Stable clients never consume beta metadata (distribution spec §11.4); promotion to 'stable' is an identity event, hence the revision bump."
     },
     "updateOrigin": {
-      "status": "blocker",
-      "value": null,
+      "status": "frozen",
+      "value": "https://github.com/jamesyong-42/vibefield/releases",
       "format": "https-url",
-      "blocker": "B-4",
-      "note": "Where electron-updater looks for metadata. Public GitHub Releases vs authenticated object storage is undecided; either way no end-user machine may carry a token (distribution spec §11.4)."
+      "machineOverlapAcknowledged": "the GitHub account jamesyong-42 is the developer's own; the overlap with the local username is the account name, not a leaked local value",
+      "note": "Frozen 2026-07-25 (James): VibeField is open source and both downloads and updates are served from public GitHub Releases. electron-updater's github provider reads metadata from here, and because the repo is public no credential ever reaches an end-user machine — which is what §11.4 requires. Release ASSETS are consequently public too: a 437 MB .app is visible to anyone, which is intended for an open beta."
     }
   }
 }
