@@ -6,8 +6,8 @@
 //! before C6-3 puts truffle QUIC behind the same seam.
 use field_native::services::mesh_bridge::{
     encode_frame, FrameReader, Lane, LaneClass, LoopbackTransport, FRAME_DATA, FRAME_ERR,
-    FRAME_HELLO, FRAME_HELLO_OK, HEADER_BYTES, LENGTH_PREFIX_BYTES, LOSSY_MAX_PAYLOAD_BYTES,
-    MAX_FRAME_BYTES, SOCKET_NAME,
+    FRAME_HELLO, FRAME_HELLO_OK, HEADER_BYTES, INBOUND_LANE_ID_BASE, LENGTH_PREFIX_BYTES,
+    LOSSY_MAX_PAYLOAD_BYTES, MAX_FRAME_BYTES, SOCKET_NAME,
 };
 use field_native::{bootstrap, config::NativeConfig, pairing, RunningDaemon};
 use serde_json::json;
@@ -39,6 +39,11 @@ fn read_secret(daemon: &RunningDaemon) -> Vec<u8> {
 struct BridgeClient {
     stream: UnixStream,
     reader: FrameReader,
+    /// One socket read can carry several frames. Holding the surplus is the
+    /// difference between "the second one was dropped" and "it is next" — a
+    /// helper that discards them turns a passing test into a coin flip the day
+    /// two frames first arrive together.
+    pending: std::collections::VecDeque<field_native::services::mesh_bridge::Frame>,
 }
 
 impl BridgeClient {
@@ -49,6 +54,7 @@ impl BridgeClient {
         Self {
             stream,
             reader: FrameReader::default(),
+            pending: std::collections::VecDeque::new(),
         }
     }
 
@@ -73,6 +79,9 @@ impl BridgeClient {
     /// Next frame, or None on EOF/timeout — the bridge closing the socket IS a
     /// result here, not a test failure.
     async fn next(&mut self) -> Option<field_native::services::mesh_bridge::Frame> {
+        if let Some(f) = self.pending.pop_front() {
+            return Some(f);
+        }
         let mut buf = vec![0u8; 64 * 1024];
         for _ in 0..40 {
             let n = match timeout(Duration::from_millis(250), self.stream.read(&mut buf)).await {
@@ -80,8 +89,9 @@ impl BridgeClient {
                 Ok(Ok(n)) => n,
                 Err(_) => continue,
             };
-            let frames = self.reader.push(&buf[..n]).expect("decode");
-            if let Some(f) = frames.into_iter().next() {
+            self.pending
+                .extend(self.reader.push(&buf[..n]).expect("decode"));
+            if let Some(f) = self.pending.pop_front() {
                 return Some(f);
             }
         }
@@ -429,6 +439,16 @@ impl MgmtClient {
         )
         .await;
     }
+    /// The next server-pushed notification (subscriptions are one-way after
+    /// their response line).
+    async fn next_note(&mut self) -> serde_json::Value {
+        let out = timeout(Duration::from_secs(5), self.reader.next_line())
+            .await
+            .expect("timed out waiting for a notification")
+            .expect("read")
+            .expect("closed");
+        serde_json::from_str(&out).expect("json")
+    }
 }
 
 #[tokio::test]
@@ -483,5 +503,175 @@ async fn lane_open_refuses_a_malformed_request() {
         )
         .await;
     assert_eq!(resp["error"]["data"]["kind"], "PRECONDITION_FAILED");
+    daemon.shutdown().await;
+}
+
+// ---- inbound lanes: adoption + announcement (C6-3) --------------------------
+// The transport's half of the lane table, exercised WITHOUT a tailnet. What
+// needs two real nodes is the QUIC carriage itself, and that lives in
+// tests/quic_lane_transport.rs; the id arithmetic and the announcement do not,
+// so they are proven on every commit rather than only when a key is present.
+
+#[tokio::test]
+async fn an_adopted_lane_cannot_collide_with_one_fieldd_minted() {
+    // Two numbering authorities, one table. fieldd mints outbound ids from its
+    // own counter starting low; the bridge mints inbound ids from a base far
+    // above it. If these ever met, one lane's bytes would reach the other's
+    // consumer — so this pins the separation rather than trusting it.
+    let (_dir, daemon) = boot().await;
+    for id in 0..64 {
+        daemon
+            .bridge
+            .open_lane(lane(id, LaneClass::Reliable))
+            .await
+            .unwrap();
+    }
+    let adopted = daemon.bridge.adopt_inbound_lane(
+        LaneClass::Reliable,
+        "ts-peer".into(),
+        "doc-sync".into(),
+        Some("doc-9".into()),
+    );
+    assert!(
+        adopted.lane_id >= INBOUND_LANE_ID_BASE,
+        "inbound ids come from their own half of the space: {}",
+        adopted.lane_id
+    );
+    assert!(adopted.inbound, "an adopted lane knows which way it points");
+    assert_eq!(daemon.bridge.open_lane_count(), 65);
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn an_inbound_lane_id_survives_the_trip_through_json() {
+    // laneId crosses the mgmt channel as a JavaScript number. Anything past
+    // 2^53 loses precision there, and a lane id that does not round-trip
+    // delivers bytes to the wrong consumer — silently.
+    let (_dir, daemon) = boot().await;
+    let adopted =
+        daemon
+            .bridge
+            .adopt_inbound_lane(LaneClass::Reliable, "p".into(), "doc-sync".into(), None);
+    assert!(
+        (adopted.lane_id as f64) as u64 == adopted.lane_id,
+        "lane id {} is not exactly representable as an f64",
+        adopted.lane_id
+    );
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn subscribers_hear_a_peer_open_a_lane_and_hear_it_close() {
+    let (_dir, daemon) = boot().await;
+    let mut c = MgmtClient::connect(&daemon).await;
+    c.hello(&daemon).await;
+
+    // The subscription is NOT gated on a live node: fieldd subscribes at boot,
+    // and if it had to wait for the mesh it would miss the first inbound lane.
+    let resp = c.call("native.mesh.lane.subscribe", json!({})).await;
+    assert!(resp["result"]["subId"].is_string());
+    assert_eq!(
+        resp["result"]["snapshot"]["lanes"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+
+    let adopted = daemon.bridge.adopt_inbound_lane(
+        LaneClass::Reliable,
+        "ts-abc".into(),
+        "doc-sync".into(),
+        Some("doc-1".into()),
+    );
+    let opened = c.next_note().await;
+    assert_eq!(opened["method"], "native.mesh.lane.peerOpened");
+    let payload = &opened["params"]["payload"];
+    assert_eq!(payload["laneId"], adopted.lane_id);
+    assert_eq!(payload["inbound"], true);
+    assert_eq!(payload["peer"], "ts-abc");
+    assert_eq!(payload["protocol"], "doc-sync");
+    assert_eq!(payload["docId"], "doc-1");
+    // EL7: absent, not empty — truffle's Peer carries no tailnet login, and a
+    // synthesized one would be fabricated identity.
+    assert!(payload.get("whois").is_none());
+
+    // The peer hangs up at the transport.
+    daemon.bridge.forget_lane(adopted.lane_id, "peer-closed");
+    let closed = c.next_note().await;
+    assert_eq!(closed["method"], "native.mesh.lane.closed");
+    assert_eq!(closed["params"]["payload"]["laneId"], adopted.lane_id);
+    assert_eq!(closed["params"]["payload"]["reason"], "peer-closed");
+    assert_eq!(closed["params"]["payload"]["inbound"], true);
+    assert_eq!(daemon.bridge.open_lane_count(), 0);
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn the_lane_snapshot_carries_lanes_already_open() {
+    // A fieldd that reconnects mid-session must learn the lanes it missed from
+    // the snapshot; the event stream alone would leave it blind to them.
+    let (_dir, daemon) = boot().await;
+    daemon
+        .bridge
+        .open_lane(lane(3, LaneClass::Reliable))
+        .await
+        .unwrap();
+    let inbound = daemon.bridge.adopt_inbound_lane(
+        LaneClass::Lossy,
+        "ts-xyz".into(),
+        "presence".into(),
+        None,
+    );
+
+    let mut c = MgmtClient::connect(&daemon).await;
+    c.hello(&daemon).await;
+    let resp = c.call("native.mesh.lane.subscribe", json!({})).await;
+    let lanes = resp["result"]["snapshot"]["lanes"].as_array().unwrap();
+    assert_eq!(lanes.len(), 2);
+    // id-ordered, so the outbound one (a small caller-minted id) comes first
+    assert_eq!(lanes[0]["laneId"], 3);
+    assert_eq!(lanes[0]["class"], "reliable");
+    assert!(lanes[0].get("inbound").is_none(), "outbound is the default");
+    assert_eq!(lanes[0]["docId"], "doc-1");
+    assert_eq!(lanes[1]["laneId"], inbound.lane_id);
+    assert_eq!(lanes[1]["class"], "lossy");
+    assert_eq!(lanes[1]["inbound"], true);
+    assert!(
+        lanes[1].get("docId").is_none(),
+        "a presence lane has no doc"
+    );
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn closing_a_lane_locally_is_announced_once_not_twice() {
+    // lane.close is idempotent, but the EVENT must not be: a second close of a
+    // dead lane telling fieldd it died again would look like a new failure.
+    let (_dir, daemon) = boot().await;
+    let mut c = MgmtClient::connect(&daemon).await;
+    c.hello(&daemon).await;
+    c.call("native.mesh.lane.subscribe", json!({})).await;
+
+    daemon
+        .bridge
+        .open_lane(lane(5, LaneClass::Reliable))
+        .await
+        .unwrap();
+    c.call("native.mesh.lane.close", json!({"laneId":5})).await;
+    let closed = c.next_note().await;
+    assert_eq!(closed["method"], "native.mesh.lane.closed");
+    assert_eq!(closed["params"]["payload"]["reason"], "local");
+
+    c.call("native.mesh.lane.close", json!({"laneId":5})).await;
+    daemon
+        .bridge
+        .open_lane(lane(6, LaneClass::Reliable))
+        .await
+        .unwrap();
+    daemon.bridge.forget_lane(6, "peer-closed");
+    // If the second close had announced itself, this would be lane 5 again.
+    let next = c.next_note().await;
+    assert_eq!(next["params"]["payload"]["laneId"], 6);
     daemon.shutdown().await;
 }

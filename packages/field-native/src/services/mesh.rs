@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::watch;
 use truffle_core::synced_store::SyncedStore;
 use truffle_core::{network::tailscale::TailscaleProvider, Node};
 
@@ -35,7 +36,11 @@ pub type JsonStore = SyncedStore<Value>;
 
 struct Shared {
     health: Mutex<UnitHealth>,
-    node: tokio::sync::Mutex<Option<Arc<MeshNode>>>,
+    /// A WATCH and not a mutex: bring-up is asynchronous, so consumers that
+    /// cannot start until the node exists (C6-3's lane transport) need to be
+    /// woken rather than to poll. `borrow()` still answers "is it up yet?"
+    /// synchronously, which is what the mgmt facade asks.
+    node: watch::Sender<Option<Arc<MeshNode>>>,
     /// pokes the daemon's health-refresh task (lib.rs) after every transition
     ping: UnboundedSender<()>,
     /// facade state (C2): open stores + declared serves (config JSON kept for list)
@@ -51,8 +56,27 @@ pub struct MeshHandle {
 }
 
 impl MeshHandle {
-    pub async fn node(&self) -> Option<Arc<MeshNode>> {
-        self.shared.node.lock().await.clone()
+    pub fn node(&self) -> Option<Arc<MeshNode>> {
+        self.shared.node.borrow().clone()
+    }
+
+    /// Park until the node exists, then hand it over. Never resolves while the
+    /// mesh is disabled or degraded — which is the honest answer, not a hang to
+    /// paper over: there is no node to give, and a caller that needs one has
+    /// nothing to do until there is. Callers spawn this and are aborted at
+    /// shutdown.
+    pub async fn wait_for_node(&self) -> Arc<MeshNode> {
+        let mut rx = self.shared.node.subscribe();
+        loop {
+            if let Some(node) = rx.borrow_and_update().clone() {
+                return node;
+            }
+            if rx.changed().await.is_err() {
+                // The unit is gone; there will never be a node. Park forever
+                // rather than return a lie — the task is aborted on shutdown.
+                std::future::pending::<()>().await;
+            }
+        }
     }
 
     /// Get-or-create a JSON synced store, file-backed under the node's state dir.
@@ -121,7 +145,7 @@ impl MeshUnit {
                     detail: None,
                     auth_url: None,
                 }),
-                node: tokio::sync::Mutex::new(None),
+                node: watch::channel(None).0,
                 ping,
                 stores: tokio::sync::Mutex::new(HashMap::new()),
                 serves: tokio::sync::Mutex::new(HashMap::new()),
@@ -138,8 +162,8 @@ impl MeshUnit {
     }
 
     /// The live node, once up (C2 facade calls go through this).
-    pub async fn node(&self) -> Option<Arc<MeshNode>> {
-        self.shared.node.lock().await.clone()
+    pub fn node(&self) -> Option<Arc<MeshNode>> {
+        self.shared.node.borrow().clone()
     }
 }
 
@@ -211,7 +235,7 @@ impl NativeService for MeshUnit {
                         .dns_name
                         .clone()
                         .unwrap_or_else(|| info.tailscale_hostname.clone());
-                    *shared.node.lock().await = Some(node);
+                    shared.node.send_replace(Some(node));
                     shared.set(UnitState::Up, Some(format!("tailnet {name}")), None);
                     tracing::info!(
                         event = "field_native.mesh.node_ready",
@@ -247,7 +271,7 @@ impl NativeService for MeshUnit {
         if let Some(t) = self.task.lock().unwrap().take() {
             t.abort(); // in-flight bring-up: sidecar child is kill_on_drop
         }
-        *self.shared.node.lock().await = None; // dropping the Node kills the sidecar
+        self.shared.node.send_replace(None); // dropping the Node kills the sidecar
         Ok(())
     }
 }

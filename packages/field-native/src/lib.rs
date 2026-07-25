@@ -26,6 +26,10 @@ pub struct RunningDaemon {
     pub state: Arc<state::DaemonState>,
     server: tokio::task::JoinHandle<()>,
     health_refresh: tokio::task::JoinHandle<()>,
+    /// C6-3: parked until the mesh node exists, then the remote leg + inbound
+    /// accept loop. Held so shutdown can abort it — with the mesh disabled it
+    /// simply never fires.
+    lane_transport: tokio::task::JoinHandle<()>,
     manager: Arc<manager::NativeServiceManager>,
     logging: Option<logging::NativeLogging>,
 }
@@ -39,6 +43,7 @@ impl RunningDaemon {
         );
         self.server.abort();
         self.health_refresh.abort();
+        self.lane_transport.abort();
         self.manager.stop_all().await;
         tracing::info!(
             event = "field_native.lifecycle.stopped",
@@ -82,6 +87,15 @@ pub async fn bootstrap_with_logging(
     let mgr = Arc::new(manager::NativeServiceManager::new(units)?);
     mgr.start_all().await;
     let health = mgr.health(&boot_id);
+
+    // C6-3: joining the mesh unit to the byte plane is WIRING, so it happens
+    // here rather than inside either of them. The bridge never learns what a
+    // QUIC stream is; the mesh unit never learns what a lane is.
+    let lane_transport = services::lane_transport::install_when_ready(
+        mesh_handle.clone(),
+        bridge_handle.clone(),
+        services::lane_transport::DOC_SYNC_QUIC_PORT,
+    );
 
     let observed = contracts::ObservedState {
         generation: 0,
@@ -129,6 +143,7 @@ pub async fn bootstrap_with_logging(
         state,
         server,
         health_refresh,
+        lane_transport,
         manager: mgr,
         logging,
     })

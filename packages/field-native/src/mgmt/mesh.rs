@@ -10,11 +10,11 @@
 //! line before any forwarded event).
 
 use crate::services::mesh::{JsonStore, MeshNode};
-use crate::services::mesh_bridge::{Lane, LaneClass};
+use crate::services::mesh_bridge::{Lane, LaneClass, LaneEvent};
 use crate::state::{DaemonState, OutMsg};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use truffle_core::proxy::{ProxyConfig, ProxyEvent, ProxyRoute, ProxyStatus, ProxyTarget};
 use truffle_core::session::PeerEvent;
 use truffle_core::synced_store::StoreEvent;
@@ -39,7 +39,7 @@ pub async fn handle(
         handle_lane(state, tx, method, params, id).await;
         return;
     }
-    let Some(node) = state.mesh.node().await else {
+    let Some(node) = state.mesh.node() else {
         send(tx, unavailable(state, id));
         return;
     };
@@ -206,7 +206,7 @@ async fn handle_lane(
             };
             // A lane needs somewhere to go. Without a node the honest answer is
             // the mesh unit's real state, not a lane that silently goes nowhere.
-            if state.mesh.node().await.is_none() {
+            if state.mesh.node().is_none() {
                 send(tx, unavailable(state, id));
                 return;
             }
@@ -256,9 +256,79 @@ async fn handle_lane(
                 Err(e) => err(id, "INTERNAL", -32000, &e.to_string(), false, None),
             }
         }
+        // Lane lifecycle, snapshot-then-delta (P5). Deliberately NOT gated on a
+        // live node: fieldd subscribes at boot and must be listening BEFORE the
+        // mesh comes up, or it misses the first peer that opens a lane.
+        "native.mesh.lane.subscribe" => {
+            let sub_id = state.sub_id();
+            let events = state.bridge.subscribe_events();
+            let snapshot =
+                json!({"lanes": state.bridge.lanes().iter().map(lane_json).collect::<Vec<_>>()});
+            // Subscribe BEFORE snapshotting, respond BEFORE forwarding: a lane
+            // opened in between is then a duplicate rather than a miss, and a
+            // duplicate is the recoverable one (fieldd keys lanes by id).
+            send(tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
+            spawn_lane_forwarder(state.clone(), tx.clone(), events, sub_id);
+            return;
+        }
         _ => err(id, "NOT_FOUND", -32601, "unknown lane method", false, None),
     };
     send(tx, resp);
+}
+
+/// One live lane as the contracts see it (mgmt.ts `MeshLanePeerOpened` for the
+/// inbound shape). `whois` is absent, not empty: truffle's `Peer` carries no
+/// tailnet user login, and synthesizing one would fabricate identity (EL7,
+/// same finding as `list_peers`). It arrives when upstream's `whois(ip)` does.
+fn lane_json(lane: &Lane) -> Value {
+    let mut v = json!({
+        "laneId": lane.lane_id,
+        "class": lane.class.as_str(),
+        "peer": lane.peer,
+        "protocol": lane.protocol,
+    });
+    if lane.inbound {
+        v["inbound"] = json!(true);
+    }
+    if let Some(doc_id) = &lane.doc_id {
+        v["docId"] = json!(doc_id);
+    }
+    v
+}
+
+/// Forwards lane lifecycle to the subscriber. A lagging consumer gets a fresh
+/// snapshot rather than a gap (P5) — the lane TABLE is the truth, and the
+/// events are only how it is learned promptly.
+fn spawn_lane_forwarder(
+    state: Arc<DaemonState>,
+    tx: Tx,
+    mut events: broadcast::Receiver<LaneEvent>,
+    sub_id: String,
+) {
+    tokio::spawn(async move {
+        loop {
+            let note = match events.recv().await {
+                Ok(LaneEvent::PeerOpened(lane)) => {
+                    json!({"jsonrpc":"2.0","method":"native.mesh.lane.peerOpened","params":{"subId": sub_id, "payload": lane_json(&lane)}})
+                }
+                Ok(LaneEvent::Closed {
+                    lane_id,
+                    inbound,
+                    reason,
+                }) => {
+                    json!({"jsonrpc":"2.0","method":"native.mesh.lane.closed","params":{"subId": sub_id, "payload": {"laneId": lane_id, "inbound": inbound, "reason": reason}}})
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    let lanes: Vec<Value> = state.bridge.lanes().iter().map(lane_json).collect();
+                    json!({"jsonrpc":"2.0","method":"native.mesh.lane.snapshot","params":{"subId": sub_id, "payload": {"lanes": lanes}}})
+                }
+                Err(_) => break,
+            };
+            if tx.send(OutMsg::Line(note.to_string())).is_err() {
+                break;
+            }
+        }
+    });
 }
 
 /// UNAVAILABLE carrying the mesh unit's live state (+authUrl) — the C1 shape.

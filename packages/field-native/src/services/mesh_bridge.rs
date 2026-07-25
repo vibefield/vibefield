@@ -13,11 +13,11 @@
 //! Doc-sync lanes carry Loro update records that fieldd itself never decodes
 //! (the B3 custody shape), so a document format change cannot reach this file.
 //!
-//! WHAT IS NOT HERE YET (C6-2's honest boundary): the remote leg. `LaneTransport`
-//! is the seam a truffle QUIC stream lands on in C6-3, where two real nodes can
-//! exercise it. Everything local — socket, auth, framing, lane table, routing,
-//! teardown — is real and tested now, because it can be. A loopback transport
-//! ships alongside so the local half is provable without a tailnet.
+//! THE REMOTE LEG IS A SIBLING, not a section of this file: `LaneTransport` is
+//! the seam, and `lane_transport.rs` puts truffle QUIC behind it (C6-3). This
+//! file cannot name a QUIC type, which is what keeps "the bridge is dumb" a
+//! property of the code rather than a promise in a comment. A loopback
+//! transport ships alongside so the local half stays provable without a tailnet.
 
 use crate::config::NativeConfig;
 use crate::contracts::{UnitHealth, UnitState};
@@ -25,9 +25,11 @@ use crate::manager::NativeService;
 use crate::pairing;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
+use tokio::sync::broadcast;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 // ---- the wire, mirrored from @vibefield/contracts src/meshdata.ts ----------
@@ -154,6 +156,13 @@ impl LaneClass {
             _ => None,
         }
     }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Reliable => "reliable",
+            Self::Lossy => "lossy",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -165,6 +174,37 @@ pub struct Lane {
     pub doc_id: Option<String>,
     pub inbound: bool,
 }
+
+/// Inbound lane ids are minted HERE; outbound ids are minted by fieldd. Both
+/// live in one table, and this base is what keeps two numbering authorities
+/// from colliding without either having to know about the other.
+///
+/// 2^32 and deliberately NOT the high bit: a laneId crosses JSON-RPC as a
+/// JavaScript number, so anything past 2^53 would silently lose precision on
+/// the way to fieldd — a lane id that does not round-trip is a lane whose bytes
+/// go to the wrong consumer.
+pub const INBOUND_LANE_ID_BASE: u64 = 1 << 32;
+
+/// Lane LIFECYCLE, which is control and therefore rides the control plane
+/// (`native.mesh.lane.subscribe`). The bytes those lanes carry never appear
+/// here — that is the whole D5 split, expressed in a type.
+#[derive(Debug, Clone)]
+pub enum LaneEvent {
+    /// A peer opened a lane toward us; fieldd has not claimed it yet.
+    PeerOpened(Lane),
+    Closed {
+        lane_id: u64,
+        inbound: bool,
+        /// Open vocabulary, logged and forwarded verbatim (tolerant reader):
+        /// "local" | "peer-closed" | "torn-frame" | …
+        reason: String,
+    },
+}
+
+/// Matches truffle's own subscribe capacity. A slow consumer LAGS rather than
+/// blocking the transport; the mgmt forwarder answers a lag with a fresh
+/// snapshot (P5), which is self-healing in a way a bigger buffer is not.
+const LANE_EVENT_CAPACITY: usize = 64;
 
 /// The remote leg. C6-3 lands the truffle QUIC/datagram implementation here;
 /// the bridge itself never learns which one it has, which is what keeps "the
@@ -222,6 +262,8 @@ struct Shared {
     out: Mutex<Option<UnboundedSender<Vec<u8>>>>,
     ping: UnboundedSender<()>,
     transport: Mutex<Option<Arc<dyn LaneTransport>>>,
+    events: broadcast::Sender<LaneEvent>,
+    next_inbound: AtomicU64,
 }
 
 impl Shared {
@@ -279,9 +321,18 @@ impl BridgeHandle {
         // this read as correct while being wrong.
         let lane = self.shared.lanes.lock().unwrap().remove(&lane_id);
         let transport = self.shared.transport.lock().unwrap().clone();
-        if let (Some(lane), Some(t)) = (lane, transport) {
+        let Some(lane) = lane else {
+            return Ok(()); // already gone — the normal both-ends-at-once race
+        };
+        let inbound = lane.inbound;
+        if let Some(t) = transport {
             t.close(&lane).await?;
         }
+        let _ = self.shared.events.send(LaneEvent::Closed {
+            lane_id,
+            inbound,
+            reason: "local".into(),
+        });
         Ok(())
     }
 
@@ -291,6 +342,78 @@ impl BridgeHandle {
 
     pub fn open_lane_count(&self) -> usize {
         self.shared.lanes.lock().unwrap().len()
+    }
+
+    /// Every live lane, id-ordered — the snapshot half of `lane.subscribe`.
+    pub fn lanes(&self) -> Vec<Lane> {
+        let mut lanes: Vec<Lane> = self
+            .shared
+            .lanes
+            .lock()
+            .unwrap()
+            .values()
+            .cloned()
+            .collect();
+        lanes.sort_by_key(|l| l.lane_id);
+        lanes
+    }
+
+    pub fn subscribe_events(&self) -> broadcast::Receiver<LaneEvent> {
+        self.shared.events.subscribe()
+    }
+
+    /// Adopt a lane a PEER opened (C6-3, transport-side). The id is minted here
+    /// and the originator's is discarded: the two directions share no id space,
+    /// and honouring a remote id would let a peer choose keys in our table —
+    /// EL7 arithmetic, not politeness. `peer` likewise comes from the
+    /// WireGuard-authenticated remote address, never from the stream's own
+    /// claim about itself.
+    pub fn adopt_inbound_lane(
+        &self,
+        class: LaneClass,
+        peer: String,
+        protocol: String,
+        doc_id: Option<String>,
+    ) -> Lane {
+        let lane = {
+            let mut lanes = self.shared.lanes.lock().unwrap();
+            // The base makes a collision impossible in practice; the skip makes
+            // it impossible in fact, whatever fieldd decides to mint.
+            let lane_id = loop {
+                let id =
+                    INBOUND_LANE_ID_BASE + self.shared.next_inbound.fetch_add(1, Ordering::Relaxed);
+                if !lanes.contains_key(&id) {
+                    break id;
+                }
+            };
+            let lane = Lane {
+                lane_id,
+                class,
+                peer,
+                protocol,
+                doc_id,
+                inbound: true,
+            };
+            lanes.insert(lane_id, lane.clone());
+            lane
+        };
+        let _ = self.shared.events.send(LaneEvent::PeerOpened(lane.clone()));
+        lane
+    }
+
+    /// A lane that ended AT THE TRANSPORT — the peer hung up, or its stream
+    /// tore. No transport call back out: the thing that would be closed is the
+    /// thing that just died. Silent for an unknown id, because both ends
+    /// hanging up at once is the ordinary case.
+    pub fn forget_lane(&self, lane_id: u64, reason: &str) {
+        let Some(lane) = self.shared.lanes.lock().unwrap().remove(&lane_id) else {
+            return;
+        };
+        let _ = self.shared.events.send(LaneEvent::Closed {
+            lane_id,
+            inbound: lane.inbound,
+            reason: reason.to_string(),
+        });
     }
 
     /// Install the remote leg. C6-3 hands the truffle-backed transport in once
@@ -340,6 +463,8 @@ impl MeshBridge {
                 out: Mutex::new(None),
                 ping,
                 transport: Mutex::new(None),
+                events: broadcast::channel(LANE_EVENT_CAPACITY).0,
+                next_inbound: AtomicU64::new(0),
             }),
             task: Mutex::new(None),
         }
