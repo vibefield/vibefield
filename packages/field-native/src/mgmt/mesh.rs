@@ -10,6 +10,7 @@
 //! line before any forwarded event).
 
 use crate::services::mesh::{JsonStore, MeshNode};
+use crate::services::mesh_bridge::{Lane, LaneClass};
 use crate::state::{DaemonState, OutMsg};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -29,6 +30,15 @@ pub async fn handle(
     params: &Value,
     id: Option<Value>,
 ) {
+    // Lane control is answered BEFORE the node gate, and not for tidiness:
+    // `lane.close` has to work when the mesh is down, because that is exactly
+    // when fieldd is tearing lanes down. Gating it behind a live node would
+    // make cleanup impossible in the one state that needs it (D5: lanes are
+    // cheap and mortal).
+    if method.starts_with("native.mesh.lane.") {
+        handle_lane(state, tx, method, params, id).await;
+        return;
+    }
     let Some(node) = state.mesh.node().await else {
         send(tx, unavailable(state, id));
         return;
@@ -156,6 +166,97 @@ pub async fn handle(
             return;
         }
         _ => err(id, "NOT_FOUND", -32601, "method not found", false, None),
+    };
+    send(tx, resp);
+}
+
+/// native.mesh.lane.* — CONTROL ONLY (D5). Every byte a lane carries rides
+/// meshdata.sock; nothing below touches a payload, which is what keeps EL2
+/// structural rather than promised.
+async fn handle_lane(
+    state: &Arc<DaemonState>,
+    tx: &Tx,
+    method: &str,
+    params: &Value,
+    id: Option<Value>,
+) {
+    let resp = match method {
+        "native.mesh.lane.open" => {
+            let (Some(lane_id), Some(class), Some(peer), Some(protocol)) = (
+                params.get("laneId").and_then(Value::as_u64),
+                params
+                    .get("class")
+                    .and_then(Value::as_str)
+                    .and_then(LaneClass::parse),
+                params.get("peer").and_then(Value::as_str),
+                params.get("protocol").and_then(Value::as_str),
+            ) else {
+                send(
+                    tx,
+                    err(
+                        id,
+                        "PRECONDITION_FAILED",
+                        -32005,
+                        "lane.open needs laneId, class, peer, protocol",
+                        false,
+                        None,
+                    ),
+                );
+                return;
+            };
+            // A lane needs somewhere to go. Without a node the honest answer is
+            // the mesh unit's real state, not a lane that silently goes nowhere.
+            if state.mesh.node().await.is_none() {
+                send(tx, unavailable(state, id));
+                return;
+            }
+            let lane = Lane {
+                lane_id,
+                class,
+                peer: peer.to_string(),
+                protocol: protocol.to_string(),
+                doc_id: params
+                    .get("docId")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                inbound: false,
+            };
+            match state.bridge.open_lane(lane).await {
+                Ok(()) => ok(id, json!({ "laneId": lane_id })),
+                // A duplicate id is the caller losing track of its own
+                // numbering, which is a precondition failure rather than a
+                // transport one — and never a silent reuse.
+                Err(e) => err(
+                    id,
+                    "PRECONDITION_FAILED",
+                    -32005,
+                    &e.to_string(),
+                    false,
+                    None,
+                ),
+            }
+        }
+        "native.mesh.lane.close" => {
+            let Some(lane_id) = params.get("laneId").and_then(Value::as_u64) else {
+                send(
+                    tx,
+                    err(
+                        id,
+                        "PRECONDITION_FAILED",
+                        -32005,
+                        "lane.close needs laneId",
+                        false,
+                        None,
+                    ),
+                );
+                return;
+            };
+            match state.bridge.close_lane(lane_id).await {
+                Ok(()) => ok(id, json!({ "laneId": lane_id })),
+                Err(e) => err(id, "INTERNAL", -32000, &e.to_string(), false, None),
+            }
+        }
+        _ => err(id, "NOT_FOUND", -32601, "unknown lane method", false, None),
     };
     send(tx, resp);
 }

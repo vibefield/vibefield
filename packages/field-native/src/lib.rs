@@ -96,6 +96,7 @@ pub async fn bootstrap_with_logging(
         health,
         observed,
         mesh_handle,
+        bridge_handle.clone(),
         logging.clone(),
     );
 

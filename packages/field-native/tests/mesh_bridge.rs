@@ -383,3 +383,105 @@ async fn the_bridge_reports_itself_in_native_health() {
     ));
     daemon.shutdown().await;
 }
+
+// ---- lane control over the mgmt channel (C6-3) -----------------------------
+// The control half of D5: lanes are negotiated on the management channel and
+// then get out of the way. These drive the real JSON-RPC surface, not the
+// handle directly, so the contract in methods.ts is what is actually exercised.
+
+struct MgmtClient {
+    reader: tokio::io::Lines<tokio::io::BufReader<tokio::net::unix::OwnedReadHalf>>,
+    writer: tokio::net::unix::OwnedWriteHalf,
+}
+
+impl MgmtClient {
+    async fn connect(daemon: &RunningDaemon) -> Self {
+        use tokio::io::AsyncBufReadExt;
+        let stream = UnixStream::connect(&daemon.mgmt_socket)
+            .await
+            .expect("connect mgmt");
+        let (r, w) = stream.into_split();
+        Self {
+            reader: tokio::io::BufReader::new(r).lines(),
+            writer: w,
+        }
+    }
+    async fn call(&mut self, method: &str, params: serde_json::Value) -> serde_json::Value {
+        let mut line = json!({"jsonrpc":"2.0","id":1,"method":method,"params":params}).to_string();
+        line.push('\n');
+        self.writer.write_all(line.as_bytes()).await.expect("write");
+        let out = timeout(Duration::from_secs(5), self.reader.next_line())
+            .await
+            .expect("timeout")
+            .expect("read")
+            .expect("closed");
+        serde_json::from_str(&out).expect("json")
+    }
+    async fn hello(&mut self, daemon: &RunningDaemon) {
+        let secret = read_secret(daemon);
+        let ts = pairing::now_epoch_secs();
+        let boot = "fieldd-boot-test";
+        let mac = pairing::compute_mac(&secret, boot, ts);
+        self.call(
+            "native.lifecycle.hello",
+            json!({"contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
+                   "credential":{"bootId":boot,"ts":ts,"mac":mac}}),
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn lane_open_without_a_mesh_node_is_honestly_unavailable() {
+    // Mesh is disabled by default in tests. A lane needs somewhere to go, so
+    // the answer names the mesh unit's REAL state rather than inventing a lane
+    // that silently goes nowhere (the C1 honesty shape).
+    let (_dir, daemon) = boot().await;
+    let mut c = MgmtClient::connect(&daemon).await;
+    c.hello(&daemon).await;
+    let resp = c
+        .call(
+            "native.mesh.lane.open",
+            json!({"laneId":1,"class":"reliable","peer":"peer-a","protocol":"doc-sync"}),
+        )
+        .await;
+    assert_eq!(resp["error"]["data"]["kind"], "UNAVAILABLE");
+    assert_eq!(resp["error"]["data"]["details"]["service"], "mesh-gateway");
+    assert_eq!(daemon.bridge.open_lane_count(), 0);
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn lane_close_works_with_the_mesh_down_because_that_is_when_it_is_needed() {
+    let (_dir, daemon) = boot().await;
+    // opened directly: the point is that CLOSE is not gated behind a live node
+    daemon
+        .bridge
+        .open_lane(lane(4, LaneClass::Reliable))
+        .await
+        .unwrap();
+    let mut c = MgmtClient::connect(&daemon).await;
+    c.hello(&daemon).await;
+    let resp = c.call("native.mesh.lane.close", json!({"laneId":4})).await;
+    assert_eq!(resp["result"]["laneId"], 4);
+    assert_eq!(daemon.bridge.open_lane_count(), 0);
+    // and again — idempotent, because both ends hanging up at once is normal
+    let again = c.call("native.mesh.lane.close", json!({"laneId":4})).await;
+    assert_eq!(again["result"]["laneId"], 4);
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn lane_open_refuses_a_malformed_request() {
+    let (_dir, daemon) = boot().await;
+    let mut c = MgmtClient::connect(&daemon).await;
+    c.hello(&daemon).await;
+    let resp = c
+        .call(
+            "native.mesh.lane.open",
+            json!({"laneId":1,"class":"telepathy"}),
+        )
+        .await;
+    assert_eq!(resp["error"]["data"]["kind"], "PRECONDITION_FAILED");
+    daemon.shutdown().await;
+}
