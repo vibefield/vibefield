@@ -3,8 +3,10 @@ import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  DOC_SYNC_RECORD,
   DocMeta,
   DocRegistryEntry,
+  type DocSyncRecord,
   LANE_MAX_FRAME_BYTES,
   type LanePutMeta,
   STORES,
@@ -375,6 +377,13 @@ export class DocumentService {
     if (current === null) {
       throw new RpcCallError("PRECONDITION_FAILED", "journal update needs a checkpoint", false);
     }
+    // THE EPOCH FENCE (S4), which replaced the revision-chain check in C6-3f.
+    // Appending is safe within an epoch and never safe across one: compaction
+    // replaces the checkpoint underneath, so a pre-compaction update applied
+    // after it would be interpreted against a base it was never built on. The
+    // caller must re-bootstrap instead — silently appending is how a peer
+    // diverges without either side noticing.
+    this.assertEpoch(entry, putMeta.baseEpoch);
     if (current.revisionId === putMeta.revisionId) {
       const last = current.updates.at(-1);
       if (last?.revisionId !== putMeta.revisionId || last.byteLength !== bytes.byteLength) {
@@ -393,11 +402,18 @@ export class DocumentService {
       }
       return currentMeta(current);
     }
+    // A stale head is NOT an error here (see LanePutMeta.baseRevisionId): with
+    // two writers it is the ordinary case, and the update appends to whatever
+    // the head is now. The client learns the real head from PUT_OK.
     if (current.revisionId !== putMeta.baseRevisionId) {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        `journal base ${putMeta.baseRevisionId} is not current revision ${current.revisionId}`,
-        false,
+      this.logger.debug(
+        "fieldd.docs.update_base_moved",
+        "An update was composed against a revision that is no longer head",
+        {
+          docId,
+          composedAgainst: putMeta.baseRevisionId,
+          head: current.revisionId,
+        },
       );
     }
 
@@ -438,6 +454,98 @@ export class DocumentService {
       throw this.storageError("registry refresh", err);
     }
     return currentMeta(next);
+  }
+
+  /** The S4 fence, in one place because both the renderer's writes and a peer's
+   * records have to pass the same one.
+   *
+   * An UNDECLARED epoch is admitted only while the doc has never been
+   * compacted. Once it has, a client that cannot say which epoch it built on
+   * cannot be shown to have built on the current one — and "probably fine" is
+   * not a standard for the operation that decides whether two devices agree. */
+  private assertEpoch(entry: DocRegistryEntry, declared: number | undefined): void {
+    if (declared === undefined) {
+      if (entry.baseEpoch !== 0) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `doc has been compacted to epoch ${entry.baseEpoch}; an update must declare baseEpoch`,
+          false,
+          { docId: entry.docId, baseEpoch: entry.baseEpoch, reason: "epoch-undeclared" },
+        );
+      }
+      return;
+    }
+    if (declared !== entry.baseEpoch) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `update belongs to epoch ${declared}, doc is at epoch ${entry.baseEpoch}; re-bootstrap`,
+        false,
+        { docId: entry.docId, baseEpoch: entry.baseEpoch, reason: "epoch-mismatch" },
+      );
+    }
+  }
+
+  // ---- cross-device sync (C6-3f) ----
+
+  /** What became of a peer's record. Declining is a normal outcome, not a
+   * failure, so it is a value rather than a thrown error — the caller reports
+   * it as sync state (EL5: no silent divergence). */
+  async applyRemoteRecord(
+    docId: string,
+    record: DocSyncRecord,
+  ): Promise<
+    | { applied: true; meta: DocMeta }
+    | {
+        applied: false;
+        reason: "unknown-doc" | "would-clobber" | "epoch-mismatch" | "unknown-kind";
+      }
+  > {
+    const entry = this.registry.get(docId);
+    if (!entry) return { applied: false, reason: "unknown-doc" };
+
+    if (record.kind === DOC_SYNC_RECORD.SNAPSHOT) {
+      // Bootstrap ONLY. fieldd cannot merge two checkpoints because it cannot
+      // read them (B3 shape A), and writeDoc replaces rather than merges — so
+      // accepting a peer's checkpoint over local content would destroy work
+      // that Loro itself would happily have merged. Declining is the honest
+      // move; merging belongs to the renderer, which holds the live doc.
+      if (this.hasStoredDoc(docId)) return { applied: false, reason: "would-clobber" };
+      const meta = await this.writeDoc(docId, record.payload, {
+        revisionId: randomUUID(),
+        kind: "checkpoint",
+        engineSchema: record.meta.engineSchema,
+        savedAt: record.meta.savedAt,
+        byteLength: record.payload.byteLength,
+      });
+      return { applied: true, meta };
+    }
+
+    if (record.kind !== DOC_SYNC_RECORD.UPDATE) {
+      // Tolerant reader: a newer peer may ship a kind this fieldd has no
+      // opinion about, and that is not a reason to tear the lane.
+      return { applied: false, reason: "unknown-kind" };
+    }
+
+    if (record.meta.baseEpoch !== entry.baseEpoch) {
+      return { applied: false, reason: "epoch-mismatch" };
+    }
+    const current = await this.readCurrent(docId);
+    if (current === null) return { applied: false, reason: "would-clobber" };
+
+    // RE-FRAMED, never appended verbatim: the peer's revision ids belong to the
+    // peer's chain and mean nothing here. A fresh id, based on OUR head. The
+    // C6-3f probe measured that this converges — and that a record whose causal
+    // dependencies have not arrived is held pending by Loro, not lost.
+    const meta = await this.writeDoc(docId, record.payload, {
+      revisionId: randomUUID(),
+      kind: "update",
+      baseRevisionId: current.revisionId,
+      baseEpoch: entry.baseEpoch,
+      engineSchema: record.meta.engineSchema,
+      savedAt: record.meta.savedAt,
+      byteLength: record.payload.byteLength,
+    });
+    return { applied: true, meta };
   }
 
   // ---- health / lifecycle ----

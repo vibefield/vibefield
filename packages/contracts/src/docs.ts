@@ -94,8 +94,28 @@ export const LanePutMeta = z
   .object({
     revisionId: z.string().uuid(),
     kind: z.enum(["checkpoint", "update"]).optional(),
-    /** Required for updates: exact current revision the update extends. */
+    /** The revision this update was composed against.
+     *
+     * NOT ENFORCED as of C6-3f, and the change is deliberate rather than a
+     * lapse. Requiring it to equal the current head encodes "nobody else
+     * appended since you read" — an optimistic-concurrency (If-Match) rule that
+     * is correct only for a store that cannot merge. This one does not need to:
+     * a doc is replayed as `checkpoint + every update`, and the ordering probe
+     * measured that replay converging whatever the order. Cross-device sync
+     * makes another writer appending the NORMAL case, so enforcing head
+     * equality would fail the renderer's every save while a peer is editing.
+     *
+     * It is still carried, and still worth carrying: it is what the reused-id
+     * idempotent-retry path compares, and it makes a journal chain readable
+     * when something does go wrong. The fence that survives is `baseEpoch`. */
     baseRevisionId: z.string().uuid().optional(),
+    /** The compaction epoch this update was composed against (the S4 fence).
+     *
+     * Optional only because `doc.compact` does not exist yet, so no doc has
+     * ever left epoch 0. On a doc that HAS been compacted its absence is
+     * refused — a client that cannot say which epoch it built on cannot be
+     * shown to be building on the current one. */
+    baseEpoch: z.number().int().nonnegative().optional(),
     engineSchema: z.number().int().nonnegative().nullable(),
     savedAt: z.number().int().nonnegative(),
     byteLength: z.number().int().nonnegative(),
