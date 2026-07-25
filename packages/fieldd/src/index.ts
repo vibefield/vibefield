@@ -27,6 +27,7 @@ export {
   type TicketRedemption,
 } from "./doc-service";
 export { MeshClient, type ServeSpec, type ServeState } from "./mesh-client";
+export { MeshLaneLink, type MeshLaneLinkOptions } from "./mesh-lane";
 export { NativeLink, RpcCallError } from "./native-link";
 export { computePairingMac } from "./pairing";
 export { PeerLink, type PeerLinkOptions, type PeerLinkState } from "./peer-link";
