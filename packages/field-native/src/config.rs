@@ -80,6 +80,14 @@ impl NativeConfig {
     pub fn mgmt_socket(&self) -> PathBuf {
         self.run_dir().join("mgmt.sock")
     }
+
+    /// The MeshData bridge's byte plane (D5). A SECOND socket beside mgmt on
+    /// purpose: control and bytes must not share a queue, and this one carries
+    /// product data while mgmt carries decisions.
+    pub fn meshdata_socket(&self) -> PathBuf {
+        self.run_dir()
+            .join(crate::services::mesh_bridge::SOCKET_NAME)
+    }
     /// truffle node state (device identity + tsnet keys) — mesh identity lives
     /// in the longer-lived plane and survives fieldd restarts (design-02 §2.4).
     pub fn mesh_state_dir(&self) -> PathBuf {

@@ -19,6 +19,9 @@ use tokio::net::UnixListener;
 
 pub struct RunningDaemon {
     pub mgmt_socket: PathBuf,
+    /// D5's byte plane. Exposed for tests and for the C6-3 transport install.
+    pub meshdata_socket: PathBuf,
+    pub bridge: services::mesh_bridge::BridgeHandle,
     pub boot_id: String,
     pub state: Arc<state::DaemonState>,
     server: tokio::task::JoinHandle<()>,
@@ -75,7 +78,7 @@ pub async fn bootstrap_with_logging(
     // units push health transitions (e.g. mesh auth flow) via this channel;
     // a refresh task re-aggregates and publishes on every ping
     let (ping_tx, mut ping_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let (units, mesh_handle) = services::build_units(&config, ping_tx);
+    let (units, mesh_handle, bridge_handle) = services::build_units(&config, secret, ping_tx);
     let mgr = Arc::new(manager::NativeServiceManager::new(units)?);
     mgr.start_all().await;
     let health = mgr.health(&boot_id);
@@ -118,6 +121,8 @@ pub async fn bootstrap_with_logging(
     let server = tokio::spawn(mgmt::serve(listener, state.clone()));
 
     Ok(RunningDaemon {
+        meshdata_socket: config.meshdata_socket(),
+        bridge: bridge_handle,
         mgmt_socket: socket_path,
         boot_id,
         state,
