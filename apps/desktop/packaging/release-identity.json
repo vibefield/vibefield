@@ -1,14 +1,14 @@
 {
   "//": "The frozen release constants (distribution spec §7.6, EDP-30). These are the values an installed VibeField is KNOWN BY: bundle id, publisher, tray slot, update origin. Changing one after a public release is a migration — signatures, update feeds, taskbar pinning and notification routing all key off them — never a cosmetic edit. Two laws are enforced by scripts/check-release-identity.mjs: (1) nothing here may be inferred from a local path, username or hostname (EDP-30) — a value that differs per developer machine is not an identity; (2) a `frozen` field cannot change without bumping identityRevision in the same commit, so an identity edit is always a reviewable event rather than a silent drift.",
-  "identityRevision": 1,
+  "identityRevision": 2,
   "frozenAt": null,
   "fields": {
     "appId": {
-      "status": "blocker",
-      "value": null,
+      "status": "frozen",
+      "value": "com.jamesyong.vibefield",
       "format": "reverse-dns",
-      "blocker": "B-1",
-      "note": "The bundle/application identifier (CFBundleIdentifier on macOS, the NSIS application id on Windows). Owner input required. NOT the same thing as contracts' APP_ID ('vibefield'), which is the truffle mesh app id and data-root slug — see windowsAppUserModelId."
+      "machineOverlapAcknowledged": "the namespace is deliberately the developer's own name, which is also this machine's username — a chosen personal namespace, not a leaked local value",
+      "note": "Frozen 2026-07-25 (James). Personal namespace — the convention for an individually-enrolled Apple Developer account, and collision-free without owning a product domain. NOT the same thing as contracts' APP_ID ('vibefield'), which is the truffle mesh app id and data-root slug; see windowsAppUserModelId."
     },
     "productName": {
       "status": "frozen",
@@ -17,11 +17,10 @@
       "note": "Already load-bearing at runtime: app.setName('VibeField') in electron-shell's composition root, and the distribution spec §7.5 builder config."
     },
     "executableName": {
-      "status": "blocker",
-      "value": null,
+      "status": "frozen",
+      "value": "VibeField",
       "format": "executable-name",
-      "blocker": "B-2",
-      "note": "The on-disk executable name. Windows shortcuts, the desktop entry's StartupWMClass and the Linux .desktop filename must all agree with it (distribution spec §6.3)."
+      "note": "Frozen 2026-07-25. Matches productName and electron-builder's own default, so Windows shortcuts, the Linux .desktop StartupWMClass and the macOS binary name all agree without a rename (distribution spec §6.3)."
     },
     "macTeamId": {
       "status": "blocker",
@@ -38,18 +37,17 @@
       "note": "The Authenticode/Trusted Signing subject shown in the UAC prompt. Must match the signing certificate's subject exactly or verification reports a publisher mismatch."
     },
     "windowsAppUserModelId": {
-      "status": "blocker",
-      "value": null,
+      "status": "frozen",
+      "value": "com.jamesyong.vibefield",
       "format": "reverse-dns",
-      "blocker": "B-1",
-      "note": "app.setAppUserModelId() (distribution spec §5.6). MUST equal the installer's application id so taskbar pinning, shortcuts, notifications and updates agree. FINDING (2026-07-24): electron-shell currently passes contracts' APP_ID ('vibefield') here — the mesh slug, not a reverse-DNS id. Harmless while Windows is not a GA target (EDP-23), wrong the moment an installer exists. The runtime switches to this value in the slice that resolves B-1."
+      "machineOverlapAcknowledged": "identical to appId by requirement; the same personal-namespace reasoning applies",
+      "note": "Frozen 2026-07-25, deliberately IDENTICAL to appId: §5.6 requires the AUMID and the installer's application id to agree or taskbar pinning, shortcuts, notifications and updates disagree with each other. ACTION OUTSTANDING: electron-shell still calls app.setAppUserModelId(APP_ID) with contracts' mesh slug 'vibefield' — now that Windows is a GA target this is a real defect, and the runtime must switch to this value before the first Windows package."
     },
     "trayGuid": {
-      "status": "blocker",
-      "value": null,
+      "status": "frozen",
+      "value": "c524c40e-05b6-4d89-bbb9-82ba4e97ea91",
       "format": "uuid",
-      "blocker": "B-3",
-      "note": "Windows notification-area GUID; preserves the user's chosen tray slot across updates. Distribution spec §5.6 admits it only once a signing identity exists, because Windows keys the reserved slot to the signed binary — an unsigned build burns the GUID."
+      "note": "Minted 2026-07-25 once Windows became a GA target. Preserves the user's chosen notification-area slot across updates. CAUTION (§5.6): Windows keys the reserved slot to the SIGNED binary, so this GUID must not be used by an unsigned build — doing so burns it and the slot is lost for the signed one. It is therefore applied only from the first Authenticode-signed Windows package, not from a local --dir build."
     },
     "updateChannel": {
       "status": "frozen",

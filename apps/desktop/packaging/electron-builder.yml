@@ -12,7 +12,18 @@
 # package.json), EXCEPT `files`, which resolves against `directories.app`.
 
 # ─────────────────────────────────────────────────────────────────────────────
-# IDENTITY — appId IS AN UNRESOLVED OWNER BLOCKER (B-1)
+# IDENTITY — B-1 RESOLVED 2026-07-25
+# ─────────────────────────────────────────────────────────────────────────────
+# Frozen in packaging/release-identity.json at identityRevision 2. Changing it after a public
+# release is a migration, not an edit: signatures, the update feed, taskbar pinning and
+# notification routing all key off it. The ledger's freeze rule refuses a silent change —
+# check-release-identity.mjs compares frozen values against HEAD and demands an identityRevision
+# bump in the same commit.
+appId: com.jamesyong.vibefield
+executableName: VibeField
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HISTORICAL NOTE — what this block looked like while B-1 was open
 # ─────────────────────────────────────────────────────────────────────────────
 # The real value is owner input tracked in packaging/release-identity.json, where appId and
 # windowsAppUserModelId both sit at status "blocker" / value null under B-1. §7.6 is why it cannot
@@ -30,13 +41,13 @@
 # first-signed-beta gate turns it on), which exits non-zero for every unfrozen field. The release
 # workflow runs it BEFORE electron-builder. Freezing B-1 means editing release-identity.json with
 # an identityRevision bump, then replacing the line below — in the same commit.
-appId: INVALID.unresolved-blocker-B-1.vibefield.invalid
+# (The placeholder was `INVALID.unresolved-blocker-B-1.vibefield.invalid` — deliberately not a
+# plausible reverse-DNS id, ending in RFC 2606's reserved `.invalid` TLD so it could never
+# collide with a real identifier even read backwards. Kept recorded because the pattern is worth
+# reusing for the blockers still open below.)
 
 # Frozen in release-identity.json, and already load-bearing at runtime via app.setName().
 productName: VibeField
-# executableName is deliberately unset: it is blocker B-2, and electron-builder defaults it to
-# productName. Setting a guess would put a name into Windows shortcuts and the Linux .desktop
-# StartupWMClass (§6.3) that a later slice would have to migrate.
 
 directories:
   # The staged ASAR root. Pointing `app` at it makes the stager's generated package.json — name,

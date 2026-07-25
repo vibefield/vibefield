@@ -83,17 +83,30 @@ const FORMATS = {
 /** EDP-30's real target: a value that differs per developer machine is not an
  * identity. Checked against THIS machine's user/host plus the universal path
  * shapes, so it catches the common accident (pasting a resolved local path)
- * without pretending to catch every possible one. */
-function machineDerived(value) {
+ * without pretending to catch every possible one.
+ *
+ * Returns `{fatal}` because the two findings are NOT the same severity. A path
+ * shape is never a legitimate identity — always fatal. A name overlap is
+ * ambiguous: `com.jamesyong.vibefield` contains this machine's username because
+ * the namespace is deliberately the developer's own name, which is the ordinary
+ * convention for an individually-enrolled Apple account. The checker cannot tell
+ * "you chose your name" from "your name leaked in", so an overlap is
+ * acknowledgeable — with a written reason, per field. Silence is still a
+ * violation; the exemption has to be argued in the ledger where a reviewer sees
+ * it. */
+function machineDerived(value, acknowledgement) {
   const user = userInfo().username;
   const host = hostname();
   const haystack = value.toLowerCase();
   if (/^([a-z]:[\\/]|\/(users|home|var|tmp|opt|private)\/)/i.test(value))
-    return "looks like an absolute local path";
-  if (user.length > 2 && haystack.includes(user.toLowerCase()))
-    return `contains this machine's username (${user})`;
-  if (host.length > 2 && haystack.includes(host.toLowerCase().replace(/\.local$/, "")))
-    return `contains this machine's hostname (${host})`;
+    return { note: "looks like an absolute local path", fatal: true };
+  const acknowledged = typeof acknowledgement === "string" && acknowledgement.trim().length > 0;
+  if (user.length > 2 && haystack.includes(user.toLowerCase())) {
+    return { note: `contains this machine's username (${user})`, fatal: !acknowledged };
+  }
+  if (host.length > 2 && haystack.includes(host.toLowerCase().replace(/\.local$/, ""))) {
+    return { note: `contains this machine's hostname (${host})`, fatal: !acknowledged };
+  }
   return null;
 }
 
@@ -111,6 +124,7 @@ function credentialShaped(value) {
 function checkLedger(ledger, committed) {
   const violations = [];
   const blockers = [];
+  const notes = [];
 
   if (!Number.isInteger(ledger.identityRevision) || ledger.identityRevision < 1)
     violations.push("identityRevision must be a positive integer");
@@ -146,8 +160,14 @@ function checkLedger(ledger, committed) {
       const verdict = format(value, name);
       if (verdict !== true) violations.push(`${name}: ${verdict}`);
     }
-    const derived = machineDerived(value);
-    if (derived !== null) violations.push(`${name}: ${derived} (EDP-30)`);
+    const derived = machineDerived(value, field.machineOverlapAcknowledged);
+    if (derived !== null) {
+      const line = `${name}: ${derived.note} (EDP-30)`;
+      // An acknowledged overlap is still REPORTED — the point is that a reviewer
+      // sees it and the reason every time, not that it disappears.
+      if (derived.fatal) violations.push(line);
+      else notes.push(`${line} — acknowledged: ${field.machineOverlapAcknowledged}`);
+    }
     const credential = credentialShaped(value);
     if (credential !== null) violations.push(`${name}: ${credential} (spec §9.4)`);
   }
@@ -169,7 +189,7 @@ function checkLedger(ledger, committed) {
     }
   }
 
-  return { violations, blockers };
+  return { violations, blockers, notes };
 }
 
 /** The ledger as committed at HEAD, or null when it is new/unreadable — a first
@@ -237,6 +257,49 @@ function selfTest() {
       2,
     ],
     [
+      "an UNACKNOWLEDGED username overlap is still refused",
+      (() => {
+        const l = base();
+        l.fields.windowsPublisher = {
+          status: "frozen",
+          value: `${userInfo().username} Ltd`,
+          format: "publisher-name",
+        };
+        return l;
+      })(),
+      1,
+    ],
+    [
+      "an acknowledged username overlap passes — the exemption is argued, not silent",
+      (() => {
+        const l = base();
+        l.fields.windowsPublisher = {
+          status: "frozen",
+          value: `${userInfo().username} Ltd`,
+          format: "publisher-name",
+          machineOverlapAcknowledged: "the company is named after the developer",
+        };
+        return l;
+      })(),
+      0,
+    ],
+    [
+      "an acknowledgement can NEVER excuse a local path",
+      (() => {
+        const l = base();
+        l.fields.windowsPublisher = {
+          status: "frozen",
+          value: "/Users/someone/certs",
+          format: "publisher-name",
+          machineOverlapAcknowledged: "trying to wave away a path",
+        };
+        return l;
+      })(),
+      // Two: the path fails the publisher-name FORMAT as well as the EDP-30
+      // shape check. Both should fire — a path is wrong twice over.
+      2,
+    ],
+    [
       "an undeclared field is refused",
       (() => {
         const l = base();
@@ -297,9 +360,10 @@ try {
   process.exit(args.includes("--enforce") ? 1 : 0);
 }
 
-const { violations, blockers } = checkLedger(ledger, committedLedger(LEDGER_PATH));
+const { violations, blockers, notes } = checkLedger(ledger, committedLedger(LEDGER_PATH));
 
 for (const v of violations) console.error(`release-identity FAIL: ${v}`);
+for (const n of notes) console.warn(`release-identity NOTE: ${n}`);
 for (const b of blockers) console.warn(`release-identity BLOCKER: ${b} awaits owner input`);
 
 if (violations.length > 0 && args.includes("--enforce")) process.exit(1);
