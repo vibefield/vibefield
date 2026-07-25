@@ -19,6 +19,11 @@ import { isSmokeLike, parseMode } from "./modes";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { installRendererLogging } from "./renderer-logging";
 import {
+  assertPackagedResources,
+  resolveDevelopmentResources,
+  resolvePackagedResources,
+} from "./resources";
+import {
   installCsp,
   installNavigationPolicy,
   installPermissionPolicy,
@@ -228,11 +233,27 @@ async function main(
     return;
   }
 
-  const repoRoot = resolve(app.getAppPath(), "..", "..");
+  // §4.3 — two explicit constructors, chosen by app.isPackaged, never a single
+  // "find it somehow" path. app.getAppPath()/../.. is a SOURCE-CHECKOUT
+  // assumption (a packaged app.asar is not a repo), so it stays on the
+  // development branch where it is true.
+  const resources = app.isPackaged
+    ? resolvePackagedResources({
+        resourcesPath: process.resourcesPath,
+        electronExecPath: process.execPath,
+      })
+    : resolveDevelopmentResources({
+        repoRoot: resolve(app.getAppPath(), "..", ".."),
+        electronExecPath: process.execPath,
+      });
+  // Fatal and typed before anything spawns: a missing or wrong-architecture
+  // sidecar must read as a packaging failure with a doctor code, not as an exec
+  // error later that looks like a missing file (§4.3, §14).
+  assertPackagedResources(resources);
   supervisor = buildSupervisor({
     mode: MODE,
     root,
-    repoRoot,
+    resources,
     viteUrl: VITE_URL,
     logRoot,
     logger,

@@ -1,0 +1,133 @@
+# electron-builder configuration (WP4; distribution spec §7.5 builder shape, §7.3/§7.4 for what
+# may enter the package, §6.2 for this directory's layout; ASAR policy and the internal layout are
+# electron-security-packaging.md §10's — this file expresses them, it does not redefine them).
+#
+# THIS CONFIG PACKAGES A STAGE, NOT THE WORKSPACE. `node scripts/stage-package.mjs` builds
+# apps/desktop/build/stage/ from an exact allowlist; every path below points into that stage.
+# Nothing here globs the repo, so the §7.3 must-never-ship list is enforced in one place (the
+# stager) instead of being re-litigated in builder globs. Run the stager first — a build against
+# a stale or absent stage is exactly what §7.2 forbids.
+#
+# All relative paths resolve against apps/desktop (the project directory holding this config's
+# package.json), EXCEPT `files`, which resolves against `directories.app`.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IDENTITY — appId IS AN UNRESOLVED OWNER BLOCKER (B-1)
+# ─────────────────────────────────────────────────────────────────────────────
+# The real value is owner input tracked in packaging/release-identity.json, where appId and
+# windowsAppUserModelId both sit at status "blocker" / value null under B-1. §7.6 is why it cannot
+# be guessed here: appId is a value an installed VibeField is KNOWN BY, and changing it after a
+# public release is a migration — signatures, update feeds, taskbar pinning and notification
+# routing all key off it.
+#
+# So this placeholder is deliberately NOT a plausible reverse-DNS id. It is prefixed INVALID so it
+# is unmistakable in Info.plist/Finder, and it ends in `.invalid` — the RFC 2606 reserved TLD,
+# which can never be a real domain — so that even read backwards it cannot collide with anyone's
+# identifier. A local `--dir` build accepts it; nothing else should.
+#
+# RELEASE GATE: a signed build MUST fail while this value is here. The mechanism is
+# `node scripts/check-release-identity.mjs --require-frozen` (report-only today; §16.1's
+# first-signed-beta gate turns it on), which exits non-zero for every unfrozen field. The release
+# workflow runs it BEFORE electron-builder. Freezing B-1 means editing release-identity.json with
+# an identityRevision bump, then replacing the line below — in the same commit.
+appId: INVALID.unresolved-blocker-B-1.vibefield.invalid
+
+# Frozen in release-identity.json, and already load-bearing at runtime via app.setName().
+productName: VibeField
+# executableName is deliberately unset: it is blocker B-2, and electron-builder defaults it to
+# productName. Setting a guess would put a name into Windows shortcuts and the Linux .desktop
+# StartupWMClass (§6.3) that a later slice would have to migrate.
+
+directories:
+  # The staged ASAR root. Pointing `app` at it makes the stager's generated package.json — name,
+  # version, main: shell/main/index.cjs, and nothing else (§7.3) — the manifest electron-builder
+  # reads, while devDependencies (electron itself) still come from apps/desktop/package.json.
+  # That is electron-builder's two-package layout, used here so the packaged manifest carries no
+  # scripts and no dev wiring.
+  app: build/stage/app
+  output: release
+  buildResources: packaging
+
+# ASAR is mandatory (ESP §10.2), and there is deliberately NO asarUnpack: §10.2 requires it to be
+# minimal and evidence-driven rather than a convenience escape. Everything needing a real
+# filesystem path — the wasm loro reads via __dirname, the worker entry `new Worker` opens, the
+# native sidecar — is an extraResource below instead.
+asar: true
+
+# The stage is already the allowlist; this is the second lock, so a polluted stage still cannot
+# widen the archive. The negations are not redundant: `assets/**/*` is the one glob here, and it
+# is exactly where a future Vite config change could start emitting source maps (§7.3 forbids them
+# absent a security review). The stager fails on the same material — two independent refusals.
+files:
+  - package.json
+  - shell/main/index.cjs
+  - shell/preload/index.cjs
+  - shell/renderer/index.html
+  - shell/renderer/assets/**/*
+  - "!**/*.map"
+  - "!**/*.{ts,tsx,cts,mts}"
+  - "!**/testing/**"
+
+# §7.4 external resources, landing under Resources/. Flat `bin/` holds because packages are
+# architecture-specific (EDP-22/23); per-arch subdirectories arrive with the universal-build
+# amendment, not before. The stager always creates all three directories even when empty, so this
+# config does not break a build during the slices where tray assets (WP3) and bundled plugins
+# (WP8) do not exist yet — a missing extraResources source is a hard electron-builder error.
+# Executable bits: the stager sets field-native to 0755 and asserts it (§7.4); confirm it survived
+# the copy in the packaged-artifact check, since that assertion is about the stage, not the .app.
+extraResources:
+  - from: build/stage/bin
+    to: bin
+  - from: build/stage/tray
+    to: tray
+  - from: build/stage/plugins
+    to: plugins
+
+# NO `electronFuses:` BLOCK HERE — deliberately, not by omission. EDP-31 split the packaging
+# surface: electron-security-packaging.md §9.1 owns the single fuse matrix (including the
+# transitional states where RunAsNode and GrantFileProtocolExtraPrivileges stay enabled), and
+# §9.2's @electron/fuses package hook owns the mechanism that flips them in the correct order
+# relative to signing. Distribution spec §7.5 deleted its own fuse block for the same reason.
+# A fuse configured here would be a second, competing source of truth — the exact drift EDP-31
+# exists to prevent.
+
+# No `icon:` — the four icon families are WP3 (§6.1/§6.3), and buildResources has no icons/ yet.
+# electron-builder will warn that the default Electron icon is used; that warning is expected
+# until WP3 lands, and it is preferable to pointing at an asset that does not exist.
+
+# The staged app declares no dependencies and ships no node_modules, so there is nothing to
+# rebuild. Off explicitly: a rebuild step that silently does nothing is still a step that can
+# start doing something.
+npmRebuild: false
+
+mac:
+  target: [dmg, zip]
+  # Hardened runtime is on from the first package even though nothing is signed yet, so the
+  # entitlement set is exercised from the start rather than discovered at notarization time.
+  hardenedRuntime: true
+  # UNSIGNED, EXPLICITLY. A WP4 build is `electron-builder --dir` and unsigned; `identity: null`
+  # states that rather than leaving it to whether the builder happens to have a certificate in
+  # their keychain — otherwise two developers get materially different artifacts from the same
+  # commit. WP10 owns signing and notarization and must replace this whole block with §7.5's
+  # shape: forceCodeSigning: true, notarize: true, entitlements/entitlementsInherit pointing at
+  # packaging/entitlements.mac.plist (§9.3), and `binaries:` listing the packaged fieldd and
+  # field-native sidecars for inside-out signing (ESP §10.5). Leaving `identity: null` in place
+  # then is caught rather than silent: it contradicts forceCodeSigning and electron-builder fails.
+  identity: null
+
+# Windows and Linux are not GA targets (EDP-22/23); these blocks record §7.5's shape so the first
+# build on either platform starts from the spec rather than from improvisation. forceCodeSigning
+# is absent for the same reason it is on macOS — WP10 owns it.
+win:
+  target: [nsis]
+  # nsis.appId must equal windowsAppUserModelId once B-1 is frozen, or taskbar pinning,
+  # shortcuts, notifications and updates disagree with each other (§5.6). Both are blocked on B-1.
+
+linux:
+  target: [AppImage, deb]
+  category: Utility
+  # No `desktopName:` — electron-builder 26 removed it (the schema rejects the whole linux block
+  # if present) in favour of a `desktop:` entry object. The .desktop filename, its
+  # StartupWMClass and the `x-scheme-handler/vibefield` MimeType all have to agree with
+  # executableName (§6.3, §10.3), which is blocker B-2 — so the Linux slice writes this block
+  # once, from the current schema, rather than carrying a guess that validates but misnames.

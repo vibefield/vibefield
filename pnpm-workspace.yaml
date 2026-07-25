@@ -11,6 +11,11 @@ packages:
 allowBuilds:
   esbuild: true
   electron: true
+  # electron-builder's Windows-installer helper. Refused rather than merely
+  # unaddressed: Windows is not a GA target (EDP-23), nothing on macOS or Linux
+  # needs it, and a postinstall we never exercise is install-time code we cannot
+  # vouch for. Flip it in the slice that first builds an NSIS installer.
+  electron-winstaller: false
 # EL8 — exactly ONE loro-crdt resolution across the whole tree (strata/ICE/app;
 # CRDT docs are only interoperable within a single wasm instance).
 # @vibecook/ice: EXACT registry pin (EL8: "exact pins on all @vibecook/*"),

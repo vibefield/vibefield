@@ -8,7 +8,7 @@
       "files": {
         "dist/main/index.cjs": {
           "count": 1,
-          "bytes": [604515]
+          "bytes": [610479]
         },
         "dist/preload/index.cjs": {
           "count": 1,
@@ -36,7 +36,7 @@
         },
         "dist/renderer/assets/workspace-[hash].js": {
           "count": 1,
-          "bytes": [6332073]
+          "bytes": [6365501]
         },
         "dist/renderer/index.html": {
           "count": 1,
@@ -48,28 +48,32 @@
           "neverShip": ["testing-tree", "smoke-or-spike-entry"]
         }
       },
-      "bytes": 7581917,
-      "installedBytes": 7602176
+      "bytes": 7621309,
+      "installedBytes": 7647232
     },
     "packages/fieldd": {
       "name": "@vibefield/fieldd",
       "files": {
         "dist/bin.cjs": {
           "count": 1,
-          "bytes": [1158993]
+          "bytes": [1431516]
+        },
+        "dist/loro_wasm_bg.wasm": {
+          "count": 1,
+          "bytes": [3151654]
         },
         "dist/service-harness.mjs": {
           "count": 1,
           "bytes": [251042]
         }
       },
-      "bytes": 1410035,
-      "installedBytes": 1413120
+      "bytes": 4834212,
+      "installedBytes": 4841472
     }
   },
   "totals": {
-    "files": 13,
-    "bytes": 8991952,
-    "installedBytes": 9015296
+    "files": 14,
+    "bytes": 12455521,
+    "installedBytes": 12488704
   }
 }

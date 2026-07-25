@@ -5,6 +5,7 @@ import { createFielddSupervisor, type FielddSupervisor } from "@vibefield/fieldd
 import type { Logger } from "@vibefield/logging";
 import { app } from "electron";
 import { isSmokeLike, type ShellMode, shutdownPolicy } from "./modes";
+import type { DesktopResources } from "./resources";
 
 // The supervisor owns adopt/spawn/probe/readiness (ESR §5.3); this builder
 // owns only what a supervisor must never know: Electron paths, the runner
@@ -22,30 +23,36 @@ export function dataRoot(mode: ShellMode): string {
 export function buildSupervisor(opts: {
   mode: ShellMode;
   root: string;
-  repoRoot: string;
+  resources: DesktopResources;
   viteUrl: string;
   logRoot: string;
   logger: Logger;
 }): FielddSupervisor {
-  const fielddBin =
-    process.env["FIELDD_BIN"] ?? join(opts.repoRoot, "packages", "fieldd", "dist", "bin.cjs");
-  const nativeBin =
-    process.env["FIELDD_NATIVE_BIN"] ?? join(opts.repoRoot, "target", "debug", "field-native");
-  if (!existsSync(fielddBin)) throw new Error(`fieldd bin missing (build it): ${fielddBin}`);
+  // Env overrides still win — they are how smoke harnesses and a developer
+  // testing a packaged layout redirect the daemon — but the DEFAULT now comes
+  // from the injected layout, never from a path this file derives. That is the
+  // §4.3 law: a packaged build must not be able to reach a repository, even by
+  // accident, so `repoRoot` is no longer an input here.
+  const fielddBin = process.env["FIELDD_BIN"] ?? opts.resources.fielddArgs[0];
+  const nativeBin = process.env["FIELDD_NATIVE_BIN"] ?? opts.resources.fieldNativePath;
+  if (fielddBin === undefined || !existsSync(fielddBin)) {
+    throw new Error(`fieldd bin missing (build it): ${fielddBin ?? "(unset)"}`);
+  }
   const smokeLike = opts.mode === "smoke" || opts.mode === "smoke-canvas";
   const logger = opts.logger.child({ component: "daemon.supervisor" });
+  const pluginRoots = opts.resources.pluginRoots;
   return createFielddSupervisor({
     dataRoot: opts.root,
-    spawn: { command: process.execPath, args: [fielddBin] },
+    spawn: { command: opts.resources.fielddCommand, args: [fielddBin] },
     environment: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
-      // PLUG-P2 — plugin discovery roots (§9.1). The app runs from the repo
-      // today; packaged bundled-roots arrive with the packaging pipeline.
-      // Explicit env always wins (PATH-style lists, see fieldd bin.ts).
-      FIELDD_PLUGIN_ROOTS: process.env["FIELDD_PLUGIN_ROOTS"] ?? join(opts.repoRoot, "plugins"),
+      // PLUG-P2 — plugin discovery roots (§9.1), now layout-derived: the repo in
+      // development, Resources/plugins/bundled when packaged. Explicit env still
+      // wins (PATH-style lists, see fieldd bin.ts).
+      FIELDD_PLUGIN_ROOTS: process.env["FIELDD_PLUGIN_ROOTS"] ?? pluginRoots.bundled.join(":"),
       FIELDD_PLUGIN_DEV_ROOTS:
-        process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? join(opts.repoRoot, "examples", "plugins"),
+        process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? pluginRoots.devLinked.join(":"),
       // The shell resolved this root under its own mode policy. Passing that
       // trusted absolute decision keeps all three process owners aligned while
       // fieldd still refuses an ambient override on its own.

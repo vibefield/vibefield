@@ -24,3 +24,9 @@ coverage/
 *.log
 logs/
 .pnpm-store/
+
+# packaged artifacts (WP4): electron-builder's output. Hundreds of MB per build,
+# and a release artifact is produced by the release workflow from a tag — never
+# committed. `apps/desktop/build/` (the deterministic stage) is already covered
+# by the `build/` rule above.
+release/
