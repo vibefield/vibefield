@@ -17,9 +17,11 @@
     "//package:stage": "NOT named `stage` — pnpm has a built-in `stage` subcommand that shadows it",
     "package:stage": "pnpm build && node ../../scripts/stage-package.mjs",
     "package:verify": "node ../../scripts/stage-package.mjs --verify",
-    "package:dir": "pnpm run package:stage && electron-builder --dir --config packaging/electron-builder.yml"
+    "package:dir": "pnpm run package:stage && electron-builder --dir --config packaging/electron-builder.yml",
+    "package:audit": "node ../../scripts/audit-fuses.mjs --app release/mac-arm64/VibeField.app"
   },
   "devDependencies": {
+    "@electron/fuses": "^2.1.3",
     "@vibefield/electron-shell": "workspace:*",
     "concurrently": "^10.0.3",
     "electron": "^43.1.1",

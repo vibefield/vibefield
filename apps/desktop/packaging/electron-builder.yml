@@ -90,6 +90,12 @@ extraResources:
 # relative to signing. Distribution spec §7.5 deleted its own fuse block for the same reason.
 # A fuse configured here would be a second, competing source of truth — the exact drift EDP-31
 # exists to prevent.
+#
+# The hook below is that mechanism. electron-builder's own `electronFuses:` option would flip
+# fuses too, but it does not READ THEM BACK, and §9.2 requires proving what the artifact carries
+# rather than what we asked for. afterPack runs after packaging and before signing — the only
+# window where flipping is legal, since nothing may mutate a signed executable.
+afterPack: packaging/after-pack.mjs
 
 # No `icon:` — the four icon families are WP3 (§6.1/§6.3), and buildResources has no icons/ yet.
 # electron-builder will warn that the default Electron icon is used; that warning is expected
