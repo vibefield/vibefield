@@ -42,13 +42,15 @@ export const FUSE_WIRE_INDEX = Object.freeze({
 
 export const FUSE_MATRIX = Object.freeze({
   RunAsNode: {
-    enabled: true,
-    status: "transitional-required",
-    owner: "WP9 / ESP §9.3",
+    enabled: false,
+    status: "final",
     reason:
-      "Production fieldd still launches as Electron-as-node (ESP-2). Electron IGNORES " +
-      "ELECTRON_RUN_AS_NODE when this fuse is off, so disabling it now would not harden the " +
-      "app — it would stop the daemon starting. Closes when the standalone launcher lands.",
+      "CLOSED by WP9 (2026-07-25): fieldd is a standalone Node SEA at Resources/bin/fieldd, so " +
+      "nothing needs Electron to impersonate node. This was not tidiness — while the fuse was " +
+      "on it BYPASSED the inspector fuse: `ELECTRON_RUN_AS_NODE=1 VibeField --inspect=0` opened " +
+      "a debugger that plain `VibeField --inspect=0` correctly refused, because in node mode the " +
+      "process is Node and the fuse has no jurisdiction. One environment variable, precisely " +
+      "§4.1's threat model. With it off, the packaged binary is not a general Node executable.",
   },
   EnableCookieEncryption: {
     enabled: true,
@@ -99,13 +101,13 @@ export const FUSE_MATRIX = Object.freeze({
       "Electron at an artifact that does not exist. Left at Electron's default.",
   },
   GrantFileProtocolExtraPrivileges: {
-    enabled: true,
-    status: "transitional-required",
-    owner: "WP7 / ESP §8.3 stage F2",
+    enabled: false,
+    status: "final",
     reason:
-      "The packaged renderer still loads through loadFile() (stage F0). Disabling it before the " +
-      "vibefield-app:// custom origin ships would break the renderer rather than harden it — " +
-      "§8.3 stages this deliberately.",
+      "CLOSED by WP7 (2026-07-25) — §8.3 stage F2 reached. The packaged renderer loads from " +
+      "vibefield-app://shell, a standard+secure scheme serving one directory, so no production " +
+      "document is a `file:` document and no file: origin needs extra privilege. This also makes " +
+      "CSP 'self' name exactly one origin instead of the whole file protocol.",
   },
   WasmTrapHandlers: {
     enabled: true,

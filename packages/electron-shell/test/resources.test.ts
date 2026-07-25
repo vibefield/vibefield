@@ -37,6 +37,9 @@ describe("resolveDevelopmentResources", () => {
     expect(dev.packaged).toBe(false);
     expect(dev.fielddCommand).toBe(ELECTRON);
     expect(dev.fielddArgs).toEqual([`${REPO}/packages/fieldd/dist/bin.cjs`]);
+    // Development keeps node mode: building a 145 MB SEA per edit would be an
+    // absurd inner loop, and the dev Electron is unfused.
+    expect(dev.fielddNeedsNodeMode).toBe(true);
   });
 
   it("uses the cargo debug profile — legal here, forbidden in a package (EDP-13)", () => {
@@ -58,9 +61,20 @@ describe("resolvePackagedResources", () => {
 
   it("hangs everything off resourcesPath", () => {
     expect(pkg.packaged).toBe(true);
-    expect(pkg.fielddArgs).toEqual([`${RESOURCES}/bin/bin.cjs`]);
     expect(pkg.fieldNativePath).toBe(`${RESOURCES}/bin/field-native`);
     expect(pkg.pluginRoots.bundled).toEqual([`${RESOURCES}/plugins/bundled`]);
+  });
+
+  it("execs a REAL fieldd executable, not Electron wearing a hat (EDP-14)", () => {
+    expect(pkg.fielddCommand).toBe(`${RESOURCES}/bin/fieldd`);
+    expect(pkg.fielddArgs).toEqual([]);
+    // The command must not be the app's own binary — that would be the
+    // Electron-as-node launcher the RunAsNode fuse now refuses to honour.
+    expect(pkg.fielddCommand).not.toBe(ELECTRON);
+  });
+
+  it("does not ask for node mode, because a packaged build cannot be granted it", () => {
+    expect(pkg.fielddNeedsNodeMode).toBe(false);
   });
 
   it("has NO dev-linked plugin root — a package must not load unverified plugins", () => {
@@ -123,25 +137,49 @@ describe("assertPackagedResources", () => {
     expect(() => assertPackagedResources(dev)).not.toThrow();
   });
 
-  it("reports a missing fieldd bundle with a doctor code, not a stack trace", () => {
+  /** Path-aware reader: fieldd and field-native are now BOTH executables, so
+   * each has to be able to fail while the other passes. */
+  const reader =
+    (byPath: Record<"fieldd" | "native", Uint8Array | null>) =>
+    (path: string): Uint8Array | null =>
+      path.endsWith("field-native") ? byPath.native : byPath.fieldd;
+
+  const bothOk = { fieldd: MACHO_ARM64, native: MACHO_ARM64 };
+
+  it("reports a missing fieldd executable with a doctor code, not a stack trace", () => {
     try {
-      assertPackagedResources(packaged());
+      assertPackagedResources(packaged(), {
+        nodeArch: "arm64",
+        readHead: reader({ fieldd: null, native: MACHO_ARM64 }),
+      });
       throw new Error("expected a ResourceError");
     } catch (error) {
       expect(error).toBeInstanceOf(ResourceError);
       expect((error as ResourceError).code).toBe("fieldd-bundle-missing");
-      expect((error as ResourceError).path).toContain("bin.cjs");
+      expect((error as ResourceError).path).toContain("fieldd");
     }
   });
 
-  it("refuses an architecture mismatch — the failure that otherwise reads as a missing file", () => {
-    // The bundle check passes only when the file exists, so this drives the
-    // native check directly with an injected reader and a real repo path.
-    const withRealBundle = packaged({ fielddArgs: [`${process.cwd()}/package.json`] });
+  it("refuses a fieldd built for another architecture", () => {
+    // The SEA embeds a whole Node binary, so an x64 SEA on an arm64 machine is
+    // a real and easy mistake once universal builds arrive.
     try {
-      assertPackagedResources(withRealBundle, {
+      assertPackagedResources(packaged(), {
         nodeArch: "arm64",
-        readHead: () => MACHO_X64,
+        readHead: reader({ fieldd: MACHO_X64, native: MACHO_ARM64 }),
+      });
+      throw new Error("expected a ResourceError");
+    } catch (error) {
+      expect((error as ResourceError).code).toBe("fieldd-arch-mismatch");
+      expect((error as ResourceError).message).toContain("x64");
+    }
+  });
+
+  it("refuses a field-native mismatch — the failure that otherwise reads as a missing file", () => {
+    try {
+      assertPackagedResources(packaged(), {
+        nodeArch: "arm64",
+        readHead: reader({ fieldd: MACHO_ARM64, native: MACHO_X64 }),
       });
       throw new Error("expected a ResourceError");
     } catch (error) {
@@ -153,19 +191,20 @@ describe("assertPackagedResources", () => {
   });
 
   it("reports an absent field-native distinctly from a mismatched one", () => {
-    const withRealBundle = packaged({ fielddArgs: [`${process.cwd()}/package.json`] });
     try {
-      assertPackagedResources(withRealBundle, { nodeArch: "arm64", readHead: () => null });
+      assertPackagedResources(packaged(), {
+        nodeArch: "arm64",
+        readHead: reader({ fieldd: MACHO_ARM64, native: null }),
+      });
       throw new Error("expected a ResourceError");
     } catch (error) {
       expect((error as ResourceError).code).toBe("field-native-missing");
     }
   });
 
-  it("accepts a matching architecture", () => {
-    const withRealBundle = packaged({ fielddArgs: [`${process.cwd()}/package.json`] });
+  it("accepts a matching architecture on both executables", () => {
     expect(() =>
-      assertPackagedResources(withRealBundle, { nodeArch: "arm64", readHead: () => MACHO_ARM64 }),
+      assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: reader(bothOk) }),
     ).not.toThrow();
   });
 
@@ -173,7 +212,9 @@ describe("assertPackagedResources", () => {
     // The regression this guards: an installed app quietly spawning from a
     // developer's checkout, which "works" on one machine and nowhere else.
     const pkg = packaged();
-    expect(pkg.fielddArgs[0]).not.toContain(REPO);
+    expect(pkg.fielddCommand).not.toContain(REPO);
+    expect(pkg.fieldNativePath).not.toContain(REPO);
+    // With nothing on disk at those paths, boot must fail rather than search.
     expect(() => assertPackagedResources(pkg)).toThrow(ResourceError);
   });
 });

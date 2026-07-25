@@ -33,20 +33,35 @@ export function buildSupervisor(opts: {
   // from the injected layout, never from a path this file derives. That is the
   // §4.3 law: a packaged build must not be able to reach a repository, even by
   // accident, so `repoRoot` is no longer an input here.
-  const fielddBin = process.env["FIELDD_BIN"] ?? opts.resources.fielddArgs[0];
+  // FIELDD_BIN overrides the ARGUMENT in node mode (a .cjs bundle) and the
+  // COMMAND when fieldd is its own executable — the two shapes the launcher
+  // takes on either side of EDP-14.
+  const nodeMode = opts.resources.fielddNeedsNodeMode;
+  const override = process.env["FIELDD_BIN"];
+  const command = nodeMode
+    ? opts.resources.fielddCommand
+    : (override ?? opts.resources.fielddCommand);
+  const args = nodeMode
+    ? [override ?? opts.resources.fielddArgs[0]]
+    : [...opts.resources.fielddArgs];
   const nativeBin = process.env["FIELDD_NATIVE_BIN"] ?? opts.resources.fieldNativePath;
-  if (fielddBin === undefined || !existsSync(fielddBin)) {
-    throw new Error(`fieldd bin missing (build it): ${fielddBin ?? "(unset)"}`);
+  const launchTarget = nodeMode ? args[0] : command;
+  if (launchTarget === undefined || !existsSync(launchTarget)) {
+    throw new Error(`fieldd bin missing (build it): ${launchTarget ?? "(unset)"}`);
   }
   const smokeLike = opts.mode === "smoke" || opts.mode === "smoke-canvas";
   const logger = opts.logger.child({ component: "daemon.supervisor" });
   const pluginRoots = opts.resources.pluginRoots;
   return createFielddSupervisor({
     dataRoot: opts.root,
-    spawn: { command: opts.resources.fielddCommand, args: [fielddBin] },
+    spawn: { command, args: args.filter((a): a is string => a !== undefined) },
     environment: {
       ...process.env,
-      ELECTRON_RUN_AS_NODE: "1",
+      // Set ONLY when the command is genuinely Electron. A packaged build execs
+      // a real fieldd, where the RunAsNode fuse is off and the variable is
+      // ignored — asking for node mode there would be a claim the artifact
+      // cannot honour (ESP §9.3).
+      ...(nodeMode ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
       // PLUG-P2 — plugin discovery roots (§9.1), now layout-derived: the repo in
       // development, Resources/plugins/bundled when packaged. Explicit env still
       // wins (PATH-style lists, see fieldd bin.ts).

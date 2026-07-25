@@ -6,6 +6,7 @@ import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
 import { app, clipboard, crashReporter, dialog, session, shell } from "electron";
+import { installAppProtocol, registerAppScheme } from "./app-protocol";
 import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
@@ -29,6 +30,7 @@ import {
   installPermissionPolicy,
   installWebContentsBackstop,
 } from "./security";
+import { buildCsp } from "./security-policy";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
@@ -192,6 +194,22 @@ async function main(
   // ESP §6.2 — every session gate and contents guard is armed BEFORE the first
   // window exists, so no renderer can outrun its own policy.
   installCsp(MODE);
+  // The renderer's own origin. Dev serves from Vite instead, so the handler is
+  // pointless there; every other mode loads vibefield-app://shell and would show
+  // a blank window without it. Root is the built renderer beside dist/main.
+  const appCsp = buildCsp(MODE);
+  if (MODE !== "dev") {
+    installAppProtocol({
+      root: join(__dirname, "..", "renderer"),
+      ...(appCsp !== null ? { csp: appCsp } : {}),
+      onRefusal: (reason, url) => {
+        logger.warn("desktop.security.app_asset_refused", "An app-scheme request was refused", {
+          reason,
+          url,
+        });
+      },
+    });
+  }
   installPermissionPolicy(session.defaultSession, (permission) => {
     logger.warn(
       "desktop.security.permission_denied",
@@ -380,6 +398,11 @@ async function main(
 
 app.setName("VibeField");
 if (process.platform === "win32") app.setAppUserModelId(APP_ID);
+// ESP §6.1 step 2 — privileged schemes MUST be declared before ready; Electron
+// refuses the registration afterwards, and a scheme that is not `standard`
+// cannot host the renderer's ES-module graph. Registered in every mode so the
+// declaration cannot drift from the mode that serves it.
+registerAppScheme();
 // ESP-4/§6.1 — process-wide renderer sandboxing, before ready and before any
 // window policy runs. Independent of per-window `sandbox:true` (which stays)
 // and of the RunAsNode fuse: three controls, three surfaces, no substitutes.

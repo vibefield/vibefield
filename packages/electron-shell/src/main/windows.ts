@@ -1,5 +1,5 @@
-import { join } from "node:path";
 import { BrowserWindow, screen } from "electron";
+import { APP_ENTRY_URL } from "./app-protocol";
 import { isSmokeLike, type ShellMode } from "./modes";
 import { assertSecurePreferences, webPreferences } from "./window-policy";
 
@@ -33,15 +33,23 @@ export function createMainWindow(opts: {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Production loads the packaged file; dev polls the Vite server up. */
+/** Production loads the app's OWN origin; dev polls the Vite server up.
+ *
+ * `loadFile()` is gone (ESP §8.3 stage F2): a `file:` document is why
+ * `GrantFileProtocolExtraPrivileges` had to stay on, and it also cannot host an
+ * ES-module graph without that privilege. Serving the same directory over
+ * `vibefield-app://shell` gives the renderer a real, single origin — which is
+ * what makes CSP `'self'` a precise statement — and let the fuse close.
+ *
+ * Smoke-canvas takes this path too, deliberately: it means the custom origin is
+ * exercised on every `pnpm smoke:canvas`, not only when someone builds a package. */
 export async function loadRenderer(
   win: BrowserWindow,
   mode: ShellMode,
   viteUrl: string,
 ): Promise<void> {
   if (mode !== "dev") {
-    // the shell is self-contained: dist/main → dist/renderer (ESR 3a)
-    await win.loadFile(join(__dirname, "..", "renderer", "index.html"));
+    await win.loadURL(APP_ENTRY_URL);
     return;
   }
   for (let i = 0; i < 40; i++) {

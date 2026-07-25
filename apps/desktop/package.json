@@ -15,7 +15,8 @@
     "spike:loro": "pnpm build:shell && VITE_SPIKE=1 pnpm build:renderer && electron . --spike-loro",
     "smoke:canvas": "pnpm build && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-canvas",
     "//package:stage": "NOT named `stage` — pnpm has a built-in `stage` subcommand that shadows it",
-    "package:stage": "pnpm build && node ../../scripts/stage-package.mjs",
+    "package:sea": "node packaging/build-fieldd-sea.mjs",
+    "package:stage": "pnpm build && pnpm run package:sea && node ../../scripts/stage-package.mjs",
     "package:verify": "node ../../scripts/stage-package.mjs --verify",
     "package:dir": "pnpm run package:stage && electron-builder --dir --config packaging/electron-builder.yml",
     "package:audit": "node ../../scripts/audit-fuses.mjs --app release/mac-arm64/VibeField.app"
@@ -25,6 +26,7 @@
     "@vibefield/electron-shell": "workspace:*",
     "concurrently": "^10.0.3",
     "electron": "^43.1.1",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "postject": "^1.0.0-alpha.6"
   }
 }

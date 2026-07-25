@@ -56,6 +56,7 @@ const MODES_ENFORCEABLE = process.platform !== "win32";
 // Sidecars are architecture-specific and flat under `bin/` (EDP-22/23) — per-arch subdirectories
 // arrive with the universal-build amendment, not before.
 const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
+const fielddName = process.platform === "win32" ? "fieldd.exe" : "fieldd";
 
 // `app/` becomes app.asar (electron-builder's `files` root); `bin/`, `tray/` and `plugins/` are
 // extraResources. The split is §10.1's law: executable app code goes in the archive, native
@@ -82,13 +83,15 @@ const PLAN = [
     kind: "dir",
   },
   {
-    // Named `bin.cjs`, not `fieldd`, because that is exactly what the fieldd build emits today and
-    // the stage does not rename its inputs. §7.4 requires sidecar names be STABLE across versions,
-    // so the rename to `fieldd[.exe]` happens once, with the standalone launcher (ESP §10.3) —
-    // renaming it now would mean renaming it twice.
-    stage: "bin/bin.cjs",
-    from: "packages/fieldd/dist/bin.cjs",
+    // The rename this table anticipated: WP9 made fieldd a standalone executable
+    // (EDP-14), so `bin.cjs` is gone and `bin/fieldd[.exe]` is the stable §7.4 name. The shell
+    // execs this directly — no Electron-as-node, which is what let the RunAsNode fuse close.
+    // ~145 MB, because a SEA embeds the whole Node runtime; that cost buys the fuse.
+    stage: `bin/${fielddName}`,
+    from: `apps/desktop/build/fieldd-sea/${fielddName}`,
     kind: "file",
+    mode: EXEC_MODE,
+    produce: "pnpm --filter @vibefield/desktop run package:sea",
   },
   {
     // Outside the ASAR because `new Worker(path)` needs a real file on disk (§7.4, P-A).

@@ -31,10 +31,17 @@ export interface TrayImageSet {
 
 export interface DesktopResources {
   readonly packaged: boolean;
-  /** the program to exec; transitionally Electron-as-node (ESP-2), later the
-   * standalone fieldd executable (ESP-3 / EDP-14) */
+  /** the program to exec: the standalone fieldd executable when packaged
+   * (EDP-14), Electron-as-node from the repo bundle in development */
   readonly fielddCommand: string;
   readonly fielddArgs: readonly string[];
+  /** Whether `fielddCommand` is an Electron binary that must be told to behave
+   * as node. TRUE only in development now: a packaged build ships a real fieldd
+   * executable, so ELECTRON_RUN_AS_NODE is neither set nor honoured — the
+   * RunAsNode fuse is off (ESP §9.3), and setting it would be a lie either way.
+   * Kept as data rather than inferred from `packaged` so the two ideas can
+   * separate again if a launcher ever changes. */
+  readonly fielddNeedsNodeMode: boolean;
   readonly fieldNativePath: string;
   /** plugin discovery roots — absolute, never derived by the daemon itself */
   readonly pluginRoots: {
@@ -99,6 +106,9 @@ export function resolveDevelopmentResources(opts: {
     packaged: false,
     fielddCommand: opts.electronExecPath,
     fielddArgs: [join(opts.repoRoot, "packages", "fieldd", "dist", "bin.cjs")],
+    // Development runs the bundle through Electron's own node — building a
+    // 145 MB SEA on every edit would be an absurd inner loop.
+    fielddNeedsNodeMode: true,
     fieldNativePath: join(opts.repoRoot, "target", "debug", exe("field-native", platform)),
     pluginRoots: {
       bundled: [join(opts.repoRoot, "plugins")],
@@ -127,8 +137,13 @@ export function resolvePackagedResources(opts: {
   const bin = join(opts.resourcesPath, "bin");
   return {
     packaged: true,
-    fielddCommand: opts.electronExecPath,
-    fielddArgs: [join(bin, "bin.cjs")],
+    // A REAL executable, not Electron wearing a hat (EDP-14). Its two sidecars —
+    // service-harness.mjs and loro_wasm_bg.wasm — are staged beside it because
+    // fieldd resolves both against its own __dirname, which probe P-A verified
+    // is the executable's directory inside a SEA, independent of cwd.
+    fielddCommand: join(bin, exe("fieldd", platform)),
+    fielddArgs: [],
+    fielddNeedsNodeMode: false,
     fieldNativePath: join(bin, exe("field-native", platform)),
     pluginRoots: {
       bundled: [join(opts.resourcesPath, "plugins", "bundled")],
@@ -140,6 +155,7 @@ export function resolvePackagedResources(opts: {
 
 export type ResourceProblemCode =
   | "fieldd-bundle-missing"
+  | "fieldd-arch-mismatch"
   | "field-native-missing"
   | "field-native-arch-mismatch";
 
@@ -185,12 +201,25 @@ export function assertPackagedResources(
   if (!resources.packaged) return;
   const readHead = opts?.readHead ?? headOf;
 
-  const bundle = resources.fielddArgs[0];
-  if (bundle === undefined || !exists(bundle)) {
+  const host: ExecutableArch = hostArch(opts?.nodeArch ?? process.arch);
+
+  // fieldd is now an EXECUTABLE, so it gets the same two questions as
+  // field-native: is it there, and is it for this machine? Before EDP-14 it was
+  // a .cjs argument to Electron, where only existence was meaningful.
+  const fielddHead = readHead(resources.fielddCommand);
+  if (fielddHead === null) {
     throw new ResourceError(
       "fieldd-bundle-missing",
-      "The packaged fieldd bundle is missing from this installation.",
-      bundle ?? "(no fieldd argument)",
+      "The packaged fieldd executable is missing from this installation.",
+      resources.fielddCommand,
+    );
+  }
+  const fielddArch = identifyExecutable(fielddHead).arch;
+  if (!archCompatible(fielddArch, host)) {
+    throw new ResourceError(
+      "fieldd-arch-mismatch",
+      `The packaged fieldd executable is ${fielddArch}, but this machine is ${host}.`,
+      resources.fielddCommand,
     );
   }
 
@@ -202,7 +231,6 @@ export function assertPackagedResources(
       resources.fieldNativePath,
     );
   }
-  const host: ExecutableArch = hostArch(opts?.nodeArch ?? process.arch);
   const { arch } = identifyExecutable(head);
   if (!archCompatible(arch, host)) {
     throw new ResourceError(
