@@ -53,10 +53,12 @@ import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
+import { DocSyncService, type LaneInfo } from "./doc-sync";
 import { EndpointService } from "./endpoint-service";
 import { InstallSetReconciler } from "./install-reconciler";
 import { McpService } from "./mcp-service";
 import { MeshClient } from "./mesh-client";
+import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
 import { RegistryInstallService } from "./plugin-install";
@@ -247,9 +249,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics = diagnosticsService;
     await diagnosticsService.start();
     const mesh = new MeshClient(native);
+    // C6-3g: sync is constructed after docs but has to be reachable from its
+    // commit hook, so the hook reads a binding that is filled in below. It is
+    // optional the whole way down — with the mesh off (the default) `docSync`
+    // stays null and every commit takes the same path it always did.
+    let docSync: DocSyncService | null = null;
     const docs = new DocumentService({
       dataDir: config.dataDir,
       logger: logger.child({ component: "docs.service" }),
+      onCommit: (commit) => docSync?.onCommit(commit),
+    });
+    const laneLink = new MeshLaneLink({
+      socketPath: join(config.dataDir, "native", "run", "meshdata.sock"),
+      pairingFile: join(config.dataDir, "native", "pairing"),
+      bootId,
+      logger: logger.child({ component: "mesh.lane" }),
     });
     // PLUG-P2 — the plugin registry (§9): manifest-only discovery, pre-listen
     // so the first snapshot is warm. No module code loads here (§19.1).
@@ -266,6 +280,47 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
     });
     await plugins.refresh();
+
+    // C6-3g — cross-device doc sync. BEST EFFORT, and that is the honest shape:
+    // the mesh is off by default, so the byte socket usually is not there at
+    // all. A failure here must never fail boot — fieldd's local plane works
+    // exactly the same without it, which is the whole point of the two-plane
+    // split. The next daemon start retries; nothing degrades silently because
+    // `lane.open` already answers UNAVAILABLE with the mesh unit's real state.
+    docSync = new DocSyncService({
+      docs,
+      control: {
+        open: async (req) => {
+          await native.request("native.mesh.lane.open", req);
+        },
+        close: async (laneId) => {
+          await native.request("native.mesh.lane.close", { laneId });
+        },
+        subscribe: async (onEvent) => {
+          const { snapshot } = await native.subscribe("native.mesh.lane.subscribe", {}, onEvent);
+          return (snapshot as { lanes: LaneInfo[] } | undefined) ?? { lanes: [] };
+        },
+      },
+      bytes: laneLink,
+      peers: async () => {
+        const peers = (await mesh.peers()) as { id?: string }[];
+        return peers.map((p) => p.id).filter((id): id is string => typeof id === "string");
+      },
+      logger: logger.child({ component: "doc.sync" }),
+    });
+    try {
+      await laneLink.connect();
+      await docSync.start();
+      logger.info("fieldd.doc_sync.started", "Cross-device document sync is live");
+    } catch (error) {
+      docSync = null;
+      laneLink.close();
+      logger.info(
+        "fieldd.doc_sync.unavailable",
+        "Cross-device document sync is not available on this boot",
+        { error: String(error) },
+      );
+    }
     // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
     const installer = new RegistryInstallService({
       dataDir: config.dataDir,
@@ -1290,6 +1345,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           processes.stopAll(),
         ]);
         detachHealthSources?.();
+        docSync?.stop();
+        laneLink.close();
         docs.dispose();
         peers.dispose();
         devices.dispose();
@@ -1315,6 +1372,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       detachHealthSources?.();
       api.close();
       docLane.close(); // release the lane port before the outer rollback runs
+      docSync?.stop();
+      laneLink.close();
       docs.dispose();
       devices.dispose();
       services.dispose();

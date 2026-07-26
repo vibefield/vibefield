@@ -28,6 +28,21 @@ import { RpcCallError } from "./native-link";
 
 const ICE1_MAGIC = [0x49, 0x43, 0x45, 0x31] as const; // "ICE1"
 
+/** A revision that actually landed. `origin` is load-bearing rather than
+ * informational: cross-device sync broadcasts what it hears about, and a record
+ * that arrived FROM a peer must never be sent back — two devices echoing each
+ * other's updates is an infinite loop that looks, from the outside, exactly
+ * like a busy network. */
+export interface DocCommit {
+  docId: string;
+  origin: "local" | "peer";
+  kind: "checkpoint" | "update";
+  /** The bytes as stored — opaque here, as everywhere in this file. */
+  payload: Uint8Array;
+  meta: DocMeta;
+  baseEpoch: number;
+}
+
 export interface DocumentServiceOptions {
   dataDir: string;
   /** injectable clock — the ticket-expiry unit tests drive it directly */
@@ -35,6 +50,9 @@ export interface DocumentServiceOptions {
   /** one-shot lane ticket lifetime (default 30s) */
   ticketTtlMs?: number;
   logger?: Logger;
+  /** Fires once per revision that reached disk. Never for the idempotent-retry
+   * path, which commits nothing. */
+  onCommit?: (commit: DocCommit) => void;
 }
 
 /** doc.open's return: the caller pairs the ticket with laneUrl before dialing. */
@@ -85,6 +103,7 @@ export class DocumentService {
   private readonly registryFile: string;
   private readonly registryPath: string;
   private readonly logger: Logger;
+  private readonly onCommit: ((commit: DocCommit) => void) | undefined;
 
   /** insertion-ordered so list() reads back in creation order */
   private registry = new Map<string, DocRegistryEntry>();
@@ -99,6 +118,7 @@ export class DocumentService {
     this.now = opts.now ?? Date.now;
     this.ticketTtlMs = opts.ticketTtlMs ?? 30_000;
     this.logger = opts.logger ?? createNoopLogger();
+    this.onCommit = opts.onCommit;
     this.docsDir = join(this.dataDir, "docs");
     this.registryDir = join(this.dataDir, "registries");
     this.registryFile = `${STORES.DOCS}.json`;
@@ -259,9 +279,14 @@ export class DocumentService {
 
   /** Validates then persists atomically, then updates the registry. Any validation
    * failure throws BEFORE the first byte hits disk — prior bytes stay untouched. */
-  writeDoc(docId: string, bytes: Uint8Array, putMeta: LanePutMeta): Promise<DocMeta> {
+  writeDoc(
+    docId: string,
+    bytes: Uint8Array,
+    putMeta: LanePutMeta,
+    origin: "local" | "peer" = "local",
+  ): Promise<DocMeta> {
     const prior = this.writes.get(docId) ?? Promise.resolve();
-    const write = prior.catch(() => {}).then(() => this.writeDocNow(docId, bytes, putMeta));
+    const write = prior.catch(() => {}).then(() => this.writeDocNow(docId, bytes, putMeta, origin));
     const tail = write.then(
       () => {},
       () => {},
@@ -276,6 +301,7 @@ export class DocumentService {
     docId: string,
     bytes: Uint8Array,
     putMeta: LanePutMeta,
+    origin: "local" | "peer",
   ): Promise<DocMeta> {
     const entry = this.registry.get(docId);
     if (!entry) throw new RpcCallError("NOT_FOUND", `no such doc: ${docId}`, false);
@@ -292,7 +318,7 @@ export class DocumentService {
         false,
       );
     if ((putMeta.kind ?? "checkpoint") === "update") {
-      return this.writeUpdateNow(entry, bytes, putMeta);
+      return this.writeUpdateNow(entry, bytes, putMeta, origin);
     }
     if (!hasIce1Magic(bytes))
       throw new RpcCallError("PRECONDITION_FAILED", "payload is not an ICE1 envelope", false);
@@ -358,6 +384,14 @@ export class DocumentService {
     // Legacy files are no longer authoritative after current.json commits.
     void rm(this.snapshotPath(docId), { force: true }).catch(() => {});
     void rm(join(dir, "meta.json"), { force: true }).catch(() => {});
+    this.announce({
+      docId,
+      origin,
+      kind: "checkpoint",
+      payload: bytes,
+      meta: currentMeta(meta),
+      baseEpoch: entry.baseEpoch,
+    });
     return meta;
   }
 
@@ -365,6 +399,7 @@ export class DocumentService {
     entry: DocRegistryEntry,
     bytes: Uint8Array,
     putMeta: LanePutMeta,
+    origin: "local" | "peer",
   ): Promise<DocMeta> {
     const docId = entry.docId;
     if (bytes.byteLength === 0) {
@@ -453,7 +488,31 @@ export class DocumentService {
     } catch (err) {
       throw this.storageError("registry refresh", err);
     }
-    return currentMeta(next);
+    const committed = currentMeta(next);
+    this.announce({
+      docId,
+      origin,
+      kind: "update",
+      payload: bytes,
+      meta: committed,
+      baseEpoch: entry.baseEpoch,
+    });
+    return committed;
+  }
+
+  /** A listener's failure is ITS problem. Sync is a consumer of durability, not
+   * a participant in it — a throw here must never turn a committed write into a
+   * failed one, or a sync bug becomes a data-loss bug. */
+  private announce(commit: DocCommit): void {
+    try {
+      this.onCommit?.(commit);
+    } catch (error) {
+      this.logger.error(
+        "fieldd.docs.commit_listener_failed",
+        "A commit listener threw; the revision is committed regardless",
+        error,
+      );
+    }
   }
 
   /** The S4 fence, in one place because both the renderer's writes and a peer's
@@ -510,13 +569,18 @@ export class DocumentService {
       // that Loro itself would happily have merged. Declining is the honest
       // move; merging belongs to the renderer, which holds the live doc.
       if (this.hasStoredDoc(docId)) return { applied: false, reason: "would-clobber" };
-      const meta = await this.writeDoc(docId, record.payload, {
-        revisionId: randomUUID(),
-        kind: "checkpoint",
-        engineSchema: record.meta.engineSchema,
-        savedAt: record.meta.savedAt,
-        byteLength: record.payload.byteLength,
-      });
+      const meta = await this.writeDoc(
+        docId,
+        record.payload,
+        {
+          revisionId: randomUUID(),
+          kind: "checkpoint",
+          engineSchema: record.meta.engineSchema,
+          savedAt: record.meta.savedAt,
+          byteLength: record.payload.byteLength,
+        },
+        "peer",
+      );
       return { applied: true, meta };
     }
 
@@ -536,15 +600,20 @@ export class DocumentService {
     // peer's chain and mean nothing here. A fresh id, based on OUR head. The
     // C6-3f probe measured that this converges — and that a record whose causal
     // dependencies have not arrived is held pending by Loro, not lost.
-    const meta = await this.writeDoc(docId, record.payload, {
-      revisionId: randomUUID(),
-      kind: "update",
-      baseRevisionId: current.revisionId,
-      baseEpoch: entry.baseEpoch,
-      engineSchema: record.meta.engineSchema,
-      savedAt: record.meta.savedAt,
-      byteLength: record.payload.byteLength,
-    });
+    const meta = await this.writeDoc(
+      docId,
+      record.payload,
+      {
+        revisionId: randomUUID(),
+        kind: "update",
+        baseRevisionId: current.revisionId,
+        baseEpoch: entry.baseEpoch,
+        engineSchema: record.meta.engineSchema,
+        savedAt: record.meta.savedAt,
+        byteLength: record.payload.byteLength,
+      },
+      "peer",
+    );
     return { applied: true, meta };
   }
 

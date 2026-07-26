@@ -320,6 +320,15 @@ fn lane_json(lane: &Lane) -> Value {
 /// Forwards lane lifecycle to the subscriber. A lagging consumer gets a fresh
 /// snapshot rather than a gap (P5) — the lane TABLE is the truth, and the
 /// events are only how it is learned promptly.
+///
+/// ONE `.delta` METHOD CARRYING A `kind`, not a method per event. Not cosmetic:
+/// fieldd's NativeLink routes a notification to its subscription only when the
+/// method ends in `.delta` or `.snapshot` (native-link.ts). `lane.peerOpened`
+/// went out on the wire and was dropped on the floor with no error anywhere —
+/// found by writing the consumer, not by testing the producer, because both
+/// halves were internally consistent and only disagreed with each other.
+/// design-02 §2.4's `lane.peerOpened` / `lane.closed` survive as the kind
+/// values, which is where the vocabulary belongs.
 fn spawn_lane_forwarder(
     state: Arc<DaemonState>,
     tx: Tx,
@@ -330,14 +339,16 @@ fn spawn_lane_forwarder(
         loop {
             let note = match events.recv().await {
                 Ok(LaneEvent::PeerOpened(lane)) => {
-                    json!({"jsonrpc":"2.0","method":"native.mesh.lane.peerOpened","params":{"subId": sub_id, "payload": lane_json(&lane)}})
+                    let mut payload = lane_json(&lane);
+                    payload["kind"] = json!("peerOpened");
+                    json!({"jsonrpc":"2.0","method":"native.mesh.lane.delta","params":{"subId": sub_id, "payload": payload}})
                 }
                 Ok(LaneEvent::Closed {
                     lane_id,
                     inbound,
                     reason,
                 }) => {
-                    json!({"jsonrpc":"2.0","method":"native.mesh.lane.closed","params":{"subId": sub_id, "payload": {"laneId": lane_id, "inbound": inbound, "reason": reason}}})
+                    json!({"jsonrpc":"2.0","method":"native.mesh.lane.delta","params":{"subId": sub_id, "payload": {"kind": "closed", "laneId": lane_id, "inbound": inbound, "reason": reason}}})
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => {
                     let lanes: Vec<Value> = state.bridge.lanes().iter().map(lane_json).collect();

@@ -20,12 +20,21 @@ export {
   type DiagnosticsServiceOptions,
 } from "./diagnostics-service";
 export {
+  type DocCommit,
   type DocOpenGrant,
   type DocServiceHealth,
   DocumentService,
   type DocumentServiceOptions,
   type TicketRedemption,
 } from "./doc-service";
+export {
+  type DocSyncOptions,
+  DocSyncService,
+  type DocSyncState,
+  type LaneBytes,
+  type LaneControl,
+  type LaneInfo,
+} from "./doc-sync";
 export { MeshClient, type ServeSpec, type ServeState } from "./mesh-client";
 export { MeshLaneLink, type MeshLaneLinkOptions } from "./mesh-lane";
 export { NativeLink, RpcCallError } from "./native-link";

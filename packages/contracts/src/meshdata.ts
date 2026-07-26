@@ -46,6 +46,16 @@ export const MESHDATA_LENGTH_PREFIX_BYTES = 4;
  * arbitrary memory, which is the actual attack this bounds. */
 export const MESHDATA_MAX_FRAME_BYTES = 8 * 1024 * 1024;
 
+/** Lane ids below this are minted by fieldd (lanes it opens); ids at or above
+ * it are minted by field-native for lanes a PEER opened toward us. One table,
+ * two minting authorities — this is what keeps them from colliding without
+ * either having to know about the other, and `native.mesh.lane.open` refuses an
+ * id from the reserved half.
+ *
+ * 2^32, deliberately not the high bit: a laneId crosses JSON-RPC as a
+ * JavaScript number, and past 2^53 it stops round-tripping. */
+export const MESHDATA_INBOUND_LANE_ID_BASE = 2 ** 32;
+
 /** D5's lossy ceiling: a datagram payload must fit one packet without
  * fragmenting. Enforced by the sender — a lossy lane is drop-tolerant, not
  * reassembling. */

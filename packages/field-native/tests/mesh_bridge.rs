@@ -140,6 +140,13 @@ fn frame_constants_match_the_typescript_codec() {
     assert!(src.contains(&format!(
         "MESHDATA_LOSSY_MAX_PAYLOAD_BYTES = {LOSSY_MAX_PAYLOAD_BYTES}"
     )));
+    // The two minting authorities share one number across two languages, and
+    // nothing regenerates them into agreement.
+    assert_eq!(INBOUND_LANE_ID_BASE, 1 << 32);
+    assert!(
+        src.contains("MESHDATA_INBOUND_LANE_ID_BASE = 2 ** 32"),
+        "meshdata.ts does not declare MESHDATA_INBOUND_LANE_ID_BASE = 2 ** 32"
+    );
 }
 
 // ---- the codec -------------------------------------------------------------
@@ -715,7 +722,8 @@ async fn subscribers_hear_a_peer_open_a_lane_and_hear_it_close() {
         Some("doc-1".into()),
     );
     let opened = c.next_note().await;
-    assert_eq!(opened["method"], "native.mesh.lane.peerOpened");
+    assert_eq!(opened["method"], "native.mesh.lane.delta");
+    assert_eq!(opened["params"]["payload"]["kind"], "peerOpened");
     let payload = &opened["params"]["payload"];
     assert_eq!(payload["laneId"], adopted.lane_id);
     assert_eq!(payload["inbound"], true);
@@ -729,7 +737,8 @@ async fn subscribers_hear_a_peer_open_a_lane_and_hear_it_close() {
     // The peer hangs up at the transport.
     daemon.bridge.forget_lane(adopted.lane_id, "peer-closed");
     let closed = c.next_note().await;
-    assert_eq!(closed["method"], "native.mesh.lane.closed");
+    assert_eq!(closed["method"], "native.mesh.lane.delta");
+    assert_eq!(closed["params"]["payload"]["kind"], "closed");
     assert_eq!(closed["params"]["payload"]["laneId"], adopted.lane_id);
     assert_eq!(closed["params"]["payload"]["reason"], "peer-closed");
     assert_eq!(closed["params"]["payload"]["inbound"], true);
@@ -790,7 +799,7 @@ async fn closing_a_lane_locally_is_announced_once_not_twice() {
         .unwrap();
     c.call("native.mesh.lane.close", json!({"laneId":5})).await;
     let closed = c.next_note().await;
-    assert_eq!(closed["method"], "native.mesh.lane.closed");
+    assert_eq!(closed["params"]["payload"]["kind"], "closed");
     assert_eq!(closed["params"]["payload"]["reason"], "local");
 
     c.call("native.mesh.lane.close", json!({"laneId":5})).await;
