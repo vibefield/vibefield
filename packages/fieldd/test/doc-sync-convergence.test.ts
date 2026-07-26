@@ -21,7 +21,11 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MESHDATA_INBOUND_LANE_ID_BASE } from "@vibefield/contracts";
+import {
+  DOC_SYNC_RECORD,
+  decodeDocSyncRecord,
+  MESHDATA_INBOUND_LANE_ID_BASE,
+} from "@vibefield/contracts";
 import { LoroDoc } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
 import { DocumentService } from "../src/doc-service";
@@ -29,6 +33,7 @@ import { DocSyncService, type LaneBytes, type LaneControl, type LaneInfo } from 
 
 let dirs: string[] = [];
 afterEach(async () => {
+  live.clear();
   await new Promise((r) => setTimeout(r, 60));
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
   dirs = [];
@@ -65,8 +70,14 @@ class Device {
  * that preserves record boundaries. */
 class Mesh {
   readonly devices = new Map<string, Device>();
+  /** Every record that crossed, so a test can ask what the protocol COST. */
+  readonly carried: { from: string; kind: number; bytes: number }[] = [];
   /** sender's laneId → receiver's inbound laneId */
   readonly #routes = new Map<string, number>();
+  /** The lane TABLE, which lives in field-native and outlives fieldd — so a
+   * restarted fieldd re-reads it from the subscribe snapshot rather than
+   * losing every lane a peer opened while it was away (the two-plane law). */
+  readonly inbound = new Map<string, LaneInfo[]>();
   #nextInbound = MESHDATA_INBOUND_LANE_ID_BASE;
 
   peersOf(name: string): string[] {
@@ -78,20 +89,23 @@ class Mesh {
     if (target === undefined) throw new Error(`no such peer: ${to}`);
     const inboundId = this.#nextInbound++;
     this.#routes.set(`${from}:${laneId}`, inboundId);
-    target.control.announce({
-      kind: "peerOpened",
+    const lane: LaneInfo = {
       laneId: inboundId,
       peer: from,
       protocol: "doc-sync",
       ...(docId !== undefined ? { docId } : {}),
       inbound: true,
-    });
+    };
+    this.inbound.set(to, [...(this.inbound.get(to) ?? []), lane]);
+    target.control.announce({ kind: "peerOpened", ...lane });
   }
 
   carry(from: string, to: string, laneId: number, payload: Uint8Array): void {
     const inboundId = this.#routes.get(`${from}:${laneId}`);
     const target = this.devices.get(to);
     if (inboundId === undefined || target === undefined) return;
+    const record = decodeDocSyncRecord(payload);
+    this.carried.push({ from, kind: record.kind, bytes: payload.byteLength });
     // A copy, because the far side is a different device: sharing a buffer
     // across the seam would let one device's storage alias another's.
     target.bytes.deliver(inboundId, payload.slice());
@@ -125,7 +139,7 @@ class RoutedControl implements LaneControl {
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
   ): Promise<{ lanes: LaneInfo[] }> {
     this.#emit = onEvent;
-    return { lanes: [] };
+    return { lanes: this.mesh.inbound.get(this.self) ?? [] };
   }
   announce(payload: unknown): void {
     this.#emit?.(payload, "delta");
@@ -163,6 +177,25 @@ function ice1(): Uint8Array {
   return new Uint8Array([0x49, 0x43, 0x45, 0x31, ...new TextEncoder().encode("board")]);
 }
 
+/** The renderer's live document, one per device — which is what it actually is.
+ *
+ * Building each edit from a FRESH LoroDoc looks equivalent and is not: a new
+ * doc restarts its op counter, so two edits from the same peer id both claim
+ * "peer 1, counter 0" and Loro keeps one. A device has one document and it
+ * evolves; the records it emits are deltas from where it was. */
+const live = new Map<string, LoroDoc>();
+
+function liveDoc(device: string, docId: string, peerId: bigint): LoroDoc {
+  const key = `${device}:${docId}`;
+  let doc = live.get(key);
+  if (doc === undefined) {
+    doc = new LoroDoc();
+    doc.setPeerId(peerId);
+    live.set(key, doc);
+  }
+  return doc;
+}
+
 function edit(peerId: bigint, key: string, value: string): Uint8Array {
   const doc = new LoroDoc();
   doc.setPeerId(peerId);
@@ -187,7 +220,11 @@ async function saveEdit(
   key: string,
   value: string,
 ): Promise<void> {
-  const payload = edit(peerId, key, value);
+  const doc = liveDoc(device.name, docId, peerId);
+  const before = doc.version();
+  doc.getMap("board").set(key, value);
+  doc.commit();
+  const payload = doc.export({ mode: "update", from: before });
   await device.docs.writeDoc(docId, payload, {
     revisionId: randomUUID(),
     kind: "update",
@@ -212,7 +249,7 @@ async function until(predicate: () => boolean | Promise<boolean>, label: string)
  * a SyncedStore slice, so doc existence already replicates across devices;
  * C6-3 is what adds content. Seeding the catalog on disk is how a peer looks
  * the moment the registry has reached it and no bytes have. */
-async function twoDevices(): Promise<{ a: Device; b: Device; docId: string }> {
+async function twoDevices(): Promise<{ a: Device; b: Device; docId: string; mesh: Mesh }> {
   const mesh = new Mesh();
   const docId = randomUUID();
   const devices: Device[] = [];
@@ -234,7 +271,7 @@ async function twoDevices(): Promise<{ a: Device; b: Device; docId: string }> {
   mesh.devices.set("B", b);
   await a.sync.start();
   await b.sync.start();
-  return { a, b, docId };
+  return { a, b, docId, mesh };
 }
 
 describe("two devices, one document", () => {
@@ -314,6 +351,38 @@ describe("two devices, one document", () => {
     await until(async () => (await b.docs.readDoc(docId)) !== null, "the bootstrap to land");
     const stored = await b.docs.readDoc(docId);
     expect([...(stored?.bytes ?? [])]).toEqual([...ice1()]);
+  });
+
+  it("costs a digest, not a document, when a device rejoins in sync", async () => {
+    // C6-3h's whole point. Before it, every new lane carried the entire board
+    // because the sender could not know what the peer held. Now it can — so a
+    // device that is already up to date receives NOTHING but a greeting.
+    const { a, b, docId, mesh } = await twoDevices();
+    await a.docs.writeDoc(docId, ice1(), {
+      revisionId: randomUUID(),
+      kind: "checkpoint",
+      engineSchema: 11,
+      savedAt: 1,
+      byteLength: ice1().byteLength,
+    });
+    for (const [i, key] of ["one", "two", "three"].entries()) {
+      await saveEdit(a, docId, 1n, key, `v${i}`);
+    }
+    await until(async () => "three" in (await board(b, docId)), "B to catch up");
+    await new Promise((r) => setTimeout(r, 80));
+
+    // A fresh lane, as a reconnect or a restarted peer would bring.
+    mesh.carried.length = 0;
+    await b.sync.stop();
+    await b.sync.start();
+    await saveEdit(a, docId, 1n, "four", "v3");
+    await until(async () => "four" in (await board(b, docId)), "the new edit only");
+
+    const content = mesh.carried.filter((r) => r.kind !== DOC_SYNC_RECORD.HAVE);
+    // Exactly the one record B did not have — not the checkpoint, not the
+    // three it already held.
+    expect(content).toHaveLength(1);
+    expect(content[0]?.kind).toBe(DOC_SYNC_RECORD.UPDATE);
   });
 
   it("settles instead of echoing forever", async () => {

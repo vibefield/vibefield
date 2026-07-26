@@ -1,6 +1,8 @@
 import {
   DOC_SYNC_RECORD,
+  decodeDocSyncDigest,
   decodeDocSyncRecord,
+  encodeDocSyncHave,
   encodeDocSyncRecord,
   MESHDATA_INBOUND_LANE_ID_BASE,
 } from "@vibefield/contracts";
@@ -20,9 +22,10 @@ import type { DocCommit, DocumentService } from "./doc-service";
 // SHAPE:
 //   · lane per (doc, peer), opened lazily — the first time we have something
 //     for that peer, not eagerly for every doc × peer pair at boot;
-//   · on lane open, the whole current state goes out (checkpoint + journal),
-//     because we cannot know what the peer already has. Correct, and honestly
-//     wasteful — see the finding in thinking-c6 §8;
+//   · on lane establishment BOTH sides send a HAVE — what they hold, by
+//     content id — and each pushes only what the other lacks. There is no WANT
+//     reply: the receiver of a HAVE already knows everything needed to compute
+//     the difference, so asking would be a round trip for information it has;
 //   · thereafter, each local commit is broadcast to that doc's open lanes;
 //   · a record that came FROM a peer is never re-broadcast. Two devices echoing
 //     each other converges instantly and then never stops, which on a graph
@@ -176,11 +179,27 @@ export class DocSyncService {
     // announcement — the ordering hazard MeshLaneLink's orphan buffer exists
     // for, and the reason the first record of every inbound lane is not the
     // one that goes missing.
-    this.#bytes.onLane(lane.laneId, (record) => void this.#receive(docId, record, lane.peer));
+    // THROUGH THE QUEUE, not straight into #receive. Records arrive back to
+    // back — a bootstrap checkpoint and the updates that follow it land in one
+    // burst — and applying a journal record is read-modify-write. Processing
+    // them concurrently means an update reads the journal before the checkpoint
+    // it depends on has finished landing, and gets declined for a state that
+    // was about to be true. Arrival order is the only order there is.
+    this.#bytes.onLane(lane.laneId, (record) =>
+      this.#enqueue(docId, () => this.#receive(docId, record, lane.peer)),
+    );
     this.#logger.info("fieldd.doc_sync.lane_claimed", "An inbound doc-sync lane was claimed", {
       laneId: lane.laneId,
       docId,
       peer: lane.peer,
+    });
+    // A lane is one-directional, so hearing from a peer is not the same as
+    // being able to answer. Opening the return lane here is also what fixes a
+    // one-way bootstrap: without it, a device that holds content and never
+    // edits again would never tell anyone, because lanes only used to open on
+    // commit.
+    this.#enqueue(docId, async () => {
+      await this.#ensureLane(docId, lane.peer);
     });
   }
 
@@ -209,13 +228,40 @@ export class DocSyncService {
       });
       return;
     }
+    if (decoded.kind === DOC_SYNC_RECORD.HAVE) {
+      this.#enqueue(docId, () =>
+        this.#answerHave(docId, peer, decoded.meta.baseEpoch, decoded.payload),
+      );
+      return;
+    }
     try {
       const outcome = await this.#docs.applyRemoteRecord(docId, decoded);
       if (outcome.applied) {
         this.#state.set(docId, "idle");
         return;
       }
-      // A decline is sync STATE, not an error — it is exactly what EL5 says
+      // Already held is the protocol WORKING, not a problem: content identity
+      // is what makes redelivery free, and a redelivery is what a reconnect or
+      // a crossed HAVE looks like from here.
+      if (outcome.reason === "already-held") return;
+      // "would-clobber" means we are not ready for this record — no checkpoint
+      // yet, so there is nothing to append to. That happens whenever a peer
+      // broadcasts an update before our bootstrap has landed, which the HAVE
+      // exchange makes ORDINARY: the greeting and the broadcast are independent
+      // and race freely.
+      //
+      // Re-greeting is the whole repair. It tells the peer what we hold, and
+      // the peer answers with everything we lack — checkpoint first. Self-
+      // healing rather than a retry queue, and it terminates, because a peer
+      // never sends a checkpoint to someone whose digest says it has one.
+      if (outcome.reason === "would-clobber") {
+        this.#enqueue(docId, async () => {
+          const lane = await this.#ensureLane(docId, peer);
+          if (lane !== null && !lane.created) await this.#greet(docId, lane.laneId);
+        });
+        return;
+      }
+      // Any other decline is sync STATE, not an error — exactly what EL5 says
       // must not be silent.
       this.#state.set(docId, outcome.reason === "epoch-mismatch" ? "epoch-stale" : "peer-declined");
       this.#logger.warn("fieldd.doc_sync.record_declined", "A peer's record was not applied", {
@@ -225,6 +271,56 @@ export class DocSyncService {
       });
     } catch (error) {
       this.#logger.error("fieldd.doc_sync.apply_failed", "Applying a peer's record failed", error);
+    }
+  }
+
+  /** A peer told us what it holds; send what it lacks and nothing else.
+   *
+   * No HAVE goes back. The peer sends its own on its own return lane when it
+   * establishes one, so both directions get covered without either side
+   * answering a digest with a digest — which is how two devices would end up
+   * trading greetings forever. */
+  async #answerHave(
+    docId: string,
+    peer: string,
+    baseEpoch: number,
+    payload: Uint8Array,
+  ): Promise<void> {
+    let digest: ReturnType<typeof decodeDocSyncDigest>;
+    try {
+      digest = decodeDocSyncDigest(payload);
+    } catch (error) {
+      this.#logger.warn("fieldd.doc_sync.have_undecodable", "A peer's HAVE could not be read", {
+        docId,
+        peer,
+        error: String(error),
+      });
+      return;
+    }
+    const missing = await this.#docs.recordsMissing(docId, {
+      baseEpoch,
+      hasCheckpoint: digest.hasCheckpoint,
+      records: digest.records,
+    });
+    // Null means either nothing to offer or a digest from another epoch — in
+    // which case pushing would carry records across a compaction boundary, and
+    // the peer has to re-bootstrap rather than be handed them.
+    if (missing === null) return;
+    const lane = await this.#ensureLane(docId, peer);
+    if (lane === null) return;
+    if (missing.checkpoint !== null) {
+      this.#write(lane.laneId, DOC_SYNC_RECORD.SNAPSHOT, missing.meta, missing.checkpoint);
+    }
+    for (const update of missing.updates) {
+      this.#write(lane.laneId, DOC_SYNC_RECORD.UPDATE, missing.meta, update);
+    }
+    if (missing.checkpoint !== null || missing.updates.length > 0) {
+      this.#logger.info("fieldd.doc_sync.answered_have", "Sent a peer the records it lacked", {
+        docId,
+        peer,
+        checkpoint: missing.checkpoint !== null,
+        updates: missing.updates.length,
+      });
     }
   }
 
@@ -253,17 +349,14 @@ export class DocSyncService {
     if (peers.length === 0) return;
     this.#state.set(commit.docId, "syncing");
     for (const peer of peers) {
-      const existing = this.#outbound.get(commit.docId)?.get(peer);
-      if (existing !== undefined) {
-        this.#send(existing, commit.kind === "checkpoint" ? "snapshot" : "update", commit);
-        continue;
+      const lane = await this.#ensureLane(commit.docId, peer);
+      // A lane we just created has already sent its HAVE, and the peer's answer
+      // will carry this commit along with anything else it lacks. Sending it
+      // again here would be a duplicate — free, since the protocol is
+      // idempotent, but noise on the wire for no gain.
+      if (lane !== null && !lane.created) {
+        this.#send(lane.laneId, commit.kind === "checkpoint" ? "snapshot" : "update", commit);
       }
-      // A NEW lane has to carry the whole state, not just this commit: the peer
-      // may have none of the history this record depends on, and a record whose
-      // dependencies never arrive is held pending forever — present in the
-      // journal, absent from the document, and invisible either way.
-      const laneId = await this.#openLane(commit.docId, peer);
-      if (laneId !== null) await this.#sendFullState(commit.docId, laneId);
     }
     // Return to idle ONLY if nothing reported a problem while this was in
     // flight. Sending is not evidence that receiving went well, and clearing a
@@ -271,6 +364,44 @@ export class DocSyncService {
     // is precisely the silent-divergence EL5 forbids — the doc would read
     // "in step" while holding records it cannot apply.
     if (this.#state.get(commit.docId) === "syncing") this.#state.set(commit.docId, "idle");
+  }
+
+  /** Get-or-open the lane toward a peer for a doc. A NEWLY created one greets
+   * with a HAVE; an existing one is left alone, or two devices would trade
+   * digests forever. */
+  async #ensureLane(
+    docId: string,
+    peer: string,
+  ): Promise<{ laneId: number; created: boolean } | null> {
+    const existing = this.#outbound.get(docId)?.get(peer);
+    if (existing !== undefined) return { laneId: existing, created: false };
+    const laneId = await this.#openLane(docId, peer);
+    if (laneId === null) return null;
+    await this.#greet(docId, laneId);
+    return { laneId, created: true };
+  }
+
+  /** Tell the peer what we hold. It answers with what we lack — and separately
+   * sends its own HAVE on its own return lane, which is how we learn what IT
+   * lacks. Symmetric, two messages, no request/response pairing. */
+  async #greet(docId: string, laneId: number): Promise<void> {
+    const digest = await this.#docs.syncDigest(docId);
+    if (digest === null) return;
+    try {
+      this.#bytes.send(
+        laneId,
+        encodeDocSyncHave(digest.baseEpoch, {
+          hasCheckpoint: digest.hasCheckpoint,
+          records: digest.records,
+        }),
+      );
+    } catch (error) {
+      this.#logger.warn("fieldd.doc_sync.greet_failed", "A doc-sync HAVE could not be sent", {
+        laneId,
+        error: String(error),
+      });
+      this.#forget(laneId);
+    }
   }
 
   async #openLane(docId: string, peer: string): Promise<number | null> {
@@ -302,24 +433,6 @@ export class DocSyncService {
   #mintLaneId(): number {
     if (this.#nextLaneId >= MESHDATA_INBOUND_LANE_ID_BASE) this.#nextLaneId = 1;
     return this.#nextLaneId++;
-  }
-
-  async #sendFullState(docId: string, laneId: number): Promise<void> {
-    const stored = await this.#docs.readDoc(docId);
-    if (stored === null) return;
-    const meta = {
-      baseEpoch: stored.meta.baseEpoch,
-      engineSchema: stored.meta.engineSchema,
-      savedAt: stored.meta.savedAt,
-    };
-    // Checkpoint FIRST, then the journal in order. The peer declines the
-    // checkpoint if it already has content, and re-frames the updates either
-    // way — so this is safe to send blind, which is what lets the sender avoid
-    // asking "what do you have?" over a round trip it would only get wrong.
-    this.#write(laneId, DOC_SYNC_RECORD.SNAPSHOT, meta, stored.bytes);
-    for (const update of stored.updates) {
-      this.#write(laneId, DOC_SYNC_RECORD.UPDATE, meta, update);
-    }
   }
 
   #send(laneId: number, as: "snapshot" | "update", commit: DocCommit): void {

@@ -24,6 +24,15 @@ export const DOC_SYNC_RECORD = {
    * journal head. Measured (C6-3f probe): re-framing converges, and a record
    * whose causal dependencies have not arrived is held pending, not lost. */
   UPDATE: 2,
+  /** What this device already holds, so the peer sends only what it lacks
+   * (C6-3h). The alternative every CRDT reaches for is a version-vector
+   * exchange — exact, and impossible here: computing a version vector means
+   * DECODING the document, and fieldd does not. Hashing bytes does not.
+   *
+   * Both sides send one on lane establishment and each pushes the difference;
+   * there is deliberately no WANT reply, because the receiver of a HAVE already
+   * knows everything needed to compute it. */
+  HAVE: 3,
 } as const;
 
 /** u8 kind + u32 metaLen. */
@@ -45,6 +54,38 @@ export interface DocSyncRecord {
   kind: number;
   meta: DocSyncMeta;
   payload: Uint8Array;
+}
+
+/** A HAVE's payload: what this device holds, by CONTENT id.
+ *
+ * `hasCheckpoint` is a boolean and not a hash, deliberately. Two devices can
+ * hold different checkpoint BYTES representing the same logical state — one
+ * compacted, one bootstrapped, one simply saved at a different moment — so
+ * hashes would never match and the sender would ship its checkpoint on every
+ * exchange forever, only for the receiver to decline it as would-clobber. What
+ * the sender actually needs to know is whether the peer has *a* checkpoint. */
+export const DocSyncDigest = z
+  .object({
+    hasCheckpoint: z.boolean(),
+    /** Content ids of the journal records held, in stored order. */
+    records: z.array(z.string()),
+  })
+  .passthrough();
+export type DocSyncDigest = z.infer<typeof DocSyncDigest>;
+
+/** A HAVE carries no document bytes, so its meta's content fields are unused.
+ * `baseEpoch` is not: a digest from another epoch describes a different
+ * lineage, and answering it would ship records across a compaction boundary. */
+export function encodeDocSyncHave(baseEpoch: number, digest: DocSyncDigest): Uint8Array {
+  return encodeDocSyncRecord(
+    DOC_SYNC_RECORD.HAVE,
+    { baseEpoch, engineSchema: null, savedAt: 0 },
+    new TextEncoder().encode(JSON.stringify(digest)),
+  );
+}
+
+export function decodeDocSyncDigest(payload: Uint8Array): DocSyncDigest {
+  return DocSyncDigest.parse(JSON.parse(new TextDecoder().decode(payload)));
 }
 
 export function encodeDocSyncRecord(

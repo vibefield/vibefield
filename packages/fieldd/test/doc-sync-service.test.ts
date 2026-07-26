@@ -13,7 +13,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   DOC_SYNC_RECORD,
+  decodeDocSyncDigest,
   decodeDocSyncRecord,
+  encodeDocSyncHave,
   encodeDocSyncRecord,
   MESHDATA_INBOUND_LANE_ID_BASE,
 } from "@vibefield/contracts";
@@ -227,18 +229,134 @@ describe("claiming the lanes a peer opened", () => {
 });
 
 describe("broadcasting what we commit", () => {
-  it("opens a lane per peer and sends the whole state on the first commit", async () => {
-    // A new lane cannot send only the newest record: the peer may hold none of
-    // the history it depends on, and a record whose dependencies never arrive
-    // sits in the journal contributing nothing, invisibly.
+  it("opens a lane per peer and greets each with a HAVE, not with the document", async () => {
+    // C6-3h. The old shape pushed the whole board down every new lane, because
+    // the sender could not know what the peer held. It can now — by content id
+    // — so a new lane costs a digest instead of a document.
     const { docs, control, bytes, sync } = harness(["peer-a", "peer-b"]);
     await sync.start();
     const docId = await seeded(docs); // the checkpoint IS the first commit
     await until(() => control.opened.length === 2, "a lane per peer");
     expect(control.opened.map((o) => o.peer)).toEqual(["peer-a", "peer-b"]);
     expect(control.opened.every((o) => o.docId === docId)).toBe(true);
-    await until(() => bytes.sent.length >= 2, "the state to go out");
-    expect(bytes.sent.every((s) => s.kind === DOC_SYNC_RECORD.SNAPSHOT)).toBe(true);
+    await until(() => bytes.sent.length >= 2, "the greetings to go out");
+    expect(bytes.sent.every((s) => s.kind === DOC_SYNC_RECORD.HAVE)).toBe(true);
+    // …and the greeting says what we hold, so the peer can ask for the rest.
+    const digest = decodeDocSyncDigest(bytes.sent[0]?.payload ?? new Uint8Array());
+    expect(digest.hasCheckpoint).toBe(true);
+    expect(digest.records).toEqual([]);
+  });
+
+  it("answers a HAVE with only what the peer lacks", async () => {
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs);
+    const first = new Uint8Array([1, 1]);
+    const second = new Uint8Array([2, 2]);
+    for (const [i, payload] of [first, second].entries()) {
+      await docs.writeDoc(docId, payload, {
+        revisionId: randomUUID(),
+        kind: "update",
+        baseRevisionId: (await docs.readDocMeta(docId))?.revisionId,
+        engineSchema: 11,
+        savedAt: 2 + i,
+        byteLength: payload.byteLength,
+      });
+    }
+    await sync.start();
+    const digest = await docs.syncDigest(docId);
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    bytes.sent.length = 0;
+
+    // The peer claims a checkpoint and the FIRST record only.
+    bytes.deliver(
+      laneId,
+      encodeDocSyncHave(0, {
+        hasCheckpoint: true,
+        records: [digest?.records[0] as string],
+      }),
+    );
+    await until(
+      () => bytes.sent.some((s) => s.kind === DOC_SYNC_RECORD.UPDATE),
+      "the missing record",
+    );
+    const content = bytes.sent.filter((s) => s.kind !== DOC_SYNC_RECORD.HAVE);
+    expect(content).toHaveLength(1);
+    expect([...(content[0]?.payload ?? [])]).toEqual([...second]);
+  });
+
+  it("sends the checkpoint only to a peer that has none", async () => {
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    bytes.sent.length = 0;
+    bytes.deliver(laneId, encodeDocSyncHave(0, { hasCheckpoint: false, records: [] }));
+    await until(
+      () => bytes.sent.some((s) => s.kind === DOC_SYNC_RECORD.SNAPSHOT),
+      "the bootstrap checkpoint",
+    );
+  });
+
+  it("says nothing to a HAVE from another epoch", async () => {
+    // Answering would push records across a compaction boundary — the one
+    // thing the S4 fence exists to prevent. The peer re-bootstraps instead.
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    bytes.sent.length = 0;
+    bytes.deliver(laneId, encodeDocSyncHave(9, { hasCheckpoint: false, records: [] }));
+    await new Promise((r) => setTimeout(r, 120));
+    expect(bytes.sent.filter((s) => s.kind !== DOC_SYNC_RECORD.HAVE)).toHaveLength(0);
+  });
+
+  it("takes a record it already holds as a no-op, not a second journal entry", async () => {
+    // Content identity is what makes redelivery free — and redelivery is what
+    // a reconnect, a second lane, or a crossed HAVE looks like from here.
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    const payload = new Uint8Array([5, 5, 5]);
+    bytes.deliver(laneId, record(payload));
+    await until(async () => (await docs.readDoc(docId))?.updates.length === 1, "the first copy");
+    bytes.deliver(laneId, record(payload));
+    bytes.deliver(laneId, record(payload));
+    await new Promise((r) => setTimeout(r, 120));
+    expect((await docs.readDoc(docId))?.updates).toHaveLength(1);
+    expect(sync.syncState(docId)).toBe("idle"); // a redelivery is not a problem
   });
 
   it("reuses the lane for later commits and sends only the new record", async () => {
@@ -269,7 +387,7 @@ describe("broadcasting what we commit", () => {
     const docId = await seeded(docs);
     await sync.start();
     await until(() => bytes.sent.length >= 1, "the bootstrap");
-    const beforeEcho = bytes.sent.length;
+    const contentBefore = bytes.sent.filter((s) => s.kind !== DOC_SYNC_RECORD.HAVE).length;
 
     const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
     control.announce({
@@ -286,9 +404,11 @@ describe("broadcasting what we commit", () => {
       async () => (await docs.readDoc(docId))?.updates.length === 1,
       "the peer's record to be stored",
     );
-    // Give any (wrong) broadcast a generous chance to happen.
+    // Give any (wrong) broadcast a generous chance to happen. A HAVE going out
+    // is fine and expected — greeting a peer is not echoing its data; what must
+    // never travel back is the RECORD.
     await new Promise((r) => setTimeout(r, 120));
-    expect(bytes.sent.length).toBe(beforeEcho);
+    expect(bytes.sent.filter((s) => s.kind !== DOC_SYNC_RECORD.HAVE).length).toBe(contentBefore);
   });
 
   it("survives a peer with no lane and retries on the next commit", async () => {
@@ -311,10 +431,9 @@ describe("broadcasting what we commit", () => {
       savedAt: 2,
       byteLength: update.byteLength,
     });
-    await until(() => bytes.sent.length >= 2, "the retry to open and send state");
-    // Full state, not just the new record — the lane is new even if the doc is not.
-    expect(bytes.sent[0]?.kind).toBe(DOC_SYNC_RECORD.SNAPSHOT);
-    expect(bytes.sent[1]?.kind).toBe(DOC_SYNC_RECORD.UPDATE);
+    await until(() => bytes.sent.length >= 1, "the retry to open a lane and greet");
+    // A greeting, not the document: the peer answers with what it needs.
+    expect(bytes.sent[0]?.kind).toBe(DOC_SYNC_RECORD.HAVE);
   });
 
   it("mints lane ids from fieldd's half of the space", async () => {

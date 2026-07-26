@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -83,6 +83,9 @@ interface CurrentRevision extends DocMeta {
   revisionId: string;
   file: string;
   committedAt: number;
+  /** sha256 of the stored bytes. Absent on revisions written before C6-3h —
+   * a tolerant reader fills it in from the file when something asks. */
+  contentId?: string;
   updates: JournalRevision[];
 }
 
@@ -92,6 +95,27 @@ interface JournalRevision {
   committedAt: number;
   savedAt: number;
   byteLength: number;
+  contentId?: string;
+}
+
+/** What one device holds, by CONTENT rather than by its own revision ids.
+ *
+ * revisionIds are minted per device — re-framing a peer's record gives it a
+ * fresh one — so the SAME record has different ids on two devices, and no
+ * comparison of them can say who is missing what. Hashing the bytes can, and
+ * needs no idea what the bytes mean, which is the only kind of identity an
+ * opaque ferry is allowed to compute. */
+export interface DocRecordDigest {
+  baseEpoch: number;
+  hasCheckpoint: boolean;
+  records: string[];
+}
+
+function contentIdOf(bytes: Uint8Array): string {
+  // 16 bytes of sha256. A HAVE is O(journal length), so the digest width is
+  // the message size: 32 hex chars keeps 1000 records near 32 KB. Collision
+  // risk at that width is far below the risk of the disk lying to us.
+  return createHash("sha256").update(bytes).digest("hex").slice(0, 32);
 }
 
 export class DocumentService {
@@ -104,6 +128,9 @@ export class DocumentService {
   private readonly registryPath: string;
   private readonly logger: Logger;
   private readonly onCommit: ((commit: DocCommit) => void) | undefined;
+  /** file name → content id, for revisions whose manifest predates C6-3h.
+   * Computed once rather than on every HAVE. */
+  private readonly contentIds = new Map<string, string>();
 
   /** insertion-ordered so list() reads back in creation order */
   private registry = new Map<string, DocRegistryEntry>();
@@ -327,6 +354,7 @@ export class DocumentService {
     const meta: CurrentRevision = {
       revisionId,
       file: `${revisionId}.ice1`,
+      contentId: contentIdOf(bytes),
       committedAt: this.now(),
       engineSchema: putMeta.engineSchema,
       savedAt: putMeta.savedAt,
@@ -456,6 +484,7 @@ export class DocumentService {
     const update: JournalRevision = {
       revisionId: putMeta.revisionId,
       file: `${putMeta.revisionId}.loro`,
+      contentId: contentIdOf(bytes),
       committedAt,
       savedAt: putMeta.savedAt,
       byteLength: bytes.byteLength,
@@ -544,7 +573,77 @@ export class DocumentService {
     }
   }
 
-  // ---- cross-device sync (C6-3f) ----
+  // ---- cross-device sync (C6-3f, C6-3h) ----
+
+  /** What we hold, for a peer to diff against. Null when the doc is unknown or
+   * has no content yet — both of which are "send me everything". */
+  async syncDigest(docId: string): Promise<DocRecordDigest | null> {
+    const entry = this.registry.get(docId);
+    if (entry === undefined) return null;
+    const current = await this.readCurrent(docId).catch(() => null);
+    if (current === null) {
+      return { baseEpoch: entry.baseEpoch, hasCheckpoint: false, records: [] };
+    }
+    const records: string[] = [];
+    for (const update of current.updates) {
+      records.push(await this.contentIdFor(docId, update.file, update.contentId));
+    }
+    return { baseEpoch: entry.baseEpoch, hasCheckpoint: true, records };
+  }
+
+  /** The records this peer lacks, ready to send.
+   *
+   * The checkpoint goes only to a peer that has NONE — never to replace one.
+   * Two devices legitimately hold different checkpoint bytes for the same
+   * logical state, so "their checkpoint differs from mine" is not evidence of
+   * anything, and shipping ours would only be declined as would-clobber. */
+  async recordsMissing(
+    docId: string,
+    theirs: DocRecordDigest,
+  ): Promise<{
+    meta: { baseEpoch: number; engineSchema: number | null; savedAt: number };
+    checkpoint: Uint8Array | null;
+    updates: Uint8Array[];
+  } | null> {
+    const entry = this.registry.get(docId);
+    if (entry === undefined) return null;
+    // A digest from another epoch describes a different lineage. Answering it
+    // would push records across a compaction boundary, which is the one thing
+    // the S4 fence exists to prevent — so the peer re-bootstraps instead.
+    if (theirs.baseEpoch !== entry.baseEpoch) return null;
+    const stored = await this.readDoc(docId);
+    if (stored === null) return null;
+
+    const held = new Set(theirs.records);
+    const current = await this.readCurrent(docId);
+    const updates: Uint8Array[] = [];
+    for (const [index, update] of (current?.updates ?? []).entries()) {
+      const contentId = await this.contentIdFor(docId, update.file, update.contentId);
+      const bytes = stored.updates[index];
+      if (bytes !== undefined && !held.has(contentId)) updates.push(bytes);
+    }
+    return {
+      meta: {
+        baseEpoch: entry.baseEpoch,
+        engineSchema: stored.meta.engineSchema,
+        savedAt: stored.meta.savedAt,
+      },
+      checkpoint: theirs.hasCheckpoint ? null : stored.bytes,
+      updates,
+    };
+  }
+
+  private async contentIdFor(docId: string, file: string, known?: string): Promise<string> {
+    if (known !== undefined) return known;
+    const cached = this.contentIds.get(file);
+    if (cached !== undefined) return cached;
+    // A revision written before C6-3h. Read it once, remember it — a manifest
+    // rewrite on a READ path would be a worse trade than a small cache.
+    const bytes = await readFile(join(this.revisionsDir(docId), file));
+    const contentId = contentIdOf(bytes);
+    this.contentIds.set(file, contentId);
+    return contentId;
+  }
 
   /** What became of a peer's record. Declining is a normal outcome, not a
    * failure, so it is a value rather than a thrown error — the caller reports
@@ -556,7 +655,12 @@ export class DocumentService {
     | { applied: true; meta: DocMeta }
     | {
         applied: false;
-        reason: "unknown-doc" | "would-clobber" | "epoch-mismatch" | "unknown-kind";
+        reason:
+          | "unknown-doc"
+          | "would-clobber"
+          | "epoch-mismatch"
+          | "unknown-kind"
+          | "already-held";
       }
   > {
     const entry = this.registry.get(docId);
@@ -595,6 +699,18 @@ export class DocumentService {
     }
     const current = await this.readCurrent(docId);
     if (current === null) return { applied: false, reason: "would-clobber" };
+
+    // Already held? Then this is a redelivery — a reconnect, a second lane, a
+    // HAVE exchange crossing a push — and the right answer is nothing at all.
+    // Loro would dedupe it on import anyway, so appending is CORRECT but the
+    // journal grows forever; content identity is what makes the whole protocol
+    // idempotent, and idempotence is what makes redelivery free.
+    const incoming = contentIdOf(record.payload);
+    for (const update of current.updates) {
+      if ((await this.contentIdFor(docId, update.file, update.contentId)) === incoming) {
+        return { applied: false, reason: "already-held" };
+      }
+    }
 
     // RE-FRAMED, never appended verbatim: the peer's revision ids belong to the
     // peer's chain and mean nothing here. A fresh id, based on OUR head. The
@@ -875,19 +991,25 @@ function parseCurrentRevision(value: unknown, docId: string): CurrentRevision {
     ) {
       throw new Error(`current revision journal for ${docId} is malformed`);
     }
+    const updateContentId = item["contentId"];
     return {
       revisionId: updateRevisionId,
       file: updateFile as string,
       committedAt: updateCommittedAt as number,
       savedAt: savedAt as number,
       byteLength: byteLength as number,
+      // Tolerant: revisions written before C6-3h carry none, and that is a
+      // thing to fill in later rather than a malformed manifest.
+      ...(typeof updateContentId === "string" ? { contentId: updateContentId } : {}),
     };
   });
+  const checkpointContentId = record["contentId"];
   return {
     ...meta.data,
     revisionId,
     file,
     committedAt: committedAt as number,
+    ...(typeof checkpointContentId === "string" ? { contentId: checkpointContentId } : {}),
     updates,
   };
 }
