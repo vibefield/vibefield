@@ -84,7 +84,7 @@ jobs:
           set -euo pipefail
           truffle_sha=$(jq -r '.siblings.truffle' siblings.lock.json)
           mkdir -p ../p008
-          git clone --no-tags https://github.com/jamesyong-42/truffle.git ../p008/truffle
+          git clone --no-tags https://github.com/vibecook-dev/truffle.git ../p008/truffle
           git -C ../p008/truffle checkout --detach "$truffle_sha"
 
       # pnpm pinned from the packageManager field (pnpm@11.13.1); node from .nvmrc.
