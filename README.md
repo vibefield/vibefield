@@ -22,6 +22,7 @@ a private mesh across machines, and an iPhone companion.
 | `plugins/*` | built-in plugins at the repo root (product actors beside the platform — plugin spec §5.1): `note` (sticky note), `field-tools` (folder/comment) |
 | `examples/plugins/widgetlab` | the 18-widget parity pack — dev/reference plugin, staged as demo boot content |
 | `apps/desktop` | packaging-only: delegating scripts + the electron dep; no application source lives here |
+| `tooling/dev-runner` | repo-owned desktop development supervisor: Vite HMR, watched process builds, safe Electron/daemon restarts, native/codegen refresh, and Nx affected typechecks |
 | `services/push-relay` | *(planned)* the one cloud hop — open-source APNs wake-hint relay |
 
 ## Getting started
@@ -39,6 +40,29 @@ pnpm verify         # full gate: typecheck · biome · rustfmt/clippy · TS+Rust
 ```
 
 Env toggles are documented in `.env.example` (nothing auto-loads it — export in your shell).
+
+## Development loop
+
+`pnpm dev` starts one VibeField-owned lifecycle supervisor directly; that supervisor uses
+Nx for workspace change detection and affected typechecks while it manages the
+long-running stack:
+
+- Vite hot-updates renderer code, including renderer-facing workspace packages and plugins.
+- esbuild watches Electron main/preload and both fieldd runtime artifacts. A successful change
+  performs one debounced Electron restart; a failed build leaves the last valid app running.
+- Contract edits regenerate schema/Rust bindings before rebuilding `field-native`. Native edits
+  rebuild the repo-owned sidecar. Plugin manifest/service edits regenerate or reload their
+  installed metadata before restart.
+- Restart uses Electron's normal `will-quit` path, waits for owned fieldd/native cleanup, and
+  validates a per-build identity before daemon adoption. Dev state, logs, and Electron user data
+  are isolated under `.vibefield/dev/`; a per-worktree lock refuses a second live stack.
+- Nx watches the complete workspace graph and runs initial plus affected typechecks in the
+  background. `pnpm build`, `pnpm test`, and `pnpm typecheck` use the same graph and local cache;
+  `pnpm verify` remains the uncropped release-quality gate.
+
+The development watcher is deliberately repository-bounded: it does not monitor
+`../p008/truffle` or its manifests. After changing dependencies or package manifests, run
+`pnpm install` and restart `pnpm dev`; installs are never performed implicitly by the watcher.
 
 Design docs live in `draft/` — local-only, tracked on the `dev-local` branch
 (`pnpm commit-draft` snapshots them; the branch is never pushed).

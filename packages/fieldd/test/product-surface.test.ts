@@ -81,10 +81,28 @@ describe("run files (shell bootstrap contract)", () => {
     expect(product.pid).toBe(process.pid);
     expect(product.bootId).toBe(daemon.bootId);
     expect(Number.isInteger(product.startedAt)).toBe(true);
+    expect(product.buildId).toBeNull();
 
     await daemon.stop();
     expect(existsSync(tokenPath)).toBe(false);
     expect(existsSync(productPath)).toBe(false);
+  });
+
+  it("records the development build identity when one is supplied", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-prod-build-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    await mock.start();
+    cleanup.push(() => mock.stop());
+    const daemon = await bootstrap({ dataDir, controlPort: 0, buildId: "dev-test-build" });
+    cleanup.push(() => daemon.stop());
+
+    const product = JSON.parse(
+      readFileSync(join(dataDir, "fieldd", "run", "product.json"), "utf8"),
+    );
+    expect(product.buildId).toBe("dev-test-build");
   });
 });
 

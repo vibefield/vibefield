@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PLUGIN_LIMITS } from "@vibefield/contracts";
 import { createFielddSupervisor, type FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { app } from "electron";
@@ -50,6 +51,8 @@ export function buildSupervisor(opts: {
     throw new Error(`fieldd bin missing (build it): ${launchTarget ?? "(unset)"}`);
   }
   const smokeLike = opts.mode === "smoke" || opts.mode === "smoke-canvas";
+  const expectedBuildId = opts.mode === "dev" ? process.env["VIBEFIELD_DEV_BUILD_ID"] : undefined;
+  const policy = shutdownPolicy(opts.mode);
   const logger = opts.logger.child({ component: "daemon.supervisor" });
   const pluginRoots = opts.resources.pluginRoots;
   return createFielddSupervisor({
@@ -77,7 +80,11 @@ export function buildSupervisor(opts: {
     ...(existsSync(nativeBin) ? { nativeExecutable: nativeBin } : {}),
     ...(opts.mode === "dev" ? { allowedOrigins: [new URL(opts.viteUrl).origin] } : {}),
     ...(smokeLike ? { controlPort: 0, dataPort: 0 } : {}),
-    shutdownPolicy: shutdownPolicy(opts.mode),
+    ...(expectedBuildId ? { expectedBuildId } : {}),
+    shutdownPolicy: policy,
+    ...(policy === "stop-owned"
+      ? { stopDeadlineMs: PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS + 2_000 }
+      : {}),
     onEvent: (event) => {
       if (event.kind === "lifecycle") {
         logger.info(event.event, event.message, event.attrs);

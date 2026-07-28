@@ -81,7 +81,12 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     assertDataRootUsable(opts.dataRoot);
     throwIfAborted(signal);
 
-    const adopted = await tryAdopt(opts.dataRoot, opts.adoptProbeMs ?? ADOPT_PROBE_MS, signal);
+    const adopted = await tryAdopt(
+      opts.dataRoot,
+      opts.adoptProbeMs ?? ADOPT_PROBE_MS,
+      signal,
+      opts.expectedBuildId,
+    );
     throwIfAborted(signal);
     if (adopted.ok) {
       lifecycle("fieldd.supervisor.adopted", "Adopted a running fieldd", {
@@ -94,6 +99,13 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     lifecycle("fieldd.supervisor.spawn_required", "No adoptable fieldd was available", {
       probeFailure: adopted.failure,
     });
+    if (adopted.failure === "incompatible-build") {
+      throw new SupervisorError(
+        "incompatible-build",
+        "a live fieldd from a different development build already owns this data root",
+        adopted.failure,
+      );
+    }
 
     const tail = createLogTail();
     const spawned = spawnFieldd(tail);
@@ -130,7 +142,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
             lastFailure,
           );
         }
-        const probe = await tryAdopt(opts.dataRoot, POLL_PROBE_MS, signal);
+        const probe = await tryAdopt(opts.dataRoot, POLL_PROBE_MS, signal, opts.expectedBuildId);
         if (probe.ok) {
           const ownership = probe.info.pid === spawned.pid ? "spawned" : "adopted";
           if (ownership === "adopted") {
@@ -201,6 +213,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
         : {}),
       ...(opts.controlPort !== undefined ? { FIELDD_CONTROL_PORT: String(opts.controlPort) } : {}),
       ...(opts.dataPort !== undefined ? { FIELDD_DATA_PORT: String(opts.dataPort) } : {}),
+      ...(opts.expectedBuildId !== undefined ? { FIELDD_BUILD_ID: opts.expectedBuildId } : {}),
     };
     let spawned: ChildProcess;
     try {
@@ -281,7 +294,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
           ...(proc.pid !== undefined ? { pid: proc.pid } : {}),
         });
         resolve();
-      }, STOP_TERM_WAIT_MS);
+      }, opts.stopDeadlineMs ?? STOP_TERM_WAIT_MS);
       proc.once("exit", () => {
         clearTimeout(t);
         resolve();

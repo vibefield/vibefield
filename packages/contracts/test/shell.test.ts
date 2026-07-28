@@ -26,6 +26,7 @@ const PRODUCT_JSON = {
   contractsVersion: "0.1.0",
   startedAt: 1753203698123,
   nativePid: null,
+  buildId: null,
 } satisfies ProductInfo;
 
 describe("ProductInfo — fieldd's product.json adoption descriptor (design-02 §3.6/D10)", () => {
@@ -34,11 +35,22 @@ describe("ProductInfo — fieldd's product.json adoption descriptor (design-02 �
     expect(parsed.port).toBe(49213);
     expect(parsed.bootId).toBe("fieldd-1a2b3c4d5e6f7a8b");
     expect(parsed.nativePid).toBeNull();
+    expect(parsed.buildId).toBeNull();
   });
 
   it("accepts a positive nativePid when field-native is ensured", () => {
     const parsed = ProductInfo.parse({ ...PRODUCT_JSON, nativePid: 84219 });
     expect(parsed.nativePid).toBe(84219);
+  });
+
+  it("accepts a bounded development build identity", () => {
+    const parsed = ProductInfo.parse({ ...PRODUCT_JSON, buildId: "dev-96d85f4f9d3f" });
+    expect(parsed.buildId).toBe("dev-96d85f4f9d3f");
+  });
+
+  it("accepts an older product file without buildId", () => {
+    const { buildId: _buildId, ...legacyProduct } = PRODUCT_JSON;
+    expect(ProductInfo.parse(legacyProduct).buildId).toBeUndefined();
   });
 
   it("preserves an unknown extra field (EL9 tolerant reader — passthrough)", () => {
@@ -60,6 +72,7 @@ describe("ProductInfo — fieldd's product.json adoption descriptor (design-02 �
     ["a negative pid", { ...PRODUCT_JSON, pid: -1 }],
     ["a missing bootId", { ...PRODUCT_JSON, bootId: undefined }],
     ["a non-semver contractsVersion", { ...PRODUCT_JSON, contractsVersion: "1.2" }],
+    ["an empty buildId", { ...PRODUCT_JSON, buildId: "" }],
   ];
   for (const [label, value] of BAD_PRODUCT) {
     it(`rejects ${label}`, () => {

@@ -1,0 +1,17 @@
+{
+  "name": "@vibefield/electron-shell",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "outputs": [
+        "{projectRoot}/dist/main",
+        "{projectRoot}/dist/preload",
+        "{projectRoot}/dist/testing"
+      ]
+    },
+    "build:renderer": {
+      "outputs": ["{projectRoot}/dist/renderer"]
+    }
+  }
+}

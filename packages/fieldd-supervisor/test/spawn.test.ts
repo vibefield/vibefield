@@ -106,6 +106,54 @@ describe("spawn: no adoptable fieldd exists", () => {
     expect(logs.some((event) => event.kind === "unexpected-stdout")).toBe(false);
   });
 
+  it("passes the expected development build identity to a spawned fieldd", async () => {
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    const logs: FielddSupervisorEvent[] = [];
+    const sup = spawnSup(
+      root,
+      FIXTURE_READY,
+      { TEST_PRODUCT_PORT: String(port), SHELL_TOKEN: token },
+      logs,
+      { expectedBuildId: "dev-spawn-current" },
+    );
+
+    const handle = await sup.ensure();
+    trackSpawnedPid(logs);
+    h.trackPid(handle.childPid);
+    expect(handle.ownership).toBe("spawned");
+    expect(handle.info.buildId).toBe("dev-spawn-current");
+  });
+
+  it("replaces dead run files from an older development build", async () => {
+    const staleProduct = await h.startProduct();
+    staleProduct.api.close();
+    const liveProduct = await h.startProduct();
+    const root = h.mkRoot();
+    h.writeRunFiles(root, {
+      port: staleProduct.port,
+      pid: 4242,
+      token: staleProduct.token,
+      buildId: "dev-stale",
+    });
+    const logs: FielddSupervisorEvent[] = [];
+    const sup = spawnSup(
+      root,
+      FIXTURE_READY,
+      {
+        TEST_PRODUCT_PORT: String(liveProduct.port),
+        SHELL_TOKEN: liveProduct.token,
+      },
+      logs,
+      { expectedBuildId: "dev-current" },
+    );
+
+    const handle = await sup.ensure();
+    h.trackPid(handle.childPid);
+    expect(handle.ownership).toBe("spawned");
+    expect(handle.info.buildId).toBe("dev-current");
+  });
+
   it("child exits before readiness → rejects PROMPTLY with kind child-exit + stderr tail", async () => {
     const root = h.mkRoot();
     const logs: FielddSupervisorEvent[] = [];

@@ -42,6 +42,7 @@ export interface Harness {
       token?: string;
       bootId?: string;
       nativePid?: number | null;
+      buildId?: string | null;
       extra?: Record<string, unknown>;
     },
   ): void;
@@ -105,6 +106,7 @@ export function createHarness(): Harness {
           contractsVersion: CONTRACTS_VERSION,
           startedAt: Date.now(),
           nativePid: o.nativePid ?? null,
+          buildId: o.buildId ?? null,
           ...(o.extra ?? {}),
         }),
       );
@@ -201,6 +203,7 @@ writeFileSync(join(dir, "shell.token"), token);
 writeFileSync(join(dir, "product.json"), JSON.stringify({
   port, pid, bootId: "boot-fixture",
   contractsVersion: process.env.CV, startedAt: Date.now(), nativePid: null,
+  buildId: process.env.FIELDD_BUILD_ID ?? null,
 }));
 process.stdout.write(JSON.stringify({ ready: true, port, bootId: "boot-fixture" }) + "\\n");
 setInterval(() => {}, 1e6);

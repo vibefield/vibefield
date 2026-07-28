@@ -45,7 +45,13 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
 
 ## Commands
 
-- `pnpm dev` / `pnpm smoke` / `pnpm smoke:canvas` — desktop dev loop & headless smoke checks
+- `pnpm dev` — directly enters the repo-owned desktop supervisor (which uses Nx for workspace
+  change detection): renderer HMR, watched
+  main/preload/fieldd builds, generated/native refresh, lifecycle-safe restarts, and background
+  affected typechecks. Its isolated state is `.vibefield/dev/`; it never watches sibling trees.
+- `pnpm smoke` / `pnpm smoke:canvas` — headless desktop smoke checks
+- `pnpm build` / `pnpm typecheck` / `pnpm test` — Nx task graph with conservative local caching;
+  use `pnpm exec nx graph` or `pnpm exec nx affected -t <target>` to inspect/select work
 - `pnpm verify` — THE gate; run before every commit: preflight → typecheck → biome →
   rustfmt/clippy → TS + Rust tests → gen freshness
 - `pnpm format` — biome `--write` + cargo fmt

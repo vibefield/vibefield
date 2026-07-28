@@ -1,0 +1,27 @@
+{
+  "name": "@vibefield/desktop",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "implicitDependencies": ["@vibefield/field-native", "@vibefield/fieldd"],
+  "targets": {
+    "build": {
+      "executor": "nx:noop",
+      "cache": true,
+      "dependsOn": [
+        {
+          "projects": ["@vibefield/fieldd"],
+          "target": "build"
+        },
+        {
+          "projects": ["@vibefield/electron-shell"],
+          "target": "build"
+        },
+        {
+          "projects": ["@vibefield/electron-shell"],
+          "target": "build:renderer"
+        }
+      ],
+      "inputs": []
+    }
+  }
+}

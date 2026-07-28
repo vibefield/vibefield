@@ -34,6 +34,44 @@ async function setup(): Promise<{ mock: MockMgmtServer; link: NativeLink }> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe("NativeLink concurrency", () => {
+  it("retries a transient refusal from a stale socket path until native is ready", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vf-stale-native-"));
+    cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+    const pairingFile = join(dir, "pairing");
+    const socketPath = join(dir, "mgmt.sock");
+    writeFileSync(pairingFile, "ab".repeat(32));
+    writeFileSync(socketPath, "stale socket inode");
+
+    const link = new NativeLink({
+      socketPath,
+      pairingFile,
+      bootId: "test-boot",
+      waitForDaemonMs: 1_500,
+    });
+    cleanup.push(() => link.close());
+    const connecting = link.connect();
+
+    await sleep(150);
+    const mock = new MockMgmtServer(socketPath);
+    await mock.start();
+    cleanup.push(() => mock.stop());
+
+    await connecting;
+    expect(link.connected).toBe(true);
+    expect(mock.connections).toBe(1);
+  });
+
+  it("does not retry a terminal initial hello rejection", async () => {
+    const { mock, link } = await setup();
+    mock.failNextHello = true;
+
+    await expect(link.connect()).rejects.toMatchObject({
+      kind: "UNAUTHORIZED",
+      retryable: false,
+    });
+    expect(mock.connections).toBe(1);
+  });
+
   it("applies the returned snapshot before a same-chunk delta", async () => {
     const { mock, link } = await setup();
     mock.deltaInSameChunk = true;

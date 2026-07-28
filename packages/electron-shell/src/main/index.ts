@@ -10,6 +10,7 @@ import { installAppProtocol, registerAppScheme } from "./app-protocol";
 import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
+import { installDevSignalQuit } from "./dev-signals";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { registerWindowBootstrap } from "./ipc";
@@ -505,6 +506,9 @@ if (!hasInstanceLock) {
       logger,
       closeLogging: closeEvidence,
     });
+    if (MODE === "dev") {
+      installDevSignalQuit(process, () => app.quit());
+    }
     try {
       await main(root, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles);
     } catch (error) {

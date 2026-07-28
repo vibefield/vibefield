@@ -94,6 +94,7 @@ async function main(): Promise<void> {
     pluginRoots,
     serviceHarnessPath,
     ...(nativePid !== undefined ? { nativePid } : {}),
+    ...(process.env["FIELDD_BUILD_ID"] ? { buildId: process.env["FIELDD_BUILD_ID"] } : {}),
     onFatal: (reason) => {
       process.stderr.write(`fieldd fatal: ${reason}\n`);
       process.exit(1);

@@ -5,6 +5,7 @@ import {
   type FielddSupervisorOptions,
   productPath,
   runDir,
+  SupervisorError,
   tokenPath,
   tryAdopt,
 } from "../src/index";
@@ -90,6 +91,21 @@ describe("adopt: a live fieldd is discovered, not respawned", () => {
     expect(second.client.status).toBe("ready");
     await expect(second.client.request("system.health")).resolves.toMatchObject({ ok: true });
   });
+
+  it("adopts only the development build identity the caller expects", async () => {
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    h.writeRunFiles(root, {
+      port,
+      pid: process.pid,
+      token,
+      buildId: "dev-current",
+    });
+
+    const handle = await adoptSup(root, { expectedBuildId: "dev-current" }).ensure();
+    expect(handle.ownership).toBe("adopted");
+    expect(handle.info.buildId).toBe("dev-current");
+  });
 });
 
 describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
@@ -118,6 +134,55 @@ describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
     const probe = await tryAdopt(root, 300);
     expect(probe.ok).toBe(false);
     if (!probe.ok) expect(probe.failure).toBe("malformed-product");
+  });
+
+  it("a different development build is rejected from adoption", async () => {
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    h.writeRunFiles(root, {
+      port,
+      pid: process.pid,
+      token,
+      buildId: "dev-stale",
+    });
+
+    const probe = await tryAdopt(root, 800, undefined, "dev-current");
+    expect(probe.ok).toBe(false);
+    if (!probe.ok) expect(probe.failure).toBe("incompatible-build");
+  });
+
+  it("never spawns over a live daemon from a different development build", async () => {
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    h.writeRunFiles(root, {
+      port,
+      pid: process.pid,
+      token,
+      buildId: "dev-stale",
+    });
+    const supervisor = adoptSup(root, { expectedBuildId: "dev-current" });
+
+    const error = await supervisor.ensure().then(
+      () => null,
+      (candidate: unknown) => candidate,
+    );
+    expect(error).toBeInstanceOf(SupervisorError);
+    expect((error as SupervisorError).kind).toBe("incompatible-build");
+    expect((error as SupervisorError).probe).toBe("incompatible-build");
+  });
+
+  it("a legacy or production product is incompatible only when a dev build is required", async () => {
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    h.writeRunFiles(root, { port, pid: process.pid, token, buildId: null });
+
+    const devProbe = await tryAdopt(root, 800, undefined, "dev-current");
+    expect(devProbe.ok).toBe(false);
+    if (!devProbe.ok) expect(devProbe.failure).toBe("incompatible-build");
+
+    const productionProbe = await tryAdopt(root, 800);
+    expect(productionProbe.ok).toBe(true);
+    if (productionProbe.ok) productionProbe.client.close();
   });
 
   it("a live listener that REJECTS the shell token → foreign-listener (EL7)", async () => {

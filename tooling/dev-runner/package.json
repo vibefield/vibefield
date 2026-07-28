@@ -1,0 +1,15 @@
+{
+  "name": "@vibefield/dev-runner",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node src/cli.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "electron": "^43.1.1",
+    "esbuild": "catalog:",
+    "vite": "^8.1.5"
+  }
+}

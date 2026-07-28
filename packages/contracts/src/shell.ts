@@ -22,6 +22,9 @@ export const ProductInfo = z
     startedAt: z.number(),
     /** pid of the field-native the daemon ensured; null when native is disabled */
     nativePid: z.number().int().positive().nullable(),
+    /** Development build identity. Production writes null; optional keeps
+     * adoption compatible with product files written by older daemons. */
+    buildId: z.string().min(1).max(128).nullable().optional(),
   })
   .passthrough();
 export type ProductInfo = z.infer<typeof ProductInfo>;

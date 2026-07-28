@@ -17,6 +17,7 @@ export async function tryAdopt(
   dataRoot: string,
   probeMs: number,
   signal?: AbortSignal,
+  expectedBuildId?: string,
 ): Promise<ProbeResult> {
   let rawProduct: string;
   let token: string;
@@ -72,7 +73,13 @@ export async function tryAdopt(
     if (signal && onAbort) signal.removeEventListener("abort", onAbort);
   });
 
-  if (outcome === "ready") return { ok: true, client, info };
+  if (outcome === "ready") {
+    if (expectedBuildId !== undefined && info.buildId !== expectedBuildId) {
+      client.close();
+      return { ok: false, failure: "incompatible-build" };
+    }
+    return { ok: true, client, info };
+  }
 
   client.close(); // kill the auto-reconnect — a probe never lingers
   if (outcome === "dial-failed") return { ok: false, failure: "stale-files" };

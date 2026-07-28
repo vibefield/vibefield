@@ -90,14 +90,24 @@ export class NativeLink extends EventEmitter {
     this.assertOpen();
     if (this.connected) return;
     const deadline = Date.now() + (this.opts.waitForDaemonMs ?? 10_000);
-    while (!existsSync(this.opts.pairingFile) || !existsSync(this.opts.socketPath)) {
+    let lastTransportFailure: unknown;
+    while (Date.now() <= deadline) {
       this.assertOpen();
-      if (Date.now() > deadline)
-        throw new Error("field-native did not come up (pairing/socket missing)");
+      if (existsSync(this.opts.pairingFile) && existsSync(this.opts.socketPath)) {
+        try {
+          await this.dial();
+          return;
+        } catch (error) {
+          if (!isRetryableInitialTransportFailure(error)) throw error;
+          lastTransportFailure = error;
+        }
+      }
       await sleep(100);
     }
-    this.assertOpen();
-    await this.dial();
+    const detail = lastTransportFailure instanceof Error ? `: ${lastTransportFailure.message}` : "";
+    throw new Error(`field-native did not come up before the readiness deadline${detail}`, {
+      cause: lastTransportFailure,
+    });
   }
 
   /** Coalesces callers so there is never more than one connection attempt. */
@@ -417,6 +427,20 @@ export class NativeLink extends EventEmitter {
     this.prepareSubscriptionsForReconnect();
     this.sock?.destroy();
   }
+}
+
+function isRetryableInitialTransportFailure(error: unknown): boolean {
+  if (error instanceof RpcCallError) {
+    return error.kind === "UNAVAILABLE" && error.retryable;
+  }
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return (
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    code === "ENOENT" ||
+    code === "ENOTSOCK" ||
+    code === "EPIPE"
+  );
 }
 
 function sleep(ms: number): Promise<void> {

@@ -7,21 +7,21 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @vibefield/desktop dev",
+    "dev": "node tooling/dev-runner/src/cli.mjs",
     "smoke": "pnpm --filter @vibefield/desktop smoke",
     "smoke:canvas": "pnpm --filter @vibefield/desktop smoke:canvas",
     "bench:logging-baseline": "node scripts/bench-logging-baseline.mjs",
     "bench:logging-native": "cargo test --release -p field-native logging_reference_benchmark -- --ignored --nocapture",
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "build": "nx run @vibefield/desktop:build",
+    "typecheck": "nx run-many -t typecheck",
+    "test": "nx run-many -t test",
     "test:rust": "cargo test --workspace",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:rust": "cargo clippy --workspace --all-targets -- -D warnings",
     "format": "biome format --write . && cargo fmt",
     "gen": "pnpm --filter @vibefield/contracts gen:rust",
-    "gen:manifests": "pnpm -r gen:manifest",
+    "gen:manifests": "nx run-many -t gen:manifest",
     "gen:check": "pnpm gen && git diff --exit-code -- packages/contracts/gen packages/field-native/src/contracts.rs",
     "preflight": "node scripts/preflight.mjs",
     "siblings:pin": "node scripts/preflight.mjs --pin-siblings",
@@ -29,7 +29,8 @@
     "commit-draft": "sh scripts/commit-draft.sh"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.4"
+    "@biomejs/biome": "2.5.4",
+    "nx": "23.1.0"
   },
   "license": "MIT"
 }

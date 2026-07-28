@@ -9,6 +9,8 @@ target/
 coverage/
 *.tsbuildinfo
 .turbo/
+.nx/
+.vibefield/
 
 # env & secrets (the committed template is the one exception)
 .env

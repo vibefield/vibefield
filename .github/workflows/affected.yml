@@ -1,0 +1,43 @@
+# Fast PR feedback from the Nx project graph. This complements — and never
+# replaces — verify.yml's full macOS gate. It intentionally runs only the
+# affected JavaScript/desktop targets; Rust format, clippy, tests, codegen
+# freshness, and the external truffle checkout remain owned by `pnpm verify`.
+name: affected
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: affected-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  affected:
+    runs-on: ubuntu-latest
+    env:
+      NX_DAEMON: "false"
+      NX_BASE: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
+      NX_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      # Full history is required: affected is a Git comparison, not a
+      # timestamp or package-directory heuristic.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # No Nx Cloud connection or token: local deterministic caching only.
+      # The full verify workflow still runs on every PR and on main.
+      - name: Build, test, and typecheck affected projects
+        run: pnpm exec nx affected -t build,test,typecheck --outputStyle=stream

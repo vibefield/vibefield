@@ -103,6 +103,8 @@ export interface FielddConfig {
   peerWebSocket?: WsCtor;
   /** pid of a field-native the caller spawned (recorded in product.json for cleanup tooling) */
   nativePid?: number;
+  /** Development-only identity used to prevent adopting output from a stale build. */
+  buildId?: string;
   /** PLUG-P2 — plugin discovery roots (§9.1): dirs whose children are plugin
    * dirs. Unset ⇒ an empty registry (honest, never a scan of guessed paths). */
   pluginRoots?: { bundled?: string[]; devLinked?: string[] };
@@ -1610,6 +1612,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           contractsVersion: CONTRACTS_VERSION,
           startedAt,
           nativePid: config.nativePid ?? null,
+          buildId: config.buildId ?? null,
         } satisfies ProductInfo, // the shell/supervisor adoption contract (shell.ts)
         null,
         2,

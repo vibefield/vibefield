@@ -13,6 +13,9 @@ export type SupervisorErrorKind =
    * of the generic pairing timeout (slice-0 finding 4) */
   | "data-root-too-long"
   | "spawn-failed"
+  /** a live dev daemon owns this root but was built from different output;
+   * never spawn a second daemon over it */
+  | "incompatible-build"
   /** the spawned child exited before readiness — rejected promptly, never
    * waiting out the deadline (slice-0 finding 3 class) */
   | "child-exit"
@@ -30,6 +33,8 @@ export type ProbeFailure =
   /** something answers but rejects our shell token — not our daemon (EL7) */
   | "foreign-listener"
   | "incompatible-contracts"
+  /** a development daemon was produced by a different watched build */
+  | "incompatible-build"
   | "probe-timeout";
 
 export class SupervisorError extends Error {
@@ -105,11 +110,17 @@ export interface FielddSupervisorOptions {
   /** undefined = daemon default (registry port); 0 = ephemeral (test isolation) */
   controlPort?: number;
   dataPort?: number;
+  /** Development-only build identity. When set, adoption requires an exact
+   * match and spawned fieldd receives it as FIELDD_BUILD_ID. */
+  expectedBuildId?: string;
   /** production: leave-running (daemon lifetime > shell lifetime, design-00);
    * dev/smoke: stop-owned tears down what THIS supervisor spawned — never an
    * adopted process. */
   shutdownPolicy: "leave-running" | "stop-owned";
   readinessDeadlineMs?: number;
+  /** TERM grace before a spawned fieldd is force-killed. Dev/smoke callers
+   * must budget for the daemon's bounded plugin-deactivation deadline. */
+  stopDeadlineMs?: number;
   /** budget for the first adoption probe before deciding to spawn */
   adoptProbeMs?: number;
   /** Typed lifecycle/control/emergency boundary. Readiness stdout is never
