@@ -37,9 +37,14 @@ export function prepareRendererClose(win: BrowserWindow, timeoutMs = 15_000): Pr
   });
 }
 
-export function installDurableClose(win: BrowserWindow, logger?: Logger): void {
+export function installDurableClose(
+  win: BrowserWindow,
+  logger?: Logger,
+  onClosing?: () => void,
+): void {
   let closeAllowed = false;
   let busy = false;
+  let closingAnnounced = false;
 
   const attemptClose = async (): Promise<void> => {
     if (busy || win.isDestroyed()) return;
@@ -87,6 +92,10 @@ export function installDurableClose(win: BrowserWindow, logger?: Logger): void {
   win.on("close", (event) => {
     if (closeAllowed) return;
     event.preventDefault();
+    if (!closingAnnounced) {
+      closingAnnounced = true;
+      onClosing?.();
+    }
     void attemptClose();
   });
 }

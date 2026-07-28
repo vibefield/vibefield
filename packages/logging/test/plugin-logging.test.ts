@@ -62,6 +62,7 @@ function captureSink(records: TrustedLogIngress[]): NodeLogging {
       throw new Error("not used");
     },
     subscribeUpdates: () => () => undefined,
+    subscribeWriterState: () => () => undefined,
     replaceDiagnosticLeases() {},
     setLevel() {},
     flush: () => Promise.resolve(),

@@ -7,6 +7,7 @@ import {
 } from "@vibecook/ice";
 import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useStageHold } from "@vibecook/ice/react";
+import type { DesktopShellState } from "@vibefield/contracts";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type Dispatch,
@@ -33,6 +34,7 @@ import {
   type ThemeColors,
 } from "../panels";
 import * as commandRegistry from "../plugin-host/command-registry";
+import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
 import {
   DEFAULT_OVERLAP_GLOW,
   DEFAULT_OVERLAP_GLOW_THEME_COLORS,
@@ -134,20 +136,23 @@ export function ChromeLayer({
     showEcs,
   } = chrome;
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [diagnosticsRequest, setDiagnosticsRequest] = useState(0);
+  const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
+  const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
 
   useEffect(() => {
     const onShellCommand = getHost().onShellCommand;
     if (onShellCommand === undefined) return;
     return onShellCommand((command) => {
-      if (command === "open-diagnostics") {
-        setDiagnosticsRequest((request) => request + 1);
-      } else {
-        setDiagnosticsRequest(0);
-      }
+      setShellPresentation((state) => reduceShellPresentation(state, command));
       setShowSettings(true);
     });
   }, [setShowSettings]);
+
+  useEffect(() => {
+    const onDesktopState = getHost().onDesktopState;
+    if (onDesktopState === undefined) return;
+    return onDesktopState(setDesktopState);
+  }, []);
 
   // The docs sheet + the loading veil quiesce the stage exactly like the tray
   // (WidgetTray holds for itself).
@@ -342,7 +347,7 @@ export function ChromeLayer({
       <button
         type="button"
         onClick={() => {
-          setDiagnosticsRequest(0);
+          setShellPresentation((state) => ({ ...state, target: "general" }));
           setShowSettings((s) => !s);
         }}
         data-hud-flight="bottom-left"
@@ -399,9 +404,11 @@ export function ChromeLayer({
           onOverlapGlowThemeColorsChange={chrome.setOverlapGlowThemeColors}
           stressWidgetType="vibefield.widgetlab.clock"
           platform={getHost().platform ?? "other"}
-          diagnosticsRequest={diagnosticsRequest}
+          desktopState={desktopState}
+          diagnosticsRequest={shellPresentation.diagnosticsRequest}
+          diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
           onClose={() => {
-            setDiagnosticsRequest(0);
+            setShellPresentation((state) => ({ ...state, target: "general" }));
             setShowSettings(false);
           }}
         />

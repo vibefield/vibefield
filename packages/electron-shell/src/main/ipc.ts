@@ -15,12 +15,20 @@ import type { WindowRegistry } from "./window-policy";
 
 export function registerWindowBootstrap(
   registry: WindowRegistry,
-  supervisor: FielddSupervisor,
+  ensure: FielddSupervisor["ensure"],
   logger?: Logger,
 ): void {
   const handle = createBootstrapHandler({
     owns: (sender) => registry.owns(sender),
-    ensure: (o) => supervisor.ensure(o),
+    ensure,
+    onRevokeError: (error, details) => {
+      logger?.error(
+        "desktop.ipc.window_token_revoke_failed",
+        "Electron could not confirm renderer token revocation",
+        error,
+        details,
+      );
+    },
   });
   ipcMain.handle(IPC_CHANNELS.windowBootstrap, async (event) => {
     try {

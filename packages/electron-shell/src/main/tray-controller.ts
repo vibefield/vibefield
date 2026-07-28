@@ -1,3 +1,4 @@
+import type { DesktopShellState } from "@vibefield/contracts";
 import type { TrayImageKind } from "./resources";
 import {
   buildTrayMenu,
@@ -42,6 +43,7 @@ export interface TrayControllerOptions {
   readonly initial: TraySnapshot;
   readonly actions: TrayControllerActions;
   readonly onError: (stage: TrayControllerErrorStage, error: unknown) => void;
+  readonly onDesktopState?: (state: DesktopShellState) => void;
 }
 
 const REBUILD_COALESCE_MS = 100;
@@ -68,10 +70,12 @@ export class TrayController {
   private disposed = false;
   private createFailed = false;
   private imageKind: TrayImageKind | null = null;
+  private lastDesktopState = "";
 
   constructor(private readonly options: TrayControllerOptions) {
     this.snapshot = options.initial;
     this.reconcileVisibility();
+    this.publishDesktopState();
   }
 
   update(patch: Partial<TraySnapshot>): void {
@@ -81,6 +85,7 @@ export class TrayController {
     if (wasVisible && !this.snapshot.showTray) this.createFailed = false;
     const created = this.reconcileVisibility();
     if (this.tray !== null && !created) this.scheduleRefresh();
+    this.publishDesktopState();
   }
 
   current(): TraySnapshot {
@@ -103,12 +108,39 @@ export class TrayController {
     return this.tray !== null && !this.disposed;
   }
 
+  desktopState(): DesktopShellState {
+    const availability = !this.snapshot.showTray
+      ? "hidden"
+      : this.tray !== null && !this.disposed
+        ? "available"
+        : "unavailable";
+    const backgroundShellEffective =
+      (this.options.runtime.platform === "win32" || this.options.runtime.platform === "linux") &&
+      availability === "available" &&
+      this.snapshot.backgroundShell;
+    return {
+      tray: {
+        availability,
+        backgroundShellEffective,
+        issue:
+          availability === "unavailable"
+            ? {
+                code: "DESKTOP_TRAY_UNAVAILABLE",
+                message:
+                  "The native status item is unavailable for this session. Closing the last window will quit VibeField.",
+              }
+            : null,
+      },
+    };
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.snapshot = { ...this.snapshot, quitting: true };
     this.cancelRefresh();
     this.destroyTray();
+    this.publishDesktopState();
   }
 
   private reconcileVisibility(): boolean {
@@ -190,6 +222,14 @@ export class TrayController {
     this.tray = null;
     this.imageKind = null;
     tray?.destroy();
+  }
+
+  private publishDesktopState(): void {
+    const state = this.desktopState();
+    const serialized = JSON.stringify(state);
+    if (serialized === this.lastDesktopState) return;
+    this.lastDesktopState = serialized;
+    this.options.onDesktopState?.(state);
   }
 
   private guardedActions(): TrayActions {

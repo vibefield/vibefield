@@ -66,6 +66,17 @@ export interface WindowSession {
   dispose(): void;
 }
 
+interface ManagedWindowSession extends WindowSession {
+  closing: boolean;
+}
+
+interface QueuedReopen {
+  readonly factory: () => PrimaryWindowCandidate;
+  readonly promise: Promise<BrowserWindow>;
+  readonly resolve: (window: BrowserWindow) => void;
+  readonly reject: (error: unknown) => void;
+}
+
 export interface PrimaryWindowCandidate {
   readonly window: BrowserWindow;
   /** Installs the window's host bridges and loads the renderer. The registry
@@ -75,9 +86,11 @@ export interface PrimaryWindowCandidate {
 }
 
 export class WindowRegistry {
-  private readonly sessions = new Map<number, WindowSession>();
+  private readonly sessions = new Map<number, ManagedWindowSession>();
   private readonly primaryListeners = new Set<(open: boolean) => void>();
   private opening: Promise<BrowserWindow> | null = null;
+  private queuedReopen: QueuedReopen | null = null;
+  private shuttingDown = false;
 
   adopt(window: BrowserWindow): WindowSession {
     const current = this.primary();
@@ -88,15 +101,19 @@ export class WindowRegistry {
     }
     const existing = this.sessions.get(window.id);
     if (existing !== undefined) return existing;
-    const session: WindowSession = {
+    const session: ManagedWindowSession = {
       window,
+      closing: false,
       dispose: () => {
         if (!this.sessions.delete(window.id)) return;
         this.emitPrimaryChanged();
       },
     };
     this.sessions.set(window.id, session);
-    window.on("closed", () => session.dispose());
+    window.on("closed", () => {
+      session.dispose();
+      this.launchQueuedReopen();
+    });
     this.emitPrimaryChanged();
     return session;
   }
@@ -125,12 +142,39 @@ export class WindowRegistry {
     this.revealWindow(win);
   }
 
+  /** Durable close is asynchronous. Once it starts, reveal intents queue for
+   * the replacement generation instead of focusing a window committed to die. */
+  markClosing(window: BrowserWindow): boolean {
+    const session = this.sessions.get(window.id);
+    if (session === undefined || session.window !== window) return false;
+    session.closing = true;
+    return true;
+  }
+
+  beginShutdown(): void {
+    if (this.shuttingDown) return;
+    this.shuttingDown = true;
+    const queued = this.queuedReopen;
+    this.queuedReopen = null;
+    queued?.reject(new Error("primary window reopen cancelled: shell is shutting down"));
+  }
+
   /** The one create-or-reveal operation for initial boot, tray, Dock
    * activation, second-instance, and future deep links. Concurrent callers
    * share the same preparation promise and can never create a second canvas. */
   revealPrimary(factory: () => PrimaryWindowCandidate): Promise<BrowserWindow> {
-    if (this.opening !== null) return this.opening;
+    if (this.shuttingDown) {
+      return Promise.reject(new Error("primary window cannot open while shell is shutting down"));
+    }
     const existing = this.primary();
+    // markClosing() is synchronous, while prepare() may still be in flight.
+    // A later Open intent belongs to the replacement generation even in that
+    // overlap; returning `opening` here would focus the window committed to die
+    // and silently lose the user's intent.
+    if (existing !== null && this.sessions.get(existing.id)?.closing) {
+      return this.queueReopen(factory);
+    }
+    if (this.opening !== null) return this.opening;
     if (existing !== null) {
       this.revealWindow(existing);
       return Promise.resolve(existing);
@@ -171,10 +215,44 @@ export class WindowRegistry {
   }
 
   disposeAll(): void {
+    this.beginShutdown();
     for (const session of [...this.sessions.values()]) {
       session.dispose();
       if (!session.window.isDestroyed()) session.window.destroy();
     }
+  }
+
+  private queueReopen(factory: () => PrimaryWindowCandidate): Promise<BrowserWindow> {
+    if (this.queuedReopen !== null) return this.queuedReopen.promise;
+    let resolve!: (window: BrowserWindow) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<BrowserWindow>((onResolve, onReject) => {
+      resolve = onResolve;
+      reject = onReject;
+    });
+    this.queuedReopen = { factory, promise, resolve, reject };
+    return promise;
+  }
+
+  private launchQueuedReopen(): void {
+    const queued = this.queuedReopen;
+    if (queued === null) return;
+    if (this.shuttingDown) {
+      this.queuedReopen = null;
+      queued.reject(new Error("primary window reopen cancelled: shell is shutting down"));
+      return;
+    }
+    if (this.opening !== null) {
+      const opening = this.opening;
+      void opening.then(
+        () => this.launchQueuedReopen(),
+        () => this.launchQueuedReopen(),
+      );
+      return;
+    }
+    if (this.primary() !== null) return;
+    this.queuedReopen = null;
+    void this.revealPrimary(queued.factory).then(queued.resolve, queued.reject);
   }
 
   private revealWindow(win: BrowserWindow): void {

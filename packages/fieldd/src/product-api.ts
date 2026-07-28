@@ -149,6 +149,21 @@ export class ProductApi extends EventEmitter {
     return dropped;
   }
 
+  /** A revoked window bearer must lose its already-authenticated socket too.
+   * TokenService blocks reconnects; this closes the live half immediately. */
+  dropTokenConnections(tokenId: string): number {
+    let dropped = 0;
+    for (const conn of [...this.liveConns]) {
+      const principal = conn.state.ctx?.principal;
+      if (principal?.kind === "local-token" && principal.tokenId === tokenId) {
+        conn.ws.terminate();
+        this.liveConns.delete(conn);
+        dropped += 1;
+      }
+    }
+    return dropped;
+  }
+
   /** P4 — arm the x.* dynamic-method path (the ServiceRegistry). */
   setDynamicRouter(router: DynamicRouterLike): void {
     this.dynamicRouter = router;

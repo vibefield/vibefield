@@ -86,6 +86,20 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  defineMethod({
+    surface: "product",
+    method: "system.revokeWindowToken",
+    scope: "tokens.mint",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "system.revokeStaleWindowTokens",
+    scope: "tokens.mint",
+    idempotent: true,
+    locality: "local",
+  }),
 
   // LOG-L6 — append-only audit ingress for shell-owned actions. The scope is
   // absent from every federated/plugin preset, and fieldd additionally proves

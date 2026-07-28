@@ -66,6 +66,26 @@ try {
   );
 }
 
+// --- installed desktop identity ---------------------------------------------
+// The ledger, electron-builder and runtime AUMID are three consumers of one
+// frozen identity. Run both the rule proof and the live comparison in the
+// ordinary gate so drift cannot wait until packaging CI to be discovered.
+for (const command of [
+  "node scripts/check-release-identity.mjs --self-test",
+  "node scripts/check-release-identity.mjs --enforce",
+]) {
+  try {
+    execSync(command, {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (err) {
+    const detail = `${err.stdout ?? ""}${err.stderr ?? ""}`.trim();
+    if (detail) console.error(detail);
+    problems.push(`release identity check failed (${command})`);
+  }
+}
+
 // --- tracked filenames stay whitespace-free ----------------------------------
 // The dev-runner's Nx watch bridge (tooling/dev-runner/src/nx-watch-event.mjs)
 // receives changed paths via NX_FILE_CHANGES, which Nx delimits with

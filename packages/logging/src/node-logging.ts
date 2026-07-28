@@ -227,6 +227,7 @@ class NodeLoggingService implements NodeLogging {
   private emergencyEmitted = false;
   private idleWaiters = new Set<() => void>();
   private readonly updateListeners = new Set<() => void>();
+  private readonly writerStateListeners = new Set<(state: LoggingHealth["writerState"]) => void>();
   private lastWriterError: unknown;
   private leases: DiagnosticLease[] = [];
   private leaseTimer: NodeJS.Timeout | null = null;
@@ -320,7 +321,7 @@ class NodeLoggingService implements NodeLogging {
     try {
       await this.writer.open();
       this.activeSegmentBytes = this.writer.bytes;
-      this.state = "healthy";
+      this.setWriterState("healthy");
       this.lastWriterError = undefined;
     } catch (error) {
       this.noteFailure(error, "open");
@@ -483,6 +484,12 @@ class NodeLoggingService implements NodeLogging {
     return () => this.updateListeners.delete(listener);
   }
 
+  subscribeWriterState(listener: (state: LoggingHealth["writerState"]) => void): () => void {
+    if (this.closed) return () => undefined;
+    this.writerStateListeners.add(listener);
+    return () => this.writerStateListeners.delete(listener);
+  }
+
   replaceDiagnosticLeases(leases: readonly DiagnosticLease[]): void {
     this.leases = leases
       .map((lease) => DiagnosticLeaseV1.parse(lease))
@@ -519,7 +526,6 @@ class NodeLoggingService implements NodeLogging {
       clearTimeout(this.leaseTimer);
       this.leaseTimer = null;
     }
-    this.updateListeners.clear();
     this.scheduleDrain();
     try {
       await this.waitForIdle(2_000);
@@ -533,7 +539,9 @@ class NodeLoggingService implements NodeLogging {
       this.noteFailure(error, "close");
     }
     this.closed = true;
-    this.state = "closed";
+    this.setWriterState("closed");
+    this.updateListeners.clear();
+    this.writerStateListeners.clear();
     this.resolveIdleWaiters();
   }
 
@@ -714,7 +722,7 @@ class NodeLoggingService implements NodeLogging {
           await this.writer.open();
           this.activeSegmentBytes = this.writer.bytes;
           if (this.queue.length === 0) {
-            this.state = "healthy";
+            this.setWriterState("healthy");
             this.lastFailure = undefined;
             this.lastWriterError = undefined;
             this.retryAttempt = 0;
@@ -737,7 +745,7 @@ class NodeLoggingService implements NodeLogging {
           this.counters.cleanupDeletions += result.cleanupDeletions;
           this.activeSegmentBytes = this.writer.bytes;
           this.lastWriteAt = this.now();
-          this.state = "healthy";
+          this.setWriterState("healthy");
           this.lastFailure = undefined;
           this.lastWriterError = undefined;
           this.retryAttempt = 0;
@@ -783,7 +791,7 @@ class NodeLoggingService implements NodeLogging {
   private noteFailure(error: unknown, operation: WriterOperation): void {
     const kind = classifyFailure(error, operation);
     this.lastWriterError = error;
-    this.state = kind === "writer-conflict" ? "writer-conflict" : "degraded";
+    this.setWriterState(kind === "writer-conflict" ? "writer-conflict" : "degraded");
     const detail = error instanceof WriterOperationError ? error.cause : error;
     const serialized = serializeError(detail, {
       ...(this.options.aliases !== undefined ? { aliases: this.options.aliases } : {}),
@@ -804,6 +812,18 @@ class NodeLoggingService implements NodeLogging {
       this.emergency(message);
     } catch {
       // Emergency output is terminal; it never recurses through this logger.
+    }
+  }
+
+  private setWriterState(state: LoggingHealth["writerState"]): void {
+    if (this.state === state) return;
+    this.state = state;
+    for (const listener of [...this.writerStateListeners]) {
+      try {
+        listener(state);
+      } catch {
+        // Health observation is best-effort and cannot affect persistence.
+      }
     }
   }
 

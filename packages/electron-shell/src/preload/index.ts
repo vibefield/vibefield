@@ -1,12 +1,14 @@
 import {
   CloseRequest,
   CloseResult,
+  type DesktopShellState,
   IPC_CHANNELS,
   type ShellCommand,
   ShellPlatform,
   WindowConnection,
 } from "@vibefield/contracts";
 import { contextBridge, ipcRenderer } from "electron";
+import { PreloadDesktopStateBridge } from "./desktop-state";
 import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
 import { PreloadShellCommandBridge } from "./shell-commands";
@@ -20,6 +22,24 @@ import { PreloadShellCommandBridge } from "./shell-commands";
 
 const logging = new PreloadLogBridge();
 const diagnostics = new PreloadDiagnosticsBridge();
+const desktopState = new PreloadDesktopStateBridge((issueCount) => {
+  logging.submit(
+    JSON.stringify({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: Date.now(),
+          level: "error",
+          event: "renderer.preload.desktop_state_rejected",
+          msg: "Preload rejected malformed desktop capability state",
+          component: "preload.shell",
+          attrs: { issueCount },
+        },
+      ],
+    }),
+  );
+});
 const shellCommands = new PreloadShellCommandBridge((issueCount) => {
   logging.submit(
     JSON.stringify({
@@ -53,6 +73,9 @@ ipcRenderer.on(IPC_CHANNELS.diagnosticsPort, (event) => {
 });
 ipcRenderer.on(IPC_CHANNELS.shellCommand, (_event, raw: unknown) => {
   shellCommands.accept(raw);
+});
+ipcRenderer.on(IPC_CHANNELS.desktopState, (_event, raw: unknown) => {
+  desktopState.accept(raw);
 });
 
 contextBridge.exposeInMainWorld("vibefield", {
@@ -92,6 +115,8 @@ contextBridge.exposeInMainWorld("vibefield", {
   },
   onShellCommand: (handler: (command: ShellCommand) => void): (() => void) =>
     shellCommands.subscribe(handler),
+  onDesktopState: (handler: (state: DesktopShellState) => void): (() => void) =>
+    desktopState.subscribe(handler),
   diagnostics: {
     query: (query: unknown) => diagnostics.query(query),
     subscribe: (query: unknown, onEvent: Parameters<typeof diagnostics.subscribe>[1]) =>

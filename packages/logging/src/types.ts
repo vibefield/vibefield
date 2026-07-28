@@ -160,6 +160,9 @@ export interface NodeLogging {
     predicate?: (record: LogRecordV1) => boolean,
   ): RecentLogDelta;
   subscribeUpdates(listener: () => void): () => void;
+  /** Writer availability changes independently of record admission. Consumers
+   * such as the desktop tray use this to report degradation and recovery live. */
+  subscribeWriterState(listener: (state: LoggingHealthV1["writerState"]) => void): () => void;
   replaceDiagnosticLeases(leases: readonly DiagnosticLeaseV1[]): void;
   setLevel(level: LogLevelNameV1): void;
   flush(): Promise<void>;

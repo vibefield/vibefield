@@ -151,6 +151,50 @@ describe("system.mintWindowToken", () => {
     const malformed = await rpc.callErr("system.mintWindowToken", { label: 42 });
     expect(malformed.data?.kind).toBe("PRECONDITION_FAILED");
   });
+
+  it("revokes exact and stale window grants, including their authenticated sockets", async () => {
+    const { daemon } = await setup();
+    const shell = await openRpc(daemon.controlPort);
+    await helloAs(shell, daemon.shellToken, "shell-main");
+    const unrelated = daemon.tokens.mint(["canvas.read"], "not-a-window");
+
+    const first = (await shell.call("system.mintWindowToken", {
+      scopes: ["canvas.read"],
+      label: "window-1",
+    })) as { token: string; tokenId: string };
+    const second = (await shell.call("system.mintWindowToken", {
+      scopes: ["canvas.read"],
+      label: "window-2",
+    })) as { token: string; tokenId: string };
+    const firstWindow = await openRpc(daemon.controlPort);
+    await helloAs(firstWindow, first.token);
+
+    await expect(
+      shell.call("system.revokeWindowToken", { tokenId: first.tokenId }),
+    ).resolves.toMatchObject({ revoked: true, droppedConnections: 1 });
+    await until(() => firstWindow.closed);
+    expect(daemon.tokens.verify(first.token)).toBeNull();
+    expect(daemon.tokens.verify(unrelated.token)).not.toBeNull();
+
+    await expect(shell.call("system.revokeStaleWindowTokens", {})).resolves.toMatchObject({
+      revoked: 1,
+    });
+    expect(daemon.tokens.verify(second.token)).toBeNull();
+    expect(daemon.tokens.verify(unrelated.token)).not.toBeNull();
+    await expect(
+      shell.call("system.revokeWindowToken", { tokenId: second.tokenId }),
+    ).resolves.toMatchObject({ revoked: false });
+  });
+
+  it("keeps window-token lifecycle authority on the loopback shell client", async () => {
+    const { daemon } = await setup();
+    const narrow = daemon.tokens.mint(["tokens.mint"], "not-shell-main");
+    const renderer = await openRpc(daemon.controlPort);
+    await helloAs(renderer, narrow.token, "renderer");
+
+    const denied = await renderer.callErr("system.revokeStaleWindowTokens", {});
+    expect(denied.data?.kind).toBe("FORBIDDEN_SCOPE");
+  });
 });
 
 describe("system.health.subscribe (aggregated stream)", () => {

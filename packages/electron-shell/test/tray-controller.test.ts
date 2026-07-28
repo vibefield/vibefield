@@ -1,3 +1,4 @@
+import type { DesktopShellState } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type NativeTrayPort,
@@ -64,13 +65,15 @@ function harness(
     quit: vi.fn(),
   };
   const onError = vi.fn();
+  const desktopStates: DesktopShellState[] = [];
   const controller = new TrayController({
     runtime,
     initial: snapshot(initial),
     actions,
     onError,
+    onDesktopState: (state) => desktopStates.push(state),
   });
-  return { controller, runtime, actions, onError, trays, menus };
+  return { controller, runtime, actions, onError, trays, menus, desktopStates };
 }
 
 const menuItem = (menu: readonly TrayMenuItem[], id: string) =>
@@ -105,6 +108,11 @@ describe("TrayController", () => {
     expect(first.destroy).toHaveBeenCalledTimes(1);
     expect(h.controller.isUsable()).toBe(false);
     expect(h.controller.keepsAliveWithoutWindows()).toBe(false);
+    expect(h.controller.desktopState().tray).toMatchObject({
+      availability: "hidden",
+      backgroundShellEffective: false,
+      issue: null,
+    });
 
     h.controller.update({ showTray: true });
     expect(h.trays).toHaveLength(2);
@@ -124,6 +132,12 @@ describe("TrayController", () => {
     expect(failed.controller.isUsable()).toBe(false);
     expect(failed.controller.keepsAliveWithoutWindows()).toBe(false);
     expect(failed.onError).toHaveBeenCalledWith("create", expect.any(Error));
+    expect(failed.controller.desktopState().tray).toMatchObject({
+      availability: "unavailable",
+      backgroundShellEffective: false,
+      issue: { code: "DESKTOP_TRAY_UNAVAILABLE" },
+    });
+    expect(failed.desktopStates.at(-1)?.tray.availability).toBe("unavailable");
 
     const disabled = harness("win32");
     disabled.controller.update({ backgroundShell: false });

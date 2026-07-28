@@ -17,8 +17,12 @@ export class WsRpc {
     { resolve: (v: unknown) => void; reject: (e: Error & { rpc?: RpcErrorShape }) => void }
   >();
   notifications: Array<{ method: string; params: { subId?: string; payload?: unknown } }> = [];
+  closed = false;
 
   constructor(private readonly ws: WebSocket) {
+    ws.on("close", () => {
+      this.closed = true;
+    });
     ws.on("message", (raw) => {
       const m = JSON.parse(String(raw)) as Record<string, unknown>;
       const id = m["id"];

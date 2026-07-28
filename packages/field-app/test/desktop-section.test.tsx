@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+
+import type { DesktopShellState } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
@@ -36,7 +38,11 @@ function client(preferences: { showTray: boolean; backgroundShell: boolean }): F
   } as unknown as FielddClient;
 }
 
-async function mount(fieldd: FielddClient, platform: "darwin" | "win32" | "linux"): Promise<void> {
+async function mount(
+  fieldd: FielddClient,
+  platform: "darwin" | "win32" | "linux",
+  desktopState: DesktopShellState | null = null,
+): Promise<void> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -45,7 +51,7 @@ async function mount(fieldd: FielddClient, platform: "darwin" | "win32" | "linux
       createElement(
         FielddProvider,
         { client: fieldd },
-        createElement(DesktopSection, { platform }),
+        createElement(DesktopSection, { platform, desktopState }),
       ),
     );
     await Promise.resolve();
@@ -80,5 +86,24 @@ describe("DesktopSection", () => {
     const inputs = container?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
     expect(inputs?.[1]?.disabled).toBe(true);
     expect(container?.textContent).toContain("Requires the status item");
+  });
+
+  it("surfaces native tray failure and renders background residency as ineffective", async () => {
+    await mount(client({ showTray: true, backgroundShell: true }), "linux", {
+      tray: {
+        availability: "unavailable",
+        backgroundShellEffective: false,
+        issue: {
+          code: "DESKTOP_TRAY_UNAVAILABLE",
+          message: "native tray creation failed",
+        },
+      },
+    });
+    const inputs = container?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+    expect(inputs?.[0]?.checked).toBe(true);
+    expect(inputs?.[1]?.checked).toBe(false);
+    expect(inputs?.[1]?.disabled).toBe(true);
+    expect(container?.textContent).toContain("Closing this window quits VibeField");
+    expect(container?.textContent).toContain("DESKTOP_TRAY_UNAVAILABLE");
   });
 });

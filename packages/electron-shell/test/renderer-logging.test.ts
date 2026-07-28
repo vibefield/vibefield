@@ -41,6 +41,7 @@ function fakeSink(records: TrustedLogIngress[]): NodeLogging {
       throw new Error("not used");
     },
     subscribeUpdates: () => () => undefined,
+    subscribeWriterState: () => () => undefined,
     replaceDiagnosticLeases: () => undefined,
     setLevel: () => undefined,
     flush: () => Promise.resolve(),

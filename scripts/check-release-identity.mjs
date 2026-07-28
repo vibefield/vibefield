@@ -30,6 +30,8 @@ import { readFileSync } from "node:fs";
 import { hostname, userInfo } from "node:os";
 
 const LEDGER_PATH = "apps/desktop/packaging/release-identity.json";
+const BUILDER_PATH = "apps/desktop/packaging/electron-builder.yml";
+const DESKTOP_REGISTRY_PATH = "packages/contracts/src/registries.ts";
 
 const REQUIRED_FIELDS = [
   "appId",
@@ -192,6 +194,76 @@ function checkLedger(ledger, committed) {
   return { violations, blockers, notes };
 }
 
+function topLevelYamlScalar(source, key) {
+  const matches = source.split(/\r?\n/).filter((line) => new RegExp(`^${key}:\\s*`).test(line));
+  if (matches.length !== 1) {
+    throw new Error(`${BUILDER_PATH}: expected exactly one top-level ${key}`);
+  }
+  const raw = matches[0].slice(matches[0].indexOf(":") + 1).trim();
+  const value =
+    (raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))
+      ? raw.slice(1, -1)
+      : raw;
+  if (value.length === 0) throw new Error(`${BUILDER_PATH}: ${key} must not be empty`);
+  return value;
+}
+
+function loadIdentityConsumers() {
+  const builder = readFileSync(BUILDER_PATH, "utf8");
+  const registries = readFileSync(DESKTOP_REGISTRY_PATH, "utf8");
+  const appIdMatch = registries.match(
+    /export\s+const\s+DESKTOP_APP_ID\s*=\s*(["'])([^"']+)\1\s+as\s+const/,
+  );
+  if (appIdMatch === null) {
+    throw new Error(`${DESKTOP_REGISTRY_PATH}: could not read DESKTOP_APP_ID`);
+  }
+  return {
+    builderAppId: topLevelYamlScalar(builder, "appId"),
+    builderProductName: topLevelYamlScalar(builder, "productName"),
+    builderExecutableName: topLevelYamlScalar(builder, "executableName"),
+    runtimeWindowsAppUserModelId: appIdMatch[2],
+  };
+}
+
+/** Cross-file identity is intentionally checked, not trusted. The ledger owns
+ * migration history; builder and runtime are consumers that must agree with it
+ * and with each other in every checkout. */
+function checkIdentityConsumers(ledger, consumers) {
+  const violations = [];
+  const frozenValue = (field) =>
+    ledger.fields?.[field]?.status === "frozen" ? ledger.fields[field].value : null;
+  const compare = (consumer, actual, field) => {
+    const expected = frozenValue(field);
+    if (expected !== null && actual !== expected) {
+      violations.push(
+        `${consumer}: ${JSON.stringify(actual)} disagrees with frozen ${field} ${JSON.stringify(expected)}`,
+      );
+    }
+  };
+
+  compare("electron-builder appId", consumers.builderAppId, "appId");
+  compare("electron-builder productName", consumers.builderProductName, "productName");
+  compare("electron-builder executableName", consumers.builderExecutableName, "executableName");
+  compare(
+    "runtime DESKTOP_APP_ID",
+    consumers.runtimeWindowsAppUserModelId,
+    "windowsAppUserModelId",
+  );
+  const appId = frozenValue("appId");
+  const aumid = frozenValue("windowsAppUserModelId");
+  if (appId !== null && aumid !== null && appId !== aumid) {
+    violations.push(
+      `ledger: appId ${JSON.stringify(appId)} and windowsAppUserModelId ${JSON.stringify(aumid)} must be identical`,
+    );
+  }
+  if (consumers.builderAppId !== consumers.runtimeWindowsAppUserModelId) {
+    violations.push(
+      `runtime/builder drift: DESKTOP_APP_ID ${JSON.stringify(consumers.runtimeWindowsAppUserModelId)} does not match appId ${JSON.stringify(consumers.builderAppId)}`,
+    );
+  }
+  return violations;
+}
+
 /** The ledger as committed at HEAD, or null when it is new/unreadable — a first
  * commit has nothing to drift from, and a checker that died on that would block
  * its own introduction. */
@@ -338,6 +410,37 @@ function selfTest() {
   if (!bumpOk) failures++;
   console.log(`${bumpOk ? "ok  " : "FAIL"} a revision bump legitimises the same change`);
 
+  const consumers = loadIdentityConsumers();
+  const consumerBaseline = checkIdentityConsumers(base(), consumers);
+  const consumerBaselineOk = consumerBaseline.length === 0;
+  if (!consumerBaselineOk) failures++;
+  console.log(
+    `${consumerBaselineOk ? "ok  " : "FAIL"} runtime, builder and ledger identities agree`,
+  );
+  if (!consumerBaselineOk) {
+    for (const violation of consumerBaseline) console.log(`       ${violation}`);
+  }
+
+  const driftedBuilder = checkIdentityConsumers(base(), {
+    ...consumers,
+    builderAppId: "com.example.drifted",
+  });
+  const builderDriftOk =
+    driftedBuilder.some((v) => v.includes("electron-builder appId")) &&
+    driftedBuilder.some((v) => v.includes("runtime/builder drift"));
+  if (!builderDriftOk) failures++;
+  console.log(`${builderDriftOk ? "ok  " : "FAIL"} builder application-id drift is refused`);
+
+  const driftedRuntime = checkIdentityConsumers(base(), {
+    ...consumers,
+    runtimeWindowsAppUserModelId: "com.example.drifted",
+  });
+  const runtimeDriftOk =
+    driftedRuntime.some((v) => v.includes("runtime DESKTOP_APP_ID")) &&
+    driftedRuntime.some((v) => v.includes("runtime/builder drift"));
+  if (!runtimeDriftOk) failures++;
+  console.log(`${runtimeDriftOk ? "ok  " : "FAIL"} runtime AUMID drift is refused`);
+
   if (failures > 0) {
     console.error(`self-test: ${failures} rule(s) did not behave as specified`);
     process.exit(1);
@@ -361,6 +464,11 @@ try {
 }
 
 const { violations, blockers, notes } = checkLedger(ledger, committedLedger(LEDGER_PATH));
+try {
+  violations.push(...checkIdentityConsumers(ledger, loadIdentityConsumers()));
+} catch (error) {
+  violations.push(`identity consumers could not be inspected: ${error}`);
+}
 
 for (const v of violations) console.error(`release-identity FAIL: ${v}`);
 for (const n of notes) console.warn(`release-identity NOTE: ${n}`);

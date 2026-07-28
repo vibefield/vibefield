@@ -60,6 +60,8 @@ describe("buildTrayMenu", () => {
     const menu = buildTrayMenu(snapshot(), actions(), "darwin");
     expect(menu.some((item) => item.id === "background-shell")).toBe(false);
     expect(menu.some((item) => item.id === "show-tray")).toBe(true);
+    for (const item of menu) expect(item.enabled).toBeUndefined();
+    expect(byId(menu, "status").click).toBeUndefined();
   });
 
   it.each([
@@ -101,6 +103,14 @@ describe("buildTrayMenu", () => {
     const menu = buildTrayMenu(snapshot({ quitting: true }), actions(), "win32");
     for (const item of menu) {
       if (item.type !== "separator") expect(item.enabled).toBe(false);
+    }
+  });
+
+  it("removes every macOS click handler while quitting instead of relying on enabled", () => {
+    const menu = buildTrayMenu(snapshot({ quitting: true }), actions(), "darwin");
+    for (const item of menu) {
+      expect(item.enabled).toBeUndefined();
+      expect(item.click).toBeUndefined();
     }
   });
 

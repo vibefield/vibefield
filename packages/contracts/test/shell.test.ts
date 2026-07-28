@@ -7,6 +7,7 @@ import {
   CloseReason,
   CloseRequest,
   CloseResult,
+  DesktopShellState,
   ProductInfo,
   ShellCommandRequest,
   WindowConnection,
@@ -147,7 +148,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the six channel keys, in order", () => {
+  it("exposes exactly the seven channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -155,6 +156,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "rendererLogPort",
       "diagnosticsPort",
       "shellCommand",
+      "desktopState",
     ]);
   });
 
@@ -166,11 +168,39 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       rendererLogPort: "vibefield:logging:renderer-port",
       diagnosticsPort: "vibefield:diagnostics:host-port",
       shellCommand: "vibefield:shell:command",
+      desktopState: "vibefield:shell:desktop-state",
     });
   });
 });
 
 describe("tray shell commands and app preferences", () => {
+  it("keeps desired preferences separate from native desktop capability truth", () => {
+    expect(
+      DesktopShellState.parse({
+        tray: {
+          availability: "unavailable",
+          backgroundShellEffective: false,
+          issue: {
+            code: "DESKTOP_TRAY_UNAVAILABLE",
+            message: "status item creation failed",
+          },
+        },
+      }).tray,
+    ).toMatchObject({
+      availability: "unavailable",
+      backgroundShellEffective: false,
+    });
+    expect(
+      DesktopShellState.safeParse({
+        tray: {
+          availability: "unavailable",
+          backgroundShellEffective: true,
+          issue: { code: "UNKNOWN", message: "bad" },
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it("keeps the renderer command set closed", () => {
     expect(ShellCommandRequest.parse({ command: "open-settings" }).command).toBe("open-settings");
     expect(ShellCommandRequest.parse({ command: "open-diagnostics" }).command).toBe(

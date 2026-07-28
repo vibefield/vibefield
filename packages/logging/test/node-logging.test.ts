@@ -410,6 +410,8 @@ describe("node logging writer lifecycle", () => {
       emergency: (message) => emergencies.push(message),
       testHooks: hooks,
     });
+    const writerStates: string[] = [];
+    const stopWriterState = service.subscribeWriterState((state) => writerStates.push(state));
     fail = true;
     service.logger.error("fieldd.test.write_failed", "important record");
     await eventually(() => service.health().lastFailure?.kind === "enospc");
@@ -418,6 +420,8 @@ describe("node logging writer lifecycle", () => {
 
     fail = false;
     await eventually(() => service.health().writerState === "healthy");
+    expect(writerStates).toEqual(["degraded", "healthy"]);
+    stopWriterState();
     await service.flush();
     expect(service.health().queue.records).toBe(0);
     expect(service.health().counters.bytesWritten).toBeGreaterThan(0);

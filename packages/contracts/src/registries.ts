@@ -163,7 +163,7 @@ export const SOCKETS = {
   MESHDATA: "meshdata.sock",
 } as const;
 
-/** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): six channels, nothing
+/** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): seven channels, nothing
  * else. Payload schemas live in shell.ts; call sites import these names — a raw
  * `vibefield:` literal outside contracts is a boundary violation (wall R6). */
 export const IPC_CHANNELS = {
@@ -179,4 +179,6 @@ export const IPC_CHANNELS = {
   diagnosticsPort: "vibefield:diagnostics:host-port",
   /** main → renderer: validated, presentation-only shell commands */
   shellCommand: "vibefield:shell:command",
+  /** main → renderer: native tray/background capability truth */
+  desktopState: "vibefield:shell:desktop-state",
 } as const;

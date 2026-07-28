@@ -6,6 +6,8 @@ import {
   AppPreferences,
   CONTRACTS_VERSION,
   DESKTOP_APP_ID,
+  type DesktopShellState,
+  DesktopShellState as DesktopShellStateSchema,
   IPC_CHANNELS,
   type ShellCommand,
   ShellCommandRequest,
@@ -21,12 +23,14 @@ import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts
 import { installDevSignalQuit } from "./dev-signals";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
+import { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import { registerWindowBootstrap } from "./ipc";
 import { installLifecycle } from "./lifecycle";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
 import { isSmokeLike, parseMode } from "./modes";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
+import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
 import { installRendererLogging } from "./renderer-logging";
 import {
   assertPackagedResources,
@@ -43,7 +47,8 @@ import {
 import { buildCsp } from "./security-policy";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { TrayController } from "./tray-controller";
-import type { TrayEvidenceState, TrayLinkState } from "./tray-model";
+import { TrayEvidenceMonitor } from "./tray-evidence";
+import type { TrayLinkState } from "./tray-model";
 import { createElectronTrayRuntime } from "./tray-native";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
@@ -61,6 +66,7 @@ const PRELOAD_PATH = join(__dirname, "..", "preload", "index.cjs");
 const DESKTOP_BOOT_ID = `desktop-${randomBytes(8).toString("hex")}`;
 
 let supervisor: FielddSupervisor | null = null;
+let fielddHandles: FielddHandleCoordinator | null = null;
 let logging: ElectronLogging | null = null;
 let localDiagnostics: ElectronLocalDiagnostics | null = null;
 let crashArtifacts: CrashArtifactManager | null = null;
@@ -70,6 +76,11 @@ let primaryWindowOpener: (() => Promise<Electron.BrowserWindow>) | null = null;
 const shellDisposers = new Set<() => void>();
 const getSupervisor = () => supervisor;
 const registry = new WindowRegistry();
+const ensureFieldd: FielddSupervisor["ensure"] = (options) => {
+  if (fielddHandles !== null) return fielddHandles.ensure(options);
+  if (supervisor !== null) return supervisor.ensure(options);
+  return Promise.reject(new Error("fieldd supervisor is unavailable"));
+};
 
 async function revealPrimaryWindow(): Promise<Electron.BrowserWindow> {
   if (primaryWindowOpener === null) {
@@ -84,6 +95,8 @@ function disposeShellState(): void {
   primaryWindowOpener = null;
   for (const dispose of shellDisposers) dispose();
   shellDisposers.clear();
+  fielddHandles?.dispose();
+  fielddHandles = null;
 }
 
 const testing = () =>
@@ -117,21 +130,14 @@ async function main(
   support: SupportBundleService,
 ): Promise<void> {
   const logger = shellLogging.logger;
-  let evidenceState: TrayEvidenceState = [
-    shellLogging.desktop,
-    shellLogging.renderer,
-    shellLogging.utility,
-    shellLogging.pluginRenderer,
-  ].some((stream) => stream.health().writerState !== "healthy")
-    ? "degraded"
-    : "healthy";
+  let crashEvidenceAvailable = true;
+  let supportEvidenceAvailable = true;
   const appendShellAudit = async (record: Record<string, unknown>): Promise<void> => {
-    const handle = await getSupervisor()?.ensure();
-    if (handle === undefined) {
+    const handle = await ensureFieldd().catch(() => {
       throw Object.assign(new Error("fieldd audit service is unavailable"), {
         kind: "AUDIT_UNAVAILABLE",
       });
-    }
+    });
     await handle.client.request("audit.append", record);
   };
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
@@ -215,7 +221,7 @@ async function main(
   try {
     await crashes.initialize();
   } catch (error) {
-    evidenceState = "degraded";
+    crashEvidenceAvailable = false;
     logger.error(
       "desktop.crash.manifest_unavailable",
       "Electron crash artifacts are unavailable",
@@ -225,7 +231,7 @@ async function main(
   try {
     await support.initialize();
   } catch (error) {
-    evidenceState = "degraded";
+    supportEvidenceAvailable = false;
     logger.error(
       "desktop.support.initialization_failed",
       "Electron support bundle staging is unavailable",
@@ -320,11 +326,17 @@ async function main(
     logRoot,
     logger,
   });
-  // ensure() starts NOW; the window never waits for it (ESR-8 / design-03
-  // §4.3 v0.3 — the splash is the honest face while the daemon comes up).
-  const fielddReady = supervisor.ensure();
   const pluginProvenance = new RendererPluginProvenanceCatalog();
   let observedLink: TrayLinkState = "starting";
+  const observedSnapshots: {
+    preferences?: unknown;
+    health?: unknown;
+    hasPreferences: boolean;
+    hasHealth: boolean;
+  } = { hasPreferences: false, hasHealth: false };
+  let healthObservationUnavailable = false;
+  let evidenceMonitor: TrayEvidenceMonitor | null = null;
+  let enforceBackgroundEscapeHatch = (): void => undefined;
   const publishLink = (status: string): void => {
     observedLink =
       status === "ready"
@@ -336,63 +348,100 @@ async function main(
             : "starting";
     trayController?.update({ link: observedLink });
   };
-  let stopPluginObservation: (() => void) | null = null;
-  let stopFielddStatusObservation: (() => void) | null = null;
-  let pluginObservationClosed = false;
-  app.once("will-quit", () => {
-    pluginObservationClosed = true;
-    stopFielddStatusObservation?.();
-    stopFielddStatusObservation = null;
-    stopPluginObservation?.();
-    stopPluginObservation = null;
-  });
-  fielddReady.then(
-    (handle) => {
-      if (pluginObservationClosed) return;
-      publishLink(handle.client.status);
-      stopFielddStatusObservation = handle.client.onStatusChange(() => {
-        if (handle.client.status !== "ready") pluginProvenance.invalidate();
-        publishLink(handle.client.status);
-        logger.info("desktop.fieldd.link_state_changed", "fieldd link state changed", {
-          status: handle.client.status,
-        });
-      });
-      void pluginProvenance
-        .observe(handle.client)
-        .then((stop) => {
-          if (pluginObservationClosed) {
-            stop();
-            return;
-          }
-          stopPluginObservation?.();
-          stopPluginObservation = stop;
-        })
-        .catch((error) => {
-          logger.error(
-            "desktop.plugins.log_provenance_unavailable",
-            "Plugin log provenance could not follow the fieldd registry",
-            error,
-          );
-        });
-    },
+  const applyPreferences = (raw: unknown): void => {
+    observedSnapshots.preferences = raw;
+    observedSnapshots.hasPreferences = true;
+    const parsed = AppPreferences.safeParse(raw);
+    if (!parsed.success) {
+      logger.warn(
+        "desktop.tray.preferences_rejected",
+        "The app-preference stream returned an invalid snapshot",
+        { issueCount: parsed.error.issues.length },
+      );
+      return;
+    }
+    trayController?.update({
+      showTray: parsed.data.showTray,
+      backgroundShell: parsed.data.backgroundShell,
+    });
+    enforceBackgroundEscapeHatch();
+  };
+  const applyEvidenceHealth = (raw: unknown): void => {
+    observedSnapshots.health = raw;
+    observedSnapshots.hasHealth = true;
+    healthObservationUnavailable = false;
+    evidenceMonitor?.updateRemote(raw);
+  };
+
+  fielddHandles = new FielddHandleCoordinator(
+    (options) => supervisor!.ensure(options),
     (error) => {
       publishLink("failed");
+      pluginProvenance.invalidate();
+      healthObservationUnavailable = true;
+      evidenceMonitor?.markRemoteUnavailable();
+      logger.error("desktop.fieldd.ensure_failed", "A fieldd adoption/spawn attempt failed", error);
+    },
+    (error) => {
       logger.error(
-        "desktop.fieldd.ensure_failed",
-        "The initial fieldd adoption/spawn attempt failed",
+        "desktop.fieldd.observer_bind_failed",
+        "A main-process fieldd observer could not bind",
         error,
       );
-      // observed: the renderer's bootstrap invoke surfaces the failure with an
-      // honest retry (each invoke re-runs ensure); nothing to crash here
     },
   );
+  const fielddObservers = new RecoveringFielddObservers(fielddHandles, {
+    onStatus: (status) => {
+      if (status !== "ready") pluginProvenance.invalidate();
+      publishLink(status);
+      logger.info("desktop.fieldd.link_state_changed", "fieldd link state changed", {
+        status,
+      });
+    },
+    observePlugins: (client) => pluginProvenance.observe(client),
+    onPreferences: applyPreferences,
+    onHealth: applyEvidenceHealth,
+    onError: (kind, error) => {
+      if (kind === "health") {
+        healthObservationUnavailable = true;
+        evidenceMonitor?.markRemoteUnavailable();
+      }
+      const [event, message] =
+        kind === "plugins"
+          ? [
+              "desktop.plugins.log_provenance_unavailable",
+              "Plugin log provenance could not follow the fieldd registry",
+            ]
+          : kind === "preferences"
+            ? [
+                "desktop.tray.preferences_unavailable",
+                "Desktop behavior preferences could not be observed",
+              ]
+            : [
+                "desktop.tray.evidence_health_unavailable",
+                "The tray could not observe diagnostic evidence health",
+              ];
+      logger.error(event, message, error);
+    },
+  });
+  shellDisposers.add(() => fielddObservers.dispose());
+
+  // ensure() starts NOW; the window never waits for it (ESR-8 / design-03
+  // §4.3 v0.3 — the splash is the honest face while the daemon comes up).
+  // Every later retry uses the same coordinator, so recovery rebinds main too.
+  const fielddReady = fielddHandles.ensure();
+  void fielddReady.catch(() => undefined);
 
   if (MODE === "smoke") {
     await (await testing()).runSmoke(await fielddReady, supervisor, root, closeEvidence);
     return;
   }
 
-  registerWindowBootstrap(registry, supervisor, logger.child({ component: "ipc.bootstrap" }));
+  registerWindowBootstrap(
+    registry,
+    (options) => fielddHandles!.ensure(options),
+    logger.child({ component: "ipc.bootstrap" }),
+  );
 
   if (MODE === "smoke-canvas") {
     await (await testing()).runSmokeCanvas({
@@ -426,6 +475,16 @@ async function main(
     return;
   }
 
+  let latestDesktopState: DesktopShellState | null = null;
+  const publishDesktopState = (raw: DesktopShellState): void => {
+    const state = DesktopShellStateSchema.parse(raw);
+    latestDesktopState = state;
+    const window = registry.primary();
+    if (window !== null && !window.isDestroyed()) {
+      window.webContents.send(IPC_CHANNELS.desktopState, state);
+    }
+  };
+
   primaryWindowOpener = () =>
     registry.revealPrimary(() => {
       performance.mark("vf:shell:window-created");
@@ -454,8 +513,14 @@ async function main(
           installDurableClose(
             window,
             logger.child({ component: "window.close", windowId: String(window.id) }),
+            () => {
+              registry.markClosing(window);
+            },
           );
           await loadRenderer(window, MODE, VITE_URL);
+          if (latestDesktopState !== null) {
+            window.webContents.send(IPC_CHANNELS.desktopState, latestDesktopState);
+          }
           logger.info("desktop.window.renderer_loaded", "The main renderer finished loading", {
             windowId: String(window.id),
             webContentsId: window.webContents.id,
@@ -474,16 +539,29 @@ async function main(
     key: (typeof APP_PREFERENCE_KEYS)[keyof typeof APP_PREFERENCE_KEYS],
     value: boolean,
   ): Promise<void> => {
-    const handle = await supervisor?.ensure();
-    if (handle === undefined) throw new Error("fieldd app-preference service is unavailable");
+    const handle = await ensureFieldd();
     await handle.client.request("storage.appPreferences.set", { key, value });
   };
+
+  evidenceMonitor = new TrayEvidenceMonitor({
+    writers: [
+      shellLogging.desktop,
+      shellLogging.renderer,
+      shellLogging.utility,
+      shellLogging.pluginRenderer,
+    ],
+    localAvailable: crashEvidenceAvailable && supportEvidenceAvailable,
+    onChange: (evidence) => trayController?.update({ evidence }),
+  });
+  if (observedSnapshots.hasHealth) evidenceMonitor.updateRemote(observedSnapshots.health);
+  else if (healthObservationUnavailable) evidenceMonitor.markRemoteUnavailable();
+  shellDisposers.add(() => evidenceMonitor?.dispose());
 
   trayController = new TrayController({
     runtime: createElectronTrayRuntime(resources),
     initial: {
       link: observedLink,
-      evidence: evidenceState,
+      evidence: evidenceMonitor.current(),
       update: { kind: "idle" },
       backgroundShell: true,
       // Preference truth belongs to fieldd's D29′ settings document. Starting
@@ -512,9 +590,10 @@ async function main(
         { stage },
       );
     },
+    onDesktopState: publishDesktopState,
   });
   let primaryHasOpened = registry.primary() !== null;
-  const enforceBackgroundEscapeHatch = (): void => {
+  enforceBackgroundEscapeHatch = (): void => {
     const controller = trayController;
     if (
       primaryHasOpened &&
@@ -536,99 +615,7 @@ async function main(
     trayController?.update({ windowOpen });
   });
   shellDisposers.add(stopWindowObservation);
-
-  let preferenceObservationClosed = false;
-  let stopPreferenceObservation: (() => void) | null = null;
-  const disposePreferenceObservation = (): void => {
-    preferenceObservationClosed = true;
-    stopPreferenceObservation?.();
-    stopPreferenceObservation = null;
-  };
-  shellDisposers.add(disposePreferenceObservation);
-  const applyPreferences = (raw: unknown): void => {
-    const parsed = AppPreferences.safeParse(raw);
-    if (!parsed.success) {
-      logger.warn(
-        "desktop.tray.preferences_rejected",
-        "The app-preference stream returned an invalid snapshot",
-        { issueCount: parsed.error.issues.length },
-      );
-      return;
-    }
-    trayController?.update({
-      showTray: parsed.data.showTray,
-      backgroundShell: parsed.data.backgroundShell,
-    });
-    enforceBackgroundEscapeHatch();
-  };
-  void fielddReady
-    .then((handle) =>
-      handle.client.subscribe("storage.appPreferences.subscribe", {}, (payload) => {
-        if (!preferenceObservationClosed) applyPreferences(payload);
-      }),
-    )
-    .then((subscription) => {
-      if (preferenceObservationClosed) {
-        subscription.unsubscribe();
-        return;
-      }
-      applyPreferences(subscription.snapshot);
-      stopPreferenceObservation = subscription.unsubscribe;
-    })
-    .catch((error) => {
-      if (preferenceObservationClosed) return;
-      logger.error(
-        "desktop.tray.preferences_unavailable",
-        "Desktop behavior preferences could not be observed",
-        error,
-      );
-    });
-
-  let healthObservationClosed = false;
-  let stopHealthObservation: (() => void) | null = null;
-  const disposeHealthObservation = (): void => {
-    healthObservationClosed = true;
-    stopHealthObservation?.();
-    stopHealthObservation = null;
-  };
-  shellDisposers.add(disposeHealthObservation);
-  const localEvidenceDegraded = evidenceState === "degraded";
-  const applyEvidenceHealth = (raw: unknown): void => {
-    const health =
-      typeof raw === "object" && raw !== null
-        ? (raw as {
-            audit?: { state?: unknown };
-            logging?: { writerState?: unknown } | null;
-          })
-        : {};
-    const auditDegraded = health.audit?.state !== "healthy";
-    const fielddLoggingDegraded = health.logging?.writerState !== "healthy";
-    evidenceState =
-      localEvidenceDegraded || auditDegraded || fielddLoggingDegraded ? "degraded" : "healthy";
-    trayController?.update({ evidence: evidenceState });
-  };
-  void fielddReady
-    .then((handle) =>
-      handle.client.subscribe("system.health.subscribe", {}, (payload) => {
-        if (!healthObservationClosed) applyEvidenceHealth(payload);
-      }),
-    )
-    .then((subscription) => {
-      if (healthObservationClosed) {
-        subscription.unsubscribe();
-        return;
-      }
-      applyEvidenceHealth(subscription.snapshot);
-      stopHealthObservation = subscription.unsubscribe;
-    })
-    .catch((error) => {
-      if (healthObservationClosed) return;
-      logger.error(
-        "desktop.tray.evidence_health_unavailable",
-        "The tray could not observe diagnostic evidence health",
-        error,
-      );
-    });
+  if (observedSnapshots.hasPreferences) applyPreferences(observedSnapshots.preferences);
 
   await revealPrimaryWindow();
 }
@@ -712,8 +699,8 @@ if (!hasInstanceLock) {
       collectContext: async () => {
         let fieldd: unknown = { state: "unavailable" };
         try {
-          const handle = await supervisor?.ensure();
-          if (handle !== undefined) fieldd = await handle.client.request("system.health");
+          const handle = await ensureFieldd();
+          fieldd = await handle.client.request("system.health");
         } catch {
           fieldd = { state: "unavailable" };
         }
@@ -744,7 +731,10 @@ if (!hasInstanceLock) {
       },
       keepAliveWithoutWindows: () =>
         process.platform === "darwin" || (trayController?.keepsAliveWithoutWindows() ?? false),
-      onQuitRequested: () => trayController?.update({ quitting: true }),
+      onQuitRequested: () => {
+        registry.beginShutdown();
+        trayController?.update({ quitting: true });
+      },
       disposeShell: disposeShellState,
       logger,
       closeLogging: closeEvidence,

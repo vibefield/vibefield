@@ -43,5 +43,6 @@ mountFieldApp({
     onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
     completeClose: (result) => window.vibefield.completeClose(result),
     onShellCommand: (handler) => window.vibefield.onShellCommand(handler),
+    onDesktopState: (handler) => window.vibefield.onDesktopState(handler),
   },
 });

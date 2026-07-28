@@ -284,6 +284,78 @@ describe("WindowRegistry single-primary reveal", () => {
     expect(reg.primary()).toBe(second.window);
   });
 
+  it("queues one replacement when Open arrives during durable close", async () => {
+    const reg = new WindowRegistry();
+    const first = makeFakeWindow(1);
+    const second = makeFakeWindow(2);
+    await reg.revealPrimary(() => ({ window: first.window, prepare: async () => {} }));
+    expect(reg.markClosing(first.window)).toBe(true);
+    const factory = vi.fn(() => ({ window: second.window, prepare: async () => {} }));
+
+    const firstOpen = reg.revealPrimary(factory);
+    const secondOpen = reg.revealPrimary(factory);
+    expect(firstOpen).toBe(secondOpen);
+    expect(factory).not.toHaveBeenCalled();
+    expect(first.focus).toHaveBeenCalledTimes(1);
+
+    first.fireClosed();
+    await expect(Promise.all([firstOpen, secondOpen])).resolves.toEqual([
+      second.window,
+      second.window,
+    ]);
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(reg.primary()).toBe(second.window);
+  });
+
+  it("preserves Open when durable close starts before initial preparation finishes", async () => {
+    const reg = new WindowRegistry();
+    const first = makeFakeWindow(1);
+    const second = makeFakeWindow(2);
+    let finishPreparation = (): void => {};
+    const preparation = new Promise<void>((resolve) => {
+      finishPreparation = resolve;
+    });
+    const opening = reg.revealPrimary(() => ({
+      window: first.window,
+      prepare: () => preparation,
+    }));
+    expect(reg.markClosing(first.window)).toBe(true);
+    const replacementFactory = vi.fn(() => ({
+      window: second.window,
+      prepare: async () => {},
+    }));
+
+    const reopen = reg.revealPrimary(replacementFactory);
+    expect(reopen).not.toBe(opening);
+    expect(replacementFactory).not.toHaveBeenCalled();
+
+    finishPreparation();
+    await expect(opening).resolves.toBe(first.window);
+    first.fireClosed();
+    await expect(reopen).resolves.toBe(second.window);
+    expect(replacementFactory).toHaveBeenCalledTimes(1);
+    expect(reg.primary()).toBe(second.window);
+  });
+
+  it("cancels a queued replacement when app shutdown wins the race", async () => {
+    const reg = new WindowRegistry();
+    const first = makeFakeWindow(1);
+    const second = makeFakeWindow(2);
+    await reg.revealPrimary(() => ({ window: first.window, prepare: async () => {} }));
+    reg.markClosing(first.window);
+    const factory = vi.fn(() => ({ window: second.window, prepare: async () => {} }));
+    const queued = reg.revealPrimary(factory);
+    const rejection = expect(queued).rejects.toThrow(/shutting down/);
+
+    reg.beginShutdown();
+    await rejection;
+    first.fireClosed();
+    expect(factory).not.toHaveBeenCalled();
+    await expect(
+      reg.revealPrimary(() => ({ window: second.window, prepare: async () => {} })),
+    ).rejects.toThrow(/shutting down/);
+  });
+
   it("refuses a second live primary at the registry boundary", () => {
     const reg = new WindowRegistry();
     reg.adopt(makeFakeWindow(1).window);

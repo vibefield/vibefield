@@ -82,6 +82,26 @@ export type ShellCommandRequest = z.infer<typeof ShellCommandRequest>;
 export const ShellPlatform = z.enum(["darwin", "win32", "linux", "other"]);
 export type ShellPlatform = z.infer<typeof ShellPlatform>;
 
+/** Main-owned desktop capability truth. Preferences describe user intent;
+ * this state describes whether the native shell actually realized it. */
+export const DesktopShellState = z
+  .object({
+    tray: z
+      .object({
+        availability: z.enum(["available", "hidden", "unavailable"]),
+        backgroundShellEffective: z.boolean(),
+        issue: z
+          .object({
+            code: z.literal("DESKTOP_TRAY_UNAVAILABLE"),
+            message: z.string().min(1).max(512),
+          })
+          .nullable(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+export type DesktopShellState = z.infer<typeof DesktopShellState>;
+
 /** D29′ app section: user-scoped desktop preferences live in the same settings
  * document as other spine preferences. The daemon returns effective values so
  * every caller applies the same defaults. */

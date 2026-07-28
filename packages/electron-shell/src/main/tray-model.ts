@@ -54,34 +54,57 @@ function serviceStatus(snapshot: TraySnapshot): string {
   }
 }
 
-function updateItem(snapshot: TraySnapshot, actions: TrayActions): TrayMenuItem {
+function availability(platform: TrayPlatform, enabled: boolean): Pick<TrayMenuItem, "enabled"> {
+  // Electron documents enabled/visibility as unsupported for top-level macOS
+  // tray menu items. There, action presence is the policy boundary.
+  return platform === "darwin" ? {} : { enabled };
+}
+
+function updateItem(
+  snapshot: TraySnapshot,
+  actions: TrayActions,
+  platform: TrayPlatform,
+): TrayMenuItem {
+  const actionable = !snapshot.quitting;
   switch (snapshot.update.kind) {
-    case "idle":
+    case "idle": {
+      const enabled = actionable && actions.checkForUpdates !== undefined;
       return {
         id: "update",
         label: "Check for Updates…",
-        enabled: !snapshot.quitting && actions.checkForUpdates !== undefined,
-        ...(actions.checkForUpdates !== undefined ? { click: actions.checkForUpdates } : {}),
+        ...availability(platform, enabled),
+        ...(enabled ? { click: actions.checkForUpdates } : {}),
       };
+    }
     case "checking":
-      return { id: "update", label: "Checking for Updates…", enabled: false };
+      return {
+        id: "update",
+        label: "Checking for Updates…",
+        ...availability(platform, false),
+      };
     case "downloading": {
       const percent = Math.max(0, Math.min(100, Math.round(snapshot.update.percent)));
       return {
         id: "update",
         label: `Downloading Update… ${percent}%`,
-        enabled: false,
+        ...availability(platform, false),
       };
     }
-    case "ready":
+    case "ready": {
+      const enabled = actionable && actions.restartToUpdate !== undefined;
       return {
         id: "update",
         label: "Restart to Update",
-        enabled: !snapshot.quitting && actions.restartToUpdate !== undefined,
-        ...(actions.restartToUpdate !== undefined ? { click: actions.restartToUpdate } : {}),
+        ...availability(platform, enabled),
+        ...(enabled ? { click: actions.restartToUpdate } : {}),
       };
+    }
     case "failed":
-      return { id: "update", label: "Update Check Failed", enabled: false };
+      return {
+        id: "update",
+        label: "Update Check Failed",
+        ...availability(platform, false),
+      };
   }
 }
 
@@ -97,27 +120,27 @@ export function buildTrayMenu(
     {
       id: "open",
       label: "Open VibeField",
-      enabled: actionable,
-      click: actions.openPrimaryWindow,
+      ...availability(platform, actionable),
+      ...(actionable ? { click: actions.openPrimaryWindow } : {}),
     },
     {
       id: "status",
       label: serviceStatus(snapshot),
-      enabled: false,
+      ...availability(platform, false),
     },
     {
       id: "settings",
       label: "Settings…",
-      enabled: actionable,
-      click: actions.openSettings,
+      ...availability(platform, actionable),
+      ...(actionable ? { click: actions.openSettings } : {}),
     },
     {
       id: "diagnostics",
       label: "Open Diagnostics…",
-      enabled: actionable,
-      click: actions.openDiagnostics,
+      ...availability(platform, actionable),
+      ...(actionable ? { click: actions.openDiagnostics } : {}),
     },
-    updateItem(snapshot, actions),
+    updateItem(snapshot, actions, platform),
     { type: "separator" },
   ];
 
@@ -127,8 +150,8 @@ export function buildTrayMenu(
       type: "checkbox",
       label: "Close window keeps VibeField running",
       checked: snapshot.backgroundShell,
-      enabled: actionable,
-      click: () => actions.setBackgroundShell(!snapshot.backgroundShell),
+      ...availability(platform, actionable),
+      ...(actionable ? { click: () => actions.setBackgroundShell(!snapshot.backgroundShell) } : {}),
     });
   }
 
@@ -138,15 +161,15 @@ export function buildTrayMenu(
       type: "checkbox",
       label: "Show status item",
       checked: snapshot.showTray,
-      enabled: actionable,
-      click: () => actions.setTrayVisible(!snapshot.showTray),
+      ...availability(platform, actionable),
+      ...(actionable ? { click: () => actions.setTrayVisible(!snapshot.showTray) } : {}),
     },
     { type: "separator" },
     {
       id: "quit",
       label: "Quit VibeField",
-      enabled: actionable,
-      click: actions.quit,
+      ...availability(platform, actionable),
+      ...(actionable ? { click: actions.quit } : {}),
     },
   );
   return items;

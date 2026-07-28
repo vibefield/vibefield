@@ -31,7 +31,7 @@ import {
   widgets,
   writeRuntimeResource,
 } from "@vibecook/ice";
-import type { ShellPlatform } from "@vibefield/contracts";
+import type { DesktopShellState, ShellPlatform } from "@vibefield/contracts";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { DesktopSection } from "./DesktopSection";
 import { MeshSection } from "./MeshSection";
@@ -63,7 +63,9 @@ interface SettingsPanelProps {
    */
   stressWidgetType?: string;
   platform?: ShellPlatform;
+  desktopState?: DesktopShellState | null;
   diagnosticsRequest?: number;
+  diagnosticsInitiallyOpen?: boolean;
   onClose: () => void;
 }
 
@@ -92,7 +94,9 @@ export function SettingsPanel({
   onOverlapGlowThemeColorsChange,
   stressWidgetType,
   platform = "other",
+  desktopState = null,
   diagnosticsRequest = 0,
+  diagnosticsInitiallyOpen = false,
   onClose,
 }: SettingsPanelProps) {
   const camLimits = engine.world.getResource(CameraLimits);
@@ -106,7 +110,7 @@ export function SettingsPanel({
   const [bpNormal, setBpNormal] = useState(320);
   const [bpExpanded, setBpExpanded] = useState(640);
   const [glowOpen, setGlowOpen] = useState(false);
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(diagnosticsRequest > 0);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(diagnosticsInitiallyOpen);
   const handledDiagnosticsRequest = useRef(diagnosticsRequest);
   useEffect(() => {
     if (diagnosticsRequest <= handledDiagnosticsRequest.current) return;
@@ -706,7 +710,7 @@ export function SettingsPanel({
           </div>
         </div>
 
-        <DesktopSection platform={platform} />
+        <DesktopSection platform={platform} desktopState={desktopState} />
         {/* System diagnostics — sections, never pages (2026-07-21). */}
         <SystemSection />
         <div className={borderCls}>

@@ -543,7 +543,57 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       healthListeners.add(fn);
       return { snapshot: health(), dispose: () => healthListeners.delete(fn) };
     });
+    const windowTokenIds = new Set<string>();
+    const requireShellWindowTokenAuthority = (ctx: {
+      transport: string;
+      clientKind?: string;
+    }): void => {
+      if (ctx.transport !== "ws-loopback" || ctx.clientKind !== "shell-main") {
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "window-token lifecycle methods are available only to the local shell",
+          false,
+        );
+      }
+    };
+    const revokeWindowToken = async (
+      ctx: Parameters<Parameters<typeof api.register>[1]>[0],
+      tokenId: string,
+      reason: "generation-ended" | "shell-restarted",
+    ): Promise<{ revoked: boolean; droppedConnections: number }> => {
+      if (!windowTokenIds.has(tokenId)) {
+        return { revoked: false, droppedConnections: 0 };
+      }
+      const effect = () => {
+        windowTokenIds.delete(tokenId);
+        const revoked = tokens.revoke(tokenId);
+        const droppedConnections = api.dropTokenConnections(tokenId);
+        return { revoked, droppedConnections };
+      };
+      try {
+        return await audit.required(
+          ctx,
+          {
+            action: "token.window.revoke",
+            target: { kind: "token", id: tokenId },
+            attrs: { reason },
+          },
+          effect,
+          (result) => ({
+            outcome: result.revoked ? "succeeded" : "cancelled",
+            ...(result.revoked ? {} : { reasonCode: "TOKEN_ALREADY_REVOKED" }),
+            attrs: { reason, droppedConnections: result.droppedConnections },
+          }),
+        );
+      } catch (error) {
+        // Revocation is safety-preserving. Evidence failure is still surfaced
+        // to the shell, but may never leave a bearer live.
+        effect();
+        throw error;
+      }
+    };
     api.register("system.mintWindowToken", async (ctx, params) => {
+      requireShellWindowTokenAuthority(ctx);
       const p = params as { scopes?: unknown; label?: unknown } | undefined;
       const scopes = p?.scopes;
       const label = p?.label;
@@ -589,7 +639,37 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           tokens.revoke(minted.tokenId);
         },
       );
+      windowTokenIds.add(grant.tokenId);
       return { token: grant.token, tokenId: grant.tokenId, scopes: grant.scopes };
+    });
+    api.register("system.revokeWindowToken", async (ctx, params) => {
+      requireShellWindowTokenAuthority(ctx);
+      const tokenId = (params as { tokenId?: unknown } | undefined)?.tokenId;
+      if (typeof tokenId !== "string" || !/^tk_[0-9a-f]{12}$/.test(tokenId)) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { tokenId: window token id }",
+          false,
+        );
+      }
+      return await revokeWindowToken(ctx, tokenId, "generation-ended");
+    });
+    api.register("system.revokeStaleWindowTokens", async (ctx) => {
+      requireShellWindowTokenAuthority(ctx);
+      let revoked = 0;
+      let droppedConnections = 0;
+      let firstError: unknown;
+      for (const tokenId of [...windowTokenIds]) {
+        try {
+          const result = await revokeWindowToken(ctx, tokenId, "shell-restarted");
+          if (result.revoked) revoked += 1;
+          droppedConnections += result.droppedConnections;
+        } catch (error) {
+          firstError ??= error;
+        }
+      }
+      if (firstError !== undefined) throw firstError;
+      return { revoked, droppedConnections };
     });
 
     // -- doc lane (the :9411-class binary data plane) + doc.* handlers --
