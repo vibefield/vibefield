@@ -345,6 +345,18 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "sync",
   }),
+  // C6-4 — per-doc sync standing (DocSyncStatus[]), snapshot-then-delta. Always
+  // registered: with the mesh off the snapshot is an empty list, which the
+  // renderer reads as "sync does not apply" — an honest quiet, not an error.
+  // doc.* stays out of TAILNET_SCOPES (D32), so this never federates.
+  defineMethod({
+    surface: "product",
+    method: "doc.sync.subscribe",
+    scope: "doc.read",
+    idempotent: true,
+    locality: "sync",
+    subscription: true,
+  }),
 
   // C4 — DeviceService (design-04 D31, P1-lite: roster only; PeerLink/D32 and
   // heartbeats deferred). workspace.read sits in the C3 tailnet preset, so

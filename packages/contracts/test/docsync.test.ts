@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DOC_SYNC_HEADER_BYTES,
   DOC_SYNC_RECORD,
+  DocSyncStatus,
   decodeDocSyncRecord,
   encodeDocSyncRecord,
 } from "../src/docsync";
@@ -67,5 +68,42 @@ describe("the doc-sync record codec (C6-3f)", () => {
       new Uint8Array([1]),
     );
     expect(decodeDocSyncRecord(frame).meta).toMatchObject({ futureField: "from a newer peer" });
+  });
+});
+
+describe("the sync status shape (C6-4)", () => {
+  const status = {
+    docId: "a-doc",
+    name: "board",
+    state: "peer-offline",
+    pendingRecords: 2,
+    peers: [{ peer: "dev-b", reachable: false, lastExchangeAt: 1_700_000_000_000 }],
+    reason: null,
+    updatedAt: 1_700_000_000_500,
+  };
+
+  it("parses the honest fold, null name and all", () => {
+    // name: null is the unknown-doc face (doc existence does not replicate
+    // yet); lastExchangeAt: null is a peer never exchanged with.
+    expect(DocSyncStatus.parse(status).state).toBe("peer-offline");
+    expect(
+      DocSyncStatus.parse({
+        ...status,
+        name: null,
+        peers: [{ peer: "dev-b", reachable: true, lastExchangeAt: null }],
+      }).name,
+    ).toBeNull();
+  });
+
+  it("refuses a state outside the vocabulary — honesty is a closed set", () => {
+    // The tolerant-reader law covers unknown FIELDS, not unknown STATES: a
+    // state word the renderer cannot interpret would render as a blank, and
+    // blanks are what EL5 forbids. A newer daemon needs a contracts bump.
+    expect(DocSyncStatus.safeParse({ ...status, state: "converged" }).success).toBe(false);
+  });
+
+  it("keeps unknown fields (tolerant reader)", () => {
+    const parsed = DocSyncStatus.parse({ ...status, futureField: true });
+    expect((parsed as { futureField?: boolean }).futureField).toBe(true);
   });
 });

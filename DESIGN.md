@@ -246,7 +246,13 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
   painted as a **mini empty field** (canvas-bg + the §2.1 CSS-fallback dots — the
   ground motif as the doc's face until real thumbnails); name 12px medium, relative
   time caption in `tabular-nums`; the CURRENT doc wears the 1.5px inside `--vf-select`
-  ring (it is the selection); hover 1.03 / active 0.95.
+  ring (it is the selection); hover 1.03 / active 0.95. **The sync dot (C6-4):** a 6px
+  dot after the pill's doc name for STANDING sync states only — pending / peer-offline
+  (muted grey `rgba(128,128,128,0.45)`) · peer-declined / epoch-stale (`--vf-orange`);
+  in-step and transient syncing render NOTHING here — the signature chrome never
+  flickers with routine traffic. The title carries the words, numbers, and the
+  last-exchange time. Explorer tiles append the honest sync word to their time caption
+  ("· syncing", "· waiting on 3", "· peer offline") only when there is one.
 - **The loading veil** (B4): a full-window chrome frost (`white/60 + backdrop-blur-xl`,
   dark `#171717/60`) while a doc loads — centered thin bar (`3px × 220px`, colorless
   fill: loading is not a §2.5 state) over an 11px/50% lowercase stage label
@@ -272,6 +278,17 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
   pill for drop affordances ("Release here to put it back"), progress with numbers
   ("index rebuilding · 42%"), placeholder faces for missing plugins (A6/A8). Empty
   screens invite the next action.
+- **Doc sync state** (C6-4; Settings Mesh section): one row per doc sync has FACTS
+  for — no facts, no row (with no peers, quiet IS the honesty; never a vacuous
+  "synced"). Vocabulary: `in step` · `syncing` (green — healthy work) · `pending`
+  ("waiting on N" in `tabular-nums`) · `peer offline` (muted-grey fact, like a
+  device's offline — never an error) · `declined` · `epoch stale` (orange —
+  needs attention; nothing failed, so never red). The muted detail line carries
+  provenance: the verbatim decline reason, WHO is offline by device name, and
+  "last exchange HH:MM:SS" — the clock, not the state word, is the freshness claim,
+  because offline detection can lag by minutes (F-C6-22) and the row must never
+  imply promptness. A doc a peer syncs that this device does not hold reads
+  "a peer's doc · not held here" — a fact, not an alarm.
 - **The plugin source badge** (P7; spec §20.5 / §5.3): every plugin row labels its
   source and rung as a FACT in the muted text ramp (`labelCls`), never a warning — no
   hue (§2.5: color is for honest state, and a source is not a state of concern). A

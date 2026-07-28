@@ -111,7 +111,9 @@ export interface DocRecordDigest {
   records: string[];
 }
 
-function contentIdOf(bytes: Uint8Array): string {
+/** Exported for DocSyncService (C6-4): an arriving record retires its own
+ * entry from the expected set by the SAME identity the digests speak. */
+export function contentIdOf(bytes: Uint8Array): string {
   // 16 bytes of sha256. A HAVE is O(journal length), so the digest width is
   // the message size: 32 hex chars keeps 1000 records near 32 KB. Collision
   // risk at that width is far below the risk of the disk lying to us.

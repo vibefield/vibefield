@@ -303,8 +303,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
       bytes: laneLink,
       peers: async () => {
-        const peers = (await mesh.peers()) as { id?: string }[];
-        return peers.map((p) => p.id).filter((id): id is string => typeof id === "string");
+        const peers = (await mesh.peers()) as { id?: unknown; online?: unknown }[];
+        return (
+          peers
+            .filter((p): p is { id: string; online?: unknown } => typeof p.id === "string")
+            // A peer that does not SAY offline gets the attempt (tolerant
+            // reader); a failed open records the truth either way.
+            .map((p) => ({ id: p.id, online: p.online !== false }))
+        );
       },
       logger: logger.child({ component: "doc.sync" }),
     });
@@ -625,6 +631,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // label-only edit — docCount is unchanged, so no emitHealth here
       return docs.rename(parsed.data.docId, parsed.data.name);
     });
+    // C6-4 — per-doc sync standing. Registered even with sync unavailable
+    // (mesh off, the default): the empty list is the honest snapshot then, and
+    // the renderer reads it as "sync does not apply" rather than an error.
+    api.registerSubscription("doc.sync.subscribe", (ctx, _params, emit) => {
+      requireLocalDocumentCaller(ctx);
+      if (docSync === null) return { snapshot: [], dispose: () => {} };
+      const sync = docSync;
+      const off = sync.onStatusChanged((statuses) => emit(statuses));
+      return { snapshot: sync.statuses(), dispose: off };
+    });
 
     // -- DeviceService (C4, design-04 D31): the device directory --
     const devices = new DeviceService({
@@ -639,6 +655,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         const s = mesh.serves().find((x) => x.name === "product");
         const url = s?.status === "active" ? capabilityUrl(s.url) : undefined;
         return { serve: "product", ...(url !== undefined ? { url } : {}) };
+      },
+    });
+    // C6-4 — doc sync folds roster liveness per doc-peer: offline flips
+    // reachability promptly (the transport keep-alive beats the lane's own
+    // minutes-late death, F-C6-22), and a RETURNING peer re-greets every doc
+    // that was waiting on it.
+    docSync?.attachLiveness({
+      list: () =>
+        devices
+          .list()
+          .filter((d) => !d.self)
+          .map((d) => ({ id: d.deviceId, online: d.online })),
+      on: (cb) => {
+        devices.on("changed", cb);
+        return () => devices.off("changed", cb);
       },
     });
     api.register("device.list", () => ({ devices: devices.list() }));

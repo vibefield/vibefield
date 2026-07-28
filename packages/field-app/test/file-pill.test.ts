@@ -5,10 +5,12 @@
  * the grid lists docs with the current one ringed, and a tile click switches.
  * createElement (not JSX) keeps this a `.ts` file, panels.test's pattern.
  */
+import type { DocSyncStatus } from "@vibefield/contracts";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DocManagerApi, DocManagerState } from "../src/doc-manager";
+import { resetDocSyncStatuses, setDocSyncStatuses } from "../src/doc-sync-store";
 import { FilePill } from "../src/hud/FilePill";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -61,6 +63,19 @@ function fakeManager(overrides?: Partial<DocManagerState>) {
   return manager;
 }
 
+/** A C6-4 status with honest defaults; tests override what they assert. */
+function syncStatus(overrides: Partial<DocSyncStatus> & { docId: string }): DocSyncStatus {
+  return {
+    name: "Field",
+    state: "in-step",
+    pendingRecords: 0,
+    peers: [{ peer: "dev-b", reachable: true, lastExchangeAt: 1_700_000_000_000 }],
+    reason: null,
+    updatedAt: 1_700_000_000_000,
+    ...overrides,
+  };
+}
+
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 afterEach(() => {
@@ -69,6 +84,7 @@ afterEach(() => {
   container?.remove();
   container = null;
   document.body.innerHTML = "";
+  act(() => resetDocSyncStatuses());
 });
 
 function mount(
@@ -169,5 +185,63 @@ describe("FilePill", () => {
     expect(plus.disabled).toBe(true);
     expect(name.disabled).toBe(true);
     expect(chevron.disabled).toBe(false);
+  });
+});
+
+describe("FilePill sync dot (C6-4)", () => {
+  it("stays quiet for in-step AND for transient syncing — no flicker on routine traffic", () => {
+    act(() => setDocSyncStatuses([syncStatus({ docId: DOC_A, state: "in-step" })]));
+    const manager = fakeManager();
+    mount(manager, false);
+    expect(container?.querySelector("[data-sync-dot]")).toBeNull();
+
+    act(() => setDocSyncStatuses([syncStatus({ docId: DOC_A, state: "syncing" })]));
+    expect(container?.querySelector("[data-sync-dot]")).toBeNull();
+  });
+
+  it("shows a muted dot for peer-offline whose title claims the last exchange, not now", () => {
+    act(() => setDocSyncStatuses([syncStatus({ docId: DOC_A, state: "peer-offline" })]));
+    mount(fakeManager(), false);
+    const dot = container?.querySelector("[data-sync-dot]") as HTMLElement;
+    expect(dot).not.toBeNull();
+    expect(dot.style.background).toContain("128");
+    // F-C6-22 honesty: the words say what we knew and when — never "up to date".
+    expect(dot.title).toContain("offline");
+    expect(dot.title).toContain("last exchange");
+  });
+
+  it("shows an orange dot for the needs-attention states", () => {
+    act(() =>
+      setDocSyncStatuses([
+        syncStatus({ docId: DOC_A, state: "peer-declined", reason: "unknown-doc" }),
+      ]),
+    );
+    mount(fakeManager(), false);
+    const dot = container?.querySelector("[data-sync-dot]") as HTMLElement;
+    expect(dot.style.background).toContain("--vf-orange");
+    expect(dot.title).toContain("unknown-doc");
+  });
+
+  it("counts what pending waits on", () => {
+    act(() =>
+      setDocSyncStatuses([syncStatus({ docId: DOC_A, state: "pending", pendingRecords: 3 })]),
+    );
+    mount(fakeManager(), false);
+    const dot = container?.querySelector("[data-sync-dot]") as HTMLElement;
+    expect(dot.title).toContain("3 records");
+  });
+
+  it("keeps the dot to the CURRENT doc; other docs speak through their tiles", () => {
+    act(() =>
+      setDocSyncStatuses([
+        syncStatus({ docId: DOC_A, state: "in-step" }),
+        syncStatus({ docId: DOC_B, name: "Studio", state: "peer-offline" }),
+      ]),
+    );
+    mount(fakeManager(), true);
+    // current doc (A) is in step — no pill dot even though B is offline …
+    expect(container?.querySelector("[data-sync-dot]")).toBeNull();
+    // … and B's tile caption carries the honest word.
+    expect(container?.textContent).toContain("peer offline");
   });
 });

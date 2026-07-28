@@ -30,10 +30,11 @@ export {
 export {
   type DocSyncOptions,
   DocSyncService,
-  type DocSyncState,
   type LaneBytes,
   type LaneControl,
   type LaneInfo,
+  type SyncLiveness,
+  type SyncPeer,
 } from "./doc-sync";
 export { MeshClient, type ServeSpec, type ServeState } from "./mesh-client";
 export { MeshLaneLink, type MeshLaneLinkOptions } from "./mesh-lane";

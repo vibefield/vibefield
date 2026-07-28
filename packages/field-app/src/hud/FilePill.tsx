@@ -1,6 +1,7 @@
-import type { DocRegistryEntry } from "@vibefield/contracts";
+import type { DocRegistryEntry, DocSyncStatus } from "@vibefield/contracts";
 import { type ReactElement, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { DocManagerApi } from "../doc-manager";
+import { useDocSyncStatuses } from "../doc-sync-store";
 import { getRendererLogger } from "../logging";
 
 /**
@@ -27,6 +28,61 @@ function fmtRelative(ms: number, now = Date.now()): string {
   if (s < 86_400) return `${Math.floor(s / 3600)}h ago`;
   if (s < 7 * 86_400) return `${Math.floor(s / 86_400)}d ago`;
   return new Date(ms).toLocaleDateString();
+}
+
+/** C6-4 — the pill's sync dot renders STANDING states only (pending /
+ * peer-offline / declined / epoch-stale): transient syncing lives in Settings
+ * and the tile captions, so the signature chrome never flickers with routine
+ * traffic. Muted grey for facts, --vf-orange for needs-attention (§2.5 —
+ * nothing failed, so never red); the title carries the words and numbers. */
+function syncDot(status: DocSyncStatus): { color: string; title: string } | null {
+  const at =
+    status.peers.reduce<number | null>(
+      (last, p) =>
+        p.lastExchangeAt !== null && (last === null || p.lastExchangeAt > last)
+          ? p.lastExchangeAt
+          : last,
+      null,
+    ) ?? null;
+  const when =
+    at !== null ? ` — last exchange ${new Date(at).toLocaleTimeString()}` : " — no exchange yet";
+  switch (status.state) {
+    case "pending":
+      return {
+        color: "rgba(128, 128, 128, 0.45)",
+        title: `Waiting on ${status.pendingRecords} record${status.pendingRecords === 1 ? "" : "s"} from a peer${when}`,
+      };
+    case "peer-offline":
+      return {
+        color: "rgba(128, 128, 128, 0.45)",
+        // Honest about the window (F-C6-22): claims the last exchange, never
+        // promptness.
+        title: `A peer is offline — not everything here has reached it${when}`,
+      };
+    case "peer-declined":
+      return {
+        color: "var(--vf-orange)",
+        title: `A peer's records were declined (${status.reason ?? "unknown"}) — devices may differ${when}`,
+      };
+    case "epoch-stale":
+      return {
+        color: "var(--vf-orange)",
+        title: `Parted from a peer by compaction — it must re-bootstrap${when}`,
+      };
+    default:
+      return null; // in-step and syncing: the pill stays quiet
+  }
+}
+
+/** Tile-caption word for a doc's sync standing; null when there is nothing
+ * worth a word (in step, or no sync facts at all). */
+function syncCaption(status: DocSyncStatus | undefined): string | null {
+  if (status === undefined || status.state === "in-step") return null;
+  if (status.state === "syncing") return "syncing";
+  if (status.state === "pending") return `waiting on ${status.pendingRecords}`;
+  if (status.state === "peer-offline") return "peer offline";
+  if (status.state === "peer-declined") return "declined";
+  return "epoch stale";
 }
 
 function DocThumbnailImage({ src }: { src: string }): ReactElement {
@@ -59,6 +115,10 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  // C6-4 — per-doc sync standing (empty/absent = sync has nothing to say).
+  const syncStatuses = useDocSyncStatuses() ?? [];
+  const currentSync = syncStatuses.find((s) => s.docId === state.doc?.docId);
+  const dot = currentSync !== undefined ? syncDot(currentSync) : null;
 
   // Fresh registry every expand — the explorer never shows a stale catalog.
   useEffect(() => {
@@ -192,6 +252,16 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
                     <path d="m15 5 4 4M4 20l1-4L16.5 4.5a2.12 2.12 0 0 1 3 3L8 19Z" />
                   </svg>
                   <span className="block min-w-0 truncate leading-4">{docName}</span>
+                  {/* C6-4: the sync dot — a standing fact beside the name,
+                      never a spinner; the title says the words and numbers. */}
+                  {dot !== null && (
+                    <span
+                      data-sync-dot=""
+                      title={dot.title}
+                      className="ml-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ background: dot.color }}
+                    />
+                  )}
                 </button>
               )}
             </div>
@@ -261,8 +331,15 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
                         <div className="truncate text-[12px] font-medium text-black/80 dark:text-white/80">
                           {d.name}
                         </div>
-                        <div className="text-[10px] text-black/40 tabular-nums dark:text-white/40">
+                        <div className="truncate text-[10px] text-black/40 tabular-nums dark:text-white/40">
                           {fmtRelative(d.updatedAt)}
+                          {/* C6-4: the honest sync word, only when there is one */}
+                          {(() => {
+                            const caption = syncCaption(
+                              syncStatuses.find((s) => s.docId === d.docId),
+                            );
+                            return caption !== null ? ` · ${caption}` : null;
+                          })()}
                         </div>
                       </div>
                     </button>

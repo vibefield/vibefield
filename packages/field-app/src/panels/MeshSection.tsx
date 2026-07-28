@@ -1,7 +1,8 @@
-import type { DeviceInfo } from "@vibefield/contracts";
+import type { DeviceInfo, DocSyncDocState } from "@vibefield/contracts";
 import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
 import type { ReactElement } from "react";
+import { useDocSyncStatuses } from "../doc-sync-store";
 import { borderCls, labelCls, sectionCls } from "./SettingsPanel";
 
 // Mesh diagnostics — a Settings SECTION, sibling to SystemSection (C3; the
@@ -34,6 +35,35 @@ function Dot({ state }: { state: string }): ReactElement {
   );
 }
 
+/** C6-4 — the sync fold in the Dot's vocabulary. In step and actively syncing
+ * are healthy work (§2.5 green); peer-offline is a FACT, muted like a device's
+ * offline; pending/declined/epoch-stale need attention (orange via the Dot's
+ * fallback — nothing failed, so never red). */
+function syncDotState(state: DocSyncDocState): string {
+  if (state === "in-step") return "up";
+  if (state === "syncing") return "running";
+  if (state === "peer-offline") return "offline";
+  return state; // pending | peer-declined | epoch-stale → the orange fallback
+}
+
+/** §9 voice: terse row words, hyphens made human; the numbers ride separately. */
+const SYNC_LABEL: Record<DocSyncDocState, string> = {
+  "in-step": "in step",
+  syncing: "syncing",
+  pending: "pending",
+  "peer-offline": "peer offline",
+  "peer-declined": "declined",
+  "epoch-stale": "epoch stale",
+};
+
+function fmtClock(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 export function MeshSection(): ReactElement {
   const conn = useFielddStatus();
   const sub = useSubscription<FielddHealth>("system.health.subscribe");
@@ -42,6 +72,11 @@ export function MeshSection(): ReactElement {
   // roster (self ⋈ peers), so `data` is the current roster wholesale.
   const devicesSub = useSubscription<DeviceInfo[]>("device.subscribe");
   const roster = devicesSub.data ?? [];
+  // C6-4: per-doc sync standing from the module store (fed in FieldView).
+  // null = stream unanswered, [] = sync has nothing to say — both render quiet.
+  const syncStatuses = useDocSyncStatuses() ?? [];
+  const deviceName = (peer: string): string =>
+    roster.find((d) => d.deviceId === peer)?.name ?? peer;
 
   // The mesh node's own unit (design-02 §2.4): prefer the gateway, tolerate any
   // mesh-named unit as the surface grows (mesh-bridge, …).
@@ -150,6 +185,67 @@ export function MeshSection(): ReactElement {
             ))
           )}
         </div>
+
+        {/* doc sync — C6-4: per-doc standing with peers, from the same fold
+            doc.sync.subscribe publishes (EL5: pending is NOT in step, and a
+            declined record is state, never floor litter). No rows when sync
+            has nothing to say — with no peers the quiet IS the honesty. The
+            last-exchange clock, not the state word, carries freshness:
+            offline detection can lag by minutes (F-C6-22). */}
+        {syncStatuses.length > 0 && (
+          <div className="pl-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className={labelCls}>doc sync</span>
+              <span className={labelCls}>{syncStatuses.length}</span>
+            </div>
+            {syncStatuses.map((s) => {
+              const offline = s.peers.filter((p) => !p.reachable);
+              const lastExchange = s.peers.reduce<number | null>(
+                (last, p) =>
+                  p.lastExchangeAt !== null && (last === null || p.lastExchangeAt > last)
+                    ? p.lastExchangeAt
+                    : last,
+                null,
+              );
+              return (
+                <div key={s.docId} className="pl-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate">
+                      {s.name ?? <span className={labelCls}>a peer's doc · not held here</span>}
+                    </span>
+                    <span className="flex flex-none items-center gap-1.5">
+                      {s.pendingRecords > 0 && (
+                        <span className={`tabular-nums ${labelCls}`}>
+                          waiting on {s.pendingRecords}
+                        </span>
+                      )}
+                      <Dot state={syncDotState(s.state)} />
+                      <span>{SYNC_LABEL[s.state]}</span>
+                    </span>
+                  </div>
+                  {/* the honest detail line: verbatim reason, WHO is offline,
+                      and WHEN we last actually exchanged — never "up to date
+                      as of now" (§9: numbers and provenance). */}
+                  {(s.reason !== null || offline.length > 0) && (
+                    <div className={`truncate text-right tabular-nums ${labelCls}`}>
+                      {[
+                        s.reason,
+                        offline.length > 0
+                          ? `offline: ${offline.map((p) => deviceName(p.peer)).join(", ")}`
+                          : null,
+                        lastExchange !== null
+                          ? `last exchange ${fmtClock(lastExchange)}`
+                          : "no exchange yet",
+                      ]
+                        .filter((part) => part !== null)
+                        .join(" · ")}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {sub.error !== null && <div className={labelCls}>health stream unavailable</div>}
       </div>

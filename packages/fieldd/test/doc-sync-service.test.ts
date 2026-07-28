@@ -20,7 +20,7 @@ import {
   MESHDATA_INBOUND_LANE_ID_BASE,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { DocumentService } from "../src/doc-service";
+import { contentIdOf, DocumentService } from "../src/doc-service";
 import { DocSyncService, type LaneBytes, type LaneControl, type LaneInfo } from "../src/doc-sync";
 
 let dirs: string[] = [];
@@ -110,20 +110,27 @@ async function until(predicate: () => boolean | Promise<boolean>, label: string)
   throw new Error(`timed out waiting for: ${label}`);
 }
 
-function harness(peers: string[] = ["peer-a"]) {
+function harness(peerIds: string[] = ["peer-a"]) {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-syncsvc-"));
   dirs.push(dataDir);
   const control = new FakeControl();
   const bytes = new FakeBytes();
   let sync: DocSyncService | undefined;
   const docs = new DocumentService({ dataDir, onCommit: (c) => sync?.onCommit(c) });
+  /** id → online; tests flip entries to take a peer off the mesh (C6-4). */
+  const peerState = new Map(peerIds.map((id) => [id, true]));
   sync = new DocSyncService({
     docs,
     control,
     bytes,
-    peers: async () => peers,
+    peers: async () => [...peerState].map(([id, online]) => ({ id, online })),
   });
-  return { docs, control, bytes, sync };
+  return { docs, control, bytes, sync, peerState };
+}
+
+/** The C6-4 fold for one doc, as `doc.sync.subscribe` would publish it. */
+function stateOf(sync: DocSyncService, docId: string): string | undefined {
+  return sync.statuses().find((s) => s.docId === docId)?.state;
 }
 
 async function seeded(docs: DocumentService): Promise<string> {
@@ -356,7 +363,7 @@ describe("broadcasting what we commit", () => {
     bytes.deliver(laneId, record(payload));
     await new Promise((r) => setTimeout(r, 120));
     expect((await docs.readDoc(docId))?.updates).toHaveLength(1);
-    expect(sync.syncState(docId)).toBe("idle"); // a redelivery is not a problem
+    expect(stateOf(sync, docId)).toBe("in-step"); // a redelivery is not a problem
   });
 
   it("reuses the lane for later commits and sends only the new record", async () => {
@@ -481,7 +488,7 @@ describe("broadcasting what we commit", () => {
         new Uint8Array([1]),
       ),
     );
-    await until(() => sync.syncState(docId) === "epoch-stale", "the epoch-stale state");
+    await until(() => stateOf(sync, docId) === "epoch-stale", "the epoch-stale state");
   });
 
   it("keeps a lane alive through one undecodable record", async () => {
@@ -507,5 +514,176 @@ describe("broadcasting what we commit", () => {
       async () => (await docs.readDoc(docId))?.updates.length === 1,
       "the next good record to land",
     );
+  });
+});
+
+describe("the honest sync state (C6-4)", () => {
+  it("reads peer-offline, not in-step, when a commit reached nobody", async () => {
+    // THE dishonesty this slice closes: the old shape settled back to idle
+    // after a broadcast whether or not any lane carried it, so a doc read
+    // "in step" while its commit reached no peer.
+    const { docs, control, sync, peerState } = harness(["peer-a"]);
+    peerState.set("peer-a", false);
+    await sync.start();
+    const docId = await seeded(docs);
+    await until(() => stateOf(sync, docId) === "peer-offline", "the peer-offline state");
+    // The roster already said offline — no dial was spent learning it.
+    expect(control.opened).toHaveLength(0);
+    const status = sync.statuses().find((s) => s.docId === docId);
+    expect(status?.peers).toEqual([{ peer: "peer-a", reachable: false, lastExchangeAt: null }]);
+  });
+
+  it("reads peer-offline when the lane open itself fails", async () => {
+    // An online-looking peer the mesh cannot actually reach: the failed open
+    // is the fact, recorded per doc-peer rather than swallowed at info level.
+    const { docs, control, sync } = harness(["peer-a"]);
+    control.refuse = true;
+    await sync.start();
+    const docId = await seeded(docs);
+    await until(() => stateOf(sync, docId) === "peer-offline", "the failed open to surface");
+  });
+
+  it("reads pending while a peer's digest names records we do not hold", async () => {
+    // §8: a record whose causal dependencies have not arrived shows NOTHING in
+    // the doc — however settled the board looks, it is not complete, and EL5
+    // forbids the state saying otherwise.
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    const enRoute = new Uint8Array([3, 1, 4]);
+    bytes.deliver(
+      laneId,
+      encodeDocSyncHave(0, { hasCheckpoint: true, records: [contentIdOf(enRoute)] }),
+    );
+    await until(() => stateOf(sync, docId) === "pending", "the pending state");
+    expect(sync.statuses().find((s) => s.docId === docId)?.pendingRecords).toBe(1);
+
+    // The named record lands — by the SAME identity the digest spoke — and
+    // the doc goes back to in step.
+    bytes.deliver(laneId, record(enRoute));
+    await until(() => stateOf(sync, docId) === "in-step", "the pending set to drain");
+  });
+
+  it("reads pending while an update has no checkpoint underneath it", async () => {
+    // The bootstrap race, made ordinary by the HAVE exchange: an update
+    // arriving before the checkpoint is declined would-clobber and re-greeted
+    // for — but until the bootstrap lands the doc is INCOMPLETE, not busy.
+    const { docs, control, bytes, sync } = harness();
+    const entry = await docs.create("empty-here"); // registry entry, no content
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId: entry.docId,
+      inbound: true,
+    });
+    bytes.deliver(laneId, record(new Uint8Array([7, 7])));
+    await until(() => stateOf(sync, entry.docId) === "pending", "the incomplete state");
+
+    bytes.deliver(laneId, record(ice1(), DOC_SYNC_RECORD.SNAPSHOT));
+    await until(() => stateOf(sync, entry.docId) === "in-step", "the bootstrap to land");
+  });
+
+  it("names a doc it does not have as peer-declined with a null name", async () => {
+    // Doc EXISTENCE does not replicate yet: a peer syncing a doc this device
+    // never created is declined unknown-doc, and the status says so honestly
+    // instead of the doc simply not existing anywhere visible.
+    const { control, bytes, sync } = harness();
+    await sync.start();
+    const ghostDocId = randomUUID();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId: ghostDocId,
+      inbound: true,
+    });
+    bytes.deliver(laneId, record(new Uint8Array([1, 2])));
+    await until(() => stateOf(sync, ghostDocId) === "peer-declined", "the declined state");
+    const status = sync.statuses().find((s) => s.docId === ghostDocId);
+    expect(status?.name).toBeNull();
+    expect(status?.reason).toBe("unknown-doc");
+  });
+
+  it("folds roster liveness in, and re-greets a peer that returns", async () => {
+    const { docs, control, bytes, sync } = harness(["peer-a"]);
+    await sync.start();
+    const docId = await seeded(docs);
+    await until(() => stateOf(sync, docId) === "in-step", "the greeting to settle");
+
+    // The roster says offline: reachability flips in seconds, not the minutes
+    // a dead QUIC lane takes to admit it (F-C6-22).
+    let online = false;
+    const listeners: Array<() => void> = [];
+    sync.attachLiveness({
+      list: () => [{ id: "peer-a", online }],
+      on: (cb) => {
+        listeners.push(cb);
+        return () => {};
+      },
+    });
+    for (const cb of listeners) cb();
+    await until(() => stateOf(sync, docId) === "peer-offline", "the roster fold");
+
+    // The peer returns: the re-greet is the catch-up, so "open the laptop"
+    // means "the docs catch up", not "nothing until the next local edit".
+    const greetings = bytes.sent.filter((s) => s.kind === DOC_SYNC_RECORD.HAVE).length;
+    online = true;
+    for (const cb of listeners) cb();
+    await until(
+      () => bytes.sent.filter((s) => s.kind === DOC_SYNC_RECORD.HAVE).length > greetings,
+      "the return re-greet",
+    );
+    await until(() => stateOf(sync, docId) === "in-step", "reachability to recover");
+  });
+
+  it("publishes status changes to subscribers, and detaches cleanly", async () => {
+    const { docs, control, bytes, sync } = harness(["peer-a"]);
+    await sync.start();
+    const seen: string[][] = [];
+    const off = sync.onStatusChanged((statuses) => seen.push(statuses.map((s) => s.state)));
+    const docId = await seeded(docs);
+    await until(() => seen.some((states) => states.includes("in-step")), "a published in-step");
+
+    off();
+    const before = seen.length;
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    bytes.deliver(laneId, record(new Uint8Array([6])));
+    await until(async () => (await docs.readDoc(docId))?.updates.length === 1, "the record");
+    expect(seen.length).toBe(before); // detached means detached
+  });
+
+  it("marks the peer unreachable on a peer-unreachable lane close", async () => {
+    // Minutes late (F-C6-22), but late truth is still truth — the close reason
+    // is a per-peer fact, not floor litter.
+    const { docs, control, sync } = harness(["peer-a"]);
+    await sync.start();
+    const docId = await seeded(docs);
+    await until(() => control.opened.length === 1, "the outbound lane");
+    const laneId = control.opened[0]?.laneId as number;
+    control.announce({ kind: "closed", laneId, reason: "peer-unreachable" });
+    await until(() => stateOf(sync, docId) === "peer-offline", "the unreachable fact");
   });
 });

@@ -73,6 +73,78 @@ export const DocSyncDigest = z
   .passthrough();
 export type DocSyncDigest = z.infer<typeof DocSyncDigest>;
 
+// ---- sync state (C6-4) ----
+//
+// What the renderer is told about a doc's standing with its peers. This is a
+// FOLD of facts fieldd actually holds (EL5) — attempt outcomes, digest diffs,
+// decline reasons — never a claim it cannot check. There are no delivery
+// receipts in the protocol, so the strongest good state is "in step": nothing
+// known un-synced. It is deliberately NOT named "converged" — convergence is a
+// property of the CRDT the daemon never decodes, and a state named for it
+// would promise more than the daemon can see.
+
+/** Doc-level fold, one honest word. Severity order, worst first:
+ * `epoch-stale` (a compaction boundary parts us from a peer — re-bootstrap) ·
+ * `peer-declined` (we refused a peer's records; devices may differ) ·
+ * `pending` (a peer's digest names records we do not yet hold — the doc is not
+ * complete, however settled it looks) · `peer-offline` (a peer we have traffic
+ * for is unreachable; detection may lag by MINUTES — F-C6-22 — so timestamps,
+ * not this word, carry the freshness truth) · `syncing` (records in flight) ·
+ * `in-step` (nothing known un-synced).
+ *
+ * There is no `solo`: a doc with no sync facts gets NO status, and the absence
+ * is the statement — with no peers there is nothing sync can honestly say. */
+export const DocSyncDocState = z.enum([
+  "in-step",
+  "syncing",
+  "pending",
+  "peer-offline",
+  "peer-declined",
+  "epoch-stale",
+]);
+export type DocSyncDocState = z.infer<typeof DocSyncDocState>;
+
+/** Per-peer facts under the fold. `lastExchangeAt` is the honesty mechanism:
+ * a state row always says WHEN it last knew, never implying now. */
+export const DocSyncPeerStatus = z
+  .object({
+    /** The peer's device id (D30 — one keyspace with the roster). */
+    peer: z.string(),
+    /** Our last attempt reached it (lane open/send ok, no unreachable close). */
+    reachable: z.boolean(),
+    /** epoch ms of the last successful send to or receive from this peer for
+     * this doc; null before the first exchange. */
+    lastExchangeAt: z.number().int().nullable(),
+  })
+  .passthrough();
+export type DocSyncPeerStatus = z.infer<typeof DocSyncPeerStatus>;
+
+export const DocSyncStatus = z
+  .object({
+    docId: z.string(),
+    /** Registry name; null when a peer syncs a doc this device does not have
+     * (doc existence does NOT replicate yet — the honest unknown-doc case). */
+    name: z.string().nullable(),
+    state: DocSyncDocState,
+    /** Records a peer's digest names that we do not hold yet (§8: the
+     * distinction between "settled" and "complete"). */
+    pendingRecords: z.number().int().nonnegative(),
+    peers: z.array(DocSyncPeerStatus),
+    /** Verbatim decline reason behind a peer-declined/epoch-stale state —
+     * provenance, logged words, never prose invented for the wire. */
+    reason: z.string().nullable(),
+    updatedAt: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type DocSyncStatus = z.infer<typeof DocSyncStatus>;
+
+/** The `doc.sync.subscribe` payload — snapshot and every delta alike carry the
+ * whole current list (the device.subscribe roster pattern), so the renderer
+ * never patches. Empty is MEANINGFUL: sync has nothing to say (no peers, mesh
+ * off), and the quiet UI is the honest rendering — not an error. */
+export const DocSyncStatusList = z.array(DocSyncStatus);
+export type DocSyncStatusList = z.infer<typeof DocSyncStatusList>;
+
 /** A HAVE carries no document bytes, so its meta's content fields are unused.
  * `baseEpoch` is not: a digest from another epoch describes a different
  * lineage, and answering it would ship records across a compaction boundary. */

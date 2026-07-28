@@ -80,8 +80,10 @@ class Mesh {
   readonly inbound = new Map<string, LaneInfo[]>();
   #nextInbound = MESHDATA_INBOUND_LANE_ID_BASE;
 
-  peersOf(name: string): string[] {
-    return [...this.devices.keys()].filter((n) => n !== name);
+  peersOf(name: string): { id: string; online: boolean }[] {
+    // Everyone this router knows is reachable — liveness honesty is the
+    // service test's subject; convergence assumes a healthy mesh.
+    return [...this.devices.keys()].filter((n) => n !== name).map((id) => ({ id, online: true }));
   }
 
   open(from: string, to: string, laneId: number, docId: string | undefined): void {

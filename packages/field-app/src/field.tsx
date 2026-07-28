@@ -12,6 +12,7 @@ import {
 } from "react";
 import { emitCanvasReadyMarker } from "./development-console";
 import type { DocManager } from "./doc-manager";
+import { useDocSyncFeed } from "./doc-sync-store";
 import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { hexToRgb01 } from "./field/theme-constants";
@@ -46,6 +47,9 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   // PLUG-P2: stream the fieldd plugin-registry snapshot into the module store
   // (session sampling + Settings section read it; daemon-away stays honest).
   usePluginRegistryFeed();
+  // C6-4: stream per-doc sync standing into its store (the file pill and the
+  // Settings Mesh section read it; empty = sync has nothing to say).
+  useDocSyncFeed();
   // PLUG-P3b: hand the plugin-client module its backend — plugin-bound leases
   // dial the same daemon this window reached (cleared on unmount, honestly).
   const fielddClient = useFielddClient();
