@@ -157,7 +157,9 @@ describe("the device? routing hook (C5/D35)", () => {
     expect(forwarder).not.toHaveBeenCalled();
   });
 
-  it("device on a subscription refuses — federated subscriptions are P2", async () => {
+  it("device on a subscription refuses honestly while the sub half is UN-armed", async () => {
+    // C6-5 ships the proxy, but an api armed without a subForwarder (a partial
+    // bootstrap) must refuse rather than half-work.
     const { port, forwarder } = await api();
     const ws = await dial(port, "/");
     await call(ws, 1, "system.hello", hello({ credential: "good-token" }));
@@ -183,5 +185,97 @@ describe("the device? routing hook (C5/D35)", () => {
     };
     expect(res.error.data.kind).toBe("UNAVAILABLE");
     expect(res.error.data.details).toEqual({ device: "dev-b", state: "unreachable" });
+  });
+});
+
+describe("the device? subscription hop (C6-5/D35)", () => {
+  async function apiWithSubForwarder(
+    subForwarder: (
+      device: string,
+      method: string,
+      params: unknown,
+      ctx: unknown,
+      emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
+    ) => Promise<{ snapshot: unknown; dispose: () => void }>,
+  ) {
+    const a = new ProductApi({
+      port: 0,
+      tokens: {
+        verify: (t) =>
+          t === "good-token"
+            ? { tokenId: "tk1", scopes: ["doc.read", "workspace.read"], label: "t" }
+            : null,
+      },
+    });
+    a.setDeviceRouting(
+      () => OWN_ID,
+      vi.fn(),
+      (device, method, params, ctx, emit) => subForwarder(device, method, params, ctx, emit),
+    );
+    a.registerSubscription("device.subscribe", () => ({ snapshot: [], dispose: () => {} }));
+    const port = await a.listen();
+    cleanup.push(() => a.close());
+    return port;
+  }
+
+  /** Collect notification frames by method (`device.delta` / `device.snapshot`). */
+  function collect(ws: WebSocket): Array<{ method: string; payload: unknown; subId: string }> {
+    const out: Array<{ method: string; payload: unknown; subId: string }> = [];
+    ws.on("message", (raw: Buffer) => {
+      const msg = JSON.parse(raw.toString());
+      if (typeof msg.method === "string" && msg.id === undefined) {
+        out.push({ method: msg.method, payload: msg.params?.payload, subId: msg.params?.subId });
+      }
+    });
+    return out;
+  }
+
+  it("installs the proxy: peer snapshot returned, kinds preserved on the wire, dispose on unsubscribe", async () => {
+    // an object holder — a plain let is control-flow-narrowed to null at the
+    // call sites below (the assignment hides inside the forwarder closure)
+    const pushed: { fn: ((payload: unknown, kind?: "delta" | "snapshot") => void) | null } = {
+      fn: null,
+    };
+    const dispose = vi.fn();
+    const port = await apiWithSubForwarder(async (device, method, params, _ctx, emit) => {
+      expect(device).toBe("dev-b");
+      expect(method).toBe("device.subscribe");
+      expect(params).toEqual({ device: "dev-b" }); // forwarded WHOLE — the peer strips
+      pushed.fn = emit;
+      return { snapshot: ["peer-roster"], dispose };
+    });
+    const ws = await dial(port, "/");
+    await call(ws, 1, "system.hello", hello({ credential: "good-token" }));
+    const frames = collect(ws);
+    const res = (await call(ws, 2, "device.subscribe", { device: "dev-b" })) as {
+      result: { subId: string; snapshot: unknown };
+    };
+    expect(res.result.snapshot).toEqual(["peer-roster"]);
+
+    pushed.fn?.(["row"], "delta");
+    pushed.fn?.(["fresh"], "snapshot"); // a recovery re-snapshot rides the same wire
+    await vi.waitFor(() => expect(frames).toHaveLength(2));
+    expect(frames[0]).toMatchObject({ method: "device.delta", payload: ["row"] });
+    expect(frames[1]).toMatchObject({ method: "device.snapshot", payload: ["fresh"] });
+    expect(frames.every((f) => f.subId === res.result.subId)).toBe(true);
+
+    await call(ws, 3, "system.unsubscribe", { subId: res.result.subId });
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it("a proxy failure maps back like any peer failure — the caller hears the truth", async () => {
+    const port = await apiWithSubForwarder(async () => {
+      throw new RpcCallError("UNAVAILABLE", "peer has no published endpoint", true, {
+        device: "dev-b",
+        state: "offline",
+      });
+    });
+    const ws = await dial(port, "/");
+    await call(ws, 1, "system.hello", hello({ credential: "good-token" }));
+    const res = (await call(ws, 2, "device.subscribe", { device: "dev-b" })) as {
+      error: { data: { kind: string; details: { state: string } } };
+    };
+    expect(res.error.data.kind).toBe("UNAVAILABLE");
+    expect(res.error.data.details.state).toBe("offline");
   });
 });

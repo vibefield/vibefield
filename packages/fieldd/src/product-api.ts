@@ -67,6 +67,17 @@ export type DeviceForwarder = (
   ctx: CallerContext,
 ) => Promise<unknown>;
 
+/** C6-5/D35 — the subscription half of the `device?` convention: installs a
+ * federated proxy (ref-counted upstream, re-snapshot on recovery) and returns
+ * the upstream snapshot plus a dispose for this local subscriber. */
+export type DeviceSubscriptionForwarder = (
+  device: string,
+  method: string,
+  params: unknown,
+  ctx: CallerContext,
+  emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
+) => Promise<{ snapshot: unknown; dispose: () => void }>;
+
 /** The slice of TokenService the API needs (keeps the dependency one-way). */
 export interface TokenServiceLike {
   verify(
@@ -107,6 +118,7 @@ export class ProductApi extends EventEmitter {
   private nextSubId = 1;
   private ownDeviceId: (() => string) | null = null;
   private forwarder: DeviceForwarder | null = null;
+  private subForwarder: DeviceSubscriptionForwarder | null = null;
   private dynamicRouter: DynamicRouterLike | null = null;
   /** live authed connections — the §15.4 revocation path closes by principal */
   private readonly liveConns = new Set<{ ws: WebSocket; state: ConnState }>();
@@ -184,10 +196,17 @@ export class ProductApi extends EventEmitter {
    * foreign `device` forwards WHOLE over PeerLink — the LOCAL scope check runs
    * first, so local restrictions never launder through a peer; the remote end
    * enforces its own. `device` = own id strips and serves locally. Un-armed ⇒
-   * `device` is inert extra params (tolerant reader). */
-  setDeviceRouting(ownDeviceId: () => string, forwarder: DeviceForwarder): void {
+   * `device` is inert extra params (tolerant reader). C6-5: `subForwarder`
+   * arms the subscription half (the federated proxy); without it, a device on
+   * a subscription keeps the honest refusal. */
+  setDeviceRouting(
+    ownDeviceId: () => string,
+    forwarder: DeviceForwarder,
+    subForwarder?: DeviceSubscriptionForwarder,
+  ): void {
     this.ownDeviceId = ownDeviceId;
     this.forwarder = forwarder;
+    this.subForwarder = subForwarder ?? null;
   }
 
   register(method: string, handler: Handler): void {
@@ -442,18 +461,48 @@ export class ProductApi extends EventEmitter {
     try {
       // C5/D35 — the `device?` convention: route AFTER the local scope check
       // (above), BEFORE execution. Own id strips and serves locally; a foreign
-      // id forwards whole; a device on a subscription refuses (federated
-      // subscriptions are P2).
+      // id forwards whole. C6-5: a device on a subscription installs the
+      // federated proxy — same wire shape as a local subscription (subId +
+      // <base>.delta/.snapshot frames), the payloads being the PEER's.
       const device = (params as { device?: unknown } | null | undefined)?.device;
       const forwarder = this.forwarder;
       if (typeof device === "string" && forwarder !== null) {
         if (device !== this.ownDeviceId?.()) {
           if (def.subscription) {
-            reply(
-              this.err(id, "PRECONDITION_FAILED", "federated subscriptions are P2", false, {
-                device,
-              }),
+            const subForwarder = this.subForwarder;
+            if (subForwarder === null) {
+              reply(
+                this.err(id, "PRECONDITION_FAILED", "federated subscriptions unavailable", false, {
+                  device,
+                }),
+              );
+              return;
+            }
+            const subId = `ps-${this.nextSubId++}`;
+            const base = method.replace(/\.subscribe$/, "");
+            let active = true;
+            const emit = (payload: unknown, kind: "delta" | "snapshot" = "delta") => {
+              if (active && ws.readyState === WS_OPEN)
+                ws.send(
+                  JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: `${base}.${kind}`,
+                    params: { subId, payload },
+                  }),
+                );
+            };
+            const { snapshot, dispose } = await subForwarder(
+              device,
+              method,
+              params,
+              state.ctx,
+              emit,
             );
+            state.subs.set(subId, () => {
+              active = false;
+              dispose();
+            });
+            reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
             return;
           }
           const result = await forwarder(device, method, params, state.ctx);

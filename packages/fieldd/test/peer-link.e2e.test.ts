@@ -247,6 +247,81 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
     expect(list.devices.find((d) => d.self)?.link).toBeUndefined();
   }, 30_000);
 
+  it("C6-5: device.subscribe federates — B's snapshot, a live delta, quiet after dispose", async () => {
+    // The D35 demonstration: A's federated proxy stands a subscription on B's
+    // product surface (under the peer-fieldd principal), relays B's roster
+    // snapshot, hears B's roster CHANGE as a delta, and goes quiet on dispose.
+    // Params are post-routing ({} — no device key) for the C5 recorded
+    // divergence: both mocks pin "dev-self", so B must serve locally.
+    const { A, mockB } = await bootPair();
+    const events: Array<{ payload: unknown; kind: "snapshot" | "delta" | undefined }> = [];
+    const sub = await A.federatedSubs.attach("dev-b", "device.subscribe", {}, (payload, kind) =>
+      events.push({ payload, kind }),
+    );
+    const roster = sub.snapshot as DeviceInfo[];
+    expect(roster.some((d) => d.self)).toBe(true); // B's own slice, through A
+
+    // B's roster changes (a peer appears in B's store) → a delta reaches A.
+    mockB.pushStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-x",
+      data: peerSlice("dev-x", "http://127.0.0.1:9/t/x"),
+      version: 1,
+    });
+    await until(
+      () =>
+        events.some((e) =>
+          (e.payload as DeviceInfo[] | undefined)?.some?.((d) => d.deviceId === "dev-x"),
+        ),
+      8000,
+    );
+
+    sub.dispose();
+    const heard = events.length;
+    mockB.pushStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-y",
+      data: peerSlice("dev-y", "http://127.0.0.1:9/t/y"),
+      version: 1,
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(events.length).toBe(heard); // disposed means disposed
+  }, 30_000);
+
+  it("C6-5: the REMOTE gate holds for subscriptions — a non-tailnet topic is refused by B", async () => {
+    // doc.read is deliberately outside TAILNET_SCOPES (D32): B refuses the
+    // peer principal at ITS gate, and the refusal is the caller's answer.
+    const { A } = await bootPair();
+    await expect(
+      A.federatedSubs.attach("dev-b", "doc.sync.subscribe", {}, () => {}),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN_SCOPE" });
+  }, 30_000);
+
+  it("C6-5: a standing subscription PINS the link against the idle sweep", async () => {
+    const { bEndpoint } = await bootPair();
+    const { ctor } = sidecar();
+    const link = new PeerLink({
+      ownDeviceId: () => "dev-a",
+      endpointFor: () => bEndpoint,
+      webSocket: ctor,
+      idleCloseMs: 60,
+    });
+    cleanup.push(() => link.dispose());
+
+    const sub = await link.subscribe(
+      "dev-b",
+      "device.subscribe",
+      {},
+      () => {},
+      () => {},
+    );
+    await new Promise((r) => setTimeout(r, 250)); // several sweep periods
+    expect(link.linkState("dev-b")).toBe("connected"); // pinned: quiet ≠ unused
+
+    sub.unsubscribe();
+    await until(() => link.linkState("dev-b") === undefined, 3000); // unpinned ⇒ swept
+  }, 30_000);
+
   it("an idle link is swept closed and the next call re-dials", async () => {
     const { bEndpoint } = await bootPair(); // reuse B (the pair's dial target)
     const { ctor, dials } = sidecar();

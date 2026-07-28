@@ -26,6 +26,12 @@ import { RpcCallError } from "./native-link";
 
 export type PeerLinkState = "dialing" | "connected" | "incompatible";
 
+/** A standing upstream subscription on a peer link (C6-5/D35). */
+export interface PeerSubscription {
+  snapshot: unknown;
+  unsubscribe: () => void;
+}
+
 export interface PeerLinkOptions {
   ownDeviceId: () => string;
   /** the peer's capability URL from its slice, or undefined = unpublished/offline */
@@ -40,6 +46,11 @@ interface Link {
   client: FielddClient;
   state: PeerLinkState;
   lastUsed: number;
+  /** live upstream subscriptions riding this link (C6-5): each holds the
+   * client-side unsubscribe plus the owner's link-death callback. A link with
+   * members is PINNED against the idle sweep — quiet is not the same as
+   * unused when a subscription is standing on it. */
+  subs: Set<{ unsubscribe: () => void; onDrop: () => void }>;
 }
 
 /** http(s) capability URL → the ws(s) dial URL (already-ws passes through). */
@@ -83,32 +94,93 @@ export class PeerLink extends EventEmitter {
     try {
       return await this.withDeadline(link.client.request(method, params), deviceId);
     } catch (e) {
-      if (e instanceof FielddRpcError) {
-        if (e.kind === "INCOMPATIBLE") {
-          this.pinIncompatible(deviceId);
-          throw new RpcCallError("INCOMPATIBLE", "peer contracts major mismatch", false, {
-            device: deviceId,
-          });
-        }
-        if (e.kind === "UNAVAILABLE" || e.kind === "TIMEOUT") {
-          // transport-class failure: drop the link so the next call re-dials
-          this.dropLink(deviceId);
-          throw new RpcCallError("UNAVAILABLE", `peer unreachable: ${e.message}`, true, {
-            device: deviceId,
-            state: "unreachable",
-          });
-        }
-        // the REMOTE's genuine reply (scope refusal, not-found, …) — pass through
-        throw new RpcCallError(e.kind as never, e.message, e.retryable, e.details);
-      }
-      this.dropLink(deviceId);
-      throw new RpcCallError(
-        "UNAVAILABLE",
-        `peer unreachable: ${e instanceof Error ? e.message : String(e)}`,
-        true,
-        { device: deviceId, state: "unreachable" },
-      );
+      throw this.mapPeerError(e, deviceId);
     }
+  }
+
+  /** One failure law for request AND subscribe: an incompatible peer pins
+   * (refuse fast, D32), a transport-class failure drops the link so the next
+   * call re-dials, and the REMOTE's genuine replies (scope refusal, not-found,
+   * …) pass through untouched — a forwarded call's answer is the peer's
+   * answer. Already-mapped errors (the deadline path) pass straight through. */
+  private mapPeerError(e: unknown, deviceId: string): RpcCallError {
+    if (e instanceof RpcCallError) return e;
+    if (e instanceof FielddRpcError) {
+      if (e.kind === "INCOMPATIBLE") {
+        this.pinIncompatible(deviceId);
+        return new RpcCallError("INCOMPATIBLE", "peer contracts major mismatch", false, {
+          device: deviceId,
+        });
+      }
+      if (e.kind === "UNAVAILABLE" || e.kind === "TIMEOUT") {
+        this.dropLink(deviceId);
+        return new RpcCallError("UNAVAILABLE", `peer unreachable: ${e.message}`, true, {
+          device: deviceId,
+          state: "unreachable",
+        });
+      }
+      return new RpcCallError(e.kind as never, e.message, e.retryable, e.details);
+    }
+    this.dropLink(deviceId);
+    return new RpcCallError(
+      "UNAVAILABLE",
+      `peer unreachable: ${e instanceof Error ? e.message : String(e)}`,
+      true,
+      { device: deviceId, state: "unreachable" },
+    );
+  }
+
+  /** Open a standing subscription on a peer (C6-5/D35). The initial subscribe
+   * runs under the per-call deadline; once standing, the CLIENT owns transport
+   * recovery — a socket blip re-dials and replays with a fresh snapshot (the
+   * P5 law), delivered through `onEvent` as kind "snapshot", and the link is
+   * pinned against the idle sweep. `onDrop` fires only when the LINK itself is
+   * torn down (a unary timeout's dropLink, an incompatible pin, dispose) — the
+   * owner re-subscribes; it never fires for blips the client heals itself. */
+  async subscribe(
+    deviceId: string,
+    method: string,
+    params: unknown,
+    onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+    onDrop: () => void,
+  ): Promise<PeerSubscription> {
+    if (this.disposed) throw new RpcCallError("UNAVAILABLE", "peer link disposed", false);
+    if (deviceId === this.opts.ownDeviceId())
+      throw new RpcCallError("PRECONDITION_FAILED", "device is self — routing bug", false);
+    if (this.incompatible.has(deviceId))
+      throw new RpcCallError("INCOMPATIBLE", "peer contracts major mismatch", false, {
+        device: deviceId,
+      });
+    const link = this.ensureLink(deviceId);
+    link.lastUsed = this.now();
+    let upstream: { snapshot: unknown; unsubscribe: () => void };
+    try {
+      upstream = await this.withDeadline(link.client.subscribe(method, params, onEvent), deviceId);
+    } catch (e) {
+      throw this.mapPeerError(e, deviceId);
+    }
+    const member = {
+      unsubscribe: upstream.unsubscribe,
+      onDrop,
+    };
+    // The link may have been dropped while the subscribe was in flight (the
+    // deadline path, a concurrent unary timeout). Registering on a corpse
+    // would pin nothing — report the drop instead of pretending.
+    if (this.links.get(deviceId) !== link) {
+      upstream.unsubscribe();
+      throw new RpcCallError("UNAVAILABLE", "peer link dropped during subscribe", true, {
+        device: deviceId,
+        state: "unreachable",
+      });
+    }
+    link.subs.add(member);
+    return {
+      snapshot: upstream.snapshot,
+      unsubscribe: () => {
+        link.subs.delete(member);
+        upstream.unsubscribe();
+      },
+    };
   }
 
   linkState(deviceId: string): PeerLinkState | undefined {
@@ -148,7 +220,7 @@ export class PeerLink extends EventEmitter {
       ...(this.opts.webSocket !== undefined ? { webSocket: this.opts.webSocket } : {}),
       maxBackoffMs: 5_000,
     });
-    const link: Link = { client, state: "dialing", lastUsed: this.now() };
+    const link: Link = { client, state: "dialing", lastUsed: this.now(), subs: new Set() };
     client.onStatusChange(() => {
       if (this.links.get(deviceId) !== link) return; // superseded/dropped
       if (client.status === "ready" && link.state !== "connected") {
@@ -203,12 +275,25 @@ export class PeerLink extends EventEmitter {
     }
     this.links.delete(deviceId);
     link.client.close();
+    // Standing subscriptions died with the client — tell each owner ONCE, so
+    // it can re-subscribe (which re-dials). Cleared first: an onDrop that
+    // immediately re-subscribes must not see itself in the corpse's set.
+    const orphans = [...link.subs];
+    link.subs.clear();
+    for (const member of orphans) {
+      try {
+        member.onDrop();
+      } catch {
+        // an owner's recovery failure is its own — the drop must still fan out
+      }
+    }
     this.emit("link-changed", { deviceId, ...(nextState ? { state: nextState } : {}) });
   }
 
   private sweepIdle(): void {
     const cutoff = this.now() - this.idleCloseMs;
     for (const [id, link] of this.links) {
+      if (link.subs.size > 0) continue; // pinned: a standing subscription is use
       if (link.lastUsed < cutoff) this.dropLink(id); // dial-on-demand: quiet links close
     }
   }

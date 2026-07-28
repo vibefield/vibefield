@@ -55,6 +55,7 @@ import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
 import { DocSyncService, type LaneInfo } from "./doc-sync";
 import { EndpointService } from "./endpoint-service";
+import { FederatedSubscriptionManager } from "./federated-subs";
 import { InstallSetReconciler } from "./install-reconciler";
 import { McpService } from "./mcp-service";
 import { MeshClient } from "./mesh-client";
@@ -146,6 +147,9 @@ export interface FielddDaemon {
   docs: DocumentService;
   devices: DeviceService;
   peers: PeerLink;
+  /** C6-5/D35 — the federated subscription proxy (tests drive it directly;
+   * the product path is a `device?` on any subscribe method). */
+  federatedSubs: FederatedSubscriptionManager;
   plugins: PluginRegistryService;
   services: ServiceRegistry;
   logging: NodeLogging | null;
@@ -1348,9 +1352,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       endpointFor: (deviceId) => devices.get(deviceId)?.productEndpoint?.url,
       ...(config.peerWebSocket !== undefined ? { webSocket: config.peerWebSocket } : {}),
     });
+    // C6-5/D35 — the subscription half: one ref-counted upstream per
+    // {device, method, params}, re-snapshot on recovery; quiet during an
+    // outage (the roster carries liveness, the topic stream never lies).
+    const federatedSubs = new FederatedSubscriptionManager({
+      link: peers,
+      logger: logger.child({ component: "federated.subs" }),
+    });
     api.setDeviceRouting(
       () => devices.currentDeviceId(),
       (device, method, params) => peers.request(device, method, params),
+      (device, method, params, _ctx, emit) => federatedSubs.attach(device, method, params, emit),
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
 
@@ -1379,6 +1391,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         docSync?.stop();
         laneLink.close();
         docs.dispose();
+        federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
         devices.dispose();
         services.dispose();
@@ -1564,6 +1577,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           api.close();
           docLane.close();
           docs.dispose();
+          federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
           devices.dispose();
           services.dispose();
@@ -1599,6 +1613,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs,
       devices,
       peers,
+      federatedSubs,
       plugins,
       services,
       logging,
