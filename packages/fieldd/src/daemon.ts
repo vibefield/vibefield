@@ -4,6 +4,8 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  ArtifactPublishParams,
+  ArtifactUnpublishParams,
   CONTRACTS_VERSION,
   DeviceGetParams,
   DocCreateParams,
@@ -48,6 +50,7 @@ import {
   PluginLogRouter,
   pluginLogProvenance,
 } from "@vibefield/logging";
+import { ArtifactService } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
@@ -150,6 +153,8 @@ export interface FielddDaemon {
   /** C6-5/D35 — the federated subscription proxy (tests drive it directly;
    * the product path is a `device?` on any subscribe method). */
   federatedSubs: FederatedSubscriptionManager;
+  /** C6-6 — the artifact hub (registry over the mesh serve facade). */
+  artifacts: ArtifactService;
   plugins: PluginRegistryService;
   services: ServiceRegistry;
   logging: NodeLogging | null;
@@ -1366,6 +1371,34 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
 
+    // C6-6 — the artifact hub. Constructed HERE (before the supersession
+    // closure below references it — a superseding takeover can fire before
+    // bootstrap's tail runs); its serves are declared later via start(), once
+    // the control port is bound. The bridge reads controlPort lazily, and the
+    // product serve's secret never enters the service.
+    const artifacts = new ArtifactService({
+      dataDir: config.dataDir,
+      bridge: {
+        declare: async (specs) => {
+          await mesh.setServes([
+            {
+              name: "product",
+              target: { kind: "port", port: controlPort },
+              tls: false,
+              pathSecret: servePathSecret,
+            },
+            ...specs,
+          ]);
+        },
+        states: () => mesh.serves(),
+        on: (cb) => {
+          mesh.on("serves-changed", cb);
+          return () => mesh.off("serves-changed", cb);
+        },
+      },
+      logger: logger.child({ component: "artifacts" }),
+    });
+
     // SUPERSEDED = another fieldd owns the native plane now; this one is done.
     // The flag also closes the small gap where takeover happens before this
     // listener is attached or while ProductApi is still binding its port.
@@ -1391,6 +1424,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         docSync?.stop();
         laneLink.close();
         docs.dispose();
+        artifacts.dispose();
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
         devices.dispose();
@@ -1429,17 +1463,37 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
 
     // C3 — the first real serve (design-00 §4.1 / foundations §2.9): fieldd's
     // own product API over the tailnet, plain-HTTP-in-WireGuard, gated by the
-    // secret route the ProductApi's tailnet door verifies. Fire-and-forget:
-    // with mesh disabled the entry sits `pending` honestly (never a stall);
-    // the declarative set replays on every native (re)connect.
-    void mesh.setServes([
-      {
-        name: "product",
-        target: { kind: "port", port: controlPort },
-        tls: false,
-        pathSecret: servePathSecret,
-      },
-    ]);
+    // secret route the ProductApi's tailnet door verifies. C6-6 — the serve
+    // SET is now composed: ArtifactService (constructed above, before the
+    // supersession closure could ever reach it) owns the artifact serves, the
+    // daemon prepends the product serve, and one declarative set replays on
+    // every native (re)connect. Fire-and-forget: with mesh disabled every
+    // entry sits `pending` honestly.
+    void artifacts.start();
+    api.register("artifact.publish", async (_ctx, params) => {
+      const parsed = ArtifactPublishParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { name: slug, target: {kind:'port',port} | {kind:'dir',path} }",
+          false,
+          { issue: parsed.error.issues[0]?.message },
+        );
+      // the entry is built from named fields inside the service — routing keys
+      // (device) and future passthrough params never enter the registry
+      return await artifacts.publish(parsed.data);
+    });
+    api.register("artifact.unpublish", async (_ctx, params) => {
+      const parsed = ArtifactUnpublishParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { name: slug }", false);
+      return await artifacts.unpublish(parsed.data.name);
+    });
+    api.register("artifact.list", () => ({ artifacts: artifacts.statuses() }));
+    api.registerSubscription("artifact.subscribe", (_ctx, _params, emit) => {
+      const off = artifacts.onChanged((statuses) => emit(statuses));
+      return { snapshot: artifacts.statuses(), dispose: off };
+    });
     mesh.on("reconciled", emitHealth);
     mesh.on("serves-changed", emitHealth);
     // C4: first roster sync (identity + publish); later syncs ride the mesh
@@ -1577,6 +1631,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           api.close();
           docLane.close();
           docs.dispose();
+          artifacts.dispose();
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
           devices.dispose();
@@ -1614,6 +1669,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       devices,
       peers,
       federatedSubs,
+      artifacts,
       plugins,
       services,
       logging,

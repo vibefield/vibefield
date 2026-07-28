@@ -358,6 +358,43 @@ export const METHODS: MethodDef[] = [
     subscription: true,
   }),
 
+  // C6-6 — ArtifactService (design-02 §3, design-01 §5): the artifact hub over
+  // the mesh serve facade. publish/unpublish are UPSERT/remove-if-present
+  // (idempotent — safe to retry); artifact.publish sits in the tailnet preset
+  // DELIBERATELY (design-01: the agent principal and peers may publish; with
+  // D35 device? routing, publishing ON another device is one param away).
+  // The CAS blob pull root is deferred with its own gate (no native
+  // file-transfer facade yet — thinking-c6 §11).
+  defineMethod({
+    surface: "product",
+    method: "artifact.publish",
+    scope: "artifact.publish",
+    idempotent: true,
+    locality: "sync",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "artifact.unpublish",
+    scope: "artifact.publish",
+    idempotent: true,
+    locality: "sync",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "artifact.list",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "sync",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "artifact.subscribe",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "sync",
+    subscription: true,
+  }),
+
   // C4 — DeviceService (design-04 D31, P1-lite: roster only; PeerLink/D32 and
   // heartbeats deferred). workspace.read sits in the C3 tailnet preset, so
   // peers may read the roster too.

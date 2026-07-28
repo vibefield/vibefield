@@ -1,6 +1,11 @@
 // @vibefield/fieldd — the product-plane daemon (design-02 §3).
 
 export {
+  type ArtifactServeBridge,
+  ArtifactService,
+  type ArtifactServiceOptions,
+} from "./artifact-service";
+export {
   AUDIT_LEDGERS,
   type AuditIntegrityResult,
   type AuditLedger,
