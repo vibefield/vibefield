@@ -3,11 +3,11 @@ resolver = "2"
 members = ["packages/field-native"]
 
 [workspace.dependencies]
-truffle-core = "0.7.3"
+truffle-core = "0.7.8"
 
 # EL8 — version lockstep: exactly one truffle-core revision across every crate in
 # this workspace (a borrowed Arc<Node> is type-incompatible across revisions).
 # Same style as electron-ghostty: registry requirement + local path patch, so the
-# checkout at ../p008/truffle (rev 0.7.3) is the single source of truth.
+# checkout at ../p008/truffle (v0.7.8) is the single source of truth.
 [patch.crates-io]
 truffle-core = { path = "../p008/truffle/crates/truffle-core" }

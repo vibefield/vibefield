@@ -56,11 +56,20 @@ async function spawnNative(): Promise<string> {
     stdio: "ignore",
   });
   children.push(child);
-  const socket = join(dir, "native/run/meshdata.sock");
+  // BOTH sockets, and the order is the reason. field-native binds meshdata.sock
+  // inside start_all() and mgmt.sock only afterwards (lib.rs), so waiting on the
+  // byte plane alone returns while the management plane is still unbound — every
+  // test here that dials mgmt.sock was racing a socket that did not exist yet.
+  // It survived on timing and failed under parallel suite load as ECONNREFUSED,
+  // which reads as a daemon fault rather than as a harness that started early.
+  // Waiting on both is also order-proof: whichever binds last, this still holds.
+  const sockets = ["meshdata.sock", "mgmt.sock"].map((s) => join(dir, "native/run", s));
   const deadline = Date.now() + 10_000;
-  while (!existsSync(socket)) {
-    if (Date.now() > deadline) throw new Error("meshdata socket never appeared");
-    await new Promise((r) => setTimeout(r, 50));
+  for (const socket of sockets) {
+    while (!existsSync(socket)) {
+      if (Date.now() > deadline) throw new Error(`${socket} never appeared`);
+      await new Promise((r) => setTimeout(r, 50));
+    }
   }
   return dir;
 }
