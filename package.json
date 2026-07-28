@@ -20,11 +20,13 @@
     "lint:fix": "biome check --write .",
     "lint:rust": "cargo clippy --workspace --all-targets -- -D warnings",
     "format": "biome format --write . && cargo fmt",
+    "icons:generate": "pnpm --filter @vibefield/desktop icons:generate",
+    "icons:check": "pnpm --filter @vibefield/desktop icons:check",
     "gen": "pnpm --filter @vibefield/contracts gen:rust",
     "gen:manifests": "nx run-many -t gen:manifest",
     "gen:check": "pnpm gen && git diff --exit-code -- packages/contracts/gen packages/field-native/src/contracts.rs",
     "preflight": "node scripts/preflight.mjs",
-    "verify": "pnpm preflight && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm test && pnpm test:rust && pnpm gen:check",
+    "verify": "pnpm preflight && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm test && pnpm test:rust && pnpm gen:check",
     "commit-draft": "sh scripts/commit-draft.sh"
   },
   "devDependencies": {

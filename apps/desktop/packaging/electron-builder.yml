@@ -82,8 +82,9 @@ files:
 # §7.4 external resources, landing under Resources/. Flat `bin/` holds because packages are
 # architecture-specific (EDP-22/23); per-arch subdirectories arrive with the universal-build
 # amendment, not before. The stager always creates all three directories even when empty, so this
-# config does not break a build during the slices where tray assets (WP3) and bundled plugins
-# (WP8) do not exist yet — a missing extraResources source is a hard electron-builder error.
+# config does not break a build while bundled plugins (WP8) do not exist yet — a missing
+# extraResources source is a hard electron-builder error. Tray assets are generated and checked
+# before staging; an empty tray directory is now a package failure.
 # Executable bits: the stager sets field-native to 0755 and asserts it (§7.4); confirm it survived
 # the copy in the packaged-artifact check, since that assertion is about the stage, not the .app.
 extraResources:
@@ -108,9 +109,8 @@ extraResources:
 # window where flipping is legal, since nothing may mutate a signed executable.
 afterPack: packaging/after-pack.mjs
 
-# No `icon:` — the four icon families are WP3 (§6.1/§6.3), and buildResources has no icons/ yet.
-# electron-builder will warn that the default Electron icon is used; that warning is expected
-# until WP3 lands, and it is preferable to pointing at an asset that does not exist.
+# Application icons are generated deterministically from icons/app-master.svg. Paths are explicit
+# per platform so builder defaults cannot silently select a stale conventional filename.
 
 # The staged app declares no dependencies and ships no node_modules, so there is nothing to
 # rebuild. Off explicitly: a rebuild step that silently does nothing is still a step that can
@@ -119,6 +119,7 @@ npmRebuild: false
 
 mac:
   target: [dmg, zip]
+  icon: packaging/icons/app.icns
   # Hardened runtime is on from the first package even though nothing is signed yet, so the
   # entitlement set is exercised from the start rather than discovered at notarization time.
   hardenedRuntime: true
@@ -137,11 +138,13 @@ mac:
 # is absent for the same reason it is on macOS — WP10 owns it.
 win:
   target: [nsis]
+  icon: packaging/icons/app.ico
   # nsis.appId must equal windowsAppUserModelId once B-1 is frozen, or taskbar pinning,
   # shortcuts, notifications and updates disagree with each other (§5.6). Both are blocked on B-1.
 
 linux:
   target: [AppImage, deb]
+  icon: packaging/icons/linux
   category: Utility
   # No `desktopName:` — electron-builder 26 removed it (the schema rejects the whole linux block
   # if present) in favour of a `desktop:` entry object. The .desktop filename, its

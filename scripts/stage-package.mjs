@@ -117,8 +117,6 @@ const PLAN = [
     stage: "tray",
     from: "apps/desktop/packaging/tray",
     kind: "dir",
-    optional: "no tray assets — a packaged tray would fall back to a missing image (§6.4)",
-    produce: "WP3 — generate apps/desktop/packaging/tray/* (distribution spec §6.2 layout)",
   },
   {
     // No producer exists yet, so there is no source path to name: inventing one here would bake a
@@ -132,9 +130,9 @@ const PLAN = [
 ];
 
 // The stage roots always exist, even when empty. electron-builder fails a build when an
-// extraResources source is missing, and an absent tray/ or plugins/ is the NORMAL state for
-// several slices yet — a config that only works once WP3 and WP8 land would block WP4's exit
-// criterion (a stage that boots) on unrelated work. Empty is loud in the report instead.
+// extraResources source is missing. Bundled plugins remain optional until WP8, while the tray is
+// required and validated by the icon gate before staging. Empty plugin roots remain loud in the
+// report instead of breaking electron-builder's extraResources copy.
 const STAGE_ROOTS = ["app", "bin", "tray", "plugins/bundled"];
 
 // ---- §7.3 "must never ship" ------------------------------------------------

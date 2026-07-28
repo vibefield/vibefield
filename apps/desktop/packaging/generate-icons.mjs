@@ -1,0 +1,526 @@
+#!/usr/bin/env node
+
+import { createHash } from "node:crypto";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+import { Resvg } from "@resvg/resvg-js";
+
+const packagingRoot = dirname(fileURLToPath(import.meta.url));
+const iconRoot = join(packagingRoot, "icons");
+const trayRoot = join(packagingRoot, "tray");
+const builderConfigPath = join(packagingRoot, "electron-builder.yml");
+const appMasterPath = join(iconRoot, "app-master.svg");
+const trayMasterPath = join(iconRoot, "tray-master.svg");
+
+const APP_ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 256];
+const APP_LINUX_SIZES = [16, 24, 32, 48, 64, 96, 128, 256, 512];
+const APP_RENDER_SIZES = [...new Set([...APP_ICO_SIZES, ...APP_LINUX_SIZES, 1024])].sort(
+  (a, b) => a - b,
+);
+const TRAY_ICO_SIZES = [16, 20, 24, 32];
+const TRAY_STATES = [
+  {
+    kind: "base",
+    mac1x: "fieldTemplate.png",
+    mac2x: "fieldTemplate@2x.png",
+    windows: "field-ready.ico",
+    linux: "field-linux.png",
+  },
+  {
+    kind: "attention",
+    mac1x: "fieldAttentionTemplate.png",
+    mac2x: "fieldAttentionTemplate@2x.png",
+    windows: "field-attention.ico",
+    linux: "field-linux-attention.png",
+  },
+  {
+    kind: "offline",
+    mac1x: "fieldOfflineTemplate.png",
+    mac2x: "fieldOfflineTemplate@2x.png",
+    windows: "field-offline.ico",
+    linux: "field-linux-offline.png",
+  },
+];
+const ICNS_REPRESENTATIONS = [
+  ["icp4", 16],
+  ["ic11", 32],
+  ["icp5", 32],
+  ["ic12", 64],
+  ["ic07", 128],
+  ["ic13", 256],
+  ["ic08", 256],
+  ["ic14", 512],
+  ["ic09", 512],
+  ["ic10", 1024],
+];
+const SOURCE_FILES = new Set(["README.md", "app-master.svg", "tray-master.svg"]);
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+const args = new Set(process.argv.slice(2));
+const checkOnly = args.delete("--check");
+if (args.size > 0) {
+  throw new Error(`unknown icon generator option(s): ${[...args].join(", ")}`);
+}
+
+const [appMaster, trayMaster, builderConfig] = await Promise.all([
+  readFile(appMasterPath, "utf8"),
+  readFile(trayMasterPath, "utf8"),
+  readFile(builderConfigPath, "utf8"),
+]);
+assertSquareMaster(appMaster, "application");
+assertSquareMaster(trayMaster, "tray");
+assertBuilderIconConfig(builderConfig);
+const appPaths = extractPaths(appMaster);
+if (appPaths.length !== 2) {
+  throw new Error(
+    `application master must contain background + mark paths; found ${appPaths.length}`,
+  );
+}
+const appMarkPath = appPaths[1];
+const trayPath = extractSinglePath(trayMaster);
+const generated = generateAssets({ appMaster, appMarkPath, trayPath });
+
+if (!checkOnly) {
+  for (const [path, asset] of generated.outputs) {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, asset);
+  }
+}
+
+await validateGeneratedTree(generated);
+console.log(
+  `icons ${checkOnly ? "current" : "generated"}: ${generated.outputs.size} files, app ${APP_RENDER_SIZES.length} raster sizes, tray 3 states`,
+);
+
+function generateAssets({ appMaster, appMarkPath, trayPath }) {
+  const outputs = new Map();
+  const pngs = new Map();
+  const appImages = new Map();
+
+  for (const size of APP_RENDER_SIZES) {
+    const image = render(applicationSvg(appMaster, appMarkPath, size), size);
+    assertApplicationPixels(image, size);
+    appImages.set(size, image);
+  }
+
+  addPng("icons/app-1024.png", appImages.get(1024));
+  for (const size of APP_LINUX_SIZES) {
+    addPng(`icons/linux/${size}x${size}.png`, appImages.get(size));
+  }
+
+  const appIco = encodeIco(APP_ICO_SIZES.map((size) => appImages.get(size)));
+  add("icons/app.ico", appIco);
+  const appIcns = encodeIcns(
+    ICNS_REPRESENTATIONS.map(([type, size]) => ({ type, image: appImages.get(size) })),
+  );
+  add("icons/app.icns", appIcns);
+  // electron-builder's conventional fallback path remains current even though
+  // the config points at icons/app.icns explicitly.
+  add("icon.icns", appIcns);
+
+  const statePngs = new Map();
+  for (const state of TRAY_STATES) {
+    const templateSvg = traySvg(trayPath, state.kind, "template");
+    const mac1x = render(templateSvg, 16);
+    const mac2x = render(templateSvg, 32);
+    assertTemplatePixels(mac1x, `${state.kind} 1x`);
+    assertTemplatePixels(mac2x, `${state.kind} 2x`);
+    addPng(`tray/${state.mac1x}`, mac1x);
+    addPng(`tray/${state.mac2x}`, mac2x);
+
+    const dualSvg = traySvg(trayPath, state.kind, "dual-tone");
+    const windows = TRAY_ICO_SIZES.map((size) => render(dualSvg, size));
+    for (const image of windows) assertDualTonePixels(image, `${state.kind} ${image.width}px`);
+    add(`tray/${state.windows}`, encodeIco(windows));
+    const linux = render(dualSvg, 32);
+    assertDualTonePixels(linux, `${state.kind} Linux`);
+    addPng(`tray/${state.linux}`, linux);
+    statePngs.set(state.kind, { mac1x, mac2x, linux });
+  }
+
+  for (const family of ["mac1x", "mac2x", "linux"]) {
+    const hashes = new Set(
+      TRAY_STATES.map((state) => digest(statePngs.get(state.kind)[family].png)),
+    );
+    if (hashes.size !== TRAY_STATES.length) {
+      throw new Error(`tray ${family} state variants are not visually distinct`);
+    }
+  }
+
+  validateIco(appIco, APP_ICO_SIZES, "application ICO");
+  validateIcns(appIcns, ICNS_REPRESENTATIONS, "application ICNS");
+  for (const state of TRAY_STATES) {
+    validateIco(
+      outputs.get(join(packagingRoot, "tray", state.windows)),
+      TRAY_ICO_SIZES,
+      `${state.kind} tray ICO`,
+    );
+  }
+
+  return { outputs, pngs };
+
+  function add(relativePath, buffer) {
+    const path = join(packagingRoot, relativePath);
+    if (outputs.has(path)) throw new Error(`duplicate generated asset: ${relativePath}`);
+    outputs.set(path, buffer);
+  }
+
+  function addPng(relativePath, image) {
+    validatePng(image.png, image.width, image.height, relativePath);
+    add(relativePath, image.png);
+    pngs.set(join(packagingRoot, relativePath), image);
+  }
+}
+
+function render(svg, size) {
+  const rendered = new Resvg(svg, {
+    fitTo: { mode: "width", value: size },
+    font: { loadSystemFonts: false },
+    shapeRendering: 2,
+    textRendering: 2,
+    imageRendering: 0,
+    logLevel: "off",
+  }).render();
+  if (rendered.width !== size || rendered.height !== size) {
+    throw new Error(
+      `renderer produced ${rendered.width}x${rendered.height}; expected ${size}x${size}`,
+    );
+  }
+  return {
+    width: rendered.width,
+    height: rendered.height,
+    pixels: Buffer.from(rendered.pixels),
+    png: rendered.asPng(),
+  };
+}
+
+function applicationSvg(master, markPath, size) {
+  if (size > 64) return master;
+  // The reviewed master is intentionally delicate. Direct reduction makes its
+  // thinnest section subpixel at 16–64px, so small platform representations
+  // receive a constant one-output-pixel optical weight correction.
+  const strokeWidth = 480 / size;
+  return `<svg width="480" height="480" viewBox="0 0 480 480" xmlns="http://www.w3.org/2000/svg"><rect width="480" height="480" fill="#ffffff"/><path d="${markPath}" fill="#212121" stroke="#212121" stroke-width="${strokeWidth}" stroke-linejoin="round"/></svg>`;
+}
+
+function traySvg(path, state, style) {
+  const template = style === "template";
+  const base = template
+    ? `<path d="${path}" fill="#000000" stroke="#000000" stroke-width="24" stroke-linejoin="round"/>`
+    : `<path d="${path}" fill="#ffffff" stroke="#ffffff" stroke-width="64" stroke-linejoin="round"/><path d="${path}" fill="#202124" stroke="#202124" stroke-width="24" stroke-linejoin="round"/>`;
+  const badge =
+    state === "base"
+      ? ""
+      : template
+        ? '<circle cx="374" cy="318" r="66" fill="#000000" stroke="#000000" stroke-width="24"/>'
+        : '<circle cx="374" cy="318" r="66" fill="#ffffff" stroke="#ffffff" stroke-width="64"/><circle cx="374" cy="318" r="66" fill="#202124" stroke="#202124" stroke-width="24"/>';
+  const cutout =
+    state === "attention"
+      ? '<rect x="365" y="275" width="18" height="51" rx="9" fill="black"/><circle cx="374" cy="346" r="11" fill="black"/>'
+      : state === "offline"
+        ? '<rect x="341" y="309" width="66" height="18" rx="9" fill="black"/>'
+        : "";
+  const mask =
+    state === "base"
+      ? ""
+      : `<mask id="status-cutout" maskUnits="userSpaceOnUse" x="0" y="0" width="480" height="480"><rect width="480" height="480" fill="white"/>${cutout}</mask>`;
+  const maskAttribute = state === "base" ? "" : ' mask="url(#status-cutout)"';
+  return `<svg width="480" height="480" viewBox="0 0 480 480" xmlns="http://www.w3.org/2000/svg"><defs>${mask}</defs><g${maskAttribute}>${base}${badge}</g></svg>`;
+}
+
+function encodeIco(images) {
+  const headerSize = 6 + images.length * 16;
+  const header = Buffer.alloc(headerSize);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(images.length, 4);
+  let offset = headerSize;
+  for (const [index, image] of images.entries()) {
+    const entry = 6 + index * 16;
+    header.writeUInt8(image.width === 256 ? 0 : image.width, entry);
+    header.writeUInt8(image.height === 256 ? 0 : image.height, entry + 1);
+    header.writeUInt8(0, entry + 2);
+    header.writeUInt8(0, entry + 3);
+    header.writeUInt16LE(1, entry + 4);
+    header.writeUInt16LE(32, entry + 6);
+    header.writeUInt32LE(image.png.length, entry + 8);
+    header.writeUInt32LE(offset, entry + 12);
+    offset += image.png.length;
+  }
+  return Buffer.concat([header, ...images.map((image) => image.png)]);
+}
+
+function encodeIcns(representations) {
+  const chunks = representations.map(({ type, image }) => {
+    const chunk = Buffer.alloc(8 + image.png.length);
+    chunk.write(type, 0, 4, "ascii");
+    chunk.writeUInt32BE(chunk.length, 4);
+    image.png.copy(chunk, 8);
+    return chunk;
+  });
+  const totalLength = 8 + chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const header = Buffer.alloc(8);
+  header.write("icns", 0, 4, "ascii");
+  header.writeUInt32BE(totalLength, 4);
+  return Buffer.concat([header, ...chunks]);
+}
+
+function validatePng(buffer, expectedWidth, expectedHeight, label) {
+  if (!buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    throw new Error(`${label} is not a PNG`);
+  }
+  if (buffer.toString("ascii", 12, 16) !== "IHDR") {
+    throw new Error(`${label} has no leading IHDR`);
+  }
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  const colorType = buffer.readUInt8(25);
+  if (width !== expectedWidth || height !== expectedHeight) {
+    throw new Error(`${label} is ${width}x${height}; expected ${expectedWidth}x${expectedHeight}`);
+  }
+  if (colorType !== 6) {
+    throw new Error(`${label} must be RGBA PNG color type 6; got ${colorType}`);
+  }
+}
+
+function validateIco(buffer, expectedSizes, label) {
+  if (
+    buffer.readUInt16LE(0) !== 0 ||
+    buffer.readUInt16LE(2) !== 1 ||
+    buffer.readUInt16LE(4) !== expectedSizes.length
+  ) {
+    throw new Error(`${label} has an invalid ICO header`);
+  }
+  const sizes = [];
+  for (let index = 0; index < expectedSizes.length; index += 1) {
+    const entry = 6 + index * 16;
+    const width = buffer.readUInt8(entry) || 256;
+    const height = buffer.readUInt8(entry + 1) || 256;
+    const length = buffer.readUInt32LE(entry + 8);
+    const offset = buffer.readUInt32LE(entry + 12);
+    if (width !== height)
+      throw new Error(`${label} contains a non-square ${width}x${height} frame`);
+    validatePng(buffer.subarray(offset, offset + length), width, height, `${label} ${width}px`);
+    sizes.push(width);
+  }
+  if (sizes.join(",") !== expectedSizes.join(",")) {
+    throw new Error(`${label} frames are ${sizes.join(",")}; expected ${expectedSizes.join(",")}`);
+  }
+}
+
+function validateIcns(buffer, expectedRepresentations, label) {
+  if (buffer.toString("ascii", 0, 4) !== "icns" || buffer.readUInt32BE(4) !== buffer.length) {
+    throw new Error(`${label} has an invalid ICNS header`);
+  }
+  const found = [];
+  let offset = 8;
+  while (offset < buffer.length) {
+    const type = buffer.toString("ascii", offset, offset + 4);
+    const length = buffer.readUInt32BE(offset + 4);
+    if (length < 8 || offset + length > buffer.length) {
+      throw new Error(`${label} has an invalid ${type} chunk length`);
+    }
+    const expected = expectedRepresentations[found.length];
+    if (expected === undefined || expected[0] !== type) {
+      throw new Error(`${label} contains unexpected representation ${type}`);
+    }
+    validatePng(
+      buffer.subarray(offset + 8, offset + length),
+      expected[1],
+      expected[1],
+      `${label} ${type}`,
+    );
+    found.push(type);
+    offset += length;
+  }
+  if (found.length !== expectedRepresentations.length) {
+    throw new Error(
+      `${label} has ${found.length} representations; expected ${expectedRepresentations.length}`,
+    );
+  }
+}
+
+function assertSquareMaster(svg, label) {
+  if (!/viewBox="0 0 480 480"/.test(svg)) {
+    throw new Error(`${label} master must retain the reviewed 480x480 viewBox`);
+  }
+  if (/<(?:text|image|script|foreignObject)\b/i.test(svg)) {
+    throw new Error(`${label} master may contain vector geometry only`);
+  }
+}
+
+function assertBuilderIconConfig(config) {
+  const expected = new Map([
+    ["mac", "packaging/icons/app.icns"],
+    ["win", "packaging/icons/app.ico"],
+    ["linux", "packaging/icons/linux"],
+  ]);
+  const found = new Map();
+  let section = null;
+  for (const line of config.split(/\r?\n/)) {
+    const topLevel = line.match(/^([A-Za-z][A-Za-z0-9_-]*):\s*(?:#.*)?$/);
+    if (topLevel !== null) {
+      section = topLevel[1];
+      continue;
+    }
+    const icon = line.match(/^\s{2}icon:\s*([^#\s]+)\s*(?:#.*)?$/);
+    if (icon !== null && section !== null) found.set(section, icon[1]);
+  }
+  for (const [platform, path] of expected) {
+    if (found.get(platform) !== path) {
+      throw new Error(
+        `electron-builder ${platform}.icon must be ${path}; got ${found.get(platform) ?? "nothing"}`,
+      );
+    }
+  }
+}
+
+function extractSinglePath(svg) {
+  const paths = extractPaths(svg);
+  if (paths.length !== 1 || paths[0].length === 0) {
+    throw new Error(`tray master must contain exactly one non-empty path; found ${paths.length}`);
+  }
+  return paths[0];
+}
+
+function extractPaths(svg) {
+  return [...svg.matchAll(/<path\s+d="([^"]+)"[^>]*\/>/g)].map((match) => match[1]);
+}
+
+function assertApplicationPixels(image, size) {
+  let dark = 0;
+  let light = 0;
+  forEachVisiblePixel(image, ({ red, green, blue }) => {
+    const luminance = (red + green + blue) / 3;
+    // At 16px the reviewed horizontal mark is subpixel-antialiased rather than
+    // carrying a fully opaque #212121 center pixel. It must still retain clear
+    // contrast against the white field.
+    if (luminance < 192) dark += 1;
+    if (luminance > 240) light += 1;
+  });
+  if (dark === 0 || light === 0) {
+    throw new Error(`application icon ${size}px lost either its mark or background`);
+  }
+}
+
+function assertTemplatePixels(image, label) {
+  let visible = 0;
+  let translucent = 0;
+  forEachVisiblePixel(image, ({ red, green, blue, alpha }) => {
+    visible += 1;
+    if (alpha < 255) translucent += 1;
+    if (red !== 0 || green !== 0 || blue !== 0) {
+      throw new Error(`macOS template ${label} contains non-black RGB at a visible pixel`);
+    }
+  });
+  if (visible === 0 || translucent === 0) {
+    throw new Error(`macOS template ${label} must be non-empty and retain antialiased alpha`);
+  }
+}
+
+function assertDualTonePixels(image, label) {
+  let dark = 0;
+  let light = 0;
+  forEachVisiblePixel(image, ({ red, green, blue }) => {
+    const luminance = (red + green + blue) / 3;
+    if (luminance < 80) dark += 1;
+    // At the 16px Windows frame the one-pixel keyline is necessarily
+    // antialiased into the panel edge; retain a materially lighter pixel rather
+    // than demanding an impossible fully white center sample.
+    if (luminance > 180) light += 1;
+  });
+  if (dark === 0 || light === 0) {
+    throw new Error(`${label} tray image must retain both its dark mark and light keyline`);
+  }
+}
+
+function forEachVisiblePixel(image, visitor) {
+  for (let offset = 0; offset < image.pixels.length; offset += 4) {
+    const alpha = image.pixels[offset + 3];
+    if (alpha === 0) continue;
+    visitor({
+      red: image.pixels[offset],
+      green: image.pixels[offset + 1],
+      blue: image.pixels[offset + 2],
+      alpha,
+    });
+  }
+}
+
+async function validateGeneratedTree({ outputs }) {
+  const problems = [];
+  for (const [path, expected] of outputs) {
+    try {
+      const actual = await readFile(path);
+      if (!actual.equals(expected)) {
+        problems.push(
+          `${display(path)} is stale (actual ${digest(actual).slice(0, 12)}, expected ${digest(expected).slice(0, 12)})`,
+        );
+      }
+    } catch (error) {
+      problems.push(
+        error?.code === "ENOENT" ? `${display(path)} is missing` : `${display(path)}: ${error}`,
+      );
+    }
+  }
+
+  const expectedTrayFiles = new Set(
+    [...outputs.keys()]
+      .filter((path) => dirname(path) === trayRoot)
+      .map((path) => relative(trayRoot, path)),
+  );
+  const actualTrayFiles = await listFiles(trayRoot);
+  for (const file of actualTrayFiles) {
+    if (!expectedTrayFiles.has(file)) problems.push(`tray/${file} is an unexpected staged asset`);
+  }
+
+  const expectedIconFiles = new Set(
+    [...outputs.keys()]
+      .filter((path) => path.startsWith(`${iconRoot}/`))
+      .map((path) => relative(iconRoot, path)),
+  );
+  const actualIconFiles = await listFiles(iconRoot);
+  for (const file of actualIconFiles) {
+    if (!expectedIconFiles.has(file) && !SOURCE_FILES.has(file)) {
+      problems.push(`icons/${file} is an unexpected generated/source asset`);
+    }
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      `icon asset validation failed:\n${problems.map((problem) => `  - ${problem}`).join("\n")}\nRun: pnpm --filter @vibefield/desktop icons:generate`,
+    );
+  }
+}
+
+async function listFiles(root) {
+  const files = [];
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return files;
+    throw error;
+  }
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.isDirectory()) {
+      for (const child of await listFiles(join(root, entry.name))) {
+        files.push(join(entry.name, child));
+      }
+    } else if (entry.isFile()) {
+      files.push(entry.name);
+    } else {
+      files.push(entry.name);
+    }
+  }
+  return files;
+}
+
+function digest(buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+function display(path) {
+  return relative(packagingRoot, path).split("\\").join("/");
+}

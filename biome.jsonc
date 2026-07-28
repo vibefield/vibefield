@@ -45,6 +45,22 @@
   },
   "overrides": [
     {
+      // Immutable packaging masters are build inputs, never inline/document
+      // content. Keeping their imported bytes exact is more important than a
+      // DOM-only accessible-title rule that no shipped UI consumes.
+      "includes": ["apps/desktop/packaging/icons/*-master.svg"],
+      "formatter": {
+        "enabled": false
+      },
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noSvgWithoutTitle": "off"
+          }
+        }
+      }
+    },
+    {
       // LOG-L3/LOG-L4: runtime code must use its injected system/plugin logger.
       // Only tests and explicit smoke/development protocols remain exempt.
       "includes": [
