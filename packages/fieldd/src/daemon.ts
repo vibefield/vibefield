@@ -519,11 +519,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       plugins.off("changed", emitHealth);
     };
 
+    // T1 §1 — the tailnet door's node-id correlation. DeviceService is built
+    // AFTER ProductApi, so this is a let-ref, not a closure over the const:
+    // a hello racing the bootstrap window resolves to undefined (claim
+    // fallback), never a TDZ crash (the C6-6 supersession lesson).
+    let devicesRef: DeviceService | null = null;
     const api = new ProductApi({
       port: config.controlPort ?? PORTS.FIELDD_WS_CONTROL,
       tokens,
       ...(config.allowedOrigins ? { allowedOrigins: config.allowedOrigins } : {}),
       tailnetPathSecret: servePathSecret,
+      correlateNodeId: (nodeId) => devicesRef?.deviceIdByNodeId(nodeId),
     });
     diagnosticsService.register(api);
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));
@@ -656,6 +662,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
 
     // -- DeviceService (C4, design-04 D31): the device directory --
+    // (also the tailnet door's node-id correlator via devicesRef, assigned below)
     const devices = new DeviceService({
       dataDir: config.dataDir,
       mesh,
@@ -670,6 +677,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         return { serve: "product", ...(url !== undefined ? { url } : {}) };
       },
     });
+    devicesRef = devices; // arms the tailnet door's node-id correlation (T1 §1)
     // C6-4 — doc sync folds roster liveness per doc-peer: offline flips
     // reachability promptly (the transport keep-alive beats the lane's own
     // minutes-late death, F-C6-22), and a RETURNING peer re-greets every doc

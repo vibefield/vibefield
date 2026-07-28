@@ -396,31 +396,51 @@ fn map_node_err(state: &Arc<DaemonState>, id: Option<Value>, msg: &str) -> Value
 }
 
 async fn list_peers(node: &Arc<MeshNode>) -> Vec<Value> {
-    node.peers()
-        .await
-        .into_iter()
-        .map(|p| {
-            json!({
-                "id": p.tailscale_id,
-                "name": p.display_name,
-                "online": p.online,
-                "addresses": [p.ip.to_string()],
-                // passthrough extras (P3 — tolerant readers keep them)
-                "deviceId": p.device_id,
-                "deviceName": p.device_name,
-                "hostname": p.hostname,
-                "connectionType": p.connection_type,
-                "lastSeen": p.last_seen,
-                // whois {login, …} is DELIBERATELY absent. WhoIsIdentity.login is
-                // REQUIRED, but truffle's Peer (node.peers()) carries no tailnet user
-                // login — only device_name and tailscale_id (the node id, already `id`
-                // above). The tailnet WhoIs identity of a peer needs the upstream
-                // `whois(ip)` node API (thinking-c3 §4 petition); synthesizing a login
-                // from what we have would fabricate identity and violate EL7. Proxied-
-                // request identity flows via sidecar-injected headers, not this list.
-            })
-        })
-        .collect()
+    let mut out = Vec::new();
+    for p in node.peers().await {
+        // whois {login, …}: the T1 petition landed (truffle 0.7.9 `whois(ip)`),
+        // so the tailnet user identity now populates from the control plane —
+        // best-effort, per-peer, riding truffle's own 60s success cache. On
+        // any failure (pre-v3 sidecar fails fast, no identity for the
+        // address, tagged node without a user) the field is ABSENT — never
+        // synthesized (EL7). WhoIsIdentity.login is REQUIRED by the contract,
+        // so an answer without a login contributes nothing.
+        let whois = match node.whois(&p.ip.to_string()).await {
+            Ok(Some(identity)) => {
+                identity
+                    .login_name
+                    .filter(|login| !login.is_empty())
+                    .map(|login| {
+                        let mut w = json!({ "login": login });
+                        if let Some(dns) = identity.dns_name.filter(|d| !d.is_empty()) {
+                            w["deviceName"] = json!(dns);
+                        }
+                        if let Some(node_id) = identity.node_id.filter(|n| !n.is_empty()) {
+                            w["tailscaleId"] = json!(node_id);
+                        }
+                        w
+                    })
+            }
+            _ => None,
+        };
+        let mut entry = json!({
+            "id": p.tailscale_id,
+            "name": p.display_name,
+            "online": p.online,
+            "addresses": [p.ip.to_string()],
+            // passthrough extras (P3 — tolerant readers keep them)
+            "deviceId": p.device_id,
+            "deviceName": p.device_name,
+            "hostname": p.hostname,
+            "connectionType": p.connection_type,
+            "lastSeen": p.last_seen,
+        });
+        if let Some(w) = whois {
+            entry["whois"] = w;
+        }
+        out.push(entry);
+    }
+    out
 }
 
 async fn store_snapshot(store: &Arc<JsonStore>) -> Value {

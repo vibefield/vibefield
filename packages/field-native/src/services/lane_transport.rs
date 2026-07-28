@@ -433,7 +433,20 @@ async fn serve_lane_stream(bridge: BridgeHandle, peer: String, mut stream: QuicS
 /// Tailnet IP → peer id, using the same `PeerInfo.id` (`tailscale_id`) that
 /// `native.mesh.peers.list` publishes — so the peer named in a `lane.peerOpened`
 /// is the same string fieldd would pass back to `lane.open`.
+///
+/// T1: `whois(ip)` is asked first — the tailnet control plane's authoritative
+/// answer for the WireGuard-authenticated address (its `node_id` IS the
+/// tailscale stable id, one keyspace with the registry scan below), and it
+/// resolves callers the app-filtered registry is blind to. A pre-v3 sidecar
+/// fails the call fast, so the registry scan stays as the mixed-fleet
+/// fallback; `unknown:<ip>` remains the honest miss (EL7: absent, never
+/// fabricated).
 async fn resolve_peer_by_ip(node: &Arc<MeshNode>, ip: String) -> String {
+    if let Ok(Some(identity)) = node.whois(&ip).await {
+        if let Some(node_id) = identity.node_id.filter(|n| !n.is_empty()) {
+            return node_id;
+        }
+    }
     node.peers()
         .await
         .into_iter()

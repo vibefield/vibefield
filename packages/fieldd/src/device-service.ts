@@ -107,6 +107,15 @@ export class DeviceService extends EventEmitter {
     return this.roster();
   }
 
+  /** T1 §1 — the tailnet door's correlation: a sidecar-injected WhoIs node id
+   * → the roster's ULID deviceId, through the same registry mapping the
+   * roster join rides. A miss is honest (peer not yet published, roster
+   * stale, mesh down) and leaves the door on its claim fallback. */
+  deviceIdByNodeId(nodeId: string): string | undefined {
+    for (const [ulid, ts] of this.tsByUlid) if (ts === nodeId) return ulid;
+    return undefined;
+  }
+
   get(deviceId: string): DeviceInfo | undefined {
     return this.roster().find((d) => d.deviceId === deviceId);
   }

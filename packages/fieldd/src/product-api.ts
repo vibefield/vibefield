@@ -58,6 +58,12 @@ export interface ProductApiOptions {
   allowedOrigins?: string[];
   /** C3: the serve route secret. Unset ⇒ the tailnet door is closed entirely. */
   tailnetPathSecret?: string;
+  /** T1 §1: map a sidecar-injected Tailscale node id (WhoIs `Node.StableID`)
+   * to the roster's ULID deviceId — DeviceService's registry correlation.
+   * Unset, or a miss (peer not yet published / roster stale) ⇒ the C5 hello
+   * claim remains the peer label (the mixed-fleet fallback; it dies with
+   * fleet-v3). */
+  correlateNodeId?: (nodeId: string) => string | undefined;
 }
 
 export type DeviceForwarder = (
@@ -107,6 +113,10 @@ interface ConnState {
   /** non-null ⇒ the upgrade arrived on the secret route path with a verified
    * login header — the sidecar-proxied door */
   tailnetLogin: string | null;
+  /** the sidecar-injected node id (v3+ sidecars only; T1 §1) — the caller's
+   * transport-derived DEVICE identity. null on the same door means an older
+   * sidecar proxied the request, never an anonymous caller. */
+  tailnetNodeId: string | null;
   /** live subscriptions on this connection: subId → dispose */
   subs: Map<string, () => void>;
 }
@@ -277,7 +287,8 @@ export class ProductApi extends EventEmitter {
       authed: false,
       ctx: null,
       scopes: [],
-      tailnetLogin: door,
+      tailnetLogin: door?.login ?? null,
+      tailnetNodeId: door?.nodeId ?? null,
       subs: new Map(),
     };
     const conn = { ws, state };
@@ -293,10 +304,12 @@ export class ProductApi extends EventEmitter {
   }
 
   /** Which door did this upgrade come through? null = the ordinary local door
-   * (token-gated; any Tailscale-User-* headers are IGNORED — a same-uid local
-   * caller can type headers but cannot know the route secret). A login string
-   * = the sidecar-proxied door. "reject" = drop the socket. */
-  private classifyDoor(req: IncomingMessage): string | null | "reject" {
+   * (token-gated; any Tailscale-* headers are IGNORED — a same-uid local
+   * caller can type headers but cannot know the route secret). An identity
+   * object = the sidecar-proxied door. "reject" = drop the socket. */
+  private classifyDoor(
+    req: IncomingMessage,
+  ): { login: string; nodeId: string | null } | null | "reject" {
     const secret = this.opts.tailnetPathSecret;
     const path = req.url ?? "/";
     if (secret === undefined || secret.length === 0) return null;
@@ -308,10 +321,16 @@ export class ProductApi extends EventEmitter {
     if (!match) return "reject";
     const login = req.headers["tailscale-user-login"];
     // The sidecar strips inbound Tailscale-* then injects verified values, so
-    // on the secret path this header is trustworthy — and REQUIRED (a tagged
-    // node / WhoIs miss arrives headerless and has no identity to grant).
+    // on the secret path these headers are trustworthy. login is REQUIRED (a
+    // tagged node / WhoIs miss arrives headerless and has no identity to
+    // grant); the node id arrives only from v3+ sidecars (T1 §1) — absent
+    // means an older proxy, so it stays optional through the fleet upgrade.
     if (typeof login !== "string" || login.length === 0) return "reject";
-    return login;
+    const nodeId = req.headers["tailscale-node-id"];
+    return {
+      login,
+      nodeId: typeof nodeId === "string" && nodeId.length > 0 ? nodeId : null,
+    };
   }
 
   private async onMessage(ws: WebSocket, state: ConnState, raw: string): Promise<void> {
@@ -374,19 +393,29 @@ export class ProductApi extends EventEmitter {
       } else if (state.tailnetLogin !== null) {
         // the sidecar-proxied door: identity is the WhoIs-verified login; the
         // grant is the D32 tailnet preset (design-04 — tokens.mint/native.*/
-        // push.manage/plugins.manage never federate). A peer fieldd may CLAIM
-        // its deviceId (C5) — a label inside the same-user trust domain, same
-        // grant either way, so it cannot escalate; honored ONLY here (the
-        // provenance-proven door), never on the local path. Retires when the
-        // sidecar injects the node id (truffle petition).
-        const claim = parsed.data.deviceId;
-        const peer =
-          parsed.data.clientKind === "peer-fieldd" && typeof claim === "string" && claim.length > 0;
+        // push.manage/plugins.manage never federate). The peer-fieldd device
+        // identity is TRANSPORT-DERIVED where the sidecar allows (T1 §1): a
+        // v3+ sidecar injects the WhoIs node id, and the registry correlation
+        // maps it to the roster deviceId — the caller's claim cannot move it
+        // (a contradicting claim loses silently; same grant either way, so
+        // nothing escalates). The C5 hello claim survives ONLY as the
+        // mixed-fleet fallback — an absent node header means an older sidecar
+        // proxied the hop, not an anonymous caller — and is deleted when the
+        // fleet is v3. clientKind still decides the KIND: the node id proves
+        // which device dialed, never what software did.
+        const claimRaw = parsed.data.deviceId;
+        const claim = typeof claimRaw === "string" && claimRaw.length > 0 ? claimRaw : undefined;
+        const derived =
+          state.tailnetNodeId !== null
+            ? this.opts.correlateNodeId?.(state.tailnetNodeId)
+            : undefined;
+        const deviceId = derived ?? claim;
+        const peer = parsed.data.clientKind === "peer-fieldd" && deviceId !== undefined;
         state.authed = true;
         state.scopes = [...TAILNET_SCOPES];
         state.ctx = {
           principal: peer
-            ? { kind: "peer-fieldd", deviceId: claim as string }
+            ? { kind: "peer-fieldd", deviceId: deviceId as string }
             : { kind: "tailnet", login: state.tailnetLogin },
           transport: "ws-tailnet",
           receivedAt: Date.now(),

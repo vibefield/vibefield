@@ -16,7 +16,9 @@ afterEach(async () => {
   cleanup = [];
 });
 
-async function api(): Promise<{ api: ProductApi; port: number }> {
+async function api(
+  correlateNodeId?: (nodeId: string) => string | undefined,
+): Promise<{ api: ProductApi; port: number }> {
   const a = new ProductApi({
     port: 0,
     tokens: {
@@ -26,6 +28,7 @@ async function api(): Promise<{ api: ProductApi; port: number }> {
           : null,
     },
     tailnetPathSecret: SECRET,
+    ...(correlateNodeId ? { correlateNodeId } : {}),
   });
   // probe handlers on real registry methods: echo the caller's principal kind
   a.register("doc.list", (ctx) => ({ principal: ctx.principal, transport: ctx.transport }));
@@ -107,6 +110,59 @@ describe("the tailnet door (C3 provenance auth)", () => {
       error: { data: { kind: string } };
     };
     expect(denied.error.data.kind).toBe("FORBIDDEN_SCOPE");
+  });
+
+  it("T1: the v3 node-id header is the peer identity — a contradicting claim loses", async () => {
+    // transport-derived beats claimed: the sidecar-injected node id correlates
+    // to the roster device, and the hello's own deviceId cannot move it.
+    const { port } = await api((nodeId) => (nodeId === "nQRJl4CNTRL" ? "dev-roster" : undefined));
+    const ws = await dial(port, {
+      path: `/t/${SECRET}`,
+      headers: {
+        "Tailscale-User-Login": "me@jamesyong42.com",
+        "Tailscale-Node-Id": "nQRJl4CNTRL",
+      },
+    });
+    await call(ws, 1, "system.hello", { ...hello(), deviceId: "dev-liar" });
+    const probe = (await call(ws, 2, "device.list", {})) as {
+      result: { principal: { kind: string; deviceId: string } };
+    };
+    expect(probe.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-roster" });
+  });
+
+  it("T1: a correlation miss keeps the C5 claim fallback (mixed fleet)", async () => {
+    // the node id is present but the registry doesn't know it yet (roster
+    // stale / peer unpublished) — the claim stays the honest label until
+    // fleet-v3 retires it.
+    const { port } = await api(() => undefined);
+    const ws = await dial(port, {
+      path: `/t/${SECRET}`,
+      headers: {
+        "Tailscale-User-Login": "me@jamesyong42.com",
+        "Tailscale-Node-Id": "nUNKNOWN01",
+      },
+    });
+    await call(ws, 1, "system.hello", { ...hello(), deviceId: "dev-claimed" });
+    const probe = (await call(ws, 2, "device.list", {})) as {
+      result: { principal: { kind: string; deviceId: string } };
+    };
+    expect(probe.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-claimed" });
+  });
+
+  it("T1: the node id names the device, not the software — a non-fieldd caller stays tailnet", async () => {
+    const { port } = await api((nodeId) => (nodeId === "nQRJl4CNTRL" ? "dev-roster" : undefined));
+    const ws = await dial(port, {
+      path: `/t/${SECRET}`,
+      headers: {
+        "Tailscale-User-Login": "me@jamesyong42.com",
+        "Tailscale-Node-Id": "nQRJl4CNTRL",
+      },
+    });
+    await call(ws, 1, "system.hello", { ...hello(), clientKind: "shell-main" });
+    const probe = (await call(ws, 2, "device.list", {})) as {
+      result: { principal: { kind: string; login: string } };
+    };
+    expect(probe.result.principal).toEqual({ kind: "tailnet", login: "me@jamesyong42.com" });
   });
 
   it("THE SPOOF: typed headers on the ordinary door are ignored — token still required", async () => {
