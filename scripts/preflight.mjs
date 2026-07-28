@@ -4,7 +4,8 @@
 //
 // The sibling-checkout machinery (SIBLINGS map, siblings.lock.json, `pnpm
 // siblings:pin`) retired on 2026-07-28: truffle-core became an exact crates-io
-// pin (=0.7.9) when the T1 petition window closed, exactly as @vibecook/ice
+// pin (version in the root Cargo.toml) when the T1 petition window closed,
+// exactly as @vibecook/ice
 // left on 2026-07-25 for npm. The repo builds standalone. If a new petition
 // window reopens the ../p008/truffle [patch.crates-io], restore the machinery
 // from git history — a path patch without a SHA pin makes verify unreplayable.

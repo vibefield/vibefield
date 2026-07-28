@@ -2,7 +2,7 @@
 # mirrors the dev machine (darwin) exactly — the desktop/Electron tests and the
 # @vibecook/truffle-sidecar-darwin-* bits are native; green here must mean green there.
 # The repo builds standalone since 2026-07-28: truffle-core is an exact crates-io pin
-# (=0.7.9, Cargo.toml), so the sibling-checkout clone step retired with the T1 petition
+# (`=` version in the root Cargo.toml), so the sibling-checkout clone step retired with the T1 petition
 # window — the same graduation @vibecook/ice made on 2026-07-25 (exact npm pin 0.2.0).
 # EL8 still holds: both pins move only as deliberate upgrade events.
 name: verify

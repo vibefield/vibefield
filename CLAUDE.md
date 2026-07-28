@@ -25,7 +25,7 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
 ## Machine setup
 
 The repo builds standalone since 2026-07-28. `truffle-core` is an **exact crates-io pin**
-(`=0.7.9` in the root Cargo.toml) — the `../p008/truffle` sibling `[patch.crates-io]` and its
+(`=0.7.11` in the root Cargo.toml) — the `../p008/truffle` sibling `[patch.crates-io]` and its
 `siblings.lock.json` SHA pin retired when the T1 petition window closed. To co-develop truffle
 again (a new petition window), re-add the `[patch]` and restore the sibling-pin machinery from
 git history; never leave a path patch unpinned.

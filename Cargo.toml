@@ -9,4 +9,4 @@ members = ["packages/field-native"]
 # Registry pin since 2026-07-28 (the T1 petition window closed with truffle 0.7.9);
 # the ../p008/truffle sibling [patch.crates-io] returns only for the duration of an
 # active petition window, together with its siblings.lock.json pin (see git history).
-truffle-core = "=0.7.9"
+truffle-core = "=0.7.11"
