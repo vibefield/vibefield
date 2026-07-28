@@ -25,7 +25,7 @@ function setup() {
         updates.push(value);
       },
     },
-    log: { warn() {}, error() {} },
+    log: { info() {}, warn() {}, error() {} },
     onUnexpectedExit(value) {
       exits.push(value);
     },
@@ -36,7 +36,7 @@ function setup() {
       return child;
     },
     async readProduct() {
-      return { pid: 2222, nativePid: 3333, buildId: "dev-current" };
+      return { pid: 2222, nativePid: 3333, buildId: "dev-daemon-current" };
     },
     async stopProduct(product, buildId) {
       products.push({ product, buildId });
@@ -61,12 +61,13 @@ function setup() {
 
 const runtime = {
   buildId: "dev-current",
+  daemonBuildId: "dev-daemon-current",
   appRoot: "/repo/.vibefield/dev/runtime/dev-current/app",
   fielddOutput: "/repo/.vibefield/dev/runtime/dev-current/fieldd/bin.cjs",
   nativeOutput: "/repo/.vibefield/dev/runtime/dev-current/native/field-native",
 };
 
-test("starts Electron directly with isolated state and the current build identity", async () => {
+test("starts Electron directly with isolated state and the daemon build identity", async () => {
   const fixture = setup();
   await fixture.stack.start(runtime);
 
@@ -77,7 +78,9 @@ test("starts Electron directly with isolated state and the current build identit
     "/repo/.vibefield/dev/runtime/dev-current/app",
     "--dev",
   ]);
-  assert.equal(options.env.VIBEFIELD_DEV_BUILD_ID, "dev-current");
+  // The adoption gate compares against product.json, which records the
+  // DAEMON plane — the combined snapshot id must not cross this boundary.
+  assert.equal(options.env.VIBEFIELD_DEV_BUILD_ID, "dev-daemon-current");
   assert.equal(options.env.VIBEFIELD_DEV_REPO_ROOT, "/repo");
   assert.equal(options.env.FIELDD_BIN, runtime.fielddOutput);
   assert.equal(options.env.FIELDD_NATIVE_BIN, runtime.nativeOutput);
@@ -87,19 +90,14 @@ test("starts Electron directly with isolated state and the current build identit
   assert.deepEqual(fixture.updates, [{ electronPid: 1234, buildId: "dev-current" }]);
 });
 
-test("a managed stop suppresses crash recovery and cleans the captured owned product", async () => {
+test("a shell-only stop leaves the daemon pair for the next shell to adopt", async () => {
   const fixture = setup();
   await fixture.stack.start(runtime);
-  await fixture.stack.stop();
+  await fixture.stack.stop({ stopDaemons: false });
 
   assert.equal(fixture.stack.running, false);
   assert.deepEqual(fixture.exits, []);
-  assert.deepEqual(fixture.products, [
-    {
-      product: { pid: 2222, nativePid: 3333, buildId: "dev-current" },
-      buildId: "dev-current",
-    },
-  ]);
+  assert.deepEqual(fixture.products, []);
   assert.deepEqual(fixture.getTerminateArgs()[1], {
     graceMs: 10_000,
     killWaitMs: 2_000,
@@ -107,19 +105,45 @@ test("a managed stop suppresses crash recovery and cleans the captured owned pro
   assert.deepEqual(fixture.updates.at(-1), { electronPid: null });
 });
 
-test("an unexpected exit cleans children before requesting recovery", async () => {
+test("a daemon-plane stop verifies the pair against the daemon identity before reaping", async () => {
+  const fixture = setup();
+  await fixture.stack.start(runtime);
+  await fixture.stack.stop({ stopDaemons: true });
+
+  assert.deepEqual(fixture.products, [
+    {
+      product: { pid: 2222, nativePid: 3333, buildId: "dev-daemon-current" },
+      buildId: "dev-daemon-current",
+    },
+  ]);
+});
+
+test("stop with daemons reaps the pair even when Electron already exited", async () => {
+  const fixture = setup();
+  await fixture.stack.start(runtime);
+  fixture.child.exitCode = 1;
+  fixture.child.emit("exit", 1, null);
+  await new Promise((resolve) => setImmediate(resolve));
+  await fixture.stack.stop({ stopDaemons: true });
+
+  assert.deepEqual(fixture.products, [
+    {
+      product: { pid: 2222, nativePid: 3333, buildId: "dev-daemon-current" },
+      buildId: "dev-daemon-current",
+    },
+  ]);
+});
+
+test("an unexpected exit leaves the daemons running and requests recovery", async () => {
   const fixture = setup();
   await fixture.stack.start(runtime);
   fixture.child.exitCode = 1;
   fixture.child.emit("exit", 1, null);
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.deepEqual(fixture.products, [
-    {
-      product: { pid: 2222, nativePid: 3333, buildId: "dev-current" },
-      buildId: "dev-current",
-    },
-  ]);
+  // Recovery restarts Electron against the same daemon identity, so the new
+  // shell adopts the running pair instead of respawning it.
+  assert.deepEqual(fixture.products, []);
   assert.deepEqual(fixture.updates.at(-1), { electronPid: null });
   assert.deepEqual(fixture.exits, [{ code: 1, signal: null }]);
 });

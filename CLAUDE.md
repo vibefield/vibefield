@@ -47,7 +47,9 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
 - `pnpm dev` — directly enters the repo-owned desktop supervisor (which uses Nx for workspace
   change detection): renderer HMR, watched
   main/preload/fieldd builds, generated/native refresh, lifecycle-safe restarts, and background
-  affected typechecks. Its isolated state is `.vibefield/dev/`; it never watches sibling trees.
+  affected typechecks. Restarts are plane-aware: shell-only edits restart Electron and re-adopt
+  the running daemons (dev is `leave-running`; the runner owns teardown); daemon-plane edits
+  bounce the pair. Its isolated state is `.vibefield/dev/`; it never watches sibling trees.
 - `pnpm smoke` / `pnpm smoke:canvas` — headless desktop smoke checks
 - `pnpm build` / `pnpm typecheck` / `pnpm test` — Nx task graph with conservative local caching;
   use `pnpm exec nx graph` or `pnpm exec nx affected -t <target>` to inspect/select work

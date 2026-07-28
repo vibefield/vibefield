@@ -20,14 +20,19 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NX_DAEMON: "false"
-      NX_BASE: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
-      NX_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       # Full history is required: affected is a Git comparison, not a
       # timestamp or package-directory heuristic.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # Sets NX_BASE/NX_HEAD properly for every trigger: merge-base for PRs
+      # (a raw base.sha over-reports whenever the base branch has moved),
+      # last successful run on main for workflow_dispatch.
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: main
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4

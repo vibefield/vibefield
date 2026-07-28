@@ -1,7 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
+import { resolveServiceModules } from "./service-graph.mjs";
 
-export async function discoverPluginProjects(repoRoot) {
+export async function discoverPluginProjects(repoRoot, resolveModules = resolveServiceModules) {
   const projects = [];
   for (const collection of ["plugins", "examples/plugins"]) {
     const collectionRoot = join(repoRoot, collection);
@@ -23,7 +24,7 @@ export async function discoverPluginProjects(repoRoot) {
         ) {
           continue;
         }
-        projects.push(await describePlugin(repoRoot, root, packageJson.name));
+        projects.push(await describePlugin(repoRoot, root, packageJson.name, resolveModules));
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
       }
@@ -32,11 +33,20 @@ export async function discoverPluginProjects(repoRoot) {
   return projects.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function refreshPluginDescriptor(repoRoot, descriptor) {
-  return describePlugin(repoRoot, resolve(repoRoot, descriptor.root), descriptor.name);
+export async function refreshPluginDescriptor(
+  repoRoot,
+  descriptor,
+  resolveModules = resolveServiceModules,
+) {
+  return describePlugin(
+    repoRoot,
+    resolve(repoRoot, descriptor.root),
+    descriptor.name,
+    resolveModules,
+  );
 }
 
-async function describePlugin(repoRoot, root, name) {
+async function describePlugin(repoRoot, root, name, resolveModules) {
   const manifestFile = join(root, "vibefield.plugin.json");
   let serviceEntry = null;
   try {
@@ -48,12 +58,25 @@ async function describePlugin(repoRoot, root, name) {
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
+  // The harness imports the entry live, so its whole relative-import closure
+  // is runtime input; hash and watch all of it, not just the entry file.
+  let serviceModules = [];
+  if (serviceEntry !== null) {
+    const resolved = await resolveModules(repoRoot, resolve(repoRoot, serviceEntry));
+    serviceModules = resolved ?? [serviceEntry];
+  }
   return {
     name,
     root: normalize(relative(repoRoot, root)),
     manifestFile: normalize(relative(repoRoot, manifestFile)),
     serviceEntry,
+    serviceModules,
   };
+}
+
+export function serviceModulesOf(project) {
+  if (Array.isArray(project.serviceModules)) return project.serviceModules;
+  return project.serviceEntry ? [project.serviceEntry] : [];
 }
 
 export function classifyCriticalChange(path, pluginProjects) {
@@ -90,9 +113,11 @@ export function classifyCriticalChange(path, pluginProjects) {
     }
   }
 
+  // No root-prefix guard: a service entry may legally import a relative
+  // module from outside its plugin directory, and that file is runtime input
+  // all the same.
   for (const project of pluginProjects) {
-    if (!file.startsWith(`${project.root}/`)) continue;
-    if (file === project.serviceEntry) {
+    if (serviceModulesOf(project).includes(file)) {
       return { kind: "plugin-runtime", project: project.name };
     }
   }

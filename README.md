@@ -53,13 +53,18 @@ long-running stack:
   publishes one immutable, content-addressed runtime snapshot and performs one debounced Electron
   restart; a failed or superseded build leaves the last valid snapshot running.
 - Contract edits regenerate schema/Rust bindings before rebuilding `field-native`. Native edits
-  rebuild the repo-owned sidecar. Plugin manifest/service edits regenerate or reload their
-  installed metadata before restart. These critical watchers start before initial codegen/build,
-  buffering startup edits until the serialized refresh queue is ready.
-- Restart uses Electron's normal `will-quit` path, waits for owned fieldd/native cleanup, and
-  launches main/preload/fieldd/native from the same verified snapshot before daemon adoption. Dev
-  state, logs, snapshots, and Electron user data are isolated under `.vibefield/dev/`; an
-  atomically published per-worktree lock refuses a second live stack.
+  rebuild the repo-owned sidecar. Plugin manifest edits regenerate installed metadata before
+  restart, and a service's whole relative-import closure (resolved via esbuild metafile, bare
+  imports external) is watched and hashed — not just its entry file. These critical watchers
+  start before initial codegen/build, buffering startup edits until the serialized refresh queue
+  is ready.
+- Snapshots carry two identities: the combined runtime and the daemon plane
+  (fieldd bundle/harness/wasm/native/plugin services). A shell-only edit restarts Electron alone
+  and the new shell **adopts** the running fieldd/field-native pair through the buildId-gated
+  probe (dev runs `leave-running`, the production shape); only a daemon-plane change reaps and
+  respawns the pair. The runner owns final teardown at session end. Dev state, logs, snapshots,
+  and Electron user data are isolated under `.vibefield/dev/`; an atomically published
+  per-worktree lock refuses a second live stack.
 - Nx watches the complete workspace graph and runs initial plus affected typechecks in the
   background. `pnpm build`, `pnpm test`, and `pnpm typecheck` use the same graph and local cache;
   `pnpm verify` remains the uncropped release-quality gate.

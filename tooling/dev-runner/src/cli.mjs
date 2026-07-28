@@ -3,7 +3,11 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { computeBuildId } from "./build-id.mjs";
 import { createChangeBuffer } from "./change-buffer.mjs";
-import { classifyCriticalChange, discoverPluginProjects } from "./critical-changes.mjs";
+import {
+  classifyCriticalChange,
+  discoverPluginProjects,
+  serviceModulesOf,
+} from "./critical-changes.mjs";
 import { watchCriticalRoots } from "./critical-watcher.mjs";
 import { acquireDevLock } from "./dev-lock.mjs";
 import { createElectronStack } from "./electron-stack.mjs";
@@ -261,7 +265,7 @@ function createTypechecks() {
 async function restartDesktop(reasons) {
   const result = await handoffDesktopRuntime({
     electron,
-    currentBuildId,
+    currentRuntime,
     prepareRuntime: stageCurrentRuntime,
     isShuttingDown: () => shuttingDown,
   });
@@ -280,7 +284,9 @@ async function restartDesktop(reasons) {
   currentRuntime = result.runtime;
   await pruneSnapshots(currentBuildId);
   log.info(
-    `desktop restarted after ${reasons.join(", ")} (Electron pid ${result.pid}, build ${currentBuildId})`,
+    `desktop restarted after ${reasons.join(", ")} (Electron pid ${result.pid}, build ${
+      currentBuildId
+    }${result.daemonsChanged ? "" : ", daemons adopted"})`,
   );
 }
 
@@ -303,23 +309,37 @@ function handleElectronExit({ code, signal }) {
   restartCoordinator.request("unexpected Electron exit");
 }
 
+// Two identities, one snapshot: `buildId` names the whole staged runtime;
+// `daemonBuildId` covers only what the fieldd/field-native pair executes.
+// A restart bounces the daemons only when the daemon identity moved — a
+// shell-only edit restarts Electron and the new shell ADOPTS the running
+// pair through the buildId-gated probe.
 async function buildIdentity() {
-  return computeBuildId(repoRoot, buildIdentityInputs());
+  const daemonFiles = daemonPlaneInputs();
+  const daemonBuildId = await computeBuildId(repoRoot, daemonFiles);
+  const buildId = await computeBuildId(repoRoot, [...shellPlaneInputs(), ...daemonFiles]);
+  return { buildId, daemonBuildId };
 }
 
-function buildIdentityInputs() {
+function shellPlaneInputs() {
+  return [paths.mainOutput, paths.preloadOutput];
+}
+
+function daemonPlaneInputs() {
   return [
-    paths.mainOutput,
-    paths.preloadOutput,
     paths.fielddOutput,
     paths.serviceHarnessOutput,
     paths.fielddWasm,
     paths.nativeOutput,
     ...pluginProjects.flatMap((project) => [
       join(repoRoot, project.manifestFile),
-      ...(project.serviceEntry ? [join(repoRoot, project.serviceEntry)] : []),
+      ...serviceModulesOf(project).map((module) => join(repoRoot, module)),
     ]),
   ];
+}
+
+function sameIdentity(a, b) {
+  return a.buildId === b.buildId && a.daemonBuildId === b.daemonBuildId;
 }
 
 async function stageCurrentRuntime() {
@@ -331,17 +351,18 @@ async function stageCurrentRuntime() {
   ) {
     return electron?.running === false ? currentRuntime : null;
   }
-  const buildId = await buildIdentity();
+  const identity = await buildIdentity();
   try {
     return await stageRuntimeSnapshot({
       paths,
-      buildId,
+      buildId: identity.buildId,
+      daemonBuildId: identity.daemonBuildId,
       validate: async () =>
         !shuttingDown &&
         builds?.allReady() === true &&
         criticalQueue?.busy !== true &&
         criticalQueue?.healthy !== false &&
-        (await buildIdentity()) === buildId,
+        sameIdentity(await buildIdentity(), identity),
     });
   } catch (error) {
     if (error instanceof RuntimeSnapshotChangedError) return null;
@@ -403,7 +424,10 @@ function shutdown(code, reason) {
     stopCriticalWatcher?.();
     stopCriticalWatcher = null;
     await nxWatcher?.close().catch((error) => log.warn(messageOf(error)));
-    await electron?.stop().catch((error) => {
+    // The runner is the daemon custodian (the shell runs leave-running in
+    // dev), so final teardown reaps the pair here — the only place it happens
+    // on a clean exit.
+    await electron?.stop({ stopDaemons: true }).catch((error) => {
       code = 1;
       log.error(messageOf(error));
     });

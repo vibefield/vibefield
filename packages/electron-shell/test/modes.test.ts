@@ -53,11 +53,13 @@ describe("isSmokeLike", () => {
 });
 
 describe("shutdownPolicy", () => {
-  // The subtle line: spike-loro joins PRODUCTION in leave-running — it is not a
-  // stop-owned smoke run despite passing isSmokeLike.
+  // Two subtle lines: spike-loro joins PRODUCTION in leave-running (not a
+  // stop-owned smoke run despite passing isSmokeLike), and dev is
+  // leave-running because the dev-runner owns daemon teardown — the shell
+  // hands the running pair to its successor via buildId-gated adoption.
   const expected: Record<ShellMode, "stop-owned" | "leave-running"> = {
     production: "leave-running",
-    dev: "stop-owned",
+    dev: "leave-running",
     smoke: "stop-owned",
     "smoke-canvas": "stop-owned",
     "spike-loro": "leave-running",

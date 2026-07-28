@@ -16,17 +16,21 @@ export function createElectronStack({
   terminate = terminateChild,
 }) {
   let child = null;
-  let currentBuildId = null;
+  let currentDaemonBuildId = null;
   let stopping = false;
   let exitCleanup = Promise.resolve();
 
   async function start(runtime) {
     if (child !== null) throw new Error("Electron is already running");
-    const { buildId } = runtime;
+    const { buildId, daemonBuildId } = runtime;
     const env = {
       ...process.env,
       VITE_DEV_SERVER_URL: viteUrl,
-      VIBEFIELD_DEV_BUILD_ID: buildId,
+      // The adoption gate compares product.json's buildId against this value,
+      // and product.json describes the DAEMON plane — a shell-only rebuild
+      // must still adopt the running fieldd, so the daemon identity is what
+      // crosses this boundary, never the combined snapshot identity.
+      VIBEFIELD_DEV_BUILD_ID: daemonBuildId,
       VIBEFIELD_DEV_REPO_ROOT: paths.repoRoot,
       FIELDD_DATA_DIR: paths.dataRoot,
       FIELDD_CONTROL_PORT: "0",
@@ -49,7 +53,7 @@ export function createElectronStack({
       },
     );
     child = next;
-    currentBuildId = buildId;
+    currentDaemonBuildId = daemonBuildId;
     let initialized = false;
     let earlyExit = null;
     next.once("exit", (code, signal) => {
@@ -59,7 +63,7 @@ export function createElectronStack({
         earlyExit = { code, signal };
         return;
       }
-      exitCleanup = handleUnexpectedExit({ code, signal, buildId });
+      exitCleanup = handleUnexpectedExit({ code, signal });
     });
     try {
       await new Promise((resolve, reject) => {
@@ -69,48 +73,49 @@ export function createElectronStack({
       await lock.update({ electronPid: next.pid ?? null, buildId });
       initialized = true;
       if (earlyExit !== null) {
-        exitCleanup = handleUnexpectedExit({ ...earlyExit, buildId });
+        exitCleanup = handleUnexpectedExit(earlyExit);
       }
     } catch (error) {
       if (child === next) child = null;
       const product = await readProduct(paths.dataRoot);
       await terminate(next, { graceMs: 2_000, killWaitMs: 1_000 });
-      await stopProduct(product, buildId, log, paths.dataRoot);
+      await stopProduct(product, daemonBuildId, log, paths.dataRoot);
       throw error;
     }
     return next.pid;
   }
 
-  async function handleUnexpectedExit({ code, signal, buildId }) {
-    const product = await readProduct(paths.dataRoot);
-    try {
-      await stopProduct(product, buildId, log, paths.dataRoot);
-    } catch (error) {
-      log.error(error instanceof Error ? error.message : String(error));
-    }
+  // The daemons deliberately survive an Electron exit (the shell runs
+  // leave-running in dev): the next start adopts them when the daemon plane
+  // is unchanged. Teardown happens only through stopDaemons().
+  async function handleUnexpectedExit({ code, signal }) {
     await lock.update({ electronPid: null });
     onUnexpectedExit({ code, signal });
   }
 
-  async function stop() {
+  async function stopDaemons() {
+    const product = await readProduct(paths.dataRoot);
+    await stopProduct(product, currentDaemonBuildId, log, paths.dataRoot);
+  }
+
+  async function stop({ stopDaemons: alsoStopDaemons = false } = {}) {
     const running = child;
     if (running === null) {
       await exitCleanup;
-      return;
-    }
-    stopping = true;
-    try {
-      const capturedProduct = await readProduct(paths.dataRoot);
-      const result = await terminate(running, { graceMs: 10_000, killWaitMs: 2_000 });
-      if (result.forced) {
-        log.warn("Electron exceeded its graceful shutdown deadline and was force-killed");
+    } else {
+      stopping = true;
+      try {
+        const result = await terminate(running, { graceMs: 10_000, killWaitMs: 2_000 });
+        if (result.forced) {
+          log.warn("Electron exceeded its graceful shutdown deadline and was force-killed");
+        }
+        child = null;
+        await lock.update({ electronPid: null });
+      } finally {
+        stopping = false;
       }
-      child = null;
-      await stopProduct(capturedProduct, currentBuildId, log, paths.dataRoot);
-      await lock.update({ electronPid: null });
-    } finally {
-      stopping = false;
     }
+    if (alsoStopDaemons) await stopDaemons();
   }
 
   return {
@@ -121,10 +126,7 @@ export function createElectronStack({
       return child?.pid ?? null;
     },
     start,
-    async restart(runtime) {
-      await stop();
-      return start(runtime);
-    },
     stop,
+    stopDaemons,
   };
 }

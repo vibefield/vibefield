@@ -11,8 +11,9 @@ import type { DesktopResources } from "./resources";
 // The supervisor owns adopt/spawn/probe/readiness (ESR §5.3); this builder
 // owns only what a supervisor must never know: Electron paths, the runner
 // (our own binary in Node mode), and the mode-derived policy. Smoke isolates
-// BOTH daemon ports (slice-0 finding 2) and dev/smoke stop what they spawned —
-// never an adopted process.
+// BOTH daemon ports (slice-0 finding 2) and stops what it spawned — never an
+// adopted process. Dev leaves daemons running (the dev-runner owns teardown);
+// successive dev shells adopt the pair through the buildId-gated probe.
 
 export function dataRoot(mode: ShellMode): string {
   const injected = process.env["FIELDD_DATA_DIR"];

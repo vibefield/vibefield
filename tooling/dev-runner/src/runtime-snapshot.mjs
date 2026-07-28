@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import { basename, join } from "node:path";
 
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 const BUILD_ID = /^dev-[a-f0-9]{24}$/;
 
 export class RuntimeSnapshotChangedError extends Error {
@@ -22,8 +22,16 @@ export class RuntimeSnapshotChangedError extends Error {
   }
 }
 
-export async function stageRuntimeSnapshot({ paths, buildId, validate = async () => true }) {
+export async function stageRuntimeSnapshot({
+  paths,
+  buildId,
+  daemonBuildId,
+  validate = async () => true,
+}) {
   if (!BUILD_ID.test(buildId)) throw new Error(`invalid development build identity: ${buildId}`);
+  if (!BUILD_ID.test(daemonBuildId)) {
+    throw new Error(`invalid development daemon build identity: ${daemonBuildId}`);
+  }
   await mkdir(paths.runtimeRoot, { recursive: true });
   const destination = join(paths.runtimeRoot, buildId);
   const existing = await readSnapshot(destination, buildId);
@@ -32,7 +40,7 @@ export async function stageRuntimeSnapshot({ paths, buildId, validate = async ()
   const temporary = await mkdtemp(join(paths.runtimeRoot, `.next-${buildId}-`));
   let published = false;
   try {
-    const layout = snapshotLayout(temporary, buildId, basename(paths.nativeOutput));
+    const layout = snapshotLayout(temporary, buildId, daemonBuildId, basename(paths.nativeOutput));
     await Promise.all([
       mkdir(join(layout.appRoot, "main"), { recursive: true }),
       mkdir(join(layout.appRoot, "preload"), { recursive: true }),
@@ -70,6 +78,7 @@ export async function stageRuntimeSnapshot({ paths, buildId, validate = async ()
         {
           version: SNAPSHOT_VERSION,
           buildId,
+          daemonBuildId,
           nativeName: basename(paths.nativeOutput),
         },
         null,
@@ -81,12 +90,19 @@ export async function stageRuntimeSnapshot({ paths, buildId, validate = async ()
     try {
       await rename(temporary, destination);
       published = true;
-      return snapshotLayout(destination, buildId, basename(paths.nativeOutput));
+      return snapshotLayout(destination, buildId, daemonBuildId, basename(paths.nativeOutput));
     } catch (error) {
       if (!destinationAlreadyExists(error)) throw error;
       const concurrent = await readSnapshot(destination, buildId);
-      if (concurrent === null) throw error;
-      return concurrent;
+      if (concurrent !== null) return concurrent;
+      // The occupant is not a valid snapshot for this identity (an older
+      // snapshot version, or a torn write) — junk squatting on our name.
+      // Clear it and publish; without this, a leftover v1 directory would
+      // block this identity forever.
+      await rm(destination, { recursive: true, force: true });
+      await rename(temporary, destination);
+      published = true;
+      return snapshotLayout(destination, buildId, daemonBuildId, basename(paths.nativeOutput));
     }
   } finally {
     if (!published) await rm(temporary, { recursive: true, force: true });
@@ -117,20 +133,22 @@ async function readSnapshot(root, expectedBuildId) {
     if (
       record?.version !== SNAPSHOT_VERSION ||
       record.buildId !== expectedBuildId ||
+      !BUILD_ID.test(record.daemonBuildId ?? "") ||
       typeof record.nativeName !== "string" ||
       basename(record.nativeName) !== record.nativeName
     ) {
       return null;
     }
-    return snapshotLayout(root, record.buildId, record.nativeName);
+    return snapshotLayout(root, record.buildId, record.daemonBuildId, record.nativeName);
   } catch {
     return null;
   }
 }
 
-function snapshotLayout(root, buildId, nativeName) {
+function snapshotLayout(root, buildId, daemonBuildId, nativeName) {
   return Object.freeze({
     buildId,
+    daemonBuildId,
     root,
     appRoot: join(root, "app"),
     fielddOutput: join(root, "fieldd", "bin.cjs"),

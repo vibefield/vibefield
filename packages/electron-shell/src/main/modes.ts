@@ -19,10 +19,12 @@ export function isSmokeLike(mode: ShellMode): boolean {
   return mode === "smoke" || mode === "smoke-canvas" || mode === "spike-loro";
 }
 
-/** Daemon lifetime policy (ESR §7.3): dev/smoke stop what they spawned;
- * production leaves daemons running past the shell (two-plane law). */
+/** Daemon lifetime policy (ESR §7.3): smoke runs stop what they spawned;
+ * production leaves daemons running past the shell (two-plane law). Dev is
+ * leave-running too — §7.3 permits either, and the dev-runner is the daemon
+ * custodian: a shell-only rebuild restarts Electron alone and the new shell
+ * ADOPTS the running pair (buildId-gated probe); the runner reaps the pair
+ * on daemon-plane changes and at session end. */
 export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" {
-  return mode === "dev" || mode === "smoke" || mode === "smoke-canvas"
-    ? "stop-owned"
-    : "leave-running";
+  return mode === "smoke" || mode === "smoke-canvas" ? "stop-owned" : "leave-running";
 }

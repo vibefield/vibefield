@@ -65,6 +65,29 @@ try {
   );
 }
 
+// --- tracked filenames stay whitespace-free ----------------------------------
+// The dev-runner's Nx watch bridge (tooling/dev-runner/src/nx-watch-event.mjs)
+// receives changed paths via NX_FILE_CHANGES, which Nx delimits with
+// whitespace. A tracked path containing whitespace would fragment into
+// phantom entries and silently mis-target affected typechecks, so the repo
+// forbids the class here rather than guessing at reassembly there.
+try {
+  const tracked = execSync("git ls-files -z", { cwd: root, stdio: ["ignore", "pipe", "ignore"] })
+    .toString()
+    .split("\0")
+    .filter(Boolean);
+  const withWhitespace = tracked.filter((path) => /\s/.test(path));
+  if (withWhitespace.length > 0) {
+    problems.push(
+      `tracked filenames contain whitespace (breaks the Nx watch event protocol): ${withWhitespace
+        .slice(0, 5)
+        .join(", ")}${withWhitespace.length > 5 ? ", …" : ""}`,
+    );
+  }
+} catch {
+  warnings.push("could not enumerate tracked files (git ls-files failed)");
+}
+
 // --- report ------------------------------------------------------------------
 for (const w of warnings) console.warn(`preflight WARN: ${w}`);
 for (const p of problems) console.error(`preflight FAIL: ${p}`);

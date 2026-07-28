@@ -52,8 +52,14 @@ export async function acquireDevLock({
           (pid) => Number.isInteger(pid) && pidAlive(pid),
         );
         if (existingLive.length > 0) {
+          // Daemons outlive Electron by design (dev is leave-running), so a
+          // crashed runner strands a live pair here. Refusal stays the safe
+          // default (pid reuse makes blind kills wrong), but the message must
+          // carry the remedy or the user is stuck.
           throw new DevLockError(
-            `the development data root still has live daemon pid ${existingLive.join(", ")}`,
+            `the development data root still has live daemon pid ${existingLive.join(
+              ", ",
+            )} — a previous dev session exited uncleanly; stop them with: kill ${existingLive.join(" ")}`,
           );
         }
         if (existingProduct) {
@@ -70,11 +76,7 @@ export async function acquireDevLock({
     const product = await readDevProduct(dataRoot);
     const live = liveOwners(stale, product, pidAlive);
     if (live.length > 0) {
-      throw new DevLockError(
-        `another development stack is still live (${live
-          .map(([name, pid]) => `${name} pid ${pid}`)
-          .join(", ")})`,
-      );
+      throw new DevLockError(describeLiveStack(live));
     }
 
     if (!(await reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive }))) {
@@ -124,11 +126,7 @@ async function reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive }) {
     const product = await readDevProduct(dataRoot);
     const live = liveOwners(stale, product, pidAlive);
     if (live.length > 0) {
-      throw new DevLockError(
-        `another development stack is still live (${live
-          .map(([name, pid]) => `${name} pid ${pid}`)
-          .join(", ")})`,
-      );
+      throw new DevLockError(describeLiveStack(live));
     }
 
     const entries = await readdir(lockDir);
@@ -154,6 +152,17 @@ async function reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive }) {
   } finally {
     if (claimAtCanonicalPath) await rmdirIfPresent(claimPath);
   }
+}
+
+function describeLiveStack(live) {
+  const names = live.map(([name, pid]) => `${name} pid ${pid}`).join(", ");
+  const daemonsOnly = live.every(([name]) => name === "fieldd" || name === "field-native");
+  if (!daemonsOnly) return `another development stack is still live (${names})`;
+  // Runner and Electron are gone but the pair survived (dev is
+  // leave-running): tell the user how to get unstuck instead of only why.
+  return `another development stack is still live (${names}) — the previous runner is gone; stop the daemons with: kill ${live
+    .map(([, pid]) => pid)
+    .join(" ")}`;
 }
 
 function liveOwners(owner, product, pidAlive) {

@@ -68,7 +68,7 @@ export async function clearDeadDevProductFiles(dataRoot, expectedProduct, pidAli
 
 async function stopPid(pid, label, log, force) {
   if (!isPidAlive(pid)) return;
-  log.warn(`cleaning up ${label} pid ${pid} after an unclean Electron exit`);
+  log.info(`stopping dev-owned ${label} pid ${pid}`);
   try {
     process.kill(pid, "SIGTERM");
   } catch {
