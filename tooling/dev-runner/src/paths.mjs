@@ -13,6 +13,7 @@ export const workspacePaths = Object.freeze({
   logRoot: join(devRoot, "logs"),
   electronUserData: join(devRoot, "electron-user-data"),
   lockDir: join(devRoot, "runner.lock"),
+  runtimeRoot: join(devRoot, "runtime"),
   desktopRoot: join(repoRoot, "apps", "desktop"),
   viteConfig: join(repoRoot, "packages", "electron-shell", "vite.config.ts"),
   mainEntry: join(repoRoot, "packages", "electron-shell", "src", "main", "index.ts"),

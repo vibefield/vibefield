@@ -104,3 +104,44 @@ test("removes exact dead daemon run files before taking ownership", async (t) =>
   await assert.rejects(readFile(tokenPath), { code: "ENOENT" });
   await lock.release();
 });
+
+test("elects exactly one owner when two runners reclaim the same stale lock", async (t) => {
+  const paths = await fixture(t);
+  const pidAlive = (pid) => pid === 201 || pid === 202;
+
+  for (let iteration = 0; iteration < 50; iteration += 1) {
+    await mkdir(paths.lockDir, { recursive: true });
+    await writeFile(
+      join(paths.lockDir, "owner.json"),
+      JSON.stringify({
+        version: 1,
+        repoRoot: paths.root,
+        runnerPid: 101,
+        electronPid: null,
+        buildId: "dev-stale",
+        startedAt: 1,
+      }),
+    );
+
+    const results = await Promise.allSettled([
+      acquireDevLock({
+        ...paths,
+        repoRoot: paths.root,
+        runnerPid: 201,
+        pidAlive,
+      }),
+      acquireDevLock({
+        ...paths,
+        repoRoot: paths.root,
+        runnerPid: 202,
+        pidAlive,
+      }),
+    ]);
+    const acquired = results.filter((result) => result.status === "fulfilled");
+    const refused = results.filter((result) => result.status === "rejected");
+    assert.equal(acquired.length, 1, `iteration ${iteration} acquired ${acquired.length} locks`);
+    assert.equal(refused.length, 1);
+    assert.ok(refused[0].reason instanceof DevLockError);
+    await acquired[0].value.release();
+  }
+});

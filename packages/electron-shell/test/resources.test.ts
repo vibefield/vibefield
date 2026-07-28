@@ -3,6 +3,7 @@ import {
   assertPackagedResources,
   type DesktopResources,
   ResourceError,
+  resolveDevelopmentRepoRoot,
   resolveDevelopmentResources,
   resolvePackagedResources,
 } from "../src/main/resources";
@@ -49,6 +50,18 @@ describe("resolveDevelopmentResources", () => {
   it("offers both plugin roots, including the dev-linked pack", () => {
     expect(dev.pluginRoots.bundled).toEqual([`${REPO}/plugins`]);
     expect(dev.pluginRoots.devLinked).toEqual([`${REPO}/examples/plugins`]);
+  });
+
+  it("keeps repository resources stable when Electron launches an immutable snapshot", () => {
+    expect(
+      resolveDevelopmentRepoRoot(
+        `${REPO}/.vibefield/dev/runtime/dev-111111111111111111111111/app`,
+        REPO,
+      ),
+    ).toBe(REPO);
+    expect(() => resolveDevelopmentRepoRoot("/snapshot/app", "relative/repo")).toThrow(
+      /absolute path/,
+    );
   });
 });
 

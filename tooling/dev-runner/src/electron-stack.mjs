@@ -20,17 +20,19 @@ export function createElectronStack({
   let stopping = false;
   let exitCleanup = Promise.resolve();
 
-  async function start(buildId) {
+  async function start(runtime) {
     if (child !== null) throw new Error("Electron is already running");
+    const { buildId } = runtime;
     const env = {
       ...process.env,
       VITE_DEV_SERVER_URL: viteUrl,
       VIBEFIELD_DEV_BUILD_ID: buildId,
+      VIBEFIELD_DEV_REPO_ROOT: paths.repoRoot,
       FIELDD_DATA_DIR: paths.dataRoot,
       FIELDD_CONTROL_PORT: "0",
       FIELDD_DATA_PORT: "0",
-      FIELDD_BIN: paths.fielddOutput,
-      FIELDD_NATIVE_BIN: paths.nativeOutput,
+      FIELDD_BIN: runtime.fielddOutput,
+      FIELDD_NATIVE_BIN: runtime.nativeOutput,
       FIELD_LOG_DIR: paths.logRoot,
     };
     // This flag is set only by Electron main for its fieldd child. Inheriting
@@ -39,7 +41,7 @@ export function createElectronStack({
 
     const next = spawnProcess(
       electronExecutable,
-      [`--user-data-dir=${paths.electronUserData}`, paths.desktopRoot, "--dev"],
+      [`--user-data-dir=${paths.electronUserData}`, runtime.appRoot, "--dev"],
       {
         cwd: paths.desktopRoot,
         env,
@@ -119,9 +121,9 @@ export function createElectronStack({
       return child?.pid ?? null;
     },
     start,
-    async restart(buildId) {
+    async restart(runtime) {
       await stop();
-      return start(buildId);
+      return start(runtime);
     },
     stop,
   };

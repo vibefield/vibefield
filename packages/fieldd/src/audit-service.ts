@@ -461,6 +461,12 @@ export class AuditService extends EventEmitter {
   }
 
   private async flushRecoveryMarkers(): Promise<void> {
+    // An empty recovery queue is not evidence that the writer recovered. In
+    // particular, another queued append may enter here after a failed write;
+    // declaring health before that append succeeds creates a transient,
+    // externally observable "healthy" state while the writer is still down.
+    if (this.recovery.length === 0) return;
+
     while (this.recovery.length > 0) {
       const marker = this.recovery[0]!;
       const ctx: CallerContext = {
@@ -492,6 +498,8 @@ export class AuditService extends EventEmitter {
       );
       this.recovery.shift();
     }
+    // Every marker was durably flushed, so recovery is now evidenced rather
+    // than inferred from an empty queue.
     this.markHealthy();
   }
 

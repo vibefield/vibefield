@@ -1,7 +1,20 @@
-import { mkdir, readFile, rename, rmdir, unlink, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rmdir,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { isPidAlive } from "./processes.mjs";
 import { clearDeadDevProductFiles, readDevProduct } from "./product.mjs";
+
+const OWNER_FILE = "owner.json";
+const RECLAIM_DIRECTORY = ".reclaim";
 
 export class DevLockError extends Error {
   constructor(message) {
@@ -18,54 +31,44 @@ export async function acquireDevLock({
   pidAlive = isPidAlive,
 }) {
   await mkdir(dirname(lockDir), { recursive: true });
-  const ownerPath = join(lockDir, "owner.json");
+  const ownerPath = join(lockDir, OWNER_FILE);
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      await mkdir(lockDir);
-      const existingProduct = await readDevProduct(dataRoot);
-      const existingLive = [existingProduct?.pid, existingProduct?.nativePid].filter(
-        (pid) => Number.isInteger(pid) && pidAlive(pid),
-      );
-      if (existingLive.length > 0) {
-        await rmdir(lockDir);
-        throw new DevLockError(
-          `the development data root still has live daemon pid ${existingLive.join(", ")}`,
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const initial = {
+      version: 1,
+      repoRoot,
+      runnerPid,
+      electronPid: null,
+      buildId: null,
+      startedAt: Date.now(),
+    };
+    if (await publishInitializedLock(lockDir, initial)) {
+      try {
+        // Publication is atomic: every contender sees either no lock or this
+        // complete owner record. Check the daemon root only after publication,
+        // while this runner has exclusive authority to clean stale run files.
+        const existingProduct = await readDevProduct(dataRoot);
+        const existingLive = [existingProduct?.pid, existingProduct?.nativePid].filter(
+          (pid) => Number.isInteger(pid) && pidAlive(pid),
         );
-      }
-      if (existingProduct) {
-        try {
-          await clearDeadDevProductFiles(dataRoot, existingProduct, pidAlive);
-        } catch (error) {
-          await rmdir(lockDir);
-          throw error;
+        if (existingLive.length > 0) {
+          throw new DevLockError(
+            `the development data root still has live daemon pid ${existingLive.join(", ")}`,
+          );
         }
+        if (existingProduct) {
+          await clearDeadDevProductFiles(dataRoot, existingProduct, pidAlive);
+        }
+      } catch (error) {
+        await removeOwnedLock(lockDir, runnerPid);
+        throw error;
       }
-      const initial = {
-        version: 1,
-        repoRoot,
-        runnerPid,
-        electronPid: null,
-        buildId: null,
-        startedAt: Date.now(),
-      };
-      await writeOwner(ownerPath, initial);
       return createHandle({ lockDir, ownerPath, record: initial, runnerPid });
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
     }
 
     const stale = await readOwner(ownerPath);
-    if (!stale) {
-      throw new DevLockError(`development lock exists but has no valid owner record: ${ownerPath}`);
-    }
     const product = await readDevProduct(dataRoot);
-    const live = [
-      ["runner", stale.runnerPid],
-      ["Electron", stale.electronPid],
-      ["fieldd", product?.pid],
-      ["field-native", product?.nativePid],
-    ].filter(([, pid]) => Number.isInteger(pid) && pidAlive(pid));
+    const live = liveOwners(stale, product, pidAlive);
     if (live.length > 0) {
       throw new DevLockError(
         `another development stack is still live (${live
@@ -74,13 +77,120 @@ export async function acquireDevLock({
       );
     }
 
-    // The exact lock directory is known and contains only our owner record.
-    // Refuse unexpected contents instead of recursively deleting them.
-    await unlink(ownerPath);
-    await rmdir(lockDir);
+    if (!(await reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive }))) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
   }
 
   throw new DevLockError("development lock changed while it was being acquired");
+}
+
+async function publishInitializedLock(lockDir, record) {
+  const candidate = await mkdtemp(`${lockDir}.candidate-${record.runnerPid}-`);
+  const candidateOwner = join(candidate, OWNER_FILE);
+  let published = false;
+  try {
+    await writeOwner(candidateOwner, record);
+    try {
+      await rename(candidate, lockDir);
+      published = true;
+      return true;
+    } catch (error) {
+      if (!destinationAlreadyExists(error)) throw error;
+      return false;
+    }
+  } finally {
+    if (!published) {
+      await unlinkIfPresent(candidateOwner);
+      await rmdirIfPresent(candidate);
+    }
+  }
+}
+
+async function reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive }) {
+  const claimPath = join(lockDir, RECLAIM_DIRECTORY);
+  try {
+    await mkdir(claimPath);
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "EEXIST") return false;
+    throw error;
+  }
+
+  let claimAtCanonicalPath = true;
+  try {
+    // Revalidate after winning the in-directory claim. No other compliant
+    // reclaimer can replace this directory while the claim is present.
+    const stale = await readOwner(join(lockDir, OWNER_FILE));
+    const product = await readDevProduct(dataRoot);
+    const live = liveOwners(stale, product, pidAlive);
+    if (live.length > 0) {
+      throw new DevLockError(
+        `another development stack is still live (${live
+          .map(([name, pid]) => `${name} pid ${pid}`)
+          .join(", ")})`,
+      );
+    }
+
+    const entries = await readdir(lockDir);
+    const unexpected = entries.filter(
+      (entry) => entry !== OWNER_FILE && entry !== RECLAIM_DIRECTORY,
+    );
+    if (unexpected.length > 0) {
+      throw new DevLockError(
+        `development lock contains unexpected entries: ${unexpected.sort().join(", ")}`,
+      );
+    }
+
+    // Move the claimed directory out of the canonical namespace atomically.
+    // A contender can now publish a fully initialized replacement, but it
+    // cannot delete or mutate this reclaimer's private quarantine.
+    const quarantine = `${lockDir}.reclaimed-${runnerPid}-${randomBytes(6).toString("hex")}`;
+    await rename(lockDir, quarantine);
+    claimAtCanonicalPath = false;
+    await unlinkIfPresent(join(quarantine, OWNER_FILE));
+    await rmdir(join(quarantine, RECLAIM_DIRECTORY));
+    await rmdir(quarantine);
+    return true;
+  } finally {
+    if (claimAtCanonicalPath) await rmdirIfPresent(claimPath);
+  }
+}
+
+function liveOwners(owner, product, pidAlive) {
+  return [
+    ["runner", owner?.runnerPid],
+    ["Electron", owner?.electronPid],
+    ["fieldd", product?.pid],
+    ["field-native", product?.nativePid],
+  ].filter(([, pid]) => Number.isInteger(pid) && pidAlive(pid));
+}
+
+async function removeOwnedLock(lockDir, runnerPid) {
+  const ownerPath = join(lockDir, OWNER_FILE);
+  const onDisk = await readOwner(ownerPath);
+  if (onDisk?.runnerPid !== runnerPid) return;
+  await unlinkIfPresent(ownerPath);
+  await rmdirIfPresent(lockDir);
+}
+
+function destinationAlreadyExists(error) {
+  return error?.code === "EEXIST" || error?.code === "ENOTEMPTY" || error?.code === "EPERM";
+}
+
+async function unlinkIfPresent(path) {
+  try {
+    await unlink(path);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
+async function rmdirIfPresent(path) {
+  try {
+    await rmdir(path);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
 }
 
 function createHandle({ lockDir, ownerPath, record, runnerPid }) {

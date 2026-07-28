@@ -13,11 +13,10 @@ function setup() {
   let terminateArgs = null;
   const stack = createElectronStack({
     paths: {
+      repoRoot: "/repo",
       dataRoot: "/repo/.vibefield/dev/data",
       electronUserData: "/repo/.vibefield/dev/user-data",
       desktopRoot: "/repo/apps/desktop",
-      fielddOutput: "/repo/packages/fieldd/dist/bin.cjs",
-      nativeOutput: "/repo/target/debug/field-native",
       logRoot: "/repo/.vibefield/dev/logs",
     },
     viteUrl: "http://127.0.0.1:5174/",
@@ -60,18 +59,28 @@ function setup() {
   };
 }
 
+const runtime = {
+  buildId: "dev-current",
+  appRoot: "/repo/.vibefield/dev/runtime/dev-current/app",
+  fielddOutput: "/repo/.vibefield/dev/runtime/dev-current/fieldd/bin.cjs",
+  nativeOutput: "/repo/.vibefield/dev/runtime/dev-current/native/field-native",
+};
+
 test("starts Electron directly with isolated state and the current build identity", async () => {
   const fixture = setup();
-  await fixture.stack.start("dev-current");
+  await fixture.stack.start(runtime);
 
   const [command, args, options] = fixture.getSpawnArgs();
   assert.equal(command, "/electron");
   assert.deepEqual(args, [
     "--user-data-dir=/repo/.vibefield/dev/user-data",
-    "/repo/apps/desktop",
+    "/repo/.vibefield/dev/runtime/dev-current/app",
     "--dev",
   ]);
   assert.equal(options.env.VIBEFIELD_DEV_BUILD_ID, "dev-current");
+  assert.equal(options.env.VIBEFIELD_DEV_REPO_ROOT, "/repo");
+  assert.equal(options.env.FIELDD_BIN, runtime.fielddOutput);
+  assert.equal(options.env.FIELDD_NATIVE_BIN, runtime.nativeOutput);
   assert.equal(options.env.FIELDD_CONTROL_PORT, "0");
   assert.equal(options.env.FIELDD_DATA_PORT, "0");
   assert.equal(options.env.VITE_DEV_SERVER_URL, "http://127.0.0.1:5174/");
@@ -80,7 +89,7 @@ test("starts Electron directly with isolated state and the current build identit
 
 test("a managed stop suppresses crash recovery and cleans the captured owned product", async () => {
   const fixture = setup();
-  await fixture.stack.start("dev-current");
+  await fixture.stack.start(runtime);
   await fixture.stack.stop();
 
   assert.equal(fixture.stack.running, false);
@@ -100,7 +109,7 @@ test("a managed stop suppresses crash recovery and cleans the captured owned pro
 
 test("an unexpected exit cleans children before requesting recovery", async () => {
   const fixture = setup();
-  await fixture.stack.start("dev-current");
+  await fixture.stack.start(runtime);
   fixture.child.exitCode = 1;
   fixture.child.emit("exit", 1, null);
   await new Promise((resolve) => setImmediate(resolve));

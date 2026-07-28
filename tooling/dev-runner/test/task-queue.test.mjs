@@ -74,3 +74,60 @@ test("keeps the last valid runtime on failure and retries on the next relevant e
   assert.equal(queue.healthy, true);
   queue.close();
 });
+
+test("does not strand a corrective edit saved while the failing build is still running", async () => {
+  const calls = [];
+  let rejectFirst;
+  let resolveSuccess;
+  let resolveFirstStarted;
+  const firstStarted = new Promise((resolve) => {
+    resolveFirstStarted = resolve;
+  });
+  const firstMayFail = new Promise((_, reject) => {
+    rejectFirst = reject;
+  });
+  const succeeded = new Promise((resolve) => {
+    resolveSuccess = resolve;
+  });
+  let attempts = 0;
+  const queue = createCriticalTaskQueue({
+    handlers: {
+      allManifests: async () => {},
+      manifest: async () => {},
+      contracts: async () => {
+        attempts += 1;
+        calls.push(`contracts:${attempts}`);
+        if (attempts === 1) {
+          resolveFirstStarted();
+          await firstMayFail;
+        }
+      },
+      native: async () => calls.push("native"),
+      pluginRuntime: async () => {},
+    },
+    onBusyChange() {},
+    onSuccess() {
+      resolveSuccess();
+    },
+    onFailure() {
+      calls.push("failure");
+    },
+    debounceMs: 1,
+  });
+
+  queue.enqueue({ kind: "contracts" });
+  await firstStarted;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  queue.enqueue({ kind: "contracts" });
+  rejectFirst(new Error("first source snapshot was invalid"));
+
+  await Promise.race([
+    succeeded,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("corrective edit was never processed")), 250),
+    ),
+  ]);
+  assert.deepEqual(calls, ["contracts:1", "failure", "contracts:2", "native"]);
+  assert.equal(queue.healthy, true);
+  queue.close();
+});

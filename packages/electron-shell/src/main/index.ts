@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { homedir, release, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { APP_ID, CONTRACTS_VERSION } from "@vibefield/contracts";
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
@@ -22,6 +22,7 @@ import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { installRendererLogging } from "./renderer-logging";
 import {
   assertPackagedResources,
+  resolveDevelopmentRepoRoot,
   resolveDevelopmentResources,
   resolvePackagedResources,
 } from "./resources";
@@ -262,7 +263,10 @@ async function main(
         electronExecPath: process.execPath,
       })
     : resolveDevelopmentResources({
-        repoRoot: resolve(app.getAppPath(), "..", ".."),
+        repoRoot: resolveDevelopmentRepoRoot(
+          app.getAppPath(),
+          process.env["VIBEFIELD_DEV_REPO_ROOT"],
+        ),
         electronExecPath: process.execPath,
       });
   // Fatal and typed before anything spawns: a missing or wrong-architecture

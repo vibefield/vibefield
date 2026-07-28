@@ -192,6 +192,30 @@ describe("LOG-L6 append-only audit ledger", () => {
       pendingRecoveryMarkers: 0,
     });
 
+    const healthTransitions: string[] = [];
+    const observeHealth = (): void => {
+      healthTransitions.push(service.health().state);
+    };
+    service.on("health", observeHealth);
+    await expect(
+      service.required(
+        shellContext(),
+        {
+          action: "plugin.enable",
+          target: { kind: "plugin", id: "vibefield.example" },
+        },
+        () => {
+          applied = true;
+        },
+      ),
+    ).rejects.toMatchObject({
+      kind: "AUDIT_UNAVAILABLE",
+      details: { operation: "write", code: "ENOSPC", actionApplied: false },
+    });
+    service.off("health", observeHealth);
+    expect(healthTransitions).not.toContain("healthy");
+    expect(service.health().state).toBe("degraded");
+
     fail = false;
     await service.required(
       shellContext(),

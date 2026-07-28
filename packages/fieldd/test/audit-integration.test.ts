@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, verifyAuditSegment } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -109,7 +109,7 @@ describe("LOG-L6 product audit policy", () => {
       },
     });
     expect(daemon.plugins.get(pluginId)?.enabled).toBe(false);
-    await vi.waitFor(() => expect(daemon.health().audit.state).toBe("degraded"));
+    expect(daemon.health().audit.state).toBe("degraded");
 
     failWrites = false;
     await shell.call("plugins.enable", { id: pluginId });

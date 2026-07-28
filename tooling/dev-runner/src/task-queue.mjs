@@ -15,21 +15,30 @@ export function createCriticalTaskQueue({
   let healthy = true;
   let closed = false;
   let timer = null;
+  const idleWaiters = new Set();
 
   function enqueue(change) {
     if (closed) return;
-    if (retry.length > 0) {
-      for (const failed of retry) add(failed);
-      retry = [];
-    }
+    mergeRetry();
     add(change);
     if (!running) {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        void drain();
-      }, debounceMs);
+      schedule(debounceMs);
     }
+  }
+
+  function schedule(delay) {
+    if (closed) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      void drain();
+    }, delay);
+  }
+
+  function mergeRetry() {
+    if (retry.length === 0) return;
+    for (const failed of retry) add(failed);
+    retry = [];
   }
 
   function add(change) {
@@ -40,17 +49,19 @@ export function createCriticalTaskQueue({
     else if (change.kind === "plugin-runtime") pendingRuntime = true;
   }
 
+  function hasPending() {
+    return (
+      pendingContracts ||
+      pendingNative ||
+      pendingAllManifests ||
+      pendingRuntime ||
+      pendingManifests.size > 0
+    );
+  }
+
   function takeBatch() {
     if (closed) return null;
-    if (
-      !pendingContracts &&
-      !pendingNative &&
-      !pendingAllManifests &&
-      !pendingRuntime &&
-      pendingManifests.size === 0
-    ) {
-      return null;
-    }
+    if (!hasPending()) return null;
     const batch = {
       contracts: pendingContracts,
       native: pendingNative,
@@ -103,7 +114,24 @@ export function createCriticalTaskQueue({
     } finally {
       running = false;
       onBusyChange(false);
+      // An edit can arrive while a handler is running. If that handler then
+      // fails, enqueue() could not arm a timer because `running` was true.
+      // Treat the already-arrived edit exactly like the next edit after a
+      // failure: merge the failed batch and drain both without requiring a
+      // third filesystem event.
+      if (!closed && hasPending()) {
+        mergeRetry();
+        schedule(0);
+      } else {
+        notifyIdle();
+      }
     }
+  }
+
+  function notifyIdle() {
+    if (running || timer !== null || hasPending()) return;
+    for (const resolve of idleWaiters) resolve();
+    idleWaiters.clear();
   }
 
   return {
@@ -112,9 +140,20 @@ export function createCriticalTaskQueue({
       closed = true;
       clearTimeout(timer);
       timer = null;
+      pendingContracts = false;
+      pendingNative = false;
+      pendingAllManifests = false;
+      pendingRuntime = false;
+      pendingManifests.clear();
+      retry = [];
+      notifyIdle();
+    },
+    waitForIdle() {
+      if (!running && timer === null && !hasPending()) return Promise.resolve();
+      return new Promise((resolve) => idleWaiters.add(resolve));
     },
     get busy() {
-      return running;
+      return running || timer !== null || hasPending();
     },
     get healthy() {
       return healthy;

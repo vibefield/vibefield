@@ -2,6 +2,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { computeBuildId } from "./build-id.mjs";
+import { createChangeBuffer } from "./change-buffer.mjs";
 import { classifyCriticalChange, discoverPluginProjects } from "./critical-changes.mjs";
 import { watchCriticalRoots } from "./critical-watcher.mjs";
 import { acquireDevLock } from "./dev-lock.mjs";
@@ -12,6 +13,12 @@ import { startNxWatcher } from "./nx-watcher.mjs";
 import { workspacePaths as paths, repoRoot } from "./paths.mjs";
 import { cargoCommand, pnpmCommand, runCommand, terminateChild } from "./processes.mjs";
 import { createRestartCoordinator } from "./restart-coordinator.mjs";
+import { handoffDesktopRuntime } from "./runtime-handoff.mjs";
+import {
+  pruneRuntimeSnapshots,
+  RuntimeSnapshotChangedError,
+  stageRuntimeSnapshot,
+} from "./runtime-snapshot.mjs";
 import { createCriticalTaskQueue } from "./task-queue.mjs";
 import { createTypecheckScheduler } from "./typecheck-scheduler.mjs";
 import { startRendererServer } from "./vite-server.mjs";
@@ -27,8 +34,11 @@ let nxWatcher = null;
 let typechecks = null;
 let pluginProjects = [];
 let currentBuildId = null;
+let currentRuntime = null;
+let runtimeStarted = false;
 let shuttingDown = false;
 let shutdownPromise = null;
+const criticalChanges = createChangeBuffer();
 const transientChildren = new Set();
 const crashTimes = [];
 
@@ -49,6 +59,12 @@ async function main() {
     repoRoot,
   });
 
+  // Observe critical source roots before any generator or native build reads
+  // them. Until the serialized refresh queue exists, events are deduplicated
+  // in memory and then drained through that queue without a hand-off gap.
+  stopCriticalWatcher = watchCriticalRoots(criticalWatchRoots(), (file) => {
+    criticalChanges.push(file);
+  });
   pluginProjects = await discoverPluginProjects(repoRoot);
   log.info("preparing generated manifests and native contracts");
   await runTracked(pnpmCommand, ["-r", "--if-present", "run", "gen:manifest"], "plugin manifests");
@@ -69,7 +85,6 @@ async function main() {
   log.info(`renderer HMR listening at ${renderer.url}`);
   await builds.ready;
 
-  currentBuildId = await buildIdentity();
   electron = createElectronStack({
     paths,
     viteUrl: renderer.url,
@@ -79,23 +94,35 @@ async function main() {
   });
   restartCoordinator = createRestartCoordinator({
     canRestart: () =>
+      runtimeStarted &&
       !shuttingDown &&
-      builds?.allReady() === true &&
-      criticalQueue?.busy !== true &&
-      criticalQueue?.healthy !== false,
+      (electron?.running === false ||
+        (builds?.allReady() === true &&
+          criticalQueue?.busy !== true &&
+          criticalQueue?.healthy !== false)),
     restart: restartDesktop,
     onError: (error) => void fatal(error),
   });
 
-  const electronPid = await electron.start(currentBuildId);
-  builds.activate();
-  log.info(`desktop started (Electron pid ${electronPid}, build ${currentBuildId})`);
-
   criticalQueue = createCriticalQueue();
-  stopCriticalWatcher = watchCriticalRoots(criticalWatchRoots(), (file) => {
+  builds.activate();
+  criticalChanges.attach((file) => {
     const change = classifyCriticalChange(file, pluginProjects);
     if (change) criticalQueue.enqueue(change);
   });
+  await criticalQueue.waitForIdle();
+  if (!criticalQueue.healthy) {
+    throw new Error("a critical source change failed while the desktop runtime was starting");
+  }
+
+  const initialRuntime = await waitForCurrentRuntime();
+  const electronPid = await electron.start(initialRuntime);
+  currentBuildId = initialRuntime.buildId;
+  currentRuntime = initialRuntime;
+  runtimeStarted = true;
+  restartCoordinator.wake();
+  await pruneSnapshots(initialRuntime.buildId);
+  log.info(`desktop started (Electron pid ${electronPid}, build ${currentBuildId})`);
 
   typechecks = createTypechecks();
   nxWatcher = await startNxWatcher({
@@ -176,6 +203,7 @@ function createCriticalQueue() {
   return {
     enqueue: queue.enqueue,
     close: queue.close,
+    waitForIdle: queue.waitForIdle,
     get busy() {
       return busy || queue.busy;
     },
@@ -231,30 +259,29 @@ function createTypechecks() {
 }
 
 async function restartDesktop(reasons) {
-  const nextBuildId = await buildIdentity();
-  if (electron.running && nextBuildId === currentBuildId) {
+  const result = await handoffDesktopRuntime({
+    electron,
+    currentBuildId,
+    prepareRuntime: stageCurrentRuntime,
+    isShuttingDown: () => shuttingDown,
+  });
+  if (result.status === "deferred") {
+    log.info("restart paused until every changed runtime artifact is valid");
+    restartCoordinator.request("pending valid runtime build");
+    return;
+  }
+  if (result.status === "unchanged") {
     log.info(`runtime output unchanged (${reasons.join(", ")}); no restart needed`);
     return;
   }
+  if (result.status !== "restarted") return;
 
-  log.info(`restarting desktop after ${reasons.join(", ")}`);
-  await electron.stop();
-  if (
-    shuttingDown ||
-    builds?.allReady() !== true ||
-    criticalQueue?.busy === true ||
-    criticalQueue?.healthy === false
-  ) {
-    if (!shuttingDown) {
-      log.info("restart paused until every changed runtime artifact is valid");
-      restartCoordinator.request("pending valid runtime build");
-    }
-    return;
-  }
-  const stableBuildId = await buildIdentity();
-  const pid = await electron.start(stableBuildId);
-  currentBuildId = stableBuildId;
-  log.info(`desktop restarted (Electron pid ${pid}, build ${stableBuildId})`);
+  currentBuildId = result.runtime.buildId;
+  currentRuntime = result.runtime;
+  await pruneSnapshots(currentBuildId);
+  log.info(
+    `desktop restarted after ${reasons.join(", ")} (Electron pid ${result.pid}, build ${currentBuildId})`,
+  );
 }
 
 function handleElectronExit({ code, signal }) {
@@ -277,7 +304,11 @@ function handleElectronExit({ code, signal }) {
 }
 
 async function buildIdentity() {
-  return computeBuildId(repoRoot, [
+  return computeBuildId(repoRoot, buildIdentityInputs());
+}
+
+function buildIdentityInputs() {
+  return [
     paths.mainOutput,
     paths.preloadOutput,
     paths.fielddOutput,
@@ -288,7 +319,53 @@ async function buildIdentity() {
       join(repoRoot, project.manifestFile),
       ...(project.serviceEntry ? [join(repoRoot, project.serviceEntry)] : []),
     ]),
-  ]);
+  ];
+}
+
+async function stageCurrentRuntime() {
+  if (
+    shuttingDown ||
+    builds?.allReady() !== true ||
+    criticalQueue?.busy === true ||
+    criticalQueue?.healthy === false
+  ) {
+    return electron?.running === false ? currentRuntime : null;
+  }
+  const buildId = await buildIdentity();
+  try {
+    return await stageRuntimeSnapshot({
+      paths,
+      buildId,
+      validate: async () =>
+        !shuttingDown &&
+        builds?.allReady() === true &&
+        criticalQueue?.busy !== true &&
+        criticalQueue?.healthy !== false &&
+        (await buildIdentity()) === buildId,
+    });
+  } catch (error) {
+    if (error instanceof RuntimeSnapshotChangedError) return null;
+    throw error;
+  }
+}
+
+async function waitForCurrentRuntime() {
+  while (!shuttingDown) {
+    await criticalQueue.waitForIdle();
+    if (!criticalQueue.healthy) {
+      throw new Error("critical runtime inputs are invalid");
+    }
+    const runtime = await stageCurrentRuntime();
+    if (runtime !== null) return runtime;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("development runtime staging was interrupted by shutdown");
+}
+
+async function pruneSnapshots(current) {
+  await pruneRuntimeSnapshots(paths.runtimeRoot, new Set([current])).catch((error) => {
+    log.warn(`could not prune old development runtime snapshots: ${messageOf(error)}`);
+  });
 }
 
 async function runTracked(command, args, label) {
@@ -319,6 +396,7 @@ function shutdown(code, reason) {
   shuttingDown = true;
   shutdownPromise = (async () => {
     log.info(`stopping (${reason})`);
+    runtimeStarted = false;
     restartCoordinator?.close();
     typechecks?.close();
     criticalQueue?.close();

@@ -50,13 +50,16 @@ long-running stack:
 
 - Vite hot-updates renderer code, including renderer-facing workspace packages and plugins.
 - esbuild watches Electron main/preload and both fieldd runtime artifacts. A successful change
-  performs one debounced Electron restart; a failed build leaves the last valid app running.
+  publishes one immutable, content-addressed runtime snapshot and performs one debounced Electron
+  restart; a failed or superseded build leaves the last valid snapshot running.
 - Contract edits regenerate schema/Rust bindings before rebuilding `field-native`. Native edits
   rebuild the repo-owned sidecar. Plugin manifest/service edits regenerate or reload their
-  installed metadata before restart.
+  installed metadata before restart. These critical watchers start before initial codegen/build,
+  buffering startup edits until the serialized refresh queue is ready.
 - Restart uses Electron's normal `will-quit` path, waits for owned fieldd/native cleanup, and
-  validates a per-build identity before daemon adoption. Dev state, logs, and Electron user data
-  are isolated under `.vibefield/dev/`; a per-worktree lock refuses a second live stack.
+  launches main/preload/fieldd/native from the same verified snapshot before daemon adoption. Dev
+  state, logs, snapshots, and Electron user data are isolated under `.vibefield/dev/`; an
+  atomically published per-worktree lock refuses a second live stack.
 - Nx watches the complete workspace graph and runs initial plus affected typechecks in the
   background. `pnpm build`, `pnpm test`, and `pnpm typecheck` use the same graph and local cache;
   `pnpm verify` remains the uncropped release-quality gate.

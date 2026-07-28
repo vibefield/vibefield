@@ -1,5 +1,5 @@
-import { readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import { isAbsolute, join, resolve } from "node:path";
 import {
   archCompatible,
   EXECUTABLE_HEADER_BYTES,
@@ -93,6 +93,14 @@ function trayLayout(dir: string): Readonly<Record<TrayImageKind, TrayImageSet>> 
 const exe = (name: string, platform: string): string =>
   platform === "win32" ? `${name}.exe` : name;
 
+export function resolveDevelopmentRepoRoot(appPath: string, injected?: string): string {
+  if (injected === undefined) return resolve(appPath, "..", "..");
+  if (!isAbsolute(injected)) {
+    throw new Error("VIBEFIELD_DEV_REPO_ROOT must be an absolute path");
+  }
+  return resolve(injected);
+}
+
 /** Development: the repo IS the layout. Electron runs the fieldd bundle in node
  * mode, and field-native comes from the cargo debug profile — both explicitly
  * forbidden in a package, which is why they live only on this side. */
@@ -181,14 +189,6 @@ function headOf(path: string): Uint8Array | null {
     return null;
   }
 }
-
-const exists = (path: string): boolean => {
-  try {
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
-};
 
 /** Validate a resolved layout before anything tries to spawn from it. Runs for
  * packaged builds only: a development tree legitimately lacks a release

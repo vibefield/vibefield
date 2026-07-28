@@ -2,9 +2,20 @@
   "name": "@vibefield/fieldd",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
+  "implicitDependencies": ["@vibefield/field-native", "@vibefield/plugin-example-kv"],
   "targets": {
     "build": {
       "outputs": ["{projectRoot}/dist"]
+    },
+    "test": {
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/Cargo.toml",
+        "{workspaceRoot}/Cargo.lock",
+        { "runtime": "cargo --version" },
+        { "runtime": "rustc --version" }
+      ]
     }
   }
 }
