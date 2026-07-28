@@ -297,9 +297,74 @@ async fn a_lane_carries_document_bytes_between_two_daemons_over_the_mesh() {
     assert_eq!(daemon_b.bridge.open_lane_count(), 0);
     eprintln!("[e2e] lane closed cleanly from the far end");
 
+    // 4. The OTHER direction, and the one a clean close cannot prove: the peer
+    //    vanishes without hanging up. F-C6-6 was that a dead outbound stream
+    //    told nobody — the writer task logged and exited, so fieldd kept a lane
+    //    it believed was open forever and only learned otherwise by writing to
+    //    it and collecting an ERR on the byte plane. Control state repaired by a
+    //    data-plane accident is precisely the inversion D5 exists to prevent, so
+    //    this asserts the lane.closed that must arrive on A's OWN control plane.
+    let mut lanes_a = daemon_a.bridge.subscribe_events();
+    let lane_8 = Lane {
+        lane_id: 8,
+        class: LaneClass::Reliable,
+        peer: beta_id.clone(),
+        protocol: "doc-sync".into(),
+        doc_id: Some("doc-2".into()),
+        inbound: false,
+    };
+    daemon_a
+        .bridge
+        .open_lane(lane_8)
+        .await
+        .expect("second lane opened toward beta");
+    eprintln!("[e2e] lane 8 open; taking beta off the tailnet");
+
+    // Beta leaves the network entirely — no FIN, no close frame, the way a
+    // rebooted laptop leaves.
+    beta.stop().await;
+
+    // QUIC does not fail a write the instant a peer disappears: bytes go into a
+    // send buffer and the connection dies on its own timers. So DRIVE it — keep
+    // writing until either the event lands or the budget is spent. A single
+    // write here would be a coin flip dressed up as a test.
+    //
+    // THE BUDGET IS MEASURED, NOT GUESSED, and it is much larger than it looks
+    // like it should be. Detection took 78s in one run and over 90s in another,
+    // against truffle's 5s keep-alive — so the honest number is minutes, not
+    // seconds, and a tight budget makes this test a coin flip instead of a
+    // proof. Recorded because the LATENCY is itself a product fact: a peer that
+    // vanishes stays "open" in fieldd's lane table for over a minute, which is
+    // what C6-4's peer-offline UX has to tell the truth about.
+    let deadline = std::time::Instant::now() + Duration::from_secs(240);
+    let mut announced = None;
+    while std::time::Instant::now() < deadline && announced.is_none() {
+        fieldd_a.send_lane(8, b"into-the-void").await;
+        if let Ok(Ok(LaneEvent::Closed {
+            lane_id, reason, ..
+        })) = timeout(Duration::from_millis(500), lanes_a.recv()).await
+        {
+            announced = Some((lane_id, reason));
+        }
+    }
+    let (lane_id, reason) = announced.expect(
+        "a lane whose peer vanished must be announced as closed on the control plane, \
+         not left open until someone writes to it",
+    );
+    assert_eq!(lane_id, 8, "the announcement names the lane that died");
+    assert_eq!(
+        reason, "peer-unreachable",
+        "the reason distinguishes a vanished peer from a clean hang-up"
+    );
+    assert_eq!(
+        daemon_a.bridge.open_lane_count(),
+        0,
+        "the dead lane leaves the table with its announcement"
+    );
+    eprintln!("[e2e] a vanished peer was announced as {reason}, not left dangling");
+
     inbound.abort();
     daemon_a.shutdown().await;
     daemon_b.shutdown().await;
     alpha.stop().await;
-    beta.stop().await;
 }

@@ -347,6 +347,108 @@ async fn a_duplicate_lane_id_is_refused_rather_than_absorbed() {
     daemon.shutdown().await;
 }
 
+/// A transport whose `open` parks. The refusal above is decided synchronously,
+/// so it cannot see the window a SECOND caller lives in: one that arrives while
+/// the first is still awaiting its stream.
+struct SlowOpenTransport {
+    opens: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl field_native::services::mesh_bridge::LaneTransport for SlowOpenTransport {
+    async fn open(&self, _lane: &Lane) -> anyhow::Result<()> {
+        self.opens.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        Ok(())
+    }
+    async fn send(&self, _lane: &Lane, _payload: &[u8]) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn close(&self, _lane: &Lane) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+struct RefusingTransport;
+
+#[async_trait::async_trait]
+impl field_native::services::mesh_bridge::LaneTransport for RefusingTransport {
+    async fn open(&self, _lane: &Lane) -> anyhow::Result<()> {
+        anyhow::bail!("no route to peer")
+    }
+    async fn send(&self, _lane: &Lane, _payload: &[u8]) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn close(&self, _lane: &Lane) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn two_opens_of_one_id_cannot_both_build_a_stream() {
+    // The id is RESERVED before the transport is asked, so the loser is refused
+    // on the table rather than after building a stream nothing can reach. The
+    // parked `open` is what makes this deterministic against the old shape:
+    // check-then-insert let both callers pass the check inside that 200ms and
+    // both call the transport, leaving one stream live and unreferenced.
+    let (_dir, daemon) = boot().await;
+    let opens = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    daemon.bridge.set_transport(Arc::new(SlowOpenTransport {
+        opens: opens.clone(),
+    }));
+
+    let (first, second) = (daemon.bridge.clone(), daemon.bridge.clone());
+    let a = tokio::spawn(async move { first.open_lane(lane(9, LaneClass::Reliable)).await });
+    let b = tokio::spawn(async move { second.open_lane(lane(9, LaneClass::Reliable)).await });
+    let (a, b) = (a.await.unwrap(), b.await.unwrap());
+
+    assert_eq!(
+        [a.is_ok(), b.is_ok()].iter().filter(|ok| **ok).count(),
+        1,
+        "exactly one open may win a contested id"
+    );
+    assert_eq!(
+        opens.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "the loser must never reach the transport — a stream it built would leak"
+    );
+    assert_eq!(daemon.bridge.open_lane_count(), 1);
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_refused_open_releases_the_id_rather_than_burning_it() {
+    // The other half of reserve-then-open: a reservation that outlived its
+    // failure would cost the caller that number for the daemon's lifetime, and
+    // an unreachable peer is a transient condition, not a permanent one.
+    let (_dir, daemon) = boot().await;
+    daemon.bridge.set_transport(Arc::new(RefusingTransport));
+    assert!(daemon
+        .bridge
+        .open_lane(lane(11, LaneClass::Reliable))
+        .await
+        .is_err());
+    assert_eq!(
+        daemon.bridge.open_lane_count(),
+        0,
+        "a failed open must leave no reservation behind"
+    );
+
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    daemon
+        .bridge
+        .set_transport(Arc::new(LoopbackTransport::new(tx)));
+    assert!(
+        daemon
+            .bridge
+            .open_lane(lane(11, LaneClass::Reliable))
+            .await
+            .is_ok(),
+        "the id must be usable again once the peer is reachable"
+    );
+    daemon.shutdown().await;
+}
+
 #[tokio::test]
 async fn closing_a_lane_is_idempotent() {
     let (_dir, daemon) = boot().await;
