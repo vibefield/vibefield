@@ -17,6 +17,10 @@ import type { WindowRegistry } from "./window-policy";
 export function installLifecycle(opts: {
   registry: WindowRegistry;
   getSupervisor: () => FielddSupervisor | null;
+  openPrimaryWindow: () => Promise<void>;
+  keepAliveWithoutWindows: () => boolean;
+  onQuitRequested: () => void;
+  disposeShell: () => void;
   logger: Logger;
   closeLogging: () => Promise<void>;
 }): QuitFlow {
@@ -25,6 +29,7 @@ export function installLifecycle(opts: {
     closeWindows: () => opts.registry.disposeAll(),
     dispose: async () => {
       logger.info("desktop.lifecycle.stopping", "Electron shell is stopping");
+      opts.disposeShell();
       await (opts.getSupervisor()?.dispose() ?? Promise.resolve());
       logger.info("desktop.lifecycle.stopped", "Electron shell teardown completed");
       await opts.closeLogging();
@@ -37,11 +42,54 @@ export function installLifecycle(opts: {
   });
   app.on("second-instance", () => {
     logger.info("desktop.lifecycle.second_instance_received", "A second app instance was routed");
-    opts.registry.focusPrimary();
+    void opts.openPrimaryWindow().catch((error) => {
+      logger.error(
+        "desktop.lifecycle.second_instance_reveal_failed",
+        "The primary window could not be revealed for a second instance",
+        error,
+      );
+    });
   });
+  app.on("activate", () => {
+    logger.info("desktop.lifecycle.activated", "The app was activated");
+    void opts.openPrimaryWindow().catch((error) => {
+      logger.error(
+        "desktop.lifecycle.activation_reveal_failed",
+        "The primary window could not be revealed after app activation",
+        error,
+      );
+    });
+  });
+  let quitAfterPrimaryCloses = false;
+  let replayingNativeQuit = false;
   app.on("window-all-closed", () => {
     logger.info("desktop.lifecycle.all_windows_closed", "All Electron windows closed");
-    app.quit(); // skeleton: no tray icon yet
+    if (quitAfterPrimaryCloses) {
+      replayingNativeQuit = true;
+      app.quit();
+      return;
+    }
+    if (opts.keepAliveWithoutWindows()) {
+      logger.info(
+        "desktop.lifecycle.background_resident",
+        "The Electron shell remains available without a renderer window",
+      );
+      return;
+    }
+    app.quit();
+  });
+  app.on("before-quit", (event) => {
+    opts.onQuitRequested();
+    const primary = opts.registry.primary();
+    if (replayingNativeQuit || primary === null) return;
+
+    // app.quit() asks Electron to close windows synchronously, while VibeField's
+    // durable-close protocol is intentionally asynchronous. Defer the native
+    // quit, let the normal close handler drain and destroy the renderer, then
+    // replay app.quit() from window-all-closed.
+    event.preventDefault();
+    quitAfterPrimaryCloses = true;
+    primary.close();
   });
   let quitObserved = false;
   app.on("will-quit", (e) => {

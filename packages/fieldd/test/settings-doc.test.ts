@@ -44,6 +44,17 @@ describe("the system settings doc (D29′)", () => {
     expect(await b.appValues()).toEqual({ theme: "dark" });
   });
 
+  it("publishes app writes and generic user undo so desktop subscribers refresh", async () => {
+    const svc = make(tempDataDir());
+    const sections: string[] = [];
+    svc.on("changed", (event: { section: string }) => sections.push(event.section));
+    await svc.setAppValue("desktop.showTray", false, "pane");
+    expect(await svc.appValues()).toEqual({ "desktop.showTray": false });
+    expect(await svc.undo()).toEqual({ applied: true });
+    expect(await svc.appValues()).toEqual({});
+    expect(sections).toEqual(["app", "settings"]);
+  });
+
   it("migrates P5's settings-user.json once, doc values winning, file renamed aside", async () => {
     const dataDir = tempDataDir();
     mkdirSync(join(dataDir, "fieldd", "plugins"), { recursive: true });

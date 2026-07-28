@@ -18,6 +18,7 @@ import {
   useState,
 } from "react";
 import type { DocManager, DocManagerState } from "../doc-manager";
+import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
 import { FilePill } from "../hud/FilePill";
 import { LoadingVeil } from "../hud/LoadingVeil";
@@ -124,8 +125,29 @@ export function ChromeLayer({
   chrome: ChromeState;
   devtoolsRef: MutableRefObject<DevtoolsHandle | null>;
 }): ReactElement {
-  const { themeColors, overlapGlow, overlapGlowThemeColors, showSettings, showEcs } = chrome;
+  const {
+    themeColors,
+    overlapGlow,
+    overlapGlowThemeColors,
+    showSettings,
+    setShowSettings,
+    showEcs,
+  } = chrome;
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [diagnosticsRequest, setDiagnosticsRequest] = useState(0);
+
+  useEffect(() => {
+    const onShellCommand = getHost().onShellCommand;
+    if (onShellCommand === undefined) return;
+    return onShellCommand((command) => {
+      if (command === "open-diagnostics") {
+        setDiagnosticsRequest((request) => request + 1);
+      } else {
+        setDiagnosticsRequest(0);
+      }
+      setShowSettings(true);
+    });
+  }, [setShowSettings]);
 
   // The docs sheet + the loading veil quiesce the stage exactly like the tray
   // (WidgetTray holds for itself).
@@ -319,7 +341,10 @@ export function ChromeLayer({
 
       <button
         type="button"
-        onClick={() => chrome.setShowSettings((s) => !s)}
+        onClick={() => {
+          setDiagnosticsRequest(0);
+          setShowSettings((s) => !s);
+        }}
         data-hud-flight="bottom-left"
         className={`hud-flight ${fabCls(showSettings)} bottom-4 left-4`}
         title="Settings"
@@ -373,7 +398,12 @@ export function ChromeLayer({
           overlapGlowThemeColors={overlapGlowThemeColors}
           onOverlapGlowThemeColorsChange={chrome.setOverlapGlowThemeColors}
           stressWidgetType="vibefield.widgetlab.clock"
-          onClose={() => chrome.setShowSettings(false)}
+          platform={getHost().platform ?? "other"}
+          diagnosticsRequest={diagnosticsRequest}
+          onClose={() => {
+            setDiagnosticsRequest(0);
+            setShowSettings(false);
+          }}
         />
       )}
 

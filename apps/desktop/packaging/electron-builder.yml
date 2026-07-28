@@ -139,8 +139,8 @@ mac:
 win:
   target: [nsis]
   icon: packaging/icons/app.ico
-  # nsis.appId must equal windowsAppUserModelId once B-1 is frozen, or taskbar pinning,
-  # shortcuts, notifications and updates disagree with each other (§5.6). Both are blocked on B-1.
+  # The runtime AUMID and builder appId are both the frozen `com.jamesyong.vibefield`.
+  # A future NSIS customization must preserve that identity (§5.6).
 
 linux:
   target: [AppImage, deb]

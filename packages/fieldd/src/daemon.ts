@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AppPreferenceSetParams,
   ArtifactPublishParams,
   ArtifactUnpublishParams,
   CONTRACTS_VERSION,
@@ -50,6 +51,7 @@ import {
   PluginLogRouter,
   pluginLogProvenance,
 } from "@vibefield/logging";
+import { effectiveAppPreferences } from "./app-preferences";
 import { ArtifactService } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { DeviceService } from "./device-service";
@@ -1144,6 +1146,78 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return {
         snapshot: await settings.snapshot(caller.pluginId),
         dispose: () => settings.off("changed", fn),
+      };
+    });
+    // D29′ app-section preferences. The method registry supplies the
+    // settings.manage capability gate; this additional caller-kind check is
+    // restrict-only, keeping a copied token from turning a plugin worker or
+    // debug client into a desktop settings principal.
+    const requireAppPreferencesCaller = (ctx: {
+      principal: { kind: string };
+      clientKind?: string;
+    }): void => {
+      if (
+        ctx.principal.kind !== "local-token" ||
+        (ctx.clientKind !== "shell-main" && ctx.clientKind !== "renderer")
+      ) {
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "app preferences require a trusted desktop caller",
+          false,
+        );
+      }
+    };
+    const appPreferencesSnapshot = async () =>
+      effectiveAppPreferences(await settingsDoc.appValues());
+    api.register("storage.appPreferences.get", async (ctx, _params) => {
+      requireAppPreferencesCaller(ctx);
+      return appPreferencesSnapshot();
+    });
+    api.register("storage.appPreferences.set", async (ctx, params) => {
+      requireAppPreferencesCaller(ctx);
+      const parsed = AppPreferenceSetParams.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { key: desktop.showTray|desktop.backgroundShell, value: boolean }",
+          false,
+        );
+      }
+      await settingsDoc.setAppValue(
+        parsed.data.key,
+        parsed.data.value,
+        ctx.clientKind === "shell-main" ? "shell" : "pane",
+      );
+      return { ok: true };
+    });
+    api.registerSubscription("storage.appPreferences.subscribe", async (ctx, _params, emit) => {
+      requireAppPreferencesCaller(ctx);
+      let disposed = false;
+      const onChanged = (event: { section: string; pluginId?: string }) => {
+        if (
+          event.section === "app" ||
+          (event.section === "settings" && event.pluginId === undefined)
+        ) {
+          void appPreferencesSnapshot().then(
+            (snapshot) => {
+              if (!disposed) emit(snapshot);
+            },
+            (error) =>
+              logger.error(
+                "fieldd.app_preferences.snapshot_failed",
+                "The app preference stream could not refresh its snapshot",
+                error,
+              ),
+          );
+        }
+      };
+      settingsDoc.on("changed", onChanged);
+      return {
+        snapshot: await appPreferencesSnapshot(),
+        dispose: () => {
+          disposed = true;
+          settingsDoc.off("changed", onChanged);
+        },
       };
     });
     api.register("storage.kv.get", async (ctx, params) => {

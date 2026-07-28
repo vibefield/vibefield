@@ -8,6 +8,7 @@
 // envelope with controlUrl); until that wire exists this mirrors today's
 // bridge exactly.
 
+import type { ShellCommand, ShellPlatform } from "@vibefield/contracts";
 import type {
   CrashArtifactListV1,
   DiagnosticLeaseCreateV1,
@@ -49,9 +50,11 @@ export interface FieldDiagnosticsHost {
 export interface FieldHost {
   readonly logger: RendererLogger;
   readonly diagnostics?: FieldDiagnosticsHost;
+  readonly platform?: ShellPlatform;
   getConnection(): Promise<{ port: number; token: string }>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;
+  onShellCommand?(handler: (command: ShellCommand) => void): () => void;
 }
 
 let current: FieldHost | null = null;

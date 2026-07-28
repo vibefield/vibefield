@@ -16,6 +16,7 @@ window.addEventListener("pagehide", () => logging.close(), { once: true });
 mountFieldApp({
   container: root,
   host: {
+    platform: window.vibefield.platform,
     logger: logging.logger,
     diagnostics: {
       query: (query) => window.vibefield.diagnostics.query(query),
@@ -41,5 +42,6 @@ mountFieldApp({
     getConnection: () => window.vibefield.getConnection(),
     onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
     completeClose: (result) => window.vibefield.completeClose(result),
+    onShellCommand: (handler) => window.vibefield.onShellCommand(handler),
   },
 });

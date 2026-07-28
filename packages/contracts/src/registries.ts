@@ -3,6 +3,11 @@
 
 export const APP_ID = "vibefield" as const;
 
+/** Installed desktop identity. This deliberately differs from APP_ID, which is
+ * the truffle mesh namespace and data-root slug. Windows shortcuts, taskbar
+ * grouping, notifications, and the installer all use this frozen value. */
+export const DESKTOP_APP_ID = "com.jamesyong.vibefield" as const;
+
 /** One place for every port VibeField binds or reserves. */
 export const PORTS = {
   /** fieldd product API — renderer control plane (loopback WS, JSON-RPC text). D27 */
@@ -125,6 +130,7 @@ export const SCOPES = [
   "diagnostics.read", // LOG §14 — trusted shell only; excluded from every federated preset
   "diagnostics.manage", // diagnostic leases/support mutations; trusted shell only
   "audit.append", // shell-originated audit actions; local-only
+  "settings.manage", // trusted desktop shell/renderer app-preference surface
   "tokens.mint", // shell-main only: mint per-window renderer tokens (Track A bootstrap)
 ] as const;
 export type Scope = (typeof SCOPES)[number];
@@ -157,7 +163,7 @@ export const SOCKETS = {
   MESHDATA: "meshdata.sock",
 } as const;
 
-/** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): five channels, nothing
+/** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): six channels, nothing
  * else. Payload schemas live in shell.ts; call sites import these names — a raw
  * `vibefield:` literal outside contracts is a boundary violation (wall R6). */
 export const IPC_CHANNELS = {
@@ -171,4 +177,6 @@ export const IPC_CHANNELS = {
   rendererLogPort: "vibefield:logging:renderer-port",
   /** main ↔ preload, one host-only diagnostics MessagePort per generation */
   diagnosticsPort: "vibefield:diagnostics:host-port",
+  /** main → renderer: validated, presentation-only shell commands */
+  shellCommand: "vibefield:shell:command",
 } as const;

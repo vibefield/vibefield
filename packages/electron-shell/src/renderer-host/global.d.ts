@@ -1,3 +1,4 @@
+import type { ShellCommand, ShellPlatform } from "@vibefield/contracts";
 import type {
   CrashArtifactListV1,
   DiagnosticLeaseCreateV1,
@@ -14,10 +15,12 @@ import type {
 declare global {
   interface Window {
     vibefield: {
+      readonly platform: ShellPlatform;
       submitRendererLogs(serializedBatch: string): boolean;
       getConnection(): Promise<{ port: number; token: string }>;
       onPrepareClose(handler: (requestId: string) => void): () => void;
       completeClose(result: { requestId: string; ok: boolean; error?: string }): void;
+      onShellCommand(handler: (command: ShellCommand) => void): () => void;
       diagnostics: {
         query(query: DiagnosticLogQueryV1): Promise<DiagnosticLogSnapshotV1>;
         subscribe(

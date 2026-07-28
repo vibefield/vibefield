@@ -31,7 +31,9 @@ import {
   widgets,
   writeRuntimeResource,
 } from "@vibecook/ice";
-import { lazy, Suspense, useState } from "react";
+import type { ShellPlatform } from "@vibefield/contracts";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { DesktopSection } from "./DesktopSection";
 import { MeshSection } from "./MeshSection";
 import { PluginsSection } from "./PluginsSection";
 import { SystemSection } from "./SystemSection";
@@ -60,6 +62,8 @@ interface SettingsPanelProps {
    * App (which owns the widget catalog) supplies it; absent ⇒ buttons disabled.
    */
   stressWidgetType?: string;
+  platform?: ShellPlatform;
+  diagnosticsRequest?: number;
   onClose: () => void;
 }
 
@@ -87,6 +91,8 @@ export function SettingsPanel({
   overlapGlowThemeColors,
   onOverlapGlowThemeColorsChange,
   stressWidgetType,
+  platform = "other",
+  diagnosticsRequest = 0,
   onClose,
 }: SettingsPanelProps) {
   const camLimits = engine.world.getResource(CameraLimits);
@@ -100,7 +106,13 @@ export function SettingsPanel({
   const [bpNormal, setBpNormal] = useState(320);
   const [bpExpanded, setBpExpanded] = useState(640);
   const [glowOpen, setGlowOpen] = useState(false);
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(diagnosticsRequest > 0);
+  const handledDiagnosticsRequest = useRef(diagnosticsRequest);
+  useEffect(() => {
+    if (diagnosticsRequest <= handledDiagnosticsRequest.current) return;
+    handledDiagnosticsRequest.current = diagnosticsRequest;
+    setDiagnosticsOpen(true);
+  }, [diagnosticsRequest]);
 
   function setGlow<K extends keyof OverlapGlowConfig>(key: K, value: OverlapGlowConfig[K]) {
     onOverlapGlowChange({ ...overlapGlow, [key]: value });
@@ -694,6 +706,7 @@ export function SettingsPanel({
           </div>
         </div>
 
+        <DesktopSection platform={platform} />
         {/* System diagnostics — sections, never pages (2026-07-21). */}
         <SystemSection />
         <div className={borderCls}>

@@ -85,6 +85,7 @@ async function mint(
       "plugins.manage",
       "diagnostics.read",
       "diagnostics.manage",
+      "settings.manage",
     ],
     label: `window-${senderId}`,
   })) as { token: string };

@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { IPC_CHANNELS } from "../src/registries";
 import {
+  APP_PREFERENCE_KEYS,
+  AppPreferenceSetParams,
+  AppPreferences,
   CloseReason,
   CloseRequest,
   CloseResult,
   ProductInfo,
+  ShellCommandRequest,
   WindowConnection,
 } from "../src/shell";
 
@@ -143,13 +147,14 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the four channel keys, in order", () => {
+  it("exposes exactly the six channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
       "closeResult",
       "rendererLogPort",
       "diagnosticsPort",
+      "shellCommand",
     ]);
   });
 
@@ -160,6 +165,43 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       closeResult: "vibefield:shell:close-result",
       rendererLogPort: "vibefield:logging:renderer-port",
       diagnosticsPort: "vibefield:diagnostics:host-port",
+      shellCommand: "vibefield:shell:command",
     });
+  });
+});
+
+describe("tray shell commands and app preferences", () => {
+  it("keeps the renderer command set closed", () => {
+    expect(ShellCommandRequest.parse({ command: "open-settings" }).command).toBe("open-settings");
+    expect(ShellCommandRequest.parse({ command: "open-diagnostics" }).command).toBe(
+      "open-diagnostics",
+    );
+    expect(ShellCommandRequest.safeParse({ command: "run-plugin-code" }).success).toBe(false);
+  });
+
+  it("requires a complete effective preference snapshot", () => {
+    expect(AppPreferences.parse({ showTray: true, backgroundShell: false })).toEqual({
+      showTray: true,
+      backgroundShell: false,
+    });
+    expect(AppPreferences.safeParse({ showTray: true }).success).toBe(false);
+  });
+
+  it("accepts only the two boolean preference mutations", () => {
+    expect(
+      AppPreferenceSetParams.parse({
+        key: APP_PREFERENCE_KEYS.SHOW_TRAY,
+        value: false,
+      }),
+    ).toMatchObject({ key: "desktop.showTray", value: false });
+    expect(AppPreferenceSetParams.safeParse({ key: "desktop.unknown", value: true }).success).toBe(
+      false,
+    );
+    expect(
+      AppPreferenceSetParams.safeParse({
+        key: APP_PREFERENCE_KEYS.BACKGROUND_SHELL,
+        value: "yes",
+      }).success,
+    ).toBe(false);
   });
 });

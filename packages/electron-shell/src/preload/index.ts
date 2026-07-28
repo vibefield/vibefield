@@ -1,7 +1,15 @@
-import { CloseRequest, CloseResult, IPC_CHANNELS, WindowConnection } from "@vibefield/contracts";
+import {
+  CloseRequest,
+  CloseResult,
+  IPC_CHANNELS,
+  type ShellCommand,
+  ShellPlatform,
+  WindowConnection,
+} from "@vibefield/contracts";
 import { contextBridge, ipcRenderer } from "electron";
 import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
+import { PreloadShellCommandBridge } from "./shell-commands";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
 // Product traffic flows over the loopback WS (D27), never over IPC. BOTH
@@ -12,6 +20,29 @@ import { PreloadLogBridge, type RendererLogPort } from "./logging";
 
 const logging = new PreloadLogBridge();
 const diagnostics = new PreloadDiagnosticsBridge();
+const shellCommands = new PreloadShellCommandBridge((issueCount) => {
+  logging.submit(
+    JSON.stringify({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: Date.now(),
+          level: "error",
+          event: "renderer.preload.shell_command_rejected",
+          msg: "Preload rejected a malformed shell command",
+          component: "preload.shell",
+          attrs: { issueCount },
+        },
+      ],
+    }),
+  );
+});
+const platform = ShellPlatform.parse(
+  process.platform === "darwin" || process.platform === "win32" || process.platform === "linux"
+    ? process.platform
+    : "other",
+);
 ipcRenderer.on(IPC_CHANNELS.rendererLogPort, (event) => {
   const port = event.ports[0] as RendererLogPort | undefined;
   if (port !== undefined) logging.attach(port);
@@ -20,8 +51,12 @@ ipcRenderer.on(IPC_CHANNELS.diagnosticsPort, (event) => {
   const port = event.ports[0] as DiagnosticsRendererPort | undefined;
   if (port !== undefined) diagnostics.attach(port);
 });
+ipcRenderer.on(IPC_CHANNELS.shellCommand, (_event, raw: unknown) => {
+  shellCommands.accept(raw);
+});
 
 contextBridge.exposeInMainWorld("vibefield", {
+  platform,
   submitRendererLogs: (serializedBatch: string): boolean => logging.submit(serializedBatch),
   getConnection: async (): Promise<{ port: number; token: string }> =>
     WindowConnection.parse(await ipcRenderer.invoke(IPC_CHANNELS.windowBootstrap)),
@@ -55,6 +90,8 @@ contextBridge.exposeInMainWorld("vibefield", {
   completeClose: (result: { requestId: string; ok: boolean; error?: string }): void => {
     ipcRenderer.send(IPC_CHANNELS.closeResult, CloseResult.parse(result));
   },
+  onShellCommand: (handler: (command: ShellCommand) => void): (() => void) =>
+    shellCommands.subscribe(handler),
   diagnostics: {
     query: (query: unknown) => diagnostics.query(query),
     subscribe: (query: unknown, onEvent: Parameters<typeof diagnostics.subscribe>[1]) =>

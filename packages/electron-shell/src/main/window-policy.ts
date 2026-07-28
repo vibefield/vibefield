@@ -66,18 +66,38 @@ export interface WindowSession {
   dispose(): void;
 }
 
+export interface PrimaryWindowCandidate {
+  readonly window: BrowserWindow;
+  /** Installs the window's host bridges and loads the renderer. The registry
+   * adopts the BrowserWindow before this runs, so bootstrap sender policy is
+   * already armed when renderer code starts. */
+  prepare(): Promise<void>;
+}
+
 export class WindowRegistry {
   private readonly sessions = new Map<number, WindowSession>();
+  private readonly primaryListeners = new Set<(open: boolean) => void>();
+  private opening: Promise<BrowserWindow> | null = null;
 
   adopt(window: BrowserWindow): WindowSession {
+    const current = this.primary();
+    if (current !== null && current !== window) {
+      throw new Error(
+        `single-primary-window invariant violated: ${current.id} is already registered`,
+      );
+    }
+    const existing = this.sessions.get(window.id);
+    if (existing !== undefined) return existing;
     const session: WindowSession = {
       window,
       dispose: () => {
-        this.sessions.delete(window.id);
+        if (!this.sessions.delete(window.id)) return;
+        this.emitPrimaryChanged();
       },
     };
     this.sessions.set(window.id, session);
     window.on("closed", () => session.dispose());
+    this.emitPrimaryChanged();
     return session;
   }
 
@@ -97,15 +117,74 @@ export class WindowRegistry {
     return null;
   }
 
-  /** second-instance behavior: restore + focus the primary window. */
+  /** Reveal an existing primary window. Kept synchronous for narrow callers;
+   * entry points that may recreate it use revealPrimary(). */
   focusPrimary(): void {
     const win = this.primary();
     if (win === null) return;
-    if (win.isMinimized()) win.restore();
-    win.focus();
+    this.revealWindow(win);
+  }
+
+  /** The one create-or-reveal operation for initial boot, tray, Dock
+   * activation, second-instance, and future deep links. Concurrent callers
+   * share the same preparation promise and can never create a second canvas. */
+  revealPrimary(factory: () => PrimaryWindowCandidate): Promise<BrowserWindow> {
+    if (this.opening !== null) return this.opening;
+    const existing = this.primary();
+    if (existing !== null) {
+      this.revealWindow(existing);
+      return Promise.resolve(existing);
+    }
+
+    let candidate: PrimaryWindowCandidate;
+    let session: WindowSession;
+    try {
+      candidate = factory();
+      session = this.adopt(candidate.window);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    const attempt = Promise.resolve()
+      .then(() => candidate.prepare())
+      .then(() => {
+        if (candidate.window.isDestroyed()) {
+          throw new Error("primary window was destroyed before its renderer became ready");
+        }
+        this.revealWindow(candidate.window);
+        return candidate.window;
+      })
+      .catch((error: unknown) => {
+        session.dispose();
+        if (!candidate.window.isDestroyed()) candidate.window.destroy();
+        throw error;
+      })
+      .finally(() => {
+        if (this.opening === attempt) this.opening = null;
+      });
+    this.opening = attempt;
+    return attempt;
+  }
+
+  onPrimaryChanged(listener: (open: boolean) => void): () => void {
+    this.primaryListeners.add(listener);
+    return () => this.primaryListeners.delete(listener);
   }
 
   disposeAll(): void {
-    for (const s of [...this.sessions.values()]) s.dispose();
+    for (const session of [...this.sessions.values()]) {
+      session.dispose();
+      if (!session.window.isDestroyed()) session.window.destroy();
+    }
+  }
+
+  private revealWindow(win: BrowserWindow): void {
+    if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.show();
+    win.focus();
+  }
+
+  private emitPrimaryChanged(): void {
+    const open = this.primary() !== null;
+    for (const listener of this.primaryListeners) listener(open);
   }
 }

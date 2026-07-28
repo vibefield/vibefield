@@ -538,6 +538,31 @@ export const METHODS: MethodDef[] = [
     locality: "local",
     subscription: true,
   }),
+  // D29′ app-section preferences. Unlike plugin settings these are an exact,
+  // trusted desktop surface; plugins, tailnet callers, and agents never receive
+  // settings.manage.
+  defineMethod({
+    surface: "product",
+    method: "storage.appPreferences.get",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "sync",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.appPreferences.set",
+    scope: "settings.manage",
+    idempotent: false,
+    locality: "sync",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "storage.appPreferences.subscribe",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "sync",
+    subscription: true,
+  }),
   defineMethod({
     surface: "product",
     method: "storage.kv.get",

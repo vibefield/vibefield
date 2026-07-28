@@ -40,7 +40,7 @@
       "value": "com.jamesyong.vibefield",
       "format": "reverse-dns",
       "machineOverlapAcknowledged": "identical to appId by requirement; the same personal-namespace reasoning applies",
-      "note": "Frozen 2026-07-25, deliberately IDENTICAL to appId: §5.6 requires the AUMID and the installer's application id to agree or taskbar pinning, shortcuts, notifications and updates disagree with each other. ACTION OUTSTANDING: electron-shell still calls app.setAppUserModelId(APP_ID) with contracts' mesh slug 'vibefield' — now that Windows is a GA target this is a real defect, and the runtime must switch to this value before the first Windows package."
+      "note": "Frozen 2026-07-25, deliberately IDENTICAL to appId: §5.6 requires the AUMID and the installer's application id to agree or taskbar pinning, shortcuts, notifications and updates disagree with each other. Wired at runtime through contracts' DESKTOP_APP_ID; the separate APP_ID ('vibefield') remains the truffle mesh namespace and data-root slug."
     },
     "trayGuid": {
       "status": "frozen",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LOCALITIES, METHODS, SURFACES } from "../src/methods";
-import { LOG_STREAMS, PORTS, SCOPES, TAILNET_SCOPES } from "../src/registries";
+import { DESKTOP_APP_ID, LOG_STREAMS, PORTS, SCOPES, TAILNET_SCOPES } from "../src/registries";
 
 describe("method registry lint (design-01 §9.2 + D36)", () => {
   it("every method is fully declared", () => {
@@ -25,6 +25,12 @@ describe("port registry", () => {
   });
 });
 
+describe("installed desktop identity", () => {
+  it("pins the frozen reverse-DNS identity separately from the mesh slug", () => {
+    expect(DESKTOP_APP_ID).toBe("com.jamesyong.vibefield");
+  });
+});
+
 describe("logging registries (LOG-43/LOG-44)", () => {
   it("declares unique, fixed category/basename pairs", () => {
     const streams = Object.values(LOG_STREAMS);
@@ -35,9 +41,27 @@ describe("logging registries (LOG-43/LOG-44)", () => {
   });
 
   it("keeps diagnostics and audit scopes local-only", () => {
-    for (const scope of ["diagnostics.read", "diagnostics.manage", "audit.append"] as const) {
+    for (const scope of [
+      "diagnostics.read",
+      "diagnostics.manage",
+      "audit.append",
+      "settings.manage",
+    ] as const) {
       expect(SCOPES).toContain(scope);
       expect(TAILNET_SCOPES).not.toContain(scope);
+    }
+  });
+
+  it("declares the exact trusted app-preference surface", () => {
+    const methods = METHODS.filter((method) => method.method.startsWith("storage.appPreferences."));
+    expect(methods.map((method) => method.method)).toEqual([
+      "storage.appPreferences.get",
+      "storage.appPreferences.set",
+      "storage.appPreferences.subscribe",
+    ]);
+    for (const method of methods) {
+      expect(method.scope).toBe("settings.manage");
+      expect(method.locality).toBe("sync");
     }
   });
 });

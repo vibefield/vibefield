@@ -62,3 +62,52 @@ export const CloseResult = z
   })
   .passthrough();
 export type CloseResult = z.infer<typeof CloseResult>;
+
+/** Presentation commands the native shell may route into the one field
+ * renderer. They carry no authority: the renderer decides how to reveal its
+ * existing Settings surface. */
+export const ShellCommand = z.enum(["open-settings", "open-diagnostics"]);
+export type ShellCommand = z.infer<typeof ShellCommand>;
+
+export const ShellCommandRequest = z
+  .object({
+    command: ShellCommand,
+  })
+  .passthrough();
+export type ShellCommandRequest = z.infer<typeof ShellCommandRequest>;
+
+/** Small host fact used only to describe platform-specific desktop behavior in
+ * Settings. Unknown Electron platforms collapse to `other` at the preload
+ * boundary rather than leaking Node's process object into the renderer. */
+export const ShellPlatform = z.enum(["darwin", "win32", "linux", "other"]);
+export type ShellPlatform = z.infer<typeof ShellPlatform>;
+
+/** D29′ app section: user-scoped desktop preferences live in the same settings
+ * document as other spine preferences. The daemon returns effective values so
+ * every caller applies the same defaults. */
+export const APP_PREFERENCE_KEYS = {
+  SHOW_TRAY: "desktop.showTray",
+  BACKGROUND_SHELL: "desktop.backgroundShell",
+} as const;
+
+export const AppPreferenceKey = z.enum([
+  APP_PREFERENCE_KEYS.SHOW_TRAY,
+  APP_PREFERENCE_KEYS.BACKGROUND_SHELL,
+]);
+export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
+
+export const AppPreferences = z
+  .object({
+    showTray: z.boolean(),
+    backgroundShell: z.boolean(),
+  })
+  .passthrough();
+export type AppPreferences = z.infer<typeof AppPreferences>;
+
+export const AppPreferenceSetParams = z
+  .object({
+    key: AppPreferenceKey,
+    value: z.boolean(),
+  })
+  .passthrough();
+export type AppPreferenceSetParams = z.infer<typeof AppPreferenceSetParams>;

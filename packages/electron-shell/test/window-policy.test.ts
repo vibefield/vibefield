@@ -12,29 +12,40 @@ interface FakeWindow {
   /** the identity object `owns()` compares against. */
   readonly webContents: WebContents;
   readonly restore: Mock;
+  readonly show: Mock;
   readonly focus: Mock;
   destroy(): void;
   minimize(): void;
+  hide(): void;
   /** invoke the listener the registry installed via window.on("closed", …). */
   fireClosed(): void;
   hasClosedHandler(): boolean;
 }
 
 function makeFakeWindow(id: number): FakeWindow {
-  const restore = vi.fn();
-  const focus = vi.fn();
-  const webContents = { id } as unknown as WebContents;
   let destroyed = false;
   let minimized = false;
+  let visible = true;
   let closedHandler: (() => void) | undefined;
+  const restore = vi.fn();
+  const show = vi.fn(() => {
+    visible = true;
+  });
+  const focus = vi.fn();
+  const webContents = { id } as unknown as WebContents;
 
   const win = {
     id,
     webContents,
     isDestroyed: () => destroyed,
     isMinimized: () => minimized,
+    isVisible: () => visible,
     restore,
+    show,
     focus,
+    destroy: () => {
+      destroyed = true;
+    },
     on(event: string, handler: () => void) {
       if (event === "closed") closedHandler = handler;
     },
@@ -44,12 +55,16 @@ function makeFakeWindow(id: number): FakeWindow {
     window: win as unknown as BrowserWindow,
     webContents,
     restore,
+    show,
     focus,
     destroy: () => {
       destroyed = true;
     },
     minimize: () => {
       minimized = true;
+    },
+    hide: () => {
+      visible = false;
     },
     fireClosed: () => closedHandler?.(),
     hasClosedHandler: () => closedHandler !== undefined,
@@ -162,8 +177,8 @@ describe("WindowRegistry.primary", () => {
     const dead = makeFakeWindow(1);
     const live = makeFakeWindow(2);
     reg.adopt(dead.window);
-    reg.adopt(live.window);
     dead.destroy();
+    reg.adopt(live.window);
     expect(reg.primary()).toBe(live.window);
   });
 
@@ -201,9 +216,102 @@ describe("WindowRegistry.focusPrimary", () => {
     expect(a.focus).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a hidden primary BEFORE focusing it", () => {
+    const reg = new WindowRegistry();
+    const a = makeFakeWindow(1);
+    reg.adopt(a.window);
+    a.hide();
+
+    reg.focusPrimary();
+
+    expect(a.show).toHaveBeenCalledTimes(1);
+    expect(firstCallOrder(a.show)).toBeLessThan(firstCallOrder(a.focus));
+  });
+
   it("is a no-op when there is no window", () => {
     const reg = new WindowRegistry();
     expect(() => reg.focusPrimary()).not.toThrow();
+  });
+});
+
+describe("WindowRegistry single-primary reveal", () => {
+  it("adopts before preparation and reveals after the renderer is ready", async () => {
+    const reg = new WindowRegistry();
+    const a = makeFakeWindow(1);
+    let ownedDuringPrepare = false;
+
+    const revealed = await reg.revealPrimary(() => ({
+      window: a.window,
+      prepare: async () => {
+        ownedDuringPrepare = reg.owns(a.webContents);
+      },
+    }));
+
+    expect(ownedDuringPrepare).toBe(true);
+    expect(revealed).toBe(a.window);
+    expect(a.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates concurrent creation onto one preparation promise", async () => {
+    const reg = new WindowRegistry();
+    const a = makeFakeWindow(1);
+    let finish = (): void => {};
+    const preparation = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const factory = vi.fn(() => ({
+      window: a.window,
+      prepare: () => preparation,
+    }));
+
+    const first = reg.revealPrimary(factory);
+    const second = reg.revealPrimary(factory);
+    expect(factory).toHaveBeenCalledTimes(1);
+    finish();
+    await expect(Promise.all([first, second])).resolves.toEqual([a.window, a.window]);
+  });
+
+  it("recreates only after the prior primary has closed", async () => {
+    const reg = new WindowRegistry();
+    const first = makeFakeWindow(1);
+    const second = makeFakeWindow(2);
+    await reg.revealPrimary(() => ({ window: first.window, prepare: async () => {} }));
+    first.fireClosed();
+
+    await expect(
+      reg.revealPrimary(() => ({ window: second.window, prepare: async () => {} })),
+    ).resolves.toBe(second.window);
+    expect(reg.primary()).toBe(second.window);
+  });
+
+  it("refuses a second live primary at the registry boundary", () => {
+    const reg = new WindowRegistry();
+    reg.adopt(makeFakeWindow(1).window);
+    expect(() => reg.adopt(makeFakeWindow(2).window)).toThrow(/single-primary-window/);
+  });
+
+  it("destroys and releases a window whose preparation fails", async () => {
+    const reg = new WindowRegistry();
+    const a = makeFakeWindow(1);
+    await expect(
+      reg.revealPrimary(() => ({
+        window: a.window,
+        prepare: async () => {
+          throw new Error("renderer failed");
+        },
+      })),
+    ).rejects.toThrow("renderer failed");
+    expect(reg.primary()).toBeNull();
+  });
+
+  it("publishes open/closed state transitions", () => {
+    const reg = new WindowRegistry();
+    const states: boolean[] = [];
+    reg.onPrimaryChanged((open) => states.push(open));
+    const a = makeFakeWindow(1);
+    reg.adopt(a.window);
+    a.fireClosed();
+    expect(states).toEqual([true, false]);
   });
 });
 
@@ -227,14 +335,11 @@ describe("WindowRegistry.disposeAll", () => {
   it("empties the registry so nothing is owned afterward", () => {
     const reg = new WindowRegistry();
     const a = makeFakeWindow(1);
-    const b = makeFakeWindow(2);
     reg.adopt(a.window);
-    reg.adopt(b.window);
 
     reg.disposeAll();
 
     expect(reg.owns(a.webContents)).toBe(false);
-    expect(reg.owns(b.webContents)).toBe(false);
     expect(reg.primary()).toBeNull();
   });
 });
