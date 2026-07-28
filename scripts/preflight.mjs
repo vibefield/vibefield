@@ -1,109 +1,19 @@
 #!/usr/bin/env node
-// Machine-coupling preflight: this repo builds only with its sibling checkouts
-// present (README "Getting started", CLAUDE.md "Machine setup"). Hard-fails on
-// missing pieces, warns on freshness/version drift. Run: `pnpm preflight`.
+// Environment preflight: tool versions + the import-boundary walls. Hard-fails
+// on missing pieces, warns on version drift. Run: `pnpm preflight`.
+//
+// The sibling-checkout machinery (SIBLINGS map, siblings.lock.json, `pnpm
+// siblings:pin`) retired on 2026-07-28: truffle-core became an exact crates-io
+// pin (=0.7.9) when the T1 petition window closed, exactly as @vibecook/ice
+// left on 2026-07-25 for npm. The repo builds standalone. If a new petition
+// window reopens the ../p008/truffle [patch.crates-io], restore the machinery
+// from git history — a path patch without a SHA pin makes verify unreplayable.
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const problems = [];
 const warnings = [];
-
-// --- sibling revision pins (siblings.lock.json) ------------------------------
-// The truffle cargo [patch] points at a WORKING TREE — a presence check alone
-// leaves the build unreproducible: a green verify can't be replayed without
-// knowing which revision it ran against. The lock records the SHA; preflight
-// verifies it. Updating the lock IS the deliberate upgrade event (EL8 spirit):
-// sync the sibling, then `pnpm siblings:pin`. A dirty sibling tree only WARNs —
-// co-developing it is the normal state; the pin is about the base revision.
-// ice left this map on 2026-07-25: it is now an exact registry pin
-// (@vibecook/ice 0.2.0), so its version is the lockfile's business and drifting
-// SHAs can no longer block the gate. Cargo has no such registry path for
-// truffle-core while [patch.crates-io] is how EL8 pins it.
-const SIBLINGS = {
-  truffle: resolve(root, "../p008/truffle"),
-};
-const SIBLINGS_LOCK = join(root, "siblings.lock.json");
-
-function siblingSha(dir) {
-  return execSync("git rev-parse HEAD", { cwd: dir, stdio: ["ignore", "pipe", "ignore"] })
-    .toString()
-    .trim();
-}
-
-function siblingDirty(dir) {
-  return (
-    execSync("git status --porcelain", { cwd: dir, stdio: ["ignore", "pipe", "ignore"] })
-      .toString()
-      .trim().length > 0
-  );
-}
-
-if (process.argv.includes("--pin-siblings")) {
-  const pinned = {};
-  for (const [name, dir] of Object.entries(SIBLINGS)) {
-    try {
-      pinned[name] = siblingSha(dir);
-    } catch {
-      console.error(`siblings:pin FAIL: ${name} is not a git checkout at ${dir}`);
-      process.exit(1);
-    }
-  }
-  const doc = {
-    "//": "Machine-coupled sibling revisions. Verified by pnpm preflight; update deliberately via pnpm siblings:pin (EL8: upgrades are events, never drift).",
-    siblings: pinned,
-  };
-  writeFileSync(SIBLINGS_LOCK, `${JSON.stringify(doc, null, 2)}\n`);
-  for (const [name, sha] of Object.entries(pinned)) console.log(`pinned ${name} @ ${sha}`);
-  process.exit(0);
-}
-
-// --- sibling checkouts -------------------------------------------------------
-// ice is no longer here: it resolves from the registry, so npm ships its own
-// dist and the B2 stale-dist class (a src/ newer than the dist/ we consume,
-// famously a missing ground.js) cannot occur through this path at all. The
-// freshness walker that used to guard it retired with the file: dep. If you
-// `pnpm link` ice for co-development, its freshness becomes your business —
-// that link is deliberately local and uncommitted.
-const TRUFFLE = resolve(root, "../p008/truffle/crates/truffle-core");
-if (!existsSync(TRUFFLE)) {
-  problems.push(`truffle-core checkout missing at ${TRUFFLE} (Cargo.toml [patch.crates-io])`);
-}
-
-// --- sibling revisions vs the lock -------------------------------------------
-if (!existsSync(SIBLINGS_LOCK)) {
-  problems.push("siblings.lock.json missing — run `pnpm siblings:pin` to record sibling revisions");
-} else {
-  const lock = JSON.parse(readFileSync(SIBLINGS_LOCK, "utf8"));
-  for (const [name, dir] of Object.entries(SIBLINGS)) {
-    if (!existsSync(dir)) continue; // presence failure already reported above
-    let sha = null;
-    try {
-      sha = siblingSha(dir);
-    } catch {
-      warnings.push(`${name}: not a git checkout at ${dir} — revision pin unverifiable`);
-      continue;
-    }
-    const pinned = lock.siblings?.[name];
-    if (pinned === undefined) {
-      problems.push(`${name} has no entry in siblings.lock.json — run \`pnpm siblings:pin\``);
-    } else if (sha !== pinned) {
-      problems.push(
-        `${name} is at ${sha.slice(0, 12)} but siblings.lock.json pins ` +
-          `${String(pinned).slice(0, 12)} — sync the sibling to the pin, or accept the new ` +
-          "revision deliberately: `pnpm siblings:pin` (EL8)",
-      );
-    }
-    try {
-      if (siblingDirty(dir)) {
-        warnings.push(`${name} working tree is dirty — verify runs against unpinned edits`);
-      }
-    } catch {
-      // status unavailable: the SHA check above already covered the repo shape
-    }
-  }
-}
 
 // --- cargo-typify (contracts gen; gen:check diffs are version-sensitive) -----
 const TYPIFY_EXPECTED = "cargo-typify 0.7.0";

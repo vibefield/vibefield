@@ -1,6 +1,0 @@
-{
-  "//": "Machine-coupled sibling revisions. Verified by pnpm preflight; update deliberately via pnpm siblings:pin (EL8: upgrades are events, never drift).",
-  "siblings": {
-    "truffle": "95dbdf7f7da42da548b8d741265028008ba6e1ef"
-  }
-}

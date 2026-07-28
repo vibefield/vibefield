@@ -22,14 +22,13 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   look and feel defer to DESIGN.md. UI reviews cite its sections; token/easing deviations
   change the doc first.
 
-## Machine setup (this repo does NOT build standalone)
+## Machine setup
 
-Required sibling checkout, verified by `pnpm preflight`:
-
-- `../p008/truffle` — Cargo `[patch.crates-io]` target for `truffle-core` (EL8 lockstep).
-
-Its REVISION is pinned in `siblings.lock.json` (preflight verifies the SHA; a dirty tree warns).
-After deliberately syncing it, accept the new revision with `pnpm siblings:pin`.
+The repo builds standalone since 2026-07-28. `truffle-core` is an **exact crates-io pin**
+(`=0.7.9` in the root Cargo.toml) — the `../p008/truffle` sibling `[patch.crates-io]` and its
+`siblings.lock.json` SHA pin retired when the T1 petition window closed. To co-develop truffle
+again (a new petition window), re-add the `[patch]` and restore the sibling-pin machinery from
+git history; never leave a path patch unpinned.
 
 `@vibecook/ice` is an **exact registry pin** (`0.2.0`, declared once in the pnpm-workspace.yaml
 overrides — packages ask for `"*"`). It stopped being a `file:` sibling on 2026-07-25: npm ships
@@ -69,7 +68,7 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
   `FIELD_*`/`FIELDD_*` env vars are stripped from agent PTYs; daemon secrets never enter
   agent environments.
 - **EL8 — version lockstep.** `loro-crdt` (workspace override) and `truffle-core`
-  (`[patch]` pin) bump only as deliberate upgrade events, never casually.
+  (exact `=` registry pin) bump only as deliberate upgrade events, never casually.
 - **Tolerant reader.** Inbound parsing is `.passthrough()` + unknown-field logging; degraded
   states surface as `UNAVAILABLE {service, state, progress}` — honest states, never blanks.
 - **Two planes.** field-native outlives fieldd outlives the shell. The session-persistence

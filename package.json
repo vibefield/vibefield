@@ -24,7 +24,6 @@
     "gen:manifests": "nx run-many -t gen:manifest",
     "gen:check": "pnpm gen && git diff --exit-code -- packages/contracts/gen packages/field-native/src/contracts.rs",
     "preflight": "node scripts/preflight.mjs",
-    "siblings:pin": "node scripts/preflight.mjs --pin-siblings",
     "verify": "pnpm preflight && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm test && pnpm test:rust && pnpm gen:check",
     "commit-draft": "sh scripts/commit-draft.sh"
   },

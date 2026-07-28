@@ -27,14 +27,15 @@ a private mesh across machines, and an iPhone companion.
 
 ## Getting started
 
-Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify` ·
-one sibling checkout, `../p008/truffle` — consumed by path because cargo `[patch.crates-io]` has no
-registry equivalent (see `CLAUDE.md` "Machine setup"). `@vibecook/ice` now comes from npm at an
-exact pin, so it needs no checkout.
+Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify`.
+The repo builds standalone: `truffle-core` is an exact crates-io pin (`=0.7.9`) and
+`@vibecook/ice` an exact npm pin — no sibling checkouts. (A truffle petition window
+reopens the `../p008/truffle` `[patch.crates-io]` + `siblings.lock.json` dance; see
+`CLAUDE.md` "Machine setup" and git history.)
 
 ```sh
 pnpm install
-pnpm preflight      # verifies the machine-coupled bits above
+pnpm preflight      # tool versions + import-boundary walls
 pnpm dev            # desktop app dev loop
 pnpm verify         # full gate: typecheck · biome · rustfmt/clippy · TS+Rust tests · gen freshness
 ```

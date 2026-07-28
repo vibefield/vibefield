@@ -3,11 +3,10 @@ resolver = "2"
 members = ["packages/field-native"]
 
 [workspace.dependencies]
-truffle-core = "0.7.8"
-
 # EL8 — version lockstep: exactly one truffle-core revision across every crate in
-# this workspace (a borrowed Arc<Node> is type-incompatible across revisions).
-# Same style as electron-ghostty: registry requirement + local path patch, so the
-# checkout at ../p008/truffle (v0.7.8) is the single source of truth.
-[patch.crates-io]
-truffle-core = { path = "../p008/truffle/crates/truffle-core" }
+# this workspace (a borrowed Arc<Node> is type-incompatible across revisions), and
+# the pin is EXACT — upgrades are deliberate events, never `cargo update` drift.
+# Registry pin since 2026-07-28 (the T1 petition window closed with truffle 0.7.9);
+# the ../p008/truffle sibling [patch.crates-io] returns only for the duration of an
+# active petition window, together with its siblings.lock.json pin (see git history).
+truffle-core = "=0.7.9"

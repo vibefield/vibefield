@@ -1,11 +1,10 @@
 # THE gate (CLAUDE.md "Commands"): `pnpm verify`, run VERBATIM. macOS runner so CI
 # mirrors the dev machine (darwin) exactly — the desktop/Electron tests and the
 # @vibecook/truffle-sidecar-darwin-* bits are native; green here must mean green there.
-# This repo does NOT build standalone: it consumes ONE sibling checkout
-# (../p008/truffle — cargo [patch]) pinned by siblings.lock.json. EL8: the sibling
-# revision is a deliberate pin, never drift, and preflight hard-fails if the checkout
-# doesn't match the lock. @vibecook/ice left this dance on 2026-07-25 — it is an exact
-# registry pin now (0.2.0), so npm ships its dist and there is nothing to clone or build.
+# The repo builds standalone since 2026-07-28: truffle-core is an exact crates-io pin
+# (=0.7.9, Cargo.toml), so the sibling-checkout clone step retired with the T1 petition
+# window — the same graduation @vibecook/ice made on 2026-07-25 (exact npm pin 0.2.0).
+# EL8 still holds: both pins move only as deliberate upgrade events.
 name: verify
 
 on:
@@ -27,19 +26,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      # truffle is a separate PUBLIC repo on the same account — a plain HTTPS clone
-      # needs no token. Check out the EXACT pinned SHA into the relative location
-      # preflight resolves (../p008/truffle). A fresh detached checkout is clean and at
-      # the pinned SHA, so preflight's revision + dirty checks both pass. No shallow
-      # clone: the pin may sit behind the branch tip.
-      - name: Fetch sibling checkout at pinned revision (EL8)
-        run: |
-          set -euo pipefail
-          truffle_sha=$(jq -r '.siblings.truffle' siblings.lock.json)
-          mkdir -p ../p008
-          git clone --no-tags https://github.com/vibecook-dev/truffle.git ../p008/truffle
-          git -C ../p008/truffle checkout --detach "$truffle_sha"
 
       # pnpm pinned from the packageManager field (pnpm@11.13.1); node from .nvmrc.
       - uses: pnpm/action-setup@v4
