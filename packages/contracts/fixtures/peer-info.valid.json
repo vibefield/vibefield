@@ -1,5 +1,6 @@
 {
   "id": "nodeid:8f3a1c",
+  "deviceId": "01J0FAKEULID0000000000PEER",
   "name": "linux-box",
   "online": true,
   "addresses": ["100.101.102.103"],

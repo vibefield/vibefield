@@ -178,6 +178,33 @@ describe("DeviceService — roster fusion", () => {
     await pollDevices(rpc, (d) => d.length === 1);
   });
 
+  it("fuses tailnet liveness through the registry correlation, never the ULID (T1 §6)", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    // Both keyspaces present and DIFFERENT, exactly as truffle guarantees
+    // (Peer.device_id never equals tailscale_id): the join must travel
+    // slice ULID → PeerInfo.deviceId → tailscale id, or it lands on nothing —
+    // which is the bug this test exists to keep dead.
+    mock.meshPeers = [
+      { id: "nodeid-peer", deviceId: "dev-peer", online: true, lastSeen: 1_700_000_200_000 },
+      { id: "nodeid-loner", online: true }, // no published ULID — stays uncorrelated
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await until(() => mock.storeWrites.length > 0); // publish ran ⇒ peers were refreshed
+
+    const slice = peerSlice({ publishedAt: 1_700_000_123_456 });
+    mock.pushStoreDelta({ kind: "peerUpdated", deviceId: "dev-peer", data: slice, version: 1 });
+    const roster = await pollDevices(rpc, (d) => d.some((x) => x.deviceId === "dev-peer"));
+    const peer = roster.find((x) => x.deviceId === "dev-peer") as DeviceInfo;
+    expect(peer.online).toBe(true); // the join hit — a live tailnet peer reads online
+    expect(peer.tailscaleId).toBe("nodeid-peer"); // the dial keyspace, exposed for liveness consumers
+    expect(peer.lastSeenAt).toBe(1_700_000_200_000); // liveness lastSeen beats publishedAt
+  });
+
   it("drops a malformed peer slice and stays alive (tolerant reader)", async () => {
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);

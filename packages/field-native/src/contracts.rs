@@ -3935,6 +3935,9 @@ impl PairingMac {
 #[doc = "        \"type\": \"string\""]
 #[doc = "      }"]
 #[doc = "    },"]
+#[doc = "    \"deviceId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"id\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
@@ -3956,6 +3959,12 @@ impl PairingMac {
 pub struct PeerInfo {
     #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
     pub addresses: ::std::vec::Vec<::std::string::String>,
+    #[serde(
+        rename = "deviceId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub device_id: ::std::option::Option<::std::string::String>,
     pub id: ::std::string::String,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub name: ::std::option::Option<::std::string::String>,
@@ -8314,6 +8323,10 @@ pub mod builder {
     pub struct PeerInfo {
         addresses:
             ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        device_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         id: ::std::result::Result<::std::string::String, ::std::string::String>,
         name: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
@@ -8329,6 +8342,7 @@ pub mod builder {
         fn default() -> Self {
             Self {
                 addresses: Ok(Default::default()),
+                device_id: Ok(Default::default()),
                 id: Err("no value supplied for id".to_string()),
                 name: Ok(Default::default()),
                 online: Err("no value supplied for online".to_string()),
@@ -8345,6 +8359,16 @@ pub mod builder {
             self.addresses = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for addresses: {e}"));
+            self
+        }
+        pub fn device_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_id: {e}"));
             self
         }
         pub fn id<T>(mut self, value: T) -> Self
@@ -8393,6 +8417,7 @@ pub mod builder {
         fn try_from(value: PeerInfo) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 addresses: value.addresses?,
+                device_id: value.device_id?,
                 id: value.id?,
                 name: value.name?,
                 online: value.online?,
@@ -8404,6 +8429,7 @@ pub mod builder {
         fn from(value: super::PeerInfo) -> Self {
             Self {
                 addresses: Ok(value.addresses),
+                device_id: Ok(value.device_id),
                 id: Ok(value.id),
                 name: Ok(value.name),
                 online: Ok(value.online),

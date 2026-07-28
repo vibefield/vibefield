@@ -91,8 +91,11 @@ export interface DocSyncOptions {
   docs: DocumentService;
   control: LaneControl;
   bytes: LaneBytes;
-  /** Peers to sync toward — `PeerInfo.id`, the same string `lane.open` takes
-   * (one keyspace with the roster's deviceId, D30). */
+  /** Peers to sync toward — `PeerInfo.id`, the same string `lane.open` takes:
+   * the Tailscale stable node id. NOT the roster's ULID deviceId — truffle's
+   * contract says the two keyspaces never collide (T1 §6; an earlier version
+   * of this comment asserted the opposite and the liveness fold was inert for
+   * it). `SyncLiveness` rows must arrive in this same keyspace. */
   peers: () => Promise<SyncPeer[]>;
   logger?: Logger;
   /** injectable clock — the state tests drive it directly */

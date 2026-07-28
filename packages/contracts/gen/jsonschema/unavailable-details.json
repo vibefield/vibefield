@@ -372,6 +372,9 @@
         "id": {
           "type": "string"
         },
+        "deviceId": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },

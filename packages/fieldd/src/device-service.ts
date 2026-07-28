@@ -51,7 +51,15 @@ export class DeviceService extends EventEmitter {
   /** the mesh identity once known (D30); the persisted local id until then */
   private deviceId: string;
   private slices = new Map<string, DeviceSlice>();
+  /** keyed by the Tailscale stable node id (PeerInfo.id) — the tailnet's own
+   * keyspace. NEVER keyed by the roster ULID; the two never collide (T1 §6). */
   private peerLiveness = new Map<string, PeerLiveness>();
+  /** ULID deviceId → tailscale id, learned from the peer registry (PeerInfo
+   * carries both). The ONLY lawful bridge between the two keyspaces: the
+   * roster (ULID slice keys) reaches liveness through this map, and the rows
+   * it produces carry `tailscaleId` so downstream consumers (doc-sync
+   * liveness, the future node-id-header principal) join in the dial keyspace. */
+  private tsByUlid = new Map<string, string>();
   private storeSubscribed = false;
   private lastRosterSig = "";
   /** syncs SERIALIZE (the MeshClient chain law): each pass sees its trigger's state */
@@ -160,6 +168,7 @@ export class DeviceService extends EventEmitter {
   private async refreshPeers(): Promise<void> {
     const raw = await this.opts.mesh.peers();
     this.peerLiveness.clear();
+    this.tsByUlid.clear();
     for (const p of raw) {
       const parsed = PeerInfo.safeParse(p);
       if (!parsed.success) continue; // tolerant: a malformed peer never breaks the roster
@@ -168,6 +177,10 @@ export class DeviceService extends EventEmitter {
         online: parsed.data.online,
         ...(typeof lastSeen === "number" ? { lastSeen } : {}),
       });
+      // a peer without a published ULID stays uncorrelated — its slice (if
+      // any) reads offline honestly rather than joining on a guessed key
+      if (parsed.data.deviceId !== undefined)
+        this.tsByUlid.set(parsed.data.deviceId, parsed.data.id);
     }
   }
 
@@ -208,7 +221,11 @@ export class DeviceService extends EventEmitter {
     const seen = new Set<string>();
     for (const [deviceId, slice] of this.slices) {
       const self = deviceId === this.deviceId;
-      const live = this.peerLiveness.get(deviceId);
+      // ULID slice key → tailscale id → liveness. Joining peerLiveness by the
+      // ULID directly is the T1 §6 bug: the map is keyed by the tailnet's own
+      // node id, and the two keyspaces never intersect.
+      const tailscaleId = self ? undefined : this.tsByUlid.get(deviceId);
+      const live = tailscaleId !== undefined ? this.peerLiveness.get(tailscaleId) : undefined;
       // link is OUR verdict about the connection to a peer — never self (C5/D32)
       const link = self ? undefined : this.peers?.linkState(deviceId);
       out.push({
@@ -216,6 +233,7 @@ export class DeviceService extends EventEmitter {
         self,
         online: self ? true : (live?.online ?? false),
         lastSeenAt: Math.max(slice.publishedAt, live?.lastSeen ?? 0),
+        ...(tailscaleId !== undefined ? { tailscaleId } : {}),
         ...(link !== undefined ? { link } : {}),
       });
       seen.add(deviceId);
@@ -240,6 +258,9 @@ export class DeviceService extends EventEmitter {
         d.self,
         d.productEndpoint?.url ?? null,
         d.link ?? null,
+        // a correlation appearing matters even while online stays false: it is
+        // what lets doc-sync's liveness fold see the peer at all
+        d.tailscaleId ?? null,
       ]),
     );
     if (sig === this.lastRosterSig) return;

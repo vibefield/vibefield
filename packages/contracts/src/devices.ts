@@ -56,6 +56,13 @@ export const DeviceInfo = DeviceSlice.extend({
   online: z.boolean(),
   lastSeenAt: z.number().int(),
   link: z.enum(["connected", "dialing", "incompatible"]).optional(),
+  /** The Tailscale stable node id, when the peer registry correlates it to
+   * this device (PeerInfo.deviceId ⋈ slice key). This is the DIAL/liveness
+   * keyspace — `lane.open`, doc-sync peers, the C5 endpoint door — distinct
+   * from `deviceId` (the durable ULID roster key, D30); the two never collide
+   * and must never be joined against each other (T1 §6). Absent for self and
+   * for devices the registry does not currently list. */
+  tailscaleId: z.string().optional(),
 }).passthrough();
 export type DeviceInfo = z.infer<typeof DeviceInfo>;
 

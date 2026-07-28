@@ -671,13 +671,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // C6-4 — doc sync folds roster liveness per doc-peer: offline flips
     // reachability promptly (the transport keep-alive beats the lane's own
     // minutes-late death, F-C6-22), and a RETURNING peer re-greets every doc
-    // that was waiting on it.
+    // that was waiting on it. The rows MUST arrive keyed by tailscaleId —
+    // doc-sync's peer keyspace is the dial key (PeerInfo.id), and feeding the
+    // roster ULID here is the T1 §6 bug that left the whole fold inert. A
+    // device the registry has not correlated contributes no row (absent, not
+    // a guessed key), which doc-sync treats as no-signal.
     docSync?.attachLiveness({
       list: () =>
         devices
           .list()
-          .filter((d) => !d.self)
-          .map((d) => ({ id: d.deviceId, online: d.online })),
+          .flatMap((d) =>
+            !d.self && d.tailscaleId !== undefined ? [{ id: d.tailscaleId, online: d.online }] : [],
+          ),
       on: (cb) => {
         devices.on("changed", cb);
         return () => devices.off("changed", cb);

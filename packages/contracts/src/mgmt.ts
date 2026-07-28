@@ -107,10 +107,16 @@ export const WhoIsIdentity = z
   .passthrough();
 export type WhoIsIdentity = z.infer<typeof WhoIsIdentity>;
 
-/** Truffle peer, mirrored minimally (parity fixture vs truffle-core serde lands with the embedding). */
+/** Truffle peer, mirrored minimally (parity fixture vs truffle-core serde lands with the embedding).
+ * TWO id keyspaces ride here, and truffle's contract says they never collide:
+ * `id` is the Tailscale stable node id (what `lane.open`/`resolve_peer` dial);
+ * `deviceId` is the durable published ULID — the SyncedStore slice key (D30).
+ * Joins must never mix them (the T1 §6 keyspace bug). `deviceId` is absent for
+ * peers that never published into the mesh registry. */
 export const PeerInfo = z
   .object({
     id: z.string(),
+    deviceId: z.string().optional(),
     name: z.string().optional(),
     online: z.boolean(),
     addresses: z.array(z.string()).optional(),
