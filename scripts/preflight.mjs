@@ -10,6 +10,7 @@
 // window reopens the ../p008/truffle [patch.crates-io], restore the machinery
 // from git history — a path patch without a SHA pin makes verify unreplayable.
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
@@ -31,6 +32,50 @@ try {
   problems.push(
     "cargo-typify not installed (needed by pnpm gen / gen:check): cargo install cargo-typify",
   );
+}
+
+// --- EL8 registry pins (the native-floor NF-0 pin event) ---------------------
+// Pins are deliberate upgrade events (EL8); drift or deletion fails HERE, not as
+// an Arc<Node> type split or a resolver surprise three slices later. Bumping a
+// pin means editing the pin AND this table in one commit — that is the ritual.
+const PIN_EXPECTATIONS = [
+  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.11"/m, label: 'truffle-core = "=0.7.11"' },
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.6\.0"/m, label: 'ghosttea = "=0.6.0"' },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/ghosttea-client":\s*0\.6\.0/,
+    label: '"@vibecook/ghosttea-client": 0.6.0',
+  },
+];
+for (const { file, re, label } of PIN_EXPECTATIONS) {
+  try {
+    const text = readFileSync(resolve(root, file), "utf8");
+    if (!re.test(text)) problems.push(`EL8 pin missing or drifted in ${file}: expected ${label}`);
+  } catch {
+    problems.push(`EL8 pin check could not read ${file}`);
+  }
+}
+// chopsticks: every override in the family must carry ONE version, and that
+// version is the pinned one — a drifted SUBSET (runtime bumped, adapters not)
+// is the failure mode a per-line table would miss.
+{
+  const CHOPSTICKS_PIN = "0.1.4";
+  try {
+    const text = readFileSync(resolve(root, "pnpm-workspace.yaml"), "utf8");
+    const family = [...text.matchAll(/"@vibecook\/(chopsticks-[a-z-]+)":\s*(\S+)/g)];
+    if (family.length === 0) {
+      problems.push("EL8 pin missing: no @vibecook/chopsticks-* overrides in pnpm-workspace.yaml");
+    }
+    for (const [, name, version] of family) {
+      if (version !== CHOPSTICKS_PIN) {
+        problems.push(
+          `EL8 pin drift: @vibecook/${name} pinned ${version}, expected ${CHOPSTICKS_PIN}`,
+        );
+      }
+    }
+  } catch {
+    problems.push("EL8 pin check could not read pnpm-workspace.yaml");
+  }
 }
 
 // --- import-boundary self-test (the checker's own fixtures) ------------------

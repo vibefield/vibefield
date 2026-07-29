@@ -35,6 +35,23 @@ overrides:
   # 1.13.8: the single-version law held, at the wrong version.
   loro-crdt: ^1.13.8
   "@vibecook/ice": 0.2.0
+  # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
+  # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
+  # as ice above. fieldd consumes ghosttea-client at NF-3; until then this is the
+  # declared version choice.
+  "@vibecook/ghosttea-client": 0.6.0
+  # chopsticks graduated at 0.1.4 (2026-07-28, C7 spawn-through aboard). Consumed
+  # by the AR track; pinned at the same pin event. @vibecook/chopsticks-node is
+  # unpublished and deliberately absent.
+  "@vibecook/chopsticks-adapter-acp": 0.1.4
+  "@vibecook/chopsticks-adapter-claude": 0.1.4
+  "@vibecook/chopsticks-adapter-codex": 0.1.4
+  "@vibecook/chopsticks-adapter-grok": 0.1.4
+  "@vibecook/chopsticks-core": 0.1.4
+  "@vibecook/chopsticks-record": 0.1.4
+  "@vibecook/chopsticks-runtime": 0.1.4
+  "@vibecook/chopsticks-testing": 0.1.4
+  "@vibecook/chopsticks-workspaces": 0.1.4
 # Shared dependency versions, declared ONCE — packages reference "catalog:".
 catalog:
   "@tailwindcss/vite": ^4.0.0
@@ -51,3 +68,15 @@ catalog:
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.11.0'
   - '@vibecook/ice@0.2.0'
+  # NF-0: released 2026-07-29 / 2026-07-28 — younger than the age gate when the
+  # floor slices first install them.
+  - '@vibecook/ghosttea-client@0.6.0'
+  - '@vibecook/chopsticks-adapter-acp@0.1.4'
+  - '@vibecook/chopsticks-adapter-claude@0.1.4'
+  - '@vibecook/chopsticks-adapter-codex@0.1.4'
+  - '@vibecook/chopsticks-adapter-grok@0.1.4'
+  - '@vibecook/chopsticks-core@0.1.4'
+  - '@vibecook/chopsticks-record@0.1.4'
+  - '@vibecook/chopsticks-runtime@0.1.4'
+  - '@vibecook/chopsticks-testing@0.1.4'
+  - '@vibecook/chopsticks-workspaces@0.1.4'

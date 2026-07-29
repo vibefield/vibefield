@@ -10,3 +10,10 @@ members = ["packages/field-native"]
 # the ../p008/truffle sibling [patch.crates-io] returns only for the duration of an
 # active petition window, together with its siblings.lock.json pin (see git history).
 truffle-core = "=0.7.11"
+# NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
+# 2026-07-29 — exact pin, upgrades are deliberate events. The published
+# ghosttea-truffle 0.6.0 requires truffle-core =0.7.11, so the Arc<Node> shared
+# with the mesh adapter stays ONE type alongside the pin above. `ghosttea` itself
+# carries no truffle dep; field-native consumes it at NF-2, ghosttea-truffle at
+# NF-remote — until then this is the declared version choice, not a lock entry.
+ghosttea = "=0.6.0"

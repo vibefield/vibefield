@@ -43,6 +43,16 @@ catalogs:
 overrides:
   loro-crdt: ^1.13.8
   '@vibecook/ice': 0.2.0
+  '@vibecook/ghosttea-client': 0.6.0
+  '@vibecook/chopsticks-adapter-acp': 0.1.4
+  '@vibecook/chopsticks-adapter-claude': 0.1.4
+  '@vibecook/chopsticks-adapter-codex': 0.1.4
+  '@vibecook/chopsticks-adapter-grok': 0.1.4
+  '@vibecook/chopsticks-core': 0.1.4
+  '@vibecook/chopsticks-record': 0.1.4
+  '@vibecook/chopsticks-runtime': 0.1.4
+  '@vibecook/chopsticks-testing': 0.1.4
+  '@vibecook/chopsticks-workspaces': 0.1.4
 
 importers:
 
