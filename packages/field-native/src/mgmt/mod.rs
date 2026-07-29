@@ -284,11 +284,18 @@ async fn handle_hello(
         "fieldd authenticated to the native management channel"
     );
 
-    let ack = json!({
+    let mut ack = json!({
         "contractsVersion": CONTRACTS_VERSION,
         "serverKind": "field-native",
         "grantedScopes": [],
     });
+    // NF-D8: the terminal floor's endpoints ride the hello, so fieldd re-learns
+    // them at every re-pair and they never enter env, config, or logs. Field
+    // names come from the generated contract type, never retyped here. Absent
+    // when no terminal unit is configured — tolerated by readers.
+    if let Some(endpoints) = state.terminal.get() {
+        ack["terminal"] = serde_json::to_value(endpoints).expect("terminal endpoints serialize");
+    }
     (ok(id, ack), true)
 }
 

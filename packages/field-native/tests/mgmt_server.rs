@@ -179,7 +179,7 @@ async fn new_hello_supersedes_old_client() {
 }
 
 #[tokio::test]
-async fn health_snapshot_reports_stub_units() {
+async fn health_snapshot_reports_every_unit() {
     let (_dir, daemon) = boot().await;
     let mut c = TestClient::connect(&daemon).await;
     c.hello(&daemon, 1).await;
@@ -193,7 +193,16 @@ async fn health_snapshot_reports_stub_units() {
     assert!(
         names.contains(&"mgmt") && names.contains(&"terminal") && names.contains(&"mesh-gateway")
     );
-    assert_eq!(resp["result"]["snapshot"]["state"], "up");
+    // The snapshot can honestly read "starting": since NF-2 the terminal unit
+    // builds its text engine off the boot path, and the deltas carry the settle.
+    // What matters is where it LANDS — mesh disabled is not degradation.
+    let mut state = resp["result"]["snapshot"]["state"].clone();
+    while state == "starting" {
+        let delta = c.recv().await;
+        assert_eq!(delta["method"], "native.lifecycle.health.delta");
+        state = delta["params"]["payload"]["state"].clone();
+    }
+    assert_eq!(state, "up");
 }
 
 #[tokio::test]

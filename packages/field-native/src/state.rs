@@ -1,9 +1,9 @@
-use crate::contracts::{DesiredState, NativeHealth, ObservedState};
+use crate::contracts::{DesiredState, NativeHealth, ObservedState, TerminalEndpoints};
 use crate::logging::NativeLogging;
 use crate::services::mesh::MeshHandle;
 use crate::services::mesh_bridge::BridgeHandle;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::{mpsc, watch, Mutex};
 
 /// One product plane per device: at most one authenticated mgmt client;
@@ -31,6 +31,13 @@ pub struct DaemonState {
     /// the lane-control door to the MeshData bridge (C6/D5). Control lives here;
     /// the bytes those lanes carry never touch this channel.
     pub bridge: BridgeHandle,
+    /// NF-D8: the terminal floor's endpoints + per-boot bearer token, which the
+    /// pairing hello hands to fieldd. A `OnceLock` and not a constructor
+    /// argument because the units are built BEFORE this state exists and the
+    /// value never changes again once boot has wired it — its emptiness is
+    /// exactly the `HelloAck.terminal` absence the contract allows. Memory-only:
+    /// the token never reaches a log, a config file, or any environment (EL7).
+    pub terminal: OnceLock<TerminalEndpoints>,
     /// Process-owned native diagnostic producer. Embedded unit tests omit it;
     /// the production main installs it before service composition.
     pub logging: Option<NativeLogging>,
@@ -59,6 +66,7 @@ impl DaemonState {
             current_client: Mutex::new(None),
             mesh,
             bridge,
+            terminal: OnceLock::new(),
             logging,
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),

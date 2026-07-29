@@ -15,13 +15,32 @@ fn health_json(daemon: &field_native::RunningDaemon) -> serde_json::Value {
     serde_json::to_value(&*daemon.state.health_tx.borrow()).unwrap()
 }
 
+/// Boot returns before every unit has finished coming up: since NF-2 the
+/// terminal unit builds its text engine off the boot path, so the first health
+/// snapshot is honestly `starting`. A test asking "did the daemon settle?" has
+/// to wait for that transition instead of reading the snapshot.
+async fn settled_health(daemon: &field_native::RunningDaemon) -> serde_json::Value {
+    let mut rx = daemon.state.health_tx.subscribe();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let h = serde_json::to_value(&*rx.borrow_and_update()).unwrap();
+        if h["state"] != "starting" {
+            return h;
+        }
+        tokio::select! {
+            r = rx.changed() => r.expect("health channel closed"),
+            _ = tokio::time::sleep_until(deadline) => panic!("health never left starting: {h}"),
+        }
+    }
+}
+
 #[tokio::test]
 async fn mesh_disabled_by_default_and_daemon_stays_up() {
     let dir = tempfile::tempdir().unwrap();
     let daemon = bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
         .await
         .unwrap();
-    let h = health_json(&daemon);
+    let h = settled_health(&daemon).await;
     let mesh = unit(&h, "mesh-gateway");
     assert_eq!(mesh["state"], "disabled");
     assert!(mesh["detail"]

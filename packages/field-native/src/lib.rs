@@ -32,6 +32,10 @@ pub struct RunningDaemon {
     /// accept loop. Held so shutdown can abort it — with the mesh disabled it
     /// simply never fires.
     lane_transport: tokio::task::JoinHandle<()>,
+    /// NF-2: parked until the terminal service serves, then the self-client's
+    /// `observed.terminals` pump. Held so shutdown can abort it before the
+    /// sweep runs.
+    terminal_inventory: tokio::task::JoinHandle<()>,
     manager: Arc<manager::NativeServiceManager>,
     logging: Option<logging::NativeLogging>,
 }
@@ -46,6 +50,10 @@ impl RunningDaemon {
         self.server.abort();
         self.health_refresh.abort();
         self.lane_transport.abort();
+        // Before stop_all: the terminal unit's sweep is the authority on the
+        // session registry from here on, and a pump still reconciling would
+        // only publish inventory nobody is subscribed to any more.
+        self.terminal_inventory.abort();
         self.manager.stop_all().await;
         tracing::info!(
             event = "field_native.lifecycle.stopped",
@@ -85,7 +93,8 @@ pub async fn bootstrap_with_logging(
     // units push health transitions (e.g. mesh auth flow) via this channel;
     // a refresh task re-aggregates and publishes on every ping
     let (ping_tx, mut ping_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let (units, mesh_handle, bridge_handle) = services::build_units(&config, secret, ping_tx);
+    let (units, mesh_handle, bridge_handle, terminal_handle) =
+        services::build_units(&config, secret, ping_tx);
     let mgr = Arc::new(manager::NativeServiceManager::new(units)?);
     mgr.start_all().await;
     let health = mgr.health(&boot_id);
@@ -115,6 +124,15 @@ pub async fn bootstrap_with_logging(
         bridge_handle.clone(),
         logging.clone(),
     );
+
+    // NF-D8/§4.3: the endpoints reach fieldd through the pairing hello, and the
+    // unit's inventory reaches it through the observed watch channel. Both are
+    // WIRING — done here so the unit stays ignorant of the mgmt plane and the
+    // mgmt facade stays ignorant of the terminal control protocol.
+    if let Some(endpoints) = terminal_handle.endpoints() {
+        let _ = state.terminal.set(endpoints);
+    }
+    let terminal_inventory = services::terminal::install_inventory(terminal_handle, state.clone());
 
     let health_refresh = tokio::spawn({
         let mgr = mgr.clone();
@@ -146,6 +164,7 @@ pub async fn bootstrap_with_logging(
         server,
         health_refresh,
         lane_transport,
+        terminal_inventory,
         manager: mgr,
         logging,
     })
