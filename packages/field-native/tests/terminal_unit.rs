@@ -1,4 +1,5 @@
-//! NF-2 gate: the terminal floor with a REAL PTY under it.
+//! NF-2/NF-5 gate: the terminal floor with a REAL PTY under it, and the survivor
+//! authority that decides which of those PTYs keeps running.
 //!
 //! These are deliberately NOT `#[ignore]`d. The only ignored tests in this crate
 //! are the ones that join a live tailnet; a local PTY needs no network, and the
@@ -53,6 +54,12 @@ async fn boot(dir: &Path) -> RunningDaemon {
 struct MgmtClient {
     reader: tokio::io::Lines<BufReader<tokio::net::unix::OwnedReadHalf>>,
     writer: tokio::net::unix::OwnedWriteHalf,
+    /// Notifications that overtook a response. Acks and deltas share one socket
+    /// and their order is not guaranteed, so a caller correlating an ack must
+    /// hand back the deltas it read on the way — otherwise it consumes the very
+    /// delta the next assertion is waiting for and the test hangs on a
+    /// convergence that already happened.
+    buffered: std::collections::VecDeque<Value>,
 }
 
 impl MgmtClient {
@@ -64,6 +71,7 @@ impl MgmtClient {
         Self {
             reader: BufReader::new(r).lines(),
             writer: w,
+            buffered: std::collections::VecDeque::new(),
         }
     }
 
@@ -74,7 +82,14 @@ impl MgmtClient {
     }
 
     async fn recv(&mut self) -> Value {
-        let line = timeout(Duration::from_secs(5), self.reader.next_line())
+        self.recv_within(Duration::from_secs(5)).await
+    }
+
+    async fn recv_within(&mut self, budget: Duration) -> Value {
+        if let Some(message) = self.buffered.pop_front() {
+            return message;
+        }
+        let line = timeout(budget, self.reader.next_line())
             .await
             .expect("recv timeout")
             .expect("read error")
@@ -106,10 +121,28 @@ impl MgmtClient {
 
     /// Subscribe and answer with the inventory snapshot.
     async fn subscribe_observed(&mut self) -> Value {
-        self.send(json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.observed.subscribe"}))
+        let response = self
+            .request(2, "native.lifecycle.observed.subscribe", json!({}))
             .await;
-        let response = self.recv().await;
         response["result"]["snapshot"].clone()
+    }
+
+    /// One request, correlated by id and never by arrival order: a delta can
+    /// always overtake the response it was caused by. Notifications read while
+    /// waiting are handed back for the delta assertions to consume.
+    async fn request(&mut self, id: u64, method: &str, params: Value) -> Value {
+        self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}))
+            .await;
+        let mut deferred = Vec::new();
+        let response = loop {
+            let message = self.recv().await;
+            if message.get("id").is_some_and(|got| got == id) {
+                break message;
+            }
+            deferred.push(message);
+        };
+        self.buffered.extend(deferred);
+        response
     }
 
     /// Read observed deltas until one satisfies `wanted`, or give up. Deltas are
@@ -123,12 +156,7 @@ impl MgmtClient {
                 !remaining.is_zero(),
                 "no matching observed delta in {budget:?}"
             );
-            let line = timeout(remaining, self.reader.next_line())
-                .await
-                .expect("observed delta timed out")
-                .expect("read error")
-                .expect("connection closed");
-            let message: Value = serde_json::from_str(&line).expect("json line");
+            let message = self.recv_within(remaining).await;
             if message["method"] == "native.lifecycle.observed.delta" {
                 let payload = message["params"]["payload"].clone();
                 if wanted(&payload) {
@@ -136,6 +164,13 @@ impl MgmtClient {
                 }
             }
         }
+    }
+
+    /// `desired.set` in fieldd's shape, answering with the whole JSON-RPC
+    /// envelope so a test can assert on either a result or a refusal.
+    async fn desired_set(&mut self, id: u64, params: Value) -> Value {
+        self.request(id, "native.lifecycle.desired.set", params)
+            .await
     }
 }
 
@@ -409,6 +444,341 @@ async fn wrong_token_is_refused_on_the_control_socket() {
         client.list_sessions().await.expect("list").is_empty(),
         "the right token still authenticates after a refusal"
     );
+
+    daemon.shutdown().await;
+}
+
+// ---------------------------------------------------------------------------
+// NF-5 — survivor authority (spec §5, NF-D2; kill-matrix row 4)
+// ---------------------------------------------------------------------------
+
+/// One session's exit event, from a witness connection that issues nothing of
+/// its own. The classification is the only evidence of WHICH authority killed a
+/// session — a dead pid proves a ladder ran, never who asked for it.
+async fn await_exit(
+    events: &mut tokio::sync::mpsc::UnboundedReceiver<Value>,
+    session_id: &str,
+    budget: Duration,
+) -> Value {
+    let deadline = Instant::now() + budget;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let event = timeout(remaining, events.recv())
+            .await
+            .unwrap_or_else(|_| panic!("no exit event for {session_id} in {budget:?}"))
+            .expect("the witness connection closed before the exit arrived");
+        if event["type"] == "session-exited" && event["sessionId"] == session_id {
+            return event;
+        }
+    }
+}
+
+/// Two tenants and the bootId fieldd would prove with: the daemon, its mgmt
+/// client subscribed to observed, a control client, and both sessions already
+/// visible in the inventory (which is what makes a proof possible at all).
+struct Pair {
+    survivor: field_native::services::terminal_client::SessionSummary,
+    doomed: field_native::services::terminal_client::SessionSummary,
+    survivor_pid: u32,
+    doomed_pid: u32,
+    boot_id: String,
+}
+
+async fn two_tenants(
+    mgmt: &mut MgmtClient,
+    client: &ControlClient,
+    daemon: &RunningDaemon,
+) -> Pair {
+    let snapshot = mgmt.subscribe_observed().await;
+    // fieldd learns the bootId the way the contract intends — from the
+    // inventory it pulled, not from anywhere else.
+    let boot_id = snapshot["bootId"].as_str().expect("bootId").to_owned();
+    assert_eq!(boot_id, daemon.boot_id);
+
+    let survivor = client
+        .create_session(tenant_options())
+        .await
+        .expect("create the survivor");
+    let doomed = client
+        .create_session(tenant_options())
+        .await
+        .expect("create the session to be withdrawn");
+    let survivor_pid = survivor.pid.expect("pid");
+    let doomed_pid = doomed.pid.expect("pid");
+
+    // The floor must SEE both before a set can prove it saw them.
+    mgmt.await_observed(Duration::from_secs(5), |payload| {
+        has_session(payload, &survivor.id) && has_session(payload, &doomed.id)
+    })
+    .await;
+
+    Pair {
+        survivor,
+        doomed,
+        survivor_pid,
+        doomed_pid,
+        boot_id,
+    }
+}
+
+/// The slice's headline: a proven set IS authority. The session fieldd still
+/// lists is untouched; the one it withdrew runs its ladder, leaves the inventory,
+/// and its exit is stamped `application` — a reconcile is the product plane's
+/// decision, neither a human's kill nor this daemon going down.
+#[tokio::test]
+async fn proven_desired_set_prunes_only_the_unlisted_session() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    let (client, mut events) = control(&ack).await;
+    let pair = two_tenants(&mut mgmt, &client, &daemon).await;
+
+    let response = mgmt
+        .desired_set(
+            10,
+            json!({
+                "generation": 1,
+                "terminals": [{"sessionId": pair.survivor.id}],
+                "workers": [],
+                "observedBootId": pair.boot_id,
+            }),
+        )
+        .await;
+    assert_eq!(
+        response["result"]["applied"], 1,
+        "a proven set must apply: {response}"
+    );
+
+    let exit = await_exit(&mut events, &pair.doomed.id, Duration::from_secs(5)).await;
+    assert_eq!(
+        exit["requestedTermination"], "application",
+        "a prune is the application withdrawing a session: {exit}"
+    );
+    assert_eq!(
+        exit["exitOutcome"], "application-terminated",
+        "the classification every observer reads must name the product plane: {exit}"
+    );
+
+    let payload = mgmt
+        .await_observed(Duration::from_secs(5), |payload| {
+            !has_session(payload, &pair.doomed.id)
+        })
+        .await;
+    assert!(
+        has_session(&payload, &pair.survivor.id),
+        "the listed session must survive the prune: {payload}"
+    );
+    assert_eq!(
+        payload["generation"], 1,
+        "the applied generation is observed"
+    );
+    assert!(
+        wait_until_gone(pair.doomed_pid, Duration::from_secs(5)).await,
+        "the withdrawn session's ladder must have run"
+    );
+    assert!(
+        alive(pair.survivor_pid),
+        "the survivor's PTY must be untouched by someone else's prune"
+    );
+
+    daemon.shutdown().await;
+}
+
+/// NF-D2(a) and (b): silence kills nothing, and a set that WOULD prune without
+/// proof of this boot's inventory is refused whole. The last step is the
+/// sensitivity proof — the identical set applies the moment it carries the
+/// proof, so these refusals are about the missing proof and not about the set.
+#[tokio::test]
+async fn unproven_desired_set_prunes_nothing() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    let (client, _events) = control(&ack).await;
+    let pair = two_tenants(&mut mgmt, &client, &daemon).await;
+
+    // (a) No set has been sent since boot, and both tenants are running. The
+    // inventory on its own is never authority to kill anything.
+    assert!(
+        alive(pair.survivor_pid) && alive(pair.doomed_pid),
+        "silence must kill nothing"
+    );
+
+    let survivors = json!([{"sessionId": pair.survivor.id}]);
+    for (id, proof) in [
+        (10, None),
+        (11, Some("native-boot-from-another-life".to_owned())),
+    ] {
+        let mut params = json!({
+            "generation": 1,
+            "terminals": survivors,
+            "workers": [],
+        });
+        if let Some(proof) = proof {
+            params["observedBootId"] = json!(proof);
+        }
+        let refusal = mgmt.desired_set(id, params).await;
+        assert_eq!(
+            refusal["error"]["data"]["kind"], "PRECONDITION_FAILED",
+            "an unproven prune must be refused: {refusal}"
+        );
+        let details = &refusal["error"]["data"]["details"];
+        assert_eq!(
+            details["wouldPrune"], 1,
+            "the refusal must name what it declined to kill: {refusal}"
+        );
+        assert_eq!(
+            details["current"], pair.boot_id,
+            "the refusal must hand back the bootId that WOULD satisfy it: {refusal}"
+        );
+    }
+
+    // A ladder is fast — /bin/cat dies on the first rung — so a wrongly fired
+    // one would already be visible here.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        alive(pair.survivor_pid) && alive(pair.doomed_pid),
+        "an unproven set must terminate NOTHING"
+    );
+    assert_eq!(
+        client.list_sessions().await.expect("list").len(),
+        2,
+        "list-sessions is truth, and it must still hold both"
+    );
+    // A refusal leaves no trace of the set it refused: the generation was never
+    // banked, so observed still reports the boot's own.
+    assert_eq!(
+        mgmt.subscribe_observed().await["generation"],
+        0,
+        "a refused set must not bank its generation"
+    );
+
+    let response = mgmt
+        .desired_set(
+            12,
+            json!({
+                "generation": 1,
+                "terminals": survivors,
+                "workers": [],
+                "observedBootId": pair.boot_id,
+            }),
+        )
+        .await;
+    assert_eq!(
+        response["result"]["applied"], 1,
+        "the same set, proven, must apply — otherwise the refusals above prove nothing: {response}"
+    );
+    assert!(
+        wait_until_gone(pair.doomed_pid, Duration::from_secs(5)).await,
+        "the proven set must prune what the unproven ones could not"
+    );
+    assert!(alive(pair.survivor_pid), "the survivor still survives");
+
+    daemon.shutdown().await;
+}
+
+/// NF-D2: a retain-only set may omit the proof. The guard exists to protect
+/// running sessions, not to make bookkeeping ceremonial — a set that kills
+/// nothing has nothing to prove.
+#[tokio::test]
+async fn retain_only_desired_set_needs_no_proof() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    let (client, _events) = control(&ack).await;
+    let pair = two_tenants(&mut mgmt, &client, &daemon).await;
+
+    // Every running session is listed, so the prune set is empty.
+    let response = mgmt
+        .desired_set(
+            10,
+            json!({
+                "generation": 3,
+                "terminals": [
+                    {"sessionId": pair.survivor.id},
+                    {"sessionId": pair.doomed.id, "persistence": "keep-until-explicit-close"},
+                ],
+                "workers": [],
+            }),
+        )
+        .await;
+    assert_eq!(
+        response["result"]["applied"], 3,
+        "a retain-only set must apply without a proof: {response}"
+    );
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        alive(pair.survivor_pid) && alive(pair.doomed_pid),
+        "a retain-only set must terminate nothing"
+    );
+    // `persistence` above is carried, never claimed: ghosttea 0.6.0 has no
+    // control op that re-policies a live session (the G9 ask), so the row it
+    // would fill stays absent rather than invented.
+    let payload = mgmt
+        .await_observed(Duration::from_secs(5), |payload| payload["generation"] == 3)
+        .await;
+    for row in terminals(&payload) {
+        assert!(
+            row.get("persistence").is_none(),
+            "a desired persistence must not appear as though it were applied: {row}"
+        );
+    }
+
+    daemon.shutdown().await;
+}
+
+/// NF-D2(c) before (b)'s effect: a stale generation is refused BEFORE any ladder
+/// fires, even when the set is otherwise perfectly proven. Kill-matrix row 4's
+/// "stale ⇒ zero terminations".
+#[tokio::test]
+async fn stale_generation_is_refused_before_any_prune() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    let (client, _events) = control(&ack).await;
+    let pair = two_tenants(&mut mgmt, &client, &daemon).await;
+
+    let response = mgmt
+        .desired_set(
+            10,
+            json!({
+                "generation": 5,
+                "terminals": [{"sessionId": pair.survivor.id}, {"sessionId": pair.doomed.id}],
+                "workers": [],
+            }),
+        )
+        .await;
+    assert_eq!(response["result"]["applied"], 5);
+
+    // Proven, and it would prune both — but it arrives behind the generation
+    // that is already applied, so it is refused before anything is issued.
+    let refusal = mgmt
+        .desired_set(
+            11,
+            json!({
+                "generation": 4,
+                "terminals": [],
+                "workers": [],
+                "observedBootId": pair.boot_id,
+            }),
+        )
+        .await;
+    assert_eq!(refusal["error"]["data"]["kind"], "PRECONDITION_FAILED");
+    assert_eq!(
+        refusal["error"]["message"], "stale generation",
+        "the generation guard must answer first, before the proof is ever weighed: {refusal}"
+    );
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        alive(pair.survivor_pid) && alive(pair.doomed_pid),
+        "a stale set must terminate nothing, however well proven"
+    );
+    assert_eq!(client.list_sessions().await.expect("list").len(), 2);
 
     daemon.shutdown().await;
 }
