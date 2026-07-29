@@ -1,0 +1,11 @@
+// Xcode owns this subtree's non-Swift artifacts: asset-catalog Contents.json
+// files are written in Xcode's own style, and imageset SVGs are icon geometry,
+// not web documents. One formatter per file: its generator (the C1d rule) —
+// biome keeps its hands off apps/ios entirely. Swift is formatted by its own
+// toolchain (none checked yet — see apps/ios/README.md).
+{
+  "root": false,
+  "formatter": { "enabled": false },
+  "linter": { "enabled": false },
+  "assist": { "enabled": false }
+}

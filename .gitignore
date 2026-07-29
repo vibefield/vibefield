@@ -32,3 +32,10 @@ logs/
 # committed. `apps/desktop/build/` (the deterministic stage) is already covered
 # by the `build/` rule above.
 release/
+
+# Xcode / SwiftPM (apps/ios) — user state and local build products only;
+# project.pbxproj and xcshareddata (schemes) are tracked.
+xcuserdata/
+*.xcresult
+.build/
+
