@@ -80,3 +80,4 @@ minimumReleaseAgeExclude:
   - '@vibecook/chopsticks-runtime@0.1.4'
   - '@vibecook/chopsticks-testing@0.1.4'
   - '@vibecook/chopsticks-workspaces@0.1.4'
+  - '@vibecook/ghosttea-protocol@0.6.0'

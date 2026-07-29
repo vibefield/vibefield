@@ -30,6 +30,10 @@ export interface DeviceServiceOptions {
   /** Supplied by the daemon (it owns the serve secret + fused serve state):
    * the current product endpoint; `url` only while the serve is active. */
   productEndpoint: () => ProductEndpoint;
+  /** NF-3 — honest capability (D31): true once the pairing hello delivered
+   * terminal endpoints (the floor is real on this device). The daemon triggers
+   * a re-sync when that flips so the published slice follows the truth. */
+  terminalHost?: () => boolean;
   now?: () => number;
 }
 
@@ -166,8 +170,13 @@ export class DeviceService extends EventEmitter {
       headless: false, // the shell is the only launcher today
       fielddVersion: this.opts.fielddVersion,
       contractsVersion: this.opts.contractsVersion,
-      // honest capabilities (D31): no TerminalService yet, DocumentService is B3-real
-      capabilities: { terminalHost: false, docHost: true, push: false },
+      // honest capabilities (D31): terminalHost follows the NF-D8 hello
+      // (true iff the floor delivered endpoints); DocumentService is B3-real.
+      capabilities: {
+        terminalHost: this.opts.terminalHost?.() ?? false,
+        docHost: true,
+        push: false,
+      },
       productEndpoint: this.opts.productEndpoint(),
       bootId: this.opts.bootId,
       publishedAt: this.now(),

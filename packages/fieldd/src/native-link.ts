@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
-import { CONTRACTS_VERSION } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, TerminalEndpoints } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { computePairingMac } from "./pairing";
 
@@ -79,6 +79,12 @@ export class NativeLink extends EventEmitter {
   connected = false;
   superseded = false;
   closed = false;
+  /** NF-D8: the terminal floor's endpoints + per-boot token, re-learned at
+   * every re-pair from the hello ack. Absent = the floor is unconfigured or the
+   * daemon predates NF-2 (tolerated — readers refuse honestly, never guess).
+   * The token lives here and in the tickets minted from it — never logs, env,
+   * or disk. */
+  terminalEndpoints: TerminalEndpoints | undefined;
 
   constructor(private readonly opts: NativeLinkOptions) {
     super();
@@ -194,12 +200,19 @@ export class NativeLink extends EventEmitter {
     const secretHex = readFileSync(this.opts.pairingFile, "utf8").trim();
     const ts = Math.floor(Date.now() / 1000);
     const mac = computePairingMac(secretHex, this.opts.bootId, ts);
-    await this.request("native.lifecycle.hello", {
+    const ack = await this.request("native.lifecycle.hello", {
       contractsVersion: CONTRACTS_VERSION,
       minCompatible: CONTRACTS_VERSION,
       clientKind: "fieldd",
       credential: { bootId: this.opts.bootId, ts, mac },
     });
+    // NF-D8: a fresh native boot means fresh endpoints + token; a re-pair to
+    // the same boot re-delivers the same ones. The tolerant gate keeps a
+    // malformed/absent field as "no floor" rather than a poisoned value.
+    const terminal = (ack as { terminal?: unknown } | null | undefined)?.terminal;
+    const parsed = TerminalEndpoints.safeParse(terminal);
+    this.terminalEndpoints = parsed.success ? parsed.data : undefined;
+    this.emit("terminal-endpoints");
   }
 
   private onData(chunk: string): void {

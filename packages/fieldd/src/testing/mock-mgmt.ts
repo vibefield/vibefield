@@ -38,6 +38,13 @@ export class MockMgmtServer {
   storeWrites: unknown[] = [];
   /** scripted tailnet peers answered by native.mesh.peers.list (default: none) */
   meshPeers: unknown[] = [];
+  /** NF-3 — when set, the hello ack carries these terminal endpoints (NF-D8);
+   * null = a floor-less native (pre-NF-2, or the unit degraded). */
+  helloTerminal: { controlSocket: string; frameSocket: string; authToken: string } | null = null;
+  /** NF-3 — when set, native.lifecycle.observed.subscribe answers this snapshot
+   * (an ObservedState); null falls through to the generic `{n:0}` handler,
+   * which the fieldd side must read as "no inventory" (tolerant reader). */
+  observedState: unknown = null;
   /** Schema-valid field-native ring used by LOG-L5 product projection tests. */
   diagnosticRecords: unknown[] = [];
   diagnosticLeases = new Map<string, unknown>();
@@ -110,8 +117,25 @@ export class MockMgmtServer {
         JSON.stringify({
           jsonrpc: "2.0",
           id: msg.id,
-          result: { contractsVersion: "0.1.0", serverKind: "field-native", grantedScopes: [] },
+          result: {
+            contractsVersion: "0.1.0",
+            serverKind: "field-native",
+            grantedScopes: [],
+            ...(this.helloTerminal !== null ? { terminal: this.helloTerminal } : {}),
+          },
         }) + "\n",
+      );
+      return;
+    }
+    if (msg.method === "native.lifecycle.observed.subscribe" && this.observedState !== null) {
+      const subId = `s${this.nextSub++}`;
+      this.issued.push({ sock, subId, method: msg.method });
+      sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: { subId, snapshot: this.observedState },
+        })}\n`,
       );
       return;
     }
@@ -326,6 +350,12 @@ export class MockMgmtServer {
         }) + "\n",
       );
     }
+  }
+
+  /** NF-3 — push a fresh ObservedState to every observed subscription. */
+  pushObserved(state: unknown): void {
+    this.observedState = state;
+    this.pushDelta("lifecycle.observed.subscribe", state);
   }
 
   pushDiagnosticRecord(record: unknown): void {

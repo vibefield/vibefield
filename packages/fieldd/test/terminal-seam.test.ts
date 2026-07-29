@@ -1,0 +1,136 @@
+// NF-3 end-to-end over the REAL floor: fieldd (TypeScript) against the real
+// field-native (Rust) — the pairing hello delivers the endpoints, a free shell
+// is born over the product plane, the observed inventory carries it back, a D6
+// ticket attaches an external ghosttea client, the epoch path accepts
+// automation input, and terminate runs the real ladder. This is the seam half
+// of the spec's §9 NF-3 gate; the kill matrix proper is NF-4.
+import { type ChildProcess, execSync, spawn } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
+import type { TerminalInfo, TerminalTicket } from "@vibefield/contracts";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import WebSocket from "ws";
+import { bootstrap } from "../src/index";
+import { helloAs, WsRpc } from "./ws-rpc";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+const BIN = join(ROOT, "target/debug/field-native");
+
+let children: ChildProcess[] = [];
+let cleanup: Array<() => void | Promise<void>> = [];
+
+beforeAll(() => {
+  execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
+}, 180_000);
+
+afterEach(async () => {
+  for (const fn of cleanup.reverse()) await fn();
+  cleanup = [];
+  for (const c of children) c.kill("SIGKILL");
+  children = [];
+});
+
+async function spawnNative(): Promise<string> {
+  // /tmp, not tmpdir(): macOS sun_path caps socket paths ~104 bytes and the
+  // ghosttea control/frame endpoints live under <dataDir>/native/run/.
+  const dir = mkdtempSync("/tmp/vf-seam-");
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  const child = spawn(BIN, [], {
+    env: {
+      ...process.env,
+      FIELD_NATIVE_DATA_DIR: dir,
+      FIELD_LOG_DIR: join(dir, "logs"),
+      FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
+    },
+    stdio: "ignore",
+  });
+  children.push(child);
+  const socket = join(dir, "native/run/mgmt.sock");
+  const deadline = Date.now() + 15_000;
+  while (!existsSync(socket)) {
+    if (Date.now() > deadline) throw new Error("field-native did not come up");
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return dir;
+}
+
+async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T> {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const v = await fn();
+    if (v !== undefined) return v;
+    if (Date.now() > deadline) throw new Error("poll timed out");
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+describe("the terminal seam (NF-3, real field-native)", () => {
+  it("create → observe → ticket-attach → automate → terminate, one authority", async () => {
+    const dataDir = await spawnNative();
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", resolve);
+      ws.once("error", reject);
+    });
+    cleanup.push(() => ws.close());
+    const rpc = new WsRpc(ws);
+    await helloAs(rpc, grant.token);
+
+    // the free-shell door (an explicit program: quiet, portable, no login shell)
+    const created = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+      sessionId: string;
+    };
+    expect(created.sessionId).toBeTruthy();
+
+    // the observed inventory carries it back within the backstop (<2s law)
+    const row = await poll(async () => {
+      const { terminals } = (await rpc.call("terminal.list", {})) as {
+        terminals: TerminalInfo[];
+      };
+      return terminals.find((t) => t.sessionId === created.sessionId);
+    });
+    expect(row.pid).toBeGreaterThan(0);
+
+    // D6 ticket → an EXTERNAL ghosttea client attaches to the same authority
+    const ticket = (await rpc.call("terminal.openTicket", {
+      sessionId: created.sessionId,
+    })) as TerminalTicket;
+    const client = new GhostteaAutomationClient(
+      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      { clientBuild: "vibefield-seam-test" },
+    );
+    cleanup.push(() => client.dispose());
+    await client.connect();
+    const sessions = await client.listSessions();
+    expect(sessions.map((s) => s.id)).toContain(created.sessionId);
+
+    // the epoch path accepts automation input (paste+submit is one atomic op)
+    const input = await client.pasteAndSubmit(created.sessionId, "hello-floor");
+    expect(input.accepted).toBe(true);
+
+    // terminate over the product plane: the real ladder runs on the floor
+    const term = (await rpc.call("terminal.terminate", {
+      sessionId: created.sessionId,
+    })) as { terminated: boolean };
+    expect(term.terminated).toBe(true);
+    await poll(async () => {
+      const { terminals } = (await rpc.call("terminal.list", {})) as {
+        terminals: TerminalInfo[];
+      };
+      return terminals.some((t) => t.sessionId === created.sessionId) ? undefined : true;
+    }, 10_000);
+
+    // terminate is idempotent: the gone session is the normal race, not an error
+    const again = (await rpc.call("terminal.terminate", {
+      sessionId: created.sessionId,
+    })) as { terminated: boolean };
+    expect(again.terminated).toBe(false);
+  }, 60_000);
+});

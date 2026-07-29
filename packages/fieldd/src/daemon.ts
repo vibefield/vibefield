@@ -40,6 +40,8 @@ import {
   SettingsResetParams,
   SettingsSetParams,
   SettingsSubscribeParams,
+  TerminalCreateParams,
+  TerminalTerminateParams,
 } from "@vibefield/contracts";
 import type { AuditHealthV1 } from "@vibefield/contracts/diagnostics";
 import type { LoggingHealthV1 } from "@vibefield/contracts/logging";
@@ -76,6 +78,7 @@ import { ProductApi } from "./product-api";
 import { type PluginServiceLogRecord, ServiceHost } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
+import { TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
 
 // fieldd bootstrap (design-02 §3.6, P0 slice): tokens → NativeLink (pair +
@@ -519,6 +522,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       plugins.off("changed", emitHealth);
     };
 
+    // -- Terminal floor (NF-3, native-floor spec §6): the observed inventory +
+    // the D6 ticket seam. Tolerant of a floor-less native (no endpoints on the
+    // hello → honest UNAVAILABLE at the ticket methods) and of the mock mgmt
+    // server (its generic subscribe snapshot parses as no inventory).
+    const terminals = new TerminalService({ link: native });
+    try {
+      await terminals.start();
+    } catch (e) {
+      // Locally this subscribe can only fail because the link died or was
+      // superseded mid-bootstrap — and those paths own the boot's outcome (the
+      // supersession test pins the /superseded/ rejection reason; a raw
+      // transport error here would misreport the takeover). Anything else is a
+      // real failure and still aborts the boot.
+      if (!native.superseded && !native.closed && native.connected) throw e;
+    }
+
     // T1 §1 — the tailnet door's node-id correlation. DeviceService is built
     // AFTER ProductApi, so this is a let-ref, not a closure over the const:
     // a hello racing the bootstrap window resolves to undefined (claim
@@ -749,6 +768,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       bootId,
       fielddVersion: FIELDD_VERSION,
       contractsVersion: CONTRACTS_VERSION,
+      // NF-3: honest capability — true iff the pairing hello delivered the
+      // floor's endpoints (D31; re-synced on the terminal-endpoints event).
+      terminalHost: () => native.terminalEndpoints !== undefined,
       // The daemon owns the serve secret + the fused serve state, so IT
       // composes the endpoint: url only while the product serve is active.
       productEndpoint: () => {
@@ -758,6 +780,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
     });
     devicesRef = devices; // arms the tailnet door's node-id correlation (T1 §1)
+    // NF-3: the terminalHost capability follows the hello — republish when the
+    // floor appears or a new native boot rotates the endpoints.
+    native.on("terminal-endpoints", () => void devices.sync());
     // C6-4 — doc sync folds roster liveness per doc-peer: offline flips
     // reachability promptly (the transport keep-alive beats the lane's own
     // minutes-late death, F-C6-22), and a RETURNING peer re-greets every doc
@@ -792,6 +817,72 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const fn = (roster: unknown) => emit(roster);
       devices.on("changed", fn);
       return { snapshot: devices.list(), dispose: () => devices.off("changed", fn) };
+    });
+
+    // -- Terminal floor (NF-3, native-floor spec §6): list/get read the
+    // observed inventory; openTicket/create/terminate are audited (attempt
+    // before effect). Scope terminal.attach across the board (NF-D5 v1 —
+    // the terminal.manage split is the named upgrade).
+    const requireSessionId = (params: unknown): string => {
+      const sessionId = (params as { sessionId?: unknown } | null | undefined)?.sessionId;
+      if (typeof sessionId !== "string" || sessionId.length === 0)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
+      return sessionId;
+    };
+    api.register("terminal.list", () => ({ terminals: terminals.list() }));
+    api.register("terminal.get", (_ctx, params) => {
+      const sessionId = requireSessionId(params);
+      const info = terminals.get(sessionId);
+      if (!info) throw new RpcCallError("NOT_FOUND", `no such terminal: ${sessionId}`, false);
+      return info;
+    });
+    // D6: every mint is an audited grant, even while the credential inside is
+    // the shared native service token (per-client tokens are the named
+    // ghosttea upgrade).
+    api.register("terminal.openTicket", async (ctx, params) => {
+      const sessionId = requireSessionId(params);
+      if (terminals.get(sessionId) === undefined)
+        throw new RpcCallError("NOT_FOUND", `no such terminal: ${sessionId}`, false);
+      return await audit.required(
+        ctx,
+        { action: "terminal.ticket.mint", target: { kind: "terminal", id: sessionId } },
+        () => terminals.ticket(),
+        () => ({ outcome: "succeeded" }),
+      );
+    });
+    api.register("terminal.create", async (ctx, params) => {
+      const parsed = TerminalCreateParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "malformed terminal.create params", false);
+      return await audit.required(
+        ctx,
+        {
+          // the session id does not exist until the effect runs; the outcome
+          // record carries it (attempt-before-effect, honest both ways)
+          action: "terminal.session.create",
+          target: { kind: "terminal", id: "pending" },
+          attrs: {
+            ...(parsed.data.shell !== undefined ? { shell: parsed.data.shell } : {}),
+            ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
+          },
+        },
+        () => terminals.create(parsed.data),
+        (result) => ({ outcome: "succeeded", attrs: { sessionId: result.sessionId } }),
+      );
+    });
+    api.register("terminal.terminate", async (ctx, params) => {
+      const parsed = TerminalTerminateParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "terminal.session.terminate",
+          target: { kind: "terminal", id: parsed.data.sessionId },
+        },
+        () => terminals.terminate(parsed.data.sessionId),
+        (result) => ({ outcome: "succeeded", attrs: { terminated: result.terminated } }),
+      );
     });
 
     // -- PluginRegistry (PLUG-P2, plugin spec §21.3/§22.1) --
@@ -1597,6 +1688,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
         devices.dispose();
+        terminals.dispose();
         services.dispose();
         settings.dispose();
         plugins.dispose();
@@ -1623,6 +1715,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       laneLink.close();
       docs.dispose();
       devices.dispose();
+      terminals.dispose();
       services.dispose();
       settings.dispose();
       plugins.dispose();
