@@ -92,10 +92,11 @@ describe("DesktopSection", () => {
     await mount(client({ showTray: true, backgroundShell: true }), "linux", {
       tray: {
         availability: "unavailable",
+        placement: "unknown",
         backgroundShellEffective: false,
         issue: {
           code: "DESKTOP_TRAY_UNAVAILABLE",
-          message: "native tray creation failed",
+          message: "Status item unavailable for this session. Closing this window quits VibeField.",
         },
       },
     });
@@ -105,5 +106,22 @@ describe("DesktopSection", () => {
     expect(inputs?.[1]?.disabled).toBe(true);
     expect(container?.textContent).toContain("Closing this window quits VibeField");
     expect(container?.textContent).toContain("DESKTOP_TRAY_UNAVAILABLE");
+  });
+
+  it("explains when macOS has overflow-hidden a successfully created status item", async () => {
+    await mount(client({ showTray: true, backgroundShell: true }), "darwin", {
+      tray: {
+        availability: "available",
+        placement: "offscreen",
+        backgroundShellEffective: false,
+        issue: {
+          code: "DESKTOP_TRAY_OFFSCREEN",
+          message:
+            "VibeField created its status item, but macOS placed it outside the visible menu bar.",
+        },
+      },
+    });
+    expect(container?.textContent).toContain("outside the visible menu bar");
+    expect(container?.textContent).toContain("DESKTOP_TRAY_OFFSCREEN");
   });
 });

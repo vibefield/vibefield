@@ -15,7 +15,8 @@ import {
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
-import { app, clipboard, crashReporter, dialog, session, shell } from "electron";
+import { app, clipboard, crashReporter, dialog, nativeImage, session, shell } from "electron";
+import { applyDevelopmentDockIcon } from "./app-branding";
 import { installAppProtocol, registerAppScheme } from "./app-protocol";
 import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
@@ -318,6 +319,26 @@ async function main(
   // sidecar must read as a packaging failure with a doctor code, not as an exec
   // error later that looks like a missing file (§4.3, §14).
   assertPackagedResources(resources);
+  try {
+    const dockIcon = applyDevelopmentDockIcon(resources, {
+      platform: process.platform,
+      dock: process.platform === "darwin" ? (app.dock ?? null) : null,
+      loadImage: (path) => nativeImage.createFromPath(path),
+    });
+    if (dockIcon.status === "applied") {
+      logger.info(
+        "desktop.identity.dock_icon_applied",
+        "The development Electron bundle received VibeField's Dock icon",
+        dockIcon,
+      );
+    }
+  } catch (error) {
+    logger.error(
+      "desktop.identity.dock_icon_failed",
+      "The development Electron bundle could not apply VibeField's Dock icon",
+      error,
+    );
+  }
   supervisor = buildSupervisor({
     mode: MODE,
     root,
@@ -589,6 +610,31 @@ async function main(
         error,
         { stage },
       );
+    },
+    onNativeState: (state) => {
+      const attrs = {
+        reason: state.reason,
+        platform: state.platform,
+        guid: state.guid,
+        imageKind: state.imageKind,
+        image: state.image,
+        bounds: state.native.bounds,
+        displayBounds: state.native.displayBounds,
+        placement: state.native.placement,
+      };
+      if (state.native.placement === "offscreen") {
+        logger.warn(
+          "desktop.tray.native_state",
+          "The native status item exists but is outside every visible display",
+          attrs,
+        );
+      } else {
+        logger.info(
+          "desktop.tray.native_state",
+          "The native status item was created and inspected",
+          attrs,
+        );
+      }
     },
     onDesktopState: publishDesktopState,
   });

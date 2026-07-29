@@ -31,6 +31,10 @@ export interface TrayImageSet {
 
 export interface DesktopResources {
   readonly packaged: boolean;
+  /** The raw Electron.app used by development cannot inherit electron-builder's
+   * bundle icon. macOS applies this checked raster after app.whenReady(); a
+   * packaged app keeps bundle-owned icon selection and therefore carries null. */
+  readonly developmentDockIconPath: string | null;
   /** the program to exec: the standalone fieldd executable when packaged
    * (EDP-14), Electron-as-node from the repo bundle in development */
   readonly fielddCommand: string;
@@ -112,6 +116,14 @@ export function resolveDevelopmentResources(opts: {
   const platform = opts.platform ?? process.platform;
   return {
     packaged: false,
+    developmentDockIconPath: join(
+      opts.repoRoot,
+      "apps",
+      "desktop",
+      "packaging",
+      "icons",
+      "app-1024.png",
+    ),
     fielddCommand: opts.electronExecPath,
     fielddArgs: [join(opts.repoRoot, "packages", "fieldd", "dist", "bin.cjs")],
     // Development runs the bundle through Electron's own node — building a
@@ -145,6 +157,7 @@ export function resolvePackagedResources(opts: {
   const bin = join(opts.resourcesPath, "bin");
   return {
     packaged: true,
+    developmentDockIconPath: null,
     // A REAL executable, not Electron wearing a hat (EDP-14). Its two sidecars —
     // service-harness.mjs and loro_wasm_bg.wasm — are staged beside it because
     // fieldd resolves both against its own __dirname, which probe P-A verified

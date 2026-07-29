@@ -214,14 +214,21 @@ function loadIdentityConsumers() {
   const appIdMatch = registries.match(
     /export\s+const\s+DESKTOP_APP_ID\s*=\s*(["'])([^"']+)\1\s+as\s+const/,
   );
+  const trayGuidMatch = registries.match(
+    /export\s+const\s+DESKTOP_TRAY_GUID\s*=\s*(["'])([^"']+)\1\s+as\s+const/,
+  );
   if (appIdMatch === null) {
     throw new Error(`${DESKTOP_REGISTRY_PATH}: could not read DESKTOP_APP_ID`);
+  }
+  if (trayGuidMatch === null) {
+    throw new Error(`${DESKTOP_REGISTRY_PATH}: could not read DESKTOP_TRAY_GUID`);
   }
   return {
     builderAppId: topLevelYamlScalar(builder, "appId"),
     builderProductName: topLevelYamlScalar(builder, "productName"),
     builderExecutableName: topLevelYamlScalar(builder, "executableName"),
     runtimeWindowsAppUserModelId: appIdMatch[2],
+    runtimeTrayGuid: trayGuidMatch[2],
   };
 }
 
@@ -249,6 +256,7 @@ function checkIdentityConsumers(ledger, consumers) {
     consumers.runtimeWindowsAppUserModelId,
     "windowsAppUserModelId",
   );
+  compare("runtime DESKTOP_TRAY_GUID", consumers.runtimeTrayGuid, "trayGuid");
   const appId = frozenValue("appId");
   const aumid = frozenValue("windowsAppUserModelId");
   if (appId !== null && aumid !== null && appId !== aumid) {
@@ -440,6 +448,14 @@ function selfTest() {
     driftedRuntime.some((v) => v.includes("runtime/builder drift"));
   if (!runtimeDriftOk) failures++;
   console.log(`${runtimeDriftOk ? "ok  " : "FAIL"} runtime AUMID drift is refused`);
+
+  const driftedTray = checkIdentityConsumers(base(), {
+    ...consumers,
+    runtimeTrayGuid: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  });
+  const trayDriftOk = driftedTray.some((v) => v.includes("runtime DESKTOP_TRAY_GUID"));
+  if (!trayDriftOk) failures++;
+  console.log(`${trayDriftOk ? "ok  " : "FAIL"} runtime tray GUID drift is refused`);
 
   if (failures > 0) {
     console.error(`self-test: ${failures} rule(s) did not behave as specified`);

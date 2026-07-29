@@ -89,12 +89,21 @@ export const DesktopShellState = z
     tray: z
       .object({
         availability: z.enum(["available", "hidden", "unavailable"]),
+        /** Native construction and visible placement are separate facts. The OS
+         * can retain a real Tray while moving it outside the visible menu bar. */
+        placement: z.enum(["visible", "offscreen", "unknown"]),
         backgroundShellEffective: z.boolean(),
         issue: z
-          .object({
-            code: z.literal("DESKTOP_TRAY_UNAVAILABLE"),
-            message: z.string().min(1).max(512),
-          })
+          .union([
+            z.object({
+              code: z.literal("DESKTOP_TRAY_UNAVAILABLE"),
+              message: z.string().min(1).max(512),
+            }),
+            z.object({
+              code: z.literal("DESKTOP_TRAY_OFFSCREEN"),
+              message: z.string().min(1).max(512),
+            }),
+          ])
           .nullable(),
       })
       .passthrough(),

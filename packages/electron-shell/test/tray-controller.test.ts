@@ -4,6 +4,8 @@ import {
   type NativeTrayPort,
   TrayController,
   type TrayControllerActions,
+  type TrayNativeState,
+  type TrayPlacement,
   type TrayRuntime,
 } from "../src/main/tray-controller";
 import type { TrayMenuItem, TrayPlatform, TraySnapshot } from "../src/main/tray-model";
@@ -15,7 +17,7 @@ class FakeTray implements NativeTrayPort {
   readonly destroy = vi.fn();
   readonly listeners = new Map<string, () => void>();
 
-  on(event: "click" | "double-click", listener: () => void): void {
+  on(event: "click" | "double-click" | "mouse-enter", listener: () => void): void {
     this.listeners.set(event, listener);
   }
 }
@@ -37,17 +39,42 @@ function harness(
   platform: TrayPlatform = "linux",
   failCreate = false,
   initial: Partial<TraySnapshot> = {},
+  initialPlacement: TrayPlacement = "visible",
 ) {
   const trays: FakeTray[] = [];
   const menus: (readonly TrayMenuItem[])[] = [];
+  const nativeStates: TrayNativeState[] = [];
+  let placement = initialPlacement;
+  let displayCallback: (() => void) | null = null;
+  const stopDisplayObservation = vi.fn();
   const runtime: TrayRuntime = {
     platform,
+    guid: platform === "darwin" ? "c524c40e-05b6-4d89-bbb9-82ba4e97ea91" : null,
     loadImage: vi.fn((kind) => ({ kind })),
+    inspectImage: vi.fn(() => ({
+      sourcePath: "/tray/fieldTemplate.png",
+      width: 16,
+      height: 16,
+      scaleFactors: [1, 2],
+      template: platform === "darwin",
+    })),
     createTray: vi.fn(() => {
       if (failCreate) throw new Error("desktop has no tray implementation");
       const tray = new FakeTray();
       trays.push(tray);
       return tray;
+    }),
+    inspectTray: vi.fn(() => ({
+      bounds:
+        placement === "offscreen"
+          ? { x: -1, y: 1116, width: 34, height: 24 }
+          : { x: 1200, y: 4, width: 34, height: 24 },
+      displayBounds: [{ x: 0, y: 0, width: 1728, height: 1117 }],
+      placement,
+    })),
+    watchDisplays: vi.fn((callback) => {
+      displayCallback = callback;
+      return stopDisplayObservation;
     }),
     buildMenu: vi.fn((items) => {
       menus.push(items);
@@ -71,9 +98,26 @@ function harness(
     initial: snapshot(initial),
     actions,
     onError,
+    onNativeState: (state) => nativeStates.push(state),
     onDesktopState: (state) => desktopStates.push(state),
   });
-  return { controller, runtime, actions, onError, trays, menus, desktopStates };
+  return {
+    controller,
+    runtime,
+    actions,
+    onError,
+    trays,
+    menus,
+    desktopStates,
+    nativeStates,
+    stopDisplayObservation,
+    setPlacement(next: TrayPlacement) {
+      placement = next;
+    },
+    emitDisplayChange() {
+      displayCallback?.();
+    },
+  };
 }
 
 const menuItem = (menu: readonly TrayMenuItem[], id: string) =>
@@ -99,6 +143,16 @@ describe("TrayController", () => {
     expect(h.runtime.buildMenu).toHaveBeenCalledTimes(2);
     expect(h.trays).toHaveLength(1);
     expect(h.trays[0]?.setImage).toHaveBeenCalledWith({ kind: "attention" });
+    expect(h.nativeStates[0]).toMatchObject({
+      reason: "created",
+      image: {
+        sourcePath: "/tray/fieldTemplate.png",
+        width: 16,
+        height: 16,
+        scaleFactors: [1, 2],
+      },
+      native: { placement: "visible" },
+    });
   });
 
   it("destroys on hide and creates one fresh tray when re-enabled", () => {
@@ -150,6 +204,28 @@ describe("TrayController", () => {
     expect(h.controller.keepsAliveWithoutWindows()).toBe(true);
   });
 
+  it("reports a real-but-offscreen macOS status item without calling creation a failure", () => {
+    const h = harness("darwin", false, {}, "offscreen");
+    expect(h.controller.isUsable()).toBe(true);
+    expect(h.onError).not.toHaveBeenCalled();
+    expect(h.controller.desktopState().tray).toMatchObject({
+      availability: "available",
+      placement: "offscreen",
+      issue: { code: "DESKTOP_TRAY_OFFSCREEN" },
+    });
+  });
+
+  it("rechecks placement after display changes without polling", () => {
+    const h = harness("darwin", false, {}, "offscreen");
+    h.setPlacement("visible");
+    h.emitDisplayChange();
+    vi.advanceTimersByTime(249);
+    expect(h.controller.desktopState().tray.placement).toBe("offscreen");
+    vi.advanceTimersByTime(1);
+    expect(h.controller.desktopState().tray.placement).toBe("visible");
+    expect(h.controller.desktopState().tray.issue).toBeNull();
+  });
+
   it("guards callbacks from an already-built menu as soon as quitting begins", async () => {
     const h = harness();
     const oldMenu = h.menus[0]!;
@@ -176,5 +252,6 @@ describe("TrayController", () => {
     vi.runAllTimers();
     expect(h.trays[0]?.destroy).toHaveBeenCalledTimes(1);
     expect(h.runtime.buildMenu).toHaveBeenCalledTimes(1);
+    expect(h.stopDisplayObservation).toHaveBeenCalledTimes(1);
   });
 });

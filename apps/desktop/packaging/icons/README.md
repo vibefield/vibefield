@@ -19,3 +19,10 @@ images for the current theme.
 The flat application master deliberately produces the conventional ICNS fallback. A layered
 Apple `.icon` asset is not synthesized: that format needs independently authored foreground and
 background layers, and wrapping the same flat bitmap would add no fidelity.
+
+`pnpm dev` runs Electron's own unsigned application bundle, so electron-builder cannot embed the
+VibeField bundle icon in that loop. After Electron is ready, the shell applies the checked
+`app-1024.png` through the macOS Dock API and logs the resolved path and dimensions. Packaged
+builds never take that runtime override: their Finder/Dock identity remains owned by the bundle,
+with `app.icns` as the current fallback until real independently-authored Icon Composer layers
+exist.

@@ -1,6 +1,12 @@
-import { Menu, type NativeImage, nativeImage, Tray } from "electron";
+import { DESKTOP_TRAY_GUID } from "@vibefield/contracts";
+import { Menu, type NativeImage, nativeImage, screen, Tray } from "electron";
 import type { DesktopResources, TrayImageKind, TrayImageSet } from "./resources";
-import type { NativeTrayPort, TrayRuntime } from "./tray-controller";
+import type {
+  NativeTrayPort,
+  TrayNativeInspection,
+  TrayRectangle,
+  TrayRuntime,
+} from "./tray-controller";
 import type { TrayMenuItem, TrayPlatform } from "./tray-model";
 
 function assertImage(image: NativeImage, path: string): NativeImage {
@@ -43,14 +49,100 @@ function electronMenu(items: readonly TrayMenuItem[]) {
   );
 }
 
+function isFiniteRectangle(rect: TrayRectangle): boolean {
+  return (
+    Number.isFinite(rect.x) &&
+    Number.isFinite(rect.y) &&
+    Number.isFinite(rect.width) &&
+    Number.isFinite(rect.height) &&
+    rect.width > 0 &&
+    rect.height > 0
+  );
+}
+
+/** AppKit parks an overflow-hidden NSStatusItem just beyond a display edge. A
+ * one-pixel intersection therefore gives a false "visible"; classify by the
+ * item's center point instead. */
+export function classifyTrayPlacement(
+  bounds: TrayRectangle,
+  displayBounds: readonly TrayRectangle[],
+): TrayNativeInspection["placement"] {
+  if (!isFiniteRectangle(bounds) || displayBounds.length === 0) return "unknown";
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  return displayBounds.some(
+    (display) =>
+      isFiniteRectangle(display) &&
+      centerX >= display.x &&
+      centerX < display.x + display.width &&
+      centerY >= display.y &&
+      centerY < display.y + display.height,
+  )
+    ? "visible"
+    : "offscreen";
+}
+
+export function trayGuidForPlatform(platform: TrayPlatform): string | null {
+  // Windows must not consume the frozen slot until its binary is signed
+  // (release-identity.json / EDP §5.6). macOS has no such restriction.
+  return platform === "darwin" ? DESKTOP_TRAY_GUID : null;
+}
+
 export function createElectronTrayRuntime(
   resources: Pick<DesktopResources, "tray">,
   platform: TrayPlatform = normalizeTrayPlatform(process.platform),
 ): TrayRuntime {
+  const guid = trayGuidForPlatform(platform);
   return {
     platform,
+    guid,
     loadImage: (kind) => loadTrayImage(resources.tray, kind, platform),
-    createTray: (image) => new Tray(image as NativeImage) as NativeTrayPort,
+    inspectImage: (image, kind) => {
+      const native = image as NativeImage;
+      const size = native.getSize();
+      const paths = resources.tray[kind];
+      const sourcePath =
+        platform === "darwin"
+          ? paths.macTemplate1x
+          : platform === "win32"
+            ? paths.windowsIco
+            : platform === "linux"
+              ? paths.linuxPng
+              : null;
+      return {
+        sourcePath,
+        width: size.width,
+        height: size.height,
+        scaleFactors: native.getScaleFactors(),
+        template: native.isTemplateImage(),
+      };
+    },
+    createTray: (image) =>
+      new Tray(image as NativeImage, guid ?? undefined) as unknown as NativeTrayPort,
+    inspectTray: (tray) => {
+      if (platform !== "darwin") {
+        return { bounds: null, displayBounds: [], placement: "unknown" };
+      }
+      const bounds = (tray as unknown as Tray).getBounds();
+      const displayBounds = screen.getAllDisplays().map((display) => ({ ...display.bounds }));
+      return {
+        bounds,
+        displayBounds,
+        placement: classifyTrayPlacement(bounds, displayBounds),
+      };
+    },
+    watchDisplays: (callback) => {
+      if (platform !== "darwin") return () => undefined;
+      const listener = () => callback();
+      screen.on("display-added", listener);
+      screen.on("display-removed", listener);
+      screen.on("display-metrics-changed", listener);
+      return () => {
+        screen.off("display-added", listener);
+        screen.off("display-removed", listener);
+        screen.off("display-metrics-changed", listener);
+      };
+    },
     buildMenu: electronMenu,
     schedule: (callback, delayMs) => setTimeout(callback, delayMs),
     cancelSchedule: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),

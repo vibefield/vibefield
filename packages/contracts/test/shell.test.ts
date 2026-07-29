@@ -179,6 +179,7 @@ describe("tray shell commands and app preferences", () => {
       DesktopShellState.parse({
         tray: {
           availability: "unavailable",
+          placement: "unknown",
           backgroundShellEffective: false,
           issue: {
             code: "DESKTOP_TRAY_UNAVAILABLE",
@@ -188,12 +189,27 @@ describe("tray shell commands and app preferences", () => {
       }).tray,
     ).toMatchObject({
       availability: "unavailable",
+      placement: "unknown",
       backgroundShellEffective: false,
     });
+    expect(
+      DesktopShellState.parse({
+        tray: {
+          availability: "available",
+          placement: "offscreen",
+          backgroundShellEffective: false,
+          issue: {
+            code: "DESKTOP_TRAY_OFFSCREEN",
+            message: "macOS placed the status item outside the visible menu bar",
+          },
+        },
+      }).tray.issue?.code,
+    ).toBe("DESKTOP_TRAY_OFFSCREEN");
     expect(
       DesktopShellState.safeParse({
         tray: {
           availability: "unavailable",
+          placement: "unknown",
           backgroundShellEffective: true,
           issue: { code: "UNKNOWN", message: "bad" },
         },

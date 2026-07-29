@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { LOCALITIES, METHODS, SURFACES } from "../src/methods";
-import { DESKTOP_APP_ID, LOG_STREAMS, PORTS, SCOPES, TAILNET_SCOPES } from "../src/registries";
+import {
+  DESKTOP_APP_ID,
+  DESKTOP_TRAY_GUID,
+  LOG_STREAMS,
+  PORTS,
+  SCOPES,
+  TAILNET_SCOPES,
+} from "../src/registries";
 
 describe("method registry lint (design-01 §9.2 + D36)", () => {
   it("every method is fully declared", () => {
@@ -26,8 +33,9 @@ describe("port registry", () => {
 });
 
 describe("installed desktop identity", () => {
-  it("pins the frozen reverse-DNS identity separately from the mesh slug", () => {
+  it("pins the frozen application and status-item identities", () => {
     expect(DESKTOP_APP_ID).toBe("com.jamesyong.vibefield");
+    expect(DESKTOP_TRAY_GUID).toBe("c524c40e-05b6-4d89-bbb9-82ba4e97ea91");
   });
 });
 

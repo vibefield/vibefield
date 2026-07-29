@@ -39,6 +39,7 @@ export function DesktopSection({
   const showTray = preferences?.showTray ?? true;
   const backgroundShell = preferences?.backgroundShell ?? true;
   const trayUnavailable = desktopState?.tray.availability === "unavailable";
+  const trayIssue = showTray ? desktopState?.tray.issue : null;
   const effectiveBackgroundShell = desktopState?.tray.backgroundShellEffective ?? backgroundShell;
 
   return (
@@ -55,6 +56,11 @@ export function DesktopSection({
           }}
         />
       </label>
+      {trayIssue !== null && trayIssue !== undefined && (
+        <div className="text-amber-600 dark:text-amber-400">
+          {trayIssue.message} <span className={labelCls}>({trayIssue.code})</span>
+        </div>
+      )}
       {(platform === "win32" || platform === "linux") && (
         <>
           <label className="flex items-center justify-between gap-3 py-0.5">
@@ -73,12 +79,6 @@ export function DesktopSection({
           </label>
           {!showTray && (
             <div className={labelCls}>Requires the status item so the app cannot be trapped.</div>
-          )}
-          {trayUnavailable && desktopState?.tray.issue !== null && (
-            <div className="text-amber-600 dark:text-amber-400">
-              Status item unavailable for this session. Closing this window quits VibeField.{" "}
-              <span className={labelCls}>({desktopState.tray.issue.code})</span>
-            </div>
           )}
         </>
       )}

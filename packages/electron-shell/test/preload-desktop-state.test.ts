@@ -4,6 +4,7 @@ import { PreloadDesktopStateBridge } from "../src/preload/desktop-state";
 const available = {
   tray: {
     availability: "available",
+    placement: "visible",
     backgroundShellEffective: true,
     issue: null,
   },
@@ -25,7 +26,12 @@ describe("PreloadDesktopStateBridge", () => {
     const bridge = new PreloadDesktopStateBridge(rejected);
     bridge.accept(available);
     bridge.accept({
-      tray: { availability: "imaginary", backgroundShellEffective: true, issue: null },
+      tray: {
+        availability: "imaginary",
+        placement: "visible",
+        backgroundShellEffective: true,
+        issue: null,
+      },
     });
     const handler = vi.fn();
     bridge.subscribe(handler);

@@ -8,6 +8,12 @@ export const APP_ID = "vibefield" as const;
  * grouping, notifications, and the installer all use this frozen value. */
 export const DESKTOP_APP_ID = "com.jamesyong.vibefield" as const;
 
+/** Stable native status-item identity, frozen in the release-identity ledger.
+ * macOS uses it in development and packaged builds so a user-selected menu-bar
+ * position survives relaunches. Windows must wait for a signed package before
+ * consuming the same identity (EDP §5.6). */
+export const DESKTOP_TRAY_GUID = "c524c40e-05b6-4d89-bbb9-82ba4e97ea91" as const;
+
 /** One place for every port VibeField binds or reserves. */
 export const PORTS = {
   /** fieldd product API — renderer control plane (loopback WS, JSON-RPC text). D27 */
