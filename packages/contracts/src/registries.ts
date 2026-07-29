@@ -167,6 +167,12 @@ export const SOCKETS = {
   FIELDD: "fieldd.sock",
   MGMT: "mgmt.sock",
   MESHDATA: "meshdata.sock",
+  /** NF — Ghosttea control/frame endpoints under native/run/: bound by
+   * field-native (which owns creation, permissions, and stale-unlink), dialed
+   * by ticket holders. Path stability across fieldd restarts is what lets
+   * ghosttea clients read endpoints once at construction. */
+  TERMINAL_CONTROL: "terminal-control.sock",
+  TERMINAL_FRAME: "terminal-frame.sock",
 } as const;
 
 /** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): seven channels, nothing

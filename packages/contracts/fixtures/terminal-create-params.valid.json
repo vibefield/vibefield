@@ -1,0 +1,6 @@
+{
+  "cwd": "/Users/james/dev/scratch",
+  "shell": "/bin/zsh",
+  "title": "scratch shell",
+  "persistence": "keep-until-exit"
+}

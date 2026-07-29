@@ -51,11 +51,29 @@ export const Hello = z
   .passthrough();
 export type Hello = z.infer<typeof Hello>;
 
+/** NF-D8 — the terminal data-plane endpoints, carried ONLY on the mgmt-channel
+ * hello ack (fieldd re-learns them at every re-pair). Socket paths are stable
+ * across fieldd restarts (external-mode law); the token is minted per
+ * field-native boot and lives nowhere but this ack and the tickets fieldd
+ * mints from it — never env, config files, or logs. */
+export const TerminalEndpoints = z
+  .object({
+    controlSocket: z.string(),
+    frameSocket: z.string(),
+    authToken: z.string(),
+  })
+  .passthrough();
+export type TerminalEndpoints = z.infer<typeof TerminalEndpoints>;
+
 export const HelloAck = z
   .object({
     contractsVersion: SemverString,
     serverKind: ServerKind,
     grantedScopes: z.array(z.string()),
+    /** mgmt surface only (NF-D8); absent on every product-surface ack, and
+     * absent until the terminal unit is up (tolerant readers treat absence as
+     * "no terminal endpoints yet", never an error). */
+    terminal: TerminalEndpoints.optional(),
   })
   .passthrough();
 export type HelloAck = z.infer<typeof HelloAck>;

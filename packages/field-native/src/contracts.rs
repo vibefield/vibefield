@@ -155,6 +155,9 @@ impl ::std::convert::TryFrom<::std::string::String> for ClientKind {
 #[doc = "    \"meshConfig\": {"]
 #[doc = "      \"$ref\": \"#/definitions/MeshConfig\""]
 #[doc = "    },"]
+#[doc = "    \"observedBootId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"terminals\": {"]
 #[doc = "      \"type\": \"array\","]
 #[doc = "      \"items\": {"]
@@ -181,6 +184,12 @@ pub struct DesiredState {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub mesh_config: ::std::option::Option<MeshConfig>,
+    #[serde(
+        rename = "observedBootId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub observed_boot_id: ::std::option::Option<::std::string::String>,
     pub terminals: ::std::vec::Vec<DesiredTerminal>,
     pub workers: ::std::vec::Vec<DesiredWorker>,
 }
@@ -847,6 +856,9 @@ impl Hello {
 #[doc = "    },"]
 #[doc = "    \"serverKind\": {"]
 #[doc = "      \"$ref\": \"#/definitions/ServerKind\""]
+#[doc = "    },"]
+#[doc = "    \"terminal\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalEndpoints\""]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": true"]
@@ -861,6 +873,8 @@ pub struct HelloAck {
     pub granted_scopes: ::std::vec::Vec<::std::string::String>,
     #[serde(rename = "serverKind")]
     pub server_kind: ServerKind,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub terminal: ::std::option::Option<TerminalEndpoints>,
 }
 impl HelloAck {
     pub fn builder() -> builder::HelloAck {
@@ -5146,6 +5160,47 @@ impl StoreSnapshot {
         Default::default()
     }
 }
+#[doc = "`TerminalEndpoints`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"authToken\","]
+#[doc = "    \"controlSocket\","]
+#[doc = "    \"frameSocket\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"authToken\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"controlSocket\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"frameSocket\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct TerminalEndpoints {
+    #[serde(rename = "authToken")]
+    pub auth_token: ::std::string::String,
+    #[serde(rename = "controlSocket")]
+    pub control_socket: ::std::string::String,
+    #[serde(rename = "frameSocket")]
+    pub frame_socket: ::std::string::String,
+}
+impl TerminalEndpoints {
+    pub fn builder() -> builder::TerminalEndpoints {
+        Default::default()
+    }
+}
 #[doc = "`UnavailableDetails`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -5378,6 +5433,10 @@ pub mod builder {
         generation: ::std::result::Result<i64, ::std::string::String>,
         mesh_config:
             ::std::result::Result<::std::option::Option<super::MeshConfig>, ::std::string::String>,
+        observed_boot_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         terminals:
             ::std::result::Result<::std::vec::Vec<super::DesiredTerminal>, ::std::string::String>,
         workers:
@@ -5388,6 +5447,7 @@ pub mod builder {
             Self {
                 generation: Err("no value supplied for generation".to_string()),
                 mesh_config: Ok(Default::default()),
+                observed_boot_id: Ok(Default::default()),
                 terminals: Err("no value supplied for terminals".to_string()),
                 workers: Err("no value supplied for workers".to_string()),
             }
@@ -5412,6 +5472,16 @@ pub mod builder {
             self.mesh_config = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for mesh_config: {e}"));
+            self
+        }
+        pub fn observed_boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.observed_boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for observed_boot_id: {e}"));
             self
         }
         pub fn terminals<T>(mut self, value: T) -> Self
@@ -5443,6 +5513,7 @@ pub mod builder {
             Ok(Self {
                 generation: value.generation?,
                 mesh_config: value.mesh_config?,
+                observed_boot_id: value.observed_boot_id?,
                 terminals: value.terminals?,
                 workers: value.workers?,
             })
@@ -5453,6 +5524,7 @@ pub mod builder {
             Self {
                 generation: Ok(value.generation),
                 mesh_config: Ok(value.mesh_config),
+                observed_boot_id: Ok(value.observed_boot_id),
                 terminals: Ok(value.terminals),
                 workers: Ok(value.workers),
             }
@@ -6255,6 +6327,10 @@ pub mod builder {
         granted_scopes:
             ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
         server_kind: ::std::result::Result<super::ServerKind, ::std::string::String>,
+        terminal: ::std::result::Result<
+            ::std::option::Option<super::TerminalEndpoints>,
+            ::std::string::String,
+        >,
     }
     impl ::std::default::Default for HelloAck {
         fn default() -> Self {
@@ -6262,6 +6338,7 @@ pub mod builder {
                 contracts_version: Err("no value supplied for contracts_version".to_string()),
                 granted_scopes: Err("no value supplied for granted_scopes".to_string()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
+                terminal: Ok(Default::default()),
             }
         }
     }
@@ -6296,6 +6373,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for server_kind: {e}"));
             self
         }
+        pub fn terminal<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalEndpoints>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.terminal = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for terminal: {e}"));
+            self
+        }
     }
     impl ::std::convert::TryFrom<HelloAck> for super::HelloAck {
         type Error = super::error::ConversionError;
@@ -6304,6 +6391,7 @@ pub mod builder {
                 contracts_version: value.contracts_version?,
                 granted_scopes: value.granted_scopes?,
                 server_kind: value.server_kind?,
+                terminal: value.terminal?,
             })
         }
     }
@@ -6313,6 +6401,7 @@ pub mod builder {
                 contracts_version: Ok(value.contracts_version),
                 granted_scopes: Ok(value.granted_scopes),
                 server_kind: Ok(value.server_kind),
+                terminal: Ok(value.terminal),
             }
         }
     }
@@ -9200,6 +9289,74 @@ pub mod builder {
             Self {
                 slices: Ok(value.slices),
                 store_id: Ok(value.store_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct TerminalEndpoints {
+        auth_token: ::std::result::Result<::std::string::String, ::std::string::String>,
+        control_socket: ::std::result::Result<::std::string::String, ::std::string::String>,
+        frame_socket: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for TerminalEndpoints {
+        fn default() -> Self {
+            Self {
+                auth_token: Err("no value supplied for auth_token".to_string()),
+                control_socket: Err("no value supplied for control_socket".to_string()),
+                frame_socket: Err("no value supplied for frame_socket".to_string()),
+            }
+        }
+    }
+    impl TerminalEndpoints {
+        pub fn auth_token<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.auth_token = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for auth_token: {e}"));
+            self
+        }
+        pub fn control_socket<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.control_socket = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for control_socket: {e}"));
+            self
+        }
+        pub fn frame_socket<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.frame_socket = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for frame_socket: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<TerminalEndpoints> for super::TerminalEndpoints {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: TerminalEndpoints,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                auth_token: value.auth_token?,
+                control_socket: value.control_socket?,
+                frame_socket: value.frame_socket?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::TerminalEndpoints> for TerminalEndpoints {
+        fn from(value: super::TerminalEndpoints) -> Self {
+            Self {
+                auth_token: Ok(value.auth_token),
+                control_socket: Ok(value.control_socket),
+                frame_socket: Ok(value.frame_socket),
             }
         }
     }

@@ -63,6 +63,12 @@ export const DesiredState = z
     terminals: z.array(DesiredTerminal),
     workers: z.array(DesiredWorker),
     meshConfig: MeshConfig.optional(),
+    /** NF-D2(b) — adopt-before-authority: a set that would TERMINATE ≥1
+     * running session must prove it saw THIS boot's inventory by echoing the
+     * current native bootId; mismatch or absence ⇒ PRECONDITION_FAILED and
+     * zero terminations. Retain-only sets may omit it (silence kills nothing —
+     * NF-D2(a)). */
+    observedBootId: z.string().optional(),
   })
   .passthrough();
 export type DesiredState = z.infer<typeof DesiredState>;

@@ -753,4 +753,55 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+
+  // NF-1 — the terminal floor's product surface (native-floor spec §6, NF-D5).
+  // Scope posture v1: terminal.attach covers attach+create+terminate — the
+  // single-user posture stated D6-style; a terminal.manage split is the named
+  // upgrade. locality "local" is exact, not a copy-paste: the ticket path and
+  // the PTY live on THIS device — a remote terminal is reached by ROUTING the
+  // call (device?, D35; terminal.attach sits in TAILNET_SCOPES already), never
+  // by federating its bytes (those ride TSP1, native-plane). The rest of the
+  // design-01 terminal ideas (subscribe, remote TSP1 endpoint info) are
+  // deferred and deliberately undeclared — declared == shipped (D36).
+  defineMethod({
+    surface: "product",
+    method: "terminal.list",
+    scope: "terminal.attach",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "terminal.get",
+    scope: "terminal.attach",
+    idempotent: true,
+    locality: "local",
+  }),
+  // NOT idempotent: every mint is a fresh audited grant (the doc.open
+  // precedent), even while D6 keeps the credential inside it the shared
+  // native service token.
+  defineMethod({
+    surface: "product",
+    method: "terminal.openTicket",
+    scope: "terminal.attach",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "terminal.create",
+    scope: "terminal.attach",
+    idempotent: false,
+    locality: "local",
+  }),
+  // Idempotent by intent — terminating an already-exited session is the normal
+  // race when the ladder and a user click converge, and must not read as an
+  // error (the lane.close reasoning).
+  defineMethod({
+    surface: "product",
+    method: "terminal.terminate",
+    scope: "terminal.attach",
+    idempotent: true,
+    locality: "local",
+  }),
 ];

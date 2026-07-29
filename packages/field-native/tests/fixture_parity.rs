@@ -44,6 +44,9 @@ fn hello_fixtures() {
 #[test]
 fn hello_ack_fixture() {
     roundtrip::<HelloAck>("hello-ack.valid.json", true);
+    // NF-D8 — the mgmt ack carrying terminal endpoints; field-native EMITS this
+    // shape, so it is strict.
+    roundtrip::<HelloAck>("hello-ack.terminal.json", true);
 }
 
 #[test]
@@ -63,6 +66,8 @@ fn mgmt_lifecycle_fixtures() {
     // field-native ECHOES these shapes (health + observed are its own outputs) — strict.
     roundtrip::<NativeHealth>("native-health.valid.json", true);
     roundtrip::<DesiredState>("desired-state.valid.json", true);
+    // NF-D2(b) — the adopt-before-authority proof field on a pruning set.
+    roundtrip::<DesiredState>("desired-state.observed-boot.json", true);
     roundtrip::<ObservedState>("observed-state.valid.json", true);
     roundtrip::<ObservedState>("observed-state.unknown-field.json", false); // tolerant reader (P3)
 }

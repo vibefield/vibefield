@@ -39,6 +39,7 @@ import {
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
+import { TerminalCreateParams, TerminalTicket } from "../src/terminal";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 
@@ -79,6 +80,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "diagnostic-lease": DiagnosticLeaseV1,
   "audit-record": AuditRecordV1,
   "support-manifest": SupportBundleManifestV1,
+  "terminal-ticket": TerminalTicket,
+  "terminal-create-params": TerminalCreateParams,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

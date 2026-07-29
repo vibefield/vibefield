@@ -29,6 +29,26 @@
     "PairingMac": {
       "$ref": "#/definitions/PairingMac"
     },
+    "TerminalEndpoints": {
+      "type": "object",
+      "properties": {
+        "controlSocket": {
+          "type": "string"
+        },
+        "frameSocket": {
+          "type": "string"
+        },
+        "authToken": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "controlSocket",
+        "frameSocket",
+        "authToken"
+      ],
+      "additionalProperties": true
+    },
     "ErrorKind": {
       "type": "string",
       "enum": [
@@ -270,6 +290,9 @@
         },
         "meshConfig": {
           "$ref": "#/definitions/MeshConfig"
+        },
+        "observedBootId": {
+          "type": "string"
         }
       },
       "required": [

@@ -12,7 +12,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "gen:schema": "tsx scripts/gen-jsonschema.ts",
-    "gen:rust": "pnpm gen:schema && cargo typify gen/jsonschema/bundle.json -o ../field-native/src/contracts.rs"
+    "gen:rust": "pnpm gen:schema && tsx scripts/gen-registries-rs.ts && cargo typify gen/jsonschema/bundle.json -o ../field-native/src/contracts.rs"
   },
   "dependencies": {
     "zod": "^3.24.0"

@@ -29,6 +29,7 @@ import {
   RpcSuccess,
   SemverString,
   ServerKind,
+  TerminalEndpoints,
 } from "../src/envelope";
 import { ErrorData, ErrorKind, UnavailableDetails } from "../src/errors";
 import {
@@ -90,6 +91,9 @@ const BASE_SHARED = {
   ClientKind,
   ServerKind,
   PairingMac,
+  // NF-D8 — rides HelloAck (mgmt surface); named so the $ref stays
+  // typify-resolvable.
+  TerminalEndpoints,
   ErrorKind,
   UnavailableDetails,
   ErrorData,

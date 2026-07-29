@@ -1,0 +1,5 @@
+{
+  "controlSocket": "/data/native/run/terminal-control.sock",
+  "frameSocket": "/data/native/run/terminal-frame.sock",
+  "token": "per-boot-native-token"
+}

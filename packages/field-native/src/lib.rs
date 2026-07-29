@@ -7,6 +7,8 @@ pub mod logging;
 pub mod manager;
 pub mod mgmt;
 pub mod pairing;
+/// GENERATED (NF-D9) — registries-as-code from @vibefield/contracts; `pnpm gen`.
+pub mod registries;
 pub mod services;
 pub mod state;
 
