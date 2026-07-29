@@ -22,7 +22,8 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldDesign` | godview monochrome tokens (palette light+dark, mono type ramp, motion constants, grid/scanlines/vignette) |
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested |
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
-| `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, home composition |
+| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.6.1), login sheet, peer roster, the mesh chip |
+| `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition |
 
 Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`) · iOS **18.1** floor (the pinned
 TailscaleKit binary's floor — GhostteaApp's own) · simulator is arm64-only
@@ -71,15 +72,20 @@ checked tool is a deliberate future event, not an inheritance.
 
 Real: the full-screen bubble field (physics, tiers, ignition, drag, tap-nudge,
 hold-to-create, spawn pop, empty state), both themes, the session card with
-live status, 18 headless tests, the mock fleet driving the **same** snapshot
-shape and classifier the daemon feed will drive.
+live status, the mock fleet driving the **same** snapshot shape and classifier
+the daemon feed will drive, and — since IOS-2 — the mesh leg: `ghosttea`
+pinned `exact: "0.6.1"` (truffle 0.7.11, lockstep with field-native), the
+in-process Tailscale runtime behind a deliberate CONNECT act, in-app login
+(Safari sheet), the online-peer roster, and the mesh chip the bubbles
+physically flow around (`.swarmObstacle()` — the desktop obstacle pattern).
+23 headless tests.
 
 Honest-missing (each says so on screen where it shows): the card's terminal is
-a placeholder — live attach arrives with the Truffle/Ghosttea leg
-(`thinking-ios-app.md` §7; both upstream supply gates closed 2026-07-29 —
-`ghosttea` resolves as a revision-pinned URL dependency at truffle 0.7.11);
-approvals render as facts, never as buttons, until the approvals track lands;
-no daemon connection of any kind yet — the mock is clearly a dev fixture.
+a placeholder — live attach is IOS-3 (session browse + TSP1 + Metal surface;
+also gated desktop-side on the NF-remote leg — field-native's embedded
+TerminalService has no mesh coupling yet); approvals render as facts, never
+as buttons, until the approvals track lands; the agent feed is still the mock
+until fieldd's `agent.*` exists (IOS-4).
 
 Vendor glyph geometry: LobeHub Lobe Icons v5.14.0 (MIT), the set the desktop
 godview embeds.

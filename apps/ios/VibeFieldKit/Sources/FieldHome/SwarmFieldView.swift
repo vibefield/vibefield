@@ -6,8 +6,13 @@ import SwiftUI
 /// The full-screen agent field: every session a physical bubble, nestling
 /// around the center, ranked by how much it needs you. Tap to open the
 /// session card; hold empty ground to conjure a new agent there.
-public struct SwarmFieldView: View {
-  static let coordinateSpace = "swarm-field"
+///
+/// `chrome` floats above the bubbles inside the field's coordinate space
+/// (the slot owns its own alignment); any chrome element marked
+/// `.swarmObstacle()` becomes a physics obstacle the swarm flows around.
+public struct SwarmFieldView<Chrome: View>: View {
+  /// Desktop `USAGE_OBSTACLE_PADDING`: breathing room around chrome.
+  private static var obstaclePadding: Double { 7 }
 
   private let agents: [AgentSnapshot]
   private let parameters: SwarmParameters
@@ -17,6 +22,7 @@ public struct SwarmFieldView: View {
   /// so the field can place its body exactly under the finger, or nil when
   /// creation is unavailable.
   private let onCreate: ((SIMD2<Double>) -> String?)?
+  private let chrome: Chrome
 
   @State private var model = SwarmFieldModel()
   @State private var driver = DisplayLinkDriver()
@@ -27,13 +33,15 @@ public struct SwarmFieldView: View {
     parameters: SwarmParameters = .default,
     isActive: Bool = true,
     onSelect: @escaping (AgentSnapshot) -> Void,
-    onCreate: ((SIMD2<Double>) -> String?)? = nil
+    onCreate: ((SIMD2<Double>) -> String?)? = nil,
+    @ViewBuilder chrome: () -> Chrome
   ) {
     self.agents = agents
     self.parameters = parameters
     self.isActive = isActive
     self.onSelect = onSelect
     self.onCreate = onCreate
+    self.chrome = chrome()
   }
 
   public var body: some View {
@@ -57,8 +65,20 @@ public struct SwarmFieldView: View {
         if agents.isEmpty {
           EmptyFieldView()
         }
+
+        chrome
       }
-      .coordinateSpace(name: Self.coordinateSpace)
+      .coordinateSpace(name: SwarmSpace.name)
+      .onPreferenceChange(SwarmObstacleFramesKey.self) { [model] frames in
+        Task { @MainActor in
+          let padding = Self.obstaclePadding
+          model.world.obstacles = frames.map { rect in
+            SwarmWorld.ObstacleRect(
+              origin: SIMD2(Double(rect.minX) - padding, Double(rect.minY) - padding),
+              size: SIMD2(Double(rect.width) + padding * 2, Double(rect.height) + padding * 2))
+          }
+        }
+      }
       .onAppear {
         model.world.parameters = parameters
         model.world.setBounds(SIMD2(Double(proxy.size.width), Double(proxy.size.height)))
@@ -166,7 +186,7 @@ public struct SwarmFieldView: View {
   }
 
   private var holdToCreate: some Gesture {
-    DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.coordinateSpace))
+    DragGesture(minimumDistance: 0, coordinateSpace: .named(SwarmSpace.name))
       .onChanged { value in
         guard onCreate != nil else { return }
         if let hold = pendingHold {
@@ -202,6 +222,21 @@ public struct SwarmFieldView: View {
     if let id = onCreate?(position) {
       model.pendingSpawnPositions[id] = position
     }
+  }
+}
+
+extension SwarmFieldView where Chrome == EmptyView {
+  public init(
+    agents: [AgentSnapshot],
+    parameters: SwarmParameters = .default,
+    isActive: Bool = true,
+    onSelect: @escaping (AgentSnapshot) -> Void,
+    onCreate: ((SIMD2<Double>) -> String?)? = nil
+  ) {
+    self.init(
+      agents: agents, parameters: parameters, isActive: isActive,
+      onSelect: onSelect, onCreate: onCreate
+    ) { EmptyView() }
   }
 }
 

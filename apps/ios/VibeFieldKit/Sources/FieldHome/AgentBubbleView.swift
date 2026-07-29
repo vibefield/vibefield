@@ -147,7 +147,7 @@ struct AgentBubbleView: View {
   // MARK: - Interaction
 
   private var interaction: some Gesture {
-    DragGesture(minimumDistance: 0, coordinateSpace: .named(SwarmFieldView.coordinateSpace))
+    DragGesture(minimumDistance: 0, coordinateSpace: .named(SwarmSpace.name))
       .onChanged { value in
         if !isDragging {
           isDragging = true
