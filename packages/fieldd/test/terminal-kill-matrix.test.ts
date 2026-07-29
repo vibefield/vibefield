@@ -1,0 +1,275 @@
+// NF-4 — THE kill matrix (native-floor spec §10), executable. The ownership
+// law as tests: PTYs live in field-native and survive fieldd; a new fieldd
+// adopts the inventory inside the <2s row; a dead floor degrades honestly; the
+// env strip holds through the real spawn path; epoch arbitration reaches
+// through the D6 ticket; churn leaves no residue. Row 2 (field-native's own
+// SIGTERM sweep) is pinned Rust-side in field-native/tests/terminal_unit.rs.
+import { type ChildProcess, execSync, spawn } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
+import type { TerminalInfo, TerminalTicket } from "@vibefield/contracts";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import WebSocket from "ws";
+import { bootstrap, type FielddDaemon } from "../src/index";
+import { helloAs, WsRpc } from "./ws-rpc";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+const BIN = join(ROOT, "target/debug/field-native");
+
+let children: ChildProcess[] = [];
+let cleanup: Array<() => void | Promise<void>> = [];
+
+beforeAll(() => {
+  execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
+}, 180_000);
+
+afterEach(async () => {
+  for (const fn of cleanup.reverse()) await fn();
+  cleanup = [];
+  for (const c of children) c.kill("SIGKILL");
+  children = [];
+});
+
+interface NativeHandle {
+  dir: string;
+  child: ChildProcess;
+}
+
+async function spawnNative(dir?: string): Promise<NativeHandle> {
+  const dataDir = dir ?? mkdtempSync("/tmp/vf-km-");
+  if (dir === undefined) cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+  const child = spawn(BIN, [], {
+    env: {
+      ...process.env,
+      FIELD_NATIVE_DATA_DIR: dataDir,
+      FIELD_LOG_DIR: join(dataDir, "logs"),
+      FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
+      // §8 — the smuggle bait: these ride field-native's OWN environment and
+      // must NEVER appear inside a PTY (the strip is service-side, so even
+      // environment:{mode:"inherit"} spawns must lose them).
+      FIELD_SMUGGLE: "leak-me",
+      FIELDD_SMUGGLE: "leak-me-too",
+    },
+    stdio: "ignore",
+  });
+  children.push(child);
+  const socket = join(dataDir, "native/run/mgmt.sock");
+  const deadline = Date.now() + 15_000;
+  while (!existsSync(socket)) {
+    if (Date.now() > deadline) throw new Error("field-native did not come up");
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return { dir: dataDir, child };
+}
+
+async function connect(daemon: FielddDaemon): Promise<WsRpc> {
+  const grant = daemon.tokens.mint(["terminal.attach"], "kill-matrix");
+  const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+  cleanup.push(() => ws.close());
+  const rpc = new WsRpc(ws);
+  await helloAs(rpc, grant.token);
+  return rpc;
+}
+
+async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T> {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const v = await fn();
+    if (v !== undefined) return v;
+    if (Date.now() > deadline) throw new Error("poll timed out");
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+const listOf = async (rpc: WsRpc): Promise<TerminalInfo[]> =>
+  ((await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] }).terminals;
+
+describe("the kill matrix (NF-4, real field-native)", () => {
+  it("row 1: the PTY survives fieldd; the next fieldd adopts it inside 2s", async () => {
+    const native = await spawnNative();
+    const daemon1 = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    const rpc1 = await connect(daemon1);
+    const created = (await rpc1.call("terminal.create", { shell: "/bin/cat" })) as {
+      sessionId: string;
+    };
+    const ticket = (await poll(async () =>
+      (await listOf(rpc1)).some((t) => t.sessionId === created.sessionId)
+        ? ((await rpc1.call("terminal.openTicket", { sessionId: created.sessionId })) as
+            | TerminalTicket
+            | undefined)
+        : undefined,
+    )) as TerminalTicket;
+
+    // the product plane goes away — the floor must not notice
+    await daemon1.stop();
+
+    const outside = new GhostteaAutomationClient(
+      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      { clientBuild: "kill-matrix" },
+    );
+    cleanup.push(() => outside.dispose());
+    await outside.connect();
+    expect((await outside.listSessions()).map((s) => s.id)).toContain(created.sessionId);
+
+    // a NEW product plane pairs and adopts — the spec's <2s row measured from
+    // ready, not from process birth
+    const daemon2 = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon2.stop());
+    const rpc2 = await connect(daemon2);
+    const adoptedAt = Date.now();
+    await poll(
+      async () =>
+        (await listOf(rpc2)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+      2_000,
+    );
+    expect(Date.now() - adoptedAt).toBeLessThan(2_000);
+
+    // a fresh ticket from the adopting fieldd drives the SAME session
+    const ticket2 = (await rpc2.call("terminal.openTicket", {
+      sessionId: created.sessionId,
+    })) as TerminalTicket;
+    expect(ticket2.token).toBe(ticket.token); // same native boot, same credential
+    const term = (await rpc2.call("terminal.terminate", {
+      sessionId: created.sessionId,
+    })) as { terminated: boolean };
+    expect(term.terminated).toBe(true);
+  }, 60_000);
+
+  it("rows 3+6: a dead floor refuses honestly; a replacement boot empties the inventory and re-arms", async () => {
+    const native = await spawnNative();
+    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await connect(daemon);
+    const created = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+      sessionId: string;
+    };
+    await poll(async () =>
+      (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+    );
+
+    // crash the floor: sessions die with it (the honest ceiling) and the seam
+    // must refuse interactive ops rather than pretend
+    native.child.kill("SIGKILL");
+    await poll(async () => {
+      const err = await rpc.callErr("terminal.create", { shell: "/bin/cat" });
+      return err.data?.kind === "UNAVAILABLE" ? true : undefined;
+    }, 10_000);
+
+    // a replacement native on the SAME data dir: re-pair re-delivers fresh
+    // endpoints (new token), the observed snapshot honestly EMPTIES (no
+    // phantom sessions), and the create path works again
+    await spawnNative(native.dir);
+    await poll(async () => ((await listOf(rpc)).length === 0 ? true : undefined), 20_000);
+    const reborn = await poll(async () => {
+      try {
+        return (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+          sessionId: string;
+        };
+      } catch {
+        return undefined;
+      }
+    }, 20_000);
+    expect(reborn.sessionId).toBeTruthy();
+    expect(reborn.sessionId).not.toBe(created.sessionId);
+  }, 60_000);
+
+  it("row 6: the env strip holds through the real spawn path (EL7)", async () => {
+    const native = await spawnNative();
+    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await connect(daemon);
+
+    const created = (await rpc.call("terminal.create", { shell: "/bin/sh" })) as {
+      sessionId: string;
+    };
+    const ticket = (await poll(async () =>
+      (await listOf(rpc)).some((t) => t.sessionId === created.sessionId)
+        ? ((await rpc.call("terminal.openTicket", { sessionId: created.sessionId })) as
+            | TerminalTicket
+            | undefined)
+        : undefined,
+    )) as TerminalTicket;
+    const client = new GhostteaAutomationClient(
+      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      { clientBuild: "kill-matrix" },
+    );
+    cleanup.push(() => client.dispose());
+    await client.connect();
+
+    const out = join(native.dir, "smuggle.txt");
+    const input = await client.pasteAndSubmit(created.sessionId, `env > ${out}`);
+    expect(input.accepted).toBe(true);
+    const env = await poll(async () => {
+      try {
+        const text = readFileSync(out, "utf8");
+        return text.length > 0 ? text : undefined;
+      } catch {
+        return undefined;
+      }
+    });
+    // the bait planted in field-native's own environment never reaches a PTY;
+    // ordinary vars do (inherit-minus-strip, NF-D6)
+    expect(env).not.toContain("FIELD_SMUGGLE");
+    expect(env).not.toContain("FIELDD_SMUGGLE");
+    expect(env).not.toContain("GHOSTTEA_");
+    expect(env).toContain("HOME=");
+  }, 60_000);
+
+  it("epoch arbitration reaches through the ticket path", async () => {
+    const native = await spawnNative();
+    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await connect(daemon);
+    const created = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+      sessionId: string;
+    };
+    const ticket = (await poll(async () =>
+      (await listOf(rpc)).some((t) => t.sessionId === created.sessionId)
+        ? ((await rpc.call("terminal.openTicket", { sessionId: created.sessionId })) as
+            | TerminalTicket
+            | undefined)
+        : undefined,
+    )) as TerminalTicket;
+    const client = new GhostteaAutomationClient(
+      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      { clientBuild: "kill-matrix" },
+    );
+    cleanup.push(() => client.dispose());
+    await client.connect();
+
+    const epoch = await client.humanInputEpoch(created.sessionId);
+    const stale = await client.input(
+      created.sessionId,
+      { kind: "text", text: "never-lands" },
+      epoch + 1,
+    );
+    expect(stale.accepted).toBe(false);
+    expect(stale.reason).toBe("human-input-conflict");
+    const fresh = await client.input(created.sessionId, { kind: "text", text: "lands" }, epoch);
+    expect(fresh.accepted).toBe(true);
+  }, 60_000);
+
+  it("churn leaves no residue (bounded soak; the 24h variant is a named CI gate)", async () => {
+    const native = await spawnNative();
+    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await connect(daemon);
+
+    for (let i = 0; i < 10; i++) {
+      const { sessionId } = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+        sessionId: string;
+      };
+      await poll(async () =>
+        (await listOf(rpc)).some((t) => t.sessionId === sessionId) ? true : undefined,
+      );
+      await rpc.call("terminal.terminate", { sessionId });
+    }
+    await poll(async () => ((await listOf(rpc)).length === 0 ? true : undefined), 15_000);
+  }, 120_000);
+});
