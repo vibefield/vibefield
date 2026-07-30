@@ -49,6 +49,15 @@ async fn boot(dir: &Path) -> RunningDaemon {
         .expect("bootstrap")
 }
 
+/// What one read off the mgmt socket found. Timeout and end-of-stream are kept
+/// apart on purpose: "nothing was said" and "the connection is gone" are
+/// different facts, and the supersession test asserts the second one.
+enum Incoming {
+    Message(Value),
+    Closed,
+    Quiet,
+}
+
 /// The mgmt client, in the idiom of tests/mgmt_server.rs: newline JSON-RPC over
 /// the paired UDS.
 struct MgmtClient {
@@ -60,6 +69,10 @@ struct MgmtClient {
     /// delta the next assertion is waiting for and the test hangs on a
     /// convergence that already happened.
     buffered: std::collections::VecDeque<Value>,
+    /// Request ids are minted here and never passed in: two requests sharing an
+    /// id make `request`'s correlator ambiguous, and a repeated
+    /// `observed.subscribe` id used to leak a second forwarder onto one socket.
+    last_id: u64,
 }
 
 impl MgmtClient {
@@ -72,7 +85,13 @@ impl MgmtClient {
             reader: BufReader::new(r).lines(),
             writer: w,
             buffered: std::collections::VecDeque::new(),
+            last_id: 0,
         }
+    }
+
+    fn next_id(&mut self) -> u64 {
+        self.last_id += 1;
+        self.last_id
     }
 
     async fn send(&mut self, v: Value) {
@@ -86,15 +105,24 @@ impl MgmtClient {
     }
 
     async fn recv_within(&mut self, budget: Duration) -> Value {
-        if let Some(message) = self.buffered.pop_front() {
-            return message;
+        match self.poll_within(budget).await {
+            Incoming::Message(message) => message,
+            Incoming::Closed => panic!("the mgmt connection closed"),
+            Incoming::Quiet => panic!("nothing arrived on the mgmt connection in {budget:?}"),
         }
-        let line = timeout(budget, self.reader.next_line())
-            .await
-            .expect("recv timeout")
-            .expect("read error")
-            .expect("connection closed");
-        serde_json::from_str(&line).expect("json line")
+    }
+
+    async fn poll_within(&mut self, budget: Duration) -> Incoming {
+        if let Some(message) = self.buffered.pop_front() {
+            return Incoming::Message(message);
+        }
+        match timeout(budget, self.reader.next_line()).await {
+            Err(_) => Incoming::Quiet,
+            Ok(Err(_)) | Ok(Ok(None)) => Incoming::Closed,
+            Ok(Ok(Some(line))) => {
+                Incoming::Message(serde_json::from_str(&line).expect("json line"))
+            }
+        }
     }
 
     /// Answers with the ack itself (the JSON-RPC `result`), which is the
@@ -104,8 +132,9 @@ impl MgmtClient {
         let ts = pairing::now_epoch_secs();
         let boot = "fieldd-boot-terminal-test";
         let mac = pairing::compute_mac(&secret, boot, ts);
+        let id = self.next_id();
         self.send(
-            json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
+            json!({"jsonrpc":"2.0","id":id,"method":"native.lifecycle.hello","params":{
                 "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
                 "credential":{"bootId":boot,"ts":ts,"mac":mac}
             }}),
@@ -119,10 +148,11 @@ impl MgmtClient {
         response["result"].clone()
     }
 
-    /// Subscribe and answer with the inventory snapshot.
+    /// Subscribe and answer with the inventory snapshot. Once per connection:
+    /// every call spawns another forwarder onto the same socket.
     async fn subscribe_observed(&mut self) -> Value {
         let response = self
-            .request(2, "native.lifecycle.observed.subscribe", json!({}))
+            .request("native.lifecycle.observed.subscribe", json!({}))
             .await;
         response["result"]["snapshot"].clone()
     }
@@ -130,7 +160,8 @@ impl MgmtClient {
     /// One request, correlated by id and never by arrival order: a delta can
     /// always overtake the response it was caused by. Notifications read while
     /// waiting are handed back for the delta assertions to consume.
-    async fn request(&mut self, id: u64, method: &str, params: Value) -> Value {
+    async fn request(&mut self, method: &str, params: Value) -> Value {
+        let id = self.next_id();
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}))
             .await;
         let mut deferred = Vec::new();
@@ -166,11 +197,70 @@ impl MgmtClient {
         }
     }
 
+    /// Every observed payload a quiet window produced — possibly none. A window
+    /// with nothing in it is evidence too: it is how a test proves a refusal
+    /// published NOTHING, without opening a second subscription on the one
+    /// socket to go looking for a snapshot.
+    async fn observed_within(&mut self, budget: Duration) -> Vec<Value> {
+        let deadline = Instant::now() + budget;
+        let mut payloads = Vec::new();
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return payloads;
+            }
+            match self.poll_within(remaining).await {
+                Incoming::Message(message)
+                    if message["method"] == "native.lifecycle.observed.delta" =>
+                {
+                    payloads.push(message["params"]["payload"].clone());
+                }
+                Incoming::Message(_) => {}
+                Incoming::Closed | Incoming::Quiet => return payloads,
+            }
+        }
+    }
+
+    /// Read until this connection ends, asserting that nothing answers `id` on
+    /// the way.
+    async fn await_close_without_answering(&mut self, id: u64, budget: Duration) {
+        let deadline = Instant::now() + budget;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            match self.poll_within(remaining).await {
+                Incoming::Closed => return,
+                Incoming::Quiet => {
+                    panic!("the connection was still open, and still unanswered, after {budget:?}")
+                }
+                Incoming::Message(message) => assert!(
+                    message.get("id").is_none_or(|got| got != id),
+                    "this connection was not supposed to be served: {message}"
+                ),
+            }
+        }
+    }
+
+    /// Read until a notification with this method arrives. Deltas share the
+    /// socket, so an assertion about a notification cannot assume it is next.
+    async fn await_notification(&mut self, method: &str, budget: Duration) -> Value {
+        let deadline = Instant::now() + budget;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(
+                !remaining.is_zero(),
+                "no {method} notification in {budget:?}"
+            );
+            let message = self.recv_within(remaining).await;
+            if message["method"] == method {
+                return message;
+            }
+        }
+    }
+
     /// `desired.set` in fieldd's shape, answering with the whole JSON-RPC
     /// envelope so a test can assert on either a result or a refusal.
-    async fn desired_set(&mut self, id: u64, params: Value) -> Value {
-        self.request(id, "native.lifecycle.desired.set", params)
-            .await
+    async fn desired_set(&mut self, params: Value) -> Value {
+        self.request("native.lifecycle.desired.set", params).await
     }
 }
 
@@ -473,6 +563,39 @@ async fn await_exit(
     }
 }
 
+/// The exits for a whole SET, gathered together. Sequential `await_exit` calls
+/// cannot do this job: each one discards the events it was not asked for, and a
+/// prune's ladders run in parallel in whatever order the floor's inventory sorted
+/// them into — so waiting for one session can consume another's only proof.
+async fn await_exits(
+    events: &mut tokio::sync::mpsc::UnboundedReceiver<Value>,
+    session_ids: &[String],
+    budget: Duration,
+) -> std::collections::HashMap<String, Value> {
+    let deadline = Instant::now() + budget;
+    let mut exits = std::collections::HashMap::new();
+    while exits.len() < session_ids.len() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let event = timeout(remaining, events.recv())
+            .await
+            .unwrap_or_else(|_| {
+                panic!(
+                    "only {} of {} exit events arrived in {budget:?}",
+                    exits.len(),
+                    session_ids.len()
+                )
+            })
+            .expect("the witness connection closed before the exits arrived");
+        if event["type"] == "session-exited" {
+            let id = event["sessionId"].as_str().expect("sessionId").to_owned();
+            if session_ids.contains(&id) {
+                exits.insert(id, event);
+            }
+        }
+    }
+    exits
+}
+
 /// Two tenants and the bootId fieldd would prove with: the daemon, its mgmt
 /// client subscribed to observed, a control client, and both sessions already
 /// visible in the inventory (which is what makes a proof possible at all).
@@ -535,15 +658,12 @@ async fn proven_desired_set_prunes_only_the_unlisted_session() {
     let pair = two_tenants(&mut mgmt, &client, &daemon).await;
 
     let response = mgmt
-        .desired_set(
-            10,
-            json!({
-                "generation": 1,
-                "terminals": [{"sessionId": pair.survivor.id}],
-                "workers": [],
-                "observedBootId": pair.boot_id,
-            }),
-        )
+        .desired_set(json!({
+            "generation": 1,
+            "terminals": [{"sessionId": pair.survivor.id}],
+            "workers": [],
+            "observedBootId": pair.boot_id,
+        }))
         .await;
     assert_eq!(
         response["result"]["applied"], 1,
@@ -606,10 +726,7 @@ async fn unproven_desired_set_prunes_nothing() {
     );
 
     let survivors = json!([{"sessionId": pair.survivor.id}]);
-    for (id, proof) in [
-        (10, None),
-        (11, Some("native-boot-from-another-life".to_owned())),
-    ] {
+    for proof in [None, Some("native-boot-from-another-life".to_owned())] {
         let mut params = json!({
             "generation": 1,
             "terminals": survivors,
@@ -618,7 +735,7 @@ async fn unproven_desired_set_prunes_nothing() {
         if let Some(proof) = proof {
             params["observedBootId"] = json!(proof);
         }
-        let refusal = mgmt.desired_set(id, params).await;
+        let refusal = mgmt.desired_set(params).await;
         assert_eq!(
             refusal["error"]["data"]["kind"], "PRECONDITION_FAILED",
             "an unproven prune must be refused: {refusal}"
@@ -635,8 +752,17 @@ async fn unproven_desired_set_prunes_nothing() {
     }
 
     // A ladder is fast — /bin/cat dies on the first rung — so a wrongly fired
-    // one would already be visible here.
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // one would already be visible here. The quiet window doubles as the
+    // generation proof: banking a refused set would publish an observed delta,
+    // and this reads every delta the window produced (which is how the claim is
+    // made on the ONE subscription this connection has, rather than by opening a
+    // second one to peek at a snapshot).
+    for payload in mgmt.observed_within(Duration::from_millis(500)).await {
+        assert_eq!(
+            payload["generation"], 0,
+            "a refused set must not bank its generation: {payload}"
+        );
+    }
     assert!(
         alive(pair.survivor_pid) && alive(pair.doomed_pid),
         "an unproven set must terminate NOTHING"
@@ -646,24 +772,14 @@ async fn unproven_desired_set_prunes_nothing() {
         2,
         "list-sessions is truth, and it must still hold both"
     );
-    // A refusal leaves no trace of the set it refused: the generation was never
-    // banked, so observed still reports the boot's own.
-    assert_eq!(
-        mgmt.subscribe_observed().await["generation"],
-        0,
-        "a refused set must not bank its generation"
-    );
 
     let response = mgmt
-        .desired_set(
-            12,
-            json!({
-                "generation": 1,
-                "terminals": survivors,
-                "workers": [],
-                "observedBootId": pair.boot_id,
-            }),
-        )
+        .desired_set(json!({
+            "generation": 1,
+            "terminals": survivors,
+            "workers": [],
+            "observedBootId": pair.boot_id,
+        }))
         .await;
     assert_eq!(
         response["result"]["applied"], 1,
@@ -692,17 +808,14 @@ async fn retain_only_desired_set_needs_no_proof() {
 
     // Every running session is listed, so the prune set is empty.
     let response = mgmt
-        .desired_set(
-            10,
-            json!({
-                "generation": 3,
-                "terminals": [
-                    {"sessionId": pair.survivor.id},
-                    {"sessionId": pair.doomed.id, "persistence": "keep-until-explicit-close"},
-                ],
-                "workers": [],
-            }),
-        )
+        .desired_set(json!({
+            "generation": 3,
+            "terminals": [
+                {"sessionId": pair.survivor.id},
+                {"sessionId": pair.doomed.id, "persistence": "keep-until-explicit-close"},
+            ],
+            "workers": [],
+        }))
         .await;
     assert_eq!(
         response["result"]["applied"], 3,
@@ -743,29 +856,23 @@ async fn stale_generation_is_refused_before_any_prune() {
     let pair = two_tenants(&mut mgmt, &client, &daemon).await;
 
     let response = mgmt
-        .desired_set(
-            10,
-            json!({
-                "generation": 5,
-                "terminals": [{"sessionId": pair.survivor.id}, {"sessionId": pair.doomed.id}],
-                "workers": [],
-            }),
-        )
+        .desired_set(json!({
+            "generation": 5,
+            "terminals": [{"sessionId": pair.survivor.id}, {"sessionId": pair.doomed.id}],
+            "workers": [],
+        }))
         .await;
     assert_eq!(response["result"]["applied"], 5);
 
     // Proven, and it would prune both — but it arrives behind the generation
     // that is already applied, so it is refused before anything is issued.
     let refusal = mgmt
-        .desired_set(
-            11,
-            json!({
-                "generation": 4,
-                "terminals": [],
-                "workers": [],
-                "observedBootId": pair.boot_id,
-            }),
-        )
+        .desired_set(json!({
+            "generation": 4,
+            "terminals": [],
+            "workers": [],
+            "observedBootId": pair.boot_id,
+        }))
         .await;
     assert_eq!(refusal["error"]["data"]["kind"], "PRECONDITION_FAILED");
     assert_eq!(
@@ -781,6 +888,287 @@ async fn stale_generation_is_refused_before_any_prune() {
     assert_eq!(client.list_sessions().await.expect("list").len(), 2);
 
     daemon.shutdown().await;
+}
+
+/// The single-client rule is a KILL-authority boundary and not bookkeeping.
+/// Superseding a connection closes its write half, but its reader loop stays
+/// alive and authenticated — and `desired.set` is the one surface where that
+/// matters, because a prune kills PTYs the SUCCESSOR is responsible for. The
+/// generation guard cannot stand in for this check: the stale set below carries a
+/// generation higher than anything applied, so every other guard would admit it.
+#[tokio::test]
+async fn a_superseded_client_may_not_prune_the_successors_sessions() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut stale = MgmtClient::connect(&daemon).await;
+    let ack = stale.hello(&daemon).await;
+    let (client, mut events) = control(&ack).await;
+    let pair = two_tenants(&mut stale, &client, &daemon).await;
+
+    // A newer fieldd pairs; the old connection is told why its plane ended.
+    let mut current = MgmtClient::connect(&daemon).await;
+    current.hello(&daemon).await;
+    let notice = stale
+        .await_notification("native.lifecycle.superseded", Duration::from_secs(5))
+        .await;
+    assert_eq!(
+        notice["params"]["reason"], "new hello",
+        "the superseded client must learn why: {notice}"
+    );
+
+    // Proven against this boot, ahead of every applied generation, and it would
+    // prune BOTH sessions: everything the other guards weigh, from a connection
+    // that is no longer the product plane. Sent raw because the id has to be
+    // known to the assertion below.
+    let stale_id = 90;
+    stale
+        .send(
+            json!({"jsonrpc":"2.0","id":stale_id,"method":"native.lifecycle.desired.set","params":{
+                "generation": 7,
+                "terminals": [],
+                "workers": [],
+                "observedBootId": pair.boot_id,
+            }}),
+        )
+        .await;
+    // The refusal is generated, but supersession already shut this connection's
+    // write half down, so it cannot reach the wire: the honest observables are a
+    // closed socket and two PTYs that are still running.
+    stale
+        .await_close_without_answering(stale_id, Duration::from_secs(5))
+        .await;
+    // EOF says nothing about timing — it was already inevitable when the write
+    // half closed — so the liveness claim needs the window a ladder would need.
+    // /bin/cat dies on the first rung, and the wrongly-pruned pids below stay
+    // alive well past this only if nothing was ever issued for them.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        alive(pair.survivor_pid) && alive(pair.doomed_pid),
+        "a superseded client must terminate NOTHING"
+    );
+    assert_eq!(
+        client.list_sessions().await.expect("list").len(),
+        2,
+        "list-sessions is truth, and it must still hold both"
+    );
+
+    // Sensitivity: the identical set from the CURRENT client applies. So the
+    // refusal was about who asked, never about the set.
+    let snapshot = current.subscribe_observed().await;
+    assert_eq!(
+        snapshot["generation"], 0,
+        "the stale set must not have banked its generation: {snapshot}"
+    );
+    let response = current
+        .desired_set(json!({
+            "generation": 7,
+            "terminals": [],
+            "workers": [],
+            "observedBootId": pair.boot_id,
+        }))
+        .await;
+    assert_eq!(
+        response["result"]["applied"], 7,
+        "the current client's identical set must apply: {response}"
+    );
+    let both = [pair.survivor.id.clone(), pair.doomed.id.clone()];
+    let exits = await_exits(&mut events, &both, Duration::from_secs(10)).await;
+    for (session_id, pid) in [
+        (&pair.survivor.id, pair.survivor_pid),
+        (&pair.doomed.id, pair.doomed_pid),
+    ] {
+        assert_eq!(
+            exits[session_id]["requestedTermination"], "application",
+            "{:?}",
+            exits[session_id]
+        );
+        assert!(
+            wait_until_gone(pid, Duration::from_secs(5)).await,
+            "pid {pid} outlived the current client's prune"
+        );
+    }
+
+    daemon.shutdown().await;
+}
+
+/// The hazard behind the reconcile prune, at the seam where it is deterministic.
+/// Every control connection receives every broadcast event (service.rs:470/624),
+/// and a client that only wants request/response — which is exactly what the
+/// prune is — has no receiver to hand them to. Discarding those events must cost
+/// nothing: a client that ended its demultiplexer instead would leave every
+/// later request on that connection unanswered until the 10s request budget
+/// expired, with the reconcile lock held the whole time.
+#[tokio::test]
+async fn a_dropped_events_receiver_does_not_wedge_the_control_client() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+
+    // A witness that keeps its receiver, so the test knows WHEN the broadcast
+    // reached the connections rather than guessing.
+    let (witness, mut events) = control(&ack).await;
+    // The client under test, in the prune's shape: the event stream it never
+    // asked for is dropped straight away.
+    let (client, unwanted) = control(&ack).await;
+    drop(unwanted);
+
+    let session = witness
+        .create_session(tenant_options())
+        .await
+        .expect("create session");
+    let pid = session.pid.expect("pid");
+    // Terminated THROUGH the client under test, so the event it is about to be
+    // handed is one its own request caused — the prune's situation exactly.
+    client
+        .terminate(&session.id, "application")
+        .await
+        .expect("terminate");
+    await_exit(&mut events, &session.id, Duration::from_secs(5)).await;
+    assert!(wait_until_gone(pid, Duration::from_secs(5)).await);
+    // The witness proves the broadcast happened; this gives the other
+    // connection's reader time to have taken its copy off the socket.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let started = Instant::now();
+    let sessions = timeout(Duration::from_secs(3), client.list_sessions())
+        .await
+        .expect("the control client stopped answering after an undeliverable event")
+        .expect("list-sessions");
+    assert!(
+        sessions.is_empty(),
+        "the terminated session must be gone: {sessions:?}"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "a request after an undeliverable event took {:?}",
+        started.elapsed()
+    );
+
+    daemon.shutdown().await;
+}
+
+/// A prune that withdraws MORE than one session, which no case covered before:
+/// every ladder runs, every exit is classified, and the response comes back at
+/// socket speed rather than waiting on anything.
+#[tokio::test]
+async fn a_multi_session_prune_answers_without_burning_request_timeouts() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    let snapshot = mgmt.subscribe_observed().await;
+    let boot_id = snapshot["bootId"].as_str().expect("bootId").to_owned();
+    let (client, mut events) = control(&ack).await;
+
+    let mut doomed = Vec::new();
+    for _ in 0..3 {
+        let session = client
+            .create_session(tenant_options())
+            .await
+            .expect("create session");
+        doomed.push((session.id.clone(), session.pid.expect("pid")));
+    }
+    // Proof first: the floor must SEE all three before a set may prune them.
+    mgmt.await_observed(Duration::from_secs(5), |payload| {
+        doomed
+            .iter()
+            .all(|(session_id, _)| has_session(payload, session_id))
+    })
+    .await;
+
+    let started = Instant::now();
+    let response = mgmt
+        .desired_set(json!({
+            "generation": 1,
+            "terminals": [],
+            "workers": [],
+            "observedBootId": boot_id,
+        }))
+        .await;
+    let elapsed = started.elapsed();
+    assert_eq!(
+        response["result"]["applied"], 1,
+        "a proven set must apply: {response}"
+    );
+    // Three terminates are three Unix-socket round trips into this process:
+    // milliseconds. The bound is loose enough not to flake on a loaded machine
+    // and far tighter than the two burned 10s budgets the bug cost.
+    assert!(
+        elapsed < Duration::from_secs(3),
+        "the prune answered in {elapsed:?}; a multi-session prune must not wait on request timeouts"
+    );
+
+    let ids: Vec<String> = doomed.iter().map(|(id, _)| id.clone()).collect();
+    let exits = await_exits(&mut events, &ids, Duration::from_secs(10)).await;
+    for (session_id, pid) in &doomed {
+        assert_eq!(
+            exits[session_id]["requestedTermination"], "application",
+            "every prune in the set is the application's: {:?}",
+            exits[session_id]
+        );
+        assert!(
+            wait_until_gone(*pid, Duration::from_secs(5)).await,
+            "pid {pid} outlived the prune"
+        );
+    }
+
+    daemon.shutdown().await;
+}
+
+/// The NF-D3 sweep's already-exited filter, proven. Only a
+/// `keep-until-explicit-close` session survives its own process in the registry
+/// (service.rs:709 removes every other class on exit), and upstream will never
+/// emit a second `session-exited` for it — so a sweep that awaited one would
+/// spend its entire 6s budget on a session that is already dead.
+#[tokio::test]
+async fn the_sweep_never_waits_on_an_already_exited_session() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    let (client, _events) = control(&ack).await;
+
+    // `/bin/echo` exits on its own the moment it is spawned; the persistence is
+    // what makes the registry keep the row afterwards.
+    let mut options = tenant_options();
+    options["executable"] = json!("/bin/echo");
+    options["persistence"] = json!("keep-until-explicit-close");
+    let session = client
+        .create_session(options)
+        .await
+        .expect("create the short-lived session");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "the session never reported itself exited"
+        );
+        let sessions = client.list_sessions().await.expect("list");
+        let row = sessions
+            .iter()
+            .find(|listed| listed.id == session.id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "a keep-until-explicit-close session must be RETAINED after its process exits"
+                )
+            });
+        if row.exited {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    let started = Instant::now();
+    daemon.shutdown().await;
+    let elapsed = started.elapsed();
+    // The sweep still ISSUES the terminate — the registry row is its to clear —
+    // it just must not wait for an exit that already happened.
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "the sweep spent {elapsed:?} waiting on a session that had already exited"
+    );
 }
 
 /// A Unix socket outlives the process that bound it, so the second boot has to

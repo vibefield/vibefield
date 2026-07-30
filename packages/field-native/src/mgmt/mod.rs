@@ -9,6 +9,11 @@
 //! safety laws are what make that safe rather than merely powerful — silence
 //! kills nothing, a prune needs proof the client saw THIS boot's inventory, and
 //! generations only move forward. Interactive ops still never ride this channel.
+//!
+//! A fourth gate is the single-client rule itself, enforced per request rather
+//! than at hello: a superseded connection's reader survives its supersession, and
+//! none of the three laws above can fence it — a stale client may hold a HIGHER
+//! generation than the fieldd that replaced it, and prove the same bootId.
 
 mod diagnostics;
 mod mesh;
@@ -44,6 +49,36 @@ const CONTRACTS_VERSION: &str = "0.1.0";
 ///   session from its desired set. That is exactly what happened, so this is the
 ///   honest stamp.
 const PRUNE_SOURCE: &str = "application";
+
+/// Upstream's message for a `terminate` naming a session its registry does not
+/// hold: `bail!("unknown session")` in `Command::Terminate`
+/// (service.rs:1325-1343), reaching us through `{type:"error", message}` built
+/// from `error.to_string()` (service.rs:1375-1380). It is the ONE failure that
+/// means the session is already gone — everything else is a failure to reach the
+/// plane, which says nothing about whether the ladder ran.
+const UNKNOWN_SESSION: &str = "unknown session";
+
+/// What a failed prune terminate actually tells us.
+#[derive(Debug, PartialEq, Eq)]
+enum PruneErrorKind {
+    /// The floor no longer holds that session, so the desired end state (it is
+    /// not running) already holds. fieldd's view merely lagged.
+    AlreadyGone,
+    /// A timeout, a closed connection, a refused write: the ladder may never
+    /// have started and this daemon cannot say the session was pruned.
+    Failed,
+}
+
+/// Classified from the message rather than a type because the wire carries only
+/// a string: upstream answers `{type:"error", message}` and there is no code to
+/// match on (service.rs:349-351).
+fn classify_prune_error(message: &str) -> PruneErrorKind {
+    if message.contains(UNKNOWN_SESSION) {
+        PruneErrorKind::AlreadyGone
+    } else {
+        PruneErrorKind::Failed
+    }
+}
 
 pub async fn serve(listener: UnixListener, state: Arc<DaemonState>) {
     loop {
@@ -108,6 +143,20 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
             .to_string();
         let params = req.get("params").cloned().unwrap_or(Value::Null);
 
+        // The single-client rule is a per-REQUEST law, not a hello-time one.
+        // Superseding a connection closes its WRITE half (handle_hello sends
+        // `Close`), but its reader loop keeps running and keeps its `authed`
+        // flag, so a stale fieldd could still reach every mutating surface. The
+        // generation guard cannot stand in for this: a stale client may hold a
+        // HIGHER generation than the successor and would then be admitted to
+        // prune the successor's PTYs. A re-hello is exempt — that is this
+        // connection asking to become current again, which the rule allows.
+        if authed && method != "native.lifecycle.hello" && !state.is_current_client(conn_id).await {
+            send(&tx, superseded(id));
+            send_raw(&tx, OutMsg::Close);
+            break;
+        }
+
         match method.as_str() {
             "native.lifecycle.hello" => {
                 let (resp, ok) = handle_hello(&state, conn_id, &tx, &params, id).await;
@@ -155,7 +204,7 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
                 );
             }
             "native.lifecycle.desired.set" => {
-                send(&tx, handle_desired_set(&state, &params, id).await);
+                send(&tx, handle_desired_set(&state, conn_id, &params, id).await);
             }
             "native.diagnostics.query" => {
                 send(&tx, diagnostics::query(&state, &params, id));
@@ -326,7 +375,12 @@ async fn handle_hello(
     (ok(id, ack), true)
 }
 
-async fn handle_desired_set(state: &Arc<DaemonState>, params: &Value, id: Option<Value>) -> Value {
+async fn handle_desired_set(
+    state: &Arc<DaemonState>,
+    conn_id: u64,
+    params: &Value,
+    id: Option<Value>,
+) -> Value {
     let desired: DesiredState = match serde_json::from_value(params.clone()) {
         Ok(d) => d,
         Err(e) => {
@@ -343,6 +397,14 @@ async fn handle_desired_set(state: &Arc<DaemonState>, params: &Value, id: Option
     // Held across the whole reconcile: two sets must never interleave their
     // prunes, and a refused set must leave nothing of itself behind.
     let mut slot = state.desired.lock().await;
+    // Asked again HERE, adjacent to the effect and under the reconcile lock. The
+    // dispatch gate in `handle_conn` only knows the truth as of the moment the
+    // request was read, and this set may have waited behind another one's prune
+    // while a hello superseded its connection. Lock order is desired →
+    // current_client and nothing takes them the other way round.
+    if !state.is_current_client(conn_id).await {
+        return superseded(id);
+    }
     if let Some(cur) = slot.as_ref() {
         if desired.generation < cur.generation {
             return err(
@@ -432,13 +494,22 @@ async fn handle_desired_set(state: &Arc<DaemonState>, params: &Value, id: Option
         // Dialing BEFORE anything is recorded: a plane that cannot be reached
         // must refuse the whole set rather than bank a generation whose prune
         // never ran.
-        let client = match ControlClient::connect(
+        //
+        // `_events` is bound for the whole reconcile on purpose. Every control
+        // connection receives every broadcast event (service.rs:470/624), so the
+        // first `session-exited` this prune causes comes back on this very
+        // connection; a receiver dropped at the end of a match arm would make it
+        // undeliverable while the prune is still issuing terminates. The client
+        // now discards undeliverable events rather than ending its read loop, so
+        // this is the second of two independent reasons the prune cannot wedge
+        // itself.
+        let (client, _events) = match ControlClient::connect(
             Path::new(&endpoints.control_socket),
             &endpoints.auth_token,
         )
         .await
         {
-            Ok((client, _events)) => client,
+            Ok(pair) => pair,
             Err(error) => {
                 tracing::warn!(
                     event = "field_native.lifecycle.prune_unreachable",
@@ -474,23 +545,68 @@ async fn handle_desired_set(state: &Arc<DaemonState>, params: &Value, id: Option
             source = PRUNE_SOURCE,
             "The desired set withdrew terminal sessions; terminating them"
         );
+        // Per-session outcomes, because `{applied}` may only be said of a prune
+        // that actually happened. `pruned` counts the sessions whose desired end
+        // state now holds (terminated, or already gone); `failed` names the ones
+        // this daemon cannot vouch for.
+        let mut pruned = 0_usize;
+        let mut failed: Vec<&str> = Vec::new();
         for session_id in &prune {
             // Fire the ladder and move on. Upstream's `terminate` starts it on
             // its own thread and returns (session.rs:1558-1584), so the ladders
             // overlap and this response never waits on an exit — the inventory
-            // pump is what reports convergence. A session that already exited or
-            // was never known is the ordinary race between fieldd's view and this
-            // floor's, so it is debug and not an error: the desired end state
-            // (that session is not running) already holds.
-            if let Err(error) = client.terminate(session_id, PRUNE_SOURCE).await {
-                tracing::debug!(
-                    event = "field_native.lifecycle.prune_terminate_skipped",
-                    component = "mgmt",
-                    session_id = %session_id,
-                    error = %error,
-                    "A pruned session did not accept termination; it had most likely already exited"
-                );
+            // pump is what reports convergence.
+            match client.terminate(session_id, PRUNE_SOURCE).await {
+                Ok(()) => pruned += 1,
+                Err(error) => match classify_prune_error(&format!("{error:#}")) {
+                    // The ordinary race between fieldd's view and this floor's:
+                    // the desired end state already holds, so it is debug and it
+                    // counts toward the prune.
+                    PruneErrorKind::AlreadyGone => {
+                        pruned += 1;
+                        tracing::debug!(
+                            event = "field_native.lifecycle.prune_terminate_skipped",
+                            component = "mgmt",
+                            session_id = %session_id,
+                            error = %error,
+                            "A pruned session was already gone from the terminal registry"
+                        );
+                    }
+                    // A timeout or a torn connection says NOTHING about whether
+                    // the ladder started. Swallowing these is what let `{applied}`
+                    // lie about a prune that half-ran.
+                    PruneErrorKind::Failed => {
+                        failed.push(session_id);
+                        tracing::warn!(
+                            event = "field_native.lifecycle.prune_terminate_failed",
+                            component = "mgmt",
+                            generation = desired.generation,
+                            session_id = %session_id,
+                            error = %error,
+                            "A pruned session's termination could not be confirmed; the desired set was refused"
+                        );
+                    }
+                },
             }
+        }
+        // A set whose prune half-ran is NOT applied: nothing is stored and no
+        // generation is banked, so fieldd retries the SAME generation and the
+        // monotonicity guard admits it precisely because we stored nothing.
+        if !failed.is_empty() {
+            return err(
+                id,
+                "UNAVAILABLE",
+                -32006,
+                "some withdrawn terminal sessions could not be terminated, so the desired set was not applied",
+                true,
+                Some(json!({
+                    "service": terminal::UNIT_ID,
+                    "state": terminal_state(state),
+                    "generation": desired.generation,
+                    "pruned": pruned,
+                    "failed": failed,
+                })),
+            );
         }
     }
 
@@ -511,9 +627,14 @@ async fn handle_desired_set(state: &Arc<DaemonState>, params: &Value, id: Option
             "The desired set carried fields this floor does not act on yet"
         );
     }
+    // Both under the reconcile lock, and in this order: storing first means a
+    // published generation is always one this daemon has banked, and publishing
+    // before the lock is released means two concurrent sets cannot hand
+    // subscribers their generations out of order (the watch channel would then
+    // report a moving-backwards generation the guard forbids).
     *slot = Some(desired);
-    drop(slot);
     state.observed_tx.send_modify(|o| o.generation = generation);
+    drop(slot);
     tracing::info!(
         event = "field_native.lifecycle.desired_applied",
         component = "mgmt",
@@ -558,6 +679,21 @@ fn spawn_forwarder<T>(
     });
 }
 
+/// What a superseded connection's requests get. The `superseded` notification
+/// already told that client why its plane ended; this is the honest answer to
+/// anything it asks afterwards, and refusing rather than serving is what keeps a
+/// stale fieldd from pruning its successor's sessions.
+fn superseded(id: Option<Value>) -> Value {
+    err(
+        id,
+        "UNAUTHORIZED",
+        -32001,
+        "this connection was superseded by a newer management client",
+        false,
+        None,
+    )
+}
+
 fn send(tx: &mpsc::UnboundedSender<OutMsg>, v: Value) {
     let _ = tx.send(OutMsg::Line(v.to_string()));
 }
@@ -580,4 +716,40 @@ fn err(
         data["details"] = d;
     }
     json!({"jsonrpc":"2.0","id": id.unwrap_or(Value::Null), "error": {"code": code, "message": message, "data": data}})
+}
+
+/// The prune classifier gets unit tests rather than an e2e case for an honest
+/// reason: a real terminate failure cannot be forced against a live floor
+/// without wedging the service, and every string below is one this exact client
+/// produces (`terminal_client.rs`) or one upstream produces
+/// (`service.rs:1325-1343`). The happy path stays covered end to end.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_unknown_session_is_the_ordinary_race() {
+        assert_eq!(
+            classify_prune_error("terminal control error: unknown session"),
+            PruneErrorKind::AlreadyGone
+        );
+    }
+
+    #[test]
+    fn unreachability_is_a_real_prune_failure() {
+        for message in [
+            // the client's own three, verbatim
+            "terminal control request timed out",
+            "terminal control connection closed before answering",
+            "write control request: Broken pipe (os error 32)",
+            // an upstream refusal that is NOT already-gone
+            "terminal control error: session owner is already closed",
+        ] {
+            assert_eq!(
+                classify_prune_error(message),
+                PruneErrorKind::Failed,
+                "{message} must not be read as an already-exited session"
+            );
+        }
+    }
 }

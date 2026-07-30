@@ -71,10 +71,15 @@ const SWEEP_BUDGET: Duration = Duration::from_secs(6);
 /// of session events coalesce into at most one `list-sessions` per tick.
 const RECONCILE_FLOOR: Duration = Duration::from_millis(100);
 
-/// Ticks between unconditional reconciles. Creation pushes no event (absence 1
+/// How long inventory may go unasked-for. Creation pushes no event (absence 1
 /// above), so this is what bounds inventory latency for a session fieldd
-/// created — ten ticks ≈ 1s, inside the kill-matrix's "< 2s" row (spec §10.1).
-const BACKSTOP_TICKS: u32 = 10;
+/// created — 1s, inside the kill-matrix's "< 2s" row (spec §10.1).
+///
+/// Measured against a timestamp and NOT by counting ticks: with
+/// `MissedTickBehavior::Skip`, a reconcile slower than the floor eats ticks, so
+/// ten of them could be well over a second of wall clock and the bounded row
+/// would quietly stop being bounded.
+const BACKSTOP_INTERVAL: Duration = Duration::from_secs(1);
 
 /// A torn control connection is reconciled by reconnecting, never by guessing
 /// (spec §10.5: `list-sessions` is truth).
@@ -390,6 +395,13 @@ pub fn install_inventory(
             std::future::pending::<()>().await;
             return;
         };
+        // Consecutive failed attempts, and whether this streak's recovery is
+        // still owed a line. A dead plane is dialed twice a second forever, so
+        // warning on every attempt is ~172k lines a day against the LOG soak
+        // gate: the FIRST failure of a streak is the news, the rest are debug,
+        // and the recovery is news again exactly once.
+        let mut failures = 0_u32;
+        let mut recovery_owed = false;
         loop {
             // Inside the loop, not before it: a torn connection reconnects at
             // once while the service is still up, and a service that DIED parks
@@ -397,18 +409,38 @@ pub fn install_inventory(
             // unit's health already says the plane is gone; a retry storm would
             // only add noise to a fact fieldd has.
             handle.wait_until_serving().await;
-            match pump_inventory(&endpoints, &state).await {
-                Ok(()) => tracing::info!(
-                    event = "field_native.terminal.inventory_disconnected",
-                    component = "terminal",
-                    "The terminal inventory connection closed; reconnecting"
-                ),
-                Err(error) => tracing::warn!(
-                    event = "field_native.terminal.inventory_failed",
-                    component = "terminal",
-                    error = %error,
-                    "The terminal inventory pump failed; reconnecting"
-                ),
+            // Dialing here rather than inside the pump is what lets a failed
+            // DIAL be told apart from a pump that ran and then broke.
+            match ControlClient::connect(Path::new(&endpoints.control), &endpoints.token).await {
+                Ok((client, events)) => {
+                    if recovery_owed {
+                        recovery_owed = false;
+                        tracing::info!(
+                            event = "field_native.terminal.inventory_reconnected",
+                            component = "terminal",
+                            after_failed_attempts = failures,
+                            "The terminal inventory connection was re-established"
+                        );
+                    }
+                    match pump_inventory(&client, events, &state).await {
+                        Ok(()) => {
+                            failures = 0;
+                            tracing::info!(
+                                event = "field_native.terminal.inventory_disconnected",
+                                component = "terminal",
+                                "The terminal inventory connection closed; reconnecting"
+                            );
+                        }
+                        Err(error) => {
+                            failures += 1;
+                            log_inventory_failure(failures, &mut recovery_owed, &error);
+                        }
+                    }
+                }
+                Err(error) => {
+                    failures += 1;
+                    log_inventory_failure(failures, &mut recovery_owed, &error);
+                }
             }
             // The last published inventory deliberately STAYS. A dead control
             // connection does not kill PTYs, so clearing the rows would claim
@@ -419,21 +451,45 @@ pub fn install_inventory(
     })
 }
 
-/// One connection's worth of inventory maintenance: reconcile on connect, then
-/// on events and on the backstop tick.
-async fn pump_inventory(endpoints: &Endpoints, state: &Arc<DaemonState>) -> anyhow::Result<()> {
-    let (client, mut events) =
-        ControlClient::connect(Path::new(&endpoints.control), &endpoints.token).await?;
+/// One failed inventory attempt, logged at a level that survives a soak: the
+/// first of a streak at warn, the rest at debug carrying the attempt count so
+/// the streak's length is still recoverable from the log.
+fn log_inventory_failure(failures: u32, recovery_owed: &mut bool, error: &anyhow::Error) {
+    if failures == 1 {
+        *recovery_owed = true;
+        tracing::warn!(
+            event = "field_native.terminal.inventory_failed",
+            component = "terminal",
+            error = %error,
+            "The terminal inventory pump failed; reconnecting"
+        );
+    } else {
+        tracing::debug!(
+            event = "field_native.terminal.inventory_failed",
+            component = "terminal",
+            attempts = failures,
+            error = %error,
+            "The terminal inventory pump is still failing; reconnecting"
+        );
+    }
+}
 
+/// One connection's worth of inventory maintenance: reconcile on connect, then
+/// on events and on the backstop.
+async fn pump_inventory(
+    client: &ControlClient,
+    mut events: tokio::sync::mpsc::UnboundedReceiver<Value>,
+    state: &Arc<DaemonState>,
+) -> anyhow::Result<()> {
     // Seeded from what the channel already holds so an unchanged inventory
     // wakes no subscriber.
     let mut published = inventory_value(&state.observed_tx.borrow().terminals);
-    published = reconcile(&client, state, published).await?;
+    let mut last_reconcile = Instant::now();
+    published = reconcile(client, state, published).await?;
 
     let mut ticker = tokio::time::interval(RECONCILE_FLOOR);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut dirty = false;
-    let mut ticks_since_backstop = 0_u32;
     loop {
         tokio::select! {
             event = events.recv() => match event {
@@ -443,14 +499,16 @@ async fn pump_inventory(endpoints: &Endpoints, state: &Arc<DaemonState>) -> anyh
                 None => return Ok(()),
             },
             _ = ticker.tick() => {
-                ticks_since_backstop += 1;
-                let backstop_due = ticks_since_backstop >= BACKSTOP_TICKS;
-                if dirty || backstop_due {
+                // An event-driven reconcile resets the backstop clock too: it
+                // asked `list-sessions` the same question the backstop would
+                // have, so counting from it kills a redundant second call.
+                if dirty || last_reconcile.elapsed() >= BACKSTOP_INTERVAL {
                     dirty = false;
-                    if backstop_due {
-                        ticks_since_backstop = 0;
-                    }
-                    published = reconcile(&client, state, published).await?;
+                    // Stamped from BEFORE the call, so a slow reconcile cannot
+                    // stretch the interval the kill matrix bounds.
+                    let started = Instant::now();
+                    published = reconcile(client, state, published).await?;
+                    last_reconcile = started;
                 }
             },
         }
@@ -516,7 +574,9 @@ fn inventory_value(terminals: &[ObservedTerminal]) -> Value {
 /// * `terminate` starts the ladder on its own thread and returns immediately
 ///   (session.rs:1558-1584), so issuing the requests in sequence still runs
 ///   every ladder in parallel. Sequence also gives the sweep a deterministic
-///   order, which a `spawn`-per-session fan-out would not.
+///   order, which a `spawn`-per-session fan-out would not. That returns-at-once
+///   property is a property of a HEALTHY service, though, so the issue loop
+///   spends the same budget the wait loop does — see below.
 /// * NF-D3's "non-persistent first" ordering is NOT implementable here:
 ///   `SessionSummary` does not carry persistence (absence 2). Recorded rather
 ///   than faked — the natural upstream ask is to expose it, which would also
@@ -546,16 +606,46 @@ async fn sweep(endpoints: &Endpoints, budget: Duration) -> anyhow::Result<()> {
         .map(|session| session.id.clone())
         .collect();
     let requested = sessions.len();
+    let mut issued = 0_usize;
     for session in &sessions {
-        if let Err(error) = client.terminate(&session.id, SWEEP_SOURCE).await {
+        // The budget covers ISSUING too, not just waiting. A wedged service
+        // answers no request until the client's own 10s timeout fires, so N
+        // sessions could cost N×10s before the wait loop below even started —
+        // far past the supervisor's patience for a shutdown, and every second
+        // spent here is a second the ladders do not get.
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
             tracing::warn!(
-                event = "field_native.terminal.sweep_terminate_failed",
+                event = "field_native.terminal.sweep_budget_spent",
+                component = "terminal",
+                sessions = requested,
+                issued,
+                unissued = requested - issued,
+                "The shutdown sweep spent its budget before every session was asked to terminate"
+            );
+            break;
+        }
+        match tokio::time::timeout(remaining, client.terminate(&session.id, SWEEP_SOURCE)).await {
+            Ok(Ok(())) => issued += 1,
+            Ok(Err(error)) => {
+                tracing::warn!(
+                    event = "field_native.terminal.sweep_terminate_failed",
+                    component = "terminal",
+                    session_id = %session.id,
+                    error = %error,
+                    "A session refused termination during the shutdown sweep"
+                );
+                awaiting.remove(&session.id); // no ladder started; nothing to await
+            }
+            // The request may or may not have reached the service, so the
+            // session STAYS in `awaiting`: the honest report is unconfirmed,
+            // never "it refused". The next iteration's zero budget ends the loop.
+            Err(_) => tracing::warn!(
+                event = "field_native.terminal.sweep_terminate_unconfirmed",
                 component = "terminal",
                 session_id = %session.id,
-                error = %error,
-                "A session refused termination during the shutdown sweep"
-            );
-            awaiting.remove(&session.id); // no ladder started; nothing to await
+                "A session's termination request did not complete inside the sweep budget"
+            ),
         }
     }
 

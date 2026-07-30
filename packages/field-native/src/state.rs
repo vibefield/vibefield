@@ -76,6 +76,20 @@ impl DaemonState {
     pub fn conn_id(&self) -> u64 {
         self.next_conn_id.fetch_add(1, Ordering::Relaxed)
     }
+
+    /// Is this connection still THE paired product plane? Asked per request and
+    /// not only at hello: superseding a connection closes its write half, but
+    /// its reader stays alive and authenticated, so a stale fieldd can still
+    /// reach mutating surfaces unless every one of them re-checks (design-02
+    /// §2.7's single-client rule, EL7's same-uid adversary).
+    pub async fn is_current_client(&self, conn_id: u64) -> bool {
+        self.current_client
+            .lock()
+            .await
+            .as_ref()
+            .is_some_and(|client| client.conn_id == conn_id)
+    }
+
     pub fn sub_id(&self) -> String {
         format!("s{}", self.next_sub_id.fetch_add(1, Ordering::Relaxed))
     }

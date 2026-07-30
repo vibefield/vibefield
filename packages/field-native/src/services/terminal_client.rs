@@ -98,7 +98,28 @@ impl ControlClient {
     /// server-pushed events (`requestId: 0`) received from this moment on —
     /// which is why callers subscribe before they reconcile: an exit that
     /// happens during the reconcile is buffered here, not lost.
+    ///
+    /// Bounded as a whole, and not only in its parts: the auth ack is a read
+    /// with no deadline of its own (`hello` gets the request budget, the ack
+    /// before it got nothing), so a service that accepted the connection and
+    /// then went quiet would park the caller forever. Callers dial under locks —
+    /// the mgmt reconcile holds `state.desired` across its whole prune — which
+    /// is what makes an unbounded handshake a daemon-wide stall rather than one
+    /// slow call. The budget is the request budget: the handshake is one write
+    /// and two round trips into a process on the same machine.
     pub async fn connect(
+        control_socket: &Path,
+        token: &str,
+    ) -> Result<(Self, mpsc::UnboundedReceiver<Value>)> {
+        match tokio::time::timeout(REQUEST_TIMEOUT, Self::handshake(control_socket, token)).await {
+            Ok(result) => result,
+            // Dropping the handshake future closes the half-open socket and
+            // aborts any reader task it had already spawned.
+            Err(_) => bail!("terminal control handshake did not complete in {REQUEST_TIMEOUT:?}"),
+        }
+    }
+
+    async fn handshake(
         control_socket: &Path,
         token: &str,
     ) -> Result<(Self, mpsc::UnboundedReceiver<Value>)> {
@@ -223,8 +244,9 @@ impl ControlClient {
 }
 
 /// Demultiplex one socket: `requestId: 0` is a pushed event, anything else
-/// answers a waiter. An unmatched response is dropped rather than fatal — a
-/// timed-out caller has already given up on it.
+/// answers a waiter. Two things are dropped rather than fatal here: a response
+/// no waiter is left for (a timed-out caller has already given up on it) and an
+/// event no receiver is left for (see below).
 async fn read_loop(
     read_half: tokio::io::ReadHalf<UnixStream>,
     pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Value>>>>,
@@ -240,9 +262,15 @@ async fn read_loop(
         };
         match message.get("requestId").and_then(Value::as_u64) {
             Some(0) | None => {
-                if events.send(message).is_err() {
-                    break; // nobody is listening for events any more
-                }
+                // A dropped receiver DISCARDS the event; it never ends the
+                // connection. The service broadcasts every event to every
+                // control client (service.rs:470/624), so a client whose owner
+                // only wants request/response — the mgmt reconcile's prune —
+                // would otherwise have its demultiplexer killed by the first
+                // `session-exited` its own ladder caused, and every later
+                // request on it would then burn the full request budget waiting
+                // for a response nobody is left to read.
+                let _ = events.send(message);
             }
             Some(request_id) => {
                 let waiter = pending.lock().unwrap().remove(&request_id);
