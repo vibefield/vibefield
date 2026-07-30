@@ -26,8 +26,16 @@ beforeAll(() => {
 }, 180_000);
 
 afterEach(async () => {
-  for (const fn of cleanup.reverse()) await fn();
+  // error-isolated: a rejecting cleanup must not leak the daemons behind it
+  const fns = cleanup.reverse();
   cleanup = [];
+  for (const fn of fns) {
+    try {
+      await fn();
+    } catch {
+      /* already-stopped is fine */
+    }
+  }
   for (const c of children) c.kill("SIGKILL");
   children = [];
 });
@@ -94,6 +102,9 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   it("row 1: the PTY survives fieldd; the next fieldd adopts it inside 2s", async () => {
     const native = await spawnNative();
     const daemon1 = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    // registered even though the test stops it mid-flow: a failure BEFORE that
+    // stop must not leak a live fieldd (the afterEach tolerates double-stop)
+    cleanup.push(() => daemon1.stop());
     const rpc1 = await connect(daemon1);
     const created = (await rpc1.call("terminal.create", { shell: "/bin/cat" })) as {
       sessionId: string;
@@ -214,7 +225,12 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       }
     });
     // the bait planted in field-native's own environment never reaches a PTY;
-    // ordinary vars do (inherit-minus-strip, NF-D6)
+    // ordinary vars do (inherit-minus-strip, NF-D6). SCOPE HONESTY (review):
+    // this proves the PREFIX classes (FIELD_/FIELDD_/GHOSTTEA_/...) — the
+    // upstream strip is an exact-prefix list, so a NON-prefixed secret in the
+    // daemon's env would pass into inherit-mode shells. That is spec-sanctioned
+    // (EL7 registers prefixes precisely so secrets are namable), not proof
+    // that arbitrary secrets can't ride the daemon env.
     expect(env).not.toContain("FIELD_SMUGGLE");
     expect(env).not.toContain("FIELDD_SMUGGLE");
     expect(env).not.toContain("GHOSTTEA_");

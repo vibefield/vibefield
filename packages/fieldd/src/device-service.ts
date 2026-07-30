@@ -279,6 +279,9 @@ export class DeviceService extends EventEmitter {
         // a correlation appearing matters even while online stays false: it is
         // what lets doc-sync's liveness fold see the peer at all
         d.tailscaleId ?? null,
+        // capabilities flip at runtime (terminalHost follows the NF-D8 hello);
+        // omitting them made the flip invisible to device.subscribe (NF-6)
+        d.capabilities,
       ]),
     );
     if (sig === this.lastRosterSig) return;

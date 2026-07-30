@@ -27,8 +27,16 @@ beforeAll(() => {
 }, 180_000);
 
 afterEach(async () => {
-  for (const fn of cleanup.reverse()) await fn();
+  // error-isolated: a rejecting cleanup must not leak the daemons behind it
+  const fns = cleanup.reverse();
   cleanup = [];
+  for (const fn of fns) {
+    try {
+      await fn();
+    } catch {
+      /* already-stopped is fine */
+    }
+  }
   for (const c of children) c.kill("SIGKILL");
   children = [];
 });

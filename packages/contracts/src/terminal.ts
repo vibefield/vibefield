@@ -13,6 +13,15 @@ import { ObservedTerminal } from "./mgmt";
 export const TerminalInfo = ObservedTerminal;
 export type TerminalInfo = z.infer<typeof TerminalInfo>;
 
+/** terminal.list result (the DeviceListResult precedent — result envelopes are
+ * contracts shapes, never ad-hoc literals; EL6). */
+export const TerminalListResult = z.object({ terminals: z.array(TerminalInfo) }).passthrough();
+export type TerminalListResult = z.infer<typeof TerminalListResult>;
+
+/** Shared params for terminal.get / terminal.openTicket / terminal.terminate. */
+export const TerminalSessionParams = z.object({ sessionId: z.string().min(1) }).passthrough();
+export type TerminalSessionParams = z.infer<typeof TerminalSessionParams>;
+
 /** terminal.openTicket result (D6: v1 carries the single native service token —
  * per-client native tokens are the named ghosttea upgrade). Socket PATHS are
  * stable across fieldd restarts (external-mode law); the token rotates per
@@ -48,7 +57,15 @@ export const TerminalCreateResult = z.object({ sessionId: z.string() }).passthro
 export type TerminalCreateResult = z.infer<typeof TerminalCreateResult>;
 
 /** terminal.terminate — the full ladder (interrupt → 2s → SIGTERM pgrp → 2s →
- * SIGKILL pgrp) runs native-side; terminating an already-exited session is the
- * normal race and reads as success, never an error. */
-export const TerminalTerminateParams = z.object({ sessionId: z.string() }).passthrough();
+ * SIGKILL pgrp) runs native-side. */
+export const TerminalTerminateParams = TerminalSessionParams;
 export type TerminalTerminateParams = z.infer<typeof TerminalTerminateParams>;
+
+/** terminal.terminate result. `terminated: true` = the ladder was fired for a
+ * session the floor knew; `false` = the session was ALREADY GONE (the normal
+ * race when a ladder and a user click converge — the desired end state holds,
+ * so the call still succeeds). A floor that cannot be asked (dead socket,
+ * absent endpoints) is an UNAVAILABLE error, never a false — the review's
+ * transport-death-reads-as-benign class (NF-6). */
+export const TerminalTerminateResult = z.object({ terminated: z.boolean() }).passthrough();
+export type TerminalTerminateResult = z.infer<typeof TerminalTerminateResult>;

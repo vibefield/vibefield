@@ -41,7 +41,8 @@ import {
   SettingsSetParams,
   SettingsSubscribeParams,
   TerminalCreateParams,
-  TerminalTerminateParams,
+  type TerminalListResult,
+  TerminalSessionParams,
 } from "@vibefield/contracts";
 import type { AuditHealthV1 } from "@vibefield/contracts/diagnostics";
 import type { LoggingHealthV1 } from "@vibefield/contracts/logging";
@@ -526,17 +527,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // the D6 ticket seam. Tolerant of a floor-less native (no endpoints on the
     // hello → honest UNAVAILABLE at the ticket methods) and of the mock mgmt
     // server (its generic subscribe snapshot parses as no inventory).
-    const terminals = new TerminalService({ link: native });
-    try {
-      await terminals.start();
-    } catch (e) {
-      // Locally this subscribe can only fail because the link died or was
-      // superseded mid-bootstrap — and those paths own the boot's outcome (the
-      // supersession test pins the /superseded/ rejection reason; a raw
-      // transport error here would misreport the takeover). Anything else is a
-      // real failure and still aborts the boot.
-      if (!native.superseded && !native.closed && native.connected) throw e;
-    }
+    //
+    // NF-6: ensureStarted never throws and never fatals the boot. The old
+    // try/catch here had BOTH failure modes the review named: a refused
+    // subscribe killed the whole daemon, and a transient link drop was
+    // swallowed with the failed subscribe DELETED from NativeLink's replay map
+    // — a daemon booting through that window had a dead inventory forever
+    // (list = [], every openTicket NOT_FOUND). Re-arming on every "connected"
+    // keeps trying until it takes; once armed, NativeLink's own replay owns it.
+    const terminals = new TerminalService({
+      link: native,
+      logger: logger.child({ component: "terminal.service" }),
+    });
+    native.on("connected", () => void terminals.ensureStarted());
+    await terminals.ensureStarted();
 
     // T1 §1 — the tailnet door's node-id correlation. DeviceService is built
     // AFTER ProductApi, so this is a let-ref, not a closure over the const:
@@ -824,12 +828,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // before effect). Scope terminal.attach across the board (NF-D5 v1 —
     // the terminal.manage split is the named upgrade).
     const requireSessionId = (params: unknown): string => {
-      const sessionId = (params as { sessionId?: unknown } | null | undefined)?.sessionId;
-      if (typeof sessionId !== "string" || sessionId.length === 0)
+      const parsed = TerminalSessionParams.safeParse(params);
+      if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
-      return sessionId;
+      return parsed.data.sessionId;
     };
-    api.register("terminal.list", () => ({ terminals: terminals.list() }));
+    api.register("terminal.list", (): TerminalListResult => ({ terminals: terminals.list() }));
     api.register("terminal.get", (_ctx, params) => {
       const sessionId = requireSessionId(params);
       const info = terminals.get(sessionId);
@@ -858,12 +862,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ctx,
         {
           // the session id does not exist until the effect runs; the outcome
-          // record carries it (attempt-before-effect, honest both ways)
+          // record carries it (attempt-before-effect, honest both ways).
+          // `title` has no upstream spawn option — the audit attr IS where
+          // "accepted, recorded, unapplied" becomes true (NF-6).
           action: "terminal.session.create",
           target: { kind: "terminal", id: "pending" },
           attrs: {
             ...(parsed.data.shell !== undefined ? { shell: parsed.data.shell } : {}),
             ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
+            ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
           },
         },
         () => terminals.create(parsed.data),
@@ -871,16 +878,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     });
     api.register("terminal.terminate", async (ctx, params) => {
-      const parsed = TerminalTerminateParams.safeParse(params);
-      if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
+      const sessionId = requireSessionId(params);
+      // audit.required records outcome "failed" when the effect throws, so the
+      // NF-6 UNAVAILABLE paths (dead floor mid-terminate) land honestly — the
+      // old success-only record was half the finding.
       return await audit.required(
         ctx,
         {
           action: "terminal.session.terminate",
-          target: { kind: "terminal", id: parsed.data.sessionId },
+          target: { kind: "terminal", id: sessionId },
         },
-        () => terminals.terminate(parsed.data.sessionId),
+        () => terminals.terminate(sessionId),
         (result) => ({ outcome: "succeeded", attrs: { terminated: result.terminated } }),
       );
     });
