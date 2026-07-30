@@ -122,7 +122,7 @@ export function resolveDevelopmentResources(opts: {
       "desktop",
       "packaging",
       "icons",
-      "app-1024.png",
+      "app-macos-1024.png",
     ),
     fielddCommand: opts.electronExecPath,
     fielddArgs: [join(opts.repoRoot, "packages", "fieldd", "dist", "bin.cjs")],

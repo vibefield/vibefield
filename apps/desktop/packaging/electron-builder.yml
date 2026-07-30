@@ -109,8 +109,10 @@ extraResources:
 # window where flipping is legal, since nothing may mutate a signed executable.
 afterPack: packaging/after-pack.mjs
 
-# Application icons are generated deterministically from icons/app-master.svg. Paths are explicit
-# per platform so builder defaults cannot silently select a stale conventional filename.
+# Apple platforms use the layered Icon Composer source; electron-builder 26 compiles it with
+# Xcode 26 actool into Assets.car plus an ICNS fallback. The other platform icons remain generated
+# deterministically from icons/app-master.svg. Paths are explicit so builder defaults cannot
+# silently select a stale conventional filename.
 
 # The staged app declares no dependencies and ships no node_modules, so there is nothing to
 # rebuild. Off explicitly: a rebuild step that silently does nothing is still a step that can
@@ -119,7 +121,7 @@ npmRebuild: false
 
 mac:
   target: [dmg, zip]
-  icon: packaging/icons/app.icns
+  icon: packaging/icons/app.icon
   # Hardened runtime is on from the first package even though nothing is signed yet, so the
   # entitlement set is exercised from the start rather than discovered at notarization time.
   hardenedRuntime: true

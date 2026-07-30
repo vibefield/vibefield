@@ -45,10 +45,14 @@
   },
   "overrides": [
     {
-      // Immutable packaging masters are build inputs, never inline/document
-      // content. Keeping their imported bytes exact is more important than a
-      // DOM-only accessible-title rule that no shipped UI consumes.
-      "includes": ["apps/desktop/packaging/icons/*-master.svg"],
+      // Packaging icon sources are build inputs, never inline/document content.
+      // Keep both imported vectors and Icon Composer's package serialization
+      // exact; DOM formatting/accessibility rules do not apply to either.
+      "includes": [
+        "apps/desktop/packaging/icons/*-master.svg",
+        "apps/desktop/packaging/icons/layers/*.svg",
+        "apps/desktop/packaging/icons/*.icon/**"
+      ],
       "formatter": {
         "enabled": false
       },

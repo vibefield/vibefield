@@ -20,7 +20,7 @@
     "package:sea": "node packaging/build-fieldd-sea.mjs",
     "package:stage": "pnpm run icons:check && pnpm build:all && pnpm run package:sea && node ../../scripts/stage-package.mjs",
     "package:verify": "node ../../scripts/stage-package.mjs --verify",
-    "package:dir": "pnpm run package:stage && electron-builder --dir --config packaging/electron-builder.yml",
+    "package:dir": "pnpm run package:stage && node packaging/run-electron-builder.mjs --dir --config packaging/electron-builder.yml",
     "package:audit": "node ../../scripts/audit-fuses.mjs --app release/mac-arm64/VibeField.app"
   },
   "devDependencies": {

@@ -36,7 +36,9 @@ describe("resolveDevelopmentResources", () => {
 
   it("runs the fieldd bundle from the repo through Electron-as-node", () => {
     expect(dev.packaged).toBe(false);
-    expect(dev.developmentDockIconPath).toBe(`${REPO}/apps/desktop/packaging/icons/app-1024.png`);
+    expect(dev.developmentDockIconPath).toBe(
+      `${REPO}/apps/desktop/packaging/icons/app-macos-1024.png`,
+    );
     expect(dev.fielddCommand).toBe(ELECTRON);
     expect(dev.fielddArgs).toEqual([`${REPO}/packages/fieldd/dist/bin.cjs`]);
     // Development keeps node mode: building a 145 MB SEA per edit would be an
