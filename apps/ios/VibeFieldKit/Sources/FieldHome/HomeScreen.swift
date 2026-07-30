@@ -42,7 +42,18 @@ public struct HomeScreen: View {
         .ignoresSafeArea()
     }
     .background(FieldPalette.panelBackground.ignoresSafeArea())
-    .onAppear { feed.start() }
+    .onAppear {
+      feed.start()
+      #if DEBUG
+        // Headless smoke hook (the GhostteaApp pattern: opt-in automation,
+        // Debug-only): drives the connect flow so a simulator run can prove
+        // the real runtime path without touch injection.
+        if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
+          meshSheetOpen = true
+          mesh.connect()
+        }
+      #endif
+    }
     .onDisappear { feed.stop() }
     .sheet(item: $selection) { selected in
       // Live lookup so the open card tracks the fleet; a vanished id renders

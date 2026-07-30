@@ -58,6 +58,12 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer sh -c '
   xcrun simctl launch booted com.jamesyong.vibefield.ios'
 ```
 
+Debug builds accept `-vf-auto-connect` as a launch argument (the GhostteaApp
+opt-in-automation pattern): it opens the mesh sheet and drives CONNECT, so a
+headless simulator run exercises the real runtime path — TailscaleKit start →
+control dial → the honest sign-in state — without touch injection. Not
+compiled into Release.
+
 Device runs: open the project in Xcode and let automatic signing pick the team
 (`DEVELOPMENT_TEAM` is deliberately empty in the pbxproj — inject it at the
 command line, the Ghosttea runner pattern).
