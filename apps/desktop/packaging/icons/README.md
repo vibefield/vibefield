@@ -1,32 +1,39 @@
 # VibeField icon assets
 
-`app-master.svg` and `tray-master.svg` are the immutable vector masters imported from the
-VibeField branding workspace on 2026-07-28:
+`app-master.svg` and `tray-master.svg` are the immutable conventional application and tray
+masters imported from the VibeField branding workspace on 2026-07-28:
 
-- app SHA-256: `3fa2553196c40f5b55ef592bdd131863290740bba949803f19371b15875cfd31`
+- conventional app SHA-256:
+  `3fa2553196c40f5b55ef592bdd131863290740bba949803f19371b15875cfd31`
 - tray SHA-256: `c2de6e79fcca0f3e966ea20a9acd53d755cf178deef3ef55d29cffb20eb64e70`
 
-Run `pnpm --filter @vibefield/desktop icons:generate` after changing a master. The generator
-creates the checked-in conventional macOS ICNS fallback, Windows ICO, Linux raster set, and all
-three platform tray states. On macOS it also uses Xcode's official Icon Composer `ictool` to
-render `app-macos-1024.png` from `app.icon`. `icons:check` regenerates every representation in
-memory and compares exact bytes, so macOS CI proves that committed outputs are current. On a
-non-macOS host, it still validates the committed Apple rendition's structure and pixels but
-cannot re-render Apple materials.
+`app.icon` is the canonical macOS application-icon source authored with Apple Icon Composer and
+imported on 2026-07-30. Keep the package serialization and its referenced vector exact:
+
+- `icon.json` SHA-256: `69440dd10d67cc0a71d8ec7ea021bffd1c158f2617dada42fbcbeee6903cf206`
+- `Assets/vibefield-appicon2.svg` SHA-256:
+  `85b663f854d34df2055eec9f5bfd34076280447a72d9abd1b7152ecac7bf3728`
+
+Run `pnpm --filter @vibefield/desktop icons:generate` after changing a master or `app.icon`. The
+generator creates the checked-in conventional macOS ICNS fallback, Windows ICO, Linux raster set,
+and all three platform tray states. On macOS it also uses Xcode's official Icon Composer `ictool`
+to render `app-macos-1024.png` from `app.icon`. `icons:check` regenerates every representation in
+memory and compares exact bytes, verifies that every Icon Composer layer is a local square vector
+and that the package contains no unreferenced assets, so macOS CI proves that committed outputs
+are current. On a non-macOS host, it still validates the committed Apple rendition's structure
+and pixels but cannot re-render Apple materials.
 
 The attention and offline tray states are deterministic monochrome badge treatments derived from
 the tray master. macOS receives black-plus-alpha template images. Windows and Linux receive a
 dark glyph with a light keyline because those platforms do not reliably tint notification-area
 images for the current theme.
 
-`app.icon` is the editable Apple source authored with Icon Composer. Its `Mark` and `Background`
-are independent vector layers mirrored under `layers/`; the generator rejects a flattened layer,
-an unrounded macOS rendition, or drift between those vectors and the Icon Composer package.
-Apple's Default rendition uses the shared iOS/macOS square-platform material, an automatic fill,
-and the reviewed VibeField group treatment. Group translucency is deliberately off: Apple keeps
-the specular depth and rounded silhouette without recoloring the supplied black-and-white brand.
-The flat application master continues to produce the conventional ICNS fallback and the
-Windows/Linux assets.
+The reviewed Icon Composer composition uses a shared square-platform white material, translucent
+dot field, black infinity mark, and RGB offset accents. The generator rejects missing or external
+layers, a non-square vector canvas, an unrounded macOS rendition, or loss of those principal
+visual treatments. The flat application master continues to produce the conventional ICNS
+fallback and the Windows/Linux assets; it is intentionally independent of Apple's material
+composition.
 
 `pnpm dev` runs Electron's own unsigned application bundle, so electron-builder cannot embed the
 VibeField bundle icon in that loop. After Electron is ready, the shell applies the checked

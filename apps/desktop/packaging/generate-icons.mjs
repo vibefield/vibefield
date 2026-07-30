@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Resvg } from "@resvg/resvg-js";
@@ -19,7 +19,6 @@ const appMasterPath = join(iconRoot, "app-master.svg");
 const trayMasterPath = join(iconRoot, "tray-master.svg");
 const appleIconPath = join(iconRoot, "app.icon");
 const appleDockIconPath = join(iconRoot, "app-macos-1024.png");
-const appleLayerRoot = join(iconRoot, "layers");
 
 const APP_ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 256];
 const APP_LINUX_SIZES = [16, 24, 32, 48, 64, 96, 128, 256, 512];
@@ -62,14 +61,10 @@ const ICNS_REPRESENTATIONS = [
   ["ic09", 512],
   ["ic10", 1024],
 ];
-const SOURCE_FILES = new Set([
+const STATIC_SOURCE_FILES = new Set([
   "README.md",
   "app-master.svg",
-  "app.icon/Assets/app-background.svg",
-  "app.icon/Assets/app-mark.svg",
   "app.icon/icon.json",
-  "layers/app-background.svg",
-  "layers/app-mark.svg",
   "tray-master.svg",
 ]);
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -80,24 +75,11 @@ if (args.size > 0) {
   throw new Error(`unknown icon generator option(s): ${[...args].join(", ")}`);
 }
 
-const [
-  appMaster,
-  trayMaster,
-  builderConfig,
-  appleIconDefinition,
-  appleBackgroundLayer,
-  appleMarkLayer,
-  packagedAppleBackgroundLayer,
-  packagedAppleMarkLayer,
-] = await Promise.all([
+const [appMaster, trayMaster, builderConfig, appleIconDefinition] = await Promise.all([
   readFile(appMasterPath, "utf8"),
   readFile(trayMasterPath, "utf8"),
   readFile(builderConfigPath, "utf8"),
   readFile(join(appleIconPath, "icon.json"), "utf8"),
-  readFile(join(appleLayerRoot, "app-background.svg"), "utf8"),
-  readFile(join(appleLayerRoot, "app-mark.svg"), "utf8"),
-  readFile(join(appleIconPath, "Assets", "app-background.svg"), "utf8"),
-  readFile(join(appleIconPath, "Assets", "app-mark.svg"), "utf8"),
 ]);
 assertSquareMaster(appMaster, "application");
 assertSquareMaster(trayMaster, "tray");
@@ -109,14 +91,7 @@ if (appPaths.length !== 2) {
   );
 }
 const appMarkPath = appPaths[1];
-assertAppleIconSources({
-  definition: appleIconDefinition,
-  backgroundLayer: appleBackgroundLayer,
-  markLayer: appleMarkLayer,
-  packagedBackgroundLayer: packagedAppleBackgroundLayer,
-  packagedMarkLayer: packagedAppleMarkLayer,
-  appMarkPath,
-});
+const appleIconSourceFiles = await validateAppleIconSource(appleIconDefinition);
 const trayPath = extractSinglePath(trayMaster);
 const appleDockIcon = await renderAppleDockIcon();
 const generated = generateAssets({ appMaster, appMarkPath, trayPath, appleDockIcon });
@@ -128,7 +103,10 @@ if (!checkOnly) {
   }
 }
 
-await validateGeneratedTree(generated);
+await validateGeneratedTree({
+  outputs: generated.outputs,
+  sourceFiles: new Set([...STATIC_SOURCE_FILES, ...appleIconSourceFiles]),
+});
 console.log(
   `icons ${checkOnly ? "current" : "generated"}: ${generated.outputs.size} files, app ${APP_RENDER_SIZES.length} raster sizes, tray 3 states`,
 );
@@ -239,7 +217,7 @@ async function renderAppleDockIcon() {
   const outputPath = join(temporaryRoot, "app-macos-1024.png");
   try {
     await execFileAsync(
-      iconComposer,
+      iconComposer.executable,
       [
         appleIconPath,
         "--export-image",
@@ -258,7 +236,15 @@ async function renderAppleDockIcon() {
         "--light-angle",
         "-45",
       ],
-      { maxBuffer: 1024 * 1024 },
+      {
+        env: {
+          ...process.env,
+          ...(iconComposer.developerDir === undefined
+            ? {}
+            : { DEVELOPER_DIR: iconComposer.developerDir }),
+        },
+        maxBuffer: 1024 * 1024,
+      },
     );
     const rendered = await readFile(outputPath);
     validateAppleDockIcon(rendered);
@@ -290,8 +276,9 @@ async function findIconComposer() {
     }
   }
   if (developerDir !== undefined && developerDir.length > 0) {
-    candidates.push(
-      resolve(
+    candidates.push({
+      developerDir,
+      executable: resolve(
         developerDir,
         "..",
         "Applications",
@@ -300,16 +287,22 @@ async function findIconComposer() {
         "Executables",
         "ictool",
       ),
-    );
+    });
   }
-  candidates.push(
-    "/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool",
-  );
-  candidates.push("/Applications/Icon Composer.app/Contents/Executables/ictool");
+  const standardXcodeDeveloperDir = "/Applications/Xcode.app/Contents/Developer";
+  candidates.push({
+    developerDir: standardXcodeDeveloperDir,
+    executable:
+      "/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool",
+  });
+  candidates.push({
+    developerDir,
+    executable: "/Applications/Icon Composer.app/Contents/Executables/ictool",
+  });
 
   for (const candidate of candidates) {
     try {
-      await access(candidate, fsConstants.X_OK);
+      await access(candidate.executable, fsConstants.X_OK);
       return candidate;
     } catch {
       // Try the next supported Apple installation layout.
@@ -521,14 +514,7 @@ function assertBuilderIconConfig(config) {
   }
 }
 
-function assertAppleIconSources({
-  definition,
-  backgroundLayer,
-  markLayer,
-  packagedBackgroundLayer,
-  packagedMarkLayer,
-  appMarkPath,
-}) {
+async function validateAppleIconSource(definition) {
   let parsed;
   try {
     parsed = JSON.parse(definition);
@@ -536,58 +522,125 @@ function assertAppleIconSources({
     throw new Error("icons/app.icon/icon.json is not valid JSON", { cause: error });
   }
 
-  const group = parsed.groups?.[0];
-  const layers = group?.layers;
+  if (!Array.isArray(parsed?.groups) || parsed.groups.length === 0) {
+    throw new Error("icons/app.icon must contain at least one Icon Composer group");
+  }
+  if (parsed["supported-platforms"]?.squares !== "shared") {
+    throw new Error("icons/app.icon must retain Icon Composer's shared square-platform rendition");
+  }
+  const fillValues = [
+    parsed.fill,
+    ...(Array.isArray(parsed["fill-specializations"])
+      ? parsed["fill-specializations"].map((specialization) => specialization?.value)
+      : []),
+  ];
   if (
-    parsed.groups?.length !== 1 ||
-    group?.name !== "VibeField" ||
-    layers?.length !== 2 ||
-    layers[0]?.name !== "Mark" ||
-    layers[0]?.["image-name"] !== "app-mark.svg" ||
-    layers[1]?.name !== "Background" ||
-    layers[1]?.["image-name"] !== "app-background.svg"
+    !fillValues.some(
+      (fill) =>
+        typeof fill?.["automatic-gradient"] === "string" && fill["automatic-gradient"].length > 0,
+    )
   ) {
     throw new Error(
-      "icons/app.icon must retain the reviewed VibeField group with separate Mark and Background layers",
+      "icons/app.icon must retain at least one automatic Icon Composer material fill",
     );
   }
-  if (
-    typeof parsed.fill?.["automatic-gradient"] !== "string" ||
-    parsed.fill["automatic-gradient"].length === 0 ||
-    parsed["supported-platforms"]?.squares !== "shared"
-  ) {
+
+  const referencedAssets = new Set();
+  for (const [groupIndex, group] of parsed.groups.entries()) {
+    if (!Array.isArray(group?.layers) || group.layers.length === 0) {
+      throw new Error(`icons/app.icon group ${groupIndex + 1} must contain at least one layer`);
+    }
+    for (const [layerIndex, layer] of group.layers.entries()) {
+      const label = `icons/app.icon group ${groupIndex + 1} layer ${layerIndex + 1}`;
+      const imageName = layer?.["image-name"];
+      if (
+        typeof imageName !== "string" ||
+        imageName.length === 0 ||
+        basename(imageName) !== imageName ||
+        extname(imageName).toLowerCase() !== ".svg"
+      ) {
+        throw new Error(`${label} must reference a local SVG asset by filename`);
+      }
+      if (typeof layer.name !== "string" || layer.name.length === 0) {
+        throw new Error(`${label} must retain its Icon Composer layer name`);
+      }
+      if (layer.position !== undefined) {
+        const { scale, ["translation-in-points"]: translation } = layer.position;
+        if (
+          (scale !== undefined && (!Number.isFinite(scale) || scale <= 0)) ||
+          (translation !== undefined &&
+            (!Array.isArray(translation) ||
+              translation.length !== 2 ||
+              !translation.every(Number.isFinite)))
+        ) {
+          throw new Error(`${label} has an invalid Icon Composer position`);
+        }
+      }
+      referencedAssets.add(imageName);
+    }
+  }
+
+  const assetsRoot = join(appleIconPath, "Assets");
+  const expectedAssets = [...referencedAssets].sort();
+  const actualAssets = (await listFiles(assetsRoot)).sort();
+  if (actualAssets.join("\n") !== expectedAssets.join("\n")) {
     throw new Error(
-      "icons/app.icon must retain its automatic Apple material fill and shared square-platform rendition",
+      `icons/app.icon Assets must exactly match the referenced SVG layers; expected ${expectedAssets.join(", ")}, found ${actualAssets.join(", ")}`,
     );
   }
-  if (group.translucency?.enabled !== false) {
-    throw new Error(
-      "icons/app.icon group translucency must stay off so Apple materials do not recolor the black-and-white brand",
-    );
-  }
-  if (backgroundLayer !== packagedBackgroundLayer || markLayer !== packagedMarkLayer) {
-    throw new Error(
-      "icons/app.icon Assets must exactly match icons/layers; re-import the reviewed layers in Icon Composer",
-    );
-  }
-  assertLayerSvg(backgroundLayer, "Apple background");
-  assertLayerSvg(markLayer, "Apple mark");
-  if (!backgroundLayer.includes('fill="#FFFFFF"')) {
-    throw new Error("Apple background layer must retain the reviewed white field");
-  }
-  const layerPaths = extractPaths(markLayer);
-  if (layerPaths.length !== 1 || layerPaths[0] !== appMarkPath) {
-    throw new Error("Apple mark layer has drifted from icons/app-master.svg");
-  }
+
+  await Promise.all(
+    expectedAssets.map(async (asset) => {
+      const svg = await readFile(join(assetsRoot, asset), "utf8");
+      assertLayerSvg(svg, `Apple layer ${asset}`);
+    }),
+  );
+  return expectedAssets.map((asset) => `app.icon/Assets/${asset}`);
 }
 
 function assertLayerSvg(svg, label) {
-  if (!/width="1024"\s+height="1024"/.test(svg)) {
-    throw new Error(`${label} layer must be authored on a 1024x1024 canvas`);
+  const root = svg.match(/<svg\b([^>]*)>/i);
+  if (root === null) {
+    throw new Error(`${label} must contain an SVG root`);
+  }
+  const width = parseSvgDimension(readSvgAttribute(root[1], "width"));
+  const height = parseSvgDimension(readSvgAttribute(root[1], "height"));
+  const viewBox = readSvgAttribute(root[1], "viewBox")
+    ?.trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  if (
+    width === undefined ||
+    height === undefined ||
+    width !== height ||
+    viewBox?.length !== 4 ||
+    !viewBox.every(Number.isFinite) ||
+    viewBox[2] <= 0 ||
+    viewBox[2] !== viewBox[3]
+  ) {
+    throw new Error(`${label} must be authored on a square SVG canvas and viewBox`);
   }
   if (/<(?:text|image|script|foreignObject)\b/i.test(svg)) {
     throw new Error(`${label} layer may contain vector geometry only`);
   }
+  if (!/<(?:path|rect|circle|ellipse|polygon|polyline|line)\b/i.test(svg)) {
+    throw new Error(`${label} must contain visible vector geometry`);
+  }
+  for (const link of svg.matchAll(/\b(?:href|xlink:href)\s*=\s*["']([^"']+)["']/gi)) {
+    if (!link[1].startsWith("#")) {
+      throw new Error(`${label} may not reference external content`);
+    }
+  }
+}
+
+function readSvgAttribute(attributes, name) {
+  return attributes.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`, "i"))?.[1];
+}
+
+function parseSvgDimension(value) {
+  if (value === undefined || !/^[0-9]+(?:\.[0-9]+)?(?:px)?$/i.test(value)) return undefined;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function validateAppleDockIcon(png) {
@@ -610,7 +663,10 @@ function validateAppleDockIcon(png) {
   let dark = 0;
   let light = 0;
   let visible = 0;
-  let colored = 0;
+  let neutralMidtone = 0;
+  let redAccent = 0;
+  let greenAccent = 0;
+  let blueAccent = 0;
   for (let offset = 0; offset < decoded.pixels.length; offset += 4) {
     const alpha = decoded.pixels[offset + 3];
     if (alpha === 0) {
@@ -621,11 +677,16 @@ function validateAppleDockIcon(png) {
     const chroma =
       Math.max(decoded.pixels[offset], decoded.pixels[offset + 1], decoded.pixels[offset + 2]) -
       Math.min(decoded.pixels[offset], decoded.pixels[offset + 1], decoded.pixels[offset + 2]);
-    if (chroma > 8) colored += 1;
-    const luminance =
-      (decoded.pixels[offset] + decoded.pixels[offset + 1] + decoded.pixels[offset + 2]) / 3;
+    const red = decoded.pixels[offset];
+    const green = decoded.pixels[offset + 1];
+    const blue = decoded.pixels[offset + 2];
+    if (red > green + 12 && red > blue + 12) redAccent += 1;
+    if (green > red + 12 && green > blue + 12) greenAccent += 1;
+    if (blue > red + 12 && blue > green + 12) blueAccent += 1;
+    const luminance = (red + green + blue) / 3;
     if (luminance < 100) dark += 1;
     if (luminance > 225) light += 1;
+    if (chroma <= 8 && luminance > 140 && luminance < 235) neutralMidtone += 1;
   }
   const pixels = decoded.width * decoded.height;
   if (transparent < pixels * 0.01) {
@@ -634,8 +695,11 @@ function validateAppleDockIcon(png) {
   if (dark === 0 || light === 0) {
     throw new Error("macOS application icon lost either its mark or material field");
   }
-  if (colored > visible * 0.001) {
-    throw new Error("macOS application icon drifted from the reviewed neutral brand palette");
+  if (neutralMidtone < visible * 0.01) {
+    throw new Error("macOS application icon lost its neutral dot-field detail");
+  }
+  if ([redAccent, greenAccent, blueAccent].some((count) => count < visible * 0.0005)) {
+    throw new Error("macOS application icon lost one or more reviewed RGB mark accents");
   }
 }
 
@@ -711,7 +775,7 @@ function forEachVisiblePixel(image, visitor) {
   }
 }
 
-async function validateGeneratedTree({ outputs }) {
+async function validateGeneratedTree({ outputs, sourceFiles }) {
   const problems = [];
   for (const [path, expected] of outputs) {
     try {
@@ -745,7 +809,7 @@ async function validateGeneratedTree({ outputs }) {
   );
   const actualIconFiles = await listFiles(iconRoot);
   for (const file of actualIconFiles) {
-    if (!expectedIconFiles.has(file) && !SOURCE_FILES.has(file)) {
+    if (!expectedIconFiles.has(file) && !sourceFiles.has(file)) {
       problems.push(`icons/${file} is an unexpected generated/source asset`);
     }
   }

@@ -50,7 +50,6 @@
       // exact; DOM formatting/accessibility rules do not apply to either.
       "includes": [
         "apps/desktop/packaging/icons/*-master.svg",
-        "apps/desktop/packaging/icons/layers/*.svg",
         "apps/desktop/packaging/icons/*.icon/**"
       ],
       "formatter": {
