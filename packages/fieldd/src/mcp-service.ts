@@ -524,6 +524,14 @@ export class McpService {
     handle.stderr.on("data", () => {
       // drain stderr so a chatty child never blocks on a full pipe
     });
+    // A write to a dying child's stdin fails ASYNCHRONOUSLY (EPIPE on the
+    // stream's error event) — the sync try/catch around stdin.write cannot
+    // catch it, and with no listener it escapes as an uncaught exception (the
+    // full-suite flake that reddened four verify runs). onChildExit is the
+    // real handler; this listener just keeps the corpse from throwing.
+    handle.stdin.on("error", () => {
+      // the exit path rejects pending requests and marks the session
+    });
     handle.onExit((code) => this.onChildExit(session, code));
 
     await this.request(session, "initialize", INITIALIZE_PARAMS);
