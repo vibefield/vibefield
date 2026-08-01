@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { homedir, release, tmpdir } from "node:os";
 import { join } from "node:path";
+import { GhostteaElectronBackend } from "@vibecook/ghosttea-electron/main";
 import {
   APP_PREFERENCE_KEYS,
   AppPreferences,
@@ -25,7 +26,7 @@ import { installDevSignalQuit } from "./dev-signals";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
-import { registerWindowBootstrap } from "./ipc";
+import { registerTerminalBackend, registerWindowBootstrap } from "./ipc";
 import { installLifecycle } from "./lifecycle";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
@@ -47,6 +48,7 @@ import {
 } from "./security";
 import { buildCsp } from "./security-policy";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
+import { TerminalBackendRegistry } from "./terminal-backend";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
 import type { TrayLinkState } from "./tray-model";
@@ -73,6 +75,7 @@ let localDiagnostics: ElectronLocalDiagnostics | null = null;
 let crashArtifacts: CrashArtifactManager | null = null;
 let supportBundles: SupportBundleService | null = null;
 let trayController: TrayController | null = null;
+let terminalBackends: TerminalBackendRegistry | null = null;
 let primaryWindowOpener: (() => Promise<Electron.BrowserWindow>) | null = null;
 const shellDisposers = new Set<() => void>();
 const getSupervisor = () => supervisor;
@@ -93,6 +96,8 @@ async function revealPrimaryWindow(): Promise<Electron.BrowserWindow> {
 function disposeShellState(): void {
   trayController?.dispose();
   trayController = null;
+  terminalBackends?.dispose();
+  terminalBackends = null;
   primaryWindowOpener = null;
   for (const dispose of shellDisposers) dispose();
   shellDisposers.clear();
@@ -464,6 +469,16 @@ async function main(
     logger.child({ component: "ipc.bootstrap" }),
   );
 
+  // GT-D3: external mode, never the supervisor — field-native embeds the floor
+  // and outlives this process. The registry builds nothing until a renderer
+  // hands over a ticket, so a window with no deck forks no bridge.
+  terminalBackends = new TerminalBackendRegistry({
+    bridgeEntryPoint: join(__dirname, "bridge-entry.mjs"),
+    createBackend: (options) => new GhostteaElectronBackend(options),
+    logger: logger.child({ component: "terminal.backend" }),
+  });
+  registerTerminalBackend(registry, terminalBackends, logger.child({ component: "ipc.terminal" }));
+
   if (MODE === "smoke-canvas") {
     await (await testing()).runSmokeCanvas({
       handle: await fielddReady,
@@ -497,11 +512,15 @@ async function main(
   }
 
   if (MODE === "spike-godview") {
+    // No handle: the spike renderer redeems its own ticket through the product
+    // bootstrap, which is the whole point of GT-1. The pair is awaited anyway so
+    // a daemon failure reads as a boot failure, not as a page timeout.
+    await fielddReady;
     await (await testing()).runSpikeGodview({
-      handle: await fielddReady,
       supervisor,
       root,
       registry,
+      preloadPath: PRELOAD_PATH,
       beforeExit: closeEvidence,
       onWindow: (window) => {
         installRendererLogging({

@@ -53,8 +53,44 @@ export const TerminalCreateParams = z
   .passthrough();
 export type TerminalCreateParams = z.infer<typeof TerminalCreateParams>;
 
-export const TerminalCreateResult = z.object({ sessionId: z.string() }).passthrough();
+/** terminal.create result. The `ticket` is GT-1's structural answer to the
+ * GT-0 finding: `openTicket` gates on fieldd's OBSERVED inventory, a mgmt round
+ * trip behind the spawn (62-117ms measured), so a caller that created and
+ * immediately ticketed got NOT_FOUND for a session that certainly existed.
+ * create does not have that problem — it KNOWS the session, having just made
+ * it — so the mint happens here and the attach has no wait to retry through.
+ * `openTicket` keeps its observed gate for attach-to-EXISTING flows, where the
+ * inventory is the only honest proof the session is real. */
+export const TerminalCreateResult = z
+  .object({ sessionId: z.string(), ticket: TerminalTicket })
+  .passthrough();
 export type TerminalCreateResult = z.infer<typeof TerminalCreateResult>;
+
+// -- The shell's Backend seam (GT-D3, design-03 A1). These two shapes are IPC,
+// not product API: the renderer redeems a ticket over fieldd (the one product
+// door, D27) and hands main the transport coordinates it cannot reach itself.
+// Main holds no product logic behind them — a ticket in, a bridge status out.
+
+/** main → renderer, unsolicited: the honest state of THIS window's bridge.
+ * `bridge-down` is the moment of death, `bridge-up` a completed recovery on the
+ * stored connection, `ticket-expired` the ladder's terminal state — main could
+ * not rebuild and the renderer owes it a freshly redeemed ticket. */
+export const TerminalBridgeStatus = z
+  .object({
+    state: z.enum(["bridge-up", "bridge-down", "ticket-expired"]),
+    /** rebuild attempts spent reaching this state (0 on the first death) */
+    attempts: z.number().int().nonnegative().optional(),
+    /** why the ladder gave up — diagnostic only, never a control signal */
+    detail: z.string().optional(),
+  })
+  .passthrough();
+export type TerminalBridgeStatus = z.infer<typeof TerminalBridgeStatus>;
+
+/** renderer → main invoke result. `attached` is true once the ports for THIS
+ * document have been posted; a false would be a lie the renderer could not
+ * detect, so every failure is an exception instead. */
+export const TerminalBackendAttachResult = z.object({ attached: z.boolean() }).passthrough();
+export type TerminalBackendAttachResult = z.infer<typeof TerminalBackendAttachResult>;
 
 /** terminal.terminate — the full ladder (interrupt → 2s → SIGTERM pgrp → 2s →
  * SIGKILL pgrp) runs native-side. */

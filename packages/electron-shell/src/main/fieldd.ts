@@ -5,6 +5,7 @@ import { PLUGIN_LIMITS } from "@vibefield/contracts";
 import { createFielddSupervisor, type FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { app } from "electron";
+import { APP_ORIGIN } from "./app-protocol";
 import { isSmokeLike, type ShellMode, shutdownPolicy } from "./modes";
 import type { DesktopResources } from "./resources";
 
@@ -86,7 +87,15 @@ export function buildSupervisor(opts: {
       FIELDD_ALLOW_LOG_DIR_OVERRIDE: "1",
     },
     ...(existsSync(nativeBin) ? { nativeExecutable: nativeBin } : {}),
-    ...(opts.mode === "dev" ? { allowedOrigins: [new URL(opts.viteUrl).origin] } : {}),
+    // The renderer's OWN origin, in every mode. Chromium sends
+    // `Origin: vibefield-app://shell` on the fieldd WebSocket handshake — the
+    // app scheme is `standard`, so it has a real origin — and fieldd refuses an
+    // origin it was not told about with a silent 1008 close. Only dev was ever
+    // listed here, so every non-dev renderer (production and packaged included)
+    // has been reconnect-looping against its own daemon since the app scheme
+    // landed; smoke-canvas could not see it because CANVAS_READY fires at
+    // canvas mount, before the first fieldd round trip (GT-1 finding).
+    allowedOrigins: [APP_ORIGIN, ...(opts.mode === "dev" ? [new URL(opts.viteUrl).origin] : [])],
     ...(isolatePorts ? { controlPort: 0, dataPort: 0 } : {}),
     ...(expectedBuildId ? { expectedBuildId } : {}),
     shutdownPolicy: policy,

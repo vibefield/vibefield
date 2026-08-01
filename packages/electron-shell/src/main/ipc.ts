@@ -1,13 +1,13 @@
-import { IPC_CHANNELS } from "@vibefield/contracts";
+import { IPC_CHANNELS, TerminalBackendAttachResult } from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { ipcMain } from "electron";
 import { createBootstrapHandler } from "./bootstrap";
+import type { TerminalBackendRegistry } from "./terminal-backend";
 import type { WindowRegistry } from "./window-policy";
 
-// The closed IPC surface, main side (ESR §6.2–6.3): one handler, wiring the
-// pure bootstrap policy (sender gate + once-per-generation mint cache,
-// bootstrap.ts) to ipcMain. The handler awaits supervisor.ensure() itself —
+// The closed IPC surface, main side (ESR §6.2–6.3): handlers wiring pure policy
+// to ipcMain. The bootstrap handler awaits supervisor.ensure() itself —
 // window creation never waits for daemon readiness (ESR-8), ensure() is
 // in-flight-deduped with failure clearing its cache, so a failed boot
 // surfaces honestly to the renderer and a later retry re-attempts
@@ -44,6 +44,44 @@ export function registerWindowBootstrap(
         "desktop.ipc.window_bootstrap_rejected",
         "Electron rejected or failed a renderer bootstrap request",
         { webContentsId: event.sender.id, error },
+      );
+      throw error;
+    }
+  });
+}
+
+/** The Backend door (GT-D3). Same sender gate as bootstrap: only a window THIS
+ * shell registered may hand main a connection to dial. The ticket itself is
+ * never inspected beyond its schema — main forwards transport coordinates and
+ * holds no terminal product logic (design-03 A1). */
+export function registerTerminalBackend(
+  registry: WindowRegistry,
+  backends: TerminalBackendRegistry,
+  logger?: Logger,
+): void {
+  ipcMain.handle(IPC_CHANNELS.terminalConnect, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) {
+      logger?.warn(
+        "desktop.ipc.terminal_connect_refused",
+        "Electron refused a terminal connection from an unregistered sender",
+        { webContentsId: event.sender.id },
+      );
+      throw new Error("terminal connect refused: unregistered sender");
+    }
+    try {
+      const result = await backends.ensure(event.sender).connect(raw);
+      logger?.info(
+        "desktop.ipc.terminal_backend_attached",
+        "A registered renderer received the terminal bridge ports",
+        { webContentsId: event.sender.id },
+      );
+      return TerminalBackendAttachResult.parse(result);
+    } catch (error) {
+      logger?.error(
+        "desktop.ipc.terminal_connect_failed",
+        "Electron could not attach a terminal backend for a renderer",
+        error,
+        { webContentsId: event.sender.id },
       );
       throw error;
     }

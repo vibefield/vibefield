@@ -1,3 +1,4 @@
+import { forwardGhostteaRendererPorts } from "@vibecook/ghosttea-electron/preload";
 import {
   CloseRequest,
   CloseResult,
@@ -5,6 +6,9 @@ import {
   IPC_CHANNELS,
   type ShellCommand,
   ShellPlatform,
+  TerminalBackendAttachResult,
+  type TerminalBridgeStatus,
+  TerminalTicket,
   WindowConnection,
 } from "@vibefield/contracts";
 import { contextBridge, ipcRenderer } from "electron";
@@ -12,6 +16,7 @@ import { PreloadDesktopStateBridge } from "./desktop-state";
 import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
 import { PreloadShellCommandBridge } from "./shell-commands";
+import { PreloadTerminalStatusBridge } from "./terminal";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
 // Product traffic flows over the loopback WS (D27), never over IPC. BOTH
@@ -58,6 +63,36 @@ const shellCommands = new PreloadShellCommandBridge((issueCount) => {
     }),
   );
 });
+const terminalStatus = new PreloadTerminalStatusBridge((issueCount) => {
+  logging.submit(
+    JSON.stringify({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: Date.now(),
+          level: "error",
+          event: "renderer.preload.terminal_status_rejected",
+          msg: "Preload rejected a malformed terminal bridge status",
+          component: "preload.terminal",
+          attrs: { issueCount },
+        },
+      ],
+    }),
+  );
+});
+/** The control and frame ports cross a world boundary no page can span alone
+ * (GT-0 finding 2): main transfers them with `webContents.postMessage`, which
+ * lands on `ipcRenderer` in the ISOLATED world, while the ghosttea runtime
+ * listens for a `window` message in the MAIN world. Installed on the first
+ * connect rather than at load: a window that never asks for a terminal keeps no
+ * port forward at all, and main only posts to a window that has asked. */
+let portForwardInstalled = false;
+const installPortForward = (): void => {
+  if (portForwardInstalled) return;
+  portForwardInstalled = true;
+  forwardGhostteaRendererPorts(ipcRenderer);
+};
 const platform = ShellPlatform.parse(
   process.platform === "darwin" || process.platform === "win32" || process.platform === "linux"
     ? process.platform
@@ -76,6 +111,9 @@ ipcRenderer.on(IPC_CHANNELS.shellCommand, (_event, raw: unknown) => {
 });
 ipcRenderer.on(IPC_CHANNELS.desktopState, (_event, raw: unknown) => {
   desktopState.accept(raw);
+});
+ipcRenderer.on(IPC_CHANNELS.terminalStatus, (_event, raw: unknown) => {
+  terminalStatus.accept(raw);
 });
 
 contextBridge.exposeInMainWorld("vibefield", {
@@ -117,6 +155,19 @@ contextBridge.exposeInMainWorld("vibefield", {
     shellCommands.subscribe(handler),
   onDesktopState: (handler: (state: DesktopShellState) => void): (() => void) =>
     desktopState.subscribe(handler),
+  terminal: {
+    connect: async (ticket: unknown): Promise<{ attached: boolean }> => {
+      // Parsed here, before the port forward exists: a malformed ticket must
+      // throw at the call site rather than arm a listener and cross IPC.
+      const validated = TerminalTicket.parse(ticket);
+      installPortForward();
+      return TerminalBackendAttachResult.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.terminalConnect, validated),
+      );
+    },
+    onStatus: (handler: (status: TerminalBridgeStatus) => void): (() => void) =>
+      terminalStatus.subscribe(handler),
+  },
   diagnostics: {
     query: (query: unknown) => diagnostics.query(query),
     subscribe: (query: unknown, onEvent: Parameters<typeof diagnostics.subscribe>[1]) =>

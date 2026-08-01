@@ -148,6 +148,10 @@ async function mint(
     // Settings plugin toggles (both local-only scopes — never in the tailnet preset).
     // LOG-L5: the host-owned Settings diagnostics surface reads records and
     // manages time-bounded leases. Plugin-bound tokens never receive either.
+    // GT-1: the deck redeems its own tickets — terminal.attach covers
+    // attach+create+terminate in the v1 posture (GT-D6), and only spine code
+    // holds a window token. The terminal.manage split is the named upgrade
+    // before any plugin reaches a terminal.
     scopes: [
       "doc.read",
       "doc.write",
@@ -157,6 +161,7 @@ async function mint(
       "diagnostics.read",
       "diagnostics.manage",
       "settings.manage",
+      "terminal.attach",
     ],
     label: `window-${senderId}`,
   })) as { token: string; tokenId: string };

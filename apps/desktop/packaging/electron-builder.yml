@@ -72,6 +72,9 @@ asar: true
 files:
   - package.json
   - shell/main/index.cjs
+  # The ghosttea bridge's utilityProcess entry (GT-1) — forked by path, so it is
+  # a file of its own rather than part of the main bundle.
+  - shell/main/bridge-entry.mjs
   - shell/preload/index.cjs
   - shell/renderer/index.html
   - shell/renderer/assets/**/*

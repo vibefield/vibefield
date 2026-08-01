@@ -3,7 +3,6 @@ import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import {
   ObservedState,
   type TerminalCreateParams,
-  type TerminalCreateResult,
   type TerminalEndpoints,
   type TerminalInfo,
   type TerminalTerminateResult,
@@ -125,7 +124,12 @@ export class TerminalService {
 
   /** D6: the ticket IS the endpoints — the single native service token, socket
    * paths stable across fieldd restarts. Fails honest when the floor is absent
-   * (native down, terminal unit degraded, pre-NF-2 daemon). */
+   * (native down, terminal unit degraded, pre-NF-2 daemon).
+   *
+   * Deliberately NOT session-scoped: the credential is the floor's, not the
+   * session's, so minting one for a just-created session needs no inventory
+   * lookup — which is exactly what lets terminal.create answer with a ticket
+   * (GT-1) while openTicket keeps its observed gate for existing sessions. */
   ticket(): TerminalTicket {
     const endpoints = this.endpoints();
     return {
@@ -142,8 +146,12 @@ export class TerminalService {
    * An EXPLICIT `shell` runs verbatim (no `-l` — it may be any program; tests
    * spawn /bin/cat). `title` has no upstream spawn option (SessionSummary
    * titles come from the running program) — accepted here, recorded in the
-   * daemon's audit attrs, unapplied to the PTY. */
-  async create(params: TerminalCreateParams): Promise<TerminalCreateResult> {
+   * daemon's audit attrs, unapplied to the PTY.
+   *
+   * Births the session and nothing else. The product result also carries a
+   * ticket (GT-1), but that mint is its own audited grant, so the daemon
+   * composes the two rather than this method quietly handing out a credential. */
+  async create(params: TerminalCreateParams): Promise<{ sessionId: string }> {
     const client = await this.connectedClient();
     const explicit = params.shell !== undefined;
     const executable = params.shell ?? this.defaultShell();

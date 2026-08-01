@@ -41,6 +41,7 @@ import {
   SettingsSetParams,
   SettingsSubscribeParams,
   TerminalCreateParams,
+  type TerminalCreateResult,
   type TerminalListResult,
   TerminalSessionParams,
 } from "@vibefield/contracts";
@@ -854,6 +855,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         () => ({ outcome: "succeeded" }),
       );
     });
+    // GT-1: create ALSO mints. openTicket gates on the observed inventory,
+    // which is a mgmt round trip behind the spawn — so create-then-ticket
+    // raced a session that certainly existed (GT-0's measured 62-117ms window).
+    // create knows its own session, so the mint here waits on nothing. It is
+    // still a privilege grant and still gets its own attempt-before-effect
+    // record, nested inside the create it belongs to: two audited actions,
+    // one call, no silent credential.
     api.register("terminal.create", async (ctx, params) => {
       const parsed = TerminalCreateParams.safeParse(params ?? {});
       if (!parsed.success)
@@ -873,8 +881,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
           },
         },
-        () => terminals.create(parsed.data),
-        (result) => ({ outcome: "succeeded", attrs: { sessionId: result.sessionId } }),
+        async (): Promise<TerminalCreateResult> => {
+          const created = await terminals.create(parsed.data);
+          const ticket = await audit.required(
+            ctx,
+            { action: "terminal.ticket.mint", target: { kind: "terminal", id: created.sessionId } },
+            () => terminals.ticket(),
+            () => ({ outcome: "succeeded" }),
+          );
+          return { sessionId: created.sessionId, ticket };
+        },
+        (result) => ({
+          outcome: "succeeded",
+          attrs: { sessionId: result.sessionId, ticketMinted: true },
+        }),
       );
     });
     api.register("terminal.terminate", async (ctx, params) => {
@@ -1906,6 +1926,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
           devices.dispose();
+          // The fatal and rollback ladders always dropped the terminal control
+          // client; this one did not, so a cleanly stopping fieldd left its
+          // socket to the floor open and made the floor read a clean shutdown
+          // as an abrupt disconnect (found by GT-1's fake-floor test, which
+          // hung waiting for the connection fieldd never closed).
+          terminals.dispose();
           services.dispose();
           settings.dispose();
           plugins.dispose();

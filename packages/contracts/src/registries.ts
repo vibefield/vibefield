@@ -193,4 +193,9 @@ export const IPC_CHANNELS = {
   shellCommand: "vibefield:shell:command",
   /** main → renderer: native tray/background capability truth */
   desktopState: "vibefield:shell:desktop-state",
+  /** renderer → main invoke: a redeemed TerminalTicket; main builds/replaces
+   * this window's external-mode Backend and posts its ports (GT-D3) */
+  terminalConnect: "vibefield:terminal:connect",
+  /** main → renderer event: TerminalBridgeStatus for this window's bridge */
+  terminalStatus: "vibefield:terminal:status",
 } as const;

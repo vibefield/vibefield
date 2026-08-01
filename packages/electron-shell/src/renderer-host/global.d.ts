@@ -1,4 +1,10 @@
-import type { DesktopShellState, ShellCommand, ShellPlatform } from "@vibefield/contracts";
+import type {
+  DesktopShellState,
+  ShellCommand,
+  ShellPlatform,
+  TerminalBridgeStatus,
+  TerminalTicket,
+} from "@vibefield/contracts";
 import type {
   CrashArtifactListV1,
   DiagnosticLeaseCreateV1,
@@ -22,6 +28,10 @@ declare global {
       completeClose(result: { requestId: string; ok: boolean; error?: string }): void;
       onShellCommand(handler: (command: ShellCommand) => void): () => void;
       onDesktopState(handler: (state: DesktopShellState) => void): () => void;
+      terminal: {
+        connect(ticket: TerminalTicket): Promise<{ attached: boolean }>;
+        onStatus(handler: (status: TerminalBridgeStatus) => void): () => void;
+      };
       diagnostics: {
         query(query: DiagnosticLogQueryV1): Promise<DiagnosticLogSnapshotV1>;
         subscribe(

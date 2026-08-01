@@ -1,6 +1,5 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { TerminalCreateResult, TerminalTicket } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { app, BrowserWindow } from "electron";
 import { APP_ORIGIN } from "../main/app-protocol";
@@ -42,37 +41,6 @@ export function waitForConsole(
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Mint a ticket for a session fieldd has only just created.
- *
- * The retry is not defensive padding — it is the GT-0 finding, kept visible.
- * `terminal.create` drives ghosttea's control socket directly, while
- * `terminal.openTicket` gates on fieldd's OBSERVED inventory, which arrives
- * over the mgmt channel a round trip later. The pair is therefore NOT
- * read-your-writes: a caller that creates and immediately tickets gets
- * NOT_FOUND for a session that certainly exists. Returns the wait it actually
- * cost so the number lands in the run's evidence instead of being smoothed
- * away. */
-async function ticketWhenObserved(
-  handle: FielddHandle,
-  sessionId: string,
-  timeoutMs: number,
-): Promise<{ ticket: TerminalTicket; observedAfterMs: number }> {
-  const started = Date.now();
-  for (;;) {
-    try {
-      const ticket = TerminalTicket.parse(
-        await handle.client.request("terminal.openTicket", { sessionId }),
-      );
-      return { ticket, observedAfterMs: Date.now() - started };
-    } catch (error) {
-      const elapsed = Date.now() - started;
-      const message = error instanceof Error ? error.message : String(error);
-      if (elapsed >= timeoutMs || !message.includes("no such terminal")) throw error;
-      await sleep(50);
-    }
-  }
-}
 
 /** Stop-owned via the supervisor (adopted daemons survive — ownership law),
  * then remove the root ONLY if this run created it (an injected
@@ -141,91 +109,102 @@ export async function runSmokeCanvas(opts: {
   app.exit(ok ? 0 : 2);
 }
 
-/** GT-0 spike: the whole terminal seam end to end, against the REAL pair.
+/** The serviceName `GhostteaElectronBridge` forks its utilityProcess under.
+ * Upstream's default, restated here because this harness kills by name. */
+const BRIDGE_SERVICE_NAME = "ghosttea-terminal-bridge";
+
+/** SIGKILL the bridge's utility process — the only honest way to test
+ * `unexpected-exit`, since `Backend.stop()` is an ORDERLY stop that emits
+ * nothing. Neither Backend nor Bridge exposes its child, so the process is
+ * found through Electron's own metrics.
  *
- * fieldd mints a free shell (`terminal.create`) and a ticket for it
- * (`terminal.openTicket`); the ticket's socket PATHS and token are what the
- * Electron backend dials in EXTERNAL mode — the shell never supervises
- * ghosttead, because field-native already embeds that floor and outlives us
- * (two-plane law). Bytes then ride the bridge's direct sockets, never
- * JSON-RPC (EL2). The renderer's verdict is the pass condition.
+ * `fork`'s `serviceName` option surfaces as the metric's `name`; the metric's
+ * OWN `serviceName` is the mojo interface (`node.mojom.NodeService`), which
+ * every utilityProcess shares. Matching the mojo name would find the logging
+ * utility just as happily, so both fields are checked for what they actually
+ * mean. Returns the pid it killed so the verdict can say what died. */
+function killTerminalBridge(): number | null {
+  const metric = app
+    .getAppMetrics()
+    .find(
+      (m) =>
+        m.type === "Utility" &&
+        m.name === BRIDGE_SERVICE_NAME &&
+        m.serviceName === "node.mojom.NodeService",
+    );
+  if (metric === undefined) return null;
+  process.kill(metric.pid, "SIGKILL");
+  return metric.pid;
+}
+
+/** GT-1 spike: the PRODUCT terminal path end to end, against the REAL pair,
+ * plus a deliberate bridge death.
  *
- * The created session id travels in the page URL rather than the console: the
- * console is the VERDICT channel here, and a harness that both speaks and
- * listens on one channel is a harness that can hear itself. */
+ * Nothing here mints anything any more — that is the point. The renderer boots
+ * through the product bootstrap, redeems its own ticket over fieldd
+ * (`terminal.create`, which now answers WITH the ticket — GT-1's contract),
+ * hands it to main over the product IPC, and main builds the external-mode
+ * Backend and posts the ports through the product preload. GT-0's
+ * `SPIKE_GODVIEW_TICKET observed after Nms` retry loop is gone: the contract
+ * removed the wait it was measuring, so the loop's absence is the proof.
+ *
+ * Then the bridge is SIGKILLed. Main's ladder rebuilds it on the stored
+ * connection and the page proves its pane is live again — the sessions
+ * themselves never noticed, because field-native owns them and the bridge is
+ * only a pipe. Both verdicts must be ok. */
 export async function runSpikeGodview(opts: {
-  handle: FielddHandle;
   supervisor: FielddSupervisor;
   root: string;
   registry: WindowRegistry;
+  preloadPath: string;
   beforeExit: () => Promise<void>;
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
-  let backend: { stop: () => void } | null = null;
   let ok = false;
   try {
-    const created = TerminalCreateResult.parse(
-      await opts.handle.client.request("terminal.create", {}),
-    );
-    const { ticket, observedAfterMs } = await ticketWhenObserved(
-      opts.handle,
-      created.sessionId,
-      10_000,
-    );
-    console.log(`SPIKE_GODVIEW_TICKET observed after ${observedAfterMs}ms`);
-    // Dynamic: ghosttea-electron is ESM-only, and this artifact is CJS. esbuild
-    // inlines it here (bundled, not required at runtime), which is also why the
-    // bridge entry is staged beside this file rather than resolved from the
-    // package — see build:shell.
-    const { GhostteaElectronBackend } = await import("@vibecook/ghosttea-electron/main");
-    const godview = new GhostteaElectronBackend({
-      mode: "external",
-      connection: {
-        controlSocket: ticket.controlSocket,
-        frameSocket: ticket.frameSocket,
-        authToken: ticket.token,
-      },
-      bridge: { entryPoint: join(__dirname, "bridge-entry.js") },
-    });
-    backend = godview;
-    await godview.start();
-
     const win = createMainWindow({
       mode: "spike-godview",
-      // NOT the product preload: the control/frame ports arrive on ipcRenderer
-      // and only a preload can hand them to the page. The spike preload is the
-      // product one plus that forward.
-      preloadPath: join(__dirname, "spike-godview-preload.cjs"),
+      // The PRODUCT preload — it carries the ports forward now (GT-1).
+      preloadPath: opts.preloadPath,
       show: false,
     });
     opts.registry.adopt(win);
     opts.onWindow?.(win);
-    // Ports are transferred per LOAD, so the handoff belongs on did-finish-load
-    // — attaching beside the constructor would post into a document that the
-    // pending navigation is about to replace.
-    win.webContents.on("did-finish-load", () => {
-      if (!win.isDestroyed() && godview.running) godview.attachRenderer(win.webContents);
-    });
+    if (process.env["VF_SPIKE_DEBUG"]) {
+      win.webContents.on("console-message", (...args: unknown[]) => {
+        console.log(`[renderer] ${args.map((a) => JSON.stringify(a)).join(" ")}`);
+      });
+    }
 
     const page = new URL(`${APP_ORIGIN}/spike-godview.html`);
-    page.searchParams.set("spikeSession", created.sessionId);
-    // The workspace spawns its own split with this; field-native chose the
-    // login shell for the session above, and the two agree by construction.
+    // The workspace spawns its splits with this; fieldd gives the session it
+    // creates the same login shell, and the two agree by construction.
     page.searchParams.set("shell", process.env["SHELL"] ?? "/bin/sh");
     // Armed BEFORE the load: a fast verdict must not land in the gap between
     // loadURL resolving and the listener attaching.
     const verdict = waitForConsole(win, "SPIKE_GODVIEW ", 60_000);
     verdict.catch(() => undefined);
+    const recovered = waitForConsole(win, "SPIKE_GODVIEW_RECOVERY ", 120_000);
+    recovered.catch(() => undefined);
     await win.loadURL(page.href);
     const raw = await verdict;
     console.log(`SPIKE_GODVIEW ${raw}`);
     ok = (JSON.parse(raw) as { ok: boolean }).ok;
+
+    if (ok) {
+      const pid = killTerminalBridge();
+      if (pid === null) throw new Error("no ghosttea bridge utility process to kill");
+      console.log(`SPIKE_GODVIEW_BRIDGE_KILLED pid=${pid}`);
+      const rawRecovery = await recovered;
+      console.log(`SPIKE_GODVIEW_RECOVERY ${rawRecovery}`);
+      ok = (JSON.parse(rawRecovery) as { ok: boolean }).ok;
+    }
   } catch (e) {
+    ok = false;
     console.error(`SPIKE_GODVIEW failed: ${e instanceof Error ? e.message : e}`);
   }
-  // The bridge is a utilityProcess; it dies with the shell, but stopping it
-  // first keeps the ordering honest — renderer, bridge, then the pair.
-  backend?.stop();
+  // The bridge is a utilityProcess and dies with the shell; the registry's
+  // dispose runs on the quit flow. Teardown order stays renderer, then pair.
   await teardown(opts.supervisor, opts.root, opts.beforeExit);
   app.exit(ok ? 0 : 2);
 }
