@@ -43,7 +43,7 @@ catalogs:
 overrides:
   loro-crdt: ^1.13.8
   '@vibecook/ice': 0.2.0
-  '@vibecook/ghosttea-client': 0.6.0
+  '@vibecook/ghosttea-client': 0.7.0
   '@vibecook/chopsticks-adapter-acp': 0.1.4
   '@vibecook/chopsticks-adapter-claude': 0.1.4
   '@vibecook/chopsticks-adapter-codex': 0.1.4
@@ -305,8 +305,8 @@ importers:
   packages/fieldd:
     dependencies:
       '@vibecook/ghosttea-client':
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.7.0
+        version: 0.7.0
       '@vibefield/audit':
         specifier: workspace:*
         version: link:../audit
@@ -1540,12 +1540,12 @@ packages:
     peerDependencies:
       react: '>= 16.8.0'
 
-  '@vibecook/ghosttea-client@0.6.0':
-    resolution: {integrity: sha512-aDMUL9IiQnJOmDH9VwOs52D+and8IPYJIivm1zbjTjZ5t2OidxeO2DznFqVfDokgnrkDlbCf6smdHKAcLSxhdg==}
+  '@vibecook/ghosttea-client@0.7.0':
+    resolution: {integrity: sha512-vHxb/x+CwxJcTFQlIqfOJ4F/7eV3XhcrYvuEbcm8jNtbCOPp833/OycvR8H7kFhuP+QhqqtGC9tD10wPWLRqbA==}
     engines: {node: '>=22'}
 
-  '@vibecook/ghosttea-protocol@0.6.0':
-    resolution: {integrity: sha512-4pQM39BG1H2Jz7m8QDm3MGfDkPwQ2L22XHMLyFnLqzhWidpL5i5d5eTZR9OEfwO4XvsCSqCNNXsagiURvwyjTA==}
+  '@vibecook/ghosttea-protocol@0.7.0':
+    resolution: {integrity: sha512-hBiAK4FkKPDdtPP8PI+2FCdPp8dzCWNUEiMEufrFqMv1sGAmUyLg2u56P954v9X5BBhbcLHtBPlbFKq0xwsugA==}
 
   '@vibecook/ice@0.2.0':
     resolution: {integrity: sha512-km+QXOnB10Tg7ttwN9U6mFBPvhv8AAdehmLMZZwNc/EtDNWr9zjp8Xc8s2PdzOydjwGAyRkeUNTpnqsv8y22uw==}
@@ -4122,11 +4122,11 @@ snapshots:
       '@use-gesture/core': 10.3.1
       react: 19.2.7
 
-  '@vibecook/ghosttea-client@0.6.0':
+  '@vibecook/ghosttea-client@0.7.0':
     dependencies:
-      '@vibecook/ghosttea-protocol': 0.6.0
+      '@vibecook/ghosttea-protocol': 0.7.0
 
-  '@vibecook/ghosttea-protocol@0.6.0': {}
+  '@vibecook/ghosttea-protocol@0.7.0': {}
 
   '@vibecook/ice@0.2.0(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)':
     dependencies:

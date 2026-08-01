@@ -358,21 +358,15 @@ async fn fieldd_link_death_does_not_stop_native_evidence_or_diagnostics() {
 
     let output = process.terminate().await;
     assert!(output.status.success());
-    // The law is unchanged — field-native has no stdout logging protocol — but
-    // ghosttea 0.6.0 breaks it for us: `TerminalService::serve` unconditionally
-    // prints `ghosttead ready (<family>; <mode>)` to its EMBEDDER's stdout
-    // (service.rs:539-546), and there is no flag to gate it. So this pins the
-    // exact shape of that one known line and still fails on anything else,
-    // rather than giving up the assertion. The upstream ask: an embedded service
-    // must not write to the host's stdout — ghosttead can print its own banner.
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let unexpected: Vec<&str> = stdout
-        .lines()
-        .filter(|line| !line.starts_with("ghosttead ready ("))
-        .collect();
+    // The law, absolute since NF-7: field-native has no stdout logging
+    // protocol, and stdout is EMPTY — no allowances. (Ghosttea 0.6.x printed
+    // `ghosttead ready (…)` from inside `serve()` and this assertion carried a
+    // one-line whitelist for it; the G8 landing in 0.7.0 moved that banner to
+    // the ghosttead binary, so the embedded library is silent by default.)
     assert!(
-        unexpected.is_empty(),
-        "field-native has no stdout logging protocol: {unexpected:?}"
+        output.stdout.is_empty(),
+        "field-native has no stdout logging protocol: {:?}",
+        String::from_utf8_lossy(&output.stdout)
     );
     assert!(
         output.stderr.is_empty(),

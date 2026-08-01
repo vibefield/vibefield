@@ -1,8 +1,10 @@
 //! TerminalUnit (NF-2) — ghosttea's `TerminalService` embedded as this device's
 //! single PTY authority (native-floor spec §4; NF-L1: every PTY the product
 //! creates lives here). The unit owns the run directory's endpoints, the
-//! per-boot bearer token, the inventory it publishes to fieldd, and the
-//! shutdown sweep ghosttea deliberately does not provide (§2.2).
+//! per-boot bearer token, the inventory it publishes to fieldd, and — since
+//! NF-7 — the G7 drain handle: shutdown is upstream's `ServiceHandle::shutdown`
+//! (admission stop + full-ladder drain + honest `DrainReport`), not a
+//! self-client sweep.
 //!
 //! Health honesty, in the M2 shape:
 //!   starting  — endpoints bound, service under construction (font discovery)
@@ -18,24 +20,22 @@
 //! why the unit declares no dependency on `mesh-gateway` — it is registered
 //! after it only to keep design-02's start order, not because it needs it.
 //!
-//! ## Verified upstream absences the floor must not paper over
+//! ## The NF-2 upstream absences, retired at NF-7 (ghosttea 0.6.0 → 0.7.0)
 //!
-//! Read from the pinned crate (`ghosttea-0.6.0`), all three confirmed against
-//! `@vibecook/ghosttea-protocol`'s `SessionSummary` as well:
+//! Three verified absences shaped this unit's first cut; the G7/G8/G9 petition
+//! landings closed all three, and the posture flipped with them:
 //!
-//! 1. **No session-created event.** The control channel pushes exactly
-//!    `control-changed`, `session-activity-changed`, and `session-exited`
-//!    (service.rs:503/524/714/749/786). A session fieldd creates is therefore
-//!    invisible to this unit until it either changes activity or exits — so
-//!    inventory needs the periodic `list-sessions` backstop below, not just
-//!    events.
-//! 2. **No persistence in `SessionSummary`** (session.rs:284-304). It is the
-//!    spawn-time input only. `ObservedTerminal.persistence` therefore stays
-//!    ABSENT rather than invented (tolerant-reader law), and the NF-D3 sweep
-//!    cannot order non-persistent sessions first — see `sweep`.
-//! 3. **No graceful drain** (spec §2.2/NF-D10). The sweep below is the interim;
-//!    it swaps for upstream `shutdown(budget)` when G7 lands, invisibly to
-//!    everything above the mgmt seam.
+//! 1. **`session-created` exists** (gated at control minor ≥ 1.9 — the client
+//!    announces 1.9 for exactly this). Creation is now a pushed hint like every
+//!    other registry change; the `list-sessions` backstop below survives only
+//!    as slow belt-and-braces reconciliation, no longer the creation-latency
+//!    bound.
+//! 2. **`SessionSummary.persistence` is reported** (`Some` for locally governed
+//!    sessions, absent for remote replicas) — `ObservedTerminal.persistence` is
+//!    filled as opaque passthrough, and mgmt re-policy is real (`set-persistence`).
+//! 3. **The graceful drain is upstream** (spec §2.2/NF-D10 held: mechanism
+//!    moved, policy stayed). `serve_managed` hands this unit a `ServiceHandle`;
+//!    stop calls `shutdown(SWEEP_BUDGET)` and logs the `DrainReport` honestly.
 
 use crate::config::NativeConfig;
 use crate::contracts::{ObservedTerminal, TerminalEndpoints, UnitHealth, UnitState};
@@ -43,9 +43,11 @@ use crate::manager::NativeService;
 use crate::registries;
 use crate::services::terminal_client::{ControlClient, SessionSummary};
 use crate::state::DaemonState;
-use ghosttea::{ipc, TerminalService, TerminalServiceConfig, TerminalServiceListeners, TextEngine};
+use ghosttea::{
+    ipc, ServiceHandle, TerminalService, TerminalServiceConfig, TerminalServiceListeners,
+    TextEngine,
+};
 use serde_json::Value;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -55,11 +57,12 @@ use tokio::sync::watch;
 
 pub const UNIT_ID: &str = "terminal";
 
-/// The whole sweep, not one session's ladder — spec §4.4's "~6s". Upstream's
-/// ladder is interrupt → 2s → SIGTERM(pgrp) → 2s → SIGKILL(pgrp)
-/// (`INTERRUPT_GRACE`/`TERMINATE_GRACE`, session.rs:362/375/1540-1584) and it
-/// runs on its own thread per session, so every ladder overlaps: this is one
-/// full ladder plus slack, not a per-session cost.
+/// The whole drain, not one session's ladder — spec §4.4's "~6s". Upstream's
+/// ladder is interrupt → 2s → SIGTERM(pgrp) → 2s → SIGKILL(pgrp) → 1s, runs on
+/// its own thread per session, and G7's drain compresses it against this budget
+/// when it must — so this is one full ladder plus slack, not a per-session
+/// cost, and a sub-ladder budget degrades to earlier SIGKILLs rather than a
+/// false `unresponsive`.
 ///
 /// The ceiling is not academic. A supervisor that SIGTERMs this daemon and then
 /// SIGKILLs it has its own patience (tests/native_logging.rs allows 5s for a
@@ -71,29 +74,22 @@ const SWEEP_BUDGET: Duration = Duration::from_secs(6);
 /// of session events coalesce into at most one `list-sessions` per tick.
 const RECONCILE_FLOOR: Duration = Duration::from_millis(100);
 
-/// How long inventory may go unasked-for. Creation pushes no event (absence 1
-/// above), so this is what bounds inventory latency for a session fieldd
-/// created — 1s, inside the kill-matrix's "< 2s" row (spec §10.1).
+/// How long inventory may go unasked-for. Since NF-7 creation is a pushed
+/// `session-created` hint (the client announces minor 1.9), so this no longer
+/// bounds creation latency — events do, inside the kill-matrix's "< 2s" row
+/// (spec §10.1). The backstop survives as belt-and-braces reconciliation for
+/// whatever an event stream can silently lose, at a pace that stays honest
+/// without being a poll.
 ///
 /// Measured against a timestamp and NOT by counting ticks: with
 /// `MissedTickBehavior::Skip`, a reconcile slower than the floor eats ticks, so
-/// ten of them could be well over a second of wall clock and the bounded row
-/// would quietly stop being bounded.
-const BACKSTOP_INTERVAL: Duration = Duration::from_secs(1);
+/// several of them could stretch well past the interval and the bound would
+/// quietly stop being one.
+const BACKSTOP_INTERVAL: Duration = Duration::from_secs(5);
 
 /// A torn control connection is reconciled by reconnecting, never by guessing
 /// (spec §10.5: `list-sessions` is truth).
 const RECONNECT_DELAY: Duration = Duration::from_millis(500);
-
-/// The sweep's honest classification. `TerminationSource` is a kebab-case wire
-/// enum (session.rs:39-46) and `classify_exit` maps this variant to
-/// `ExitOutcome::ServiceTerminated` (session.rs:69-83), so a self-client sweep
-/// CAN stamp the true source. Recorded as a divergence: spec §2.2/NF-D10 says
-/// "through the control socket we can only say `source:"application"`, which
-/// lies to every observer" — that half of the G7 argument does not hold for
-/// 0.6.0. The admission race (a same-uid token holder creating a session
-/// mid-sweep) is real and remains G7's justification.
-const SWEEP_SOURCE: &str = "service-shutdown";
 
 /// Socket paths and the per-boot token: everything a client needs, and the
 /// exact shape the NF-D8 hello carries.
@@ -128,6 +124,10 @@ struct Shared {
     /// A watch and not a flag: the inventory pump cannot start before the
     /// service accepts connections, so it is woken rather than left to poll.
     serving: watch::Sender<bool>,
+    /// G7's drain handle, deposited by the serve task once `serve_managed`
+    /// constructs the service. `stop` TAKES it — a taken handle is also how the
+    /// serve task's end path tells a requested shutdown from a crash.
+    drain: Mutex<Option<ServiceHandle>>,
 }
 
 impl Shared {
@@ -220,6 +220,7 @@ impl TerminalUnit {
                 ping,
                 endpoints,
                 serving: watch::channel(false).0,
+                drain: Mutex::new(None),
             }),
             tasks: Mutex::new(Vec::new()),
         }
@@ -270,19 +271,50 @@ impl NativeService for TerminalUnit {
         self.shared.health.lock().unwrap().clone()
     }
 
-    /// Stop = the NF-D3 sweep, then teardown. No PTY survives field-native —
-    /// the honest ceiling the product promises and nothing more.
+    /// Stop = G7's drain, then teardown. No PTY survives field-native — the
+    /// honest ceiling the product promises and nothing more. Taking the handle
+    /// (not borrowing it) is deliberate: the serve task's end path reads
+    /// `drain.is_none()` as "this ending was requested".
     async fn stop(&self) -> anyhow::Result<()> {
-        if let Some(endpoints) = self.shared.endpoints.clone() {
-            if *self.shared.serving.borrow() {
-                if let Err(error) = sweep(&endpoints, SWEEP_BUDGET).await {
-                    tracing::warn!(
-                        event = "field_native.terminal.sweep_failed",
-                        component = "terminal",
-                        error = %error,
-                        "The terminal shutdown sweep did not complete; sessions may outlive this boot"
-                    );
+        let handle = self.shared.drain.lock().unwrap().take();
+        if let Some(handle) = handle {
+            match handle.shutdown(SWEEP_BUDGET).await {
+                Ok(report) => {
+                    // The report is the record: every bucket named, nothing
+                    // inferred. `unresponsive`/`pending_creates` are the two
+                    // shapes of "a process may outlive this boot" — warn-level,
+                    // because the OS re-parents them and the observed tier
+                    // inherits the problem (spec §4.4).
+                    if report.unresponsive.is_empty() && report.pending_creates == 0 {
+                        tracing::info!(
+                            event = "field_native.terminal.drain_complete",
+                            component = "terminal",
+                            drained = report.drained,
+                            killed = report.killed,
+                            announced_shutdown = report.announced_shutdown,
+                            elapsed_ms = report.spent.as_millis() as u64,
+                            "Every terminal session concluded under the shutdown drain"
+                        );
+                    } else {
+                        tracing::warn!(
+                            event = "field_native.terminal.drain_incomplete",
+                            component = "terminal",
+                            drained = report.drained,
+                            killed = report.killed,
+                            unresponsive = %report.unresponsive.join(","),
+                            pending_creates = report.pending_creates,
+                            announced_shutdown = report.announced_shutdown,
+                            elapsed_ms = report.spent.as_millis() as u64,
+                            "The shutdown drain spent its budget with sessions unaccounted for"
+                        );
+                    }
                 }
+                Err(error) => tracing::warn!(
+                    event = "field_native.terminal.drain_failed",
+                    component = "terminal",
+                    error = %error,
+                    "The shutdown drain did not run; sessions may outlive this boot"
+                ),
             }
         }
         self.tasks.lock().unwrap().clear(); // TaskGuard aborts the serve loop
@@ -361,12 +393,26 @@ async fn serve(
         "The terminal service is serving"
     );
 
-    // Runs until a listener fails; a normal shutdown ABORTS this task instead,
-    // so reaching either arm means the plane died on its own.
-    let outcome = service
-        .serve(TerminalServiceListeners::new(control.into(), frames.into()))
-        .await;
+    // G7 (NF-7): `serve_managed` runs until a listener fails OR a completed
+    // `shutdown` — the first non-failure way serving ends. The handle is
+    // deposited BEFORE the await so `stop` can always reach a serving plane.
+    let (handle, serving_future) =
+        service.serve_managed(TerminalServiceListeners::new(control.into(), frames.into()));
+    *shared.drain.lock().unwrap() = Some(handle);
+    let outcome = serving_future.await;
     shared.serving.send_replace(false);
+    // `stop` TAKES the handle before draining, so a missing handle plus a clean
+    // exit is a requested shutdown — the one ending that is not a crash.
+    let requested = shared.drain.lock().unwrap().is_none();
+    if requested && outcome.is_ok() {
+        tracing::info!(
+            event = "field_native.terminal.serve_ended",
+            component = "terminal",
+            "The terminal service drained and stopped as requested"
+        );
+        return;
+    }
+    shared.drain.lock().unwrap().take(); // a dead plane's handle answers nothing
     let detail = match outcome {
         Ok(()) => "the terminal service stopped serving".to_string(),
         Err(error) => format!("the terminal service failed: {error}"),
@@ -554,7 +600,7 @@ fn observed_row(session: &SessionSummary) -> ObservedTerminal {
         session_id: session.id.clone(),
         pid: session.pid.map(i64::from),
         created_at: session.created_at_ms.and_then(|ms| i64::try_from(ms).ok()),
-        persistence: None,
+        persistence: session.persistence.clone(),
         title: session.title.clone(),
         cwd: session.cwd.clone(),
     }
@@ -565,130 +611,6 @@ fn observed_row(session: &SessionSummary) -> ObservedTerminal {
 /// contract grows a field.
 fn inventory_value(terminals: &[ObservedTerminal]) -> Value {
     serde_json::to_value(terminals).unwrap_or(Value::Null)
-}
-
-/// The NF-D3 sweep: every session gets upstream's full ladder, then the daemon
-/// waits — bounded — for the exits it asked for.
-///
-/// Two properties of the protocol shape this:
-/// * `terminate` starts the ladder on its own thread and returns immediately
-///   (session.rs:1558-1584), so issuing the requests in sequence still runs
-///   every ladder in parallel. Sequence also gives the sweep a deterministic
-///   order, which a `spawn`-per-session fan-out would not. That returns-at-once
-///   property is a property of a HEALTHY service, though, so the issue loop
-///   spends the same budget the wait loop does — see below.
-/// * NF-D3's "non-persistent first" ordering is NOT implementable here:
-///   `SessionSummary` does not carry persistence (absence 2). Recorded rather
-///   than faked — the natural upstream ask is to expose it, which would also
-///   fill `ObservedTerminal.persistence` and unblock NF-5's re-policy.
-///
-/// The admission race stands as spec §2.2 records it: a same-uid holder of the
-/// token can create a session after `list-sessions` and it will not be swept.
-/// Only upstream can close that (G7's atomic admission stop).
-async fn sweep(endpoints: &Endpoints, budget: Duration) -> anyhow::Result<()> {
-    let started = Instant::now();
-    let deadline = started + budget;
-    // A fresh connection on purpose: the sweep must not depend on the
-    // inventory pump's socket still being healthy. Connecting BEFORE listing
-    // means an exit that happens mid-sweep is buffered, not missed.
-    let (client, mut events) =
-        ControlClient::connect(Path::new(&endpoints.control), &endpoints.token).await?;
-    let sessions = client.list_sessions().await?;
-    if sessions.is_empty() {
-        return Ok(());
-    }
-
-    // An already-exited session (only `keep-until-explicit-close` can be one)
-    // will emit no further exit event, so it is terminated but never awaited.
-    let mut awaiting: HashSet<String> = sessions
-        .iter()
-        .filter(|session| !session.exited)
-        .map(|session| session.id.clone())
-        .collect();
-    let requested = sessions.len();
-    let mut issued = 0_usize;
-    for session in &sessions {
-        // The budget covers ISSUING too, not just waiting. A wedged service
-        // answers no request until the client's own 10s timeout fires, so N
-        // sessions could cost N×10s before the wait loop below even started —
-        // far past the supervisor's patience for a shutdown, and every second
-        // spent here is a second the ladders do not get.
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            tracing::warn!(
-                event = "field_native.terminal.sweep_budget_spent",
-                component = "terminal",
-                sessions = requested,
-                issued,
-                unissued = requested - issued,
-                "The shutdown sweep spent its budget before every session was asked to terminate"
-            );
-            break;
-        }
-        match tokio::time::timeout(remaining, client.terminate(&session.id, SWEEP_SOURCE)).await {
-            Ok(Ok(())) => issued += 1,
-            Ok(Err(error)) => {
-                tracing::warn!(
-                    event = "field_native.terminal.sweep_terminate_failed",
-                    component = "terminal",
-                    session_id = %session.id,
-                    error = %error,
-                    "A session refused termination during the shutdown sweep"
-                );
-                awaiting.remove(&session.id); // no ladder started; nothing to await
-            }
-            // The request may or may not have reached the service, so the
-            // session STAYS in `awaiting`: the honest report is unconfirmed,
-            // never "it refused". The next iteration's zero budget ends the loop.
-            Err(_) => tracing::warn!(
-                event = "field_native.terminal.sweep_terminate_unconfirmed",
-                component = "terminal",
-                session_id = %session.id,
-                "A session's termination request did not complete inside the sweep budget"
-            ),
-        }
-    }
-
-    while !awaiting.is_empty() {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            break;
-        }
-        match tokio::time::timeout(remaining, events.recv()).await {
-            Ok(Some(event)) => {
-                if event.get("type").and_then(Value::as_str) == Some("session-exited") {
-                    if let Some(id) = event.get("sessionId").and_then(Value::as_str) {
-                        awaiting.remove(id);
-                    }
-                }
-            }
-            Ok(None) => break, // the service went away mid-sweep
-            Err(_) => break,   // budget spent
-        }
-    }
-
-    let unconfirmed = awaiting.len();
-    if unconfirmed == 0 {
-        tracing::info!(
-            event = "field_native.terminal.sweep_complete",
-            component = "terminal",
-            sessions = requested,
-            elapsed_ms = started.elapsed().as_millis() as u64,
-            "Every terminal session exited under the shutdown sweep"
-        );
-    } else {
-        // Honest, not silent: these processes are being re-parented by the OS
-        // and become the observed tier's problem (spec §4.4).
-        tracing::warn!(
-            event = "field_native.terminal.sweep_incomplete",
-            component = "terminal",
-            sessions = requested,
-            unconfirmed,
-            elapsed_ms = started.elapsed().as_millis() as u64,
-            "The shutdown sweep spent its budget with sessions unconfirmed"
-        );
-    }
-    Ok(())
 }
 
 /// Socket names come from the generated registries (NF-D9); paths are stable

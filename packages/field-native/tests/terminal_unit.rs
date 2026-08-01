@@ -387,9 +387,9 @@ async fn live_pty_enters_and_leaves_the_observed_inventory() {
     let pid = session.pid.expect("the PTY leader has a pid");
     assert!(alive(pid), "the tenant process must be running");
 
-    // Creation pushes no upstream event (SessionSummary has no create
-    // notification), so this delta arrives on the inventory backstop — the row
-    // the kill matrix bounds at < 2s.
+    // NF-7: creation is a pushed `session-created` hint (the self-client
+    // announces control minor 1.9), so this delta arrives event-driven — the
+    // kill matrix's < 2s row now rides the event, not the backstop.
     let payload = mgmt
         .await_observed(Duration::from_secs(5), |p| has_session(p, &session.id))
         .await;
@@ -402,9 +402,11 @@ async fn live_pty_enters_and_leaves_the_observed_inventory() {
         row["createdAt"].as_i64().is_some_and(|ms| ms > 0),
         "createdAt is epoch millis straight from the summary: {row}"
     );
-    assert!(
-        row.get("persistence").is_none(),
-        "persistence has no upstream source and must stay ABSENT, not invented: {row}"
+    // G9 (0.7.0): the summary reports persistence and the row passes it
+    // through — the create default, not an invention.
+    assert_eq!(
+        row["persistence"], "keep-until-exit",
+        "persistence rides the summary into the observed row: {row}"
     );
 
     client
@@ -827,18 +829,27 @@ async fn retain_only_desired_set_needs_no_proof() {
         alive(pair.survivor_pid) && alive(pair.doomed_pid),
         "a retain-only set must terminate nothing"
     );
-    // `persistence` above is carried, never claimed: ghosttea 0.6.0 has no
-    // control op that re-policies a live session (the G9 ask), so the row it
-    // would fill stays absent rather than invented.
+    // NF-7: the carried persistence is now APPLIED (G9's `set-persistence`,
+    // spec §5's re-policy step) — the promoted session's observed row must
+    // come to say so. No event announces a policy change, so the row refreshes
+    // on the backstop; the wait spans it with room.
     let payload = mgmt
-        .await_observed(Duration::from_secs(5), |payload| payload["generation"] == 3)
+        .await_observed(Duration::from_secs(12), |payload| {
+            terminals(payload).iter().any(|row| {
+                row["sessionId"] == pair.doomed.id
+                    && row["persistence"] == "keep-until-explicit-close"
+            })
+        })
         .await;
-    for row in terminals(&payload) {
-        assert!(
-            row.get("persistence").is_none(),
-            "a desired persistence must not appear as though it were applied: {row}"
-        );
-    }
+    let untouched = terminals(&payload)
+        .iter()
+        .find(|row| row["sessionId"] == pair.survivor.id)
+        .map(|row| row["persistence"].clone())
+        .expect("the survivor's row");
+    assert_eq!(
+        untouched, "keep-until-exit",
+        "a set that says nothing about a session's persistence changes nothing: {payload}"
+    );
 
     daemon.shutdown().await;
 }

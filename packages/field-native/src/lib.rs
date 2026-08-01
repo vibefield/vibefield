@@ -34,7 +34,7 @@ pub struct RunningDaemon {
     lane_transport: tokio::task::JoinHandle<()>,
     /// NF-2: parked until the terminal service serves, then the self-client's
     /// `observed.terminals` pump. Held so shutdown can abort it before the
-    /// sweep runs.
+    /// drain runs.
     terminal_inventory: tokio::task::JoinHandle<()>,
     manager: Arc<manager::NativeServiceManager>,
     logging: Option<logging::NativeLogging>,
@@ -50,7 +50,7 @@ impl RunningDaemon {
         self.server.abort();
         self.health_refresh.abort();
         self.lane_transport.abort();
-        // Before stop_all: the terminal unit's sweep is the authority on the
+        // Before stop_all: the terminal unit's G7 drain is the authority on the
         // session registry from here on, and a pump still reconciling would
         // only publish inventory nobody is subscribed to any more.
         self.terminal_inventory.abort();

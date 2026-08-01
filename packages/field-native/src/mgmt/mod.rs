@@ -42,9 +42,10 @@ const CONTRACTS_VERSION: &str = "0.1.0";
 /// * `user` — a human's kill, which is what `terminal.terminate` will carry
 ///   (NF-D5). A reconcile is not a human act; claiming it were would put a
 ///   person behind a decision fieldd's bookkeeping made.
-/// * `service-shutdown` — reserved for the NF-D3 sweep (`terminal.rs`'s
-///   `SWEEP_SOURCE`), and it asserts field-native is going down. Here it would
-///   be a lie: the floor keeps serving, and the survivors keep running.
+/// * `service-shutdown` — reserved for the shutdown drain (G7's
+///   `ServiceHandle::shutdown` stamps it upstream since NF-7), and it asserts
+///   field-native is going down. Here it would be a lie: the floor keeps
+///   serving, and the survivors keep running.
 /// * `application` — the application above this floor (fieldd) withdrew the
 ///   session from its desired set. That is exactly what happened, so this is the
 ///   honest stamp.
@@ -73,7 +74,10 @@ enum PruneErrorKind {
 /// a string: upstream answers `{type:"error", message}` and there is no code to
 /// match on (service.rs:349-351).
 fn classify_prune_error(message: &str) -> PruneErrorKind {
-    if message.contains(UNKNOWN_SESSION) {
+    // Two upstream refusal strings, one meaning: `terminate` answers
+    // "unknown session", `set-persistence` answers "unknown or remote session"
+    // (service.rs SetPersistence handler) — both say the registry row is gone.
+    if message.contains(UNKNOWN_SESSION) || message.contains("unknown or remote session") {
         PruneErrorKind::AlreadyGone
     } else {
         PruneErrorKind::Failed
@@ -443,17 +447,29 @@ async fn handle_desired_set(
     // this set lists that the floor does not have is fieldd's view lagging, not
     // an instruction — it is retained by saying nothing about it.
     //
-    // Persistence re-policy belongs HERE in spec §5's order (between the guard
-    // and the prune) and is not implementable against the pinned ghosttea 0.6.0:
-    // no control op changes a live session's policy. Verified in the crate rather
-    // than assumed — the `Command` enum's 27 variants carry none
-    // (service.rs:142-281), `Session::persistence` is a read-only accessor
-    // (session.rs:1031-1033) over a field written once at construction
-    // (session.rs:314/611), and persistence enters only as a spawn-time
-    // `SessionOptions` input (session.rs:227). So `DesiredTerminal.persistence`
-    // is accepted and carried, never pretended to be applied; the G9 ask
-    // (spec §12) is what makes re-policy real, and it fills
-    // `ObservedTerminal.persistence` in the same stroke.
+    // Persistence re-policy is REAL since NF-7 (ghosttea 0.7.0, the G9
+    // landing): `set-persistence` writes under the service's registry lock and
+    // answers with the applied summary, and `SessionSummary.persistence` fills
+    // the observed inventory this diff is computed against. Only sessions the
+    // floor OBSERVES are re-policied — a desired row the inventory lacks is
+    // fieldd's view lagging (same law as creation above), and a `None` in
+    // observed is unknown, so a stated desire applies.
+    let repolicy: Vec<(String, String)> = {
+        let observed = state.observed_tx.borrow();
+        desired
+            .terminals
+            .iter()
+            .filter_map(|terminal| {
+                let want = terminal.persistence.as_ref()?;
+                let row = observed
+                    .terminals
+                    .iter()
+                    .find(|row| row.session_id == terminal.session_id)?;
+                (row.persistence.as_deref() != Some(want.as_str()))
+                    .then(|| (terminal.session_id.clone(), want.clone()))
+            })
+            .collect()
+    };
 
     if !prune.is_empty() {
         // NF-D2(b): a fieldd may only kill what it has SEEN this boot. An absent
@@ -473,46 +489,46 @@ async fn handle_desired_set(
                 })),
             );
         }
-        // The prune is the terminal plane's to execute. Without endpoints there
-        // is no plane to execute it on, so the honest answer is that the work
-        // did not happen — never a success that killed nothing. (Inventory would
-        // normally be empty in that state; the guard states the law regardless.)
+    }
+
+    // One plane connection for every effect this set carries (re-policy and
+    // prune). NF-6's dial-before-store law covers both: a plane that cannot be
+    // reached refuses the WHOLE set rather than banking a generation whose
+    // effects never ran, and without endpoints there is no plane to execute on
+    // — never a success that did nothing. (Inventory would normally be empty in
+    // that state; the guard states the law regardless.)
+    //
+    // The event receiver rides in `plane` for the whole reconcile on purpose.
+    // Every control connection receives every broadcast event
+    // (service.rs:470/624), so the first `session-exited` a prune causes comes
+    // back on this very connection; a receiver dropped early would make it
+    // undeliverable while the prune is still issuing terminates. The client
+    // discards undeliverable events rather than ending its read loop, so this
+    // is the second of two independent reasons the reconcile cannot wedge
+    // itself.
+    let plane = if !prune.is_empty() || !repolicy.is_empty() {
         let Some(endpoints) = state.terminal.get() else {
             return err(
                 id,
                 "UNAVAILABLE",
                 -32006,
-                "the terminal plane has no endpoints, so the prune cannot be executed",
+                "the terminal plane has no endpoints, so the desired set's effects cannot be executed",
                 true,
                 Some(json!({
                     "service": terminal::UNIT_ID,
                     "state": terminal_state(state),
                     "wouldPrune": prune.len(),
+                    "wouldRepolicy": repolicy.len(),
                 })),
             );
         };
-        // Dialing BEFORE anything is recorded: a plane that cannot be reached
-        // must refuse the whole set rather than bank a generation whose prune
-        // never ran.
-        //
-        // `_events` is bound for the whole reconcile on purpose. Every control
-        // connection receives every broadcast event (service.rs:470/624), so the
-        // first `session-exited` this prune causes comes back on this very
-        // connection; a receiver dropped at the end of a match arm would make it
-        // undeliverable while the prune is still issuing terminates. The client
-        // now discards undeliverable events rather than ending its read loop, so
-        // this is the second of two independent reasons the prune cannot wedge
-        // itself.
-        let (client, _events) = match ControlClient::connect(
-            Path::new(&endpoints.control_socket),
-            &endpoints.auth_token,
-        )
-        .await
+        match ControlClient::connect(Path::new(&endpoints.control_socket), &endpoints.auth_token)
+            .await
         {
-            Ok(pair) => pair,
+            Ok(pair) => Some(pair),
             Err(error) => {
                 tracing::warn!(
-                    event = "field_native.lifecycle.prune_unreachable",
+                    event = "field_native.lifecycle.plane_unreachable",
                     component = "mgmt",
                     generation = desired.generation,
                     error = %error,
@@ -522,16 +538,84 @@ async fn handle_desired_set(
                     id,
                     "UNAVAILABLE",
                     -32006,
-                    "the terminal control plane could not be reached, so the prune was not executed",
+                    "the terminal control plane could not be reached, so the desired set was not applied",
                     true,
                     Some(json!({
                         "service": terminal::UNIT_ID,
                         "state": terminal_state(state),
                         "wouldPrune": prune.len(),
+                        "wouldRepolicy": repolicy.len(),
                     })),
                 );
             }
-        };
+        }
+    } else {
+        None
+    };
+
+    // Spec §5's order: re-policy BEFORE the prune — a session promoted and
+    // withdrawn by the same set still gets its retention decided by the new
+    // policy when its ladder concludes.
+    if !repolicy.is_empty() {
+        let (client, _events) = plane.as_ref().expect("plane is connected when work exists");
+        tracing::info!(
+            event = "field_native.lifecycle.repolicy_attempt",
+            component = "mgmt",
+            generation = desired.generation,
+            sessions = repolicy.len(),
+            "The desired set changes session persistence; applying it"
+        );
+        let mut failed_repolicy: Vec<&str> = Vec::new();
+        for (session_id, persistence) in &repolicy {
+            match client.set_persistence(session_id, persistence).await {
+                Ok(()) => {}
+                Err(error) => match classify_prune_error(&format!("{error:#}")) {
+                    // The observed row was stale: the session concluded between
+                    // fieldd's snapshot and this call. Its policy is moot — the
+                    // ordinary race, not a failure.
+                    PruneErrorKind::AlreadyGone => tracing::debug!(
+                        event = "field_native.lifecycle.repolicy_skipped",
+                        component = "mgmt",
+                        session_id = %session_id,
+                        error = %error,
+                        "A re-policied session was already gone from the terminal registry"
+                    ),
+                    // Same law as the prune below: a set whose effects half-ran
+                    // is NOT applied — nothing banked, and `set-persistence` is
+                    // idempotent, so retrying this same generation is safe.
+                    PruneErrorKind::Failed => {
+                        failed_repolicy.push(session_id);
+                        tracing::warn!(
+                            event = "field_native.lifecycle.repolicy_failed",
+                            component = "mgmt",
+                            generation = desired.generation,
+                            session_id = %session_id,
+                            error = %error,
+                            "A session's persistence change could not be applied; the desired set was refused"
+                        );
+                    }
+                },
+            }
+        }
+        if !failed_repolicy.is_empty() {
+            return err(
+                id,
+                "UNAVAILABLE",
+                -32006,
+                "some persistence changes could not be applied, so the desired set was not applied",
+                true,
+                Some(json!({
+                    "service": terminal::UNIT_ID,
+                    "state": terminal_state(state),
+                    "generation": desired.generation,
+                    "failedRepolicy": failed_repolicy,
+                })),
+            );
+        }
+    }
+
+    if !prune.is_empty() {
+        let (client, _events) = plane.as_ref().expect("plane is connected when work exists");
 
         // Attempt-before-effect (spec §8): the intent is on the record before a
         // single ladder fires, so a prune is accountable even if this daemon dies
@@ -641,6 +725,7 @@ async fn handle_desired_set(
         generation,
         listed,
         pruned = prune.len(),
+        repolicied = repolicy.len(),
         "The desired native state generation was applied"
     );
     ok(id, json!({"applied": generation}))

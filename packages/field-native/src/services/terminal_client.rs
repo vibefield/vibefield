@@ -1,12 +1,15 @@
 //! The self-client (NF-D7) — field-native's own client on the control socket it
 //! minted the token for. Control-through-sockets IS the architecture
-//! (predesign-03 §2.2): the terminal unit learns its inventory and runs its
-//! shutdown sweep over the same protocol fieldd uses, never through a private
-//! back door. G2 (an in-process API) stays the optional latency upgrade and
-//! would be invisible above the mgmt seam.
+//! (predesign-03 §2.2): the terminal unit learns its inventory and the mgmt
+//! seam applies re-policy over the same protocol fieldd uses, never through a
+//! private back door. (The shutdown sweep this client used to run moved
+//! upstream at NF-7 — G7's `ServiceHandle::shutdown` drains in-process.) G2 (an
+//! in-process API) stays the optional latency upgrade and would be invisible
+//! above the mgmt seam.
 //!
 //! Protocol facts below are read from the pinned crate, not from a doc:
-//! `ghosttea-0.6.0/src/service.rs`. Framing is a little-endian u32 length
+//! `ghosttea-0.7.0/src/service.rs` (first verified at 0.6.0; framing and
+//! handshake unchanged at 0.7.0). Framing is a little-endian u32 length
 //! followed by the payload (service.rs:573-587, mirrored by `packet()` in
 //! `@vibecook/ghosttea-client`'s index.ts). The first packet a client sends is
 //! the bare auth token — not JSON — and the service answers with the packet
@@ -29,13 +32,17 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::sync::{mpsc, oneshot};
 
-/// Control protocol v1.7 as shipped by ghosttea 0.6.0
-/// (`CONTROL_PROTOCOL_MAJOR`/`MINOR`, service.rs:37-38). The minor is not
-/// cosmetic: the service withholds `session-activity-changed` from clients
-/// below 1.6 (service.rs:42-45), and those events are this client's only early
-/// hint that a session it did not create now exists.
+/// Control protocol: ghosttea 0.7.0 serves 1.13 and the hello answers
+/// `min(client, server)` per connection. This client announces **1.9** — the
+/// feature floor it consumes, not the newest it has heard of. The minor is not
+/// cosmetic: the service gates events on it — `session-activity-changed` below
+/// 1.6, `events-lost` below 1.8, and `session-created` below 1.9
+/// (`SESSION_CREATED_PROTOCOL_MINOR`, service.rs:48). 1.9 is what turns
+/// creation from a polled fact into a pushed hint (NF-7); the 1.10-1.13
+/// reconnect-era answers stay off this connection until something here reads
+/// them.
 pub const PROTOCOL_MAJOR: u16 = 1;
-pub const PROTOCOL_MINOR: u16 = 7;
+pub const PROTOCOL_MINOR: u16 = 9;
 
 /// = upstream `MAX_CONTROL_BYTES` (service.rs:27). Reading with the service's
 /// own ceiling keeps a hostile or wedged peer from making us allocate.
@@ -69,10 +76,15 @@ pub struct SessionSummary {
     #[serde(default)]
     pub cwd: Option<String>,
     /// True for a session the registry still holds after its process exited —
-    /// only `keep-until-explicit-close` sessions can be in this state
-    /// (service.rs:709). The sweep must not wait for an exit event from one.
+    /// only `keep-until-explicit-close` sessions can be in this state.
+    /// Nothing may await an exit event from one.
     #[serde(default)]
     pub exited: bool,
+    /// G9 (0.7.0): kebab-case policy name — `Some` for locally governed
+    /// sessions, absent for remote replicas. Opaque passthrough into
+    /// `ObservedTerminal.persistence` (reference-don't-remodel).
+    #[serde(default)]
+    pub persistence: Option<String>,
 }
 
 /// An authenticated control connection, plus the pushed-event stream that came
@@ -199,6 +211,21 @@ impl ControlClient {
         self.call(json!({"type": "terminate", "sessionId": session_id, "source": source}))
             .await
             .map(|_| ())
+    }
+
+    /// G9 re-policy (ghosttea 0.7.0): set a live session's persistence. The
+    /// service holds its registry write lock across the write and answers with
+    /// the updated summary, so a success here IS the value that will decide
+    /// retention — never a lost update. "unknown or remote session" is the
+    /// service's own refusal for a session it does not govern.
+    pub async fn set_persistence(&self, session_id: &str, persistence: &str) -> Result<()> {
+        self.call(json!({
+            "type": "set-persistence",
+            "sessionId": session_id,
+            "persistence": persistence,
+        }))
+        .await
+        .map(|_| ())
     }
 
     /// One request, one correlated response. `type: "error"` is upstream's
