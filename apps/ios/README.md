@@ -22,7 +22,7 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldDesign` | godview monochrome tokens (palette light+dark, mono type ramp, motion constants, grid/scanlines/vignette) |
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested |
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
-| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.6.1), login sheet, peer roster, the mesh chip |
+| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.7.0), login sheet, peer roster, the mesh chip |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition |
 
 Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`) · iOS **18.1** floor (the pinned
@@ -80,7 +80,7 @@ Real: the full-screen bubble field (physics, tiers, ignition, drag, tap-nudge,
 hold-to-create, spawn pop, empty state), both themes, the session card with
 live status, the mock fleet driving the **same** snapshot shape and classifier
 the daemon feed will drive, and — since IOS-2 — the mesh leg: `ghosttea`
-pinned `exact: "0.6.1"` (truffle 0.7.11, lockstep with field-native), the
+pinned `exact: "0.7.0"` (truffle 0.7.11, lockstep with field-native), the
 in-process Tailscale runtime behind a deliberate CONNECT act, in-app login
 (Safari sheet), the online-peer roster, and the mesh chip the bubbles
 physically flow around (`.swarmObstacle()` — the desktop obstacle pattern).

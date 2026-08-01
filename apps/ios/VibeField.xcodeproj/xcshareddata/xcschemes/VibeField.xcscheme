@@ -22,17 +22,12 @@
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
-   <!-- Package tests run through the package's own scheme:
-        `xcodebuild test -scheme VibeFieldKit-Package` from VibeFieldKit/
-        (see README). This app scheme builds and launches only. -->
    <TestAction
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
-      <Testables>
-      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
