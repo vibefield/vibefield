@@ -8,13 +8,14 @@
     "./preload": "./dist/preload/index.cjs"
   },
   "scripts": {
-    "build": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --external:electron '--external:../testing/smoke.cjs' --outfile=dist/main/index.cjs && esbuild src/preload/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload/index.cjs && esbuild src/testing/smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/testing/smoke.cjs",
+    "build": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --external:electron '--external:../testing/smoke.cjs' --outfile=dist/main/index.cjs && esbuild src/preload/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload/index.cjs && esbuild src/testing/smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/testing/smoke.cjs && esbuild src/testing/spike-godview-preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/testing/spike-godview-preload.cjs && esbuild src/testing/bridge-entry.ts --bundle --platform=node --format=esm --outfile=dist/testing/bridge-entry.js",
     "build:renderer": "vite build",
     "dev:renderer": "vite",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.renderer.json"
   },
   "dependencies": {
+    "@vibecook/ghosttea-electron": "*",
     "@vibefield/audit": "workspace:*",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/field-app": "workspace:*",

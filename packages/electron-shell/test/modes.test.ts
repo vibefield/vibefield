@@ -11,6 +11,7 @@ const ALL_MODES: readonly ShellMode[] = [
   "smoke",
   "smoke-canvas",
   "spike-loro",
+  "spike-godview",
 ];
 
 describe("parseMode", () => {
@@ -25,6 +26,7 @@ describe("parseMode", () => {
     expect(parseMode(["--smoke"])).toBe("smoke");
     expect(parseMode(["--smoke-canvas"])).toBe("smoke-canvas");
     expect(parseMode(["--spike-loro"])).toBe("spike-loro");
+    expect(parseMode(["--spike-godview"])).toBe("spike-godview");
   });
 
   it("finds the flag anywhere in argv, not only at a fixed position", () => {
@@ -33,19 +35,21 @@ describe("parseMode", () => {
     expect(parseMode(["a", "b", "c", "--spike-loro"])).toBe("spike-loro");
   });
 
-  it("honors precedence spike-loro > smoke > smoke-canvas > dev", () => {
+  it("honors precedence spike-loro > spike-godview > smoke > smoke-canvas > dev", () => {
     expect(parseMode(["--dev", "--smoke-canvas", "--smoke", "--spike-loro"])).toBe("spike-loro");
     expect(parseMode(["--dev", "--smoke-canvas", "--smoke"])).toBe("smoke");
     expect(parseMode(["--dev", "--smoke-canvas"])).toBe("smoke-canvas");
     expect(parseMode(["--dev", "--smoke"])).toBe("smoke");
     expect(parseMode(["--smoke-canvas", "--spike-loro"])).toBe("spike-loro");
     expect(parseMode(["--dev", "--spike-loro"])).toBe("spike-loro");
+    expect(parseMode(["--spike-godview", "--spike-loro"])).toBe("spike-loro");
+    expect(parseMode(["--dev", "--smoke", "--spike-godview"])).toBe("spike-godview");
   });
 });
 
 describe("isSmokeLike", () => {
-  // Exactly the three transient, port-isolated, never-packaged runs.
-  const smokeLike = new Set<ShellMode>(["smoke", "smoke-canvas", "spike-loro"]);
+  // Exactly the transient, port-isolated, never-packaged runs.
+  const smokeLike = new Set<ShellMode>(["smoke", "smoke-canvas", "spike-loro", "spike-godview"]);
 
   it.each(ALL_MODES)("classifies %s", (mode) => {
     expect(isSmokeLike(mode)).toBe(smokeLike.has(mode));
@@ -57,12 +61,15 @@ describe("shutdownPolicy", () => {
   // stop-owned smoke run despite passing isSmokeLike), and dev is
   // leave-running because the dev-runner owns daemon teardown — the shell
   // hands the running pair to its successor via buildId-gated adoption.
+  // The spikes disagree with each other on purpose: spike-godview spawns the
+  // real pair to reach the terminal floor, so it owes that pair a teardown.
   const expected: Record<ShellMode, "stop-owned" | "leave-running"> = {
     production: "leave-running",
     dev: "leave-running",
     smoke: "stop-owned",
     "smoke-canvas": "stop-owned",
     "spike-loro": "leave-running",
+    "spike-godview": "stop-owned",
   };
 
   it.each(ALL_MODES)("%s", (mode) => {

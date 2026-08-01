@@ -40,6 +40,12 @@ export default defineConfig({
         ...(process.env["VITE_SPIKE"]
           ? {
               "spike-loro": join(import.meta.dirname, "src", "renderer-host", "spike-loro.html"),
+              "spike-godview": join(
+                import.meta.dirname,
+                "src",
+                "renderer-host",
+                "spike-godview.html",
+              ),
             }
           : {}),
       },

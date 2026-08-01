@@ -701,9 +701,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13654212afafb89e448ea9936cc08d492337a43ce458483534b08ba50cb59f93"
+checksum = "86740f96de5b9f21c7c3b36ff6c1c7ee3d579e58e6185761d0303a886afc8798"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -724,9 +724,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-config"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8382001a66c859d6e8ce7b68a91da01959df3978cff0147d9cdb76fe2b622e3"
+checksum = "10e4cb17c790ed1a36456d627478649eaa5564301aa7f5d6c80c866de4ddc582"
 dependencies = [
  "serde",
  "serde_json",
@@ -736,9 +736,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-core"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e898b0f42bffbe52fd273483ed9c78ef669c747e1f4e4744a1c0a1ff36a93a2"
+checksum = "44a48c82d2dbda8d4712ce84cb93990f2b16a6c189bce68832bd8d5527058565"
 dependencies = [
  "anyhow",
  "ghosttea-text",
@@ -749,9 +749,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-text"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ba7d4f46dd41ad1f0220debe89693147580f253201b396b336bb723e20ef654"
+checksum = "7e830e5cc127b8970d12a602505350d0ad2d9fbdcc99615bceffec677ad394a7"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -763,18 +763,18 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-vt"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43a16db812be5a25e790da495037b32e72eb04acb79a72823e7039f10aa6653b"
+checksum = "d3c250667e05fe2df2a2d9d2fb9fece5885217bc8f65e6ce2056c622eac8f2dd"
 dependencies = [
  "ghosttea-vt-sys",
 ]
 
 [[package]]
 name = "ghosttea-vt-sys"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d16398ad1a122771c14a16e2e63223d104d43b4d632e84968b25f996357f7945"
+checksum = "0015f1f5b774e01b285dd1c45769ed79da8628a8d12253f3ef7b94bac4c724c0"
 dependencies = [
  "cc",
  "serde",

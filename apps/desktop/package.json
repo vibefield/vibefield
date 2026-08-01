@@ -13,6 +13,7 @@
     "start": "pnpm build:all && electron .",
     "smoke": "pnpm build:shell && electron . --smoke",
     "spike:loro": "pnpm build:shell && VITE_SPIKE=1 pnpm build:renderer && electron . --spike-loro",
+    "spike:godview": "pnpm build:shell && VITE_SPIKE=1 pnpm build:renderer && electron . --spike-godview",
     "smoke:canvas": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-canvas",
     "icons:generate": "node packaging/generate-icons.mjs",
     "icons:check": "node packaging/generate-icons.mjs --check",

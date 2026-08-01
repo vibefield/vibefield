@@ -1,11 +1,18 @@
 // Mode selection (ESR §5.2.6): parsed ONCE, here — window, supervisor, and
 // security code receive a mode, never argv.
 
-export type ShellMode = "production" | "dev" | "smoke" | "smoke-canvas" | "spike-loro";
+export type ShellMode =
+  | "production"
+  | "dev"
+  | "smoke"
+  | "smoke-canvas"
+  | "spike-loro"
+  | "spike-godview";
 
 /** Precedence mirrors the pre-split dispatch order in main(). */
 export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--spike-loro")) return "spike-loro";
+  if (argv.includes("--spike-godview")) return "spike-godview";
   if (argv.includes("--smoke")) return "smoke";
   if (argv.includes("--smoke-canvas")) return "smoke-canvas";
   if (argv.includes("--dev")) return "dev";
@@ -16,7 +23,9 @@ export function parseMode(argv: readonly string[]): ShellMode {
  * They skip the single-instance lock (slice-0 finding 1: a lock-blocked smoke
  * exited 0 with no output — a silent false pass) and the workarea fill. */
 export function isSmokeLike(mode: ShellMode): boolean {
-  return mode === "smoke" || mode === "smoke-canvas" || mode === "spike-loro";
+  return (
+    mode === "smoke" || mode === "smoke-canvas" || mode === "spike-loro" || mode === "spike-godview"
+  );
 }
 
 /** Daemon lifetime policy (ESR §7.3): smoke runs stop what they spawned;
@@ -24,7 +33,13 @@ export function isSmokeLike(mode: ShellMode): boolean {
  * leave-running too — §7.3 permits either, and the dev-runner is the daemon
  * custodian: a shell-only rebuild restarts Electron alone and the new shell
  * ADOPTS the running pair (buildId-gated probe); the runner reaps the pair
- * on daemon-plane changes and at session end. */
+ * on daemon-plane changes and at session end.
+ *
+ * The two spikes split on what they SPAWN, not on being spikes: spike-loro
+ * touches no daemon, while spike-godview drives the real pair through the
+ * terminal floor and so owes the same teardown a smoke run does. */
 export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" {
-  return mode === "smoke" || mode === "smoke-canvas" ? "stop-owned" : "leave-running";
+  return mode === "smoke" || mode === "smoke-canvas" || mode === "spike-godview"
+    ? "stop-owned"
+    : "leave-running";
 }

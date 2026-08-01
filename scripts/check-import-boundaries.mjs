@@ -61,6 +61,16 @@ function isConfigFile(relPath) {
   return /\.config\.[cm]?tsx?$/.test(basename(relPath));
 }
 
+// A spike module: a `spike/` directory or a `spike-`-prefixed file. These are
+// built only under VITE_SPIKE and packaged never, so they are not the
+// "production" R8 speaks of — a spike page reaching its own implementation is
+// the arrangement R8 exists to protect, not a breach of it. Named the same way
+// isTestPath is, and trusted the same way: by convention, not by proof.
+function isSpikePath(relPath) {
+  if (basename(relPath).startsWith("spike-")) return true;
+  return relPath.split("/").some((seg) => seg === "spike");
+}
+
 // --- import-specifier predicates ---------------------------------------------
 
 // Exact package or a subpath of it ("react" or "react/jsx-runtime"), but not a
@@ -78,9 +88,16 @@ function matchesForbid(spec, forbid) {
 // A cross-package deep import: reaching past a new package's public entries. Bare
 // `@vibefield/field-app` (no subpath) is the public root and allowed; `/main`,
 // `/preload`, `/host` are the declared entries (spec §8.2), plus field-app's
-// browser-safe `/logging` seam and exported `/spike` implementation consumed by
-// the shell's test-only spike page.
-const NEW_PACKAGE_ENTRIES = new Set(["main", "preload", "host", "logging", "spike"]);
+// browser-safe `/logging` seam and its exported `/spike*` implementations,
+// consumed by the shell's test-only spike pages.
+const NEW_PACKAGE_ENTRIES = new Set([
+  "main",
+  "preload",
+  "host",
+  "logging",
+  "spike",
+  "spike-godview",
+]);
 function isDeepPackageImport(spec) {
   const m = /^@vibefield\/(?:electron-shell|field-app|fieldd-supervisor)\/(.+)$/.exec(spec);
   if (m === null) return false;
@@ -185,7 +202,8 @@ const RULES = [
     applies: (p) =>
       SOURCE_EXT.test(p) &&
       underAny(p, ["apps/desktop", "packages/electron-shell", "packages/field-app"]) &&
-      !isTestPath(p),
+      !isTestPath(p) &&
+      !isSpikePath(p),
     importTest: importsTestingOrSpike,
   },
   {

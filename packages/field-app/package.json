@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./logging": "./src/logging.ts",
-    "./spike": "./src/spike/spike-loro.ts"
+    "./spike": "./src/spike/spike-loro.ts",
+    "./spike-godview": "./src/spike/spike-godview.tsx"
   },
   "scripts": {
     "test": "vitest run",
@@ -14,6 +15,7 @@
   },
   "dependencies": {
     "@react-three/fiber": "^9.6.1",
+    "@vibecook/ghosttea-react": "*",
     "@vibecook/ice": "*",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/fieldd-client": "workspace:*",

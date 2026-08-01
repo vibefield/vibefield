@@ -496,6 +496,36 @@ async function main(
     return;
   }
 
+  if (MODE === "spike-godview") {
+    await (await testing()).runSpikeGodview({
+      handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      beforeExit: closeEvidence,
+      onWindow: (window) => {
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch((error) => {
+              logger.error(
+                "desktop.crash.refresh_failed",
+                "Electron could not refresh crash evidence after a renderer exited",
+                error,
+              );
+            });
+          },
+        });
+        installDiagnostics(window);
+      },
+    });
+    return;
+  }
+
   let latestDesktopState: DesktopShellState | null = null;
   const publishDesktopState = (raw: DesktopShellState): void => {
     const state = DesktopShellStateSchema.parse(raw);

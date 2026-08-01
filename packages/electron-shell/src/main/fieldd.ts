@@ -51,9 +51,16 @@ export function buildSupervisor(opts: {
   if (launchTarget === undefined || !existsSync(launchTarget)) {
     throw new Error(`fieldd bin missing (build it): ${launchTarget ?? "(unset)"}`);
   }
-  const smokeLike = opts.mode === "smoke" || opts.mode === "smoke-canvas";
   const expectedBuildId = opts.mode === "dev" ? process.env["VIBEFIELD_DEV_BUILD_ID"] : undefined;
   const policy = shutdownPolicy(opts.mode);
+  // Port isolation is DERIVED from the lifetime policy rather than listed
+  // again: a run that stops what it spawned must not be able to reach the
+  // ambient pair in the first place, and a leave-running mode wants the
+  // registry ports precisely so its successor can adopt. The list this
+  // replaced named smoke and smoke-canvas literally and so quietly handed
+  // spike-godview the production ports — an EADDRINUSE against whatever
+  // daemon the machine already had.
+  const isolatePorts = policy === "stop-owned";
   const logger = opts.logger.child({ component: "daemon.supervisor" });
   const pluginRoots = opts.resources.pluginRoots;
   return createFielddSupervisor({
@@ -80,7 +87,7 @@ export function buildSupervisor(opts: {
     },
     ...(existsSync(nativeBin) ? { nativeExecutable: nativeBin } : {}),
     ...(opts.mode === "dev" ? { allowedOrigins: [new URL(opts.viteUrl).origin] } : {}),
-    ...(smokeLike ? { controlPort: 0, dataPort: 0 } : {}),
+    ...(isolatePorts ? { controlPort: 0, dataPort: 0 } : {}),
     ...(expectedBuildId ? { expectedBuildId } : {}),
     shutdownPolicy: policy,
     ...(policy === "stop-owned"

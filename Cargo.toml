@@ -12,10 +12,12 @@ members = ["packages/field-native"]
 truffle-core = "=0.7.11"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
-# 0.6.0 → 0.7.0 to consume the G7/G8/G9 petition landings (shutdown drain, silent
-# serve, persistence surface; control protocol 1.13). The published
-# ghosttea-truffle 0.7.0 still requires truffle-core =0.7.11, so the Arc<Node>
-# shared with the mesh adapter stays ONE type alongside the pin above. `ghosttea`
-# itself carries no truffle dep; field-native consumes it since NF-2,
-# ghosttea-truffle at NF-remote.
-ghosttea = "=0.7.0"
+# 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,
+# persistence surface; control protocol 1.13). GT-0 (same day) bumped 0.7.0 →
+# 0.8.0 — zero Rust delta upstream (the release is GhostteaWorkspace layout
+# rehydration on the npm side); the bump keeps the one-version law as the shell
+# planes join at 0.8.0. ghosttea-truffle 0.8.0 still requires truffle-core
+# =0.7.11, so the Arc<Node> shared with the mesh adapter stays ONE type alongside
+# the pin above. `ghosttea` itself carries no truffle dep; field-native consumes
+# it since NF-2, ghosttea-truffle at GT-4 (NF-remote).
+ghosttea = "=0.8.0"
