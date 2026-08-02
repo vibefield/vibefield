@@ -102,6 +102,13 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
    * session that goes on living (GT-D5); without this it would be re-adopted on
    * the next open and the close would mean nothing. */
   const seen = useRef(new Set<string>());
+  /** GT-2c: only a status TRANSITION may act — main republishes unchanged
+   * states by contract, and a republish treated as news is a remount loop. */
+  const lastBridgeState = useRef<string | null>(null);
+  /** Replaced runtimes retire here and are disposed after commit. A Set, so a
+   * twice-run updater (StrictMode) retires an instance once; disposal inside
+   * an updater or an unmount cleanup would double-fire there. */
+  const retiredRuntimes = useRef(new Set<GhostteaTerminalRuntime>());
 
   const publish = useCallback((next: GhostteaWorkspaceContext) => setWorkspace(next), []);
   /** GT-2b: a failed deck must offer its own way back. Bumping the generation
@@ -110,8 +117,25 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
    * coming (a bridge that never built, a ladder that spent itself). */
   const retry = useCallback(() => {
     setError(null);
+    // The failed runtime's one-shot ports wait is SPENT — retry must mint a
+    // fresh runtime, not merely re-ask on the dead one.
+    setRuntime((previous) => {
+      retiredRuntimes.current.add(previous);
+      return makeRuntime();
+    });
     setGeneration((current) => current + 1);
   }, []);
+
+  // Disposal happens HERE, after commit, never in an updater: each runtime
+  // owns a render worker and the ports, and a leaked one is a leaked thread.
+  useEffect(() => {
+    for (const old of retiredRuntimes.current) {
+      if (old !== runtime) {
+        retiredRuntimes.current.delete(old);
+        old.dispose();
+      }
+    }
+  }, [runtime]);
   // Read once per mount: the tokens do not move under a running deck, and
   // re-reading them every render would restyle every surface for nothing.
   const theme = useMemo(godviewTerminalTheme, []);
@@ -177,12 +201,25 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
     const terminal = getHost().terminal;
     if (terminal === undefined) return;
     return terminal.onStatus((status) => {
+      // GT-2c: main publishes on EVERY set, including unchanged — its own
+      // contract test pins that — so only a TRANSITION may act here. Treating
+      // a republish as news built a feedback loop: each event minted a runtime
+      // and a generation, each generation re-asked, and the deck remounted
+      // itself to death (the dev storm James hit).
+      if (status.state === lastBridgeState.current) return;
+      lastBridgeState.current = status.state;
       if (status.state === "bridge-down") {
         setError("the terminal bridge died — rebuilding");
         return;
       }
+      if (status.state !== "bridge-up" && status.state !== "ticket-expired") return;
+      // Act = a fresh runtime (the old one's one-shot ports wait is spent) and
+      // a new generation (re-redeem + re-connect). The old runtime is disposed
+      // by the effect below, never inside the updater — updaters must stay
+      // pure, React may run them more than once.
+      setError(null);
       setRuntime((previous) => {
-        previous.dispose();
+        retiredRuntimes.current.add(previous);
         return makeRuntime();
       });
       setGeneration((previous) => previous + 1);
