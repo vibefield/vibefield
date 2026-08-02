@@ -28,6 +28,9 @@ export function createMainWindow(opts: {
     webPreferences: assertSecurePreferences(webPreferences(opts.preloadPath)),
   });
   if (fillWorkArea) win.setBounds(screen.getPrimaryDisplay().workArea);
+  // Dev opens the tools by default (James, 2026-08-02) — detached, so the
+  // canvas keeps its geometry. Every other mode stays clean.
+  if (opts.mode === "dev") win.webContents.openDevTools({ mode: "detach" });
   return win;
 }
 

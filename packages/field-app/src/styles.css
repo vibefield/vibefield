@@ -238,3 +238,42 @@ body {
       visibility 0s linear;
   }
 }
+
+/* GT-2b: the deck's fault face — the honest alternative to ghosttea's raw
+ * rejection string on a dead stage. Dark-stage text tiers per the header's
+ * idiom (§2.3); the detail rides DESIGN.md's mono stack. */
+.vf-godview-deck-fault {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  height: 100%;
+  text-align: center;
+}
+
+.vf-godview-deck-fault-message {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+}
+
+.vf-godview-deck-fault-detail {
+  color: rgba(255, 255, 255, 0.45);
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  max-width: 52ch;
+}
+
+.vf-godview-deck-fault-retry {
+  margin-top: 6px;
+  padding: 6px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vf-card) 80%, transparent);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.vf-godview-deck-fault-retry:hover {
+  border-color: color-mix(in srgb, var(--vf-select) 60%, transparent);
+  color: rgba(255, 255, 255, 1);
+}

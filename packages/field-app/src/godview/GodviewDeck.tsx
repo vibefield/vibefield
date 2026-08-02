@@ -104,6 +104,14 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
   const seen = useRef(new Set<string>());
 
   const publish = useCallback((next: GhostteaWorkspaceContext) => setWorkspace(next), []);
+  /** GT-2b: a failed deck must offer its own way back. Bumping the generation
+   * births a runtime with a FRESH ports wait and re-runs the connect ask — the
+   * same path `bridge-up` takes, available to a human when no bridge-up is
+   * coming (a bridge that never built, a ladder that spent itself). */
+  const retry = useCallback(() => {
+    setError(null);
+    setGeneration((current) => current + 1);
+  }, []);
   // Read once per mount: the tokens do not move under a running deck, and
   // re-reading them every render would restyle every surface for nothing.
   const theme = useMemo(godviewTerminalTheme, []);
@@ -248,6 +256,22 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
     },
     onMenuAction: () => () => undefined,
   };
+
+  // GT-2b: the honest fault face. Without it, a deck whose ports never arrive
+  // shows ghosttea's own raw rejection string on a dead stage with no way back
+  // (the dev screenshot that prompted this). The workspace is not rendered —
+  // its runtime's one-shot ports wait is already spent.
+  if (error !== null) {
+    return (
+      <div className="vf-godview-deck-fault" role="alert">
+        <p className="vf-godview-deck-fault-message">the deck could not reach its shell</p>
+        <p className="vf-godview-deck-fault-detail">{error}</p>
+        <button type="button" className="vf-godview-deck-fault-retry" onClick={retry}>
+          retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <GhostteaProvider key={generation} runtime={runtime}>
