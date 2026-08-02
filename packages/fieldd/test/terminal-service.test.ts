@@ -396,3 +396,27 @@ describe("TerminalService (NF-3, mock native)", () => {
     expect(self?.capabilities.terminalHost).toBe(true);
   });
 });
+
+describe("GT-2d — the adopted floor is named in health", () => {
+  it("carries the hello ack's build through to system.health", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.helloNativeBuild = "field-native/0.1.0+dev-4f3a91c07b2e5d68a1c40b93";
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    expect(daemon.native.nativeBuild).toBe("field-native/0.1.0+dev-4f3a91c07b2e5d68a1c40b93");
+    expect(daemon.health().nativeBuild).toBe("field-native/0.1.0+dev-4f3a91c07b2e5d68a1c40b93");
+  });
+
+  it("reports a floor that did not say as null, never as a guess", async () => {
+    const dataDir = makeDataDir();
+    await startMock(dataDir); // a pre-GT-2d native: the ack has no build label
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const health = daemon.health();
+    expect(health.nativeConnected).toBe(true);
+    expect(health.nativeBuild).toBeNull();
+  });
+});

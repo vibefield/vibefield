@@ -108,6 +108,37 @@ describe("golden fixtures parse (the fixture is the contract)", () => {
   }
 });
 
+describe("GT-2d — the hello ack wears a provenance label", () => {
+  it("carries the build when the floor names it and stays silent when it does not", () => {
+    const named = HelloAck.parse({
+      contractsVersion: "0.1.0",
+      serverKind: "field-native",
+      grantedScopes: [],
+      nativeBuild: "field-native/0.1.0+dev-4f3a91c07b2e5d68a1c40b93",
+    });
+    expect(named.nativeBuild).toBe("field-native/0.1.0+dev-4f3a91c07b2e5d68a1c40b93");
+
+    // Additive: a daemon predating GT-2d acks exactly as it always did, and its
+    // silence is the tell — never a parse failure.
+    const silent = HelloAck.parse({
+      contractsVersion: "0.1.0",
+      serverKind: "field-native",
+      grantedScopes: [],
+    });
+    expect(silent.nativeBuild).toBeUndefined();
+  });
+
+  it("refuses a non-string label rather than coercing one", () => {
+    const parsed = HelloAck.safeParse({
+      contractsVersion: "0.1.0",
+      serverKind: "field-native",
+      grantedScopes: [],
+      nativeBuild: 20260728,
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
+
 describe("P3 — tolerant reader", () => {
   it("passthrough preserves unknown fields end-to-end", () => {
     const raw = JSON.parse(readFileSync(join(FIXTURES, "hello.unknown-field.json"), "utf8"));

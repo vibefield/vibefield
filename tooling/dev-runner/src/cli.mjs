@@ -14,8 +14,10 @@ import { createElectronStack } from "./electron-stack.mjs";
 import { startEsbuildWatches } from "./esbuild-watches.mjs";
 import { log } from "./log.mjs";
 import { startNxWatcher } from "./nx-watcher.mjs";
+import { reapDevOrphans } from "./orphan-reaper.mjs";
 import { workspacePaths as paths, repoRoot } from "./paths.mjs";
 import { cargoCommand, pnpmCommand, runCommand, terminateChild } from "./processes.mjs";
+import { readDevProduct } from "./product.mjs";
 import { createRestartCoordinator } from "./restart-coordinator.mjs";
 import { handoffDesktopRuntime } from "./runtime-handoff.mjs";
 import {
@@ -120,6 +122,7 @@ async function main() {
   }
 
   const initialRuntime = await waitForCurrentRuntime();
+  await reapStartupOrphans(initialRuntime);
   const electronPid = await electron.start(initialRuntime);
   currentBuildId = initialRuntime.buildId;
   currentRuntime = initialRuntime;
@@ -153,6 +156,39 @@ async function main() {
   });
   typechecks.requestFull();
   log.info("Nx is watching every workspace project; typechecks run in the background");
+}
+
+// GT-2d: a daemon nobody supervises still answers its socket forever (the
+// two-plane law), so a pair from a session that is gone beats the pair this
+// session is about to start — and fieldd honestly reports whatever that ancient
+// floor can do. The dev lock is already held here, which means no other runner
+// of this checkout is live: everything executing out of the runner's snapshot
+// namespace, or holding a socket in its data root, is a leftover. The one
+// exception is the pair this session will ADOPT, gated on the DAEMON identity
+// exactly as the shell's own adopt probe gates it — a shell-only rebuild leaves
+// that pair running from a snapshot directory that is no longer current, which
+// is the stale-snapshot class to the letter and must survive it.
+async function reapStartupOrphans(runtime) {
+  try {
+    const product = await readDevProduct(paths.dataRoot);
+    const adoptable =
+      product !== null && product.buildId === runtime.daemonBuildId
+        ? [product.pid, product.nativePid].filter((pid) => pid !== null)
+        : [];
+    log.info(
+      await reapDevOrphans({
+        paths,
+        log,
+        keepSnapshots: [runtime.buildId],
+        keepPids: adoptable,
+      }),
+    );
+  } catch (error) {
+    const detail = messageOf(error);
+    log.warn(
+      `orphan reaping did not finish; a previous session may still hold the tree: ${detail}`,
+    );
+  }
 }
 
 function createCriticalQueue() {

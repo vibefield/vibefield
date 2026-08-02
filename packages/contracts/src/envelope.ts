@@ -74,6 +74,12 @@ export const HelloAck = z
      * absent until the terminal unit is up (tolerant readers treat absence as
      * "no terminal endpoints yet", never an error). */
     terminal: TerminalEndpoints.optional(),
+    /** GT-2d — who actually answered. field-native outlives everything and is
+     * adopted by design, so the floor a shell pairs with can be far older than
+     * the tree that built it; this label is how that becomes visible instead of
+     * being inferred from missing capabilities. Opaque provenance, never parsed
+     * for behavior. Absence is itself the tell: a daemon predating GT-2d. */
+    nativeBuild: z.string().optional(),
   })
   .passthrough();
 export type HelloAck = z.infer<typeof HelloAck>;

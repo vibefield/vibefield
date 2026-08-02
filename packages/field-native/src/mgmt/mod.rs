@@ -368,6 +368,7 @@ async fn handle_hello(
         "contractsVersion": CONTRACTS_VERSION,
         "serverKind": "field-native",
         "grantedScopes": [],
+        "nativeBuild": native_build(),
     });
     // NF-D8: the terminal floor's endpoints ride the hello, so fieldd re-learns
     // them at every re-pair and they never enter env, config, or logs. Field
@@ -377,6 +378,23 @@ async fn handle_hello(
         ack["terminal"] = serde_json::to_value(endpoints).expect("terminal endpoints serialize");
     }
     (ok(id, ack), true)
+}
+
+/// GT-2d — who is actually answering this socket. This plane outlives fieldd
+/// and is adopted by design, so the floor a shell pairs with can be many builds
+/// older than the tree that started the pairing; a July native answering an
+/// August fieldd reports its missing units perfectly honestly and reads as a
+/// product bug. The crate version is always available; `FIELDD_BUILD_ID` is the
+/// development snapshot identity, inherited from the fieldd that spawned this
+/// process (bin.ts hands its whole environment down) — present in dev, absent
+/// in a packaged run, which is why it is a suffix and not a requirement. A
+/// build label, never a secret and never parsed for behavior.
+fn native_build() -> String {
+    const BASE: &str = concat!("field-native/", env!("CARGO_PKG_VERSION"));
+    match std::env::var("FIELDD_BUILD_ID") {
+        Ok(stamp) if !stamp.is_empty() => format!("{BASE}+{stamp}"),
+        _ => BASE.to_string(),
+    }
 }
 
 async fn handle_desired_set(

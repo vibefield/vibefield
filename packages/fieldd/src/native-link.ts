@@ -85,6 +85,11 @@ export class NativeLink extends EventEmitter {
    * The token lives here and in the tickets minted from it — never logs, env,
    * or disk. */
   terminalEndpoints: TerminalEndpoints | undefined;
+  /** GT-2d: the floor's own build label, re-learned at every re-pair. This
+   * plane outlives us and is adopted by design, so "which field-native answered"
+   * is a real question — undefined means the daemon predates GT-2d, which is
+   * itself an answer (it is at least that old). */
+  nativeBuild: string | undefined;
 
   constructor(private readonly opts: NativeLinkOptions) {
     super();
@@ -209,9 +214,14 @@ export class NativeLink extends EventEmitter {
     // NF-D8: a fresh native boot means fresh endpoints + token; a re-pair to
     // the same boot re-delivers the same ones. The tolerant gate keeps a
     // malformed/absent field as "no floor" rather than a poisoned value.
-    const terminal = (ack as { terminal?: unknown } | null | undefined)?.terminal;
-    const parsed = TerminalEndpoints.safeParse(terminal);
+    const record = (ack ?? {}) as { terminal?: unknown; nativeBuild?: unknown };
+    const parsed = TerminalEndpoints.safeParse(record.terminal);
     this.terminalEndpoints = parsed.success ? parsed.data : undefined;
+    // GT-2d: read on its own terms, so a floor whose endpoints are malformed
+    // still says who it is (and the reverse). Anything but a string is a floor
+    // that did not answer the question — the same honest blank a pre-GT-2d
+    // daemon leaves, never a guess.
+    this.nativeBuild = typeof record.nativeBuild === "string" ? record.nativeBuild : undefined;
     this.emit("terminal-endpoints");
   }
 

@@ -137,6 +137,13 @@ export interface FielddConfig {
 export interface FielddHealth {
   fieldd: { state: "up"; bootId: string; contractsVersion: string; startedAt: number; pid: number };
   nativeConnected: boolean;
+  /** GT-2d — the build label the paired field-native gave in its hello ack.
+   * The native plane outlives fieldd and is ADOPTED, so the floor answering
+   * this socket can be many builds older than the tree that started us; without
+   * this, a stale floor is visible only as capabilities it honestly lacks.
+   * `null` = it did not say, which means a daemon predating GT-2d — itself the
+   * tell, and never a claim that the build is unknowable. */
+  nativeBuild: string | null;
   native: NativeHealth | null;
   docs: { state: string; docCount: number };
   plugins: { count: number; enabled: number; invalid: number };
@@ -479,6 +486,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         pid: process.pid,
       },
       nativeConnected: native.connected,
+      nativeBuild: native.nativeBuild ?? null,
       native: latestHealth,
       docs: docs.health(),
       plugins: plugins.health(),

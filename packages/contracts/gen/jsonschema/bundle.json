@@ -1274,6 +1274,9 @@
         },
         "terminal": {
           "$ref": "#/definitions/TerminalEndpoints"
+        },
+        "nativeBuild": {
+          "type": "string"
         }
       },
       "required": [

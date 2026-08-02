@@ -106,6 +106,15 @@ async fn hello_pairs_and_acks() {
     let resp = c.hello(&daemon, 1).await;
     assert_eq!(resp["result"]["serverKind"], "field-native");
     assert_eq!(resp["result"]["contractsVersion"], "0.1.0");
+    // GT-2d: the ack names the build that answered. This plane is adopted, so
+    // the pairing alone never says how old the floor on the other end is.
+    let build = resp["result"]["nativeBuild"]
+        .as_str()
+        .expect("the hello ack carries a build label");
+    assert!(
+        build.starts_with(concat!("field-native/", env!("CARGO_PKG_VERSION"))),
+        "build label lost its crate version: {build}"
+    );
 }
 
 #[tokio::test]

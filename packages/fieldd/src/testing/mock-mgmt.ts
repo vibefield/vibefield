@@ -41,6 +41,9 @@ export class MockMgmtServer {
   /** NF-3 — when set, the hello ack carries these terminal endpoints (NF-D8);
    * null = a floor-less native (pre-NF-2, or the unit degraded). */
   helloTerminal: { controlSocket: string; frameSocket: string; authToken: string } | null = null;
+  /** GT-2d — the build label the hello ack carries; null = a floor predating
+   * GT-2d, which fieldd must surface as "it did not say", never as a guess. */
+  helloNativeBuild: string | null = null;
   /** NF-3 — when set, native.lifecycle.observed.subscribe answers this snapshot
    * (an ObservedState); null falls through to the generic `{n:0}` handler,
    * which the fieldd side must read as "no inventory" (tolerant reader). */
@@ -121,6 +124,7 @@ export class MockMgmtServer {
             contractsVersion: "0.1.0",
             serverKind: "field-native",
             grantedScopes: [],
+            ...(this.helloNativeBuild !== null ? { nativeBuild: this.helloNativeBuild } : {}),
             ...(this.helloTerminal !== null ? { terminal: this.helloTerminal } : {}),
           },
         }) + "\n",

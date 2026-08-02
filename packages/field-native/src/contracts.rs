@@ -854,6 +854,9 @@ impl Hello {
 #[doc = "        \"type\": \"string\""]
 #[doc = "      }"]
 #[doc = "    },"]
+#[doc = "    \"nativeBuild\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"serverKind\": {"]
 #[doc = "      \"$ref\": \"#/definitions/ServerKind\""]
 #[doc = "    },"]
@@ -871,6 +874,12 @@ pub struct HelloAck {
     pub contracts_version: SemverString,
     #[serde(rename = "grantedScopes")]
     pub granted_scopes: ::std::vec::Vec<::std::string::String>,
+    #[serde(
+        rename = "nativeBuild",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub native_build: ::std::option::Option<::std::string::String>,
     #[serde(rename = "serverKind")]
     pub server_kind: ServerKind,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
@@ -6326,6 +6335,10 @@ pub mod builder {
         contracts_version: ::std::result::Result<super::SemverString, ::std::string::String>,
         granted_scopes:
             ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        native_build: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         server_kind: ::std::result::Result<super::ServerKind, ::std::string::String>,
         terminal: ::std::result::Result<
             ::std::option::Option<super::TerminalEndpoints>,
@@ -6337,6 +6350,7 @@ pub mod builder {
             Self {
                 contracts_version: Err("no value supplied for contracts_version".to_string()),
                 granted_scopes: Err("no value supplied for granted_scopes".to_string()),
+                native_build: Ok(Default::default()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
                 terminal: Ok(Default::default()),
             }
@@ -6361,6 +6375,16 @@ pub mod builder {
             self.granted_scopes = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for granted_scopes: {e}"));
+            self
+        }
+        pub fn native_build<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.native_build = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for native_build: {e}"));
             self
         }
         pub fn server_kind<T>(mut self, value: T) -> Self
@@ -6390,6 +6414,7 @@ pub mod builder {
             Ok(Self {
                 contracts_version: value.contracts_version?,
                 granted_scopes: value.granted_scopes?,
+                native_build: value.native_build?,
                 server_kind: value.server_kind?,
                 terminal: value.terminal?,
             })
@@ -6400,6 +6425,7 @@ pub mod builder {
             Self {
                 contracts_version: Ok(value.contracts_version),
                 granted_scopes: Ok(value.granted_scopes),
+                native_build: Ok(value.native_build),
                 server_kind: Ok(value.server_kind),
                 terminal: Ok(value.terminal),
             }
