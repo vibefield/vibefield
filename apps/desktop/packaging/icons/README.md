@@ -15,13 +15,13 @@ imported on 2026-07-30. Keep the package serialization and its referenced vector
   `85b663f854d34df2055eec9f5bfd34076280447a72d9abd1b7152ecac7bf3728`
 
 Run `pnpm --filter @vibefield/desktop icons:generate` after changing a master or `app.icon`. The
-generator creates the checked-in conventional macOS ICNS fallback, Windows ICO, Linux raster set,
-and all three platform tray states. On macOS it also uses Xcode's official Icon Composer `ictool`
-to render `app-macos-1024.png` from `app.icon`. `icons:check` regenerates every representation in
-memory and compares exact bytes, verifies that every Icon Composer layer is a local square vector
-and that the package contains no unreferenced assets, so macOS CI proves that committed outputs
-are current. On a non-macOS host, it still validates the committed Apple rendition's structure
-and pixels but cannot re-render Apple materials.
+generator creates the checked-in Icon Composer-derived macOS ICNS fallbacks, Windows ICO, Linux
+raster set, and all three platform tray states. On macOS it uses Xcode's official Icon Composer
+`ictool` to render `app-macos-1024.png` and `actool` to compile the ICNS fallback directly from
+`app.icon`. `icons:check` regenerates every representation in memory and compares exact bytes,
+verifies that every Icon Composer layer is a local square vector and that the package contains no
+unreferenced assets, so macOS CI proves that committed outputs are current. On a non-macOS host,
+it still validates the committed Apple PNG and ICNS outputs but cannot recompile Apple materials.
 
 The attention and offline tray states are deterministic monochrome badge treatments derived from
 the tray master. macOS receives black-plus-alpha template images. Windows and Linux receive a
@@ -31,9 +31,9 @@ images for the current theme.
 The reviewed Icon Composer composition uses a shared square-platform white material, translucent
 dot field, black infinity mark, and RGB offset accents. The generator rejects missing or external
 layers, a non-square vector canvas, an unrounded macOS rendition, or loss of those principal
-visual treatments. The flat application master continues to produce the conventional ICNS
-fallback and the Windows/Linux assets; it is intentionally independent of Apple's material
-composition.
+visual treatments. The flat application master continues to produce only the Windows/Linux
+assets; it is intentionally independent of Apple's material composition. No macOS representation
+is allowed to fall back to that legacy artwork.
 
 `pnpm dev` runs Electron's own unsigned application bundle, so electron-builder cannot embed the
 VibeField bundle icon in that loop. After Electron is ready, the shell applies the checked
