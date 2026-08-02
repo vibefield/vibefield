@@ -19,6 +19,7 @@ import {
   useState,
 } from "react";
 import type { DocManager, DocManagerState } from "../doc-manager";
+import { GodviewOverlay, GodviewToggle, useGodviewOpen } from "../godview";
 import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
 import { FilePill } from "../hud/FilePill";
@@ -138,6 +139,9 @@ export function ChromeLayer({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
+  // One state, three readers: the overlay, the toolbar button, and the stage
+  // hold. Owned by main (GT-D2) because ⌘G never reaches this page.
+  const godviewOpen = useGodviewOpen();
 
   useEffect(() => {
     const onShellCommand = getHost().onShellCommand;
@@ -158,6 +162,9 @@ export function ChromeLayer({
   // (WidgetTray holds for itself).
   useStageHold(ce, docsOpen, "docs-explorer");
   useStageHold(ce, docState.phase === "loading", "loading-veil");
+  // M5, the strongest case for it: the Godview covers the window outright, so
+  // every canvas frame drawn behind it is work nobody can see.
+  useStageHold(ce, godviewOpen, "godview");
   useEffect(() => {
     if (docsOpen) ce.ops.cancelActiveGestures();
   }, [docsOpen, ce]);
@@ -368,6 +375,7 @@ export function ChromeLayer({
           <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.86 2.86-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.55v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.86-2.86.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-1.5-1H2.5V10h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06L6.56 4.2l.06.06A1.7 1.7 0 0 0 8.5 4.6a1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.86 2.86-.06.06A1.7 1.7 0 0 0 18.9 9a1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
         </svg>
       </button>
+      <GodviewToggle active={godviewOpen} />
       <button
         type="button"
         onClick={() => chrome.setShowEcs((s) => !s)}
@@ -431,6 +439,11 @@ export function ChromeLayer({
         onClose={() => setPaletteOpen(false)}
         windowId={FIELD_WINDOW_ID}
       />
+
+      {/* The Godview stage (GT-D2): above every piece of field chrome, below
+          the loading veil — a document that is still opening owns the window
+          more than a terminal deck does. */}
+      <GodviewOverlay />
 
       {/* The loading veil rides ABOVE all chrome — loading is modal (B4 §2). */}
       <LoadingVeil loading={docState.loading} />

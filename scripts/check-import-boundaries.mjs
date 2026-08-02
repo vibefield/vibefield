@@ -88,16 +88,9 @@ function matchesForbid(spec, forbid) {
 // A cross-package deep import: reaching past a new package's public entries. Bare
 // `@vibefield/field-app` (no subpath) is the public root and allowed; `/main`,
 // `/preload`, `/host` are the declared entries (spec §8.2), plus field-app's
-// browser-safe `/logging` seam and its exported `/spike*` implementations,
-// consumed by the shell's test-only spike pages.
-const NEW_PACKAGE_ENTRIES = new Set([
-  "main",
-  "preload",
-  "host",
-  "logging",
-  "spike",
-  "spike-godview",
-]);
+// browser-safe `/logging` seam and its exported `/spike` implementation,
+// consumed by the shell's test-only spike page.
+const NEW_PACKAGE_ENTRIES = new Set(["main", "preload", "host", "logging", "spike"]);
 function isDeepPackageImport(spec) {
   const m = /^@vibefield\/(?:electron-shell|field-app|fieldd-supervisor)\/(.+)$/.exec(spec);
   if (m === null) return false;

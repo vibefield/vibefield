@@ -1,8 +1,14 @@
-import { IPC_CHANNELS, TerminalBackendAttachResult } from "@vibefield/contracts";
+import {
+  GodviewSetRequest,
+  GodviewState as GodviewStateSchema,
+  IPC_CHANNELS,
+  TerminalBackendAttachResult,
+} from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { ipcMain } from "electron";
 import { createBootstrapHandler } from "./bootstrap";
+import type { GodviewRegistry } from "./godview";
 import type { TerminalBackendRegistry } from "./terminal-backend";
 import type { WindowRegistry } from "./window-policy";
 
@@ -85,5 +91,29 @@ export function registerTerminalBackend(
       );
       throw error;
     }
+  });
+}
+
+/** The Godview door (GT-D2). The toolbar button's request and the menu
+ * accelerator's are the SAME transition applied to the same bit — this handler
+ * exists so the button can reach it, not so the renderer can hold an opinion.
+ * Same registered-sender gate as the others: a window this shell did not make
+ * cannot flip a window it does not own. */
+export function registerGodviewToggle(
+  registry: WindowRegistry,
+  godview: GodviewRegistry,
+  logger?: Logger,
+): void {
+  ipcMain.handle(IPC_CHANNELS.godviewSet, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) {
+      logger?.warn(
+        "desktop.ipc.godview_set_refused",
+        "Electron refused a Godview transition from an unregistered sender",
+        { webContentsId: event.sender.id },
+      );
+      throw new Error("godview set refused: unregistered sender");
+    }
+    const request = GodviewSetRequest.parse(raw);
+    return GodviewStateSchema.parse(godview.ensure(event.sender).set(request.open));
   });
 }

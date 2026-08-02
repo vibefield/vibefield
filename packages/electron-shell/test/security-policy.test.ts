@@ -12,7 +12,7 @@ import {
 // literals (repository law / wall R7): the assertions read PORTS so a registry
 // bump can never quietly diverge from the CSP.
 
-const SMOKE_LIKE: readonly ShellMode[] = ["smoke", "smoke-canvas", "spike-loro", "spike-godview"];
+const SMOKE_LIKE: readonly ShellMode[] = ["smoke", "smoke-canvas", "smoke-godview", "spike-loro"];
 const NON_DEV: readonly ShellMode[] = ["production", ...SMOKE_LIKE];
 
 describe("buildCsp", () => {

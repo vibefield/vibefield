@@ -16,8 +16,18 @@ import {
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
-import { app, clipboard, crashReporter, dialog, nativeImage, session, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  crashReporter,
+  dialog,
+  nativeImage,
+  session,
+  shell,
+} from "electron";
 import { applyDevelopmentDockIcon } from "./app-branding";
+import { installAppMenu } from "./app-menu";
 import { installAppProtocol, registerAppScheme } from "./app-protocol";
 import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
@@ -26,7 +36,8 @@ import { installDevSignalQuit } from "./dev-signals";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
-import { registerTerminalBackend, registerWindowBootstrap } from "./ipc";
+import { GodviewRegistry } from "./godview";
+import { registerGodviewToggle, registerTerminalBackend, registerWindowBootstrap } from "./ipc";
 import { installLifecycle } from "./lifecycle";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
@@ -76,6 +87,7 @@ let crashArtifacts: CrashArtifactManager | null = null;
 let supportBundles: SupportBundleService | null = null;
 let trayController: TrayController | null = null;
 let terminalBackends: TerminalBackendRegistry | null = null;
+let godviewStates: GodviewRegistry | null = null;
 let primaryWindowOpener: (() => Promise<Electron.BrowserWindow>) | null = null;
 const shellDisposers = new Set<() => void>();
 const getSupervisor = () => supervisor;
@@ -98,6 +110,8 @@ function disposeShellState(): void {
   trayController = null;
   terminalBackends?.dispose();
   terminalBackends = null;
+  godviewStates?.dispose();
+  godviewStates = null;
   primaryWindowOpener = null;
   for (const dispose of shellDisposers) dispose();
   shellDisposers.clear();
@@ -479,6 +493,61 @@ async function main(
   });
   registerTerminalBackend(registry, terminalBackends, logger.child({ component: "ipc.terminal" }));
 
+  // GT-D2: main owns the overlay bit, the menu draws it, the renderer reads it.
+  // `redrawMenu` is assigned below for the modes that have a menu; the states
+  // exist in every windowed mode because the renderer needs its truth either
+  // way.
+  let redrawMenu: (state: { godviewOpen: boolean }) => void = () => undefined;
+  godviewStates = new GodviewRegistry({
+    logger: logger.child({ component: "godview" }),
+    onChanged: (state) => redrawMenu({ godviewOpen: state.open }),
+  });
+  registerGodviewToggle(registry, godviewStates, logger.child({ component: "ipc.godview" }));
+  /** The accelerator's and the menu item's one action. The focused window is
+   * the subject — that is what "toggle" means from a menu — falling back to the
+   * primary window, which is the only one v1 has and the one a hidden harness
+   * drives. */
+  const toggleGodview = (): void => {
+    const window = BrowserWindow.getFocusedWindow() ?? registry.primary();
+    if (window === null || window.isDestroyed()) return;
+    godviewStates?.ensure(window.webContents).set();
+  };
+
+  if (MODE === "smoke-godview") {
+    await (await testing()).runSmokeGodview({
+      handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      viteUrl: VITE_URL,
+      // The accelerator's own action, handed over rather than re-implemented:
+      // the harness must exercise the path ⌘G takes, not a parallel one.
+      toggleGodview,
+      beforeExit: closeEvidence,
+      onWindow: (window) => {
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch((error) => {
+              logger.error(
+                "desktop.crash.refresh_failed",
+                "Electron could not refresh crash evidence after a renderer exited",
+                error,
+              );
+            });
+          },
+        });
+        installDiagnostics(window);
+      },
+    });
+    return;
+  }
+
   if (MODE === "smoke-canvas") {
     await (await testing()).runSmokeCanvas({
       handle: await fielddReady,
@@ -511,39 +580,13 @@ async function main(
     return;
   }
 
-  if (MODE === "spike-godview") {
-    // No handle: the spike renderer redeems its own ticket through the product
-    // bootstrap, which is the whole point of GT-1. The pair is awaited anyway so
-    // a daemon failure reads as a boot failure, not as a page timeout.
-    await fielddReady;
-    await (await testing()).runSpikeGodview({
-      supervisor,
-      root,
-      registry,
-      preloadPath: PRELOAD_PATH,
-      beforeExit: closeEvidence,
-      onWindow: (window) => {
-        installRendererLogging({
-          window,
-          sink: shellLogging.renderer,
-          pluginRouter: shellLogging.pluginRendererRouter,
-          pluginResolver: pluginProvenance,
-          desktopLogger: logger,
-          onProcessGone: () => {
-            void crashes.refresh("renderer").catch((error) => {
-              logger.error(
-                "desktop.crash.refresh_failed",
-                "Electron could not refresh crash evidence after a renderer exited",
-                error,
-              );
-            });
-          },
-        });
-        installDiagnostics(window);
-      },
-    });
-    return;
-  }
+  // The application menu exists only where there is a menu bar to hold it —
+  // the harness modes present no UI and would only be installing accelerators
+  // for nobody. Assigning `redrawMenu` here is what makes the checkmark and the
+  // conditional ⌘W follow the overlay from this point on.
+  redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
+    toggleGodview,
+  });
 
   let latestDesktopState: DesktopShellState | null = null;
   const publishDesktopState = (raw: DesktopShellState): void => {
@@ -591,6 +634,10 @@ async function main(
           if (latestDesktopState !== null) {
             window.webContents.send(IPC_CHANNELS.desktopState, latestDesktopState);
           }
+          // A fresh document believes the overlay is closed; main knows whether
+          // it is. Correcting it here means a reload never leaves the toolbar
+          // button and the menu checkmark disagreeing.
+          godviewStates?.ensure(window.webContents).republish();
           logger.info("desktop.window.renderer_loaded", "The main renderer finished loading", {
             windowId: String(window.id),
             webContentsId: window.webContents.id,

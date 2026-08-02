@@ -8,7 +8,14 @@
 // envelope with controlUrl); until that wire exists this mirrors today's
 // bridge exactly.
 
-import type { DesktopShellState, ShellCommand, ShellPlatform } from "@vibefield/contracts";
+import type {
+  DesktopShellState,
+  GodviewState,
+  ShellCommand,
+  ShellPlatform,
+  TerminalBridgeStatus,
+  TerminalTicket,
+} from "@vibefield/contracts";
 import type {
   CrashArtifactListV1,
   DiagnosticLeaseCreateV1,
@@ -47,10 +54,30 @@ export interface FieldDiagnosticsHost {
   copyText(text: string): Promise<void>;
 }
 
+/** The terminal transport seam (GT-D3). The renderer redeems its own ticket
+ * over fieldd — the one product door — and hands the transport coordinates to a
+ * host that can dial a unix socket, which a sandboxed page cannot. Optional
+ * because a browser harness has no bridge to offer; the Godview reports that
+ * honestly rather than drawing an empty deck. */
+export interface FieldTerminalHost {
+  connect(ticket: TerminalTicket): Promise<{ attached: boolean }>;
+  onStatus(handler: (status: TerminalBridgeStatus) => void): () => void;
+}
+
+/** The Godview overlay's open bit, which the HOST owns (GT-D2): ⌘G is an
+ * application accelerator and never reaches this page, so the renderer reads
+ * the state rather than keeping one. `set` with no argument is a flip. */
+export interface FieldGodviewHost {
+  set(open?: boolean): Promise<GodviewState>;
+  onState(handler: (state: GodviewState) => void): () => void;
+}
+
 export interface FieldHost {
   readonly logger: RendererLogger;
   readonly diagnostics?: FieldDiagnosticsHost;
   readonly platform?: ShellPlatform;
+  readonly terminal?: FieldTerminalHost;
+  readonly godview?: FieldGodviewHost;
   getConnection(): Promise<{ port: number; token: string }>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

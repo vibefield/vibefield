@@ -175,7 +175,7 @@ export const SOCKETS = {
   TERMINAL_FRAME: "terminal-frame.sock",
 } as const;
 
-/** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): seven channels, nothing
+/** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): these channels, nothing
  * else. Payload schemas live in shell.ts; call sites import these names — a raw
  * `vibefield:` literal outside contracts is a boundary violation (wall R6). */
 export const IPC_CHANNELS = {
@@ -198,4 +198,11 @@ export const IPC_CHANNELS = {
   terminalConnect: "vibefield:terminal:connect",
   /** main → renderer event: TerminalBridgeStatus for this window's bridge */
   terminalStatus: "vibefield:terminal:status",
+  /** main → renderer event: GodviewState — this window's overlay truth, which
+   * main owns (GT-D2: the accelerator intercepts before the renderer, so the
+   * menu item and the renderer must read ONE state, and it has to be main's) */
+  godviewState: "vibefield:godview:state",
+  /** renderer → main invoke: GodviewSetRequest — the toolbar button asking for
+   * the same transition ⌘G asks for; answers with the resulting GodviewState */
+  godviewSet: "vibefield:godview:set",
 } as const;

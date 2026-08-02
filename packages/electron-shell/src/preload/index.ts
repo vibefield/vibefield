@@ -3,6 +3,9 @@ import {
   CloseRequest,
   CloseResult,
   type DesktopShellState,
+  GodviewSetRequest,
+  type GodviewState,
+  GodviewState as GodviewStateSchema,
   IPC_CHANNELS,
   type ShellCommand,
   ShellPlatform,
@@ -14,6 +17,7 @@ import {
 import { contextBridge, ipcRenderer } from "electron";
 import { PreloadDesktopStateBridge } from "./desktop-state";
 import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
+import { PreloadGodviewStateBridge } from "./godview";
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
 import { PreloadShellCommandBridge } from "./shell-commands";
 import { PreloadTerminalStatusBridge } from "./terminal";
@@ -81,6 +85,24 @@ const terminalStatus = new PreloadTerminalStatusBridge((issueCount) => {
     }),
   );
 });
+const godviewState = new PreloadGodviewStateBridge((issueCount) => {
+  logging.submit(
+    JSON.stringify({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: Date.now(),
+          level: "error",
+          event: "renderer.preload.godview_state_rejected",
+          msg: "Preload rejected a malformed Godview state",
+          component: "preload.godview",
+          attrs: { issueCount },
+        },
+      ],
+    }),
+  );
+});
 /** The control and frame ports cross a world boundary no page can span alone
  * (GT-0 finding 2): main transfers them with `webContents.postMessage`, which
  * lands on `ipcRenderer` in the ISOLATED world, while the ghosttea runtime
@@ -114,6 +136,9 @@ ipcRenderer.on(IPC_CHANNELS.desktopState, (_event, raw: unknown) => {
 });
 ipcRenderer.on(IPC_CHANNELS.terminalStatus, (_event, raw: unknown) => {
   terminalStatus.accept(raw);
+});
+ipcRenderer.on(IPC_CHANNELS.godviewState, (_event, raw: unknown) => {
+  godviewState.accept(raw);
 });
 
 contextBridge.exposeInMainWorld("vibefield", {
@@ -167,6 +192,19 @@ contextBridge.exposeInMainWorld("vibefield", {
     },
     onStatus: (handler: (status: TerminalBridgeStatus) => void): (() => void) =>
       terminalStatus.subscribe(handler),
+  },
+  godview: {
+    /** `open` omitted = flip. The page never sends the value it believes,
+     * because main is the one holding it (GT-D2). */
+    set: async (open?: boolean): Promise<GodviewState> =>
+      GodviewStateSchema.parse(
+        await ipcRenderer.invoke(
+          IPC_CHANNELS.godviewSet,
+          GodviewSetRequest.parse(open === undefined ? {} : { open }),
+        ),
+      ),
+    onState: (handler: (state: GodviewState) => void): (() => void) =>
+      godviewState.subscribe(handler),
   },
   diagnostics: {
     query: (query: unknown) => diagnostics.query(query),

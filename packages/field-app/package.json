@@ -6,8 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./logging": "./src/logging.ts",
-    "./spike": "./src/spike/spike-loro.ts",
-    "./spike-godview": "./src/spike/spike-godview.tsx"
+    "./spike": "./src/spike/spike-loro.ts"
   },
   "scripts": {
     "test": "vitest run",

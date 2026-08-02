@@ -1,5 +1,6 @@
 import type {
   DesktopShellState,
+  GodviewState,
   ShellCommand,
   ShellPlatform,
   TerminalBridgeStatus,
@@ -31,6 +32,10 @@ declare global {
       terminal: {
         connect(ticket: TerminalTicket): Promise<{ attached: boolean }>;
         onStatus(handler: (status: TerminalBridgeStatus) => void): () => void;
+      };
+      godview: {
+        set(open?: boolean): Promise<GodviewState>;
+        onState(handler: (state: GodviewState) => void): () => void;
       };
       diagnostics: {
         query(query: DiagnosticLogQueryV1): Promise<DiagnosticLogSnapshotV1>;

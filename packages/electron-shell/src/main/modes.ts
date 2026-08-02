@@ -6,13 +6,13 @@ export type ShellMode =
   | "dev"
   | "smoke"
   | "smoke-canvas"
-  | "spike-loro"
-  | "spike-godview";
+  | "smoke-godview"
+  | "spike-loro";
 
 /** Precedence mirrors the pre-split dispatch order in main(). */
 export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--spike-loro")) return "spike-loro";
-  if (argv.includes("--spike-godview")) return "spike-godview";
+  if (argv.includes("--smoke-godview")) return "smoke-godview";
   if (argv.includes("--smoke")) return "smoke";
   if (argv.includes("--smoke-canvas")) return "smoke-canvas";
   if (argv.includes("--dev")) return "dev";
@@ -24,7 +24,7 @@ export function parseMode(argv: readonly string[]): ShellMode {
  * exited 0 with no output — a silent false pass) and the workarea fill. */
 export function isSmokeLike(mode: ShellMode): boolean {
   return (
-    mode === "smoke" || mode === "smoke-canvas" || mode === "spike-loro" || mode === "spike-godview"
+    mode === "smoke" || mode === "smoke-canvas" || mode === "smoke-godview" || mode === "spike-loro"
   );
 }
 
@@ -35,11 +35,10 @@ export function isSmokeLike(mode: ShellMode): boolean {
  * ADOPTS the running pair (buildId-gated probe); the runner reaps the pair
  * on daemon-plane changes and at session end.
  *
- * The two spikes split on what they SPAWN, not on being spikes: spike-loro
- * touches no daemon, while spike-godview drives the real pair through the
- * terminal floor and so owes the same teardown a smoke run does. */
+ * spike-loro is leave-running despite passing isSmokeLike: it touches no
+ * daemon, so it has nothing to stop and no right to stop anyone else's. */
 export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" {
-  return mode === "smoke" || mode === "smoke-canvas" || mode === "spike-godview"
+  return mode === "smoke" || mode === "smoke-canvas" || mode === "smoke-godview"
     ? "stop-owned"
     : "leave-running";
 }

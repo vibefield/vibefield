@@ -169,3 +169,72 @@ body {
     animation-duration: 1ms;
   }
 }
+
+/* The Godview stage (GT-2; DESIGN.md §1 "the control room may commit to dark",
+   §5 sheet tier, §6 island ease). One element that changes role rather than two
+   that crossfade (M1), in CSS rather than WAAPI (M3), and it stays MOUNTED while
+   closed so PF6's visibility seam — not an unmount — is what silences the panes.
+   Written here and not inline so the reduced-motion override below can simply
+   win on specificity instead of shouting !important at an inline style. */
+.vf-godview {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--vf-card) 92%, transparent);
+  backdrop-filter: blur(48px);
+  opacity: 0;
+  transform: scale(1.012);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 240ms ease,
+    transform 560ms var(--vf-ease-island),
+    visibility 0s linear 240ms;
+}
+
+.vf-godview[data-godview-open="true"] {
+  opacity: 1;
+  transform: scale(1);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 240ms ease,
+    transform 560ms var(--vf-ease-island),
+    visibility 0s linear 0s;
+}
+
+/* Ghosttea paints its window and pane gutters One Dark (#282c34) — another
+   design system's color. The stage owns those pixels, so they give way to the
+   overlay's own §2.2 surface and only the panes (whose theme comes from the
+   tokens, deck-theme.ts) paint themselves. */
+.vf-godview .ghostty-window,
+.vf-godview .terminal-host {
+  background: transparent;
+}
+
+/* The workspace publishes its context to a sidebar and to nothing else, so the
+   deck mounts a probe there to observe and drive panes. The probe draws
+   nothing — but the slot around it is a 340px panel in yet another bespoke
+   color, so it would take a third of the stage to hold an empty div. Hidden,
+   not omitted: React still mounts the probe and still runs its effect. */
+.vf-godview .ghosttea-workspace-sidebar {
+  display: none;
+}
+
+.vf-godview-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* §2.3 hairline, dark */
+}
+
+/* M6: the travel goes, the fade stays, durations halve. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-godview,
+  .vf-godview[data-godview-open="true"] {
+    transform: none;
+    transition:
+      opacity 120ms ease,
+      visibility 0s linear;
+  }
+}

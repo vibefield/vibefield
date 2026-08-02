@@ -8,6 +8,8 @@ import {
   CloseRequest,
   CloseResult,
   DesktopShellState,
+  GodviewSetRequest,
+  GodviewState,
   ProductInfo,
   ShellCommandRequest,
   WindowConnection,
@@ -148,7 +150,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the nine channel keys, in order", () => {
+  it("exposes exactly the eleven channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -159,6 +161,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "desktopState",
       "terminalConnect",
       "terminalStatus",
+      "godviewState",
+      "godviewSet",
     ]);
   });
 
@@ -173,6 +177,32 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       desktopState: "vibefield:shell:desktop-state",
       terminalConnect: "vibefield:terminal:connect",
       terminalStatus: "vibefield:terminal:status",
+      godviewState: "vibefield:godview:state",
+      godviewSet: "vibefield:godview:set",
+    });
+  });
+});
+
+describe("Godview overlay state (GT-D2)", () => {
+  it("carries one boolean — the overlay bit main owns", () => {
+    expect(GodviewState.parse({ open: true })).toEqual({ open: true });
+    expect(GodviewState.safeParse({}).success).toBe(false);
+    expect(GodviewState.safeParse({ open: "yes" }).success).toBe(false);
+  });
+
+  it("lets a request omit `open`, which is how the renderer asks for a FLIP", () => {
+    // The accelerator is consumed before any renderer sees the keystroke, so a
+    // page that sent the value it believed could be arguing with one main had
+    // already changed. Omission means "whatever it is, change it".
+    expect(GodviewSetRequest.parse({})).toEqual({});
+    expect(GodviewSetRequest.parse({ open: false })).toEqual({ open: false });
+    expect(GodviewSetRequest.safeParse({ open: 1 }).success).toBe(false);
+  });
+
+  it("passes unknown fields through, like every other inbound shape (EL9)", () => {
+    expect(GodviewState.parse({ open: false, future: "field" })).toEqual({
+      open: false,
+      future: "field",
     });
   });
 });

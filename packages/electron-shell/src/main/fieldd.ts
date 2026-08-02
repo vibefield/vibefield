@@ -58,9 +58,10 @@ export function buildSupervisor(opts: {
   // again: a run that stops what it spawned must not be able to reach the
   // ambient pair in the first place, and a leave-running mode wants the
   // registry ports precisely so its successor can adopt. The list this
-  // replaced named smoke and smoke-canvas literally and so quietly handed
-  // spike-godview the production ports — an EADDRINUSE against whatever
-  // daemon the machine already had.
+  // replaced named smoke and smoke-canvas literally, so the next stop-owned
+  // mode added got the production ports by omission and died on EADDRINUSE
+  // against whatever daemon the machine already had (GT-0). Deriving it means
+  // a new mode cannot be forgotten here.
   const isolatePorts = policy === "stop-owned";
   const logger = opts.logger.child({ component: "daemon.supervisor" });
   const pluginRoots = opts.resources.pluginRoots;
