@@ -408,6 +408,53 @@ ports, private intent vs synced catalog, local-only mutation, spine-stage/plugin
 ownership, bounded URL-served previews, full-config reconciliation, the CAS consumer gate,
 the static `shell.*` provider over Electron main's existing authenticated loopback connection,
 and the browser's cross-port cookie boundary.
+
+## GT-2e — one authority
+
+**GT-2e LANDED (2026-08-02, `a3babb7` — builder + orchestrator re-verification).** The v0.3
+design correction (James: "a bad design smell — why all these tricks?"), traced from a
+`sh-3.2$` pane: GT-1/2 had made fieldd a second session authority in front of
+`GhostteaWorkspace`, and every trick — ticket-rides-create as the deck's door,
+`sessionsToAdopt`, the split interception, the `defaultShell: "/bin/sh"` hardcode, the mount
+race itself — was compensation. Now (GT-D10/D11): the workspace is the ONE UI authority over
+pane births through its own doors, exactly as ghosttea desktop and the chopsticks godview run
+it; main resolves the real login shell + `$HOME` onto the connect IPC; `terminal.connectTicket`
+mints the connection's one ticket; `terminal.create` stays the programmatic door
+(iOS/agents/tests); and the FLOOR enforces persistence — ownerless `terminate-with-app` births
+flip to `keep-until-exit` at `session-created`, native-side, so the law holds with fieldd
+dead. Verdicts read from source, not assumed: `ownerId` IS on the wire (flip discriminator
+sound); `programKind:"interactive-shell"` does NOT loginify (panes are non-login interactive —
+G10 petition candidate: `defaultPersistence` + a login/default-args knob). Smoke carries the
+tombstone (`paneShell:"/bin/zsh"` via `$0`-echo through the workspace's OWN door) and the
+G9→flip→observed roundtrip. Verify + smoke exit 0, re-run by the orchestrator. Full record:
+`specs/godview-terminal.md` (GT-D10/D11 + GT-2e findings).
+
+## GT-3 — the deck remembers
+
+**GT-3 LANDED (2026-08-02, `af316db` — builder + orchestrator re-verification).** Restore
+(GT-D8 as amended: the settings-doc REFUSED the manifest — user-scope-only law — so layer 2
+IS `paneMeta` `{cwd, title}` in ghosttea's own layout doc; the fieldd device-scope manifest
+waits for a reader): consent gate once per deck MOUNT before the workspace may exist —
+`dead === 0` mounts silently, `dead > 0` shows honest counts with **restore**/**start clean**,
+an unlistable floor mounts unarmed; `onRehydratePane` births replacements through the
+workspace's own door at each pane's recorded cwd (GT-D11 governs them). The kill affordance
+(GT-D5): a two-step overlay chip through fieldd's audited `terminal.terminate` — close still
+detaches. The `config.ghostty` rider: `FILES.TERMINAL_CONFIG` registry → `with_config_path`
+on the embedded service (missing file = valid empty overlay) → fieldd `terminal.config.
+read/write` over the floor's OWN document API (atomic revision-checked replace + reload +
+broadcast; scope `settings.manage`; audited by bytes+revision, never contents) → Settings →
+Terminal raw monospace editor (deliberately not a form), loader verdict honest incl. `ok:true`
+WITH diagnostics. Debts paid: the GT-2c deck-mount fixture (11 tests) + `keystrokeEchoMs`
+report-only (measured 3ms). Measured findings: a pane's cwd is an OSC 7 **URL** (host kept
+verbatim for GT-4); the spawn dir is never reported (no-OSC7 shells restore at `$HOME`);
+consent is per-mount, not per-generation (a bridge rebuild mid-decision blanked the face);
+config-document commands are NOT gated native-side (`settings.manage` gates the product door
+only — GT-D6 posture restated); pre-existing NF debt flagged: the terminal unit self-reports
+`starting` forever in `system.health` while serving. Smoke rows: silent rejoin same-ids,
+consent `{saved:2,alive:1,dead:1}` with nothing mounted before the answer, `$PWD`-echo at the
+recorded cwd, two-click kill → `exited` face, config write with REAL import-chain diagnostics
+(the user's own Ghostty shader warned) and every session surviving. Verify + smoke exit 0,
+re-run by the orchestrator. Full record: `specs/godview-terminal.md` (GT-3 findings).
 The governing design docs and DESIGN.md carry the fold-backs; C6's as-built record carries a
 dated forward correction for name-only reconcile, failed-removal retry, health URL/storage
 health, folder port zero, the too-narrow VibeField serve facade, and Truffle list's missing

@@ -3,8 +3,9 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-02** (AH-0 Artifact Hub
-> direction ratified in the working tree after `af316db`; runtime remains C6-6).
+> stays in the design docs + specs. Last rewritten: **2026-08-02** (GT caught up through
+> GT-2e `a3babb7` + GT-3 `af316db` — the one-authority correction, then restore/kill/config;
+> AH-0 ratified; runtime remains C6-6).
 >
 > Lives in main-tracked `docs/` (moved from `draft/` 2026-08-02). Corpus citations here
 > (`specs/…`, `thinking-…`, `predesign-…`, `research/…`, `petitions/…`) resolve under
@@ -36,17 +37,23 @@ between those two facts; its unblocked first landing is AH-1a.
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
-| GT — Godview terminal | **IN FLIGHT** — GT-0/1/2 + 2b/c/d landed | `specs/godview-terminal.md` | **GT-3** restore manifest → GT-4 remote floor → GT-5 iOS attach |
+| GT — Godview terminal | **IN FLIGHT** — GT-0…3 landed, incl. the **GT-2e one-authority correction** (spec v0.3) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
 ## In flight now
 
-**GT.** The control room is open: ⌘G, the deck is real product UI, sessions outlive their
-panes; GT-2b/c/d closed the dev-parity traps James hit running `pnpm dev`. Next slice
-**GT-3**: restore manifest in the settings doc + consent prompt + `onRehydratePane` (dead ⇒
-free shell at cwd) + detach-vs-kill affordances; the deck-mount test fixture is named GT-3
-work too.
+**GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
+authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through
+its own doors, main hands it the real login shell, and the FLOOR flips ownerless births to
+keep-until-exit — the persistence law survives fieldd death. GT-3 landed restore (consent
+before anything relaunches; `paneMeta` carries `{cwd, title}`; dead panes come back as shells
+in their folders), the audited two-step kill chip, the `config.ghostty` surface (Settings →
+Terminal raw editor; atomic write + live reload through the floor's own document API; the
+user's real Ghostty config imported underneath), and paid both named test debts (deck-mount
+fixture; `keystrokeEchoMs: 3` report-only). Next slice **GT-4**: `with_terminal_mesh` behind
+config + `terminal.v1.hosts` + mirror-write v1 — the desktop deck's ⌘⇧O remote panes are the
+test row, and NF-remote rides it.
 
 **AH.** The product direction is closed, not implemented: one live-source object, one exact
 Truffle URL, one safe catalog across devices, and source-local mutation. Next slice **AH-1a**
@@ -65,7 +72,7 @@ loopback client into the static `shell.*` provider; no ProductAPI UDS or rendere
   AH-1b closes Folder and unlocks hardened preview routes as soon as T2 lands, while AH-3/4/5
   add desktop, previews, and phone.
 - **AR** — the agent tracks; the reason everything else exists.
-- **GT-3 → GT-4 → GT-5** — restore, the remote floor, the phone attaches.
+- **GT-4 → GT-5** — the remote floor, then the phone attaches.
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).
 - **LOG-39 packaged CI** — also carries NF's 24h-soak gate.
 - **ESR follow-on** bundle slice.
@@ -99,6 +106,14 @@ loopback client into the static `shell.*` provider; no ProductAPI UDS or rendere
 - **I5 ICE in-band rename migration** — needed before replica-everywhere (C2, 2026-07-23).
 - **`terminal.list` lags for readers** — GT-1 fixed create, not list; assertions poll past
   the window (GT-2 finding 6).
+- **Terminal unit health self-report** — the unit publishes `starting / "binding terminal
+  service"` while its service is serving and answering; `system.health` (and Settings →
+  System) may show it perpetually starting. Pre-existing, reproduced on unmodified code
+  (GT-3 finding 6, 2026-08-02); NF-owned.
+- **G10 ghosttea petition candidate, unfiled** — two workspace props: `defaultPersistence`
+  (deletes the sub-second persistence-flip window) + a login/default-args knob (panes are
+  non-login interactive shells today; packaged-run PATH poverty is the risk) (GT-2e/GT-3,
+  2026-08-02).
 
 ## Eyeballs owed (James's standing visual passes)
 
@@ -108,9 +123,12 @@ loopback client into the static `shell.*` provider; no ProductAPI UDS or rendere
 - Settings Plugins section (P2) · toggle widgetlab → placeholders swap LIVE + tray thins (P3).
 - Mesh sync rows + the file pill's standing-state dot, both themes (C6-4).
 - Artifact Hub grid + Proxy/Folder add flows, both themes and reduced motion (AH-3).
+- The Godview deck end-to-end (⌘G): the zsh first pane, the consent face after a session
+  dies, the kill chip's two steps, Settings → Terminal editor with a live reload (GT-2e/3).
 
 ## Upstream / sibling pins (the EL8 watch)
 
 truffle `=0.7.11` (exact crates-io) · ghosttea `=0.8.0` on all planes · chopsticks 0.1.4 ·
 strata 0.10.0 (via ICE) · `@vibecook/ice` 0.2.0 (registry pin). G7/G8/G9 consumed at NF-7;
-C7 implemented upstream, consumption rides AR. Full petition status: `petitions/README.md`.
+G10 candidate named at GT-2e/3, unfiled; C7 implemented upstream, consumption rides AR. Full
+petition status: `petitions/README.md`.
