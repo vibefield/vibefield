@@ -15,10 +15,11 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   `design-01-contracts` → `design-02-daemons` → `design-03-electron-app` (supersedes
   `design-03-widget-sdk`, kept as appendix 03·A) → `design-04-aggregation`.
   `foundations-and-architecture.md` is the decision record; `predesign-*` are evidence.
-- The roadmap discipline (2026-08-02 — four doc species, four mutation rules):
-  `draft/ROADMAP.md` = now/next, REWRITTEN in place at each milestone (never appended) ·
-  `draft/LANDED.md` = the append-only ledger, one entry per landed slice ·
-  `draft/DECISIONS.md` = the decision index (status flips there; definitions stay in their
+- The roadmap discipline (2026-08-02 — four doc species, four mutation rules; the trio is
+  main-tracked under `docs/`, unlike the rest of the corpus):
+  `docs/ROADMAP.md` = now/next, REWRITTEN in place at each milestone (never appended) ·
+  `docs/LANDED.md` = the append-only ledger, one entry per landed slice ·
+  `docs/DECISIONS.md` = the decision index (status flips there; definitions stay in their
   owning docs) · `draft/petitions/README.md` = petition status. The milestone ritual:
   rewrite ROADMAP · append LANDED · flip the finished thinking-doc's Status header · fold
   recorded deltas into the governing spec (or mark its section stale). Errata rule: a
