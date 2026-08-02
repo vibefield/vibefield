@@ -73,19 +73,30 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
 
   const [trayOpen, setTrayOpenRaw] = useState(false);
   const [docsOpen, setDocsOpenRaw] = useState(false);
-  // One sheet at a time: the tray and the docs explorer are mutually exclusive
-  // (two simultaneous sheets would fight over the recede and the stage hold).
-  const setTrayOpen = useCallback((o: boolean) => {
-    setTrayOpenRaw(o);
-    if (o) setDocsOpenRaw(false);
-  }, []);
-  const setDocsOpen = useCallback((o: boolean) => {
-    setDocsOpenRaw(o);
-    if (o) setTrayOpenRaw(false);
-  }, []);
-  const sheetOpen = trayOpen || docsOpen;
-
   const chrome = useChromeState();
+  // One modal surface at a time: sheets dismiss Settings when opened, while
+  // ChromeLayer performs the inverse when Settings or the command palette opens.
+  const setTrayOpen = useCallback(
+    (o: boolean) => {
+      setTrayOpenRaw(o);
+      if (o) {
+        setDocsOpenRaw(false);
+        chrome.setShowSettings(false);
+      }
+    },
+    [chrome.setShowSettings],
+  );
+  const setDocsOpen = useCallback(
+    (o: boolean) => {
+      setDocsOpenRaw(o);
+      if (o) {
+        setTrayOpenRaw(false);
+        chrome.setShowSettings(false);
+      }
+    },
+    [chrome.setShowSettings],
+  );
+  const sheetOpen = trayOpen || docsOpen || chrome.showSettings;
 
   const [hudReturning, setHudReturning] = useState(false);
   const hudWasLoading = useRef(docState.phase === "loading");

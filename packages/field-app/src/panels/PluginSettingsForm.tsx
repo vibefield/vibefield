@@ -1,29 +1,18 @@
-import type { SettingsContribution, SettingsUndoResult } from "@vibefield/contracts";
+import type { SettingsContribution } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
-import { labelCls } from "./SettingsPanel";
+import {
+  buttonCls,
+  fieldCls,
+  labelCls,
+  SettingsPill,
+  SettingsRow,
+  SettingsSwitch,
+} from "./settings-ui";
 
-// PLUG-P5 UI — the GENERATED per-plugin settings pane (plugin spec §21.6 item 1:
-// settings UI rendered from declared schemas, no plugin UI code). Extends
-// PluginsSection: a plugin whose contributions declare `settings` (§8.5) gains a
-// disclosure that mounts this form. Every control is DRIVEN by the property's
-// JSON Schema — the v1 form subset ONLY (string · number/integer · boolean ·
-// enum); anything outside it renders an honest "unsupported schema" row, never a
-// crash (DESIGN.md §8: a state is rendered, never blank).
-//
-// Storage seam (§16.2/§22.3): storage.settings.get/set/reset over the fieldd
-// client. NO optimistic state — every write re-gets its key (the daemon is the
-// truth; ajv-validates on set, and its PRECONDITION_FAILED message surfaces
-// inline in the section's muted error voice, DESIGN.md §9). SECRET keys never
-// echo a stored value — get returns { isSet, secret } with no value; the field
-// shows "•••• set" and commits only a fresh, non-empty entry.
-//
-// Future refinement: storage.settings.subscribe exists — the pane re-gets on
-// expand and after writes instead (no live subscription in v1).
+// Generated plugin preferences. The controls come entirely from the plugin's
+// declared schema; plugin code never mounts inside the settings surface.
 
-/** The JSON Schema fields the v1 form subset reads. JsonSchemaObject is an
- * opaque passthrough record in the contract; this is the honest view of the
- * keys a form control needs. */
 interface SchemaView {
   type?: unknown;
   enum?: unknown;
@@ -32,8 +21,6 @@ interface SchemaView {
   default?: unknown;
 }
 
-/** storage.settings.get result (§22.3). SECRET keys carry { isSet, secret:true }
- * and never a `value`. */
 interface SettingsValue {
   value?: unknown;
   isSet: boolean;
@@ -42,8 +29,6 @@ interface SettingsValue {
 
 type ControlKind = "secret" | "enum" | "string" | "integer" | "number" | "boolean" | "unsupported";
 
-/** Secret scope wins (never echo); then enum; then the declared JSON type.
- * Everything else is honestly unsupported in v1. */
 function controlKind(scope: string, schema: SchemaView): ControlKind {
   if (scope === "secret") return "secret";
   if (Array.isArray(schema.enum)) return "enum";
@@ -54,354 +39,251 @@ function controlKind(scope: string, schema: SchemaView): ControlKind {
   return "unsupported";
 }
 
-// Matches the Settings panel's inputCls vocabulary (mono, neutral hairline) — a
-// diagnostics SECTION speaks the panel's language, not the card tokens.
-const fieldCls =
-  "min-w-0 flex-1 rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-200";
-
-function SettingRow({
+function PluginSettingRow({
   pluginId,
   settingKey,
   prop,
   externalReload,
+  onSettingsChanged,
 }: {
   pluginId: string;
   settingKey: string;
   prop: SettingsContribution["properties"][string];
-  /** bumped by the form after an undo/redo applies — the doc changed under us,
-   * so every row re-gets its key (no optimistic state; the daemon is truth). */
   externalReload: number;
+  onSettingsChanged?: ((undoable: boolean) => void) | undefined;
 }): ReactElement {
   const client = useFielddClient();
   const schema = prop.schema as SchemaView;
   const kind = controlKind(prop.scope, schema);
   const options = Array.isArray(schema.enum) ? schema.enum : [];
-
+  const [loaded, setLoaded] = useState(false);
   const [isSet, setIsSet] = useState(false);
-  const [value, setValue] = useState<unknown>(undefined); // last committed value (baseline)
-  const [draft, setDraft] = useState(""); // text/number/enum(index) editable draft
+  const [value, setValue] = useState<unknown>(undefined);
+  const [draft, setDraft] = useState("");
   const [boolDraft, setBoolDraft] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
-  // Re-get on mount, on key/plugin change, and after every write (reloadNonce).
-  // The daemon is the truth: the fresh get reseeds the draft, so there is no
-  // optimistic state to drift.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    setLoaded(false);
+    void (async () => {
       try {
-        const res = (await client.request("storage.settings.get", {
+        const result = (await client.request("storage.settings.get", {
           pluginId,
           key: settingKey,
         })) as SettingsValue;
         if (cancelled) return;
         setError(null);
-        setIsSet(res.isSet);
-        setValue(res.isSet ? res.value : undefined);
-        const current = res.isSet ? res.value : schema.default;
+        setIsSet(result.isSet);
+        setValue(result.isSet ? result.value : undefined);
+        const current = result.isSet ? result.value : schema.default;
         if (prop.scope === "secret") {
-          setDraft(""); // never echo a stored secret
+          setDraft("");
         } else if (kind === "boolean") {
           setBoolDraft(current === true);
         } else if (kind === "enum") {
-          const idx = options.findIndex((o) => String(o) === String(current));
-          setDraft(idx >= 0 ? String(idx) : "");
+          const index = options.findIndex((option) => String(option) === String(current));
+          setDraft(index >= 0 ? String(index) : "");
         } else {
           setDraft(current === undefined || current === null ? "" : String(current));
         }
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        setLoaded(true);
+      } catch (caught) {
+        if (!cancelled) {
+          setError(caught instanceof Error ? caught.message : String(caught));
+          setLoaded(true);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-    // schema/kind/options derive from `prop`; keying on prop covers a schema swap.
-    // externalReload re-gets after an undo/redo mutates the doc out-of-band.
   }, [client, pluginId, settingKey, prop, kind, reloadNonce, externalReload, schema.default]);
 
-  const commit = async (v: unknown) => {
+  const commit = async (nextValue: unknown): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
-      await client.request("storage.settings.set", { pluginId, key: settingKey, value: v });
-      setReloadNonce((n) => n + 1); // no optimistic state — re-get the key
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      await client.request("storage.settings.set", {
+        pluginId,
+        key: settingKey,
+        value: nextValue,
+      });
+      onSettingsChanged?.(prop.scope === "user");
+      setReloadNonce((nonce) => nonce + 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setBusy(false);
     }
   };
 
-  const reset = async () => {
+  const reset = async (): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
       await client.request("storage.settings.reset", { pluginId, key: settingKey });
-      setReloadNonce((n) => n + 1);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      onSettingsChanged?.(prop.scope === "user");
+      setReloadNonce((nonce) => nonce + 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setBusy(false);
     }
   };
 
-  // Text/number/secret commit on blur or Enter. Skip no-op writes so a bare
-  // focus-blur never persists the default in place; secrets commit any non-empty
-  // entry (there is no baseline to diff against).
-  const commitText = () => {
+  const commitText = (): void => {
     if (prop.scope === "secret") {
       if (draft.length > 0) void commit(draft);
       return;
     }
     const baseline = isSet ? value : schema.default;
-    const baselineStr = baseline === undefined || baseline === null ? "" : String(baseline);
-    if (draft === baselineStr) return;
+    const baselineString = baseline === undefined || baseline === null ? "" : String(baseline);
+    if (draft === baselineString) return;
     if (kind === "number" || kind === "integer") {
       if (draft.trim() === "") return;
-      const n = Number(draft);
-      if (Number.isNaN(n)) return; // let the daemon own range; never send NaN
-      void commit(n);
-    } else {
-      void commit(draft);
+      const number = Number(draft);
+      if (!Number.isNaN(number)) void commit(number);
+      return;
     }
-  };
-
-  const onKey = (e: { key: string }) => {
-    if (e.key === "Enter") commitText();
+    void commit(draft);
   };
 
   let control: ReactElement;
   if (kind === "boolean") {
     control = (
-      <input
-        type="checkbox"
+      <SettingsSwitch
+        label={prop.title}
         checked={boolDraft}
-        disabled={busy}
-        onChange={(e) => {
-          setBoolDraft(e.target.checked);
-          void commit(e.target.checked);
+        disabled={!loaded || busy}
+        onChange={(checked) => {
+          setBoolDraft(checked);
+          void commit(checked);
         }}
       />
     );
   } else if (kind === "enum") {
     control = (
       <select
-        className={fieldCls}
-        disabled={busy}
+        className={`${fieldCls} w-56`}
+        disabled={!loaded || busy}
         value={draft}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          const i = Number(e.target.value);
-          if (i >= 0) void commit(options[i]);
+        onChange={(event) => {
+          setDraft(event.target.value);
+          const index = Number(event.target.value);
+          if (index >= 0) void commit(options[index]);
         }}
       >
-        {draft === "" && <option value="">—</option>}
-        {options.map((opt, i) => (
-          <option key={`opt-${i}-${String(opt)}`} value={String(i)}>
-            {String(opt)}
+        {draft === "" && <option value="">Choose…</option>}
+        {options.map((option, index) => (
+          <option key={`${String(option)}-${index}`} value={String(index)}>
+            {String(option)}
           </option>
         ))}
       </select>
     );
-  } else if (kind === "secret") {
+  } else if (kind === "unsupported") {
+    control = <span className={labelCls}>Unsupported schema</span>;
+  } else {
     control = (
       <input
-        type="password"
-        className={fieldCls}
-        disabled={busy}
-        placeholder={isSet ? "•••• set" : ""}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commitText}
-        onKeyDown={onKey}
-      />
-    );
-  } else if (kind === "number" || kind === "integer") {
-    control = (
-      <input
-        type="number"
-        className={`${fieldCls} text-right`}
-        disabled={busy}
-        step={kind === "integer" ? 1 : "any"}
+        type={
+          kind === "secret"
+            ? "password"
+            : kind === "number" || kind === "integer"
+              ? "number"
+              : "text"
+        }
+        className={`${fieldCls} w-56 ${kind === "number" || kind === "integer" ? "text-right tabular-nums" : ""}`}
+        disabled={!loaded || busy}
+        step={kind === "integer" ? 1 : kind === "number" ? "any" : undefined}
         min={typeof schema.minimum === "number" ? schema.minimum : undefined}
         max={typeof schema.maximum === "number" ? schema.maximum : undefined}
+        placeholder={kind === "secret" && isSet ? "•••• set" : undefined}
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(event) => setDraft(event.target.value)}
         onBlur={commitText}
-        onKeyDown={onKey}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") commitText();
+        }}
       />
     );
-  } else if (kind === "string") {
-    control = (
-      <input
-        type="text"
-        className={fieldCls}
-        disabled={busy}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commitText}
-        onKeyDown={onKey}
-      />
-    );
-  } else {
-    control = <span className={labelCls}>unsupported schema</span>;
   }
 
-  // "default" marker only when nothing is stored (secrets show "•••• set"
-  // instead, never a default). "reset" appears only once a value is set.
   return (
-    <div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate" title={settingKey}>
-          {prop.title}
+    <SettingsRow
+      align="start"
+      title={
+        <span className="flex flex-wrap items-center gap-1.5" title={settingKey}>
+          <span>{prop.title}</span>
+          <SettingsPill>{prop.scope}</SettingsPill>
+          {!isSet && kind !== "secret" && <SettingsPill>default</SettingsPill>}
         </span>
-        <span className="flex flex-none items-center gap-1.5">
-          {!isSet && kind !== "secret" && <span className={labelCls}>default</span>}
-          <span className={labelCls}>{prop.scope}</span>
-        </span>
-      </div>
-      {prop.description !== undefined && (
-        <div className={`pl-2 ${labelCls}`}>{prop.description}</div>
-      )}
-      <div className="flex items-center gap-1.5 pl-2">
+      }
+      description={
+        <>
+          {prop.description !== undefined && <span>{prop.description}</span>}
+          {error !== null && (
+            <span className="mt-1 block text-amber-600 dark:text-amber-400" title={error}>
+              {error}
+            </span>
+          )}
+        </>
+      }
+    >
+      <div className="flex items-center gap-2 pt-0.5">
         {control}
         {isSet && (
           <button
             type="button"
-            onClick={() => void reset()}
+            className={`${buttonCls} h-8 px-3`}
             disabled={busy}
-            className={`flex-none ${labelCls} hover:text-neutral-600 dark:hover:text-neutral-300`}
+            onClick={() => void reset()}
           >
-            reset
+            Reset
           </button>
         )}
       </div>
-      {error !== null && (
-        <div className={`truncate pl-2 text-right ${labelCls}`} title={error}>
-          {error}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// D29′ UI — the settings undo/redo affordance (spec §16.6 D29′ + design-03 §7.2).
-// Compact undo/redo over storage.settings.undo/redo {pluginId} (per-peer Loro
-// local-undo — your ops, remote edits preserved). Three laws surfaced honestly:
-//  - law 1 (honest partial coverage): undo covers USER-scope keys ONLY; the row
-//    says so, and when a plugin declares no user-scope key the affordance reads
-//    "no user-scope keys to undo" and stays disabled (the form knows each scope);
-//  - law 2 (undo never re-escalates): grants/install-set live OUTSIDE the stack —
-//    not this form's concern (it only touches settings values), but a server
-//    "not-undoable" outcome still renders honestly rather than as a silent no-op;
-//  - law 3 (bounded reach): reason "horizon" reads "history horizon reached".
-// No optimistic state — an applied undo bumps the form's reload nonce so every
-// row re-gets from the daemon (DESIGN.md §9: say the truth with the real value).
-// No ⌘Z global this slice (pane-focus routing is a later nicety).
-
-/** §16.6 D29′ outcomes → one honest line each (DESIGN.md §9). */
-function undoReason(dir: "undo" | "redo", reason: SettingsUndoResult["reason"]): string {
-  if (reason === "horizon") return "history horizon reached";
-  if (reason === "not-undoable") return "not undoable";
-  return dir === "undo" ? "nothing to undo" : "nothing to redo";
-}
-
-function SettingsUndo({
-  pluginId,
-  hasUserScope,
-  onApplied,
-}: {
-  pluginId: string;
-  hasUserScope: boolean;
-  onApplied: () => void;
-}): ReactElement {
-  const client = useFielddClient();
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-
-  const run = async (dir: "undo" | "redo") => {
-    setBusy(true);
-    setNote(null);
-    try {
-      const res = (await client.request(`storage.settings.${dir}`, {
-        pluginId,
-      })) as SettingsUndoResult;
-      if (res.applied) {
-        setNote(null);
-        onApplied(); // the doc changed under us — re-get every row
-      } else {
-        setNote(undoReason(dir, res.reason));
-      }
-    } catch (e) {
-      setNote(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const status = note ?? (hasUserScope ? "covers user-scope keys only" : "no user-scope keys");
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="flex flex-none items-center gap-2">
-        <button
-          type="button"
-          disabled={busy || !hasUserScope}
-          onClick={() => void run("undo")}
-          className={`flex-none ${labelCls} hover:text-neutral-600 disabled:opacity-40 dark:hover:text-neutral-300`}
-        >
-          undo
-        </button>
-        <button
-          type="button"
-          disabled={busy || !hasUserScope}
-          onClick={() => void run("redo")}
-          className={`flex-none ${labelCls} hover:text-neutral-600 disabled:opacity-40 dark:hover:text-neutral-300`}
-        >
-          redo
-        </button>
-      </span>
-      <span className={`min-w-0 truncate text-right ${labelCls}`} title={status}>
-        {status}
-      </span>
-    </div>
+    </SettingsRow>
   );
 }
 
 export function PluginSettingsForm({
   pluginId,
   properties,
+  externalReload = 0,
+  onSettingsChanged,
 }: {
   pluginId: string;
   properties: SettingsContribution["properties"];
+  externalReload?: number;
+  onSettingsChanged?: ((undoable: boolean) => void) | undefined;
 }): ReactElement {
   const entries = Object.entries(properties);
-  const [reloadNonce, setReloadNonce] = useState(0);
-  // The form knows each key's scope (§16.6 D29′ law 1): undo reaches user-scope
-  // keys only — device/secret keys are never on the stack.
-  const hasUserScope = entries.some(([, prop]) => prop.scope === "user");
+  const hasUserScope = entries.some(([, property]) => property.scope === "user");
   return (
-    <div className="mt-1.5 space-y-1.5 border-l border-neutral-100 pl-2 dark:border-neutral-700">
+    <div className="mt-3 rounded-[14px] bg-black/[0.025] px-3 dark:bg-white/[0.035]">
       {entries.length === 0 ? (
-        <div className={labelCls}>no settings</div>
+        <div className={`py-3 ${labelCls}`}>This plugin has no settings.</div>
       ) : (
         <>
-          <SettingsUndo
-            pluginId={pluginId}
-            hasUserScope={hasUserScope}
-            onApplied={() => setReloadNonce((n) => n + 1)}
-          />
-          {entries.map(([k, prop]) => (
-            <SettingRow
-              key={k}
+          {entries.map(([key, property]) => (
+            <PluginSettingRow
+              key={key}
               pluginId={pluginId}
-              settingKey={k}
-              prop={prop}
-              externalReload={reloadNonce}
+              settingKey={key}
+              prop={property}
+              externalReload={externalReload}
+              onSettingsChanged={onSettingsChanged}
             />
           ))}
+          <p className={`py-3 ${labelCls}`}>
+            {hasUserScope
+              ? "Synced user settings can be undone from the window toolbar."
+              : "Device and secret settings stay on this device and are not part of settings history."}
+          </p>
         </>
       )}
     </div>
