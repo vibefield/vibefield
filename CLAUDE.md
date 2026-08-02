@@ -15,8 +15,14 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   `design-01-contracts` → `design-02-daemons` → `design-03-electron-app` (supersedes
   `design-03-widget-sdk`, kept as appendix 03·A) → `design-04-aggregation`.
   `foundations-and-architecture.md` is the decision record; `predesign-*` are evidence.
-- The current build plan and landed-track log live in the header note of
-  `draft/predesign-00-index.md`. Update it when a track milestone lands.
+- The roadmap discipline (2026-08-02 — four doc species, four mutation rules):
+  `draft/ROADMAP.md` = now/next, REWRITTEN in place at each milestone (never appended) ·
+  `draft/LANDED.md` = the append-only ledger, one entry per landed slice ·
+  `draft/DECISIONS.md` = the decision index (status flips there; definitions stay in their
+  owning docs) · `draft/petitions/README.md` = petition status. The milestone ritual:
+  rewrite ROADMAP · append LANDED · flip the finished thinking-doc's Status header · fold
+  recorded deltas into the governing spec (or mark its section stale). Errata rule: a
+  falsified claim gets a dated correction AT ITS SOURCE, never only downstream in the ledger.
 - **`DESIGN.md` (repo root) governs art direction** — read it before writing ANY UI
   (tokens, motion easings, card chrome, materials, voice). Mechanics defer to design-03;
   look and feel defer to DESIGN.md. UI reviews cite its sections; token/easing deviations
@@ -85,7 +91,7 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
   integration tests live in `packages/fieldd/test`. New plugins get at least a
   manifest/registry test (`plugins/note/test` is the template). Plugins live at the
   repo root (`plugins/*`, dev/reference packs in `examples/plugins/*`) — walls rule
-  R10 (report-only until the plugin SDK lands) keeps them SDK-only.
+  R10 (ENFORCED since PLUG-P3 — the SDK is the door) keeps them SDK-only.
 - Env vars: see `.env.example`. Nothing auto-loads `.env` — export in the launching shell.
 
 ## Commits
