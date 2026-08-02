@@ -1,5 +1,5 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import { TerminalCreateResult, TerminalListResult, TerminalTicket } from "@vibefield/contracts";
@@ -291,22 +291,23 @@ async function untilFloor(
   throw new Error(`the floor never ${what} within ${timeoutMs}ms (saw ${last.length} terminals)`);
 }
 
-/** The type/echo proof, driven over the floor's OWN control socket.
+/** Ask a real pane what shell it is, and prove it ran the question.
  *
  * `GhostteaAutomationClient` is ghosttea's Node door onto a session — the same
  * socket and token the deck's bridge dialed, redeemed through the same
  * `terminal.openTicket` any attach uses. `pasteAndSubmit` writes into the real
- * PTY, so what runs is the user's real login shell interpreting a real command.
- * The proof is its SIDE EFFECT: the shell writes a marker to a file main then
- * reads. A screen scrape would prove less — the file only exists if the process
- * on the other end actually ran the line. That the echo also came BACK to the
- * deck is the deck's own business, and its marker line reports the panes that
- * are drawing it. */
-async function proveEcho(
+ * PTY, so what runs is the user's real shell interpreting a real command.
+ *
+ * One line carries both proofs. The SIDE EFFECT is the first: the marker only
+ * reaches the file if the process on the other end actually executed the line,
+ * which a screen scrape could never show. `$0` is the second: it is the shell's
+ * own name for itself, so it answers what the workspace's own create door
+ * spawned — the question GT-2e exists to settle. */
+async function askPaneWhatShellItIs(
   handle: FielddHandle,
   sessionId: string,
   markerPath: string,
-): Promise<string> {
+): Promise<{ marker: string; argv0: string }> {
   const marker = `godview-${Math.random().toString(36).slice(2, 10)}`;
   const ticket = TerminalTicket.parse(
     await handle.client.request("terminal.openTicket", { sessionId }),
@@ -317,11 +318,15 @@ async function proveEcho(
   );
   try {
     await automation.connect();
-    await automation.pasteAndSubmit(sessionId, `echo ${marker} > ${markerPath}\n`);
+    await automation.pasteAndSubmit(sessionId, `echo "${marker}:$0" > ${markerPath}\n`);
+    // Matched rather than merely "contains": a half-written file must read as
+    // not-yet, not as an empty shell name.
+    const written = new RegExp(`${marker}:(\\S+)`);
     const deadline = Date.now() + 15_000;
     while (Date.now() < deadline) {
       try {
-        if (readFileSync(markerPath, "utf8").includes(marker)) return marker;
+        const found = written.exec(readFileSync(markerPath, "utf8"));
+        if (found?.[1] !== undefined) return { marker, argv0: found[1] };
       } catch {
         /* the shell has not written it yet */
       }
@@ -333,13 +338,37 @@ async function proveEcho(
   }
 }
 
-/** GT-2: the product Godview, end to end, against the real pair.
+/** The shell name a path names, with the login-shell `-` convention allowed
+ * for: a login shell reports `$0` as `-zsh`, and it is the same zsh. */
+const shellName = (path: string): string => (path.split("/").pop() ?? path).replace(/^-/, "");
+
+/** Main's resolution, mirrored — deliberately NOT imported from
+ * `main/login-shell.ts`. Importing it would make this row assert that main
+ * agrees with itself; writing the ladder out means the row fails if main's
+ * answer ever stops being the user's shell. */
+function expectedLoginShell(): string {
+  const nonEmpty = (value: string | undefined | null): string | undefined => {
+    const trimmed = value?.trim();
+    return trimmed !== undefined && trimmed !== "" ? trimmed : undefined;
+  };
+  if (process.platform === "win32") return nonEmpty(process.env["COMSPEC"]) ?? "powershell.exe";
+  return nonEmpty(process.env["SHELL"]) ?? nonEmpty(userInfo().shell) ?? "/bin/zsh";
+}
+
+/** How the floor governs one session's retention, or undefined if it is gone. */
+const persistenceOf = (
+  terminals: TerminalListResult["terminals"],
+  sessionId: string,
+): string | undefined => terminals.find((t) => t.sessionId === sessionId)?.persistence;
+
+/** GT-2/GT-2e: the product Godview, end to end, against the real pair.
  *
  * Everything the deck does here it does because a user asked: the overlay opens
- * through the accelerator's own action, panes split and close through the
- * workspace's own ⌘D/⌘W, and the shells are fieldd's. The harness only presses
- * things and reads two sources of truth — the floor's inventory for what
- * exists, the deck's own marker for what is on screen.
+ * through the accelerator's own action, and panes are born, split and closed
+ * through the WORKSPACE's own doors (GT-D10) — the harness never asks fieldd
+ * for a session except to plant the stranger the claim row needs. It presses
+ * things and reads two sources of truth: the floor's inventory for what exists
+ * and how it is governed, the deck's own marker for what is on screen.
  *
  * The window is SHOWN, unlike the canvas smoke's. Ghosttea gives its terminal
  * input focus only when `document.hasFocus()`, and the workspace routes a hotkey
@@ -381,12 +410,20 @@ export async function runSmokeGodview(opts: {
     win.webContents.focus();
 
     const before = await listTerminals(opts.handle);
+    if (before.length > 0) {
+      throw new Error(
+        `the init-door row needs an EMPTY floor; found ${before.length} session(s) already`,
+      );
+    }
 
-    // 1. ⌘G's own action — the overlay opens and asks fieldd for a free shell.
+    // 1. ⌘G's own action. The overlay opens, the deck redeems a ticket for the
+    //    CONNECTION — no session — and the workspace then creates its own first
+    //    pane through its own door (GT-D10). Nothing outside it asked for a
+    //    shell; there is one because the workspace decided there should be.
     opts.toggleGodview();
     const opened = await deck.until(
       (facts) => facts.active && facts.panes >= 1,
-      "the overlay to open with a free shell in a pane",
+      "the overlay to open with the workspace's own first pane",
       90_000,
     );
     const freeShell = opened.sessionIds[0]!;
@@ -404,20 +441,52 @@ export async function runSmokeGodview(opts: {
       .then((facts) => facts.rendererBackend)
       .catch(() => opened.rendererBackend);
 
-    // The shell is a FLOOR session, not a renderer's idea of one.
+    // The pane is a FLOOR session, not a renderer's idea of one.
     const afterOpen = await untilFloor(
       opts.handle,
       (terminals) => terminals.some((terminal) => terminal.sessionId === freeShell),
-      `listed the deck's free shell ${freeShell}`,
+      `listed the pane the workspace created for itself (${freeShell})`,
       15_000,
     );
     verdict["freeShellCreated"] = afterOpen.length > before.length;
 
-    // 2. Type, and prove the shell ran it.
-    verdict["echo"] = await proveEcho(opts.handle, freeShell, join(scratch, "echo.txt"));
+    // 2. THE TOMBSTONE ROW. Type into that pane and ask it what it is. Before
+    //    GT-2e the deck handed the workspace `defaultShell: "/bin/sh"` for a
+    //    door it believed was never taken — the door WAS taken, and James's
+    //    first real look at the deck found an `sh-3.2$` prompt. `$0` now has to
+    //    name the user's actual shell, resolved by main and delivered on the
+    //    connect.
+    const asked = await askPaneWhatShellItIs(opts.handle, freeShell, join(scratch, "echo.txt"));
+    const expected = expectedLoginShell();
+    verdict["echo"] = asked.marker;
+    verdict["paneShell"] = asked.argv0;
+    verdict["expectedShell"] = expected;
+    if (shellName(asked.argv0) !== shellName(expected)) {
+      throw new Error(
+        `the workspace's own door spawned ${asked.argv0}, not the user's shell ${expected}`,
+      );
+    }
+    if (shellName(asked.argv0) === "sh") {
+      throw new Error("the deck is back to /bin/sh — the sh-3.2$ pane has returned");
+    }
 
-    // 3. Split — the workspace's own ⌘D, which routes through the deck's
-    //    createSplitSession and so mints another FLOOR session.
+    // 3. THE FLIP ROW (GT-D11). That pane was born through a workspace door,
+    //    and those doors hardcode `terminate-with-app` — the opposite of this
+    //    product's daemon-lifetime promise. field-native watches
+    //    `session-created` and re-governs ownerless births to keep-until-exit.
+    //    Polling past the observed-inventory lag proves the WHOLE chain: the
+    //    G9 event, the native flip, and the observed roundtrip fieldd reports.
+    await untilFloor(
+      opts.handle,
+      (terminals) => persistenceOf(terminals, freeShell) === "keep-until-exit",
+      `re-govern the workspace's own pane ${freeShell} to keep-until-exit`,
+      20_000,
+    );
+    verdict["firstPaneRegoverned"] = true;
+
+    // 4. Split — the workspace's own ⌘D, through the workspace's OWN create
+    //    door now that the deck no longer intercepts it. The new session is a
+    //    floor session, and it is re-governed exactly like the first.
     await focusDeck(win);
     verdict["focusAtSplit"] = await focusReport(win);
     pressChord(win, "d");
@@ -430,25 +499,35 @@ export async function runSmokeGodview(opts: {
     if (splitSession === undefined) throw new Error("the split pane carries no new session");
     await untilFloor(
       opts.handle,
-      (terminals) => terminals.some((terminal) => terminal.sessionId === splitSession),
-      `listed the split session ${splitSession}`,
-      15_000,
+      (terminals) => persistenceOf(terminals, splitSession) === "keep-until-exit",
+      `list the split session ${splitSession} re-governed to keep-until-exit`,
+      20_000,
     );
     verdict["splitCreated"] = true;
+    verdict["splitRegoverned"] = true;
 
-    // 4. A session born on the floor OUTSIDE the deck, which the deck must
-    //    adopt on its next open — `claimExistingSessions` covers only the first
-    //    ever open, so this is the product rule doing the work.
+    // 5. Claim. `claimExistingSessions` is first-run-only upstream (gated on
+    //    there being no saved workspace), so this stages a genuine first run:
+    //    a session born on the floor outside the deck, the deck's saved layout
+    //    cleared, and a fresh document. That is the real scenario — a machine
+    //    where field-native has been running and the app is opened onto it.
     const stranger = TerminalCreateResult.parse(
       await opts.handle.client.request("terminal.create", {}),
     ).sessionId;
-    opts.toggleGodview(); // closed
+    opts.toggleGodview(); // closed, so the reload comes up with the deck unmounted
     await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
-    opts.toggleGodview(); // open again
+    await win.webContents.executeJavaScript("localStorage.clear()");
+    const reloaded = waitForConsole(win, "CANVAS_READY ", 60_000);
+    reloaded.catch(() => undefined);
+    await loadRenderer(win, "smoke-godview", opts.viteUrl);
+    await reloaded;
+    win.focus();
+    win.webContents.focus();
+    opts.toggleGodview(); // the fresh document's FIRST open
     const claimed = await deck.until(
       (facts) => facts.active && facts.sessionIds.includes(stranger),
-      "the deck to claim the floor session it did not create",
-      45_000,
+      "the workspace to claim the floor session nothing in this deck created",
+      90_000,
     );
     // DESIGN.md §10's review ritual asks UI changes for a screenshot, and this
     // is the one moment the deck is fully itself: three panes, one adopted, all
@@ -462,7 +541,7 @@ export async function runSmokeGodview(opts: {
     verdict["claimedExisting"] = true;
     verdict["panesAfterClaim"] = claimed.panes;
 
-    // 5. Close a pane — and watch the session go on living (GT-D5). The deck
+    // 6. Close a pane — and watch the session go on living (GT-D5). The deck
     //    detaches; nothing kills. Ghosttea's own closePane removes the pane
     //    from the layout and sends the floor nothing at all, which is the law
     //    this asserts rather than assumes.
@@ -492,7 +571,7 @@ export async function runSmokeGodview(opts: {
     verdict["closedPaneSurvived"] = detached;
     verdict["panesAfterClose"] = closed.panes;
 
-    // 6. The recovery row, inherited from the GT-1 spike: SIGKILL the bridge
+    // 7. The recovery row, inherited from the GT-1 spike: SIGKILL the bridge
     //    and watch the deck come back on a new runtime with the same sessions.
     //    field-native owns them; the bridge is only a pipe.
     const survivors = [...closed.sessionIds];

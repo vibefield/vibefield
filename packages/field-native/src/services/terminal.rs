@@ -36,6 +36,18 @@
 //! 3. **The graceful drain is upstream** (spec §2.2/NF-D10 held: mechanism
 //!    moved, policy stayed). `serve_managed` hands this unit a `ServiceHandle`;
 //!    stop calls `shutdown(SWEEP_BUDGET)` and logs the `DrainReport` honestly.
+//!
+//! ## The persistence law (GT-D11)
+//!
+//! Absence 1's `session-created` is not only a latency fix — it is the seam
+//! where this plane can hold a promise the UI cannot. `GhostteaWorkspace` owns
+//! pane births (GT-D10) and its own doors hardcode `terminate-with-app`; our
+//! product promise is daemon-lifetime. So an OWNERLESS birth carrying that
+//! default is re-governed to `keep-until-exit` here, on the event, by
+//! `govern_birth` — never in fieldd, because a custody claim enforced only
+//! while fieldd is alive is not a custody claim. Named residual: the flip is a
+//! sub-second window in which a session really is app-lifetime, and a tiny
+//! upstream `defaultPersistence` prop (the G10 candidate) is what deletes it.
 
 use crate::config::NativeConfig;
 use crate::contracts::{ObservedTerminal, TerminalEndpoints, UnitHealth, UnitState};
@@ -90,6 +102,15 @@ const BACKSTOP_INTERVAL: Duration = Duration::from_secs(5);
 /// A torn control connection is reconciled by reconnecting, never by guessing
 /// (spec §10.5: `list-sessions` is truth).
 const RECONNECT_DELAY: Duration = Duration::from_millis(500);
+
+/// What `GhostteaWorkspace` hardcodes into every one of its own create doors —
+/// init, split, and new-pane alike (Workspace.tsx:206/682/716). It is the right
+/// default for the app it was written for, where the shell dies with the window.
+const APP_LIFETIME: &str = "terminate-with-app";
+
+/// What this product promises instead: sessions live as long as the floor does
+/// (NF-D3, the daemon-lifetime ceiling stated honestly).
+const FLOOR_LIFETIME: &str = "keep-until-exit";
 
 /// Socket paths and the per-boot token: everything a client needs, and the
 /// exact shape the NF-D8 hello carries.
@@ -541,7 +562,10 @@ async fn pump_inventory(
             event = events.recv() => match event {
                 // Every pushed event is a hint that the registry may have
                 // moved; the tick below is what bounds how often we ask.
-                Some(_) => dirty = true,
+                Some(event) => {
+                    govern_birth(client, &event).await;
+                    dirty = true;
+                }
                 None => return Ok(()),
             },
             _ = ticker.tick() => {
@@ -558,6 +582,83 @@ async fn pump_inventory(
                 }
             },
         }
+    }
+}
+
+/// GT-D11, the floor persistence law: re-govern an **ownerless** birth that
+/// carries the workspace's app-lifetime default.
+///
+/// The law lives HERE, in the plane that outlives fieldd, because it is a
+/// custody claim: a session promised daemon-lifetime must keep that promise
+/// even if fieldd dies a second later. A fieldd-side flip would be a policy
+/// that stops being enforced exactly when the product needs it most.
+///
+/// Only one shape is touched, and the two exclusions are the reasoning:
+///
+/// - **Owned** (`ownerId` present) — fieldd states persistence explicitly on
+///   every session it creates, so an owned birth already carries its author's
+///   intent. Overriding an explicit choice is not policy, it is a bug that
+///   would be very hard to see.
+/// - **`persistence: None`** — a replica of a session another host governs
+///   (session.rs:314-321). Re-policying one would be this device asserting a
+///   governance it does not hold, and the service would refuse it anyway.
+///
+/// Anything else — `keep-until-exit`, `keep-until-explicit-close`, a value a
+/// later ghosttea invents — is left exactly as found. A tolerant reader does
+/// not rewrite what it does not recognise.
+fn is_ownerless_app_lifetime_birth(session: &SessionSummary) -> bool {
+    session.owner_id.is_none() && session.persistence.as_deref() == Some(APP_LIFETIME)
+}
+
+/// Apply the law to one pushed event, if it is a birth this floor governs.
+///
+/// Failures are swallowed after a line: by the time the event is read the
+/// session may have already exited (a shell that ran `exit` immediately, a
+/// pane closed in the same breath it opened), and the service answers "unknown
+/// or remote session" for one it no longer holds. That is a race, not a fault
+/// — the desired end state, a session that does not outlive its process, holds
+/// either way. A control connection that is genuinely broken is diagnosed by
+/// the very next `reconcile`, which returns its error instead of hiding it.
+async fn govern_birth(client: &ControlClient, event: &Value) {
+    if event.get("type").and_then(Value::as_str) != Some("session-created") {
+        return;
+    }
+    // The event carries the full summary under the same `session` key the
+    // create response uses (service.rs:145-150), so no follow-up list is owed.
+    let Some(summary) = event.get("session") else {
+        return;
+    };
+    let session: SessionSummary = match serde_json::from_value(summary.clone()) {
+        Ok(session) => session,
+        Err(error) => {
+            tracing::warn!(
+                event = "field_native.terminal.birth_unreadable",
+                component = "terminal",
+                error = %error,
+                "A session-created event carried a summary this floor could not read"
+            );
+            return;
+        }
+    };
+    if !is_ownerless_app_lifetime_birth(&session) {
+        return;
+    }
+    match client.set_persistence(&session.id, FLOOR_LIFETIME).await {
+        Ok(()) => tracing::info!(
+            event = "field_native.terminal.persistence_regoverned",
+            component = "terminal",
+            session_id = %session.id,
+            from = APP_LIFETIME,
+            to = FLOOR_LIFETIME,
+            "An ownerless session was re-governed to the floor's lifetime"
+        ),
+        Err(error) => tracing::warn!(
+            event = "field_native.terminal.persistence_regovern_failed",
+            component = "terminal",
+            session_id = %session.id,
+            error = %error,
+            "An ownerless session could not be re-governed; it may already be gone"
+        ),
     }
 }
 
@@ -636,4 +737,80 @@ fn mint_token() -> String {
 fn set_private_socket_permissions(path: &str) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(PathBuf::from(path), std::fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Built from JSON rather than a struct literal on purpose: what the law
+    /// reads is a WIRE shape, and a summary assembled field-by-field in Rust
+    /// would keep passing if the serde names stopped matching ghosttea's.
+    fn summary(extra: Value) -> SessionSummary {
+        let mut wire = json!({
+            "id": "s1",
+            "handle": "s1-handle",
+            "executable": "/bin/zsh",
+            "cols": 100,
+            "rows": 30,
+            "exited": false,
+            "readWrite": true,
+            "title": null,
+            "cwd": null,
+            "bellCount": 0,
+            "pid": 4242,
+            "createdAtMs": 1,
+            "exitCode": null,
+            "exitSignal": null,
+            "requestedTermination": null,
+            "exitOutcome": null,
+        });
+        for (key, value) in extra.as_object().expect("an object of overrides") {
+            wire[key] = value.clone();
+        }
+        serde_json::from_value(wire).expect("the 0.8.0 summary shape parses")
+    }
+
+    #[test]
+    fn an_ownerless_app_lifetime_birth_is_the_only_one_re_governed() {
+        assert!(
+            is_ownerless_app_lifetime_birth(&summary(json!({"persistence": APP_LIFETIME}))),
+            "a workspace door states no owner and asks for app lifetime — the GT-D11 case"
+        );
+        assert!(
+            !is_ownerless_app_lifetime_birth(&summary(
+                json!({"persistence": APP_LIFETIME, "ownerId": "vibefield.fieldd"})
+            )),
+            "an owned birth carries its author's explicit intent and is never overridden"
+        );
+        assert!(
+            !is_ownerless_app_lifetime_birth(&summary(json!({"persistence": FLOOR_LIFETIME}))),
+            "a session already governed by the floor's lifetime needs nothing"
+        );
+        assert!(
+            !is_ownerless_app_lifetime_birth(&summary(
+                json!({"persistence": "keep-until-explicit-close"})
+            )),
+            "a stronger retention class is not ours to weaken"
+        );
+        assert!(
+            !is_ownerless_app_lifetime_birth(&summary(json!({"persistence": null}))),
+            "a replica reports no class, and re-policying one would claim a governance \
+             this host does not hold"
+        );
+    }
+
+    /// The wire name is the whole contract here: `ownerId` arriving as anything
+    /// else would read as `None` and turn every owned birth into a flip.
+    #[test]
+    fn the_owner_rides_the_summary_as_owner_id() {
+        assert_eq!(
+            summary(json!({"ownerId": "vibefield.fieldd"}))
+                .owner_id
+                .as_deref(),
+            Some("vibefield.fieldd")
+        );
+        assert!(summary(json!({})).owner_id.is_none());
+    }
 }

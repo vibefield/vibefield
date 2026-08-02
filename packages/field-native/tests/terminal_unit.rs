@@ -428,6 +428,95 @@ async fn live_pty_enters_and_leaves_the_observed_inventory() {
     daemon.shutdown().await;
 }
 
+/// The persistence of one session, as the observed inventory reports it.
+fn persistence_of<'a>(payload: &'a Value, session_id: &str) -> Option<&'a str> {
+    terminals(payload)
+        .iter()
+        .find(|t| t["sessionId"] == session_id)
+        .and_then(|t| t["persistence"].as_str())
+}
+
+/// What a `GhostteaWorkspace` door asks for: an interactive shell, no owner
+/// named, and the app-lifetime default it hardcodes (Workspace.tsx:199-207).
+/// Written out rather than derived so this test still means what it says if the
+/// deck's own props change.
+fn workspace_door_options() -> Value {
+    json!({
+        "executable": TENANT,
+        "args": [],
+        "cols": 100,
+        "rows": 30,
+        "persistence": "terminate-with-app",
+        "programKind": "interactive-shell",
+        "environment": {"mode": "clean", "variables": {}},
+    })
+}
+
+/// GT-D11: the floor keeps what the UI creates.
+///
+/// The workspace is the one authority over pane births (GT-D10) and its doors
+/// hardcode `terminate-with-app`; this plane re-governs those births to the
+/// daemon-lifetime the product promises. The whole chain is real here — a birth
+/// on the actual floor, the actual `session-created` event, the actual
+/// `set-persistence` — and the assertion reads the mgmt seam fieldd reads, so a
+/// flip that never reached an observer would still fail.
+#[tokio::test]
+async fn an_ownerless_app_lifetime_birth_is_re_governed_to_the_floors_lifetime() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    mgmt.subscribe_observed().await;
+    let (client, _events) = control(&ack).await;
+
+    let ownerless = client
+        .create_session(workspace_door_options())
+        .await
+        .expect("create an ownerless session");
+    assert_eq!(
+        ownerless.persistence.as_deref(),
+        Some("terminate-with-app"),
+        "the floor must have honoured the door's own ask before anything re-governs it"
+    );
+
+    let payload = mgmt
+        .await_observed(Duration::from_secs(10), |p| {
+            persistence_of(p, &ownerless.id) == Some("keep-until-exit")
+        })
+        .await;
+    assert_eq!(
+        persistence_of(&payload, &ownerless.id),
+        Some("keep-until-exit"),
+        "an ownerless app-lifetime birth must reach the observed inventory re-governed: {payload}"
+    );
+
+    // The other half of the law, and the one that would be invisible if broken:
+    // an OWNED birth carries its author's explicit intent, and explicit intent
+    // is never overridden. Read from the floor's own `list-sessions` — the
+    // authority on retention — after a window several times longer than the
+    // flip takes for the ownerless case above.
+    let mut owned_options = workspace_door_options();
+    owned_options["ownerId"] = json!("vibefield.fieldd");
+    let owned = client
+        .create_session(owned_options)
+        .await
+        .expect("create an owned session");
+    assert_eq!(owned.owner_id.as_deref(), Some("vibefield.fieldd"));
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let sessions = client.list_sessions().await.expect("list sessions");
+    let owned_now = sessions
+        .iter()
+        .find(|s| s.id == owned.id)
+        .expect("the owned session is still on the floor");
+    assert_eq!(
+        owned_now.persistence.as_deref(),
+        Some("terminate-with-app"),
+        "an owned birth states its own persistence and must be left alone"
+    );
+
+    daemon.shutdown().await;
+}
+
 /// NF-D3: stop is a sweep. No PTY survives field-native — the honest ceiling —
 /// it happens inside a bounded budget, and the exits are CLASSIFIED as the
 /// service's doing.

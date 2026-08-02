@@ -787,6 +787,17 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // GT-D10: a ticket for a CONNECTION, with no session named and none made.
+  // Not idempotent, for openTicket's reason — every mint is a fresh audited
+  // grant. Same scope as the other two doors: it hands out the same credential,
+  // so a scope split here would be theatre.
+  defineMethod({
+    surface: "product",
+    method: "terminal.connectTicket",
+    scope: "terminal.attach",
+    idempotent: false,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "terminal.create",

@@ -13,6 +13,7 @@ import type {
   GodviewState,
   ShellCommand,
   ShellPlatform,
+  TerminalBackendAttachResult,
   TerminalBridgeStatus,
   TerminalTicket,
 } from "@vibefield/contracts";
@@ -60,7 +61,10 @@ export interface FieldDiagnosticsHost {
  * because a browser harness has no bridge to offer; the Godview reports that
  * honestly rather than drawing an empty deck. */
 export interface FieldTerminalHost {
-  connect(ticket: TerminalTicket): Promise<{ attached: boolean }>;
+  /** Answers with the ports attached AND the shell identity only main can read
+   * (GT-D10) — the workspace spawns every pane with `defaultShell` at `home`,
+   * and neither is knowable in a sandboxed page. */
+  connect(ticket: TerminalTicket): Promise<TerminalBackendAttachResult>;
   onStatus(handler: (status: TerminalBridgeStatus) => void): () => void;
 }
 

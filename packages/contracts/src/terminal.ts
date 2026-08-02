@@ -36,10 +36,33 @@ export const TerminalTicket = z
   .passthrough();
 export type TerminalTicket = z.infer<typeof TerminalTicket>;
 
+/** terminal.connectTicket params — deliberately empty (GT-D10). A connection
+ * is not a session, so there is nothing to name: the caller is asking for the
+ * coordinates of THIS device's floor, which are the same for every holder of
+ * the scope. Kept as an object rather than `void` so the method can grow a
+ * device selector (D35) without a params-shape break. */
+export const TerminalConnectTicketParams = z.object({}).passthrough();
+export type TerminalConnectTicketParams = z.infer<typeof TerminalConnectTicketParams>;
+
+/** terminal.connectTicket result (GT-D10 — the one-authority correction).
+ *
+ * `terminal.create` answers with a ticket because GT-1 needed the mint to
+ * outrun the observed inventory, and the deck then used create as its DOOR:
+ * every connection began by spawning a shell nobody asked for. The workspace
+ * owns pane births now, so the deck needs a ticket and no session at all —
+ * that is this method. `openTicket` keeps its observed gate for
+ * attach-to-a-KNOWN-session (load-bearing in the seam and kill-matrix tests),
+ * `create` keeps its nested mint for programmatic births (iOS, agents, tests);
+ * this one mints for a connection, with no floor state to consult and none to
+ * make. Same ticket shape, same scope, same per-call audited grant. */
+export const TerminalConnectTicketResult = z.object({ ticket: TerminalTicket }).passthrough();
+export type TerminalConnectTicketResult = z.infer<typeof TerminalConnectTicketResult>;
+
 /** terminal.create — the free-shell door (NF-D6: the user's $SHELL as a login
  * shell, inherit-minus-strip env). Agent PTYs are NOT born here — they come
  * from agent.spawn with clean+allowlist env; this method exists so plain PTYs
- * (pane deck, canvas terminals without an agent) have a product-plane birth. */
+ * (iOS, agents, tests) have a product-plane birth. Since GT-D10 the pane deck
+ * is NOT among its callers: the workspace creates its own panes. */
 export const TerminalCreateParams = z
   .object({
     cwd: z.string().optional(),
@@ -88,8 +111,26 @@ export type TerminalBridgeStatus = z.infer<typeof TerminalBridgeStatus>;
 
 /** renderer → main invoke result. `attached` is true once the ports for THIS
  * document have been posted; a false would be a lie the renderer could not
- * detect, so every failure is an exception instead. */
-export const TerminalBackendAttachResult = z.object({ attached: z.boolean() }).passthrough();
+ * detect, so every failure is an exception instead.
+ *
+ * `defaultShell` and `home` ride here because GT-D10 makes the WORKSPACE the
+ * one authority over pane births, and its create doors take `executable` and
+ * `cwd` from props the renderer must already hold. Neither value is knowable
+ * in a sandboxed page — `SHELL`, `userInfo()` and `$HOME` are main's to read —
+ * and both are needed BEFORE the workspace first mounts, because ghosttea's
+ * initialization key is `storageKey ∥ defaultShell ∥ claimExistingSessions ∥
+ * initialCwd`: a value that arrives late re-initializes the workspace and
+ * creates a second pane. Answering them on the connect the deck already makes
+ * is what lets the deck gate its first render on knowing them. */
+export const TerminalBackendAttachResult = z
+  .object({
+    attached: z.boolean(),
+    /** the user's real login shell — never `/bin/sh` (the `sh-3.2$` tombstone) */
+    defaultShell: z.string().min(1),
+    /** `$HOME`, which becomes the workspace's `initialCwd` */
+    home: z.string().min(1),
+  })
+  .passthrough();
 export type TerminalBackendAttachResult = z.infer<typeof TerminalBackendAttachResult>;
 
 /** terminal.terminate — the full ladder (interrupt → 2s → SIGTERM pgrp → 2s →

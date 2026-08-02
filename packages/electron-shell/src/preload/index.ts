@@ -181,9 +181,12 @@ contextBridge.exposeInMainWorld("vibefield", {
   onDesktopState: (handler: (state: DesktopShellState) => void): (() => void) =>
     desktopState.subscribe(handler),
   terminal: {
-    connect: async (ticket: unknown): Promise<{ attached: boolean }> => {
+    connect: async (ticket: unknown): Promise<TerminalBackendAttachResult> => {
       // Parsed here, before the port forward exists: a malformed ticket must
-      // throw at the call site rather than arm a listener and cross IPC.
+      // throw at the call site rather than arm a listener and cross IPC. The
+      // ANSWER is parsed too (GT-D10): the page mounts a workspace on the
+      // `defaultShell` it carries, and a missing one must fail here rather
+      // than become `undefined` in a spawn.
       const validated = TerminalTicket.parse(ticket);
       installPortForward();
       return TerminalBackendAttachResult.parse(

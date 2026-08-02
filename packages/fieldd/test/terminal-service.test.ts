@@ -11,12 +11,13 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type {
-  DeviceInfo,
-  TerminalCreateResult,
-  TerminalEndpoints,
-  TerminalInfo,
-  TerminalTicket,
+import {
+  type DeviceInfo,
+  TerminalConnectTicketResult,
+  type TerminalCreateResult,
+  type TerminalEndpoints,
+  type TerminalInfo,
+  type TerminalTicket,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -171,18 +172,30 @@ async function startFakeFloor(
   };
 }
 
-/** Every audited action the daemon recorded, in order. */
-async function readAuditActions(dataDir: string): Promise<string[]> {
+interface AuditRecord {
+  action: string;
+  phase: "attempt" | "outcome";
+  outcome?: string;
+  target?: { kind: string; id: string };
+}
+
+/** Every audited record the daemon wrote, in order. */
+async function readAuditRecords(dataDir: string): Promise<AuditRecord[]> {
   const root = join(dataDir, "audit");
-  const actions: string[] = [];
+  const records: AuditRecord[] = [];
   for (const name of readdirSync(root).sort()) {
     if (!name.endsWith(".jsonl")) continue;
     for (const line of readFileSync(join(root, name), "utf8").split("\n")) {
       if (line.trim() === "") continue;
-      actions.push((JSON.parse(line) as { action: string }).action);
+      records.push(JSON.parse(line) as AuditRecord);
     }
   }
-  return actions;
+  return records;
+}
+
+/** Every audited action the daemon recorded, in order. */
+async function readAuditActions(dataDir: string): Promise<string[]> {
+  return (await readAuditRecords(dataDir)).map((record) => record.action);
 }
 
 const observed = (terminals: Array<Record<string, unknown>>) => ({
@@ -266,12 +279,57 @@ describe("TerminalService (NF-3, mock native)", () => {
 
     for (const [method, params] of [
       ["terminal.openTicket", { sessionId: "s1" }],
+      ["terminal.connectTicket", {}],
       ["terminal.create", {}],
       ["terminal.terminate", { sessionId: "s1" }],
     ] as const) {
       const err = await rpc.callErr(method, params);
       expect(err.data?.kind, method).toBe("UNAVAILABLE");
     }
+  });
+
+  it("terminal.connectTicket mints for a connection, with no session on the floor (GT-D10)", async () => {
+    // The deck's door. It used to be `terminal.create`: opening the Godview
+    // spawned a shell so that a ticket could ride the answer, which is how
+    // fieldd became a second session authority in front of the workspace. This
+    // asks for the connection and nothing else — so the floor here is EMPTY,
+    // and it must still be empty afterwards.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.helloTerminal = ENDPOINTS;
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "terminal-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    // Parsed against the contract, not merely shaped like it.
+    const minted = TerminalConnectTicketResult.parse(await rpc.call("terminal.connectTicket", {}));
+    expect(minted.ticket).toMatchObject({
+      controlSocket: ENDPOINTS.controlSocket,
+      frameSocket: ENDPOINTS.frameSocket,
+      token: ENDPOINTS.authToken,
+    });
+
+    const list = (await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] };
+    expect(list.terminals, "a connection mint must not have created anything").toEqual([]);
+
+    // Still a privilege grant, so still on the record — attempt before effect,
+    // like every other mint — and recorded as what it IS: a ticket for the
+    // connection, not for some session id this call never had.
+    const records = (await readAuditRecords(dataDir)).filter((r) =>
+      r.action.startsWith("terminal."),
+    );
+    expect(records.map((r) => `${r.action}:${r.phase}`)).toEqual([
+      "terminal.ticket.mint:attempt",
+      "terminal.ticket.mint:outcome",
+    ]);
+    for (const record of records) {
+      expect(record.target).toEqual({ kind: "terminal", id: "connection" });
+    }
+    expect(records[1]?.outcome).toBe("succeeded");
   });
 
   it("gates every terminal.* method on terminal.attach", async () => {

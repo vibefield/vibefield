@@ -40,6 +40,7 @@ import {
   SettingsResetParams,
   SettingsSetParams,
   SettingsSubscribeParams,
+  type TerminalConnectTicketResult,
   TerminalCreateParams,
   type TerminalCreateResult,
   type TerminalListResult,
@@ -863,6 +864,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         () => ({ outcome: "succeeded" }),
       );
     });
+    // GT-D10: the connection's ticket, minted against no session at all. The
+    // deck used to open by CREATING one — a shell nobody asked for, born so a
+    // ticket could ride its answer — which is exactly how fieldd became a
+    // second authority in front of the workspace. There is no floor state to
+    // gate on here (a connection is not a session), so this neither waits for
+    // the observed inventory nor touches it; the target names the connection
+    // rather than a session id, because that is what was granted.
+    api.register(
+      "terminal.connectTicket",
+      async (ctx): Promise<TerminalConnectTicketResult> =>
+        await audit.required(
+          ctx,
+          { action: "terminal.ticket.mint", target: { kind: "terminal", id: "connection" } },
+          () => ({ ticket: terminals.ticket() }),
+          () => ({ outcome: "succeeded" }),
+        ),
+    );
     // GT-1: create ALSO mints. openTicket gates on the observed inventory,
     // which is a mgmt round trip behind the spawn — so create-then-ticket
     // raced a session that certainly existed (GT-0's measured 62-117ms window).

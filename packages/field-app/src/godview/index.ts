@@ -11,4 +11,4 @@ export {
   subscribeGodviewOpen,
   useGodviewOpen,
 } from "./overlay-state";
-export { type DeckSession, describePane, type PaneFace, sessionsToAdopt } from "./pane-faces";
+export { type DeckSession, describePane, type PaneFace } from "./pane-faces";

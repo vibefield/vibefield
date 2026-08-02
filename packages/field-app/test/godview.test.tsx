@@ -16,7 +16,7 @@ import {
   resetGodviewOpenForTest,
   useGodviewOpen,
 } from "../src/godview/overlay-state";
-import { type DeckSession, describePane, sessionsToAdopt } from "../src/godview/pane-faces";
+import { type DeckSession, describePane } from "../src/godview/pane-faces";
 import { type FieldHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
@@ -79,24 +79,11 @@ describe("describePane", () => {
   });
 });
 
-describe("sessionsToAdopt", () => {
-  it("adopts a floor session the deck has never shown", () => {
-    const floor = [session({ id: "a" }), session({ id: "b" })];
-    expect(sessionsToAdopt(floor, new Set(["a"])).map((s) => s.id)).toEqual(["b"]);
-  });
-
-  it("never re-adopts a session whose pane was closed — that is what close MEANS", () => {
-    // GT-D5: closing a pane detaches, so `b` is still on the floor and still
-    // listed. Re-adopting it would undo the user's close on the next open.
-    const floor = [session({ id: "a" }), session({ id: "b" })];
-    expect(sessionsToAdopt(floor, new Set(["a", "b"]))).toEqual([]);
-  });
-
-  it("leaves exited sessions on the floor — the deck is for work in progress", () => {
-    const floor = [session({ id: "a", exited: true, exitCode: 0 })];
-    expect(sessionsToAdopt(floor, new Set())).toEqual([]);
-  });
-});
+// `sessionsToAdopt` and its three rules were deleted at GT-2e: the deck no
+// longer decides what a pane holds. `GhostteaWorkspace` claims on mount and
+// creates through its own doors (GT-D10), so there is no product rule left here
+// to unit-test — what replaced it is a workspace behaviour, asserted in
+// `pnpm smoke:godview` against the real library.
 
 // ---- the overlay state -------------------------------------------------------
 

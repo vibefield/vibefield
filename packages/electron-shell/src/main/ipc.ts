@@ -9,6 +9,7 @@ import type { Logger } from "@vibefield/logging";
 import { ipcMain } from "electron";
 import { createBootstrapHandler } from "./bootstrap";
 import type { GodviewRegistry } from "./godview";
+import { shellIdentity } from "./login-shell";
 import type { TerminalBackendRegistry } from "./terminal-backend";
 import type { WindowRegistry } from "./window-policy";
 
@@ -59,7 +60,13 @@ export function registerWindowBootstrap(
 /** The Backend door (GT-D3). Same sender gate as bootstrap: only a window THIS
  * shell registered may hand main a connection to dial. The ticket itself is
  * never inspected beyond its schema — main forwards transport coordinates and
- * holds no terminal product logic (design-03 A1). */
+ * holds no terminal product logic (design-03 A1).
+ *
+ * The answer also carries the shell identity (GT-D10). That is not product
+ * logic sneaking in: `SHELL`, the passwd entry and `$HOME` are facts about the
+ * machine that a sandboxed page cannot read, and the deck needs them before it
+ * may mount a workspace. Composed HERE rather than inside the Backend host,
+ * which stays exactly what it was — a ticket in, a bridge out. */
 export function registerTerminalBackend(
   registry: WindowRegistry,
   backends: TerminalBackendRegistry,
@@ -81,7 +88,7 @@ export function registerTerminalBackend(
         "A registered renderer received the terminal bridge ports",
         { webContentsId: event.sender.id },
       );
-      return TerminalBackendAttachResult.parse(result);
+      return TerminalBackendAttachResult.parse({ ...result, ...shellIdentity() });
     } catch (error) {
       logger?.error(
         "desktop.ipc.terminal_connect_failed",

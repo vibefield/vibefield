@@ -3,6 +3,7 @@ import type {
   GodviewState,
   ShellCommand,
   ShellPlatform,
+  TerminalBackendAttachResult,
   TerminalBridgeStatus,
   TerminalTicket,
 } from "@vibefield/contracts";
@@ -30,7 +31,7 @@ declare global {
       onShellCommand(handler: (command: ShellCommand) => void): () => void;
       onDesktopState(handler: (state: DesktopShellState) => void): () => void;
       terminal: {
-        connect(ticket: TerminalTicket): Promise<{ attached: boolean }>;
+        connect(ticket: TerminalTicket): Promise<TerminalBackendAttachResult>;
         onStatus(handler: (status: TerminalBridgeStatus) => void): () => void;
       };
       godview: {

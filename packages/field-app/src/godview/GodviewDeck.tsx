@@ -10,25 +10,38 @@ import {
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
-import { TerminalCreateResult } from "@vibefield/contracts";
+import { TerminalConnectTicketResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { emitGodviewDeckMarker } from "../development-console";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import { godviewTerminalTheme } from "./deck-theme";
-import { type DeckSession, describePane, sessionsToAdopt } from "./pane-faces";
+import { describePane } from "./pane-faces";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
-// The pane deck (GT-D3/D5) — the spike's proven dance, become product.
+// The pane deck (GT-D3/D5/D10) — the spike's proven dance, become product.
 //
-// Control rides fieldd, the one product door (D27): the renderer asks for a
-// free shell with `terminal.create`, which answers WITH its ticket, and hands
-// the ticket to main, which dials field-native's sockets and posts the two
+// ONE session authority (GT-D10). `GhostteaWorkspace` owns every pane birth:
+// it claims on mount, creates its first pane itself, and splits and rehydrates
+// through its OWN doors — exactly as ghosttea desktop and the chopsticks
+// godview run it. This deck supplies the two things those doors need and
+// cannot know (the connection, and the user's shell) and then gets out of the
+// way. It was not always so: GT-1/2 had the deck create sessions out-of-band
+// through `terminal.create` and coax the workspace into showing them, and
+// every trick that made that work — the adopt sweep, the split interception,
+// a `/bin/sh` hardcode — was compensation for being a second authority. James
+// saw the result as an `sh-3.2$` prompt.
+//
+// Control rides fieldd, the one product door (D27): the renderer asks for the
+// connection's ticket with `terminal.connectTicket` — a mint, no session — and
+// hands it to main, which dials field-native's sockets and posts the two
 // MessagePorts back. Bytes never touch JSON-RPC (EL2). The shell supervises no
 // ghosttead: field-native embeds that floor and outlives us, which is what the
-// Backend's external mode is for.
+// Backend's external mode is for. fieldd stands BESIDE the flow as policy
+// client: it mints tickets and audits, and the native plane keeps what the
+// workspace creates alive (GT-D11) — neither is a gate in front of a pane.
 //
 // Nothing here is mounted until the overlay has been opened once — a user who
 // never presses ⌘G forks no bridge, opens no socket, and spawns no shell.
@@ -87,7 +100,7 @@ export interface GodviewDeckProps {
   active: boolean;
 }
 
-export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
+export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
   const fieldd = useFielddClient();
   const [runtime, setRuntime] = useState(makeRuntime);
   /** Bumped by a recovery. A runtime holds its ports for life, so a rebuilt
@@ -95,13 +108,14 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
    * context at mount, so the deck has to remount onto it. */
   const [generation, setGeneration] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  /** Published by the sidebar probe. Read only to REPORT what the deck holds
+   * (the marker below); the deck does not drive panes through it any more —
+   * that was the adopt sweep GT-2e deleted. */
   const [workspace, setWorkspace] = useState<GhostteaWorkspaceContext>();
-  const latest = useRef<GhostteaWorkspaceContext | undefined>(undefined);
-  latest.current = workspace;
-  /** Every session this deck has ever put in a pane. Closing a pane detaches a
-   * session that goes on living (GT-D5); without this it would be re-adopted on
-   * the next open and the close would mean nothing. */
-  const seen = useRef(new Set<string>());
+  /** The shell every pane is born with, and where. Main's answer to the connect
+   * (GT-D10) — `null` until it lands, which is what gates the workspace's first
+   * mount below. */
+  const [shell, setShell] = useState<{ defaultShell: string; home: string } | null>(null);
   /** GT-2c: only a status TRANSITION may act — main republishes unchanged
    * states by contract, and a republish treated as news is a remount loop. */
   const lastBridgeState = useRef<string | null>(null);
@@ -153,9 +167,13 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
     [publish],
   );
 
-  // The free shell, and the transport that shows it. Runs once per runtime
-  // generation: a recovery rebuilds the bridge, so the ports have to be asked
-  // for again — main's `bridge-up` is the invitation, this is the ask.
+  // The transport, and the shell policy that rides its answer. Runs once per
+  // runtime generation: a recovery rebuilds the bridge, so the ports have to be
+  // asked for again — main's `bridge-up` is the invitation, this is the ask.
+  //
+  // No session is created here, and that is the whole of GT-D10. The deck asks
+  // for a ticket to the floor; what appears in a pane is the workspace's
+  // decision, made through its own doors against the connection this opens.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -164,14 +182,15 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
         if (terminal === undefined) {
           throw new Error("this host has no terminal bridge");
         }
-        // Parsed, not cast: a create result without a ticket must fail loudly.
-        // cwd, shell and persistence are fieldd's to decide (NF-D6/GT-D5: the
-        // user's login shell, $HOME, keep-until-exit) — the deck states no
-        // policy it does not own.
-        const created = TerminalCreateResult.parse(await fieldd.request("terminal.create", {}));
+        // Parsed, not cast: a mint without a ticket must fail loudly.
+        const minted = TerminalConnectTicketResult.parse(
+          await fieldd.request("terminal.connectTicket", {}),
+        );
         if (cancelled) return;
-        await terminal.connect(created.ticket);
+        // Main answers the connect with the shell identity it alone can read.
+        const attached = await terminal.connect(minted.ticket);
         if (cancelled) return;
+        setShell({ defaultShell: attached.defaultShell, home: attached.home });
         setError(null);
       } catch (cause) {
         if (cancelled) return;
@@ -226,46 +245,19 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
     });
   }, []);
 
-  // Adopt what the floor has and the deck has never shown. `claimExistingSessions`
-  // covers only the first-ever open (ghosttea gates it on there being no saved
-  // workspace), so without this a session born after the deck's first layout —
-  // another surface's, an agent's when AR lands — would be invisible in the
-  // very view that exists to show everything.
-  const hasContext = workspace !== undefined;
-  useEffect(() => {
-    if (!active || !hasContext) return;
-    let cancelled = false;
-    void (async () => {
-      const context = latest.current;
-      if (context === undefined) return;
-      try {
-        const floor = await runtime.listSessions();
-        if (cancelled) return;
-        for (const pane of context.panes) seen.current.add(pane.session.id);
-        for (const session of sessionsToAdopt(floor, seen.current)) {
-          seen.current.add(session.id);
-          context.addSession(session);
-        }
-      } catch (cause) {
-        // A floor we cannot list is the bridge's problem, and the bridge
-        // reports itself; adopting nothing is the honest outcome here.
-        getRendererLogger()
-          .child({ component: "godview" })
-          .warn("renderer.godview.adopt_failed", "The Godview deck could not list the floor", {
-            error: cause instanceof Error ? cause.message : String(cause),
-          });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [active, runtime, hasContext]);
+  // NOTE (GT-D10, deliberate): there is no adopt sweep here any more. The old
+  // one listed the floor on every open and pushed anything unseen into a pane,
+  // because `claimExistingSessions` is first-run-only — but that made the deck
+  // a second authority over what a pane holds, and `seen` existed only to stop
+  // it from undoing the user's own pane closes. The workspace claims on mount
+  // and that is the rule. Named residual, from the spec: a session born mid-run
+  // outside the deck no longer auto-surfaces. It returns as deliberate AR/GT-5
+  // work driven by `session-created`, not as a `listSessions` poll.
 
   // Whatever the deck currently is, said out loud once per change. The canvas
   // smoke's CANVAS_READY precedent: the headless harness reads renderer console
   // output because there is no other way to ask a page what it drew.
   useEffect(() => {
-    for (const pane of workspace?.panes ?? []) seen.current.add(pane.session.id);
     emitGodviewDeckMarker({
       active,
       panes: workspace?.panes.length ?? 0,
@@ -276,23 +268,29 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
     });
   }, [active, workspace, runtime, error]);
 
-  const platform: GhostteaWorkspacePlatform = {
-    platform: getHost().platform ?? "other",
-    // The workspace only uses this for its OWN create path, which
-    // `createSplitSession` below replaces outright; fieldd picks the real shell.
-    defaultShell: "/bin/sh",
-    readClipboard: () => navigator.clipboard?.readText() ?? "",
-    showContextMenu: () => undefined,
-    toggleFullscreen: () => undefined,
-    // The deck's "window" is the overlay. Ghosttea calls this when the LAST
-    // pane closes, and taking the Electron window down there would close the
-    // canvas because a terminal ran out — so it closes the overlay instead,
-    // which is what the gesture meant.
-    closeWindow: () => {
-      void getHost().godview?.set(false);
-    },
-    onMenuAction: () => () => undefined,
-  };
+  const platform: GhostteaWorkspacePlatform | null =
+    shell === null
+      ? null
+      : {
+          platform: getHost().platform ?? "other",
+          // The user's real login shell, resolved by main (GT-D10). This is the
+          // value every pane is spawned with, because the workspace's own doors
+          // are the only doors — the `/bin/sh` that used to sit here was a
+          // placeholder for a path we then never took, and it was what James
+          // actually saw in a pane.
+          defaultShell: shell.defaultShell,
+          readClipboard: () => navigator.clipboard?.readText() ?? "",
+          showContextMenu: () => undefined,
+          toggleFullscreen: () => undefined,
+          // The deck's "window" is the overlay. Ghosttea calls this when the
+          // LAST pane closes, and taking the Electron window down there would
+          // close the canvas because a terminal ran out — so it closes the
+          // overlay instead, which is what the gesture meant.
+          closeWindow: () => {
+            void getHost().godview?.set(false);
+          },
+          onMenuAction: () => () => undefined,
+        };
 
   // GT-2b: the honest fault face. Without it, a deck whose ports never arrive
   // shows ghosttea's own raw rejection string on a dead stage with no way back
@@ -310,6 +308,20 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
     );
   }
 
+  // The GATE (GT-D10). The workspace keys its initialization on
+  // `storageKey ∥ defaultShell ∥ claimExistingSessions ∥ initialCwd`
+  // (Workspace.tsx:229), so mounting it with a placeholder shell and correcting
+  // it a moment later does not adjust anything — it RE-INITIALIZES, claiming
+  // and creating a second time. Waiting costs one round trip on a surface the
+  // user just opened; guessing costs a pane nobody asked for.
+  //
+  // Empty rather than a "connecting" face on purpose: the two honest states
+  // this deck owes are the fault face above (the connect failed, here is the
+  // way back) and the workspace itself, and everything between them is one
+  // round trip inside the overlay's own reveal. A label that appears and
+  // vanishes inside 200ms reads as a stutter, not as honesty.
+  if (platform === null || shell === null) return null;
+
   return (
     <GhostteaProvider key={generation} runtime={runtime}>
       <GhostteaWorkspace
@@ -318,24 +330,14 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement {
         storageKey={DECK_STORAGE_KEY}
         sidebar={Sidebar}
         decoratePane={describePane}
-        // Every split is a FLOOR session (GT-D5): fieldd's `terminal.create`
-        // with its keep-until-exit default and its audit, never the workspace's
-        // own runtime create — that one asks for `terminate-with-app`, which is
-        // the opposite of the promise this product makes about sessions.
-        createSplitSession={async (activeSession: DeckSession) => {
-          const created = TerminalCreateResult.parse(
-            await fieldd.request("terminal.create", {
-              ...(activeSession.cwd !== null ? { cwd: activeSession.cwd } : {}),
-            }),
-          );
-          const floor = await runtime.listSessions();
-          const session = floor.find((candidate) => candidate.id === created.sessionId);
-          if (session === undefined) {
-            throw new Error("the floor did not list the session it had just created");
-          }
-          seen.current.add(session.id);
-          return session;
-        }}
+        // No `createSplitSession` (GT-D10): splits go through the workspace's
+        // own door, like every other birth. It asks for `terminate-with-app`
+        // there — the opposite of this product's promise — and that is
+        // corrected where it belongs, in the plane that outlives fieldd:
+        // field-native re-governs ownerless births to keep-until-exit on
+        // `session-created` (GT-D11). Intercepting the door instead is what
+        // made this deck an authority it should never have been.
+        initialCwd={shell.home}
         claimExistingSessions
         // GT-4's floor work is what lights these up; until field-native serves
         // the mesh the palette would list nothing and promise something.

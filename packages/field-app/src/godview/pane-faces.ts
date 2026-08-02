@@ -42,26 +42,3 @@ export function describePane(session: DeckSession): PaneFace | undefined {
   if (session.exitCode === 0) return { label: "exited" };
   return { label: `exited · ${session.exitCode}`, color: "var(--vf-red)" };
 }
-
-/** Which live floor sessions this deck has not yet shown.
- *
- * `claimExistingSessions` is a LOAD-time affordance and first-run only —
- * ghosttea's `initializeWorkspace` passes `claimExistingSessions && !hasSavedWorkspace`
- * to its filter — so once the deck has persisted a layout it never adopts
- * anything again on its own. A session born on the floor after that (another
- * surface's `terminal.create`, an agent's shell when AR lands) would simply be
- * invisible here, which is the opposite of a Godview.
- *
- * So the deck adopts, on every open, what it has never seen. `seen` is what
- * makes closing a pane mean something: a pane the user closed detached a
- * session that is still alive and still listed, and re-adopting it on the next
- * open would make the close a no-op. Seen once, never re-adopted.
- *
- * Exited sessions are not adopted — an ended shell is history, and the deck is
- * for work in progress. One already in a pane keeps its pane and its face. */
-export function sessionsToAdopt(
-  floor: readonly DeckSession[],
-  seen: ReadonlySet<string>,
-): readonly DeckSession[] {
-  return floor.filter((session) => !session.exited && !seen.has(session.id));
-}

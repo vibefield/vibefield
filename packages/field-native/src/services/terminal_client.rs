@@ -85,6 +85,12 @@ pub struct SessionSummary {
     /// `ObservedTerminal.persistence` (reference-don't-remodel).
     #[serde(default)]
     pub persistence: Option<String>,
+    /// Who asked for this session, verbatim from the `ownerId` a create passed
+    /// (session.rs:295-318 — the summary echoes the option back). `None` is
+    /// the whole point: a UI door that states no owner produces an ownerless
+    /// birth, and GT-D11 governs exactly those.
+    #[serde(default)]
+    pub owner_id: Option<String>,
 }
 
 /// An authenticated control connection, plus the pushed-event stream that came
