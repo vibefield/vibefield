@@ -2,7 +2,7 @@ import type { PluginsUpdatesCheckResult, PluginUpdateInfo } from "@vibefield/con
 import { FielddRpcError } from "@vibefield/fieldd-client";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useState } from "react";
-import { labelCls } from "./SettingsPanel";
+import { labelCls } from "./settings-ui";
 
 // P7 UI — the user-initiated updates flow (plugin spec §5.3.1: "plugins.updates.check
 // is user-initiated … no push feed, no phone-home"). Mounts under PluginsSection as an

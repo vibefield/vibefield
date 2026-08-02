@@ -3,7 +3,7 @@ import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
 import type { ReactElement } from "react";
 import { useDocSyncStatuses } from "../doc-sync-store";
-import { borderCls, labelCls, sectionCls } from "./SettingsPanel";
+import { labelCls, SettingsSection } from "./settings-ui";
 
 // Mesh diagnostics — a Settings SECTION, sibling to SystemSection (C3; the
 // 2026-07-21 law: dev-facing diagnostics live inside the Settings panel, never
@@ -92,8 +92,10 @@ export function MeshSection(): ReactElement {
   const nodeState = meshUnit ? meshUnit.state : h ? "unavailable" : conn;
 
   return (
-    <div className={borderCls}>
-      <div className={sectionCls}>Mesh</div>
+    <SettingsSection
+      title="Mesh network"
+      description="Devices, shared services, and document synchronization on your private network."
+    >
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <span className={labelCls}>node</span>
@@ -249,6 +251,6 @@ export function MeshSection(): ReactElement {
 
         {sub.error !== null && <div className={labelCls}>health stream unavailable</div>}
       </div>
-    </div>
+    </SettingsSection>
   );
 }

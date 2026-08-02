@@ -18,7 +18,8 @@ import { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { type FieldHost, setHost } from "../src/host";
 import { NavigationBreadcrumbs } from "../src/hud/NavigationBreadcrumbs";
 import {
   type OverlapGlowConfig,
@@ -28,6 +29,24 @@ import {
 } from "../src/panels";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const noopLogger: FieldHost["logger"] = {
+  child: () => noopLogger,
+  trace() {},
+  debug() {},
+  info() {},
+  warn() {},
+  error() {},
+  fatal() {},
+  isLevelEnabled: () => false,
+};
+
+setHost({
+  logger: noopLogger,
+  getConnection: async () => ({ port: 1, token: "test" }),
+  onPrepareClose: () => () => undefined,
+  completeClose: () => undefined,
+});
 
 const THEME: ThemeColors = {
   dotLight: "#c0c0c0",
@@ -79,7 +98,7 @@ function mount(node: ReactElement): void {
 }
 
 describe("widgetlab panels", () => {
-  it("SettingsPanel mounts with controlled grid/theme/glow props", () => {
+  it("SettingsPanel presents categorized pages and preserves the canvas tools", async () => {
     const engine = makeEngine();
     let grid = DEFAULT_GRID_CONFIG;
     // SystemSection (diagnostics live inside Settings) reads the fieldd hooks —
@@ -106,27 +125,100 @@ describe("widgetlab panels", () => {
       ),
     );
 
-    expect(container?.textContent).toContain("Settings");
-    expect(container?.textContent).toContain("Grid Spacings");
-    expect(container?.textContent).toContain("Zoom Range");
-    // The System diagnostics section renders inside the panel (2026-07-21 law).
-    expect(container?.textContent).toContain("System");
-    expect(container?.textContent).toContain("connection");
-    // C4: the Mesh section is a sibling of System; its device roster renders the
-    // honest empty state for the never-connected client here (the subscription
-    // sits in loading — no data, no error — so "no devices yet").
-    expect(container?.textContent).toContain("Mesh");
-    expect(container?.textContent).toContain("devices");
-    expect(container?.textContent).toContain("no devices yet");
-    // B3: the board-persistence row (module store; "booting" pre-attach).
-    expect(container?.textContent).toContain("board");
-    // Controlled: the grid inputs render (a spacing value from the default cfg).
+    expect(container?.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(container?.textContent).toContain("Desktop behavior");
+    expect(container?.textContent).toContain("Settings history");
+    expect(container?.textContent).not.toContain("World grid");
+
+    const category = (name: string): HTMLButtonElement | undefined =>
+      Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
+        (button) => button.getAttribute("aria-label") === `${name} settings`,
+      );
+    expect(category("General")?.getAttribute("aria-current")).toBe("page");
+    expect(category("Appearance")).toBeDefined();
+    expect(category("Canvas")).toBeDefined();
+    expect(category("Plugins")).toBeDefined();
+    expect(category("Mesh")).toBeDefined();
+    expect(category("Diagnostics")).toBeDefined();
+    expect(category("Advanced")).toBeDefined();
+
+    act(() => category("Canvas")?.click());
+    expect(container?.textContent).toContain("World grid");
+    expect(container?.textContent).toContain("Zoom range");
     const numberInputs = container?.querySelectorAll('input[type="number"]');
     expect(numberInputs?.length ?? 0).toBeGreaterThan(0);
+
+    act(() => category("Advanced")?.click());
+    expect(container?.textContent).toContain("Breakpoint preview");
+    expect(container?.textContent).toContain("Canvas stress test");
     // Stress buttons are disabled without a stressWidgetType.
     const buttons = Array.from(container?.querySelectorAll("button") ?? []);
     const stress = buttons.find((b) => b.textContent === "+50");
     expect(stress?.disabled).toBe(true);
+
+    act(() => category("Mesh")?.click());
+    expect(container?.textContent).toContain("Mesh network");
+    expect(container?.textContent).toContain("devices");
+    expect(container?.textContent).toContain("no devices yet");
+
+    await act(async () => {
+      category("Diagnostics")?.click();
+      await import("../src/panels/DiagnosticsSection");
+    });
+    expect(container?.textContent).toContain("System status");
+    expect(container?.textContent).toContain("connection");
+    expect(container?.textContent).toContain("board");
+  });
+
+  it("routes settings undo through the global Loro history toolbar", async () => {
+    const engine = makeEngine();
+    const request = vi.fn(async (method: string) =>
+      method === "storage.settings.undo" ? { applied: true } : { ok: true },
+    );
+    const client = {
+      status: "ready",
+      onStatusChange: () => () => undefined,
+      subscribe: vi.fn(async (method: string) => {
+        if (method !== "storage.appPreferences.subscribe") {
+          throw new Error(`unexpected subscription: ${method}`);
+        }
+        return {
+          subId: "app-preferences",
+          snapshot: { showTray: true, backgroundShell: true },
+          unsubscribe: () => undefined,
+        };
+      }),
+      request,
+    } as unknown as FielddClient;
+
+    mount(
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(SettingsPanel, {
+          engine,
+          gridConfig: DEFAULT_GRID_CONFIG,
+          onGridChange: () => {},
+          themeColors: THEME,
+          onThemeColorsChange: () => {},
+          overlapGlow: GLOW,
+          onOverlapGlowChange: () => {},
+          overlapGlowThemeColors: GLOW_THEME,
+          onOverlapGlowThemeColorsChange: () => {},
+          onClose: () => {},
+        }),
+      ),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const undo = container?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Undo settings change"]',
+    );
+    await act(async () => undo?.click());
+    expect(request).toHaveBeenCalledWith("storage.settings.undo", {});
+    expect(container?.textContent).toContain("Last synced change undone");
   });
 
   it("NavigationBreadcrumbs renders the root state at depth 0", () => {

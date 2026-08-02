@@ -63,12 +63,12 @@ describe("DesktopSection", () => {
   it("shows both Linux controls and writes only the exact preference key", async () => {
     const fieldd = client({ showTray: true, backgroundShell: true });
     await mount(fieldd, "linux");
-    const inputs = container?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
-    expect(inputs).toHaveLength(2);
-    expect(inputs?.[0]?.checked).toBe(true);
-    expect(inputs?.[1]?.checked).toBe(true);
+    const switches = container?.querySelectorAll<HTMLButtonElement>('[role="switch"]');
+    expect(switches).toHaveLength(2);
+    expect(switches?.[0]?.getAttribute("aria-checked")).toBe("true");
+    expect(switches?.[1]?.getAttribute("aria-checked")).toBe("true");
 
-    await act(async () => inputs?.[0]?.click());
+    await act(async () => switches?.[0]?.click());
     expect(fieldd.request).toHaveBeenCalledWith("storage.appPreferences.set", {
       key: "desktop.showTray",
       value: false,
@@ -77,15 +77,15 @@ describe("DesktopSection", () => {
 
   it("hides the inapplicable close behavior on macOS", async () => {
     await mount(client({ showTray: true, backgroundShell: true }), "darwin");
-    expect(container?.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
+    expect(container?.querySelectorAll('[role="switch"]')).toHaveLength(1);
     expect(container?.textContent).not.toContain("Keep running after window closes");
   });
 
   it("disables background residency when the status item is hidden", async () => {
     await mount(client({ showTray: false, backgroundShell: true }), "win32");
-    const inputs = container?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
-    expect(inputs?.[1]?.disabled).toBe(true);
-    expect(container?.textContent).toContain("Requires the status item");
+    const switches = container?.querySelectorAll<HTMLButtonElement>('[role="switch"]');
+    expect(switches?.[1]?.disabled).toBe(true);
+    expect(container?.textContent).toContain("requires the status item");
   });
 
   it("surfaces native tray failure and renders background residency as ineffective", async () => {
@@ -100,10 +100,10 @@ describe("DesktopSection", () => {
         },
       },
     });
-    const inputs = container?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
-    expect(inputs?.[0]?.checked).toBe(true);
-    expect(inputs?.[1]?.checked).toBe(false);
-    expect(inputs?.[1]?.disabled).toBe(true);
+    const switches = container?.querySelectorAll<HTMLButtonElement>('[role="switch"]');
+    expect(switches?.[0]?.getAttribute("aria-checked")).toBe("true");
+    expect(switches?.[1]?.getAttribute("aria-checked")).toBe("false");
+    expect(switches?.[1]?.disabled).toBe(true);
     expect(container?.textContent).toContain("Closing this window quits VibeField");
     expect(container?.textContent).toContain("DESKTOP_TRAY_UNAVAILABLE");
   });

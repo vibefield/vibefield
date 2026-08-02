@@ -148,9 +148,12 @@ export function ChromeLayer({
     if (onShellCommand === undefined) return;
     return onShellCommand((command) => {
       setShellPresentation((state) => reduceShellPresentation(state, command));
+      onTrayOpenChange(false);
+      onDocsOpenChange(false);
+      setPaletteOpen(false);
       setShowSettings(true);
     });
-  }, [setShowSettings]);
+  }, [setShowSettings, onTrayOpenChange, onDocsOpenChange]);
 
   useEffect(() => {
     const onDesktopState = getHost().onDesktopState;
@@ -161,13 +164,14 @@ export function ChromeLayer({
   // The docs sheet + the loading veil quiesce the stage exactly like the tray
   // (WidgetTray holds for itself).
   useStageHold(ce, docsOpen, "docs-explorer");
+  useStageHold(ce, showSettings, "settings-panel");
   useStageHold(ce, docState.phase === "loading", "loading-veil");
   // M5, the strongest case for it: the Godview covers the window outright, so
   // every canvas frame drawn behind it is work nobody can see.
   useStageHold(ce, godviewOpen, "godview");
   useEffect(() => {
-    if (docsOpen) ce.ops.cancelActiveGestures();
-  }, [docsOpen, ce]);
+    if (docsOpen || showSettings) ce.ops.cancelActiveGestures();
+  }, [docsOpen, showSettings, ce]);
 
   // Theme → live tokens: the settings panel makes DESIGN.md's static defaults
   // dynamic. We write the TOKEN source (--vf-canvas-bg — the widgetlab-compat
@@ -204,6 +208,7 @@ export function ChromeLayer({
       return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
     };
     const onKeyDown = (e: KeyboardEvent) => {
+      if (showSettings) return;
       if (e.key !== "Escape" || isEditableTarget(e.target)) return;
       if (ce.nav.depth() > 0) {
         e.preventDefault();
@@ -211,6 +216,7 @@ export function ChromeLayer({
       }
     };
     const onKeyDownCapture = (e: KeyboardEvent) => {
+      if (showSettings) return;
       if ((e.key !== "c" && e.key !== "C") || e.metaKey || e.ctrlKey || e.altKey) return;
       if (isEditableTarget(e.target)) return;
       const sel = selectedEntities(ce.world);
@@ -234,7 +240,7 @@ export function ChromeLayer({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keydown", onKeyDownCapture, true);
     };
-  }, [ce]);
+  }, [ce, showSettings]);
 
   // ⌘K / Ctrl+K toggles the command palette (§8.3). ⌘K is free — the ICE keymap
   // and the tray's B/Esc/C additions never claim it. Opening it closes the tray
@@ -248,13 +254,14 @@ export function ChromeLayer({
         if (next) {
           onTrayOpenChange(false);
           onDocsOpenChange(false);
+          setShowSettings(false);
         }
         return next;
       });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onTrayOpenChange, onDocsOpenChange]);
+  }, [onTrayOpenChange, onDocsOpenChange, setShowSettings]);
 
   // ECS devtools while the button is active (v1's EcsDevtools panel slot).
   // The FACADE goes in (not ce.engine): the strata observer's durable tab
@@ -355,7 +362,15 @@ export function ChromeLayer({
         type="button"
         onClick={() => {
           setShellPresentation((state) => ({ ...state, target: "general" }));
-          setShowSettings((s) => !s);
+          setShowSettings((open) => {
+            const next = !open;
+            if (next) {
+              onTrayOpenChange(false);
+              onDocsOpenChange(false);
+              setPaletteOpen(false);
+            }
+            return next;
+          });
         }}
         data-hud-flight="bottom-left"
         className={`hud-flight ${fabCls(showSettings)} bottom-4 left-4`}
@@ -413,6 +428,8 @@ export function ChromeLayer({
           stressWidgetType="vibefield.widgetlab.clock"
           platform={getHost().platform ?? "other"}
           desktopState={desktopState}
+          dark={dark}
+          onToggleTheme={onToggleTheme}
           diagnosticsRequest={shellPresentation.diagnosticsRequest}
           diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
           onClose={() => {

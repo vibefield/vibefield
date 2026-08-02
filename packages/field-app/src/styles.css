@@ -170,6 +170,125 @@ body {
   }
 }
 
+/* Settings is a window-level sheet: calm, large, and centered. The sidebar and
+   content remain one surface, with only a hairline and opacity ramp providing
+   hierarchy. Color is reserved for real state inside the individual sections. */
+.vf-settings-backdrop {
+  background: rgba(18, 18, 20, 0.16);
+  backdrop-filter: blur(8px) saturate(0.92);
+  animation: vf-settings-backdrop-in 180ms ease both;
+}
+
+.dark .vf-settings-backdrop {
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.vf-settings-dialog {
+  min-height: min(540px, calc(100vh - 32px));
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 42px 100px rgba(0, 0, 0, 0.18),
+    0 12px 36px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(36px) saturate(1.1);
+  animation: vf-settings-dialog-in 440ms var(--vf-ease-island) both;
+}
+
+.dark .vf-settings-dialog {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--vf-card) 96%, transparent);
+  box-shadow:
+    0 48px 120px rgba(0, 0, 0, 0.48),
+    0 14px 40px rgba(0, 0, 0, 0.3);
+}
+
+.vf-settings-sidebar {
+  background: rgba(0, 0, 0, 0.018);
+}
+
+.dark .vf-settings-sidebar {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+@keyframes vf-settings-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vf-settings-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.975) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .vf-settings-dialog {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .vf-settings-sidebar {
+    padding-inline: 8px;
+  }
+
+  .vf-settings-sidebar-title,
+  .vf-settings-nav-group,
+  .vf-settings-nav-label,
+  .vf-settings-sidebar-note {
+    display: none;
+  }
+
+  .vf-settings-nav-item {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .vf-settings-dialog > main > header,
+  .vf-settings-dialog > main > div:last-child {
+    padding-inline: 20px;
+  }
+
+  .vf-settings-history-label {
+    display: none;
+  }
+
+  .vf-settings-history-button {
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 620px) {
+  .vf-settings-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .vf-settings-row-control {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-settings-backdrop,
+  .vf-settings-dialog {
+    animation-duration: 90ms;
+  }
+
+  .vf-settings-dialog {
+    animation-name: vf-settings-backdrop-in;
+  }
+}
+
 /* The Godview stage (GT-2; DESIGN.md §1 "the control room may commit to dark",
    §5 sheet tier, §6 island ease). One element that changes role rather than two
    that crossfade (M1), in CSS rather than WAAPI (M3), and it stays MOUNTED while

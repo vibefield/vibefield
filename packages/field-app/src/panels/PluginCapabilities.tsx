@@ -5,7 +5,7 @@ import type {
 } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useMemo, useState } from "react";
-import { labelCls } from "./SettingsPanel";
+import { labelCls } from "./settings-ui";
 
 // P6 UI — the per-plugin capability GRANTS pane (plugin spec §15.2–§15.4). Mounts
 // under PluginsSection as a "capabilities ▸" disclosure, sibling to P5's

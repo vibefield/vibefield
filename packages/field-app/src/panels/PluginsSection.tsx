@@ -5,63 +5,42 @@ import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store"
 import { PluginCapabilities } from "./PluginCapabilities";
 import { PluginSettingsForm } from "./PluginSettingsForm";
 import { PluginUpdates } from "./PluginUpdates";
-import { borderCls, labelCls, sectionCls } from "./SettingsPanel";
+import { buttonCls, labelCls, SettingsPill, SettingsSection, SettingsSwitch } from "./settings-ui";
 
-// Plugins — a Settings SECTION, sibling to System/Mesh (PLUG-P2 UI: the
-// fieldd plugin registry rendered honestly, EL5). Enable/disable toggles call
-// plugins.enable/disable and never write local "enabled" state — the row
-// reflects whatever plugins.subscribe reports next (plugin-registry-store's
-// own law), same as System/Mesh's health rows above it.
-
-/** DESIGN.md §2.5 hue mapping for PluginRecordState — invalid/incompatible
- * are errors; disabled carries no hue (a choice, not a failure). */
 function Dot({ state }: { state: string }): ReactElement {
   const color =
     state === "enabled"
       ? "var(--vf-green)"
       : state === "invalid" || state === "incompatible"
         ? "var(--vf-red)"
-        : "rgba(128, 128, 128, 0.45)"; // disabled
-  return (
-    <span
-      className="inline-block h-1.5 w-1.5 flex-none rounded-full"
-      style={{ background: color }}
-    />
-  );
+        : "rgba(128, 128, 128, 0.45)";
+  return <span className="h-2 w-2 flex-none rounded-full" style={{ background: color }} />;
 }
 
-/** §20.5 — the UI labels source and rung on every row; "reviewed" names who
- * reviewed. These are FACTS in the muted text ramp, never warnings — no hue
- * (DESIGN.md §2.5: color belongs to honest STATE only, and a source is a fact,
- * not a state of concern; §9 voice). The registry publisher IS the reviewer. */
 const SOURCE_LABEL: Record<PluginSource, string> = {
-  bundled: "built-in",
-  "dev-linked": "dev",
-  registry: "registry · reviewed",
-  sideload: "sideload",
+  bundled: "Built in",
+  "dev-linked": "Development",
+  registry: "Registry",
+  sideload: "Sideloaded",
 };
 
 function SourceBadge({ plugin }: { plugin: PluginRecord }): ReactElement {
   const publisher = plugin.source === "registry" ? plugin.registry?.publisher : undefined;
   return (
-    <span className={`flex-none rounded px-1 ${labelCls}`} title={plugin.source}>
+    <SettingsPill>
       {SOURCE_LABEL[plugin.source]}
       {publisher !== undefined && ` · ${publisher}`}
-    </span>
+    </SettingsPill>
   );
 }
 
-/** §16.5 uninstall — data is PRESERVED by default; "remove data too" is the
- * separate, explicit destructive act (DESIGN.md §2.5 red). Two-step confirm on
- * each so a narrow-panel click is never irreversible. No optimistic state — the
- * row leaves when plugins.subscribe re-snapshots (the P5 law). */
 function PluginUninstall({ plugin }: { plugin: PluginRecord }): ReactElement {
   const client = useFielddClient();
   const [confirm, setConfirm] = useState<null | "keep" | "data">(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const run = async (removeData: boolean) => {
+  const run = async (removeData: boolean): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
@@ -69,9 +48,8 @@ function PluginUninstall({ plugin }: { plugin: PluginRecord }): ReactElement {
         "plugins.uninstall",
         removeData ? { id: plugin.id, removeData: true } : { id: plugin.id },
       );
-      // on success the row unmounts with the next snapshot; nothing to flip here.
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
       setConfirm(null);
     } finally {
       setBusy(false);
@@ -79,81 +57,57 @@ function PluginUninstall({ plugin }: { plugin: PluginRecord }): ReactElement {
   };
 
   return (
-    <div className="mt-1.5 space-y-1 border-l border-neutral-100 pl-2 dark:border-neutral-700">
+    <div className="mt-3 rounded-[14px] border border-black/5 bg-black/[0.02] p-3 dark:border-white/10 dark:bg-white/[0.03]">
       {confirm === null && (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setConfirm("keep")}
-            className={`flex-none ${labelCls} hover:text-neutral-600 dark:hover:text-neutral-300`}
-          >
-            uninstall
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className={buttonCls} onClick={() => setConfirm("keep")}>
+            Uninstall
           </button>
-          {/* destructive variant — §2.5 red, visually distinct before the confirm */}
           <button
             type="button"
-            onClick={() => setConfirm("data")}
-            className="flex-none hover:opacity-80"
+            className={`${buttonCls} bg-transparent`}
             style={{ color: "var(--vf-red)" }}
+            onClick={() => setConfirm("data")}
           >
-            remove data too
+            Remove plugin and data
           </button>
         </div>
       )}
-      {confirm === "keep" && (
-        <div className="space-y-1">
-          <div className={labelCls}>uninstall {plugin.title}? keeps its data</div>
-          <div className="flex items-center gap-3">
+      {confirm !== null && (
+        <div>
+          <p className="text-[13px] font-medium text-black/80 dark:text-white/80">
+            {confirm === "keep"
+              ? `Uninstall ${plugin.title}?`
+              : `Remove ${plugin.title} and its data?`}
+          </p>
+          <p className={`mt-1 ${labelCls}`}>
+            {confirm === "keep"
+              ? "Plugin data is preserved, so reinstalling can restore its settings."
+              : "Plugin settings and stored data are deleted. Canvas cards it created remain."}
+          </p>
+          <div className="mt-3 flex items-center gap-2">
             <button
               type="button"
               disabled={busy}
-              onClick={() => void run(false)}
-              className="flex-none hover:text-neutral-700 dark:hover:text-neutral-200"
+              className={buttonCls}
+              style={confirm === "data" ? { color: "var(--vf-red)" } : undefined}
+              onClick={() => void run(confirm === "data")}
             >
-              {busy ? "uninstalling…" : "uninstall"}
+              {busy ? "Working…" : confirm === "data" ? "Remove data" : "Uninstall"}
             </button>
             <button
               type="button"
               disabled={busy}
+              className={buttonCls}
               onClick={() => setConfirm(null)}
-              className={`flex-none ${labelCls} hover:text-neutral-600 dark:hover:text-neutral-300`}
             >
-              cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {confirm === "data" && (
-        <div className="space-y-1">
-          <div style={{ color: "var(--vf-red)" }}>remove {plugin.title} and its data?</div>
-          <div className={labelCls}>
-            deletes its settings and stored data — canvas cards it made are kept (§16.5)
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void run(true)}
-              className="flex-none hover:opacity-80"
-              style={{ color: "var(--vf-red)" }}
-            >
-              {busy ? "removing…" : "remove data"}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setConfirm(null)}
-              className={`flex-none ${labelCls} hover:text-neutral-600 dark:hover:text-neutral-300`}
-            >
-              cancel
+              Cancel
             </button>
           </div>
         </div>
       )}
       {error !== null && (
-        <div className={`truncate text-right ${labelCls}`} title={error}>
-          {error}
-        </div>
+        <p className="mt-2 text-[12px] text-amber-600 dark:text-amber-400">{error}</p>
       )}
     </div>
   );
@@ -162,9 +116,13 @@ function PluginUninstall({ plugin }: { plugin: PluginRecord }): ReactElement {
 function PluginRow({
   plugin,
   plugins,
+  settingsRevision,
+  onSettingsChanged,
 }: {
   plugin: PluginRecord;
   plugins: readonly PluginRecord[];
+  settingsRevision: number;
+  onSettingsChanged?: ((undoable: boolean) => void) | undefined;
 }): ReactElement {
   const client = useFielddClient();
   const [pending, setPending] = useState(false);
@@ -173,147 +131,165 @@ function PluginRow({
   const [capsOpen, setCapsOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const toggleable = plugin.state === "enabled" || plugin.state === "disabled";
-  // §5.3 mutability — only registry and sideload code is uninstallable; bundled
-  // ships with the app and dev-linked is managed through its link.
   const uninstallable = plugin.source === "registry" || plugin.source === "sideload";
   const widgetCount = plugin.contributions.widgets.length;
-  // contributions.settings (§8.5) lands in parallel; read it through a typed
-  // view so this file compiles before the SanitizedContributions field does.
-  const settingsProps = (plugin.contributions as { settings?: SettingsContribution }).settings
+  const settingsProperties = (plugin.contributions as { settings?: SettingsContribution }).settings
     ?.properties;
-  const hasSettings = settingsProps !== undefined && Object.keys(settingsProps).length > 0;
-  // P6 — the grants pane shows one row per REQUESTED capability, i.e. the union
-  // of the record's granted + denied lists (§15.2). No requests ⇒ no disclosure.
+  const hasSettings =
+    settingsProperties !== undefined && Object.keys(settingsProperties).length > 0;
   const hasCapabilities = plugin.grantedCapabilities.length + plugin.deniedCapabilities.length > 0;
 
-  const toggle = async () => {
+  const toggle = async (): Promise<void> => {
     setPending(true);
     setError(null);
     try {
       await client.request(plugin.enabled ? "plugins.disable" : "plugins.enable", {
         id: plugin.id,
       });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setPending(false);
     }
   };
 
   return (
-    <div className="pl-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <Dot state={plugin.state} />
-          <span className="min-w-0 truncate">{plugin.title}</span>
-        </span>
-        <span className="flex flex-none items-center gap-1.5">
+    <article className="rounded-[16px] border border-black/5 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.025]">
+      <div className="flex items-start justify-between gap-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Dot state={plugin.state} />
+            <h3 className="text-[13px] font-semibold text-black/85 dark:text-white/85">
+              {plugin.title}
+            </h3>
+            <SourceBadge plugin={plugin} />
+            <SettingsPill>v{plugin.version}</SettingsPill>
+          </div>
+          <p className={`mt-1 truncate ${labelCls}`} title={plugin.id}>
+            {plugin.id} · {widgetCount} widget{widgetCount === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
           <span className={labelCls}>{plugin.state}</span>
           {toggleable && (
-            <input type="checkbox" checked={plugin.enabled} disabled={pending} onChange={toggle} />
+            <SettingsSwitch
+              label={`${plugin.enabled ? "Disable" : "Enable"} ${plugin.title}`}
+              checked={plugin.enabled}
+              disabled={pending}
+              onChange={() => void toggle()}
+            />
           )}
-        </span>
+        </div>
       </div>
-      <div className="flex items-center justify-between gap-2 pl-2">
-        <span className={`min-w-0 truncate ${labelCls}`} title={plugin.id}>
-          {plugin.id}
-        </span>
-        <span className="flex flex-none items-center gap-1.5">
-          <SourceBadge plugin={plugin} />
-          <span className={labelCls}>v{plugin.version}</span>
-          <span className={labelCls}>
-            {widgetCount} widget{widgetCount === 1 ? "" : "s"}
-          </span>
-          {uninstallable && (
+
+      {(hasSettings || hasCapabilities || uninstallable) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/5 pt-3 dark:border-white/10">
+          {hasSettings && (
             <button
               type="button"
-              onClick={() => setOverflowOpen((v) => !v)}
-              aria-expanded={overflowOpen}
-              aria-label="uninstall options"
-              className={`flex-none ${labelCls} hover:text-neutral-600 dark:hover:text-neutral-300`}
+              className={buttonCls}
+              aria-expanded={settingsOpen}
+              onClick={() => setSettingsOpen((open) => !open)}
             >
-              {overflowOpen ? "···▾" : "···"}
+              Settings {settingsOpen ? "−" : "+"}
             </button>
           )}
           {hasCapabilities && (
             <button
               type="button"
-              onClick={() => setCapsOpen((v) => !v)}
+              className={buttonCls}
               aria-expanded={capsOpen}
-              className={`flex-none ${labelCls} hover:text-neutral-600 dark:hover:text-neutral-300`}
+              onClick={() => setCapsOpen((open) => !open)}
             >
-              capabilities {capsOpen ? "▾" : "▸"}
+              Capabilities {capsOpen ? "−" : "+"}
             </button>
           )}
-          {hasSettings && (
+          {uninstallable && (
             <button
               type="button"
-              onClick={() => setSettingsOpen((v) => !v)}
-              aria-expanded={settingsOpen}
-              className={`flex-none ${labelCls} hover:text-neutral-600 dark:hover:text-neutral-300`}
+              className={buttonCls}
+              aria-label="uninstall options"
+              aria-expanded={overflowOpen}
+              onClick={() => setOverflowOpen((open) => !open)}
             >
-              settings {settingsOpen ? "▾" : "▸"}
+              More {overflowOpen ? "−" : "+"}
             </button>
           )}
-        </span>
-      </div>
-      {/* the registry's own lastError and a live toggle error share one voice
-          (DESIGN.md §9: say what happened) — a fresh toggle error wins. */}
-      {error !== null ? (
-        <div className={`truncate pl-2 text-right ${labelCls}`} title={error}>
-          {error}
         </div>
+      )}
+
+      {error !== null ? (
+        <p className="mt-2 text-[12px] text-amber-600 dark:text-amber-400">{error}</p>
       ) : (
         plugin.lastError !== undefined && (
-          <div className={`truncate pl-2 text-right ${labelCls}`} title={plugin.lastError.message}>
+          <p className="mt-2 text-[12px] text-amber-600 dark:text-amber-400">
             {plugin.lastError.message}
-          </div>
+          </p>
         )
       )}
       {hasCapabilities && capsOpen && <PluginCapabilities plugin={plugin} plugins={plugins} />}
-      {hasSettings && settingsOpen && settingsProps !== undefined && (
-        <PluginSettingsForm pluginId={plugin.id} properties={settingsProps} />
+      {hasSettings && settingsOpen && settingsProperties !== undefined && (
+        <PluginSettingsForm
+          pluginId={plugin.id}
+          properties={settingsProperties}
+          externalReload={settingsRevision}
+          onSettingsChanged={onSettingsChanged}
+        />
       )}
       {uninstallable && overflowOpen && <PluginUninstall plugin={plugin} />}
-    </div>
+    </article>
   );
 }
 
-export function PluginsSection(): ReactElement {
+export function PluginsSection({
+  settingsRevision = 0,
+  onSettingsChanged,
+}: {
+  settingsRevision?: number;
+  onSettingsChanged?: ((undoable: boolean) => void) | undefined;
+}): ReactElement {
   const snapshot = usePluginRegistrySnapshot();
   return (
-    <div className={borderCls}>
-      <div className={sectionCls}>Plugins</div>
-      <div className="space-y-1">
-        {snapshot === null ? (
-          <div className={labelCls}>registry unavailable (daemon offline or still connecting)</div>
-        ) : (
-          <>
-            {/* §5.3.1 — the user-initiated updates flow sits at the section top;
-                it never checks on its own (no push feed, no polling). */}
-            <PluginUpdates />
-            {snapshot.plugins.length === 0 && <div className={labelCls}>no plugins</div>}
-            {snapshot.plugins.map((p) => (
-              <PluginRow key={p.id} plugin={p} plugins={snapshot.plugins} />
-            ))}
-            {snapshot.problems.map((prob) => (
-              <div key={prob.root} className="flex items-center justify-between gap-2 pl-2">
-                <span className={labelCls}>{prob.root}</span>
-                <span className={`min-w-0 truncate ${labelCls}`} title={prob.error.message}>
-                  {prob.error.message}
-                </span>
-              </div>
-            ))}
-            {/* P3c truth: faces + tray follow the toggle LIVE; boards stay
-                writable — a disabled plugin's widgets become preserving
-                placeholders (never lossy) and return on re-enable. */}
-            <div className={labelCls}>
-              takes effect immediately · a disabled plugin's widgets show as placeholders and return
-              on re-enable
-            </div>
-          </>
-        )}
+    <SettingsSection
+      title="Installed plugins"
+      description="Plugins add cards, commands, and services to your field. Changes take effect immediately."
+    >
+      <div className="mb-3">
+        <PluginUpdates />
       </div>
-    </div>
+      {snapshot === null ? (
+        <div className={labelCls}>Plugin registry unavailable while the daemon connects.</div>
+      ) : (
+        <div className="space-y-3">
+          {snapshot.plugins.length === 0 && (
+            <div className={labelCls}>No plugins are installed.</div>
+          )}
+          {snapshot.plugins.map((plugin) => (
+            <PluginRow
+              key={plugin.id}
+              plugin={plugin}
+              plugins={snapshot.plugins}
+              settingsRevision={settingsRevision}
+              onSettingsChanged={onSettingsChanged}
+            />
+          ))}
+          {snapshot.problems.map((problem) => (
+            <div
+              key={problem.root}
+              className="rounded-[14px] border border-black/5 p-3 dark:border-white/10"
+            >
+              <div className="text-[12px] font-medium text-black/70 dark:text-white/70">
+                {problem.root}
+              </div>
+              <div className={labelCls}>{problem.error.message}</div>
+            </div>
+          ))}
+          <p className={labelCls}>
+            Disabled plugin cards remain on the canvas as placeholders and return when the plugin is
+            enabled again.
+          </p>
+        </div>
+      )}
+    </SettingsSection>
   );
 }
