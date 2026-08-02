@@ -388,3 +388,31 @@ These landed after the GT-2 entry was written and never got ledger lines; full r
   again"; record in the GT spec).
 - **Desktop settings panel redesign (2026-08-01, `5b37b3e` + merge `0632699`)** — settings
   panel rebuilt per DESIGN.md; no ledger entry was written at landing.
+
+## AH-0 — the Artifact Hub direction is ratified
+
+**AH-0 DESIGN RATIFIED (2026-08-02 — documentation event; no runtime landing claimed).**
+`draft/specs/artifact-hub.md` v0.1 now owns the product shape designed backward from desktop
+and phone: a bundled-plugin artifact sheet in the existing morphing HUD island; Proxy
+(loopback port + HTTP/HTTPS source) and Folder (native picker) creation; a safe global catalog
+with previews; and exact Truffle-returned URLs opened by the system browser on any admitted
+tailnet client whose OS Tailscale route is connected. Local Truffle v0.7.11 was inspected
+through the Rust/JS/Go seam: proxying,
+static serving, TLS/MagicDNS, WebSockets, longest-prefix routes, allow globs, and runtime events
+already exist, so no new data plane is needed. The pass did find one narrow upstream hardening
+gate: T2 makes static roots symlink-confined before Folder or URL-served previews ship;
+root-only Proxy does not wait.
+
+Twelve AH decisions lock live-source semantics, one-node custody, public HTTPS, persisted stable
+ports, private intent vs synced catalog, local-only mutation, spine-stage/plugin-actor
+ownership, bounded URL-served previews, full-config reconciliation, the CAS consumer gate,
+the static `shell.*` provider over Electron main's existing authenticated loopback connection,
+and the browser's cross-port cookie boundary.
+The governing design docs and DESIGN.md carry the fold-backs; C6's as-built record carries a
+dated forward correction for name-only reconcile, failed-removal retry, health URL/storage
+health, folder port zero, the too-narrow VibeField serve facade, and Truffle list's missing
+config echo (handled by fingerprinted serve ids). It also records that `shell.*` scopes and
+main's recovering ProductAPI client are landed, but its callable bidirectional provider half is
+not; AH-3/4 own that bridge. Runtime remains exactly C6-6 until AH-1a;
+AH-1a is the unblocked root-only Proxy/core slice, AH-1b consumes T2 for Folder and makes the
+hardened preview route available, and AH-2…AH-5 finish catalog, desktop, previews, and phone.

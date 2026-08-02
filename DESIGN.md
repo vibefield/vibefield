@@ -225,6 +225,23 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
 - **HUD island**: one morphing element (§6 M1), island material, centered-bottom;
   `64px` closed; opens to a sheet with pull bar (48×6 rounded-full, `black/20`),
   morphing ⊕→✕ (135° rotation), edge-fade scroll masks, no visible scrollbars.
+- **Artifact Hub sheet** (AH-3/4): a `vibefield.browser` contribution inside that same
+  bottom island — never a second panel. Header = “Artifacts” + quiet count + one round Add
+  action. The catalog is a responsive two-column grid collapsing to one; tiles use a
+  `aspect-[16/10] rounded-[10px]` clipped preview, then title at 12px medium and one 11px `/50`
+  fact line (`origin · proxy|folder`). Availability is an honest dot + word, with color only
+  from §2.5: active green, source-unavailable orange, error red, and
+  starting/removing/offline/unknown muted. Offline/unknown keeps the cached image at `/55`,
+  never turns it into a skeleton.
+  Openable tile click opens externally; overflow holds copy URL and, for the local owner only,
+  refresh preview and remove. A first-publish failure has no guessed URL, so open/copy are
+  disabled. Add morphs the sheet in place (M1) to a two-choice Proxy/Folder step: protocol uses
+  the segmented control, port uses `tabular-nums`, and Folder is a single native-picker row —
+  no renderer path textbox. Starting is immediate but visually quiet; success returns to the
+  catalog, while errors stay inline with a plain corrective sentence. The confirm step carries
+  one `/50` factual line: “Opens on devices connected to this tailnet with Tailscale”; it is not
+  a warning banner or a green reachability promise. One sheet arbitration,
+  backdrop/recede/hold, Escape, focus return, and reduced-motion behavior follow M1/M5/M6.
 - **Segmented control**: full-round track in `--vf-fill`, sliding solid thumb
   (white / `#2C2C2E`, hairline + `shadow-sm`), 300ms island ease; labels 13px medium,
   active full-opacity, rest `/50`.

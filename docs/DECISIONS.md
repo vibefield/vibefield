@@ -31,11 +31,12 @@ M1–M5 contract milestones — design-01 §11 (M1+M2 implemented, green cross-l
 | Namespace | Home | Status (2026-08-02) |
 |---|---|---|
 | NF-D1…NF-D10 | native-floor §3 | track complete; NF-D1 resolved upstream (ghosttea 0.6.0) · NF-D3's gap filled at NF-7 · NF-D10's mechanism half retired when G7 landed. §3's heading undercount (…D9) fixed 2026-08-02 |
-| PA-1…PA-36 | plugin-architecture §1.1 | all binding; the §21 ladder (P0–P7) implemented; distribution staged — only rung R3 stays fenced (PA-24) |
+| PA-1…PA-36 | plugin-architecture §1.1 | all binding; the §21 ladder (P0–P7) implemented; distribution staged — only rung R3 stays fenced (PA-24). AH-3's additive `hud.sheet` fixed slot is ratified/open and does not reopen the prior ladder; AH-D10 gates PA-31's peer-CAS optimization (registry fetch landed, peer fetch did not) |
 | EDP-1…EDP-40 | electron-distribution-and-tray §1.1 | EDP-22 AMENDED 2026-07-29 (universal macOS; separate-arch retired) · EDP-6 supersedes the v0.1 platform-convention rule · EDP-15 amended Node 24→26 · EDP-33…40 = the update system (defined IN THE SPEC; `thinking-auto-update.md` is provenance and defines U1–U15) |
 | ESP-1…ESP-17 | electron-security-packaging §1.1 | in force; §9.3 (operationalizing ESP-3) CLOSED 2026-07-25 (WP9) |
 | ESR-1…ESR-15 | electron-shell-refactor §1.1 | ESR COMPLETE as specced (§17) |
 | GT-D1…GT-D8 | godview-terminal §3 (v0.2) | LIVE track; GT-D9 refuted and deleted in v0.2 — retired, never reissued |
+| AH-D1…AH-D12 | artifact-hub §3 (v0.1) | RATIFIED 2026-08-02; AH-0 is a docs-only design event, AH-1a/1b and AH-2…AH-5 are open; AH-1b Folder and AH-4 preview serving wait on T2, while root-only Proxy does not; CAS/file transfer stays gated by AH-D10; AH-D11 reuses Electron main's authenticated loopback ProductAPI connection for the static `shell.*` provider — no ProductAPI UDS or renderer relay; AH-D12 records that per-port origins do not isolate browser cookies |
 | LOG-1…LOG-44 | logging-and-diagnostics §1.1 (glosses in its own table) | all binding; LOG-41…44 folded in v0.2; slices LOG-L0…L6 all complete; **LOG-39 release-gated (open)**; verify-items LOG-V1 (Windows half) / V5 / V8 open, V7 optional-deferred |
 
 ## Work / finding namespaces (status lives in their own tables — pointers only)
@@ -49,6 +50,8 @@ M1–M5 contract milestones — design-01 §11 (M1+M2 implemented, green cross-l
   **F-C6-21 (the track's oldest debt)**; F-C6-22 mitigated-not-fixed (see its corrected row).
 - **IOS-0…IOS-4** + **D-i1…D-i6** — thinking-ios-app. D-i5 superseded 2026-07-29 (upstream
   publish).
+- **AH-0…AH-5** (AH-1a/1b split) — artifact-hub §10. AH-0 design ratified 2026-08-02;
+  AH-1a/1b and AH-2…AH-5 open.
 - **U1–U15** — thinking-auto-update §4 (+8 unprefixed closed decisions §8; all consumed by
   EDP v0.3).
 - **P-1…P-8 / V-1…V-6 / P-D1…P-D4** — thinking-widgetlab-port (all executed 2026-07-21).
