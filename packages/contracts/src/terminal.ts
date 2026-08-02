@@ -146,3 +146,85 @@ export type TerminalTerminateParams = z.infer<typeof TerminalTerminateParams>;
  * transport-death-reads-as-benign class (NF-6). */
 export const TerminalTerminateResult = z.object({ terminated: z.boolean() }).passthrough();
 export type TerminalTerminateResult = z.infer<typeof TerminalTerminateResult>;
+
+// -- The `config.ghostty` surface (GT-3 rider). Config belongs to whoever owns
+// the daemon, and that is us: field-native points its embedded service at
+// `<its data dir>/config.ghostty` (registries FILES), loaded as an overlay
+// AFTER the user's own Ghostty files. These two methods are the product-plane
+// door onto that one file, scoped `settings.manage` — the trusted desktop
+// surface, never plugins, agents, or the tailnet.
+//
+// The floor's OWN document API is what runs underneath: it reads and replaces
+// the overlay atomically (same-directory temp + fsync + revision recheck) and
+// reloads in the same operation. fieldd therefore does no file IO and derives
+// no path — it asks the service, which is the one authority for where the file
+// is and the only process that may write it while sessions are live.
+
+/** terminal.config.read params — empty, like connectTicket: there is one
+ * app-owned overlay per device and the caller is asking for it. */
+export const TerminalConfigReadParams = z.object({}).passthrough();
+export type TerminalConfigReadParams = z.infer<typeof TerminalConfigReadParams>;
+
+/** The overlay as it stands. `exists: false` with empty `text` is a NORMAL
+ * state, not an error — ghosttea treats a not-yet-created overlay as a valid
+ * empty config (verified in the pinned loader: the explicit path joins the
+ * source list marked optional), so nothing has to create the file to read it.
+ * `revision` is the loader's own hash of the exact bytes; a write must hand it
+ * back, which is what makes a lost update impossible rather than unlikely. */
+export const TerminalConfigDocument = z
+  .object({
+    path: z.string(),
+    text: z.string(),
+    revision: z.string(),
+    exists: z.boolean(),
+  })
+  .passthrough();
+export type TerminalConfigDocument = z.infer<typeof TerminalConfigDocument>;
+
+/** terminal.config.write params. `revision` is the one the reader was handed;
+ * a stale one is CONFLICT with the current document, never a silent clobber. */
+export const TerminalConfigWriteParams = z
+  .object({
+    text: z.string(),
+    revision: z.string(),
+  })
+  .passthrough();
+export type TerminalConfigWriteParams = z.infer<typeof TerminalConfigWriteParams>;
+
+/** One thing the config loader has to say about the text it just read. Ghostty
+ * syntax is permissive — an unknown key is a diagnostic, not a refusal — so a
+ * write can succeed and reload while the loader still has complaints, and
+ * hiding them would make the panel claim more than it knows (EL5). */
+export const TerminalConfigDiagnostic = z
+  .object({
+    severity: z.string(),
+    code: z.string(),
+    message: z.string(),
+    source: z.string().optional(),
+    line: z.number().optional(),
+    key: z.string().optional(),
+  })
+  .passthrough();
+export type TerminalConfigDiagnostic = z.infer<typeof TerminalConfigDiagnostic>;
+
+/** terminal.config.write result — the service's own verdict, not our summary.
+ *
+ * `ok` is the loader's acceptance of the reloaded config (no error-severity
+ * diagnostic), NOT "the bytes reached the disk": a written file that the loader
+ * rejects is a real state a user must see, and it is not a failed call.
+ * `effectiveChanged` answers "did anything actually move" — a comment-only edit
+ * reloads honestly and changes nothing, and saying so beats implying a restyle
+ * that never happened. It is DERIVED, because the service computes the same bit
+ * internally (to decide whether to push `config-changed`) and then does not put
+ * it on the wire: fieldd compares the effective-config revision it held before
+ * the write with the one the write answered — the service's own comparison,
+ * made one level up. */
+export const TerminalConfigWriteResult = z
+  .object({
+    ok: z.boolean(),
+    document: TerminalConfigDocument,
+    effectiveChanged: z.boolean(),
+    diagnostics: z.array(TerminalConfigDiagnostic),
+  })
+  .passthrough();
+export type TerminalConfigWriteResult = z.infer<typeof TerminalConfigWriteResult>;

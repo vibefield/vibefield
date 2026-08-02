@@ -175,6 +175,18 @@ export const SOCKETS = {
   TERMINAL_FRAME: "terminal-frame.sock",
 } as const;
 
+/** File names VibeField owns beneath a daemon's own data directory. A name here
+ * is resolved by the plane that OWNS the file and by nobody else — GT-3's
+ * `config.ghostty` is field-native's, so the native plane joins it to its data
+ * dir and every reader asks the service where the file is rather than deriving
+ * the same path a second time (two derivations of one path is the R4 drift
+ * class wearing a different hat). */
+export const FILES = {
+  /** The app-owned Ghostty-syntax overlay the embedded terminal service loads
+   * AFTER the user's own Ghostty files (GT-3 rider; ghosttea `with_config_path`). */
+  TERMINAL_CONFIG: "config.ghostty",
+} as const;
+
 /** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): these channels, nothing
  * else. Payload schemas live in shell.ts; call sites import these names — a raw
  * `vibefield:` literal outside contracts is a boundary violation (wall R6). */

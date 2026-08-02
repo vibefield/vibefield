@@ -36,3 +36,9 @@ pub mod stores {
     pub const PUSH: &str = "field.push.v1";
     pub const DEVICES: &str = "field.devices.v1";
 }
+
+/// File names beneath a daemon's own data directory. The plane that OWNS the
+/// file joins the name to its data dir; readers ask that plane for the path.
+pub mod files {
+    pub const TERMINAL_CONFIG: &str = "config.ghostty";
+}

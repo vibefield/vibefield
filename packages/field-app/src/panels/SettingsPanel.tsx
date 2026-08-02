@@ -27,6 +27,7 @@ import {
   SettingsSection,
   SettingsSwitch,
 } from "./settings-ui";
+import { TerminalSection } from "./TerminalSection";
 import type { OverlapGlowConfig, OverlapGlowThemeColors, ThemeColors } from "./types";
 
 const LazyDiagnosticsSection = lazy(() =>
@@ -61,6 +62,7 @@ type SettingsPage =
   | "canvas"
   | "plugins"
   | "mesh"
+  | "terminal"
   | "diagnostics"
   | "advanced";
 
@@ -68,7 +70,7 @@ interface PageMeta {
   id: SettingsPage;
   label: string;
   description: string;
-  icon: "sliders" | "sun" | "canvas" | "plugin" | "mesh" | "pulse" | "code";
+  icon: "sliders" | "sun" | "canvas" | "plugin" | "mesh" | "terminal" | "pulse" | "code";
 }
 
 const PAGES: readonly PageMeta[] = [
@@ -103,6 +105,12 @@ const PAGES: readonly PageMeta[] = [
     icon: "mesh",
   },
   {
+    id: "terminal",
+    label: "Terminal",
+    description: "Configuration every terminal on this device loads.",
+    icon: "terminal",
+  },
+  {
     id: "diagnostics",
     label: "Diagnostics",
     description: "System health, logs, and support tooling.",
@@ -118,7 +126,7 @@ const PAGES: readonly PageMeta[] = [
 
 const NAV_GROUPS: ReadonlyArray<{ label: string; pages: readonly SettingsPage[] }> = [
   { label: "Preferences", pages: ["general", "appearance", "canvas"] },
-  { label: "Workspace", pages: ["plugins", "mesh"] },
+  { label: "Workspace", pages: ["plugins", "mesh", "terminal"] },
   { label: "Support", pages: ["diagnostics", "advanced"] },
 ];
 
@@ -163,6 +171,14 @@ function PageIcon({ name }: { name: PageMeta["icon"] }): ReactElement {
         <circle cx="15" cy="6" r="2" />
         <circle cx="10" cy="15" r="2" />
         <path d="m6.8 5.4 6.2.4M6.2 6.8l2.7 6.3M13.9 7.7l-2.8 5.5" />
+      </svg>
+    );
+  }
+  if (name === "terminal") {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="2.5" y="4" width="15" height="12" rx="2.5" />
+        <path d="m6 8.5 2.5 2L6 13M10.5 13h3.5" />
       </svg>
     );
   }
@@ -932,6 +948,8 @@ export function SettingsPanel({
     );
   } else if (activePage === "mesh") {
     pageContent = <MeshSection />;
+  } else if (activePage === "terminal") {
+    pageContent = <TerminalSection />;
   } else if (activePage === "diagnostics") {
     pageContent = (
       <div className="space-y-4">

@@ -5,7 +5,7 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { APP_ID, ENV_PREFIXES, PORTS, SOCKETS, STORES } from "../src/registries";
+import { APP_ID, ENV_PREFIXES, FILES, PORTS, SOCKETS, STORES } from "../src/registries";
 
 const OUT = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -39,6 +39,12 @@ const lines: string[] = [
   "",
   "pub mod stores {",
   ...Object.entries(STORES).map(([k, v]) => `    pub const ${k}: &str = "${v}";`),
+  "}",
+  "",
+  "/// File names beneath a daemon's own data directory. The plane that OWNS the",
+  "/// file joins the name to its data dir; readers ask that plane for the path.",
+  "pub mod files {",
+  ...Object.entries(FILES).map(([k, v]) => `    pub const ${k}: &str = "${v}";`),
   "}",
 ];
 

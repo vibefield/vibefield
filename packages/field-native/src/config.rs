@@ -77,6 +77,17 @@ impl NativeConfig {
     pub fn pairing_file(&self) -> PathBuf {
         self.native_dir().join("pairing")
     }
+
+    /// The app-owned Ghostty config overlay the terminal unit loads after the
+    /// user's own Ghostty files (GT-3). It sits in the native dir, not the run
+    /// dir: a user's configuration outlives a boot, and the run dir holds only
+    /// what a boot creates. The NAME comes from the generated registries — one
+    /// name, and this is the only place it is joined to a directory, because
+    /// this plane owns the file and every reader asks the service where it is.
+    pub fn terminal_config_file(&self) -> PathBuf {
+        self.native_dir()
+            .join(crate::registries::files::TERMINAL_CONFIG)
+    }
     pub fn mgmt_socket(&self) -> PathBuf {
         self.run_dir().join("mgmt.sock")
     }

@@ -815,4 +815,34 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // GT-3 rider — the `config.ghostty` surface. Scope is `settings.manage`, NOT
+  // `terminal.attach`: attaching to a terminal and rewriting the configuration
+  // every terminal on the device loads are different powers, and the second one
+  // is the trusted desktop shell's alone (settings.manage is absent from
+  // TAILNET_SCOPES and from every plugin preset by construction). Stated
+  // honestly: this scope gates the PRODUCT door, and a `terminal.attach` holder
+  // still receives the floor's shared token in its ticket, whose control socket
+  // accepts the same config commands — that is GT-D6's named posture (per-client
+  // native tokens are the upgrade), not a claim this scope closes.
+  //
+  // locality "local": the file is this device's, beside this device's floor.
+  // A remote device's config is reached by ROUTING the call, never by
+  // federating a path that means something different on each machine.
+  defineMethod({
+    surface: "product",
+    method: "terminal.config.read",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  // NOT idempotent: it is an optimistic replace against a revision, so the
+  // second identical call is a CONFLICT, not a no-op — replaying it is exactly
+  // the lost update the revision exists to refuse.
+  defineMethod({
+    surface: "product",
+    method: "terminal.config.write",
+    scope: "settings.manage",
+    idempotent: false,
+    locality: "local",
+  }),
 ];

@@ -630,6 +630,169 @@ async fn wrong_token_is_refused_on_the_control_socket() {
 }
 
 // ---------------------------------------------------------------------------
+// GT-3 — the app-owned config overlay (`config.ghostty`)
+// ---------------------------------------------------------------------------
+
+/// One framed control request on a raw socket, answered by type.
+///
+/// Written here rather than added to `ControlClient` on purpose: the config
+/// document has no field-native caller, and a `pub` method with no production
+/// user is a surface this crate would then owe forever (declared == shipped).
+/// The framing is the same LE-u32 the wrong-token test already writes by hand.
+async fn control_request(socket: &str, token: &str, request: Value, want: &str) -> Value {
+    let mut stream = UnixStream::connect(socket).await.expect("dial control");
+    write_frame(&mut stream, token.as_bytes()).await;
+    let ack = read_frame(&mut stream).await;
+    assert_eq!(ack, b"ok", "control authentication was refused");
+    let hello = serde_json::to_vec(&json!({
+        "requestId": 1,
+        "type": "hello",
+        "protocolMajor": 1,
+        "protocolMinor": 9,
+        "clientBuild": "field-native-test",
+    }))
+    .unwrap();
+    write_frame(&mut stream, &hello).await;
+    let _hello = read_frame(&mut stream).await;
+    let mut body = request;
+    body["requestId"] = json!(2);
+    write_frame(&mut stream, &serde_json::to_vec(&body).unwrap()).await;
+    // Looped, not read once: this connection is a client like any other and the
+    // service may push it an unsolicited event before the answer.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        let frame = read_frame(&mut stream).await;
+        let value: Value = serde_json::from_slice(&frame).expect("a JSON response");
+        if value["type"] == want {
+            return value;
+        }
+        assert_ne!(
+            value["type"], "error",
+            "the service refused the request: {value}"
+        );
+    }
+    panic!("no {want} response within the budget");
+}
+
+async fn write_frame(stream: &mut UnixStream, bytes: &[u8]) {
+    stream
+        .write_u32_le(bytes.len() as u32)
+        .await
+        .expect("write length");
+    stream.write_all(bytes).await.expect("write body");
+    stream.flush().await.expect("flush");
+}
+
+async fn read_frame(stream: &mut UnixStream) -> Vec<u8> {
+    let len = timeout(Duration::from_secs(10), stream.read_u32_le())
+        .await
+        .expect("a frame within the budget")
+        .expect("read frame length") as usize;
+    let mut body = vec![0_u8; len];
+    stream.read_exact(&mut body).await.expect("read frame body");
+    body
+}
+
+/// GT-3: the embedded service is pointed at OUR config file, and the file is
+/// the registries name under this daemon's own native dir.
+///
+/// The path is read back from the SERVICE, not recomputed here — that is the
+/// whole claim. `with_config_path` is the only thing that makes a document
+/// editable at all (without it the service answers "unavailable without an
+/// explicit overlay"), so a wiring that silently went missing fails this test
+/// rather than surfacing later as a settings panel that cannot save.
+#[tokio::test]
+async fn the_config_overlay_is_this_daemons_own_file() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    let socket = ack["terminal"]["controlSocket"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let token = ack["terminal"]["authToken"].as_str().unwrap().to_owned();
+
+    // Serving, not merely bound — an unaccepted connection queues in the kernel.
+    let (probe, _events) = control(&ack).await;
+    probe.list_sessions().await.expect("service is serving");
+    drop(probe);
+
+    let expected = dir.path().join("native/config.ghostty");
+    assert!(
+        !expected.exists(),
+        "a fresh boot must not write a config file nobody asked for"
+    );
+
+    let response = control_request(
+        &socket,
+        &token,
+        json!({"type": "get-config-document"}),
+        "config-document",
+    )
+    .await;
+    let document = &response["document"];
+    assert_eq!(
+        document["path"].as_str().unwrap(),
+        expected.to_str().unwrap(),
+        "the overlay must be the registries name under this daemon's native dir"
+    );
+    // A not-yet-created overlay is a valid empty config upstream, which is why
+    // nothing has to be written before a user can be shown the file — and the
+    // service answering at all, on a floor that just listed sessions, is the
+    // answer to "does a missing config degrade the unit": it does not.
+    assert_eq!(document["exists"], json!(false));
+    assert_eq!(document["contents"].as_str().unwrap(), "");
+
+    // The write half, on the same seam fieldd drives: an optimistic replace
+    // against the revision just read. The file appears here and not before.
+    let updated = control_request(
+        &socket,
+        &token,
+        json!({
+            "type": "replace-config-document",
+            "expectedRevision": document["revision"].as_str().unwrap(),
+            "contents": "# vibefield\nfont-size = 13\n",
+        }),
+        "config-document-updated",
+    )
+    .await;
+    assert_eq!(updated["document"]["exists"], json!(true));
+    assert_eq!(
+        std::fs::read_to_string(&expected).expect("the overlay is on disk now"),
+        "# vibefield\nfont-size = 13\n",
+        "the service writes the bytes it was given, verbatim"
+    );
+    // The reload is part of the same operation, so the EFFECTIVE config has
+    // already moved by the time the write is answered.
+    assert_eq!(
+        updated["config"]["renderer"]["fontSize"],
+        json!(13.0),
+        "the replace reloaded the config it just wrote: {}",
+        updated["config"]["diagnostics"]
+    );
+
+    // A stale revision is refused rather than clobbering the newer file.
+    let conflicted = control_request(
+        &socket,
+        &token,
+        json!({
+            "type": "replace-config-document",
+            "expectedRevision": document["revision"].as_str().unwrap(),
+            "contents": "font-size = 99\n",
+        }),
+        "config-document-conflict",
+    )
+    .await;
+    assert_eq!(
+        conflicted["document"]["contents"],
+        updated["document"]["contents"]
+    );
+
+    daemon.shutdown().await;
+}
+
+// ---------------------------------------------------------------------------
 // NF-5 — survivor authority (spec §5, NF-D2; kill-matrix row 4)
 // ---------------------------------------------------------------------------
 

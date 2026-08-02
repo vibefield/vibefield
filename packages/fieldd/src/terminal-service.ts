@@ -1,7 +1,12 @@
 import { homedir, userInfo } from "node:os";
-import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
+import {
+  GhostteaAutomationClient,
+  GhostteaConfigDocumentConflictError,
+} from "@vibecook/ghosttea-client";
 import {
   ObservedState,
+  type TerminalConfigDocument,
+  type TerminalConfigWriteResult,
   type TerminalCreateParams,
   type TerminalEndpoints,
   type TerminalInfo,
@@ -212,6 +217,95 @@ export class TerminalService {
     }
   }
 
+  /** GT-3: read the app-owned `config.ghostty` overlay.
+   *
+   * Through the floor's OWN document door, not through `fs`. Three reasons, all
+   * load-bearing: the file lives beside field-native and fieldd has no business
+   * deriving that path a second time (the service is asked where it is); the
+   * service holds a document lock that a bare read would ignore; and a
+   * not-yet-created overlay comes back as `exists: false` with empty text
+   * rather than an ENOENT to invent a policy for — ghosttea's loader treats a
+   * missing app overlay as a valid empty config, so nothing has to be written
+   * to disk before a user can be shown the file they are about to write. */
+  async readConfig(): Promise<TerminalConfigDocument> {
+    const client = await this.connectedClient();
+    try {
+      const document = await client.getConfigDocument();
+      return {
+        path: document.path,
+        text: document.contents,
+        revision: document.revision,
+        exists: document.exists,
+      };
+    } catch (error) {
+      throw this.configFailure("read", client, error);
+    }
+  }
+
+  /** GT-3: replace the overlay and let the floor reload itself.
+   *
+   * `replaceConfigDocument` is one operation on the service's side: revision
+   * check → same-directory temp file → fsync → recheck → atomic persist →
+   * reload → `config-changed` to every attached client. A fieldd-side
+   * write-then-ask-for-a-reload would be two operations with a window between
+   * them, performed by a process that is not the file's owner.
+   *
+   * `effectiveChanged` is derived rather than reported: the service computes it
+   * to decide whether to push `config-changed` and does not put it on the wire,
+   * so this compares the effective-config revision from before the write with
+   * the one the write answered — the same comparison, one level up. */
+  async writeConfig(text: string, revision: string): Promise<TerminalConfigWriteResult> {
+    const client = await this.connectedClient();
+    let before: string | undefined;
+    try {
+      before = (await client.getConfig()).revision;
+    } catch (error) {
+      throw this.configFailure("read", client, error);
+    }
+    try {
+      const update = await client.replaceConfigDocument(revision, text);
+      // Mapped field by field rather than forwarded: the contract shape is what
+      // the renderer parses, and passing the library's object straight through
+      // would put whatever it grows next on our wire without a decision.
+      const diagnostics = (update.config.diagnostics ?? []).map((diagnostic) => ({
+        severity: String(diagnostic.severity),
+        code: diagnostic.code,
+        message: diagnostic.message,
+        ...(diagnostic.source !== undefined ? { source: diagnostic.source } : {}),
+        ...(diagnostic.line !== undefined ? { line: diagnostic.line } : {}),
+        ...(diagnostic.key !== undefined ? { key: diagnostic.key } : {}),
+      }));
+      return {
+        // The loader's verdict on what it just read, not our summary of it: an
+        // unknown key is a diagnostic and not a refusal in Ghostty syntax, so a
+        // write can land, reload, and still leave the config in a state the
+        // user has to see.
+        ok: !diagnostics.some((diagnostic) => diagnostic.severity === "error"),
+        document: {
+          path: update.document.path,
+          text: update.document.contents,
+          revision: update.document.revision,
+          exists: update.document.exists,
+        },
+        effectiveChanged: update.config.revision !== before,
+        diagnostics,
+      };
+    } catch (error) {
+      // A stale revision is the one refusal that is neither our fault nor the
+      // floor's: the file moved under this editor. It gets its own kind so the
+      // panel can say so and re-read, rather than showing a transport error for
+      // something no retry fixes.
+      if (isConfigConflict(error)) {
+        throw new RpcCallError(
+          "CONFLICT",
+          "the terminal configuration changed since it was read",
+          false,
+        );
+      }
+      throw this.configFailure("write", client, error);
+    }
+  }
+
   dispose(): void {
     this.dropClient();
   }
@@ -298,6 +392,32 @@ export class TerminalService {
     });
   }
 
+  /** Classify a config-document failure the way create/terminate classify
+   * theirs (NF-6): a dead transport is UNAVAILABLE, and so is a live floor that
+   * has no app-owned overlay to edit — that is a degraded SERVICE state (an
+   * older field-native, or a floor whose service was never pointed at our
+   * file), not a malformed request, and the panel owes it an honest face rather
+   * than an error toast. Anything else is the service refusing on its own
+   * terms, reported verbatim. */
+  private configFailure(
+    operation: "read" | "write",
+    client: GhostteaAutomationClient,
+    error: unknown,
+  ): RpcCallError {
+    if (!client.connected) {
+      return this.unavailable(`the terminal floor died mid-config-${operation}`, error);
+    }
+    if (NO_OVERLAY.test(errorMessage(error))) {
+      return new RpcCallError(
+        "UNAVAILABLE",
+        "this terminal floor has no app-owned configuration file",
+        false,
+        { service: "terminal", state: "no-overlay", detail: errorMessage(error) },
+      );
+    }
+    return new RpcCallError("INTERNAL", `config ${operation} failed: ${errorMessage(error)}`, true);
+  }
+
   private defaultShell(): string {
     if (this.opts.defaultShell) return this.opts.defaultShell();
     try {
@@ -322,6 +442,19 @@ function errorMessage(error: unknown): string {
  * read as this). */
 function isUnknownSession(error: unknown): boolean {
   return /unknown session/i.test(errorMessage(error));
+}
+
+/** The service's refusal when no explicit overlay path was configured
+ * (`ConfigDocumentError::Unavailable`, verbatim from the pinned crate). Matched
+ * on the message because the wire carries only a string — the same bargain
+ * `isUnknownSession` strikes, and the same narrowness: this pattern must not
+ * catch an IO failure that merely mentions a path. */
+const NO_OVERLAY = /unavailable without an explicit overlay/i;
+
+/** A revision that moved under the editor. The client throws its own error
+ * class for exactly this, so it is identified by type and not by prose. */
+function isConfigConflict(error: unknown): boolean {
+  return error instanceof GhostteaConfigDocumentConflictError;
 }
 
 /** Opaque passthrough with a typed default (NF-D3: keep-until-exit IS the

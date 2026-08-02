@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type DeviceInfo,
+  TerminalConfigDocument,
+  TerminalConfigWriteResult,
   TerminalConnectTicketResult,
   type TerminalCreateResult,
   type TerminalEndpoints,
@@ -102,19 +104,47 @@ const fakeSession = (id: string): Record<string, unknown> => ({
   ownerId: "vibefield.fieldd",
 });
 
+/** The overlay a fake floor is holding, in the fields the real service's
+ * `config-document` carries. GT-3 drives this seam through the SERVICE's own
+ * document API rather than through `fs`, so a fake that answers it is what
+ * stands in for a floor here. */
+interface FakeConfigDocument {
+  path: string;
+  revision: string;
+  exists: boolean;
+  contents: string;
+}
+
 /** A fake ghosttead control endpoint speaking just enough protocol: LE-u32
- * framing, bare-token auth → "ok", the hello, and one create-session. Enough
- * to exercise the product plane's create/terminate without a real PTY
- * authority (that lives in terminal-seam.test.ts, against the real floor).
- * `dieOnTerminate` destroys the socket mid-call — the NF-6 hole. */
+ * framing, bare-token auth → "ok", the hello, one create-session, and (GT-3)
+ * the config-document trio. Enough to exercise the product plane's
+ * create/terminate/config without a real PTY authority (that lives in
+ * terminal-seam.test.ts, against the real floor).
+ * `dieOnTerminate` destroys the socket mid-call — the NF-6 hole.
+ * `noOverlay` refuses the document the way a service with no `with_config_path`
+ * does, VERBATIM: the message is the only thing on the wire, and fieldd's
+ * classification reads it. */
 async function startFakeFloor(
-  opts: { dieOnTerminate?: boolean } = {},
-): Promise<{ endpoints: TerminalEndpoints; createdSessionId: string }> {
+  opts: { dieOnTerminate?: boolean; noOverlay?: boolean } = {},
+): Promise<{
+  endpoints: TerminalEndpoints;
+  createdSessionId: string;
+  document: FakeConfigDocument;
+  /** what the effective config reports; a write bumps it iff the text changed */
+  configRevision: () => string;
+}> {
   const dir = mkdtempSync(join("/tmp", "vf-fake-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const socketPath = join(dir, "control.sock");
   const createdSessionId = "fake-session-1";
   const live = new Set<Socket>();
+  const document: FakeConfigDocument = {
+    path: join(dir, "config.ghostty"),
+    revision: "rev-empty",
+    exists: false,
+    contents: "",
+  };
+  let configRevision = "config-0";
   const server: Server = createServer((sock: Socket) => {
     let buf = Buffer.alloc(0);
     let authed = false;
@@ -148,6 +178,35 @@ async function startFakeFloor(
           reply({ type: "session-created", session: fakeSession(createdSessionId) });
         } else if (msg.type === "terminate" && opts.dieOnTerminate === true) {
           sock.destroy(); // the floor dies mid-call
+        } else if (msg.type === "get-config") {
+          reply({ type: "config", config: fakeConfig(configRevision) });
+        } else if (msg.type === "get-config-document") {
+          if (opts.noOverlay === true) reply({ type: "error", message: NO_OVERLAY_MESSAGE });
+          else reply({ type: "config-document", document: { schemaVersion: 1, ...document } });
+        } else if (msg.type === "replace-config-document") {
+          if (opts.noOverlay === true) {
+            reply({ type: "error", message: NO_OVERLAY_MESSAGE });
+          } else if (msg.expectedRevision !== document.revision) {
+            // The real service answers a conflict with the CURRENT document, so
+            // an editor can show what it is about to overwrite.
+            reply({
+              type: "config-document-conflict",
+              document: { schemaVersion: 1, ...document },
+            });
+          } else {
+            // The real replace_document writes, then reloads, in one operation:
+            // the effective revision moves iff the text actually did.
+            if (msg.contents !== document.contents)
+              configRevision = `config-${msg.contents.length}`;
+            document.contents = msg.contents;
+            document.revision = `rev-${msg.contents.length}`;
+            document.exists = true;
+            reply({
+              type: "config-document-updated",
+              document: { schemaVersion: 1, ...document },
+              config: fakeConfig(configRevision, msg.contents),
+            });
+          }
         }
       }
     });
@@ -169,8 +228,59 @@ async function startFakeFloor(
       authToken: "fake-token",
     },
     createdSessionId,
+    document,
+    configRevision: () => configRevision,
   };
 }
+
+/** The service's refusal when nothing pointed it at an overlay, verbatim from
+ * the pinned crate (`ConfigDocumentError::Unavailable`). Copied deliberately:
+ * fieldd classifies this state by MESSAGE, and a fake that paraphrased it would
+ * make the classification test pass while production kept getting INTERNAL. */
+const NO_OVERLAY_MESSAGE = "configuration document is unavailable without an explicit overlay";
+
+/** A WHOLE `ConfigSnapshot`, not the two fields fieldd reads.
+ *
+ * The 0.8.0 client validates every server event and DESTROYS the socket on a
+ * malformed one rather than rejecting the call — so a stub carrying only
+ * `revision` and `diagnostics` does not fail an assertion, it kills the
+ * connection and every config test reads "the floor died". That is GT-0's
+ * finding number 6 arriving a second time, and it is why this is spelled out.
+ *
+ * The parts that MEAN something here: `revision` is what fieldd compares to
+ * derive `effectiveChanged`, and `diagnostics` severities decide `ok` — an
+ * unknown key earns a diagnostic and NOT a refusal in Ghostty syntax, which is
+ * the case the panel has to show. */
+const fakeConfig = (revision: string, contents = ""): Record<string, unknown> => ({
+  schemaVersion: 1,
+  revision,
+  compatibility: { ghosttyVersion: "1.0.0", ghosttyCommit: "deadbeef", knownKeyCount: 1 },
+  sources: [{ path: "/fake/config.ghostty", kind: "ghosttea-overlay" }],
+  diagnostics: contents.includes("nonsense-key")
+    ? [{ severity: "error", code: "unknown-key", message: "unknown configuration key" }]
+    : [],
+  configuredKeys: [],
+  terminal: {
+    scrollbackBytes: 1024,
+    foreground: [255, 255, 255],
+    background: [0, 0, 0],
+    cursor: [255, 255, 255],
+  },
+  renderer: {
+    foreground: [255, 255, 255],
+    background: [0, 0, 0],
+    cursor: [255, 255, 255],
+    selectionBackground: [255, 255, 255],
+    selectionForeground: [0, 0, 0],
+    fontSize: 13,
+    fontFamilies: [],
+    paddingX: [2, 2],
+    paddingY: [2, 2],
+    postProcess: "none",
+    customShaderPaths: [],
+  },
+  workspace: { keybindings: [], clearKeybindings: false },
+});
 
 interface AuditRecord {
   action: string;
@@ -273,7 +383,7 @@ describe("TerminalService (NF-3, mock native)", () => {
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
-    const grant = daemon.tokens.mint(["terminal.attach"], "terminal-test");
+    const grant = daemon.tokens.mint(["terminal.attach", "settings.manage"], "terminal-test");
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, grant.token);
 
@@ -282,6 +392,8 @@ describe("TerminalService (NF-3, mock native)", () => {
       ["terminal.connectTicket", {}],
       ["terminal.create", {}],
       ["terminal.terminate", { sessionId: "s1" }],
+      ["terminal.config.read", {}],
+      ["terminal.config.write", { text: "", revision: "rev" }],
     ] as const) {
       const err = await rpc.callErr(method, params);
       expect(err.data?.kind, method).toBe("UNAVAILABLE");
@@ -436,6 +548,163 @@ describe("TerminalService (NF-3, mock native)", () => {
     if (failure.kind === "error") {
       expect(failure.e).toBeInstanceOf(RpcCallError);
       expect((failure.e as RpcCallError).kind).toBe("UNAVAILABLE");
+    }
+  });
+
+  it("reads and writes config.ghostty through the floor's own document door (GT-3)", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.helloTerminal = floor.endpoints;
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["settings.manage"], "settings-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    // A file that does not exist yet reads as an empty document with a path —
+    // there is nothing to create, and the panel can show the user the file they
+    // are about to write.
+    const before = TerminalConfigDocument.parse(await rpc.call("terminal.config.read", {}));
+    expect(before.exists).toBe(false);
+    expect(before.text).toBe("");
+    expect(before.path.endsWith("config.ghostty")).toBe(true);
+
+    const written = TerminalConfigWriteResult.parse(
+      await rpc.call("terminal.config.write", {
+        text: "# vibefield\nfont-size = 13\n",
+        revision: before.revision,
+      }),
+    );
+    expect(written.ok, "a config the loader accepted").toBe(true);
+    expect(written.effectiveChanged, "the reload moved the effective config").toBe(true);
+    expect(written.document.exists).toBe(true);
+    expect(written.document.text).toBe("# vibefield\nfont-size = 13\n");
+    expect(floor.document.contents, "the floor holds what was written").toBe(
+      "# vibefield\nfont-size = 13\n",
+    );
+
+    // The revision the write answered is the one the next write must carry.
+    const again = TerminalConfigWriteResult.parse(
+      await rpc.call("terminal.config.write", {
+        text: "# vibefield\nfont-size = 13\n",
+        revision: written.document.revision,
+      }),
+    );
+    expect(again.ok).toBe(true);
+    expect(again.effectiveChanged, "rewriting identical text changes nothing").toBe(false);
+
+    // Auditing: the write is an act, the read is not. The record carries the
+    // SHAPE of the edit and never the file's contents.
+    const records = (await readAuditRecords(dataDir)).filter(
+      (record) => record.action === "terminal.config.write",
+    );
+    expect(records.map((record) => record.phase)).toEqual([
+      "attempt",
+      "outcome",
+      "attempt",
+      "outcome",
+    ]);
+    for (const record of records) {
+      expect(record.target).toEqual({ kind: "terminal", id: "config" });
+    }
+    const serialized = JSON.stringify(records);
+    expect(serialized).not.toContain("font-size");
+  });
+
+  it("a write the loader refuses is honest, not a failed call (GT-3)", async () => {
+    // Ghostty syntax is permissive: an unknown key is a DIAGNOSTIC and the file
+    // still loads. The bytes reached the disk and the floor reloaded, so this
+    // is not an error — it is a verdict the user has to see.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.helloTerminal = floor.endpoints;
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["settings.manage"], "settings-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const before = TerminalConfigDocument.parse(await rpc.call("terminal.config.read", {}));
+    const written = TerminalConfigWriteResult.parse(
+      await rpc.call("terminal.config.write", {
+        text: "nonsense-key = 1\n",
+        revision: before.revision,
+      }),
+    );
+    expect(written.ok).toBe(false);
+    expect(written.document.exists, "it still landed").toBe(true);
+    expect(written.diagnostics[0]?.message).toBe("unknown configuration key");
+  });
+
+  it("a stale revision is a CONFLICT, never a silent clobber (GT-3)", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.helloTerminal = floor.endpoints;
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["settings.manage"], "settings-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const before = TerminalConfigDocument.parse(await rpc.call("terminal.config.read", {}));
+    await rpc.call("terminal.config.write", {
+      text: "font-size = 13\n",
+      revision: before.revision,
+    });
+    // The same revision a second time: this editor is holding a stale read.
+    const err = await rpc.callErr("terminal.config.write", {
+      text: "font-size = 99\n",
+      revision: before.revision,
+    });
+    expect(err.data?.kind).toBe("CONFLICT");
+    expect(floor.document.contents, "the newer file survived").toBe("font-size = 13\n");
+  });
+
+  it("a floor with no app overlay says so, and is not an INTERNAL (GT-3)", async () => {
+    // A pre-GT-3 field-native, or any floor whose service was never pointed at
+    // our file. The service is alive and answering — it simply has no document
+    // to edit — so this is a degraded SERVICE state with its own name.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor({ noOverlay: true });
+    mock.helloTerminal = floor.endpoints;
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["settings.manage"], "settings-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const err = await rpc.callErr("terminal.config.read", {});
+    expect(err.data?.kind).toBe("UNAVAILABLE");
+    expect((err.data?.details as { state?: string } | undefined)?.state).toBe("no-overlay");
+  });
+
+  it("gates the config surface on settings.manage, not terminal.attach (GT-3)", async () => {
+    // Attaching to a terminal and rewriting the configuration every terminal on
+    // the device loads are different powers.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.helloTerminal = ENDPOINTS;
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const attacher = daemon.tokens.mint(["terminal.attach"], "deck");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, attacher.token);
+    for (const [method, params] of [
+      ["terminal.config.read", {}],
+      ["terminal.config.write", { text: "", revision: "r" }],
+    ] as const) {
+      const err = await rpc.callErr(method, params);
+      expect(err.data?.kind, method).toBe("FORBIDDEN_SCOPE");
     }
   });
 

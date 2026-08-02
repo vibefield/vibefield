@@ -1,8 +1,14 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
-import { TerminalCreateResult, TerminalListResult, TerminalTicket } from "@vibefield/contracts";
+import {
+  TerminalConfigDocument,
+  TerminalConfigWriteResult,
+  TerminalCreateResult,
+  TerminalListResult,
+  TerminalTicket,
+} from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { app, BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
@@ -149,6 +155,12 @@ interface DeckFacts {
   sessionIds: string[];
   rendererBackend: string;
   error?: string;
+  /** present ONLY while the GT-3 restore consent face is up */
+  consent?: { saved: number; alive: number; dead: number };
+  /** panes showing an ended session */
+  exitedSessionIds?: string[];
+  /** the pane the deck's own affordances act on */
+  activeSessionId?: string;
 }
 
 /** A running tail of the deck's markers, armed BEFORE the load so a fast deck
@@ -181,6 +193,14 @@ class DeckWatch {
 
   current(): DeckFacts | null {
     return this.latest;
+  }
+
+  /** Forget what the deck last said. Called immediately before a renderer
+   * reload: `until` answers from the latest marker it has, so a pre-reload
+   * state would satisfy a post-reload question — and every assertion about
+   * what the deck did on COMING BACK would be about the deck that left. */
+  reset(): void {
+    this.latest = null;
   }
 
   /** Resolve on the first marker satisfying `predicate`, including one already
@@ -303,11 +323,12 @@ async function untilFloor(
  * which a screen scrape could never show. `$0` is the second: it is the shell's
  * own name for itself, so it answers what the workspace's own create door
  * spawned — the question GT-2e exists to settle. */
-async function askPaneWhatShellItIs(
+async function askPane(
   handle: FielddHandle,
   sessionId: string,
   markerPath: string,
-): Promise<{ marker: string; argv0: string }> {
+  expression: string,
+): Promise<{ marker: string; value: string }> {
   const marker = `godview-${Math.random().toString(36).slice(2, 10)}`;
   const ticket = TerminalTicket.parse(
     await handle.client.request("terminal.openTicket", { sessionId }),
@@ -318,21 +339,177 @@ async function askPaneWhatShellItIs(
   );
   try {
     await automation.connect();
-    await automation.pasteAndSubmit(sessionId, `echo "${marker}:$0" > ${markerPath}\n`);
+    await automation.pasteAndSubmit(sessionId, `echo "${marker}:${expression}" > ${markerPath}\n`);
     // Matched rather than merely "contains": a half-written file must read as
-    // not-yet, not as an empty shell name.
+    // not-yet, not as an empty answer.
     const written = new RegExp(`${marker}:(\\S+)`);
     const deadline = Date.now() + 15_000;
     while (Date.now() < deadline) {
       try {
         const found = written.exec(readFileSync(markerPath, "utf8"));
-        if (found?.[1] !== undefined) return { marker, argv0: found[1] };
+        if (found?.[1] !== undefined) return { marker, value: found[1] };
       } catch {
         /* the shell has not written it yet */
       }
       await sleep(150);
     }
     throw new Error(`the shell never wrote ${marker} to ${markerPath}`);
+  } finally {
+    automation.dispose();
+  }
+}
+
+/** Run one line in a pane and wait for the shell to have finished it, without
+ * asking for a value back. Used to move a pane's cwd — the thing GT-3's restore
+ * has to carry across a death. */
+async function runInPane(
+  handle: FielddHandle,
+  sessionId: string,
+  markerPath: string,
+  line: string,
+): Promise<void> {
+  const marker = `godview-${Math.random().toString(36).slice(2, 10)}`;
+  const ticket = TerminalTicket.parse(
+    await handle.client.request("terminal.openTicket", { sessionId }),
+  );
+  const automation = new GhostteaAutomationClient(
+    { controlSocket: ticket.controlSocket, authToken: ticket.token },
+    { clientBuild: "vibefield-smoke-godview" },
+  );
+  try {
+    await automation.connect();
+    await automation.pasteAndSubmit(sessionId, `${line}; echo ${marker} > ${markerPath}\n`);
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      try {
+        if (readFileSync(markerPath, "utf8").includes(marker)) return;
+      } catch {
+        /* not yet */
+      }
+      await sleep(100);
+    }
+    throw new Error(`the shell never finished "${line}"`);
+  } finally {
+    automation.dispose();
+  }
+}
+
+/** Click a button in the deck's own chrome by its visible text.
+ *
+ * `element.click()` and not a synthesized mouse event: `sendInputEvent` injects
+ * at the browser's input layer but skips Chromium's default actions, so a
+ * synthesized mousedown on a button does not activate it (GT-2 finding 4, the
+ * reason the deck is focused page-side). A DOM click dispatches a real,
+ * bubbling click event, which is what React's root listener is waiting for. */
+async function clickDeckButton(win: BrowserWindow, label: string): Promise<void> {
+  // Polled, not asserted-on-arrival: a marker says what the deck WAS at the
+  // moment it published, and a face can still be a render away. A harness that
+  // demands an affordance exist the instant it looks for it is testing its own
+  // timing, so this waits for the button the way a person would.
+  const deadline = Date.now() + 20_000;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const clicked = (await win.webContents.executeJavaScript(
+      `(() => {
+        const buttons = [...document.querySelectorAll("button")];
+        const button = buttons.find(
+          (candidate) => candidate.textContent.trim() === ${JSON.stringify(label)},
+        );
+        if (!button) return "absent: " + buttons.map((b) => b.textContent.trim()).join("|");
+        button.click();
+        return "ok";
+      })()`,
+    )) as string;
+    if (clicked === "ok") return;
+    seen = clicked;
+    await sleep(200);
+  }
+  throw new Error(`no "${label}" button appeared within 20s (${seen})`);
+}
+
+/** The deck's saved layout, as the page holds it. Read so the smoke can assert
+ * what `paneMeta` actually persisted rather than trusting that it did. */
+async function readDeckLayout(win: BrowserWindow): Promise<string | null> {
+  return (await win.webContents.executeJavaScript(`localStorage.getItem("vf-godview-deck-v1")`)) as
+    | string
+    | null;
+}
+
+/** Close the overlay, reload the renderer, open it again — the GT-2e claim
+ * row's idiom, minus the `localStorage.clear()`. This is how a restore is
+ * staged: the document dies and comes back while the FLOOR does not. */
+async function reopenAfterReload(opts: {
+  win: BrowserWindow;
+  deck: DeckWatch;
+  toggleGodview: () => void;
+  viteUrl: string;
+}): Promise<void> {
+  opts.toggleGodview();
+  await opts.deck.until((facts) => !facts.active, "the overlay to close", 20_000);
+  const reloaded = waitForConsole(opts.win, "CANVAS_READY ", 60_000);
+  reloaded.catch(() => undefined);
+  opts.deck.reset();
+  await loadRenderer(opts.win, "smoke-godview", opts.viteUrl);
+  await reloaded;
+  opts.win.focus();
+  opts.win.webContents.focus();
+  opts.toggleGodview();
+}
+
+/** REPORT-ONLY (GT-3): how long a real keystroke takes to become an observable
+ * effect. No threshold is asserted and nothing fails on it — the v0.3 review
+ * asked for a number, and a number that gates a smoke would be a budget nobody
+ * has agreed to yet.
+ *
+ * What it measures, stated exactly, because the name is a promise: the command
+ * is STAGED with a control-plane paste and left unsubmitted, then Enter is
+ * pressed as a real key event. The clock runs from that keypress to the moment
+ * the shell's file side effect is visible to this process — so it spans the
+ * renderer's input handling, the bridge, the floor, the PTY, the shell's own
+ * execution of the line, and this harness's filesystem poll. It is NOT frame
+ * paint, and it is NOT a floor round trip in isolation.
+ *
+ * Never fatal: it returns null with a reason rather than failing the smoke,
+ * because a measurement that can fail a gate is an assertion in disguise. */
+async function measureKeystrokeEcho(
+  win: BrowserWindow,
+  handle: FielddHandle,
+  sessionId: string,
+  markerPath: string,
+): Promise<{ ms: number } | { skipped: string }> {
+  const marker = `latency-${Math.random().toString(36).slice(2, 10)}`;
+  const ticket = TerminalTicket.parse(
+    await handle.client.request("terminal.openTicket", { sessionId }),
+  );
+  const automation = new GhostteaAutomationClient(
+    { controlSocket: ticket.controlSocket, authToken: ticket.token },
+    { clientBuild: "vibefield-smoke-godview" },
+  );
+  try {
+    await automation.connect();
+    // Staged WITHOUT a newline: the line sits on the shell's edit buffer and
+    // nothing has run, so the only thing left between here and the side effect
+    // is the keypress below.
+    await automation.paste(sessionId, `echo ${marker} > ${markerPath}`);
+    await sleep(500); // let the paste settle onto the line before timing starts
+    const started = Date.now();
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+    win.webContents.sendInputEvent({ type: "char", keyCode: "\r" });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+    const deadline = started + 10_000;
+    while (Date.now() < deadline) {
+      try {
+        if (readFileSync(markerPath, "utf8").includes(marker)) {
+          return { ms: Date.now() - started };
+        }
+      } catch {
+        /* not yet */
+      }
+      await sleep(2); // the poll IS the resolution floor, so it is small
+    }
+    return { skipped: "the pane never ran the staged line on a Return keypress" };
+  } catch (error) {
+    return { skipped: error instanceof Error ? error.message : String(error) };
   } finally {
     automation.dispose();
   }
@@ -353,6 +530,23 @@ function expectedLoginShell(): string {
   };
   if (process.platform === "win32") return nonEmpty(process.env["COMSPEC"]) ?? "powershell.exe";
   return nonEmpty(process.env["SHELL"]) ?? nonEmpty(userInfo().shell) ?? "/bin/zsh";
+}
+
+/** A reported cwd as a filesystem path.
+ *
+ * The floor reports whatever the shell announced over OSC 7, verbatim — which
+ * is a `file://host/path` URL. Written out here rather than imported from the
+ * deck's own `paneCwd` on purpose: this is the harness's independent reading of
+ * the same wire value, so a decoder that quietly stopped decoding would fail
+ * this row instead of agreeing with itself. */
+function cwdPath(reported: string | null | undefined): string | null {
+  if (typeof reported !== "string" || reported === "") return null;
+  if (reported.startsWith("/")) return reported;
+  try {
+    return decodeURIComponent(new URL(reported).pathname);
+  } catch {
+    return null;
+  }
 }
 
 /** How the floor governs one session's retention, or undefined if it is gone. */
@@ -415,6 +609,13 @@ export async function runSmokeGodview(opts: {
         `the init-door row needs an EMPTY floor; found ${before.length} session(s) already`,
       );
     }
+    // …and an empty DECK. Row 1 is about a first open, and both planes have to
+    // be first: the renderer origin's localStorage outlives this process, so a
+    // previous run's saved layout is still sitting there — and since GT-3 that
+    // layout is not silently dropped, it is a QUESTION (every session it names
+    // died with the last run's floor). Clearing here rather than reloading
+    // because nothing has mounted yet: the deck is not built until ⌘G.
+    await win.webContents.executeJavaScript("localStorage.clear()");
 
     // 1. ⌘G's own action. The overlay opens, the deck redeems a ticket for the
     //    CONNECTION — no session — and the workspace then creates its own first
@@ -456,17 +657,17 @@ export async function runSmokeGodview(opts: {
     //    first real look at the deck found an `sh-3.2$` prompt. `$0` now has to
     //    name the user's actual shell, resolved by main and delivered on the
     //    connect.
-    const asked = await askPaneWhatShellItIs(opts.handle, freeShell, join(scratch, "echo.txt"));
+    const asked = await askPane(opts.handle, freeShell, join(scratch, "echo.txt"), "$0");
     const expected = expectedLoginShell();
     verdict["echo"] = asked.marker;
-    verdict["paneShell"] = asked.argv0;
+    verdict["paneShell"] = asked.value;
     verdict["expectedShell"] = expected;
-    if (shellName(asked.argv0) !== shellName(expected)) {
+    if (shellName(asked.value) !== shellName(expected)) {
       throw new Error(
-        `the workspace's own door spawned ${asked.argv0}, not the user's shell ${expected}`,
+        `the workspace's own door spawned ${asked.value}, not the user's shell ${expected}`,
       );
     }
-    if (shellName(asked.argv0) === "sh") {
+    if (shellName(asked.value) === "sh") {
       throw new Error("the deck is back to /bin/sh — the sh-3.2$ pane has returned");
     }
 
@@ -519,6 +720,7 @@ export async function runSmokeGodview(opts: {
     await win.webContents.executeJavaScript("localStorage.clear()");
     const reloaded = waitForConsole(win, "CANVAS_READY ", 60_000);
     reloaded.catch(() => undefined);
+    deck.reset();
     await loadRenderer(win, "smoke-godview", opts.viteUrl);
     await reloaded;
     win.focus();
@@ -571,17 +773,254 @@ export async function runSmokeGodview(opts: {
     verdict["closedPaneSurvived"] = detached;
     verdict["panesAfterClose"] = closed.panes;
 
-    // 7. The recovery row, inherited from the GT-1 spike: SIGKILL the bridge
+    // 7. RESTORE, the silent case (GT-3). The document dies and comes back
+    //    while the floor does not: same panes, same session ids, and — the
+    //    assertion that is about a face NOT being drawn — no consent prompt.
+    //    Nothing was lost, so there is nothing to ask, and a prompt here would
+    //    be the deck training its user to dismiss the one that matters.
+    const beforeReload = [...closed.sessionIds];
+    await reopenAfterReload({
+      win,
+      deck,
+      toggleGodview: opts.toggleGodview,
+      viteUrl: opts.viteUrl,
+    });
+    const restored = await deck.until(
+      (facts) => facts.active && facts.panes === closed.panes,
+      "the deck to come back with the panes it had",
+      90_000,
+    );
+    if (restored.consent !== undefined) {
+      throw new Error(
+        `an all-alive restore asked for consent it did not need: ${JSON.stringify(restored.consent)}`,
+      );
+    }
+    const rejoined = beforeReload.every((id) => restored.sessionIds.includes(id));
+    if (!rejoined) {
+      throw new Error(
+        `panes did not rejoin their sessions: had ${beforeReload.join(",")}, got ${restored.sessionIds.join(",")}`,
+      );
+    }
+    verdict["restoredSilently"] = true;
+    verdict["restoredSessionIds"] = restored.sessionIds;
+
+    // 8. THE LATENCY PROBE (report-only). A number the v0.3 review asked for,
+    //    with no threshold attached — see `measureKeystrokeEcho` for exactly
+    //    what the interval spans, because the name alone would over-promise.
+    await focusDeck(win);
+    const probe = await measureKeystrokeEcho(
+      win,
+      opts.handle,
+      restored.sessionIds[0]!,
+      join(scratch, "latency.txt"),
+    );
+    if ("ms" in probe) verdict["keystrokeEchoMs"] = probe.ms;
+    else verdict["keystrokeEchoMs"] = { unmeasured: probe.skipped };
+
+    // 9. THE DEGRADE ROW (GT-3, GT-D8). Move a pane into a distinctive folder,
+    //    kill its session out from under the deck, and reopen: the deck must
+    //    ASK, with honest counts, and a restore must relaunch that pane WHERE
+    //    IT WAS. The cwd is the whole point of `paneMeta` — a shell reborn at
+    //    `$HOME` is a shell that lost the work it was next to.
+    //
+    //    A plain `cd` is all it takes, and that is itself the finding: a
+    //    session's cwd comes ONLY from what the shell announces over OSC 7 (the
+    //    spawn directory is never reported), and this user's zsh announces it
+    //    on every prompt. What the floor then reports is that announcement
+    //    VERBATIM — a `file://host/path` URL, not a path — which is why the
+    //    deck decodes it before spawning anything.
+    const workdir = join(scratch, "work");
+    mkdirSync(workdir, { recursive: true });
+    const doomed = restored.sessionIds[0]!;
+    await runInPane(opts.handle, doomed, join(scratch, "cd.txt"), `cd ${workdir}`);
+    const withCwd = await untilFloor(
+      opts.handle,
+      (terminals) => cwdPath(terminals.find((t) => t.sessionId === doomed)?.cwd) === workdir,
+      `report ${doomed} sitting in ${workdir} (a pane's cwd is only ever what its shell announced over OSC 7)`,
+      20_000,
+    );
+    const recorded = withCwd.find((t) => t.sessionId === doomed)?.cwd;
+    verdict["recordedCwd"] = recorded;
+    // The layout has to have PERSISTED that cwd before the session dies —
+    // otherwise the restore below would be reading a meta this run never wrote.
+    const layoutDeadline = Date.now() + 15_000;
+    let persisted = false;
+    while (Date.now() < layoutDeadline && !persisted) {
+      persisted = ((await readDeckLayout(win)) ?? "").includes(workdir);
+      if (!persisted) await sleep(200);
+    }
+    if (!persisted) throw new Error(`paneMeta never persisted the cwd ${workdir}`);
+    verdict["paneMetaPersisted"] = true;
+
+    // The kill is the FLOOR's, not the deck's — this row is about restore, and
+    // the deck's own kill affordance gets its own row below.
+    await opts.handle.client.request("terminal.terminate", { sessionId: doomed });
+    await untilFloor(
+      opts.handle,
+      (terminals) => {
+        const row = terminals.find((t) => t.sessionId === doomed);
+        return row === undefined || row.exited === true;
+      },
+      `let ${doomed} go`,
+      20_000,
+    );
+
+    await reopenAfterReload({
+      win,
+      deck,
+      toggleGodview: opts.toggleGodview,
+      viteUrl: opts.viteUrl,
+    });
+    const asking = await deck.until(
+      (facts) => facts.active && facts.consent !== undefined,
+      "the deck to ask before relaunching a dead pane",
+      90_000,
+    );
+    verdict["consentShown"] = asking.consent;
+    if (asking.consent?.dead !== 1 || asking.consent.saved !== closed.panes) {
+      throw new Error(`the consent face miscounted: ${JSON.stringify(asking.consent)}`);
+    }
+    if (asking.panes !== 0) {
+      throw new Error("the workspace mounted before the question was answered");
+    }
+    await clickDeckButton(win, "restore");
+    const relaunched = await deck.until(
+      (facts) => facts.consent === undefined && facts.panes === closed.panes,
+      "the restored deck to come up with every pane filled",
+      90_000,
+    );
+    const replacement = relaunched.sessionIds.find((id) => !beforeReload.includes(id));
+    if (replacement === undefined) {
+      throw new Error("no new session was created for the dead pane");
+    }
+    verdict["rehydratedSession"] = replacement;
+    // `openTicket` gates on the OBSERVED inventory, a mgmt round trip behind
+    // the spawn (GT-0's measured 62-117ms) — and this session was born through
+    // the WORKSPACE's door, which has no ticket to answer with the way
+    // `terminal.create` does. So the wait is real and belongs here.
+    await untilFloor(
+      opts.handle,
+      (terminals) => terminals.some((t) => t.sessionId === replacement),
+      `list the relaunched session ${replacement}`,
+      20_000,
+    );
+    // The claim, proven by the pane itself: a real shell, running in the folder
+    // the dead one recorded.
+    const where = await askPane(opts.handle, replacement, join(scratch, "pwd.txt"), "$PWD");
+    verdict["rehydratedCwd"] = where.value;
+    // Compared through `realpath` because macOS answers the same directory two
+    // ways: the ORIGINAL pane's zsh reported the logical `/var/folders/…` it
+    // was told to `cd` into, while the relaunched one was spawned with that
+    // path and reports the physical `/private/var/folders/…` the symlink
+    // resolves to. Same folder, two spellings — and a string compare would call
+    // a working restore a failure.
+    if (realpathSync(where.value) !== realpathSync(workdir)) {
+      throw new Error(`the relaunched pane came up in ${where.value}, not ${workdir}`);
+    }
+
+    // 10. THE KILL ROW (GT-D5). Closing a pane detaches (row 6); killing is a
+    //     separate, audited, confirmed act. Driven through the deck's own
+    //     affordance — two clicks, because one would be the bug.
+    await focusDeck(win);
+    // The chip acts on the ACTIVE pane and names no session on screen, so the
+    // target is read from the deck rather than chosen here — asserting about a
+    // session the chip was never pointed at would be a test of nothing.
+    const active = await deck.until(
+      (facts) => facts.panes === closed.panes && facts.activeSessionId !== undefined,
+      "the deck to name its active pane",
+      20_000,
+    );
+    const killTarget = active.activeSessionId!;
+    await clickDeckButton(win, "kill session");
+    await clickDeckButton(win, "kill");
+    // Two proofs, one for each plane. The floor: the session ends. The
+    // renderer: the pane ADMITS it, which no floor query can show.
+    await untilFloor(
+      opts.handle,
+      (terminals) => {
+        const row = terminals.find((t) => t.sessionId === killTarget);
+        return row === undefined || row.exited === true;
+      },
+      `end ${killTarget} on the deck's own kill`,
+      20_000,
+    );
+    verdict["killedSession"] = killTarget;
+    const degraded = await deck.until(
+      (facts) =>
+        (facts.exitedSessionIds ?? []).includes(killTarget) ||
+        !facts.sessionIds.includes(killTarget),
+      "the killed pane to degrade honestly",
+      30_000,
+    );
+    verdict["killedPaneFace"] = (degraded.exitedSessionIds ?? []).includes(killTarget)
+      ? "exited"
+      : "pane dropped";
+
+    // 11. THE CONFIG ROW (GT-3 rider). A real write through the product door,
+    //     the floor's own reload verdict, and the one property that matters
+    //     more than any restyle: nothing died for a settings change.
+    const beforeConfig = await listTerminals(opts.handle);
+    const document = TerminalConfigDocument.parse(
+      await opts.handle.client.request("terminal.config.read", {}),
+    );
+    verdict["configPath"] = document.path;
+    verdict["configExisted"] = document.exists;
+    const wrote = TerminalConfigWriteResult.parse(
+      await opts.handle.client.request("terminal.config.write", {
+        text: `# written by pnpm smoke:godview\nfont-size = 13\n`,
+        revision: document.revision,
+      }),
+    );
+    verdict["configOk"] = wrote.ok;
+    verdict["configEffectiveChanged"] = wrote.effectiveChanged;
+    // The messages and not just a count: "1 diagnostic" is a number nobody can
+    // act on, and the loader's own words are the only honest record of what it
+    // made of the file.
+    verdict["configDiagnostics"] = wrote.diagnostics.map(
+      (diagnostic) => `${diagnostic.severity}: ${diagnostic.code} — ${diagnostic.message}`,
+    );
+    if (!wrote.ok) {
+      throw new Error(`the floor refused a benign config: ${JSON.stringify(wrote.diagnostics)}`);
+    }
+    if (
+      readFileSync(document.path, "utf8") !== "# written by pnpm smoke:godview\nfont-size = 13\n"
+    ) {
+      throw new Error(`the config file does not hold what was written: ${document.path}`);
+    }
+    // A settings change must not be a kill. Read PAST the observed round trip
+    // before believing the good news, the same way row 6 does.
+    await sleep(2_000);
+    const afterConfig = await listTerminals(opts.handle);
+    const lost = beforeConfig
+      .filter((row) => row.exited !== true)
+      .filter(
+        (row) => !afterConfig.some((now) => now.sessionId === row.sessionId && now.exited !== true),
+      );
+    if (lost.length > 0) {
+      throw new Error(`a config reload ended ${lost.map((row) => row.sessionId).join(",")}`);
+    }
+    verdict["configSurvivors"] = afterConfig.length;
+
+    // 12. The recovery row, inherited from the GT-1 spike: SIGKILL the bridge
     //    and watch the deck come back on a new runtime with the same sessions.
     //    field-native owns them; the bridge is only a pipe.
-    const survivors = [...closed.sessionIds];
+    //
+    //    The survivor set is whatever the deck holds NOW — rows 9 to 11 have
+    //    moved it since the close row, and a recovery that had to reproduce a
+    //    stale list would be asserting about a deck that no longer exists.
+    //    The killed session is excluded: a rebuild does not resurrect, and
+    //    demanding it back would make a passing recovery impossible.
+    const current = deck.current();
+    if (current === null) throw new Error("the deck said nothing before the bridge kill");
+    const survivors = current.sessionIds.filter((id) => id !== killTarget);
+    const panesBeforeKill = current.panes;
     const pid = killTerminalBridge();
     if (pid === null) throw new Error("no ghosttea bridge utility process to kill");
     verdict["bridgeKilledPid"] = pid;
     const recovered = await deck.until(
       (facts) =>
         facts.active &&
-        facts.panes === closed.panes &&
+        facts.panes === panesBeforeKill &&
         survivors.every((id) => facts.sessionIds.includes(id)),
       "the deck to rebuild itself on a new bridge with the same sessions",
       120_000,

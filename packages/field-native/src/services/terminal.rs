@@ -118,6 +118,12 @@ const FLOOR_LIFETIME: &str = "keep-until-exit";
 struct Endpoints {
     control: String,
     frame: String,
+    /// The app-owned config overlay (GT-3). A `PathBuf`, not a `String`: only
+    /// the SOCKET paths owe the contract UTF-8, and a config file on a path
+    /// this daemon cannot spell as UTF-8 is still a config file the service can
+    /// open — refusing the whole unit over it would be a contract requirement
+    /// leaking somewhere it was never made.
+    config: PathBuf,
     /// 32 random bytes, hex, minted per field-native boot. Memory-only: never
     /// logged, never written to disk, never placed in any environment (NF-D8,
     /// EL7). Rotating it means restarting the pair.
@@ -215,9 +221,11 @@ pub struct TerminalUnit {
 impl TerminalUnit {
     pub fn new(config: &NativeConfig, ping: UnboundedSender<()>) -> Self {
         let run_dir = config.run_dir();
+        let config_file = config.terminal_config_file();
         let endpoints = endpoint_paths(&run_dir).map(|(control, frame)| Endpoints {
             control,
             frame,
+            config: config_file,
             token: mint_token(),
         });
         let detail = endpoints.is_none().then(|| {
@@ -384,6 +392,19 @@ async fn serve(
         frame_socket: endpoints.frame.clone(),
         auth_token: endpoints.token.clone(),
     })
+    // GT-3: the app-owned config overlay, loaded AFTER the user's own Ghostty
+    // files so their existing setup is imported and ours refines it. Pointing
+    // the service here is also what makes the document editable at all —
+    // without an explicit path the service answers `configuration document is
+    // unavailable without an explicit overlay`, which is the honest state
+    // fieldd surfaces as UNAVAILABLE.
+    //
+    // The file is deliberately NOT created here. A missing overlay is a valid
+    // empty config upstream (the explicit path joins the loader's source list
+    // marked optional, and a NotFound on an optional source is skipped, not
+    // diagnosed), so touching the disk at boot would only be this daemon
+    // writing a file nobody asked for. It appears the first time someone saves.
+    .with_config_path(endpoints.config.clone())
     // EL7/NF-D6: FIELD_/FIELDD_ join ghosttea's own GHOSTTEA_*/TERMINALD_*
     // strip list at the service, so even an inherit-mode PTY cannot carry a
     // daemon secret. Prefixes come from the generated registries, never a
@@ -410,6 +431,7 @@ async fn serve(
         component = "terminal",
         control_socket = %endpoints.control,
         frame_socket = %endpoints.frame,
+        config_overlay = %endpoints.config.display(),
         text_engine = %family,
         "The terminal service is serving"
     );

@@ -396,3 +396,74 @@ body {
   border-color: color-mix(in srgb, var(--vf-select) 60%, transparent);
   color: rgba(255, 255, 255, 1);
 }
+
+/* GT-3: the restore consent face reuses the fault face's anatomy and only adds
+   a row, because it is the same moment — the deck saying something true before
+   it can be itself. Neither action is styled as the safe one: restoring runs
+   shells and starting clean forgets a layout, and a default-looking button
+   would be the UI making that choice for the user. */
+.vf-godview-deck-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* GT-3: the kill affordance (GT-D5). An overlay chip (DESIGN.md §5) over the
+   deck's top-right, because 0.8.0's `decoratePane` seam carries a label and an
+   accent and no action slot — and forking the library's pane chrome for one
+   button is not a trade this deck should make. */
+.vf-godview-kill {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1); /* §2.3 hairline, dark */
+  background: color-mix(in srgb, var(--vf-card) 90%, transparent);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4); /* §5 island/floating chrome, dark */
+}
+
+.vf-godview-kill-question {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  max-width: 44ch;
+}
+
+.vf-godview-kill-action {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.vf-godview-kill-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* §2.5: red means destructive, and DESIGN.md's uninstall precedent keeps it
+   TEXT — visually distinct before any confirm, never a filled alarm. */
+.vf-godview-kill-action.is-destructive {
+  color: var(--vf-red);
+}
+
+.vf-godview-kill-action.is-destructive:hover {
+  background: color-mix(in srgb, var(--vf-red) 14%, transparent);
+  color: var(--vf-red);
+}
+
+.vf-godview-kill-action:disabled {
+  cursor: default;
+  opacity: 0.4;
+}

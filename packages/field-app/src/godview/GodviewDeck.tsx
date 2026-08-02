@@ -10,13 +10,21 @@ import {
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
-import { TerminalConnectTicketResult } from "@vibefield/contracts";
+import { TerminalConnectTicketResult, TerminalListResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { emitGodviewDeckMarker } from "../development-console";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
+import {
+  paneCwd,
+  type RestoreQuestion,
+  restoreQuestion,
+  restoreSentence,
+  savedPaneSessionIds,
+} from "./deck-restore";
 import { godviewTerminalTheme } from "./deck-theme";
+import { KillActivePane } from "./KillActivePane";
 import { describePane } from "./pane-faces";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
@@ -51,6 +59,13 @@ import "@vibecook/ghosttea-react/workspace.css";
  * R6 reserves for contracts — GT-0 caught a storage key squatting there, and
  * R6 catches this comment too if it spells the prefix out. */
 const DECK_STORAGE_KEY = "vf-godview-deck-v1";
+
+/** The geometry the workspace's OWN create doors use for a pane with nothing to
+ * copy from (Workspace.tsx's initialization door). A rehydrated pane is that
+ * same case — the session it replaces is gone, so there are no cols to inherit
+ * — and the first resize from the mounted surface corrects it either way. */
+const SPAWN_COLS = 100;
+const SPAWN_ROWS = 30;
 
 /** Ports are transferred per ATTACH and the wait is one-shot, so a runtime is
  * born with its own fresh wait, armed before the connect that causes the
@@ -116,6 +131,14 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
    * (GT-D10) — `null` until it lands, which is what gates the workspace's first
    * mount below. */
   const [shell, setShell] = useState<{ defaultShell: string; home: string } | null>(null);
+  /** GT-3, the restore gate. `null` while the question is still being asked of
+   * the floor; a question object while the user is being asked; `"go"` once the
+   * deck may mount — with rehydration armed or not, per `rehydrate`. */
+  const [consent, setConsent] = useState<RestoreQuestion | "go" | null>(null);
+  /** Whether `onRehydratePane` is armed. False is not a bug state: a user who
+   * chose to start clean has no layout left to rehydrate, and a deck with no
+   * dead panes never had anything to ask about. */
+  const [rehydrate, setRehydrate] = useState(false);
   /** GT-2c: only a status TRANSITION may act — main republishes unchanged
    * states by contract, and a republish treated as news is a remount loop. */
   const lastBridgeState = useRef<string | null>(null);
@@ -138,6 +161,34 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
       return makeRuntime();
     });
     setGeneration((current) => current + 1);
+  }, []);
+
+  /** The user said restore. Rehydration is armed and the workspace mounts;
+   * dead panes come back through `onRehydratePane` below. */
+  const acceptRestore = useCallback(() => {
+    setRehydrate(true);
+    setConsent("go");
+  }, []);
+
+  /** The user said start clean. The saved layout is REMOVED rather than
+   * ignored: leaving it would mean the next open asks the same question about
+   * the same dead panes, and an answer that does not stick is not an answer.
+   * Nothing on the floor is touched — the live sessions this drops go on
+   * running, which is the close-detaches law (GT-D5) applied to a whole deck. */
+  const startClean = useCallback(() => {
+    try {
+      localStorage.removeItem(DECK_STORAGE_KEY);
+    } catch (cause) {
+      getRendererLogger()
+        .child({ component: "godview" })
+        .error(
+          "renderer.godview.layout_clear_failed",
+          "The saved deck layout could not be cleared",
+          cause,
+        );
+    }
+    setRehydrate(false);
+    setConsent("go");
   }, []);
 
   // Disposal happens HERE, after commit, never in an updater: each runtime
@@ -210,6 +261,76 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
     };
   }, [fieldd, generation]);
 
+  // THE RESTORE GATE (GT-3, GT-D8 as amended). Runs ONCE per deck mount, and
+  // finishes BEFORE the workspace is allowed to mount.
+  //
+  // It has to happen here and not inside `onRehydratePane`, because by the time
+  // the workspace asks about a dead pane it has already committed to restoring
+  // the layout — and the question a user needs answered is about the whole
+  // deck, once, before anything spawns: "these N panes are coming back, K of
+  // them as new shells". Asking per pane would be K prompts for one decision.
+  //
+  // Once per MOUNT and deliberately not per generation, which the connect above
+  // does run per generation: a recovery rebuilds the bridge, and the bridge has
+  // nothing to do with what the last session left behind. Re-running it would
+  // re-ask a question the user already answered, and — measured, in the smoke —
+  // blank the consent face mid-decision, because a bridge-up arrives moments
+  // after the deck comes up and the gate's first act is to have no answer yet.
+  //
+  // Silence is the common case and is deliberate: with the floor outliving the
+  // shell, most reopens find every saved session still alive, and a prompt that
+  // appears when nothing is at stake trains people to dismiss the one that
+  // matters. No layout, or a layout this reader cannot make sense of, is also
+  // silent — GT-D8's malformed-manifest rule is "start clean", not "explain".
+  //
+  // A floor that cannot be asked mounts too, unarmed: `terminal.list` failing
+  // means the deck is about to have bigger problems than a prompt, and guessing
+  // that every saved pane is dead would be the one answer certain to be wrong.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      let saved: string[] = [];
+      try {
+        saved = savedPaneSessionIds(localStorage.getItem(DECK_STORAGE_KEY));
+      } catch {
+        saved = []; // a page with no storage has no layout, which is an answer
+      }
+      if (saved.length === 0) {
+        if (!cancelled) setConsent("go");
+        return;
+      }
+      let live: string[] = [];
+      try {
+        live = TerminalListResult.parse(await fieldd.request("terminal.list", {})).terminals.map(
+          (terminal) => terminal.sessionId,
+        );
+      } catch (cause) {
+        getRendererLogger()
+          .child({ component: "godview" })
+          .error(
+            "renderer.godview.restore_floor_unreadable",
+            "The floor could not be listed for the restore check; mounting without it",
+            cause,
+          );
+        if (!cancelled) setConsent("go");
+        return;
+      }
+      if (cancelled) return;
+      const question = restoreQuestion(saved, live);
+      // Everything alive ⇒ nothing to consent to. The panes rejoin by id
+      // inside the workspace's own initialization, exactly as they did before
+      // this gate existed.
+      if (question.dead === 0) {
+        setConsent("go");
+        return;
+      }
+      setConsent(question);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fieldd]);
+
   // Recovery (GT-1's ladder, from the renderer's side). `bridge-down` is the
   // honest moment of death; `bridge-up` is the only one this page can act on,
   // and acting means a new runtime with a fresh ports wait for the deck to
@@ -254,19 +375,111 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
   // outside the deck no longer auto-surfaces. It returns as deliberate AR/GT-5
   // work driven by `session-created`, not as a `listSessions` poll.
 
+  // LAYER 2 OF RESTORE (GT-D8 as amended): the durable meaning of a pane, which
+  // its session id alone does not carry. Ghosttea persists whatever this
+  // returns inside its own layout document and hands it back on rehydration —
+  // opaque to the library, which is exactly why the shape is ours to keep
+  // small: two fields, both JSON, both from the session the floor reported.
+  //
+  // `cwd` is the one that earns its place — it is what makes a relaunched pane
+  // land where its work was instead of at `$HOME`. `title` rides along so a
+  // future reader can name a pane it could not otherwise identify; nothing
+  // reads it yet, and it is here rather than later because adding a field to a
+  // persisted document is a migration and adding it now is not.
+  //
+  // Stable identity, and it matters: ghosttea's persist effect depends on this
+  // prop, so a fresh arrow per render would rewrite localStorage every render.
+  const paneMeta = useCallback((session: { cwd?: string | null; title?: string | null }) => {
+    // Only DEFINED fields: an explicit `undefined` would serialize away anyway,
+    // and a null cwd persisted as `"cwd": null` is a value a reader has to
+    // learn to disbelieve.
+    //
+    // `cwd` is stored VERBATIM — the OSC 7 URL the floor reported, host and
+    // all — and decoded by whoever reads it (`paneCwd`). Normalizing on the way
+    // in would throw away the host, which is exactly the field a remote pane
+    // will need when GT-4 lights them up, and would make the persisted document
+    // a summary of what the floor said rather than a record of it.
+    return {
+      ...(typeof session.cwd === "string" && session.cwd !== "" ? { cwd: session.cwd } : {}),
+      ...(typeof session.title === "string" && session.title !== ""
+        ? { title: session.title }
+        : {}),
+    };
+  }, []);
+
+  // A dead pane, answered with a live one (GT-D8). Armed only after consent.
+  //
+  // The replacement is created through the WORKSPACE'S OWN runtime door, with
+  // the same options its own initialization uses — that is GT-D10 holding under
+  // a feature that could easily have broken it. Going through `terminal.create`
+  // would put fieldd back in front of a pane birth for no reason: the deck has
+  // a connection, the workspace has a door, and fieldd's policy seat does not
+  // require it to be on the path.
+  //
+  // `terminate-with-app` is passed DELIBERATELY, and it is the one thing here
+  // that looks wrong and is not: it is what the workspace's own doors ask for,
+  // and field-native re-governs an ownerless birth to keep-until-exit on
+  // `session-created` (GT-D11). Asking for keep-until-exit here would make this
+  // pane the one session on the floor whose retention came from the renderer.
+  const rehydratePane = useCallback(
+    async (context: { meta: unknown; sessionId: string; paneId: string }) => {
+      if (shell === null) return null;
+      // `paneCwd` and not `meta.cwd`: what the floor calls a cwd is the OSC 7
+      // URL the shell announced, and a spawn given `file://host/Users/x` cannot
+      // chdir into it. Home is the honest fallback for a pane whose shell never
+      // announced one at all — which is most of them, since the spawn directory
+      // is not reported and OSC 7 needs a shell integration.
+      const cwd = paneCwd(context.meta) ?? shell.home;
+      try {
+        return await runtime.createSession({
+          executable: shell.defaultShell,
+          args: [],
+          cwd,
+          environment: { mode: "inherit" },
+          cols: SPAWN_COLS,
+          rows: SPAWN_ROWS,
+          persistence: "terminate-with-app",
+          programKind: "interactive-shell",
+        });
+      } catch (cause) {
+        // Drop-and-collapse is the library's own answer to a null, and it is
+        // the honest one: a pane that cannot be refilled should not be drawn as
+        // though it were. The failure is LOUD in the log and quiet on screen.
+        getRendererLogger()
+          .child({ component: "godview" })
+          .error(
+            "renderer.godview.rehydrate_failed",
+            `A saved pane could not be relaunched at ${cwd}`,
+            cause,
+          );
+        return null;
+      }
+    },
+    [runtime, shell],
+  );
+
   // Whatever the deck currently is, said out loud once per change. The canvas
   // smoke's CANVAS_READY precedent: the headless harness reads renderer console
   // output because there is no other way to ask a page what it drew.
   useEffect(() => {
+    const panes = workspace?.panes ?? [];
+    const exited = panes
+      .filter((pane) => (pane.session as { exited?: boolean }).exited === true)
+      .map((pane) => pane.session.id);
     emitGodviewDeckMarker({
       active,
-      panes: workspace?.panes.length ?? 0,
+      panes: panes.length,
       sessions: workspace?.sessions.length ?? 0,
-      sessionIds: (workspace?.panes ?? []).map((pane) => pane.session.id),
+      sessionIds: panes.map((pane) => pane.session.id),
       rendererBackend: runtime.rendererBackend,
       ...(error !== null ? { error } : {}),
+      ...(consent !== null && consent !== "go" ? { consent } : {}),
+      ...(exited.length > 0 ? { exitedSessionIds: exited } : {}),
+      ...(workspace?.activeSession !== undefined
+        ? { activeSessionId: workspace.activeSession.id }
+        : {}),
     });
-  }, [active, workspace, runtime, error]);
+  }, [active, workspace, runtime, error, consent]);
 
   const platform: GhostteaWorkspacePlatform | null =
     shell === null
@@ -320,16 +533,49 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
   // way back) and the workspace itself, and everything between them is one
   // round trip inside the overlay's own reveal. A label that appears and
   // vanishes inside 200ms reads as a stutter, not as honesty.
-  if (platform === null || shell === null) return null;
+  if (platform === null || shell === null || consent === null) return null;
+
+  // The consent face (GT-3). Same family as the fault face above — a centred
+  // statement on the dark stage with actions under it — because they are the
+  // same kind of moment: the deck has something true to say before it can be
+  // itself. It states counts and consequences (DESIGN.md §9: states tell the
+  // truth with numbers) and neither action is styled as the safe one, because
+  // neither is: restoring runs shells, and starting clean forgets a layout.
+  if (consent !== "go") {
+    return (
+      <div className="vf-godview-deck-fault" role="dialog" aria-label="Restore saved panes">
+        <p className="vf-godview-deck-fault-message">
+          this deck had {consent.saved} pane{consent.saved === 1 ? "" : "s"} last time
+        </p>
+        <p className="vf-godview-deck-fault-detail">{restoreSentence(consent)}</p>
+        <div className="vf-godview-deck-actions">
+          <button type="button" className="vf-godview-deck-fault-retry" onClick={acceptRestore}>
+            restore
+          </button>
+          <button type="button" className="vf-godview-deck-fault-retry" onClick={startClean}>
+            start clean
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <GhostteaProvider key={generation} runtime={runtime}>
+      {workspace?.activeSession !== undefined && (
+        <KillActivePane session={workspace.activeSession} fieldd={fieldd} />
+      )}
       <GhostteaWorkspace
         platform={platform}
         theme={theme}
         storageKey={DECK_STORAGE_KEY}
         sidebar={Sidebar}
         decoratePane={describePane}
+        paneMeta={paneMeta}
+        // Armed only on consent. Unarmed, the library's default applies and a
+        // dead pane is dropped — which is what "start clean" asked for and what
+        // an all-alive deck never encounters.
+        {...(rehydrate ? { onRehydratePane: rehydratePane } : {})}
         // No `createSplitSession` (GT-D10): splits go through the workspace's
         // own door, like every other birth. It asks for `terminate-with-app`
         // there — the opposite of this product's promise — and that is

@@ -40,6 +40,9 @@ import {
   SettingsResetParams,
   SettingsSetParams,
   SettingsSubscribeParams,
+  type TerminalConfigDocument,
+  TerminalConfigWriteParams,
+  type TerminalConfigWriteResult,
   type TerminalConnectTicketResult,
   TerminalCreateParams,
   type TerminalCreateResult,
@@ -936,6 +939,48 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
         () => terminals.terminate(sessionId),
         (result) => ({ outcome: "succeeded", attrs: { terminated: result.terminated } }),
+      );
+    });
+
+    // GT-3 rider — the `config.ghostty` surface (scope settings.manage, the
+    // trusted desktop shell). Reading is a read; WRITING changes how every
+    // terminal on this device is configured, including sessions this caller
+    // never opened, so it is an audited act like create and terminate. The
+    // attrs record the shape of the edit (bytes, the revision it replaced) and
+    // never its CONTENTS — a config file can hold a shell path or a font name,
+    // and the audit log is not the place to copy a user's file into.
+    api.register(
+      "terminal.config.read",
+      async (): Promise<TerminalConfigDocument> => await terminals.readConfig(),
+    );
+    api.register("terminal.config.write", async (ctx, params) => {
+      const parsed = TerminalConfigWriteParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { text: string, revision: string }",
+          false,
+        );
+      return await audit.required(
+        ctx,
+        {
+          action: "terminal.config.write",
+          target: { kind: "terminal", id: "config" },
+          attrs: { bytes: parsed.data.text.length, replaces: parsed.data.revision },
+        },
+        async (): Promise<TerminalConfigWriteResult> =>
+          await terminals.writeConfig(parsed.data.text, parsed.data.revision),
+        (result) => ({
+          outcome: "succeeded",
+          // The effect landed either way; `ok` says whether the LOADER accepted
+          // what landed, which is a different question and worth recording as
+          // its own fact rather than collapsing into the outcome.
+          attrs: {
+            accepted: result.ok,
+            effectiveChanged: result.effectiveChanged,
+            diagnostics: result.diagnostics.length,
+          },
+        }),
       );
     });
 
