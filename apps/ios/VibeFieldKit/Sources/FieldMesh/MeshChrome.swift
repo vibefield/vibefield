@@ -128,7 +128,7 @@ public struct MeshSheet: View {
     }
     .padding(.horizontal, 22)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .background(FieldPalette.panelBackground)
+    // Transparent: the sheet's liquid glass is the surface.
   }
 
   private var peersEmptyLine: String {

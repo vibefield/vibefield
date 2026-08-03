@@ -24,7 +24,8 @@ struct SessionCardView: View {
         endedFace
       }
     }
-    .background(FieldPalette.panelBackground)
+    // No opaque background: the sheet's liquid glass carries the card, and
+    // the field stays visible behind it, blurred and dimmed.
   }
 
   // MARK: - Header
@@ -94,7 +95,16 @@ struct SessionCardView: View {
 
   private func terminalSurface(_ agent: AgentSnapshot) -> some View {
     ZStack {
-      FieldPalette.terminalBackground
+      // The terminal paper floats translucent in the glass — the field
+      // ghosts through it until the live Metal surface takes this slot.
+      RoundedRectangle(cornerRadius: 14)
+        .fill(FieldPalette.terminalBackground.opacity(0.45))
+        .overlay(
+          RoundedRectangle(cornerRadius: 14)
+            .strokeBorder(FieldPalette.panelBorder.opacity(0.6), lineWidth: 1)
+        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
 
       VStack(spacing: 10) {
         Text("TERMINAL")

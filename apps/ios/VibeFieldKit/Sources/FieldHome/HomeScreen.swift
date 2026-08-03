@@ -45,12 +45,21 @@ public struct HomeScreen: View {
     .onAppear {
       feed.start()
       #if DEBUG
-        // Headless smoke hook (the GhostteaApp pattern: opt-in automation,
-        // Debug-only): drives the connect flow so a simulator run can prove
-        // the real runtime path without touch injection.
+        // Headless smoke hooks (the GhostteaApp pattern: opt-in automation,
+        // Debug-only): drive flows a simulator run can't tap into.
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
           meshSheetOpen = true
           mesh.connect()
+        }
+        if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
+          Task {
+            try? await Task.sleep(for: .seconds(2))
+            if let agent = feed.agents.first(where: {
+              classifyAgentStatus($0.state) == .working
+            }) ?? feed.agents.first {
+              selection = SessionSelection(id: agent.id)
+            }
+          }
         }
       #endif
     }
@@ -62,14 +71,14 @@ public struct HomeScreen: View {
         .presentationDetents([.fraction(0.55), .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(40)
-        .presentationBackground(FieldPalette.panelBackground)
+        .fieldGlassSheet()
     }
     .sheet(isPresented: $meshSheetOpen) {
       MeshSheet(model: mesh)
         .presentationDetents([.fraction(0.45), .medium])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(40)
-        .presentationBackground(FieldPalette.panelBackground)
+        .fieldGlassSheet()
     }
     // The Tailscale login page. One presenter at root: an arriving login
     // closes the mesh sheet first, so the sheets never contend.
