@@ -14,8 +14,10 @@ import {
   type MutableRefObject,
   type ReactElement,
   type SetStateAction,
+  useCallback,
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
 } from "react";
 import type { DocManager, DocManagerState } from "../doc-manager";
@@ -25,7 +27,8 @@ import { CommandPalette } from "../hud/CommandPalette";
 import { FilePill } from "../hud/FilePill";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { NavigationBreadcrumbs } from "../hud/NavigationBreadcrumbs";
-import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
+import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfaceSlot";
+import { SidePanelStage, SidePanelToggle } from "../hud/SidePanelStage";
 import { WidgetTray } from "../hud/WidgetTray";
 import { ZoomPill } from "../hud/ZoomPill";
 import {
@@ -42,6 +45,7 @@ import {
   DEFAULT_THEME_COLORS,
   fabCls,
   hexToRgb255,
+  roundButtonCls,
 } from "./theme-constants";
 
 // ChromeLayer (§5.4.3): HUD, file pill, the tray (DESIGN.md's bottom toolbar),
@@ -139,9 +143,94 @@ export function ChromeLayer({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
+  const sidePanelSurfaces = useVisiblePluginSurfaces("hud.side-panel");
+  const sidePanelSurface = sidePanelSurfaces[0] ?? null;
+  const [sidePanelSurfaceId, setSidePanelSurfaceId] = useState<string | null>(null);
+  const sidePanelToggleRef = useRef<HTMLButtonElement | null>(null);
+  const activeSidePanel =
+    sidePanelSurface?.surfaceId === sidePanelSurfaceId ? sidePanelSurface : null;
   // One state, three readers: the overlay, the toolbar button, and the stage
   // hold. Owned by main (GT-D2) because ⌘G never reaches this page.
   const godviewOpen = useGodviewOpen();
+
+  const closeSidePanel = useCallback((returnFocus: boolean) => {
+    setSidePanelSurfaceId(null);
+    if (returnFocus) {
+      window.setTimeout(() => sidePanelToggleRef.current?.focus(), 0);
+    }
+  }, []);
+
+  const toggleSidePanel = useCallback(() => {
+    if (sidePanelSurface === null) return;
+    if (sidePanelSurfaceId === sidePanelSurface.surfaceId) {
+      closeSidePanel(true);
+      return;
+    }
+    const reveal = () => {
+      onTrayOpenChange(false);
+      onDocsOpenChange(false);
+      setShowSettings(false);
+      setPaletteOpen(false);
+      setSidePanelSurfaceId(sidePanelSurface.surfaceId);
+    };
+    if (godviewOpen && getHost().godview !== undefined) {
+      void getHost()
+        .godview?.set(false)
+        .then(reveal, () => undefined);
+      return;
+    }
+    reveal();
+  }, [
+    closeSidePanel,
+    godviewOpen,
+    onDocsOpenChange,
+    onTrayOpenChange,
+    setShowSettings,
+    sidePanelSurface,
+    sidePanelSurfaceId,
+  ]);
+
+  // Disable/unbind removes both stage and toggle in one render. An existing
+  // toggle receives focus only while it still exists (§13.2).
+  useEffect(() => {
+    if (
+      sidePanelSurfaceId !== null &&
+      !sidePanelSurfaces.some((surface) => surface.surfaceId === sidePanelSurfaceId)
+    ) {
+      setSidePanelSurfaceId(null);
+    }
+  }, [sidePanelSurfaceId, sidePanelSurfaces]);
+
+  // Expanded focus surfaces remain exclusive. The Artifact panel itself is
+  // non-modal, so this arbitration does not recede or hold the canvas.
+  useEffect(() => {
+    if (
+      sidePanelSurfaceId !== null &&
+      (trayOpen || docsOpen || showSettings || paletteOpen || godviewOpen)
+    ) {
+      closeSidePanel(false);
+    }
+  }, [
+    closeSidePanel,
+    docsOpen,
+    godviewOpen,
+    paletteOpen,
+    showSettings,
+    sidePanelSurfaceId,
+    trayOpen,
+  ]);
+
+  useEffect(() => {
+    if (activeSidePanel === null) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeSidePanel(true);
+    };
+    window.addEventListener("keydown", onEscape, true);
+    return () => window.removeEventListener("keydown", onEscape, true);
+  }, [activeSidePanel, closeSidePanel]);
 
   useEffect(() => {
     const onShellCommand = getHost().onShellCommand;
@@ -151,9 +240,10 @@ export function ChromeLayer({
       onTrayOpenChange(false);
       onDocsOpenChange(false);
       setPaletteOpen(false);
+      closeSidePanel(false);
       setShowSettings(true);
     });
-  }, [setShowSettings, onTrayOpenChange, onDocsOpenChange]);
+  }, [closeSidePanel, setShowSettings, onTrayOpenChange, onDocsOpenChange]);
 
   useEffect(() => {
     const onDesktopState = getHost().onDesktopState;
@@ -255,13 +345,14 @@ export function ChromeLayer({
           onTrayOpenChange(false);
           onDocsOpenChange(false);
           setShowSettings(false);
+          closeSidePanel(false);
         }
         return next;
       });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onTrayOpenChange, onDocsOpenChange, setShowSettings]);
+  }, [closeSidePanel, onTrayOpenChange, onDocsOpenChange, setShowSettings]);
 
   // ECS devtools while the button is active (v1's EcsDevtools panel slot).
   // The FACADE goes in (not ce.engine): the strata observer's durable tab
@@ -305,53 +396,74 @@ export function ChromeLayer({
     <>
       {/* Chrome overlays sit OUTSIDE the recede wrapper — they never scale. */}
       <NavigationBreadcrumbs engine={ce} />
-      <ZoomPill ce={ce} />
       {/* The file pill (B4): top-center — new doc, the editable name, and the
           morph-open docs explorer. */}
       <FilePill manager={manager} open={docsOpen} onOpenChange={onDocsOpenChange} />
-      {/* Dark mode toggle (widgetlab position) — no-drag: it sits in the titlebar strip. */}
-      <button
-        type="button"
-        onClick={onToggleTheme}
+      {/* DESIGN §8: one no-drag top-right cluster. Artifact is outermost so its
+          control stays physically attached to the edge it opens from. */}
+      <div
         data-hud-flight="top-right"
-        className="hud-flight no-drag absolute top-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-500 shadow-lg transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
-        title={dark ? "Switch to light mode" : "Switch to dark mode"}
+        className="hud-flight no-drag absolute top-4 right-4 z-50 flex items-center gap-2"
       >
-        {dark ? (
-          <svg
-            aria-hidden="true"
-            className="h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          >
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" />
-          </svg>
-        ) : (
-          <svg
-            aria-hidden="true"
-            className="h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
-          </svg>
+        <ZoomPill ce={ce} />
+        <button
+          type="button"
+          onClick={onToggleTheme}
+          className={roundButtonCls(false)}
+          title={dark ? "Switch to light mode" : "Switch to dark mode"}
+          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {dark ? (
+            <svg
+              aria-hidden="true"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            >
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" />
+            </svg>
+          ) : (
+            <svg
+              aria-hidden="true"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
+            </svg>
+          )}
+        </button>
+        {sidePanelSurface !== null && (
+          <SidePanelToggle
+            entry={sidePanelSurface}
+            active={activeSidePanel !== null}
+            buttonRef={sidePanelToggleRef}
+            onToggle={toggleSidePanel}
+          />
         )}
-      </button>
+      </div>
+
+      <SidePanelStage
+        entry={activeSidePanel}
+        windowId={FIELD_WINDOW_ID}
+        onClose={() => closeSidePanel(true)}
+      />
 
       {/* hud.attention (§8.4): the top-right attention stack, below the theme
           fab. pointer-events-none wrapper so an empty slot never blocks the
           canvas; the host restores pointer-events on its own content. */}
       <div
         data-hud-flight="top-right"
-        className="hud-flight pointer-events-none absolute top-16 right-4 z-40 flex w-72 max-w-[80vw] flex-col"
+        className="hud-flight pointer-events-none absolute top-16 z-40 flex w-72 max-w-[80vw] flex-col transition-[right] duration-300"
+        style={{ right: activeSidePanel === null ? "1rem" : "calc(min(92vw, 26rem) + 1rem)" }}
       >
         <PluginSurfaceHost slot="hud.attention" windowId={FIELD_WINDOW_ID} />
       </div>
@@ -368,6 +480,7 @@ export function ChromeLayer({
               onTrayOpenChange(false);
               onDocsOpenChange(false);
               setPaletteOpen(false);
+              closeSidePanel(false);
             }
             return next;
           });
@@ -395,7 +508,8 @@ export function ChromeLayer({
         type="button"
         onClick={() => chrome.setShowEcs((s) => !s)}
         data-hud-flight="bottom-right"
-        className={`hud-flight ${fabCls(showEcs)} bottom-4 right-4`}
+        className={`hud-flight ${fabCls(showEcs)} bottom-4`}
+        style={{ right: activeSidePanel === null ? "1rem" : "calc(min(92vw, 26rem) + 1rem)" }}
         title="ICE Devtools"
       >
         <svg

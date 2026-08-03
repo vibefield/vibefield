@@ -112,6 +112,38 @@ export const METHODS: MethodDef[] = [
     locality: "local",
   }),
 
+  // AH-3 — Electron main's static provider. Registration/resolution are
+  // shell-principal-only in ProductApi; provided calls retain ordinary static
+  // scope/locality policy before fieldd dispatches them to main.
+  defineMethod({
+    surface: "product",
+    method: "shell.provider.register",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "shell.provider.resolve",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "shell.dialog.pickFolder",
+    scope: "shell.dialog",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "shell.openExternal",
+    scope: "shell.open",
+    idempotent: false,
+    locality: "local",
+  }),
+
   // LOG-L5 — trusted local diagnostics. These scopes are absent from every
   // tailnet/plugin/MCP preset; Electron mints them only for its host viewer.
   defineMethod({

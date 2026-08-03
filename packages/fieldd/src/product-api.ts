@@ -12,10 +12,12 @@ import {
   NAMESPACES,
   RPC_ERROR_CODES,
   type Scope,
+  type ShellProviderMethod,
   TAILNET_SCOPES,
 } from "@vibefield/contracts";
 import { type WebSocket, WebSocketServer } from "ws";
 import { RpcCallError } from "./native-link";
+import { ShellProviderBroker, type ShellProviderTransport } from "./shell-provider";
 
 // ProductAPI — the fabric's control binding (design-02 §3.3, D27): loopback WS
 // :9410, JSON text frames, hello-gated with scoped bearer tokens, per-method
@@ -96,9 +98,13 @@ export type DeviceSubscriptionForwarder = (
 
 /** The slice of TokenService the API needs (keeps the dependency one-way). */
 export interface TokenServiceLike {
-  verify(
-    token: string,
-  ): { tokenId: string; scopes: Scope[]; label: string; pluginId?: string } | null;
+  verify(token: string): {
+    tokenId: string;
+    scopes: Scope[];
+    label: string;
+    pluginId?: string;
+    shellMain?: true;
+  } | null;
 }
 
 /** P4 — the dynamic-method router (ServiceRegistry): any "x."-prefixed method
@@ -129,6 +135,8 @@ interface ConnState {
   tailnetNodeId: string | null;
   /** live subscriptions on this connection: subId → dispose */
   subs: Map<string, () => void>;
+  abortController: AbortController;
+  shellTransport: ShellProviderTransport;
 }
 
 export class ProductApi extends EventEmitter {
@@ -140,6 +148,7 @@ export class ProductApi extends EventEmitter {
   private forwarder: DeviceForwarder | null = null;
   private subForwarder: DeviceSubscriptionForwarder | null = null;
   private dynamicRouter: DynamicRouterLike | null = null;
+  private readonly shellProvider = new ShellProviderBroker();
   /** live authed connections — the §15.4 revocation path closes by principal */
   private readonly liveConns = new Set<{ ws: WebSocket; state: ConnState }>();
 
@@ -165,7 +174,10 @@ export class ProductApi extends EventEmitter {
     let dropped = 0;
     for (const conn of [...this.liveConns]) {
       const principal = conn.state.ctx?.principal;
-      if (principal?.kind === "local-token" && principal.tokenId === tokenId) {
+      if (
+        (principal?.kind === "local-token" || principal?.kind === "shell-main") &&
+        principal.tokenId === tokenId
+      ) {
         conn.ws.terminate();
         this.liveConns.delete(conn);
         dropped += 1;
@@ -177,6 +189,14 @@ export class ProductApi extends EventEmitter {
   /** P4 — arm the x.* dynamic-method path (the ServiceRegistry). */
   setDynamicRouter(router: DynamicRouterLike): void {
     this.dynamicRouter = router;
+  }
+
+  callShellProvider(
+    ctx: CallerContext,
+    method: ShellProviderMethod,
+    params: unknown,
+  ): Promise<unknown> {
+    return this.shellProvider.call(ctx, method, params);
   }
 
   /** The dynamic execution tail: the router owns gating and validation; this
@@ -310,6 +330,11 @@ export class ProductApi extends EventEmitter {
       ws.close(1008, "unauthorized");
       return;
     }
+    const identity = {};
+    const shellTransport: ShellProviderTransport = {
+      identity,
+      notify: (method, params) => this.sendBounded(ws, { jsonrpc: "2.0", method, params }),
+    };
     const state: ConnState = {
       authed: false,
       ctx: null,
@@ -317,6 +342,8 @@ export class ProductApi extends EventEmitter {
       tailnetLogin: door?.login ?? null,
       tailnetNodeId: door?.nodeId ?? null,
       subs: new Map(),
+      abortController: new AbortController(),
+      shellTransport,
     };
     const conn = { ws, state };
     this.liveConns.add(conn);
@@ -325,6 +352,8 @@ export class ProductApi extends EventEmitter {
     });
     ws.on("close", () => {
       this.liveConns.delete(conn);
+      state.abortController.abort();
+      this.shellProvider.withdraw(state.shellTransport);
       for (const dispose of state.subs.values()) dispose();
       state.subs.clear();
     });
@@ -410,10 +439,15 @@ export class ProductApi extends EventEmitter {
           principal:
             grant.pluginId !== undefined
               ? { kind: "plugin", id: grant.pluginId, scopes: grant.scopes }
-              : { kind: "local-token", tokenId: grant.tokenId, scopes: grant.scopes },
+              : grant.shellMain === true &&
+                  parsed.data.clientKind === "shell-main" &&
+                  state.tailnetLogin === null
+                ? { kind: "shell-main", tokenId: grant.tokenId, scopes: grant.scopes }
+                : { kind: "local-token", tokenId: grant.tokenId, scopes: grant.scopes },
           transport: state.tailnetLogin !== null ? "ws-tailnet" : "ws-loopback",
           receivedAt: Date.now(),
           clientKind: parsed.data.clientKind, // §11.2 kind gate reads it (restrict-only)
+          signal: state.abortController.signal,
         };
       } else if (state.tailnetLogin !== null) {
         // the sidecar-proxied door: identity is the WhoIs-verified login; the
@@ -444,6 +478,7 @@ export class ProductApi extends EventEmitter {
             : { kind: "tailnet", login: state.tailnetLogin },
           transport: "ws-tailnet",
           receivedAt: Date.now(),
+          signal: state.abortController.signal,
         };
       } else {
         reply(this.err(id, "UNAUTHORIZED", "invalid token", false));
@@ -464,6 +499,26 @@ export class ProductApi extends EventEmitter {
 
     if (!state.authed || !state.ctx) {
       reply(this.err(id, "UNAUTHORIZED", "hello required first", false));
+      return;
+    }
+
+    // AH-3 — these two lifecycle calls bind to this exact transport. They are
+    // intercepted before the ordinary handler map because a CallerContext
+    // alone intentionally carries no writable connection handle.
+    if (method === "shell.provider.register" || method === "shell.provider.resolve") {
+      try {
+        const result =
+          method === "shell.provider.register"
+            ? this.shellProvider.register(state.ctx, state.shellTransport, params)
+            : this.shellProvider.resolve(state.ctx, state.shellTransport, params);
+        reply({ jsonrpc: "2.0", id, result });
+      } catch (e) {
+        if (e instanceof RpcCallError) {
+          reply(this.err(id, e.kind as ErrorKind, e.message, e.retryable, e.details));
+        } else {
+          reply(this.err(id, "INTERNAL", "shell provider lifecycle failed", false));
+        }
+      }
       return;
     }
 
@@ -673,6 +728,7 @@ export class ProductApi extends EventEmitter {
   }
 
   close(): void {
+    this.shellProvider.dispose();
     for (const client of this.wss?.clients ?? []) client.terminate();
     this.wss?.close();
   }

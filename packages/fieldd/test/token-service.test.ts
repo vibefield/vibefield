@@ -25,4 +25,17 @@ describe("TokenService", () => {
     const svc = new TokenService();
     expect(svc.verify("tok_deadbeef")).toBeNull();
   });
+
+  it("preserves one non-forgeable shell binding and refuses ambiguous bindings", () => {
+    const svc = new TokenService();
+    const shell = svc.mint(["tokens.mint"], "shell", { shellMain: true });
+    expect(shell.shellMain).toBe(true);
+    expect(svc.verify(shell.token)?.shellMain).toBe(true);
+    expect(() =>
+      svc.mint([], "ambiguous", {
+        pluginId: "vibefield.browser",
+        shellMain: true,
+      }),
+    ).toThrow(/both plugin-bound and shell-bound/);
+  });
 });

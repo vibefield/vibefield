@@ -22,7 +22,7 @@ async function root(): Promise<string> {
 function shellContext(tokenId = "tk_shell_safe"): CallerContext {
   return {
     principal: {
-      kind: "local-token",
+      kind: "shell-main",
       tokenId,
       scopes: ["audit.append", "plugins.manage"],
     },
@@ -125,7 +125,15 @@ describe("LOG-L6 append-only audit ledger", () => {
     const dataDir = await root();
     const service = new AuditService({ dataDir, bootId: "fieldd-authority-test" });
     await service.start();
-    const renderer = { ...shellContext(), clientKind: "renderer" as const };
+    const renderer: CallerContext = {
+      ...shellContext(),
+      principal: {
+        kind: "local-token",
+        tokenId: "tk_renderer_safe",
+        scopes: ["audit.append"],
+      },
+      clientKind: "renderer",
+    };
     expect(() =>
       service.appendFromCaller(renderer, {
         action: "support.bundle.export",

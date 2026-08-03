@@ -140,6 +140,7 @@ export type Unsubscribe = z.infer<typeof Unsubscribe>;
 // ---- CallerContext (P6 — server-side ONLY; identity is transport-derived, never on the wire) ----
 export type Principal =
   | { kind: "local-token"; tokenId: string; scopes: string[] }
+  | { kind: "shell-main"; tokenId: string; scopes: string[] }
   // deviceName/tailscaleId optional (C3): the sidecar proxy injects only
   // login/name/pic — absent transport facts stay absent, never empty-string
   // (node-id header injection is an upstream truffle petition).
@@ -164,4 +165,7 @@ export interface CallerContext {
    * gate reads it; a CLAIM, so it may only ever RESTRICT, never grant). Absent
    * on tailnet/peer principals — those doors never carry local client kinds. */
   clientKind?: ClientKind;
+  /** Server-side call lifetime. ProductAPI aborts it when the owning transport
+   * closes; providers use it only for best-effort cancellation. */
+  signal?: AbortSignal;
 }

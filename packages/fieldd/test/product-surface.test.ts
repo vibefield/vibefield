@@ -132,7 +132,7 @@ describe("system.mintWindowToken", () => {
   it("refuses escalation beyond the caller's own grant and unknown scopes", async () => {
     const { daemon } = await setup();
     // a caller that can mint but holds nothing else
-    const narrow = daemon.tokens.mint(["tokens.mint"], "narrow");
+    const narrow = daemon.tokens.mint(["tokens.mint"], "narrow", { shellMain: true });
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, narrow.token, "shell-main");
 
@@ -194,6 +194,14 @@ describe("system.mintWindowToken", () => {
 
     const denied = await renderer.callErr("system.revokeStaleWindowTokens", {});
     expect(denied.data?.kind).toBe("FORBIDDEN_SCOPE");
+
+    const claimedShell = await openRpc(daemon.controlPort);
+    await helloAs(claimedShell, narrow.token, "shell-main");
+    const claimed = await claimedShell.callErr("system.mintWindowToken", {
+      scopes: [],
+      label: "forged-shell-kind",
+    });
+    expect(claimed.data?.kind).toBe("FORBIDDEN_SCOPE");
   });
 });
 

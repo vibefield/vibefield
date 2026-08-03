@@ -217,7 +217,15 @@ export type CrashArtifactViewedV1 = z.infer<typeof CrashArtifactViewedV1>;
 
 export const AuditPrincipalV1 = z
   .object({
-    kind: z.enum(["local-token", "tailnet", "mcp-agent", "peer-fieldd", "shell-main", "system"]),
+    kind: z.enum([
+      "local-token",
+      "tailnet",
+      "mcp-agent",
+      "peer-fieldd",
+      "plugin",
+      "shell-main",
+      "system",
+    ]),
     id: LogBoundedIdentityV1.optional(),
     label: z.string().max(256).optional(),
   })

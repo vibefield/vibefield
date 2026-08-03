@@ -4,10 +4,10 @@ import type { PluginProductClient } from "@vibefield/plugin-sdk";
 
 // P3b — plugin-bound product clients (§11.2): every plugin call rides its OWN
 // connection whose bearer token is a short-lived, plugin-scoped lease minted
-// by plugins.openRendererSession. fieldd derives {kind:"local-token"} scoped
-// to the plugin's grant — attribution AND enforcement, not the window's
-// shared principal. The credential lives inside this module's closures; it is
-// never a context property and never persisted (§11.2).
+// by plugins.openRendererSession. fieldd derives {kind:"plugin"} from the
+// lease's plugin binding — attribution AND enforcement, never renderer claims
+// or the window's shared principal. The credential lives inside this module's
+// closures; it is never a context property and never persisted (§11.2).
 //
 // The backend (the window's own client) arrives from FieldView once the spine
 // connection exists; before that — and whenever fieldd is away — plugin calls

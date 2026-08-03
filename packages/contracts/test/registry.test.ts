@@ -86,4 +86,16 @@ describe("logging registries (LOG-43/LOG-44)", () => {
       expect(method.locality).toBe("sync");
     }
   });
+
+  it("declares the exact AH-3 static shell provider surface", () => {
+    const methods = METHODS.filter((method) => method.method.startsWith("shell."));
+    expect(methods.map((method) => method.method)).toEqual([
+      "shell.provider.register",
+      "shell.provider.resolve",
+      "shell.dialog.pickFolder",
+      "shell.openExternal",
+    ]);
+    expect(methods.map(({ scope }) => scope)).toEqual([null, null, "shell.dialog", "shell.open"]);
+    expect(methods.every(({ locality }) => locality === "local")).toBe(true);
+  });
 });

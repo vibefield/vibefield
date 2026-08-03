@@ -11,6 +11,7 @@ import {
   WireTo,
 } from "@vibecook/ice";
 import type { PluginManifestV1 } from "@vibefield/contracts";
+import { browserManifest, browserRenderer } from "@vibefield/plugin-browser";
 import { fieldToolsManifest, fieldToolsRenderer } from "@vibefield/plugin-field-tools";
 import { noteManifest, noteRenderer } from "@vibefield/plugin-note";
 import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
@@ -68,6 +69,7 @@ function registerCanonical(
  * registry state is the FACE (live, faces.tsx) and the tray/seed surfaces.
  * The staged import-map loader (§19.2) later replaces the static list. */
 const BUNDLED: Array<[PluginManifestV1, RendererPluginModule]> = [
+  [browserManifest, browserRenderer],
   [noteManifest, noteRenderer],
   [fieldToolsManifest, fieldToolsRenderer],
   [widgetlabManifest, widgetlabRenderer],

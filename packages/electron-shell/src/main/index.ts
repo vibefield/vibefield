@@ -58,6 +58,7 @@ import {
   installWebContentsBackstop,
 } from "./security";
 import { buildCsp } from "./security-policy";
+import { RecoveringShellProvider } from "./shell-provider";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { TerminalBackendRegistry } from "./terminal-backend";
 import { TrayController } from "./tray-controller";
@@ -465,6 +466,16 @@ async function main(
     },
   });
   shellDisposers.add(() => fielddObservers.dispose());
+  const shellProvider = new RecoveringShellProvider(
+    fielddHandles,
+    {
+      parentWindow: () => BrowserWindow.getFocusedWindow() ?? registry.primary(),
+      showOpenDialog: (parent, options) => dialog.showOpenDialog(parent, options),
+      openExternal: (url) => shell.openExternal(url),
+    },
+    logger.child({ component: "shell.provider" }),
+  );
+  shellDisposers.add(() => shellProvider.dispose());
 
   // ensure() starts NOW; the window never waits for it (ESR-8 / design-03
   // §4.3 v0.3 — the splash is the honest face while the daemon comes up).

@@ -71,7 +71,12 @@ export function activateRenderer(
   const declaredSurfaces = new Map(
     (manifest.contributes?.surfaces ?? []).map((s) => [
       s.id,
-      { slot: s.slot, order: s.order ?? 0 },
+      {
+        slot: s.slot,
+        title: s.title,
+        ...(s.icon !== undefined ? { icon: s.icon } : {}),
+        order: s.order ?? 0,
+      },
     ]),
   );
   // §12.7 STOPGAP gate: mirror the storage.self pattern — key on the REQUESTED
@@ -147,6 +152,8 @@ export function activateRenderer(
                 decl.slot,
                 component,
                 decl.order,
+                decl.title,
+                decl.icon,
               );
               resources.push(disp);
               return disp;

@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { SemverString } from "./envelope";
+import { ClientKind, SemverString } from "./envelope";
+import { ErrorKind } from "./errors";
+import { PluginId } from "./plugins";
 
 // Shell-boundary contracts (ESR spec §6.1): the shapes that cross the Electron
 // seam — the daemon's on-disk discovery descriptor and the closed contextBridge
@@ -157,3 +159,163 @@ export const AppPreferenceSetParams = z
   })
   .passthrough();
 export type AppPreferenceSetParams = z.infer<typeof AppPreferenceSetParams>;
+
+// AH-3 — the static Electron-main provider. These are ProductAPI contracts,
+// not renderer IPC: main registers on its existing authenticated shell link,
+// receives bounded notifications, and resolves them on the same connection.
+
+export const SHELL_PROVIDER_METHODS = ["shell.dialog.pickFolder", "shell.openExternal"] as const;
+
+export const ShellProviderMethod = z.enum(SHELL_PROVIDER_METHODS);
+export type ShellProviderMethod = z.infer<typeof ShellProviderMethod>;
+
+export const ShellDialogPickFolderParams = z
+  .object({ purpose: z.literal("artifact.publish") })
+  .passthrough();
+export type ShellDialogPickFolderParams = z.infer<typeof ShellDialogPickFolderParams>;
+
+const ShellAbsoluteFolderPath = z
+  .string()
+  .min(1)
+  .max(4096)
+  .refine(
+    (path) =>
+      !path.includes("\0") &&
+      (path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || /^\\\\[^\\/]+[\\/]/.test(path)),
+    "expected an absolute desktop folder path",
+  );
+
+export const ShellDialogPickFolderResult = z.union([
+  z.object({ canceled: z.literal(true) }).passthrough(),
+  z.object({ canceled: z.literal(false), path: ShellAbsoluteFolderPath }).passthrough(),
+]);
+export type ShellDialogPickFolderResult = z.infer<typeof ShellDialogPickFolderResult>;
+
+export const ShellExternalUrl = z
+  .string()
+  .min(1)
+  .max(2048)
+  .superRefine((raw, ctx) => {
+    if (
+      raw !== raw.trim() ||
+      !raw.startsWith("https://") ||
+      raw.includes("\\") ||
+      Array.from(raw).some((character) => {
+        const codePoint = character.codePointAt(0);
+        return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f);
+      })
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "expected an unambiguous absolute HTTPS URL",
+      });
+      return;
+    }
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "expected an absolute HTTPS URL" });
+      return;
+    }
+    if (url.protocol !== "https:") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "only HTTPS URLs may open externally" });
+    }
+    if (url.username !== "" || url.password !== "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "URL credentials are forbidden" });
+    }
+  });
+export type ShellExternalUrl = z.infer<typeof ShellExternalUrl>;
+
+export const ShellOpenExternalParams = z.object({ url: ShellExternalUrl }).passthrough();
+export type ShellOpenExternalParams = z.infer<typeof ShellOpenExternalParams>;
+
+export const ShellOpenExternalResult = z.object({ opened: z.literal(true) }).passthrough();
+export type ShellOpenExternalResult = z.infer<typeof ShellOpenExternalResult>;
+
+export const ShellProviderRegisterParams = z
+  .object({ methods: z.array(ShellProviderMethod).min(1).max(SHELL_PROVIDER_METHODS.length) })
+  .passthrough()
+  .superRefine((value, ctx) => {
+    if (new Set(value.methods).size !== value.methods.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["methods"], message: "duplicate method" });
+    }
+  });
+export type ShellProviderRegisterParams = z.infer<typeof ShellProviderRegisterParams>;
+
+export const ShellProviderRegisterResult = z
+  .object({
+    registered: z
+      .array(ShellProviderMethod)
+      .length(SHELL_PROVIDER_METHODS.length)
+      .superRefine((methods, ctx) => {
+        const registered = new Set(methods);
+        if (
+          registered.size !== SHELL_PROVIDER_METHODS.length ||
+          !SHELL_PROVIDER_METHODS.every((method) => registered.has(method))
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "expected the exact enabled shell provider method set",
+          });
+        }
+      }),
+  })
+  .passthrough();
+export type ShellProviderRegisterResult = z.infer<typeof ShellProviderRegisterResult>;
+
+export const ShellProviderCaller = z
+  .object({
+    kind: z.enum(["local-token", "shell-main", "tailnet", "mcp-agent", "peer-fieldd", "plugin"]),
+    pluginId: PluginId.optional(),
+    clientKind: ClientKind.optional(),
+  })
+  .passthrough();
+export type ShellProviderCaller = z.infer<typeof ShellProviderCaller>;
+
+export const ShellProviderCallParams = z
+  .object({
+    callId: z.string().regex(/^shell-[A-Za-z0-9_-]{16,64}$/),
+    method: ShellProviderMethod,
+    params: z.unknown(),
+    caller: ShellProviderCaller,
+    deadlineAt: z.number().int().nonnegative().safe(),
+  })
+  .passthrough();
+export type ShellProviderCallParams = z.infer<typeof ShellProviderCallParams>;
+
+export const ShellProviderError = z
+  .object({
+    kind: ErrorKind,
+    message: z.string().min(1).max(256),
+    retryable: z.boolean().default(false),
+  })
+  .passthrough();
+export type ShellProviderError = z.infer<typeof ShellProviderError>;
+
+export const ShellProviderOutcome = z.union([
+  z.object({ error: ShellProviderError, result: z.never().optional() }).passthrough(),
+  z
+    .object({
+      result: z.unknown().refine((value) => value !== undefined, "result is required"),
+      error: z.never().optional(),
+    })
+    .passthrough(),
+]);
+export type ShellProviderOutcome = z.infer<typeof ShellProviderOutcome>;
+
+export const ShellProviderResolveParams = z
+  .object({
+    callId: z.string().regex(/^shell-[A-Za-z0-9_-]{16,64}$/),
+    outcome: ShellProviderOutcome,
+  })
+  .passthrough();
+export type ShellProviderResolveParams = z.infer<typeof ShellProviderResolveParams>;
+
+export const ShellProviderResolveResult = z.object({ accepted: z.boolean() }).passthrough();
+export type ShellProviderResolveResult = z.infer<typeof ShellProviderResolveResult>;
+
+export const ShellProviderCancelParams = z
+  .object({ callId: z.string().regex(/^shell-[A-Za-z0-9_-]{16,64}$/) })
+  .passthrough();
+export type ShellProviderCancelParams = z.infer<typeof ShellProviderCancelParams>;

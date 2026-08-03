@@ -44,6 +44,10 @@ import {
   SettingsResetParams,
   SettingsSetParams,
   SettingsSubscribeParams,
+  ShellDialogPickFolderParams,
+  type ShellDialogPickFolderResult,
+  ShellOpenExternalParams,
+  type ShellOpenExternalResult,
   STORES,
   type TerminalConfigDocument,
   TerminalConfigWriteParams,
@@ -591,6 +595,55 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnosticsService.register(api);
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));
 
+    api.register("shell.dialog.pickFolder", async (ctx, params) => {
+      const parsed = ShellDialogPickFolderParams.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { purpose: artifact.publish }",
+          false,
+        );
+      }
+      return await audit.required(
+        ctx,
+        {
+          action: "shell.dialog.pick_folder",
+          target: { kind: "shell-operation", id: "artifact-folder-picker" },
+        },
+        async (): Promise<ShellDialogPickFolderResult> =>
+          (await api.callShellProvider(
+            ctx,
+            "shell.dialog.pickFolder",
+            parsed.data,
+          )) as ShellDialogPickFolderResult,
+        (result) => ({ outcome: result.canceled ? "cancelled" : "succeeded" }),
+      );
+    });
+    api.register("shell.openExternal", async (ctx, params) => {
+      const parsed = ShellOpenExternalParams.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected a bounded credential-free HTTPS URL",
+          false,
+        );
+      }
+      return await audit.required(
+        ctx,
+        {
+          action: "shell.open.external",
+          target: { kind: "shell-operation", id: "system-browser" },
+        },
+        async (): Promise<ShellOpenExternalResult> =>
+          (await api.callShellProvider(
+            ctx,
+            "shell.openExternal",
+            parsed.data,
+          )) as ShellOpenExternalResult,
+        () => ({ outcome: "succeeded" }),
+      );
+    });
+
     api.register("system.health", () => health());
     api.register("system.capabilities", () => ({
       methods: METHODS.filter((m) => m.surface === "product").map((m) => m.method),
@@ -603,9 +656,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const windowTokenIds = new Set<string>();
     const requireShellWindowTokenAuthority = (ctx: {
       transport: string;
-      clientKind?: string;
+      principal: { kind: string };
     }): void => {
-      if (ctx.transport !== "ws-loopback" || ctx.clientKind !== "shell-main") {
+      if (ctx.transport !== "ws-loopback" || ctx.principal.kind !== "shell-main") {
         throw new RpcCallError(
           "FORBIDDEN_SCOPE",
           "window-token lifecycle methods are available only to the local shell",
@@ -1160,8 +1213,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       if (
         ctx.transport !== "ws-loopback" ||
-        ctx.principal.kind !== "local-token" ||
-        (ctx.clientKind !== "renderer" && ctx.clientKind !== "shell-main")
+        !(
+          ctx.principal.kind === "shell-main" ||
+          (ctx.principal.kind === "local-token" && ctx.clientKind === "renderer")
+        )
       )
         throw new RpcCallError(
           "FORBIDDEN_SCOPE",
@@ -1265,7 +1320,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           });
         return { pluginId: own.id, ownerPlugin: true };
       }
-      if (principal.kind === "local-token") {
+      if (principal.kind === "local-token" || principal.kind === "shell-main") {
         const scopes = (principal as { scopes: string[] }).scopes;
         if (!scopes.includes("plugins.manage"))
           throw new RpcCallError("FORBIDDEN_SCOPE", "requires plugins.manage", false);
@@ -1456,8 +1511,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       clientKind?: string;
     }): void => {
       if (
-        ctx.principal.kind !== "local-token" ||
-        (ctx.clientKind !== "shell-main" && ctx.clientKind !== "renderer")
+        !(
+          ctx.principal.kind === "shell-main" ||
+          (ctx.principal.kind === "local-token" && ctx.clientKind === "renderer")
+        )
       ) {
         throw new RpcCallError(
           "FORBIDDEN_SCOPE",
@@ -1570,7 +1627,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     }): string | null => {
       if (ctx.principal.kind === "plugin") return pluginCaller(ctx, "process.spawn");
       const scopes = (ctx.principal as { scopes?: string[] }).scopes ?? [];
-      if (ctx.principal.kind === "local-token" && scopes.includes("plugins.manage")) return null;
+      if (
+        (ctx.principal.kind === "local-token" || ctx.principal.kind === "shell-main") &&
+        scopes.includes("plugins.manage")
+      )
+        return null;
       throw new RpcCallError("FORBIDDEN_SCOPE", "process views are owner or plugins.manage", false);
     };
     api.register("process.spawn", (ctx, params) => {
@@ -1604,7 +1665,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // -- endpoint adoption (PLUG-P6, §17.3) + MCP (§17.4/§22.4) --
     const manageCaller = (ctx: { principal: { kind: string; scopes?: string[] } }): void => {
       const scopes = (ctx.principal as { scopes?: string[] }).scopes ?? [];
-      if (ctx.principal.kind !== "local-token" || !scopes.includes("plugins.manage"))
+      if (
+        (ctx.principal.kind !== "local-token" && ctx.principal.kind !== "shell-main") ||
+        !scopes.includes("plugins.manage")
+      )
         throw new RpcCallError("FORBIDDEN_SCOPE", "requires a local plugins.manage caller", false);
     };
     api.register("services.registerEndpoint", (ctx, params) =>
@@ -2054,7 +2118,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         target: { kind: "token", id: shellTokenId },
         attrs: { scopeCount: SCOPES.length },
       },
-      () => tokens.mint([...SCOPES], "shell", { tokenId: shellTokenId }),
+      () =>
+        tokens.mint([...SCOPES], "shell", {
+          tokenId: shellTokenId,
+          shellMain: true,
+        }),
       (grant) => ({
         attrs: {
           grantId: grant.tokenId,

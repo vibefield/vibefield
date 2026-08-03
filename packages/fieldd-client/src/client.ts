@@ -100,6 +100,7 @@ export class FielddClient {
   private attempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private statusListeners = new Set<() => void>();
+  private notificationListeners = new Map<string, Set<(params: unknown) => void>>();
   private readyWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
   private closedByUser = false;
 
@@ -140,6 +141,22 @@ export class FielddClient {
   onStatusChange(fn: () => void): () => void {
     this.statusListeners.add(fn);
     return () => this.statusListeners.delete(fn);
+  }
+
+  /** Server-originated control notifications that are not subscriptions.
+   * Used by Electron main's static shell provider; listeners survive automatic
+   * reconnects on this client and are removed explicitly or on close(). */
+  onNotification(method: string, fn: (params: unknown) => void): () => void {
+    let listeners = this.notificationListeners.get(method);
+    if (listeners === undefined) {
+      listeners = new Set();
+      this.notificationListeners.set(method, listeners);
+    }
+    listeners.add(fn);
+    return () => {
+      listeners?.delete(fn);
+      if (listeners?.size === 0) this.notificationListeners.delete(method);
+    };
   }
 
   async request(method: string, params?: unknown): Promise<unknown> {
@@ -183,6 +200,7 @@ export class FielddClient {
     this.ws = null;
     ws?.close();
     this.failPending();
+    this.notificationListeners.clear();
     this.setStatus("closed");
     this.flushReadyWaiters(new FielddRpcError("UNAVAILABLE", "client closed"));
   }
@@ -287,6 +305,16 @@ export class FielddClient {
       const key = this.subRoutes.get(params.subId);
       const sub = key === undefined ? undefined : this.subs.get(key);
       sub?.onEvent(params.payload, method.endsWith(".snapshot") ? "snapshot" : "delta");
+      return;
+    }
+    if (method !== undefined) {
+      for (const listener of [...(this.notificationListeners.get(method) ?? [])]) {
+        try {
+          listener(msg["params"]);
+        } catch {
+          // One consumer cannot break response/subscription routing for peers.
+        }
+      }
     }
   }
 

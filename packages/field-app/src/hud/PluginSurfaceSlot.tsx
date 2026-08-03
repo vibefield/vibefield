@@ -4,6 +4,7 @@ import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store"
 import {
   getSurfacesSnapshot,
   type LiveSurfaceSlot,
+  type SurfaceEntry,
   subscribeSurfaces,
 } from "../plugin-host/surface-registry";
 
@@ -53,33 +54,52 @@ class SurfaceErrorBoundary extends Component<
   }
 }
 
-/** Render every surface bound to `slot` for ENABLED plugins (P5: the fieldd
- * snapshot decides enablement; a null snapshot renders all — the honest
- * degraded default, matching faces.tsx/the tray). Empty → null. */
-export function PluginSurfaceHost({
-  slot,
-  windowId,
-}: {
-  slot: LiveSurfaceSlot;
-  windowId: string;
-}): ReactElement | null {
+/** The enabled subset is shared by ordinary fixed hosts and the side-panel
+ * controller, whose toggle must disappear on disable/unbind in the same
+ * render as its content. */
+export function useVisiblePluginSurfaces(slot: LiveSurfaceSlot): readonly SurfaceEntry[] {
   const surfaces = useSyncExternalStore(subscribeSurfaces, getSurfacesSnapshot);
   const snapshot = usePluginRegistrySnapshot();
   const disabled =
     snapshot === null ? null : new Set(snapshot.plugins.filter((p) => !p.enabled).map((p) => p.id));
-
-  const shown = surfaces.filter(
-    (s) => s.slot === slot && (disabled === null || !disabled.has(s.pluginId)),
+  return surfaces.filter(
+    (surface) => surface.slot === slot && (disabled === null || !disabled.has(surface.pluginId)),
   );
+}
+
+export function PluginSurfaceHost({
+  slot,
+  windowId,
+  requestClose,
+  surfaceId,
+}: {
+  slot: LiveSurfaceSlot;
+  windowId: string;
+  requestClose?: () => void;
+  surfaceId?: string;
+}): ReactElement | null {
+  const visible = useVisiblePluginSurfaces(slot);
+  const shown =
+    surfaceId === undefined
+      ? visible
+      : visible.filter((surface) => surface.surfaceId === surfaceId);
   if (shown.length === 0) return null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, pointerEvents: "auto" }}>
       {shown.map((s) => {
         const Surface = s.component;
+        const props =
+          slot === "hud.side-panel"
+            ? ({
+                slot,
+                windowId,
+                requestClose: requestClose ?? (() => undefined),
+              } as const)
+            : ({ slot, windowId } as const);
         return (
-          <SurfaceErrorBoundary key={s.surfaceId} surfaceId={s.surfaceId}>
-            <Surface slot={slot} windowId={windowId} />
+          <SurfaceErrorBoundary key={s.seq} surfaceId={s.surfaceId}>
+            <Surface {...props} />
           </SurfaceErrorBoundary>
         );
       })}

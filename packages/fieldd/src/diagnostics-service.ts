@@ -436,7 +436,9 @@ export class DiagnosticsService {
       expiresAt,
       createdBy: {
         kind: "shell-main",
-        ...(principal.kind === "local-token" ? { id: principal.tokenId } : {}),
+        ...(principal.kind === "local-token" || principal.kind === "shell-main"
+          ? { id: principal.tokenId }
+          : {}),
       },
     });
     if (owner === "native") {
@@ -828,7 +830,10 @@ export class DiagnosticsService {
   }
 
   private assertLocalDiagnosticCaller(ctx: CallerContext): void {
-    if (ctx.transport !== "ws-loopback" || ctx.principal.kind !== "local-token") {
+    if (
+      ctx.transport !== "ws-loopback" ||
+      (ctx.principal.kind !== "local-token" && ctx.principal.kind !== "shell-main")
+    ) {
       throw new RpcCallError(
         "FORBIDDEN_SCOPE",
         "diagnostics are available only to a trusted local shell token",

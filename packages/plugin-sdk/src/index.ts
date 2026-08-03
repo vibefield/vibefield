@@ -358,12 +358,22 @@ export interface RendererCommandAPI {
 }
 
 /** §8.4/§13.2 — the props the spine supplies to a bound surface component.
- * Typed loosely on purpose: the spine owns slot layout/props/subscriptions, and
- * a component cannot move itself to another slot or escape its boundary. */
-export interface PluginSurfaceProps {
-  slot: string;
-  windowId: string;
-}
+ * The slot is manifest truth. Only a side panel may ask its host stage to
+ * close; open state and the top-right toggle remain spine truth. */
+export type PluginSurfaceProps =
+  | {
+      slot: "hud.attention" | "hud.panel";
+      windowId: string;
+    }
+  | {
+      slot: "hud.side-panel";
+      windowId: string;
+      requestClose(): void;
+    }
+  | {
+      slot: "godview.row" | "godview.lens";
+      windowId: string;
+    };
 
 /** §13.2 — bind a React component to a surface THIS plugin's manifest declares.
  * Undeclared ids are refused; forward-declared-but-not-yet-live slots

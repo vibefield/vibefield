@@ -12,6 +12,13 @@ import {
   GodviewState,
   ProductInfo,
   ShellCommandRequest,
+  ShellDialogPickFolderParams,
+  ShellDialogPickFolderResult,
+  ShellOpenExternalParams,
+  ShellProviderCallParams,
+  ShellProviderOutcome,
+  ShellProviderRegisterParams,
+  ShellProviderRegisterResult,
   WindowConnection,
 } from "../src/shell";
 
@@ -283,5 +290,91 @@ describe("tray shell commands and app preferences", () => {
         value: "yes",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("AH-3 static shell provider", () => {
+  it("pins the folder picker to its one purpose and bounded result union", () => {
+    expect(ShellDialogPickFolderParams.parse({ purpose: "artifact.publish" })).toEqual({
+      purpose: "artifact.publish",
+    });
+    expect(ShellDialogPickFolderParams.safeParse({ purpose: "browse-anywhere" }).success).toBe(
+      false,
+    );
+    expect(ShellDialogPickFolderResult.parse({ canceled: true })).toEqual({ canceled: true });
+    expect(
+      ShellDialogPickFolderResult.parse({ canceled: false, path: "/Users/me/Sites/demo" }),
+    ).toEqual({ canceled: false, path: "/Users/me/Sites/demo" });
+    expect(ShellDialogPickFolderResult.parse({ canceled: false, path: "C:\\Sites\\demo" })).toEqual(
+      { canceled: false, path: "C:\\Sites\\demo" },
+    );
+    expect(ShellDialogPickFolderResult.safeParse({ canceled: false }).success).toBe(false);
+    expect(
+      ShellDialogPickFolderResult.safeParse({ canceled: false, path: "relative/demo" }).success,
+    ).toBe(false);
+  });
+
+  it("accepts only bounded credential-free HTTPS external URLs", () => {
+    expect(ShellOpenExternalParams.parse({ url: "https://device.example.ts.net:12000/" }).url).toBe(
+      "https://device.example.ts.net:12000/",
+    );
+    for (const url of [
+      "http://device.example.ts.net:12000/",
+      "https://user:pass@device.example.ts.net:12000/",
+      " https://device.example.ts.net:12000/",
+      "HTTPS://device.example.ts.net:12000/",
+      "https://device.example.ts.net\\@evil.example/",
+      "not a url",
+      `https://example.com/${"x".repeat(2048)}`,
+    ]) {
+      expect(ShellOpenExternalParams.safeParse({ url }).success, url).toBe(false);
+    }
+  });
+
+  it("requires a unique registered static method set and exactly one outcome arm", () => {
+    expect(
+      ShellProviderRegisterParams.safeParse({
+        methods: ["shell.dialog.pickFolder", "shell.openExternal"],
+      }).success,
+    ).toBe(true);
+    expect(
+      ShellProviderRegisterParams.safeParse({
+        methods: ["shell.openExternal", "shell.openExternal"],
+      }).success,
+    ).toBe(false);
+    expect(
+      ShellProviderRegisterResult.safeParse({
+        registered: ["shell.dialog.pickFolder", "shell.openExternal"],
+      }).success,
+    ).toBe(true);
+    expect(
+      ShellProviderRegisterResult.safeParse({
+        registered: ["shell.openExternal", "shell.openExternal"],
+      }).success,
+    ).toBe(false);
+    expect(
+      ShellProviderRegisterResult.safeParse({ registered: ["shell.openExternal"] }).success,
+    ).toBe(false);
+    expect(ShellProviderOutcome.safeParse({ result: { opened: true } }).success).toBe(true);
+    expect(ShellProviderOutcome.safeParse({}).success).toBe(false);
+    expect(ShellProviderOutcome.safeParse({ result: undefined }).success).toBe(false);
+    expect(
+      ShellProviderOutcome.safeParse({
+        result: { opened: true },
+        error: { kind: "INTERNAL", message: "no", retryable: false },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("bounds and validates server-originated call notifications", () => {
+    expect(
+      ShellProviderCallParams.parse({
+        callId: "shell-abcdefghijklmnop",
+        method: "shell.openExternal",
+        params: { url: "https://device.example.ts.net:12000/" },
+        caller: { kind: "plugin", pluginId: "vibefield.browser", clientKind: "renderer" },
+        deadlineAt: Date.now() + 5_000,
+      }).caller,
+    ).toMatchObject({ kind: "plugin", pluginId: "vibefield.browser" });
   });
 });

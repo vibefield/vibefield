@@ -115,6 +115,69 @@ describe("FielddClient", () => {
     expect(await client.request("system.health")).toEqual({ ok: true });
   });
 
+  it("routes static shell-provider notifications and keeps listeners across reconnect", async () => {
+    const tokens = new TokenService();
+    const shellGrant = tokens.mint(["shell.open"], "shell", { shellMain: true });
+    const pluginGrant = tokens.mint(["shell.open"], "browser", {
+      pluginId: "vibefield.browser",
+    });
+    const api = new ProductApi({ port: 0, tokens });
+    api.register("shell.openExternal", (ctx, params) =>
+      api.callShellProvider(ctx, "shell.openExternal", params),
+    );
+    const port = await api.listen();
+    cleanup.push(() => api.close());
+
+    const provider = new FielddClient({
+      url: `ws://127.0.0.1:${port}`,
+      token: shellGrant.token,
+      clientKind: "shell-main",
+    });
+    const caller = new FielddClient({
+      url: `ws://127.0.0.1:${port}`,
+      token: pluginGrant.token,
+      clientKind: "renderer",
+    });
+    cleanup.push(() => provider.close());
+    cleanup.push(() => caller.close());
+    let notifications = 0;
+    provider.onNotification("shell.provider.call", (raw) => {
+      notifications += 1;
+      const callId = (raw as { callId: string }).callId;
+      void provider.request("shell.provider.resolve", {
+        callId,
+        outcome: { result: { opened: true } },
+      });
+    });
+    await provider.ready();
+    await caller.ready();
+    await provider.request("shell.provider.register", {
+      methods: ["shell.dialog.pickFolder", "shell.openExternal"],
+    });
+    await expect(
+      caller.request("shell.openExternal", {
+        url: "https://host.example.ts.net:12000/",
+      }),
+    ).resolves.toEqual({ opened: true });
+    expect(notifications).toBe(1);
+
+    api.dropConnections();
+    await until(
+      () => provider.status === "reconnecting" || caller.status === "reconnecting",
+      2_000,
+    );
+    await until(() => provider.status === "ready" && caller.status === "ready", 6_000);
+    await provider.request("shell.provider.register", {
+      methods: ["shell.dialog.pickFolder", "shell.openExternal"],
+    });
+    await expect(
+      caller.request("shell.openExternal", {
+        url: "https://host.example.ts.net:12001/",
+      }),
+    ).resolves.toEqual({ opened: true });
+    expect(notifications).toBe(2);
+  });
+
   it("a bad token is terminal — status failed, no retry loop", async () => {
     const { daemon } = await fullStack();
     const client = clientFor(daemon.controlPort, "tok_forged");

@@ -435,7 +435,9 @@ export class ServiceRegistry extends EventEmitter {
     const cap = entry.decl.requiredCapability;
     if ((SCOPES as readonly string[]).includes(cap)) {
       const scopes =
-        ctx.principal.kind === "local-token" || ctx.principal.kind === "plugin"
+        ctx.principal.kind === "local-token" ||
+        ctx.principal.kind === "shell-main" ||
+        ctx.principal.kind === "plugin"
           ? ctx.principal.scopes
           : [];
       if (!scopes.includes(cap))
@@ -444,7 +446,7 @@ export class ServiceRegistry extends EventEmitter {
       const granted = this.opts.grantedCapabilities(ctx.principal.id) ?? [];
       if (!granted.includes(cap))
         throw new RpcCallError("FORBIDDEN_SCOPE", `requires ${cap}`, false, { required: cap });
-    } else if (ctx.principal.kind !== "local-token") {
+    } else if (ctx.principal.kind !== "local-token" && ctx.principal.kind !== "shell-main") {
       // local-token non-plugin principals pass custom-cap gates — recorded v1
       // (the user's own trusted UI is the grant authority until P6 grants UX)
       throw new RpcCallError("FORBIDDEN_SCOPE", `requires ${cap}`, false, { required: cap });

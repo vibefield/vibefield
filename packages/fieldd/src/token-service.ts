@@ -16,6 +16,9 @@ export interface TokenGrant {
   /** P4 — a plugin-bound grant: hello with it derives a {kind:"plugin"}
    * principal (D20 provenance; the plugin cannot choose its identity). */
   pluginId?: string;
+  /** Shell bootstrap binding. A hello derives shell-main only when this and
+   * clientKind:shell-main agree on the loopback door. */
+  shellMain?: true;
 }
 
 export interface TokenEvent {
@@ -29,6 +32,7 @@ export interface TokenEvent {
 export interface TokenMintOptions {
   ttlMs?: number;
   pluginId?: string;
+  shellMain?: true;
   /** A caller may reserve the safe public id so a mandatory audit attempt can
    * name it before the bearer token is generated. */
   tokenId?: string;
@@ -48,6 +52,7 @@ interface TokenRecord {
   expiresAt?: number;
   /** P4 — plugin-bound grants (renderer leases + service-entry mints) */
   pluginId?: string;
+  shellMain?: true;
 }
 
 export class TokenService {
@@ -65,6 +70,9 @@ export class TokenService {
   }
 
   mint(scopes: Scope[], label: string, opts?: TokenMintOptions): TokenGrant {
+    if (opts?.pluginId !== undefined && opts.shellMain === true) {
+      throw new Error("a token cannot be both plugin-bound and shell-bound");
+    }
     for (const s of scopes) {
       if (!(SCOPES as readonly string[]).includes(s)) throw new Error(`unknown scope: ${s}`);
     }
@@ -81,6 +89,7 @@ export class TokenService {
       createdAt: Date.now(),
       ...(expiresAt !== undefined ? { expiresAt } : {}),
       ...(opts?.pluginId !== undefined ? { pluginId: opts.pluginId } : {}),
+      ...(opts?.shellMain === true ? { shellMain: true } : {}),
     });
     this.byId.set(tokenId, token);
     this.onEvent?.({ kind: "mint", tokenId, label, scopes, at: Date.now() });
@@ -91,12 +100,17 @@ export class TokenService {
       label,
       ...(expiresAt !== undefined ? { expiresAt } : {}),
       ...(opts?.pluginId !== undefined ? { pluginId: opts.pluginId } : {}),
+      ...(opts?.shellMain === true ? { shellMain: true } : {}),
     };
   }
 
-  verify(
-    token: string,
-  ): { tokenId: string; scopes: Scope[]; label: string; pluginId?: string } | null {
+  verify(token: string): {
+    tokenId: string;
+    scopes: Scope[];
+    label: string;
+    pluginId?: string;
+    shellMain?: true;
+  } | null {
     const rec = this.byToken.get(token); // token is 192-bit random — map lookup is fine
     if (!rec) {
       this.onEvent?.({ kind: "verify-failed", at: Date.now() });
@@ -114,6 +128,7 @@ export class TokenService {
       scopes: rec.scopes,
       label: rec.label,
       ...(rec.pluginId !== undefined ? { pluginId: rec.pluginId } : {}),
+      ...(rec.shellMain === true ? { shellMain: true } : {}),
     };
   }
 

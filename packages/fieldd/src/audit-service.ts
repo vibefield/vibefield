@@ -119,11 +119,10 @@ function targetForAudit(target: AuditTargetV1): AuditTargetV1 {
 
 function actorFor(ctx: CallerContext): AuditPrincipalV1 {
   switch (ctx.principal.kind) {
+    case "shell-main":
+      return { kind: "shell-main", id: ctx.principal.tokenId };
     case "local-token":
-      return {
-        kind: ctx.clientKind === "shell-main" ? "shell-main" : "local-token",
-        id: ctx.principal.tokenId,
-      };
+      return { kind: "local-token", id: ctx.principal.tokenId };
     case "tailnet":
       return { kind: "tailnet", id: ctx.principal.login };
     case "mcp-agent":
@@ -131,7 +130,7 @@ function actorFor(ctx: CallerContext): AuditPrincipalV1 {
     case "peer-fieldd":
       return { kind: "peer-fieldd", id: ctx.principal.deviceId };
     case "plugin":
-      throw new RpcCallError("FORBIDDEN_SCOPE", "plugin principals cannot author audit records");
+      return { kind: "plugin", id: ctx.principal.id };
   }
 }
 
@@ -192,11 +191,7 @@ export class AuditService extends EventEmitter {
   }
 
   appendFromCaller(ctx: CallerContext, raw: unknown): Promise<AuditAppendResultV1> {
-    if (
-      ctx.transport !== "ws-loopback" ||
-      ctx.principal.kind !== "local-token" ||
-      ctx.clientKind !== "shell-main"
-    ) {
+    if (ctx.transport !== "ws-loopback" || ctx.principal.kind !== "shell-main") {
       throw new RpcCallError(
         "FORBIDDEN_SCOPE",
         "audit.append is available only to the authenticated local shell",
