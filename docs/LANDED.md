@@ -582,3 +582,42 @@ validation per row, so one malformed Go glob cannot reject bootstrap. Final proo
 fieldd hardening 54/54; full fieldd 361/361; contracts 162/162; field-native 114 passed with
 four explicit benchmark/real-tailnet ignores. All-target field-native Clippy, Rust formatting,
 targeted Biome, TypeScript typechecks, generated registry refresh, and diff hygiene are clean.
+
+## AH-3 — desktop artifact panel and shell-provider bridge
+
+**AH-3 DESKTOP IMPLEMENTATION LANDED (2026-08-03, `8c07bf4`; packaged-plugin discovery
+and the physical UI/native-picker closeout remain open).** The spine now owns one additive
+`hud.side-panel` stage and the outermost control in its existing top-right cluster: zoom,
+theme, then a 40px round Artifacts toggle. The fixed right-edge panel uses the established
+sheet material, radius, left-cast shadow, dark tokens, focus ring, 600ms island motion, and a
+reduced-motion branch. It stays non-modal and overlays the field without resize, recede,
+backdrop, or stage hold. Expanded-surface arbitration, Escape, focus return, plugin loss,
+hot reload, and the exit transition remain host responsibilities.
+
+The new statically bundled `vibefield.browser` renderer contribution owns the product UI behind
+public SDK doors. Its exact manifest grants are `artifact.publish`, `workspace.read`,
+`shell.dialog`, and `shell.open`. A subscription-driven one-column catalog renders bounded
+validated `ArtifactView` rows, 16:10 previews/placeholders, honest status words, exact external
+open/copy, local rename, and two-step removal. Add stays inside the panel: Proxy accepts only
+HTTP/HTTPS plus a local port; Folder invokes a native directory picker and renders only the
+basename, never a filesystem textbox or full path. Mutations are serialized and catalog truth
+is never guessed optimistically; provider loss and invalid-static-root errors stay actionable.
+
+Electron main's existing authenticated loopback `FielddClient` is now bidirectional. A
+shell-bound bootstrap token derives the `shell-main` principal only when binding, loopback, and
+client kind agree. fieldd owns one static, first-live-wins provider registry for
+`shell.dialog.pickFolder` and `shell.openExternal`, validates both sides, carries a sanitized
+transport-derived plugin caller, enforces deadlines/cancellation, withdraws on connection loss,
+and audits only safe method/outcome facts—never URL, path, or token. Main re-registers across
+reconnect, permits one parented directory picker, and opens only the contracts-validated exact
+HTTPS URL. No ProductAPI UDS, renderer relay, artifact IPC door, or renderer filesystem access
+was added.
+
+Proofs: contracts 167/167; full fieldd 369/369; FielddClient 12/12; Electron 371/371; browser
+plugin 5/5; focused host/panel 6/6; all touched TypeScript projects typecheck; the production
+renderer build and targeted Biome/diff hygiene are green (the two plugin-SDK `void` warnings are
+pre-existing). A live Electron development run confirmed provider registration, the exact
+zoom/theme/Artifacts cluster, and the 416px right-edge overlay without field reflow. WP8 still
+owns staging/signing bundled plugin manifests for packaged discovery, and James's both-theme,
+reduced-motion, native Folder picker, and real add/open visual pass remains an explicit AH-3
+closeout rather than an inferred claim. AH-4 adds preview capture; AH-5 adds the phone list.
