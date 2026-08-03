@@ -39,7 +39,7 @@ try {
 // an Arc<Node> type split or a resolver surprise three slices later. Bumping a
 // pin means editing the pin AND this table in one commit — that is the ritual.
 const PIN_EXPECTATIONS = [
-  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.11"/m, label: 'truffle-core = "=0.7.11"' },
+  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.12"/m, label: 'truffle-core = "=0.7.12"' },
   { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.8\.0"/m, label: 'ghosttea = "=0.8.0"' },
   {
     file: "pnpm-workspace.yaml",
