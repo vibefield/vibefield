@@ -18,7 +18,7 @@ const builderConfigPath = join(packagingRoot, "electron-builder.yml");
 const appMasterPath = join(iconRoot, "app-master.svg");
 const trayMasterPath = join(iconRoot, "tray-master.svg");
 const appleIconPath = join(iconRoot, "app.icon");
-const appleDockIconPath = join(iconRoot, "app-macos-1024.png");
+const appleComposerRenditionPath = join(iconRoot, "app-macos-1024.png");
 const appleFallbackIconPath = join(iconRoot, "app.icns");
 
 const APP_ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 256];
@@ -106,10 +106,17 @@ console.log(
   `icons ${checkOnly ? "current" : "generated"}: ${generated.outputs.size} files, app ${APP_RENDER_SIZES.length} conventional raster sizes, official macOS ICNS fallback, tray 3 states`,
 );
 
-function generateAssets({ appMaster, appMarkPath, trayPath, appleDockIcon, appleFallbackIcns }) {
+function generateAssets({
+  appMaster,
+  appMarkPath,
+  trayPath,
+  appleComposerRendition,
+  appleFallbackIcns,
+}) {
   const outputs = new Map();
   const pngs = new Map();
   const appImages = new Map();
+  const { developmentDockIcon } = validateAppleFallbackIcns(appleFallbackIcns);
 
   for (const size of APP_RENDER_SIZES) {
     const image = render(applicationSvg(appMaster, appMarkPath, size), size);
@@ -118,7 +125,8 @@ function generateAssets({ appMaster, appMarkPath, trayPath, appleDockIcon, apple
   }
 
   addPng("icons/app-1024.png", appImages.get(1024));
-  add("icons/app-macos-1024.png", appleDockIcon);
+  add("icons/app-macos-1024.png", appleComposerRendition);
+  add("icons/app-macos-dock.png", developmentDockIcon);
   for (const size of APP_LINUX_SIZES) {
     addPng(`icons/linux/${size}x${size}.png`, appImages.get(size));
   }
@@ -160,7 +168,6 @@ function generateAssets({ appMaster, appMarkPath, trayPath, appleDockIcon, apple
   }
 
   validateIco(appIco, APP_ICO_SIZES, "application ICO");
-  validateAppleFallbackIcns(appleFallbackIcns);
   for (const state of TRAY_STATES) {
     validateIco(
       outputs.get(join(packagingRoot, "tray", state.windows)),
@@ -189,11 +196,11 @@ async function compileAppleIconAssets() {
   if (toolchain === null) {
     let committed;
     try {
-      const [appleDockIcon, appleFallbackIcns] = await Promise.all([
-        readFile(appleDockIconPath),
+      const [appleComposerRendition, appleFallbackIcns] = await Promise.all([
+        readFile(appleComposerRenditionPath),
         readFile(appleFallbackIconPath),
       ]);
-      committed = { appleDockIcon, appleFallbackIcns };
+      committed = { appleComposerRendition, appleFallbackIcns };
     } catch (error) {
       if (error?.code === "ENOENT") {
         throw new Error(
@@ -202,7 +209,7 @@ async function compileAppleIconAssets() {
       }
       throw error;
     }
-    validateAppleDockIcon(committed.appleDockIcon);
+    validateAppleComposerRendition(committed.appleComposerRendition);
     validateAppleFallbackIcns(committed.appleFallbackIcns);
     console.warn(
       "Xcode Icon Composer and actool are unavailable; validated the committed macOS PNG and ICNS without regenerating them",
@@ -262,13 +269,13 @@ async function compileAppleIconAssets() {
         options,
       ),
     ]);
-    const [appleDockIcon, appleFallbackIcns] = await Promise.all([
+    const [appleComposerRendition, appleFallbackIcns] = await Promise.all([
       readFile(dockOutputPath),
       readFile(join(compiledOutputRoot, "app.icns")),
     ]);
-    validateAppleDockIcon(appleDockIcon);
+    validateAppleComposerRendition(appleComposerRendition);
     validateAppleFallbackIcns(appleFallbackIcns);
-    return { appleDockIcon, appleFallbackIcns };
+    return { appleComposerRendition, appleFallbackIcns };
   } catch (error) {
     const detail = [error?.message, error?.stderr, error?.stdout]
       .filter((value) => typeof value === "string" && value.trim().length > 0)
@@ -460,6 +467,7 @@ function validateAppleFallbackIcns(buffer) {
     throw new Error(`${label} has an invalid ICNS header`);
   }
   const found = [];
+  let developmentDockIcon = null;
   let offset = 8;
   while (offset < buffer.length) {
     const type = buffer.toString("ascii", offset, offset + 4);
@@ -479,7 +487,10 @@ function validateAppleFallbackIcns(buffer) {
     } else {
       validatePng(payload, expected[1], expected[1], `${label} ${type}`);
       if (type === "ic13") {
-        validateReviewedApplePixels(decodePng(payload, expected[1]), `${label} ${expected[1]}px`);
+        const decoded = decodePng(payload, expected[1]);
+        validateReviewedApplePixels(decoded, `${label} ${expected[1]}px`);
+        validateAppleDockSafeArea(decoded, `${label} ${expected[1]}px`);
+        developmentDockIcon = payload;
       }
     }
     found.push(type);
@@ -490,6 +501,10 @@ function validateAppleFallbackIcns(buffer) {
       `${label} has ${found.length} representations; expected ${APPLE_ICNS_CHUNKS.length}`,
     );
   }
+  if (developmentDockIcon === null) {
+    throw new Error(`${label} has no Apple-padded ic13 representation for development`);
+  }
+  return { developmentDockIcon };
 }
 
 function assertSquareMaster(svg, label) {
@@ -656,9 +671,39 @@ function parseSvgDimension(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function validateAppleDockIcon(png) {
+function validateAppleComposerRendition(png) {
   validatePng(png, 1024, 1024, "icons/app-macos-1024.png");
   validateReviewedApplePixels(decodePng(png, 1024), "macOS application icon");
+}
+
+function validateAppleDockSafeArea(decoded, label) {
+  const alphaThreshold = 8;
+  let minX = decoded.width;
+  let minY = decoded.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < decoded.height; y += 1) {
+    for (let x = 0; x < decoded.width; x += 1) {
+      if (decoded.pixels[(y * decoded.width + x) * 4 + 3] <= alphaThreshold) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  if (maxX < 0 || maxY < 0) throw new Error(`${label} has no visible pixels`);
+
+  // A raw Icon Composer export reaches all four canvas edges. Apple's compiled
+  // Dock representation reserves roughly ten percent per edge; require a
+  // conservative six percent so future Xcode renderers may vary without ever
+  // regressing to the visually oversized, full-bleed development icon.
+  const minimumInset = Math.ceil(Math.min(decoded.width, decoded.height) * 0.06);
+  const insets = [minX, minY, decoded.width - 1 - maxX, decoded.height - 1 - maxY];
+  if (insets.some((inset) => inset < minimumInset)) {
+    throw new Error(
+      `${label} breaches the Dock safe area: visible bounds ${minX},${minY}..${maxX},${maxY}`,
+    );
+  }
 }
 
 function validateReviewedApplePixels(decoded, label) {

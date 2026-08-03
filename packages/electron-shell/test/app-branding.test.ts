@@ -3,14 +3,14 @@ import { applyDevelopmentDockIcon } from "../src/main/app-branding";
 
 const resources = {
   packaged: false,
-  developmentDockIconPath: "/repo/apps/desktop/packaging/icons/app-macos-1024.png",
+  developmentDockIconPath: "/repo/apps/desktop/packaging/icons/app-macos-dock.png",
 };
 
 describe("development Dock branding", () => {
-  it("applies the checked Icon Composer rendition to raw Electron.app on macOS", () => {
+  it("applies the Apple-padded Dock rendition to raw Electron.app on macOS", () => {
     const image = {
       isEmpty: () => false,
-      getSize: () => ({ width: 1024, height: 1024 }),
+      getSize: () => ({ width: 256, height: 256 }),
     };
     const dock = { setIcon: vi.fn() };
     expect(
@@ -22,8 +22,8 @@ describe("development Dock branding", () => {
     ).toEqual({
       status: "applied",
       path: resources.developmentDockIconPath,
-      width: 1024,
-      height: 1024,
+      width: 256,
+      height: 256,
     });
     expect(dock.setIcon).toHaveBeenCalledWith(image);
   });

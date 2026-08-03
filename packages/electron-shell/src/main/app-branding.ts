@@ -19,9 +19,9 @@ export type DevelopmentDockIconResult =
     };
 
 /** Development launches Electron's own bundle, so electron-builder never gets a
- * chance to install VibeField's application icon. Apply Icon Composer's checked
- * 1024px macOS rendition at runtime only; packaged identity remains Info.plist /
- * Assets.car / ICNS territory and must not be overridden here. */
+ * chance to install VibeField's application icon. Apply the Apple-compiled,
+ * safe-area-correct Dock rendition at runtime only; packaged identity remains
+ * Info.plist / Assets.car / ICNS territory and must not be overridden here. */
 export function applyDevelopmentDockIcon(
   resources: Pick<DesktopResources, "packaged" | "developmentDockIconPath">,
   native: {

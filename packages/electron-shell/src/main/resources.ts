@@ -32,8 +32,9 @@ export interface TrayImageSet {
 export interface DesktopResources {
   readonly packaged: boolean;
   /** The raw Electron.app used by development cannot inherit electron-builder's
-   * bundle icon. macOS applies this checked raster after app.whenReady(); a
-   * packaged app keeps bundle-owned icon selection and therefore carries null. */
+   * bundle icon. macOS applies this Apple-compiled, safe-area-correct raster
+   * after app.whenReady(); a packaged app keeps bundle-owned icon selection and
+   * therefore carries null. */
   readonly developmentDockIconPath: string | null;
   /** the program to exec: the standalone fieldd executable when packaged
    * (EDP-14), Electron-as-node from the repo bundle in development */
@@ -122,7 +123,7 @@ export function resolveDevelopmentResources(opts: {
       "desktop",
       "packaging",
       "icons",
-      "app-macos-1024.png",
+      "app-macos-dock.png",
     ),
     fielddCommand: opts.electronExecPath,
     fielddArgs: [join(opts.repoRoot, "packages", "fieldd", "dist", "bin.cjs")],

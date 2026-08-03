@@ -15,10 +15,12 @@ imported on 2026-07-30. Keep the package serialization and its referenced vector
   `85b663f854d34df2055eec9f5bfd34076280447a72d9abd1b7152ecac7bf3728`
 
 Run `pnpm --filter @vibefield/desktop icons:generate` after changing a master or `app.icon`. The
-generator creates the checked-in Icon Composer-derived macOS ICNS fallbacks, Windows ICO, Linux
+generator creates the checked-in Icon Composer-derived macOS ICNS fallback, Windows ICO, Linux
 raster set, and all three platform tray states. On macOS it uses Xcode's official Icon Composer
-`ictool` to render `app-macos-1024.png` and `actool` to compile the ICNS fallback directly from
-`app.icon`. `icons:check` regenerates every representation in memory and compares exact bytes,
+`ictool` to render the full-canvas `app-macos-1024.png` composition and `actool` to compile the ICNS
+fallback directly from `app.icon`. It also extracts `app-macos-dock.png` from the ICNS `ic13`
+representation; this is Apple's padded rendition for the development Dock, not a second icon
+design. `icons:check` regenerates every representation in memory and compares exact bytes,
 verifies that every Icon Composer layer is a local square vector and that the package contains no
 unreferenced assets, so macOS CI proves that committed outputs are current. On a non-macOS host,
 it still validates the committed Apple PNG and ICNS outputs but cannot recompile Apple materials.
@@ -31,13 +33,16 @@ images for the current theme.
 The reviewed Icon Composer composition uses a shared square-platform white material, translucent
 dot field, black infinity mark, and RGB offset accents. The generator rejects missing or external
 layers, a non-square vector canvas, an unrounded macOS rendition, or loss of those principal
-visual treatments. The flat application master continues to produce only the Windows/Linux
-assets; it is intentionally independent of Apple's material composition. No macOS representation
-is allowed to fall back to that legacy artwork.
+visual treatments. It also enforces a development-Dock safe-area inset, preventing a full-canvas
+Icon Composer export from being wired into the Dock again. The flat application master continues
+to produce only the Windows/Linux assets; it is intentionally independent of Apple's material
+composition. No macOS representation is allowed to fall back to that legacy artwork.
 
 `pnpm dev` runs Electron's own unsigned application bundle, so electron-builder cannot embed the
-VibeField bundle icon in that loop. After Electron is ready, the shell applies the checked
-`app-macos-1024.png` through the macOS Dock API and logs the resolved path and dimensions.
-Packaged builds never take that runtime override: electron-builder compiles `app.icon` with
-Xcode 26 `actool`, writes `Assets.car`, sets `CFBundleIconName`, and installs an ICNS fallback in
-the application bundle.
+VibeField bundle icon in that loop. After Electron is ready, the shell applies
+`app-macos-dock.png`, extracted from Apple's compiled ICNS and therefore carrying the same optical
+safe area as the packaged icon, through the macOS Dock API. The full-canvas
+`app-macos-1024.png` remains a checked Icon Composer rendition but is not suitable as a raw Dock
+override. Packaged builds never take that runtime override: electron-builder compiles `app.icon`
+with Xcode 26 `actool`, writes `Assets.car`, sets `CFBundleIconName`, and installs an ICNS fallback
+in the application bundle.

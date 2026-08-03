@@ -37,7 +37,7 @@ describe("resolveDevelopmentResources", () => {
   it("runs the fieldd bundle from the repo through Electron-as-node", () => {
     expect(dev.packaged).toBe(false);
     expect(dev.developmentDockIconPath).toBe(
-      `${REPO}/apps/desktop/packaging/icons/app-macos-1024.png`,
+      `${REPO}/apps/desktop/packaging/icons/app-macos-dock.png`,
     );
     expect(dev.fielddCommand).toBe(ELECTRON);
     expect(dev.fielddArgs).toEqual([`${REPO}/packages/fieldd/dist/bin.cjs`]);
