@@ -31,5 +31,12 @@
     "electron": "^43.1.1",
     "electron-builder": "^26.0.12",
     "postject": "^1.0.0-alpha.6"
+  },
+  "optionalDependencies": {
+    "@vibecook/truffle-sidecar-darwin-arm64": "0.7.12",
+    "@vibecook/truffle-sidecar-darwin-x64": "0.7.12",
+    "@vibecook/truffle-sidecar-linux-arm64": "0.7.12",
+    "@vibecook/truffle-sidecar-linux-x64": "0.7.12",
+    "@vibecook/truffle-sidecar-win32-x64": "0.7.12"
   }
 }

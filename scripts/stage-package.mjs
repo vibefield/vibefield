@@ -57,6 +57,18 @@ const MODES_ENFORCEABLE = process.platform !== "win32";
 // arrive with the universal-build amendment, not before.
 const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
 const fielddName = process.platform === "win32" ? "fieldd.exe" : "fieldd";
+const truffleSidecarName = process.platform === "win32" ? "sidecar-slim.exe" : "sidecar-slim";
+const trufflePlatform = `${process.platform}-${process.arch}`;
+const truffleSidecarPackages = new Set([
+  "darwin-arm64",
+  "darwin-x64",
+  "linux-arm64",
+  "linux-x64",
+  "win32-x64",
+]);
+if (!truffleSidecarPackages.has(trufflePlatform)) {
+  throw new Error(`Truffle 0.7.12 has no desktop sidecar package for ${trufflePlatform}`);
+}
 
 // `app/` becomes app.asar (electron-builder's `files` root); `bin/`, `tray/` and `plugins/` are
 // extraResources. The split is §10.1's law: executable app code goes in the archive, native
@@ -121,6 +133,18 @@ const PLAN = [
     mode: EXEC_MODE,
     optional: "the field-native sidecar is absent — the packaged app will have no native plane",
     produce: "cargo build --release -p field-native",
+  },
+  {
+    // AH-1b: field-native resolves this exact executable beside itself. The
+    // platform packages are optional only so pnpm can install one lockfile on
+    // every OS; for the active package target this input is REQUIRED.
+    stage: `bin/${truffleSidecarName}`,
+    from:
+      `apps/desktop/node_modules/@vibecook/truffle-sidecar-${trufflePlatform}` +
+      `/bin/${truffleSidecarName}`,
+    kind: "file",
+    mode: EXEC_MODE,
+    produce: "pnpm install --frozen-lockfile",
   },
   {
     stage: "tray",

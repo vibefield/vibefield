@@ -143,8 +143,8 @@ export type Scope = (typeof SCOPES)[number];
 
 /** The D32 tailnet-caller preset (C3): the scopes a WhoIs-authenticated tailnet
  * principal is granted on a served product surface. Broad product access MINUS
- * D32's local-only-forever set (doc.*, tokens.mint, native.admin, push.manage,
- * plugins.*) and MINUS plugin-runtime/shell powers — those are capability
+ * D32's local-only-forever set (doc.*, artifact mutations, tokens.mint,
+ * native.admin, push.manage, plugins.*) and MINUS plugin-runtime/shell powers — those are capability
  * grants for local runtimes, meaningless (and dangerous) as remote-caller
  * scopes. Document replication uses its dedicated authenticated sync protocol;
  * the renderer's persistence API and lane tickets never federate. */
@@ -155,7 +155,6 @@ export const TAILNET_SCOPES: readonly Scope[] = [
   "agent.control",
   "agent.observe",
   "terminal.attach",
-  "artifact.publish",
   "index.read",
   "approval.respond",
   "workspace.read",

@@ -675,6 +675,7 @@ impl ErrorData {
 #[doc = "    \"AUDIT_UNAVAILABLE\","]
 #[doc = "    \"TIMEOUT\","]
 #[doc = "    \"INCOMPATIBLE\","]
+#[doc = "    \"RESOURCE_EXHAUSTED\","]
 #[doc = "    \"INTERNAL\""]
 #[doc = "  ]"]
 #[doc = "}"]
@@ -711,6 +712,8 @@ pub enum ErrorKind {
     Timeout,
     #[serde(rename = "INCOMPATIBLE")]
     Incompatible,
+    #[serde(rename = "RESOURCE_EXHAUSTED")]
+    ResourceExhausted,
     #[serde(rename = "INTERNAL")]
     Internal,
 }
@@ -726,6 +729,7 @@ impl ::std::fmt::Display for ErrorKind {
             Self::AuditUnavailable => f.write_str("AUDIT_UNAVAILABLE"),
             Self::Timeout => f.write_str("TIMEOUT"),
             Self::Incompatible => f.write_str("INCOMPATIBLE"),
+            Self::ResourceExhausted => f.write_str("RESOURCE_EXHAUSTED"),
             Self::Internal => f.write_str("INTERNAL"),
         }
     }
@@ -743,6 +747,7 @@ impl ::std::str::FromStr for ErrorKind {
             "AUDIT_UNAVAILABLE" => Ok(Self::AuditUnavailable),
             "TIMEOUT" => Ok(Self::Timeout),
             "INCOMPATIBLE" => Ok(Self::Incompatible),
+            "RESOURCE_EXHAUSTED" => Ok(Self::ResourceExhausted),
             "INTERNAL" => Ok(Self::Internal),
             _ => Err("invalid value".into()),
         }
@@ -4822,11 +4827,24 @@ impl<'de> ::serde::Deserialize<'de> for SemverString {
 #[doc = "        \"type\": \"string\""]
 #[doc = "      }"]
 #[doc = "    },"]
+#[doc = "    \"listenPort\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"maximum\": 65535.0,"]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    },"]
 #[doc = "    \"name\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"pathSecret\": {"]
 #[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"previewDir\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"serveId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
 #[doc = "    },"]
 #[doc = "    \"target\": {"]
 #[doc = "      \"$ref\": \"#/definitions/ServeTarget\""]
@@ -4843,6 +4861,12 @@ impl<'de> ::serde::Deserialize<'de> for SemverString {
 pub struct ServeConfig {
     #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
     pub allow: ::std::vec::Vec<::std::string::String>,
+    #[serde(
+        rename = "listenPort",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub listen_port: ::std::option::Option<::std::num::NonZeroU64>,
     pub name: ::std::string::String,
     #[serde(
         rename = "pathSecret",
@@ -4850,6 +4874,18 @@ pub struct ServeConfig {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub path_secret: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "previewDir",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub preview_dir: ::std::option::Option<ServeConfigPreviewDir>,
+    #[serde(
+        rename = "serveId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub serve_id: ::std::option::Option<ServeConfigServeId>,
     pub target: ServeTarget,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub tls: ::std::option::Option<bool>,
@@ -4857,6 +4893,142 @@ pub struct ServeConfig {
 impl ServeConfig {
     pub fn builder() -> builder::ServeConfig {
         Default::default()
+    }
+}
+#[doc = "`ServeConfigPreviewDir`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ServeConfigPreviewDir(::std::string::String);
+impl ::std::ops::Deref for ServeConfigPreviewDir {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ServeConfigPreviewDir> for ::std::string::String {
+    fn from(value: ServeConfigPreviewDir) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ServeConfigPreviewDir {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ServeConfigPreviewDir {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ServeConfigPreviewDir {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ServeConfigPreviewDir {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ServeConfigPreviewDir {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`ServeConfigServeId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ServeConfigServeId(::std::string::String);
+impl ::std::ops::Deref for ServeConfigServeId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ServeConfigServeId> for ::std::string::String {
+    fn from(value: ServeConfigServeId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ServeConfigServeId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ServeConfigServeId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ServeConfigServeId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ServeConfigServeId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ServeConfigServeId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
     }
 }
 #[doc = "`ServeEntry`"]
@@ -4867,7 +5039,9 @@ impl ServeConfig {
 #[doc = "{"]
 #[doc = "  \"type\": \"object\","]
 #[doc = "  \"required\": ["]
+#[doc = "    \"listenPort\","]
 #[doc = "    \"name\","]
+#[doc = "    \"serveId\","]
 #[doc = "    \"target\","]
 #[doc = "    \"url\""]
 #[doc = "  ],"]
@@ -4881,8 +5055,17 @@ impl ServeConfig {
 #[doc = "    \"error\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
+#[doc = "    \"listenPort\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"maximum\": 65535.0,"]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    },"]
 #[doc = "    \"name\": {"]
 #[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"serveId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
 #[doc = "    },"]
 #[doc = "    \"status\": {"]
 #[doc = "      \"type\": \"string\","]
@@ -4895,6 +5078,9 @@ impl ServeConfig {
 #[doc = "    },"]
 #[doc = "    \"target\": {"]
 #[doc = "      \"$ref\": \"#/definitions/ServeTarget\""]
+#[doc = "    },"]
+#[doc = "    \"tls\": {"]
+#[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
 #[doc = "    \"url\": {"]
 #[doc = "      \"type\": \"string\""]
@@ -4910,15 +5096,89 @@ pub struct ServeEntry {
     pub allow: ::std::vec::Vec<::std::string::String>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub error: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "listenPort")]
+    pub listen_port: ::std::num::NonZeroU64,
     pub name: ::std::string::String,
+    #[serde(rename = "serveId")]
+    pub serve_id: ServeEntryServeId,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub status: ::std::option::Option<ServeEntryStatus>,
     pub target: ServeTarget,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub tls: ::std::option::Option<bool>,
     pub url: ::std::string::String,
 }
 impl ServeEntry {
     pub fn builder() -> builder::ServeEntry {
         Default::default()
+    }
+}
+#[doc = "`ServeEntryServeId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ServeEntryServeId(::std::string::String);
+impl ::std::ops::Deref for ServeEntryServeId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ServeEntryServeId> for ::std::string::String {
+    fn from(value: ServeEntryServeId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ServeEntryServeId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ServeEntryServeId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ServeEntryServeId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ServeEntryServeId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ServeEntryServeId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
     }
 }
 #[doc = "`ServeEntryStatus`"]
@@ -5025,6 +5285,13 @@ impl ::std::convert::TryFrom<::std::string::String> for ServeEntryStatus {
 #[doc = "          \"type\": \"integer\","]
 #[doc = "          \"maximum\": 65535.0,"]
 #[doc = "          \"minimum\": 1.0"]
+#[doc = "        },"]
+#[doc = "        \"scheme\": {"]
+#[doc = "          \"type\": \"string\","]
+#[doc = "          \"enum\": ["]
+#[doc = "            \"http\","]
+#[doc = "            \"https\""]
+#[doc = "          ]"]
 #[doc = "        }"]
 #[doc = "      },"]
 #[doc = "      \"additionalProperties\": true"]
@@ -5036,6 +5303,10 @@ impl ::std::convert::TryFrom<::std::string::String> for ServeEntryStatus {
 #[doc = "        \"path\""]
 #[doc = "      ],"]
 #[doc = "      \"properties\": {"]
+#[doc = "        \"fallback\": {"]
+#[doc = "          \"type\": \"string\","]
+#[doc = "          \"const\": \"/index.html\""]
+#[doc = "        },"]
 #[doc = "        \"kind\": {"]
 #[doc = "          \"type\": \"string\","]
 #[doc = "          \"const\": \"dir\""]
@@ -5056,11 +5327,87 @@ pub enum ServeTarget {
     Variant0 {
         kind: ::std::string::String,
         port: ::std::num::NonZeroU64,
+        #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+        scheme: ::std::option::Option<ServeTargetVariant0Scheme>,
     },
     Variant1 {
+        #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+        fallback: ::std::option::Option<::std::string::String>,
         kind: ::std::string::String,
         path: ::std::string::String,
     },
+}
+#[doc = "`ServeTargetVariant0Scheme`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"http\","]
+#[doc = "    \"https\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ServeTargetVariant0Scheme {
+    #[serde(rename = "http")]
+    Http,
+    #[serde(rename = "https")]
+    Https,
+}
+impl ::std::fmt::Display for ServeTargetVariant0Scheme {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Http => f.write_str("http"),
+            Self::Https => f.write_str("https"),
+        }
+    }
+}
+impl ::std::str::FromStr for ServeTargetVariant0Scheme {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "http" => Ok(Self::Http),
+            "https" => Ok(Self::Https),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ServeTargetVariant0Scheme {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ServeTargetVariant0Scheme {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ServeTargetVariant0Scheme {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
 }
 #[doc = "`ServerKind`"]
 #[doc = r""]
@@ -9047,9 +9394,21 @@ pub mod builder {
     #[derive(Clone, Debug)]
     pub struct ServeConfig {
         allow: ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        listen_port: ::std::result::Result<
+            ::std::option::Option<::std::num::NonZeroU64>,
+            ::std::string::String,
+        >,
         name: ::std::result::Result<::std::string::String, ::std::string::String>,
         path_secret: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        preview_dir: ::std::result::Result<
+            ::std::option::Option<super::ServeConfigPreviewDir>,
+            ::std::string::String,
+        >,
+        serve_id: ::std::result::Result<
+            ::std::option::Option<super::ServeConfigServeId>,
             ::std::string::String,
         >,
         target: ::std::result::Result<super::ServeTarget, ::std::string::String>,
@@ -9059,8 +9418,11 @@ pub mod builder {
         fn default() -> Self {
             Self {
                 allow: Ok(Default::default()),
+                listen_port: Ok(Default::default()),
                 name: Err("no value supplied for name".to_string()),
                 path_secret: Ok(Default::default()),
+                preview_dir: Ok(Default::default()),
+                serve_id: Ok(Default::default()),
                 target: Err("no value supplied for target".to_string()),
                 tls: Ok(Default::default()),
             }
@@ -9075,6 +9437,16 @@ pub mod builder {
             self.allow = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for allow: {e}"));
+            self
+        }
+        pub fn listen_port<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::num::NonZeroU64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.listen_port = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for listen_port: {e}"));
             self
         }
         pub fn name<T>(mut self, value: T) -> Self
@@ -9095,6 +9467,26 @@ pub mod builder {
             self.path_secret = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for path_secret: {e}"));
+            self
+        }
+        pub fn preview_dir<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::ServeConfigPreviewDir>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.preview_dir = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for preview_dir: {e}"));
+            self
+        }
+        pub fn serve_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::ServeConfigServeId>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.serve_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for serve_id: {e}"));
             self
         }
         pub fn target<T>(mut self, value: T) -> Self
@@ -9125,8 +9517,11 @@ pub mod builder {
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 allow: value.allow?,
+                listen_port: value.listen_port?,
                 name: value.name?,
                 path_secret: value.path_secret?,
+                preview_dir: value.preview_dir?,
+                serve_id: value.serve_id?,
                 target: value.target?,
                 tls: value.tls?,
             })
@@ -9136,8 +9531,11 @@ pub mod builder {
         fn from(value: super::ServeConfig) -> Self {
             Self {
                 allow: Ok(value.allow),
+                listen_port: Ok(value.listen_port),
                 name: Ok(value.name),
                 path_secret: Ok(value.path_secret),
+                preview_dir: Ok(value.preview_dir),
+                serve_id: Ok(value.serve_id),
                 target: Ok(value.target),
                 tls: Ok(value.tls),
             }
@@ -9150,12 +9548,15 @@ pub mod builder {
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
         >,
+        listen_port: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
         name: ::std::result::Result<::std::string::String, ::std::string::String>,
+        serve_id: ::std::result::Result<super::ServeEntryServeId, ::std::string::String>,
         status: ::std::result::Result<
             ::std::option::Option<super::ServeEntryStatus>,
             ::std::string::String,
         >,
         target: ::std::result::Result<super::ServeTarget, ::std::string::String>,
+        tls: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         url: ::std::result::Result<::std::string::String, ::std::string::String>,
     }
     impl ::std::default::Default for ServeEntry {
@@ -9163,9 +9564,12 @@ pub mod builder {
             Self {
                 allow: Ok(Default::default()),
                 error: Ok(Default::default()),
+                listen_port: Err("no value supplied for listen_port".to_string()),
                 name: Err("no value supplied for name".to_string()),
+                serve_id: Err("no value supplied for serve_id".to_string()),
                 status: Ok(Default::default()),
                 target: Err("no value supplied for target".to_string()),
+                tls: Ok(Default::default()),
                 url: Err("no value supplied for url".to_string()),
             }
         }
@@ -9191,6 +9595,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for error: {e}"));
             self
         }
+        pub fn listen_port<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.listen_port = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for listen_port: {e}"));
+            self
+        }
         pub fn name<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::string::String>,
@@ -9199,6 +9613,16 @@ pub mod builder {
             self.name = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for name: {e}"));
+            self
+        }
+        pub fn serve_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::ServeEntryServeId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.serve_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for serve_id: {e}"));
             self
         }
         pub fn status<T>(mut self, value: T) -> Self
@@ -9221,6 +9645,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for target: {e}"));
             self
         }
+        pub fn tls<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.tls = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for tls: {e}"));
+            self
+        }
         pub fn url<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::string::String>,
@@ -9240,9 +9674,12 @@ pub mod builder {
             Ok(Self {
                 allow: value.allow?,
                 error: value.error?,
+                listen_port: value.listen_port?,
                 name: value.name?,
+                serve_id: value.serve_id?,
                 status: value.status?,
                 target: value.target?,
+                tls: value.tls?,
                 url: value.url?,
             })
         }
@@ -9252,9 +9689,12 @@ pub mod builder {
             Self {
                 allow: Ok(value.allow),
                 error: Ok(value.error),
+                listen_port: Ok(value.listen_port),
                 name: Ok(value.name),
+                serve_id: Ok(value.serve_id),
                 status: Ok(value.status),
                 target: Ok(value.target),
+                tls: Ok(value.tls),
                 url: Ok(value.url),
             }
         }

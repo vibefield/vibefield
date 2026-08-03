@@ -372,26 +372,36 @@ export const METHODS: MethodDef[] = [
     subscription: true,
   }),
 
-  // C6-6 — ArtifactService (design-02 §3, design-01 §5): the artifact hub over
-  // the mesh serve facade. publish/unpublish are UPSERT/remove-if-present
-  // (idempotent — safe to retry); artifact.publish sits in the tailnet preset
-  // DELIBERATELY (design-01: the agent principal and peers may publish; with
-  // D35 device? routing, publishing ON another device is one param away).
-  // The CAS blob pull root is deferred with its own gate (no native
-  // file-transfer facade yet — thinking-c6 §11).
+  // AH-1 — ArtifactService mutations are source-local. Local plugin/agent
+  // principals may be explicitly granted artifact.publish, but tailnet callers
+  // and D35 device? routing may only read the eventual global catalog.
   defineMethod({
     surface: "product",
     method: "artifact.publish",
     scope: "artifact.publish",
     idempotent: true,
-    locality: "sync",
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "artifact.update",
+    scope: "artifact.publish",
+    idempotent: true,
+    locality: "local",
   }),
   defineMethod({
     surface: "product",
     method: "artifact.unpublish",
     scope: "artifact.publish",
     idempotent: true,
-    locality: "sync",
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "artifact.refreshPreview",
+    scope: "artifact.publish",
+    idempotent: true,
+    locality: "local",
   }),
   defineMethod({
     surface: "product",

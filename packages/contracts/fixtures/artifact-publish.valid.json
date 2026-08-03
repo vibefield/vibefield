@@ -1,0 +1,7 @@
+{
+  "artifactId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "title": "Workbench",
+  "source": { "kind": "proxy", "port": 3000, "scheme": "https" },
+  "allow": ["*@corp.example"],
+  "idempotencyKey": "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+}

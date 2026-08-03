@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { ServeStatus } from "@vibefield/contracts";
+import { ARTIFACT_SERVE_PREFIX, ServeStatus } from "@vibefield/contracts";
 import type { NativeLink } from "./native-link";
 import { RpcCallError } from "./native-link";
 
@@ -16,12 +16,22 @@ import { RpcCallError } from "./native-link";
 // `serves()` returns that fused view; "serves-changed" fires on any per-serve
 // status/url/error transition. The subscription is registered once; NativeLink
 // replays it on reconnect (P5 — reconnect = fresh snapshot). Deltas are PARTIAL
-// entries merged by name; a `.snapshot` (subscribe result, reconnect replay, or
+// entries merged by serveId; a `.snapshot` (subscribe result, reconnect replay, or
 // a broadcast-lag re-snapshot notification) replaces runtime state wholesale.
+// Entries are keyed by serveId; legacy native floors omit it, in which case
+// name remains the compatibility identity.
 
 export interface ServeSpec {
+  /** Engine identity. Omitted by legacy callers, where it defaults to name. */
+  serveId?: string;
   name: string;
-  target: { kind: "port"; port: number } | { kind: "dir"; path: string };
+  /** Tailnet listener independent of the source port. */
+  listenPort?: number;
+  target:
+    | { kind: "port"; port: number; scheme?: "http" | "https" }
+    | { kind: "dir"; path: string; fallback?: "/index.html" };
+  /** App-owned static route mounted ahead of the source root. */
+  previewDir?: string;
   allow?: string[];
   /** false = plain HTTP inside WireGuard (the product serve's choice; no
    * MagicDNS-cert dependency). Forwarded verbatim to native.mesh.serve.add. */
@@ -46,7 +56,16 @@ export interface ServeState extends ServeSpec {
   error?: string;
 }
 
-/** Live runtime status per serve, keyed by name — a faithful mirror of the node's
+/** Raw native inventory. ArtifactService uses listener ports for allocation;
+ * source config is intentionally absent because proxy.list does not expose it. */
+export interface ObservedServe {
+  serveId: string;
+  name: string;
+  listenPort: number;
+  url?: string;
+}
+
+/** Live runtime status per serve, keyed by serveId — a faithful mirror of the node's
  * ProxyStatus, mapped to the fused `status` only in `fuse()`. */
 interface RuntimeEntry {
   status: ServeStatus;
@@ -89,35 +108,119 @@ export class MeshClient extends EventEmitter {
 
   /** Replace the desired serve set and reconcile now. */
   async setServes(specs: ServeSpec[]): Promise<ServeState[]> {
-    this.desired = new Map(specs.map((s) => [s.name, s]));
+    this.desired = new Map(specs.map((s) => [serveKey(s), s]));
     await this.reconcile();
     return this.serves();
+  }
+
+  /** Remove one engine identity directly. ArtifactService uses this for its
+   * crash-safe retiringServeIds queue before declaring a replacement config. */
+  removeServe(serveId: string): Promise<{ removed: boolean }> {
+    return this.enqueue(async () => {
+      try {
+        await this.link.request("native.mesh.serve.remove", { serveId });
+      } catch (error) {
+        if (!(error instanceof RpcCallError && error.kind === "NOT_FOUND")) throw error;
+      }
+      this.desired.delete(serveId);
+      this.states.delete(serveId);
+      this.runtime.delete(serveId);
+      this.emitServesChanged();
+      return { removed: true };
+    });
+  }
+
+  /** Read the node's complete serve inventory without changing desired state. */
+  async observedServes(): Promise<ObservedServe[]> {
+    const listed = (await this.link.request("native.mesh.serve.list", {})) as {
+      serves?: unknown;
+    };
+    if (!Array.isArray(listed.serves)) return [];
+    const out: ObservedServe[] = [];
+    for (const raw of listed.serves) {
+      if (typeof raw !== "object" || raw === null) continue;
+      const entry = raw as Record<string, unknown>;
+      const name = entry["name"];
+      const serveId = typeof entry["serveId"] === "string" ? entry["serveId"] : name;
+      const listenPort = entry["listenPort"];
+      if (
+        typeof name !== "string" ||
+        typeof serveId !== "string" ||
+        typeof listenPort !== "number" ||
+        !Number.isInteger(listenPort)
+      ) {
+        continue;
+      }
+      out.push({
+        serveId,
+        name,
+        listenPort,
+        ...(typeof entry["url"] === "string" ? { url: entry["url"] } : {}),
+      });
+    }
+    return out;
   }
 
   /** The fused public view: every DESIRED serve, its reconcile outcome fused with
    * live runtime status. Runtime-only entries (present on the node but not
    * desired here) are never surfaced. */
   serves(): ServeState[] {
-    return [...this.states.values()].map((rec) => this.fuse(rec));
+    const out: ServeState[] = [];
+    for (const [serveId, spec] of this.desired) {
+      const rec = this.states.get(serveId) ?? { ...spec, status: "pending" as const };
+      out.push(this.fuse(rec));
+    }
+    return out;
   }
 
   reconcile(): Promise<void> {
-    const run = this.chain.then(() => this.doReconcile());
-    this.chain = run.catch(() => {});
+    return this.enqueue(() => this.doReconcile());
+  }
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(operation);
+    this.chain = run.then(
+      () => undefined,
+      () => undefined,
+    );
     return run;
   }
 
   private async doReconcile(): Promise<void> {
     try {
       const listed = (await this.link.request("native.mesh.serve.list", {})) as {
-        serves: Array<{ name: string; url?: string }>;
+        serves: Array<{ serveId?: string; name: string; url?: string; listenPort?: number }>;
       };
-      const live = new Map(listed.serves.map((s) => [s.name, s]));
+      const live = new Map(listed.serves.map((s) => [s.serveId ?? s.name, s]));
 
-      for (const [name, spec] of this.desired) {
-        const existing = live.get(name);
+      // Remove managed strays before adding replacements. A failure deliberately
+      // retains states[id], so the next reconcile really retries it.
+      for (const [serveId] of live) {
+        // AH-1 owns artifact removals with a durable retiringServeIds queue.
+        // A generic best-effort removal here would bypass that checkpoint and
+        // make an outliving listener invisible after a crash.
+        if (serveId.startsWith(ARTIFACT_SERVE_PREFIX)) continue;
+        if (!this.desired.has(serveId) && this.states.has(serveId)) {
+          try {
+            await this.link.request("native.mesh.serve.remove", { serveId });
+            this.states.delete(serveId);
+            this.runtime.delete(serveId);
+            live.delete(serveId);
+          } catch (error) {
+            if (error instanceof RpcCallError && error.kind === "NOT_FOUND") {
+              this.states.delete(serveId);
+              this.runtime.delete(serveId);
+              live.delete(serveId);
+            }
+            // Any other failure keeps the tracking record for the next pass.
+          }
+        }
+      }
+
+      for (const [serveId, spec] of this.desired) {
+        const existing = live.get(serveId);
         if (existing) {
-          this.states.set(name, {
+          this.states.set(serveId, {
             ...spec,
             status: "active",
             ...(existing.url ? { url: existing.url } : {}),
@@ -128,32 +231,20 @@ export class MeshClient extends EventEmitter {
           const added = (await this.link.request("native.mesh.serve.add", spec)) as {
             url?: string;
           };
-          this.states.set(name, {
+          this.states.set(serveId, {
             ...spec,
             status: "active",
             ...(added.url ? { url: added.url } : {}),
           });
           // a fresh proxy — discard any stale runtime status; the node's started
           // event refreshes it (this is how a stopped serve "flips back")
-          this.runtime.delete(name);
+          this.runtime.delete(serveId);
         } catch (e) {
-          this.states.set(name, {
+          this.states.set(serveId, {
             ...spec,
             status: "error",
             error: e instanceof Error ? e.message : String(e),
           });
-        }
-      }
-      // strays: live entries we once declared but no longer desire
-      for (const [name] of live) {
-        if (!this.desired.has(name) && this.states.has(name)) {
-          try {
-            await this.link.request("native.mesh.serve.remove", { name });
-          } catch {
-            /* next reconcile retries */
-          }
-          this.states.delete(name);
-          this.runtime.delete(name);
         }
       }
       this.emit("reconciled", this.serves());
@@ -165,9 +256,9 @@ export class MeshClient extends EventEmitter {
     } catch (e) {
       // mesh not up (disabled/auth pending) — mark everything pending, not failed
       if (e instanceof RpcCallError && e.kind === "UNAVAILABLE") {
-        for (const [name, spec] of this.desired) {
-          const prev = this.states.get(name);
-          if (prev?.status !== "active") this.states.set(name, { ...spec, status: "pending" });
+        for (const [serveId, spec] of this.desired) {
+          const prev = this.states.get(serveId);
+          if (prev?.status !== "active") this.states.set(serveId, { ...spec, status: "pending" });
         }
         this.emit("unavailable", e.details);
         this.emitServesChanged();
@@ -202,7 +293,7 @@ export class MeshClient extends EventEmitter {
 
   /** Runtime stream handler. kind "snapshot" (subscribe result, reconnect replay,
    * or a broadcast-lag re-snapshot) replaces runtime state wholesale; kind
-   * "delta" merges one PARTIAL entry by name. */
+   * "delta" merges one PARTIAL entry by serveId. */
   private onServeEvent(payload: unknown, kind: "snapshot" | "delta"): void {
     if (kind === "snapshot") this.applyServeSnapshot(payload);
     else {
@@ -228,7 +319,7 @@ export class MeshClient extends EventEmitter {
     }
   }
 
-  /** Merge one entry into the runtime layer by name. Deltas are PARTIAL — a
+  /** Merge one entry into the runtime layer by serveId. Deltas are PARTIAL — a
    * stopped entry carries no url, so url is STICKY (last-known carried forward);
    * error is scoped to error runs (cleared on any healthy/transitional status so
    * a later stop never shows a stale message). */
@@ -245,10 +336,10 @@ export class MeshClient extends EventEmitter {
 
   /** Fuse one serve's reconcile record with its live runtime status. Runtime
    * status, when known, refines the reconcile verdict (running→active,
-   * starting→pending, stopped/error→error) and carries the runtime url/error;
+   * starting/stopped→pending, error→error) and carries the runtime url/error;
    * with no runtime signal the reconcile verdict stands. */
   private fuse(rec: ServeState): ServeState {
-    const rt = this.runtime.get(rec.name);
+    const rt = this.runtime.get(serveKey(rec));
     if (rt === undefined) return { ...rec };
     const status = RUNTIME_TO_STATUS[rt.status];
     const out: ServeState = { ...rec, status };
@@ -322,11 +413,16 @@ export class MeshClient extends EventEmitter {
 function coerceRuntimeEntry(raw: unknown): ({ name: string } & Partial<RuntimeEntry>) | null {
   if (typeof raw !== "object" || raw === null) return null;
   const o = raw as Record<string, unknown>;
-  if (typeof o["name"] !== "string") return null;
-  const out: { name: string } & Partial<RuntimeEntry> = { name: o["name"] };
+  const serveId = typeof o["serveId"] === "string" ? o["serveId"] : o["name"];
+  if (typeof serveId !== "string") return null;
+  const out: { name: string } & Partial<RuntimeEntry> = { name: serveId };
   const st = ServeStatus.safeParse(o["status"]);
   if (st.success) out.status = st.data;
   if (typeof o["url"] === "string") out.url = o["url"];
   if (typeof o["error"] === "string") out.error = o["error"];
   return out;
+}
+
+function serveKey(spec: Pick<ServeSpec, "serveId" | "name">): string {
+  return spec.serveId ?? spec.name;
 }

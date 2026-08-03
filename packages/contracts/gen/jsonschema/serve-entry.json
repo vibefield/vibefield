@@ -78,6 +78,7 @@
         "AUDIT_UNAVAILABLE",
         "TIMEOUT",
         "INCOMPATIBLE",
+        "RESOURCE_EXHAUSTED",
         "INTERNAL"
       ]
     },
@@ -471,6 +472,13 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 65535
+            },
+            "scheme": {
+              "type": "string",
+              "enum": [
+                "http",
+                "https"
+              ]
             }
           },
           "required": [
@@ -488,6 +496,10 @@
             },
             "path": {
               "type": "string"
+            },
+            "fallback": {
+              "type": "string",
+              "const": "/index.html"
             }
           },
           "required": [
@@ -501,8 +513,17 @@
     "ServeConfig": {
       "type": "object",
       "properties": {
+        "serveId": {
+          "type": "string",
+          "minLength": 1
+        },
         "name": {
           "type": "string"
+        },
+        "listenPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
         },
         "target": {
           "$ref": "#/definitions/ServeTarget"
@@ -515,6 +536,10 @@
         },
         "tls": {
           "type": "boolean"
+        },
+        "previewDir": {
+          "type": "string",
+          "minLength": 1
         },
         "pathSecret": {
           "type": "string"

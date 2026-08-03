@@ -1,7 +1,9 @@
 {
-  "name": "product",
-  "target": { "kind": "port", "port": 9410 },
-  "allow": ["me@jamesyong42.com"],
-  "tls": false,
-  "pathSecret": "3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM"
+  "serveId": "artifact-01ARZ3NDEKTSV4RRFFQ69G5FAV-jmneg5mapclp2hhy",
+  "name": "artifact:01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "listenPort": 17180,
+  "target": { "kind": "port", "port": 3000, "scheme": "https" },
+  "previewDir": "/var/lib/vibefield/artifacts/previews/01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "allow": ["*@corp.example"],
+  "tls": true
 }

@@ -1,7 +1,10 @@
 {
-  "name": "product",
-  "target": { "kind": "port", "port": 9410 },
-  "url": "http://mac.tail1234.ts.net:443",
-  "allow": ["me@jamesyong42.com"],
+  "serveId": "artifact-01ARZ3NDEKTSV4RRFFQ69G5FAV-jmneg5mapclp2hhy",
+  "name": "artifact:01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "listenPort": 17180,
+  "target": { "kind": "port", "port": 3000, "scheme": "https" },
+  "url": "https://mac.tail1234.ts.net:17180",
+  "allow": ["*@corp.example"],
+  "tls": true,
   "status": "running"
 }

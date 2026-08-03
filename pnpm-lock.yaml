@@ -87,6 +87,22 @@ importers:
       postject:
         specifier: ^1.0.0-alpha.6
         version: 1.0.0-alpha.6
+    optionalDependencies:
+      '@vibecook/truffle-sidecar-darwin-arm64':
+        specifier: 0.7.12
+        version: 0.7.12
+      '@vibecook/truffle-sidecar-darwin-x64':
+        specifier: 0.7.12
+        version: 0.7.12
+      '@vibecook/truffle-sidecar-linux-arm64':
+        specifier: 0.7.12
+        version: 0.7.12
+      '@vibecook/truffle-sidecar-linux-x64':
+        specifier: 0.7.12
+        version: 0.7.12
+      '@vibecook/truffle-sidecar-win32-x64':
+        specifier: 0.7.12
+        version: 0.7.12
 
   examples/plugins/kv-service:
     dependencies:
@@ -1603,6 +1619,36 @@ packages:
         optional: true
       react:
         optional: true
+
+  '@vibecook/truffle-sidecar-darwin-arm64@0.7.12':
+    resolution: {integrity: sha512-SIg+K39Yf8/YrFwBfsZhtDoWK5MBeI7oQg82M+MVw/UxzHbBkE7H1ElFjp2hk0W3UC5LZfMKD8xYd7jLJwoF8g==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@vibecook/truffle-sidecar-darwin-x64@0.7.12':
+    resolution: {integrity: sha512-GXz7nOT6+jJwPAjo8DJ6Ci09YRH6Vnl6oiEseBVA3/vhPasQ5PvCs5kplpnXzxWA83M9LG2kZbz/mjiCY72fuQ==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@vibecook/truffle-sidecar-linux-arm64@0.7.12':
+    resolution: {integrity: sha512-p/Vr9XrE29OX0j6QHyc335zXLhDhgFpSePYa0ts4ZYbyr06adIJZ0XYpqjWHC1nNxHajO+bdW/fUkOSOJdYroQ==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@vibecook/truffle-sidecar-linux-x64@0.7.12':
+    resolution: {integrity: sha512-KHc84jHsFjYvS0au+HsHmEdFZuHog2vSByh0WUZ1dDAWwjF3ionFekYMBgnmfivOMxQBodqpYlQGB8TtjN+vGg==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [linux]
+
+  '@vibecook/truffle-sidecar-win32-x64@0.7.12':
+    resolution: {integrity: sha512-Ao6O7ifup6dVsc+KkrcVYeSKqwpwdI6B3Ka+aaqDtBu398XV9iZLhGl+PVvca8/pMCfBCJkpT/50XXPgVglIsg==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [win32]
 
   '@vitejs/plugin-react@6.0.3':
     resolution: {integrity: sha512-vmFvco5/QuC2f9Oj+wTk0+9XeDFkHxSamwZKYc7MxYwKICfvUvlMhqKI0VuICPltGqh1neqBKDvO4kes1ya8vg==}
@@ -4190,6 +4236,21 @@ snapshots:
     optionalDependencies:
       loro-crdt: 1.13.8
       react: 19.2.7
+
+  '@vibecook/truffle-sidecar-darwin-arm64@0.7.12':
+    optional: true
+
+  '@vibecook/truffle-sidecar-darwin-x64@0.7.12':
+    optional: true
+
+  '@vibecook/truffle-sidecar-linux-arm64@0.7.12':
+    optional: true
+
+  '@vibecook/truffle-sidecar-linux-x64@0.7.12':
+    optional: true
+
+  '@vibecook/truffle-sidecar-win32-x64@0.7.12':
+    optional: true
 
   '@vitejs/plugin-react@6.0.3(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:

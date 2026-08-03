@@ -37,6 +37,12 @@ import { RpcCallError } from "./native-link";
 // the D32 TAILNET_SCOPES preset.
 
 const WS_OPEN = 1;
+const SOURCE_LOCAL_ARTIFACT_METHODS = new Set([
+  "artifact.publish",
+  "artifact.update",
+  "artifact.unpublish",
+  "artifact.refreshPreview",
+]);
 
 export type Handler = (ctx: CallerContext, params: unknown) => Promise<unknown> | unknown;
 
@@ -509,6 +515,18 @@ export class ProductApi extends EventEmitter {
       // federated proxy — same wire shape as a local subscription (subId +
       // <base>.delta/.snapshot frames), the payloads being the PEER's.
       const device = (params as { device?: unknown } | null | undefined)?.device;
+      if (typeof device === "string" && SOURCE_LOCAL_ARTIFACT_METHODS.has(method)) {
+        reply(
+          this.err(
+            id,
+            "PRECONDITION_FAILED",
+            `${method} is source-local and rejects device routing`,
+            false,
+            { method },
+          ),
+        );
+        return;
+      }
       const forwarder = this.forwarder;
       if (typeof device === "string" && forwarder !== null) {
         if (device !== this.ownDeviceId?.()) {

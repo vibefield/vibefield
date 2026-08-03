@@ -6,10 +6,10 @@ members = ["packages/field-native"]
 # EL8 — version lockstep: exactly one truffle-core revision across every crate in
 # this workspace (a borrowed Arc<Node> is type-incompatible across revisions), and
 # the pin is EXACT — upgrades are deliberate events, never `cargo update` drift.
-# Registry pin since 2026-07-28 (the T1 petition window closed with truffle 0.7.9);
-# the ../p008/truffle sibling [patch.crates-io] returns only for the duration of an
-# active petition window, together with its siblings.lock.json pin (see git history).
-truffle-core = "=0.7.11"
+# Registry pin advanced 2026-08-02 to consume T2's rooted static serving release
+# for Artifact Hub AH-1b. The ../p008/truffle sibling [patch.crates-io] returns
+# only for an active petition window, together with siblings.lock.json (history).
+truffle-core = "=0.7.12"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,
@@ -17,7 +17,7 @@ truffle-core = "=0.7.11"
 # 0.8.0 — zero Rust delta upstream (the release is GhostteaWorkspace layout
 # rehydration on the npm side); the bump keeps the one-version law as the shell
 # planes join at 0.8.0. ghosttea-truffle 0.8.0 still requires truffle-core
-# =0.7.11, so the Arc<Node> shared with the mesh adapter stays ONE type alongside
-# the pin above. `ghosttea` itself carries no truffle dep; field-native consumes
-# it since NF-2, ghosttea-truffle at GT-4 (NF-remote).
+# =0.7.11 and therefore MUST upgrade before GT-4 can add it; it is not in this
+# workspace today. `ghosttea` itself carries no Truffle dependency, so AH-1b's
+# 0.7.12 pin remains the workspace's one Arc<Node> type.
 ghosttea = "=0.8.0"

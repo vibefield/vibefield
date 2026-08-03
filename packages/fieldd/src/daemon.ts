@@ -6,7 +6,10 @@ import { join } from "node:path";
 import {
   AppPreferenceSetParams,
   ArtifactPublishParams,
+  ArtifactPublishV2Params,
+  ArtifactRefreshPreviewParams,
   ArtifactUnpublishParams,
+  ArtifactUpdateParams,
   CONTRACTS_VERSION,
   DeviceGetParams,
   DocCreateParams,
@@ -18,6 +21,7 @@ import {
   KvGetParams,
   KvListParams,
   KvSetParams,
+  LegacyArtifactPublishParams,
   LOG_STREAMS,
   METHODS,
   type NativeHealth,
@@ -60,7 +64,7 @@ import {
   pluginLogProvenance,
 } from "@vibefield/logging";
 import { effectiveAppPreferences } from "./app-preferences";
-import { ArtifactService } from "./artifact-service";
+import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
@@ -153,9 +157,13 @@ export interface FielddHealth {
   plugins: { count: number; enabled: number; invalid: number };
   logging: LoggingHealthV1 | null;
   audit: AuditHealthV1;
+  /** AH-1 — private-intent durability and source-probe truth are not mesh
+   * health, so they have a first-class projection of their own. */
+  artifacts: ArtifactServiceHealth;
   /** C3: the declared serves with their fused reconcile+runtime state. `url`
-   * is the full CAPABILITY URL (base serve URL + the secret route path) —
-   * the Settings mesh section is where the user reads it; never log it. */
+   * is authoritative per serve: product carries its private capability path;
+   * artifacts carry Truffle's exact root URL. The Settings mesh section is
+   * where the user reads it; never log it. */
   mesh: { serves: Array<{ name: string; status: string; url?: string; error?: string }> };
 }
 
@@ -480,6 +488,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       base === undefined ? undefined : `${base.replace(/\/+$/, "")}/t/${servePathSecret}`;
     // -- health aggregation: native deltas + link liveness, one stream out --
     let latestHealth: NativeHealth | null = null;
+    let artifactsRef: ArtifactService | null = null;
+    let detachArtifactHealth: (() => void) | null = null;
     const healthListeners = new Set<(h: FielddHealth) => void>();
     const health = (): FielddHealth => ({
       fieldd: {
@@ -496,10 +506,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       plugins: plugins.health(),
       logging: logging?.health() ?? null,
       audit: audit.health(),
+      artifacts: artifactsRef?.health() ?? {
+        count: 0,
+        storage: "ready",
+        sources: { ready: 0, unavailable: 0, pending: 0 },
+        retiring: 0,
+      },
       mesh: {
         // serves() is the FUSED view (reconcile ∘ runtime — mesh-client C3)
         serves: mesh.serves().map((s) => {
-          const url = capabilityUrl(s.url);
+          // The provenance secret belongs only to the product serve. Artifact
+          // URLs are exact Truffle results with a root route.
+          const url = s.name === "product" ? capabilityUrl(s.url) : s.url;
           return {
             name: s.name,
             status: s.status,
@@ -534,6 +552,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       mesh.off("reconciled", emitHealth);
       mesh.off("serves-changed", emitHealth);
       plugins.off("changed", emitHealth);
+      detachArtifactHealth?.();
+      detachArtifactHealth = null;
     };
 
     // -- Terminal floor (NF-3, native-floor spec §6): the observed inventory +
@@ -1730,7 +1750,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
 
-    // C6-6 — the artifact hub. Constructed HERE (before the supersession
+    // AH-1 — the artifact serving foundation. Constructed HERE (before the supersession
     // closure below references it — a superseding takeover can fire before
     // bootstrap's tail runs); its serves are declared later via start(), once
     // the control port is bound. The bridge reads controlPort lazily, and the
@@ -1749,7 +1769,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...specs,
           ]);
         },
+        remove: async (serveId) => await mesh.removeServe(serveId),
         states: () => mesh.serves(),
+        observed: async () => await mesh.observedServes(),
         on: (cb) => {
           mesh.on("serves-changed", cb);
           return () => mesh.off("serves-changed", cb);
@@ -1757,6 +1779,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
       logger: logger.child({ component: "artifacts" }),
     });
+    artifactsRef = artifacts;
 
     // SUPERSEDED = another fieldd owns the native plane now; this one is done.
     // The flag also closes the small gap where takeover happens before this
@@ -1824,31 +1847,82 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
 
     // C3 — the first real serve (design-00 §4.1 / foundations §2.9): fieldd's
     // own product API over the tailnet, plain-HTTP-in-WireGuard, gated by the
-    // secret route the ProductApi's tailnet door verifies. C6-6 — the serve
+    // secret route the ProductApi's tailnet door verifies. AH-1 — the serve
     // SET is now composed: ArtifactService (constructed above, before the
     // supersession closure could ever reach it) owns the artifact serves, the
     // daemon prepends the product serve, and one declarative set replays on
-    // every native (re)connect. Fire-and-forget: with mesh disabled every
-    // entry sits `pending` honestly.
-    void artifacts.start();
-    api.register("artifact.publish", async (_ctx, params) => {
+    // every native (re)connect. Initialization is awaited so a one-time C6
+    // migration is durable before the product methods become callable; mesh
+    // disabled still resolves promptly into honest `starting` states.
+    await artifacts.start();
+    detachArtifactHealth = artifacts.onChanged(() => emitHealth());
+    api.register("artifact.publish", async (ctx, params) => {
       const parsed = ArtifactPublishParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { name: slug, target: {kind:'port',port} | {kind:'dir',path} }",
+          "expected artifactId/title/source (or the one-window legacy name/target shape)",
           false,
           { issue: parsed.error.issues[0]?.message },
         );
-      // the entry is built from named fields inside the service — routing keys
-      // (device) and future passthrough params never enter the registry
-      return await artifacts.publish(parsed.data);
+      const v2 = ArtifactPublishV2Params.safeParse(parsed.data);
+      const legacy = v2.success ? null : LegacyArtifactPublishParams.parse(parsed.data);
+      const targetId = v2.success ? v2.data.artifactId : legacy!.name;
+      const kind = v2.success ? v2.data.source.kind : legacy!.target.kind;
+      return await audit.required(
+        ctx,
+        {
+          action: "artifact.publish",
+          target: { kind: "artifact", id: targetId },
+          attrs: { kind },
+        },
+        () => artifacts.publish(parsed.data),
+        (status) => ({
+          outcome: "succeeded",
+          attrs: { artifactId: status.artifactId, status: status.status },
+        }),
+      );
     });
-    api.register("artifact.unpublish", async (_ctx, params) => {
+    api.register("artifact.update", async (ctx, params) => {
+      const parsed = ArtifactUpdateParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "malformed artifact.update params", false, {
+          issue: parsed.error.issues[0]?.message,
+        });
+      return await audit.required(
+        ctx,
+        { action: "artifact.update", target: { kind: "artifact", id: parsed.data.artifactId } },
+        () => artifacts.update(parsed.data),
+        (status) => ({ outcome: "succeeded", attrs: { status: status.status } }),
+      );
+    });
+    api.register("artifact.unpublish", async (ctx, params) => {
       const parsed = ArtifactUnpublishParams.safeParse(params);
       if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { name: slug }", false);
-      return await artifacts.unpublish(parsed.data.name);
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { artifactId } (or one-window legacy { name })",
+          false,
+        );
+      const targetId =
+        typeof parsed.data.artifactId === "string"
+          ? parsed.data.artifactId
+          : String(parsed.data.name);
+      return await audit.required(
+        ctx,
+        { action: "artifact.unpublish", target: { kind: "artifact", id: targetId } },
+        () => artifacts.unpublish(parsed.data),
+        (result) => ({
+          outcome: result.removed ? "succeeded" : "cancelled",
+          ...(!result.removed ? { reasonCode: "ARTIFACT_NOT_FOUND" } : {}),
+        }),
+      );
+    });
+    api.register("artifact.refreshPreview", (_ctx, params) => {
+      const parsed = ArtifactRefreshPreviewParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { artifactId: ULID }", false);
+      return artifacts.refreshPreview(parsed.data.artifactId);
     });
     api.register("artifact.list", () => ({ artifacts: artifacts.statuses() }));
     api.registerSubscription("artifact.subscribe", (_ctx, _params, emit) => {

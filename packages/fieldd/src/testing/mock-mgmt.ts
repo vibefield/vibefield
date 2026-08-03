@@ -19,10 +19,25 @@ export class MockMgmtServer {
   supersedeAfterSubscribe = false;
   /** when set, every native.mesh.* call answers UNAVAILABLE (node not up) */
   meshUnavailable = false;
-  /** scripted node-side serve state (C2 reconcile tests) */
-  meshServes = new Map<string, { name: string; url: string }>();
+  /** scripted node-side serve state (C2/AH-1 reconcile tests), keyed by serveId */
+  meshServes = new Map<
+    string,
+    {
+      serveId: string;
+      name: string;
+      listenPort: number;
+      target: unknown;
+      url: string;
+      allow?: unknown;
+      tls?: unknown;
+      previewDir?: unknown;
+    }
+  >();
   meshAddCalls = 0;
   meshRemoveCalls = 0;
+  /** one-shot fault seams for crash-safe artifact reconciliation tests */
+  failNextServeAdd = false;
+  failNextServeRemove = false;
   /** scripted serve RUNTIME snapshot (C3): the ServeEntry[] answered by
    * native.mesh.serve.subscribe; deltas are pushed with pushServeDelta */
   serveSnapshot: unknown[] = [];
@@ -267,16 +282,79 @@ export class MockMgmtServer {
         return;
       case "native.mesh.serve.add": {
         this.meshAddCalls += 1;
+        if (this.failNextServeAdd) {
+          this.failNextServeAdd = false;
+          reply({
+            error: {
+              code: -32000,
+              message: "scripted serve add failure",
+              data: { kind: "INTERNAL", retryable: true },
+            },
+          });
+          return;
+        }
         const name = String(p["name"]);
-        const entry = { name, url: `https://mock.ts.net/${name}` };
-        this.meshServes.set(name, entry);
-        reply({ result: { ...p, url: entry.url } });
+        const serveId = typeof p["serveId"] === "string" ? p["serveId"] : name;
+        const target = p["target"] as { port?: unknown } | undefined;
+        const listenPort =
+          typeof p["listenPort"] === "number"
+            ? p["listenPort"]
+            : typeof target?.port === "number"
+              ? target.port
+              : 0;
+        const collision = [...this.meshServes.values()].find(
+          (entry) => entry.listenPort === listenPort && entry.serveId !== serveId,
+        );
+        if (collision !== undefined) {
+          reply({
+            error: {
+              code: -32004,
+              message: "listener port already in use",
+              data: { kind: "CONFLICT", retryable: true },
+            },
+          });
+          return;
+        }
+        const scheme = p["tls"] === false ? "http" : "https";
+        const entry = {
+          serveId,
+          name,
+          listenPort,
+          target: p["target"],
+          url: `${scheme}://mock.ts.net:${listenPort}`,
+          ...(p["allow"] !== undefined ? { allow: p["allow"] } : {}),
+          ...(p["tls"] !== undefined ? { tls: p["tls"] } : {}),
+          ...(p["previewDir"] !== undefined ? { previewDir: p["previewDir"] } : {}),
+        };
+        this.meshServes.set(serveId, entry);
+        reply({ result: { ...p, serveId, listenPort, url: entry.url } });
         return;
       }
       case "native.mesh.serve.remove": {
         this.meshRemoveCalls += 1;
-        this.meshServes.delete(String(p["name"]));
-        reply({ result: { removed: true } });
+        if (this.failNextServeRemove) {
+          this.failNextServeRemove = false;
+          reply({
+            error: {
+              code: -32000,
+              message: "scripted serve removal failure",
+              data: { kind: "INTERNAL", retryable: true },
+            },
+          });
+          return;
+        }
+        const serveId = String(p["serveId"] ?? p["name"]);
+        if (!this.meshServes.delete(serveId)) {
+          reply({
+            error: {
+              code: -32003,
+              message: "serve not found",
+              data: { kind: "NOT_FOUND", retryable: false },
+            },
+          });
+          return;
+        }
+        reply({ result: { serveId, removed: true } });
         return;
       }
       case "native.mesh.serve.subscribe": {
@@ -387,7 +465,7 @@ export class MockMgmtServer {
     }
   }
 
-  /** Push a serve runtime delta — a PARTIAL entry {name, status, url?, error?}
+  /** Push a serve runtime delta — a PARTIAL entry {serveId, status, url?, error?}
    * (native.mesh.serve.subscribe → native.mesh.serve.delta). */
   pushServeDelta(entry: unknown): void {
     this.pushDelta("mesh.serve.subscribe", entry);

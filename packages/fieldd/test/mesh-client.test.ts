@@ -51,7 +51,7 @@ describe("MeshClient", () => {
       { name: "api", target: { kind: "port", port: 3000 } },
     ]);
     expect(states.map((s) => s.status)).toEqual(["active", "active"]);
-    expect(states[0]!.url).toBe("https://mock.ts.net/site");
+    expect(states[0]!.url).toBe("https://mock.ts.net:0");
     expect(mock.meshAddCalls).toBe(2);
 
     // dropping one from the desired set removes it at the node
@@ -92,6 +92,64 @@ describe("MeshClient", () => {
     };
     expect(snap.storeId).toBe("field.docs.v1");
     expect(Object.keys(snap.slices)).toEqual(["dev-self"]);
+  });
+
+  it("retains a failed generic stray removal and retries it on the next reconcile", async () => {
+    const { mock, mesh } = await setup();
+    await mesh.setServes([{ name: "site", target: { kind: "port", port: 3_000 } }]);
+    mock.failNextServeRemove = true;
+    await mesh.setServes([]);
+    expect(mock.meshRemoveCalls).toBe(1);
+    expect(mock.meshServes.has("site")).toBe(true);
+
+    await mesh.reconcile();
+    expect(mock.meshRemoveCalls).toBe(2);
+    expect(mock.meshServes.has("site")).toBe(false);
+  });
+
+  it("treats direct remove NOT_FOUND as converged success and exposes raw listener inventory", async () => {
+    const { mesh } = await setup();
+    await mesh.setServes([
+      {
+        serveId: "stable-id",
+        name: "display-name",
+        listenPort: 12_345,
+        target: { kind: "port", port: 3_000, scheme: "https" },
+        tls: true,
+      },
+    ]);
+    expect(await mesh.observedServes()).toEqual([
+      expect.objectContaining({
+        serveId: "stable-id",
+        name: "display-name",
+        listenPort: 12_345,
+      }),
+    ]);
+    await mesh.removeServe("stable-id");
+    await expect(mesh.removeServe("stable-id")).resolves.toEqual({ removed: true });
+  });
+
+  it("merges runtime events by serveId, not by the display name", async () => {
+    const { mock, mesh } = await setup();
+    await mesh.setServes([
+      {
+        serveId: "engine-v1",
+        name: "artifact:stable-object",
+        listenPort: 12_345,
+        target: { kind: "port", port: 3_000 },
+      },
+    ]);
+    mock.pushServeDelta({
+      serveId: "engine-v1",
+      status: "error",
+      error: "[CONNECTION_REFUSED] source down",
+    });
+    await until(() => mesh.serves()[0]?.status === "error");
+    expect(mesh.serves()[0]).toMatchObject({
+      serveId: "engine-v1",
+      name: "artifact:stable-object",
+      error: "[CONNECTION_REFUSED] source down",
+    });
   });
 
   // ---- C3: runtime status stream fused into serves() ----
@@ -154,7 +212,7 @@ describe("MeshClient", () => {
     expect(seen.at(-1)?.find((s) => s.name === "product")?.status).toBe("pending");
   });
 
-  it("partial deltas merge by name: stopped→pending keeps the last-known url", async () => {
+  it("partial legacy deltas merge by name: stopped→pending keeps the last-known url", async () => {
     const { mock, mesh } = await setup();
     await mesh.setServes([productSpec]);
     mock.pushServeDelta(runtimeEntry({ status: "running" })); // runtime url supersedes the add url

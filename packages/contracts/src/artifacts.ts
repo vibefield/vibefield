@@ -1,66 +1,156 @@
 import { z } from "zod";
 
-// ArtifactService wire shapes (C6-6; design-02 §3 ArtifactService · design-01
-// §5 catalog). The artifact hub is fieldd's registry over the mesh serve
-// facade: publish a port or a directory → a tailnet URL, registry-persisted
-// and REPLAYED on restart ("re-serving is re-creating"). fieldd-only shapes,
-// deliberately out of the Rust gen bundle — field-native sees ordinary
-// serves, never artifacts.
+// Artifact Hub wire shapes (AH-1; design-02 §3 ArtifactService ·
+// specs/artifact-hub §4). Local source details are accepted only by mutation
+// methods and persisted in fieldd's private intent file. List/status shapes are
+// safe projections and never contain a directory path, source port, scheme, or
+// allow-list.
 
-/** An artifact's serve name on the mesh: `artifact-<name>`. The prefix is the
- * wire-visible convention (health/Settings show serve names), and it keeps
- * artifact serves disjoint from the product serve by construction. */
 export const ARTIFACT_SERVE_PREFIX = "artifact-";
+export const ARTIFACT_TECHNICAL_NAME_PREFIX = "artifact:";
+export const ARTIFACT_INTENT_FILE = "field.artifact-intent.v2.json";
 
-/** Serve-safe naming: the name rides into proxy ids and URLs, so it is a slug
- * by law, not by hope. */
-export const ARTIFACT_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-export const ArtifactName = z
-  .string()
-  .regex(ARTIFACT_NAME_RE, "artifact names are lowercase slugs (a-z, 0-9, -; max 64)");
+export const ARTIFACT_LIMITS = {
+  LOCAL_OBJECTS: 128,
+  TITLE_CHARS: 128,
+  PATH_CHARS: 4096,
+  ALLOW_GLOBS: 32,
+  ALLOW_GLOB_CHARS: 256,
+  URL_CHARS: 2048,
+  ERROR_CHARS: 256,
+  SLICE_BYTES: 256 * 1024,
+  LISTEN_PORT_MIN: 10_000,
+  LISTEN_PORT_MAX: 19_999,
+} as const;
 
-export const ArtifactTarget = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("port"), port: z.number().int().min(1).max(65535) }).passthrough(),
-  z.object({ kind: z.literal("dir"), path: z.string().min(1) }).passthrough(),
+export const ArtifactId = z.string().ulid();
+export type ArtifactId = z.infer<typeof ArtifactId>;
+
+export const ArtifactTitle = z.string().trim().min(1).max(ARTIFACT_LIMITS.TITLE_CHARS);
+export type ArtifactTitle = z.infer<typeof ArtifactTitle>;
+
+export const ArtifactSource = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("proxy"),
+      port: z.number().int().min(1).max(65_535),
+      scheme: z.enum(["http", "https"]),
+    })
+    .passthrough(),
+  z
+    .object({
+      kind: z.literal("folder"),
+      path: z.string().min(1).max(ARTIFACT_LIMITS.PATH_CHARS),
+      spaFallback: z.literal("/index.html").optional(),
+    })
+    .passthrough(),
 ]);
-export type ArtifactTarget = z.infer<typeof ArtifactTarget>;
+export type ArtifactSource = z.infer<typeof ArtifactSource>;
 
-export const ArtifactPublishParams = z
+const ArtifactAllow = z
+  .array(z.string().min(1).max(ARTIFACT_LIMITS.ALLOW_GLOB_CHARS))
+  .max(ARTIFACT_LIMITS.ALLOW_GLOBS);
+
+export const ArtifactPublishV2Params = z
   .object({
-    name: ArtifactName,
-    target: ArtifactTarget,
-    /** per-route allow globs, forwarded verbatim to the serve (design-00 §4.7) */
-    allow: z.array(z.string()).optional(),
+    artifactId: ArtifactId,
+    title: ArtifactTitle,
+    source: ArtifactSource,
+    allow: ArtifactAllow.optional(),
+    idempotencyKey: z.string().ulid().optional(),
   })
   .passthrough();
+export type ArtifactPublishV2Params = z.infer<typeof ArtifactPublishV2Params>;
+
+/** C6 compatibility window. New clients must use ArtifactPublishV2Params. */
+export const LegacyArtifactName = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "artifact names are lowercase slugs");
+
+export const LegacyArtifactPublishParams = z
+  .object({
+    name: LegacyArtifactName,
+    target: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("port"), port: z.number().int().min(1).max(65_535) }),
+      z.object({ kind: z.literal("dir"), path: z.string().min(1).max(ARTIFACT_LIMITS.PATH_CHARS) }),
+    ]),
+    allow: ArtifactAllow.optional(),
+  })
+  .passthrough();
+export type LegacyArtifactPublishParams = z.infer<typeof LegacyArtifactPublishParams>;
+
+export const ArtifactPublishParams = z.union([
+  ArtifactPublishV2Params,
+  LegacyArtifactPublishParams,
+]);
 export type ArtifactPublishParams = z.infer<typeof ArtifactPublishParams>;
 
-export const ArtifactUnpublishParams = z.object({ name: ArtifactName }).passthrough();
+export const ArtifactUpdateParams = z
+  .object({
+    artifactId: ArtifactId,
+    title: ArtifactTitle.optional(),
+    source: ArtifactSource.optional(),
+    allow: ArtifactAllow.optional(),
+    idempotencyKey: z.string().ulid().optional(),
+  })
+  .passthrough()
+  .refine(
+    (value) => value.title !== undefined || value.source !== undefined || value.allow !== undefined,
+    {
+      message: "artifact.update requires title, source, or allow",
+    },
+  );
+export type ArtifactUpdateParams = z.infer<typeof ArtifactUpdateParams>;
+
+export const ArtifactUnpublishParams = z.union([
+  z.object({ artifactId: ArtifactId }).passthrough(),
+  z.object({ name: LegacyArtifactName }).passthrough(),
+]);
 export type ArtifactUnpublishParams = z.infer<typeof ArtifactUnpublishParams>;
 
-/** The persisted registry entry (`field.artifacts.v1`). Status is NOT here —
- * live serve state is fused at read time, never stored stale. */
-export const ArtifactEntry = z
+export const ArtifactRefreshPreviewParams = z.object({ artifactId: ArtifactId }).passthrough();
+export type ArtifactRefreshPreviewParams = z.infer<typeof ArtifactRefreshPreviewParams>;
+
+export const LocalArtifactIntent = z
   .object({
-    name: ArtifactName,
-    target: ArtifactTarget,
-    allow: z.array(z.string()).optional(),
-    publishedAt: z.number().int().nonnegative(),
+    artifactId: ArtifactId,
+    title: ArtifactTitle,
+    source: ArtifactSource,
+    listenPort: z
+      .number()
+      .int()
+      .min(ARTIFACT_LIMITS.LISTEN_PORT_MIN)
+      .max(ARTIFACT_LIMITS.LISTEN_PORT_MAX),
+    allow: ArtifactAllow.default([]),
+    publicTls: z.literal(true),
+    desired: z.enum(["published", "absent"]),
+    retiringServeIds: z.array(z.string().min(1)).max(16),
+    lastPublishedUrl: z.string().max(ARTIFACT_LIMITS.URL_CHARS).optional(),
+    previewRevision: z.number().int().nonnegative().safe().optional(),
+    createdAt: z.number().int().nonnegative(),
+    updatedAt: z.number().int().nonnegative(),
+    /** Present only for the one-window C6 adapter/migration. */
+    legacyName: LegacyArtifactName.optional(),
   })
   .passthrough();
-export type ArtifactEntry = z.infer<typeof ArtifactEntry>;
+export type LocalArtifactIntent = z.infer<typeof LocalArtifactIntent>;
 
-/** What list/subscribe answer: the entry fused with the serve's live verdict
- * (the C3 fused vocabulary — pending is honest "declared, not serving yet"). */
-export const ArtifactStatus = ArtifactEntry.extend({
-  status: z.enum(["active", "pending", "error"]),
-  /** the tailnet URL, present while the node reports the serve up */
-  url: z.string().optional(),
-  error: z.string().optional(),
-}).passthrough();
+export const ArtifactStatus = z
+  .object({
+    artifactId: ArtifactId,
+    title: ArtifactTitle,
+    kind: z.enum(["proxy", "folder"]),
+    status: z.enum(["active", "starting", "removing", "source-unavailable", "error"]),
+    url: z.string().max(ARTIFACT_LIMITS.URL_CHARS).optional(),
+    error: z.string().max(ARTIFACT_LIMITS.ERROR_CHARS).optional(),
+    previewRevision: z.number().int().nonnegative().safe().optional(),
+    publishedAt: z.number().int().nonnegative(),
+    updatedAt: z.number().int().nonnegative(),
+    /** Compatibility echo for legacy callers; never used as identity. */
+    name: LegacyArtifactName.optional(),
+  })
+  .passthrough();
 export type ArtifactStatus = z.infer<typeof ArtifactStatus>;
 
-/** `artifact.list`'s result; `artifact.subscribe` snapshots and deltas carry
- * the bare `ArtifactStatus[]` (the roster pattern — whole list, never a patch). */
 export const ArtifactListResult = z.object({ artifacts: z.array(ArtifactStatus) }).passthrough();
 export type ArtifactListResult = z.infer<typeof ArtifactListResult>;

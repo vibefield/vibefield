@@ -12,8 +12,9 @@
 //! The sidecar binary is truffle's Go child process. Resolution mirrors
 //! truffle-sidecar's runtime order WITHOUT its build-time downloader (a network
 //! fetch inside `cargo build` would poison every offline/CI build): explicit
-//! env override, then the well-known install locations. Packaging (P2) bundles
-//! the sidecar next to field-native, which the exe-adjacent probe picks up.
+//! env override, then the well-known install locations. AH-1b packages the
+//! exact platform sidecar release next to field-native, which the
+//! executable-adjacent probe picks up first.
 
 use crate::config::NativeConfig;
 use crate::contracts::{UnitHealth, UnitState};

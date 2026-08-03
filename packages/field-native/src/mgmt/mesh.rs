@@ -135,24 +135,28 @@ pub async fn handle(
         }
         "native.mesh.serve.add" => serve_add(state, &node, params, id).await,
         "native.mesh.serve.remove" => {
-            let Some(name) = params.get("name").and_then(Value::as_str) else {
+            let Some(serve_id) = params
+                .get("serveId")
+                .or_else(|| params.get("name"))
+                .and_then(Value::as_str)
+            else {
                 send(
                     tx,
                     err(
                         id,
                         "PRECONDITION_FAILED",
                         -32005,
-                        "name required",
+                        "serveId required",
                         false,
                         None,
                     ),
                 );
                 return;
             };
-            match node.proxy().remove(name).await {
+            match node.proxy().remove(serve_id).await {
                 Ok(()) => {
-                    state.mesh.forget_serve(name).await;
-                    ok(id, json!({"removed": true}))
+                    state.mesh.forget_serve(serve_id).await;
+                    ok(id, json!({"serveId": serve_id, "removed": true}))
                 }
                 Err(e) => map_node_err(state, id, &e.to_string()),
             }
@@ -392,6 +396,19 @@ fn map_node_err(state: &Arc<DaemonState>, id: Option<Value>, msg: &str) -> Value
     if msg.contains("not running") || msg.contains("NotRunning") {
         return unavailable(state, id);
     }
+    if msg.contains("[PROXY_NOT_FOUND]") || msg.contains("proxy not found") {
+        return err(id, "NOT_FOUND", -32003, "serve not found", false, None);
+    }
+    if msg.contains("[STATIC_ROOT_INVALID]") {
+        return err(
+            id,
+            "PRECONDITION_FAILED",
+            -32005,
+            "static root is missing, unreadable, or not a directory",
+            false,
+            Some(json!({"code": "STATIC_ROOT_INVALID"})),
+        );
+    }
     err(id, "INTERNAL", -32000, msg, false, None)
 }
 
@@ -469,9 +486,55 @@ async fn serve_add(
             None,
         );
     };
+    let serve_id = params
+        .get("serveId")
+        .and_then(Value::as_str)
+        .unwrap_or(name);
+    if serve_id.is_empty() || name.is_empty() {
+        return err(
+            id,
+            "PRECONDITION_FAILED",
+            -32005,
+            "serveId and name must be non-empty",
+            false,
+            None,
+        );
+    }
     let target = params.get("target").cloned().unwrap_or(Value::Null);
     let allow = params.get("allow").cloned().unwrap_or_else(|| json!([]));
     let tls = params.get("tls").and_then(Value::as_bool);
+    let listen_port = match params.get("listenPort") {
+        None => None,
+        Some(value) => match value.as_u64() {
+            Some(port) => Some(port),
+            None => {
+                return err(
+                    id,
+                    "PRECONDITION_FAILED",
+                    -32005,
+                    "listenPort must be an unsigned integer",
+                    false,
+                    None,
+                )
+            }
+        },
+    };
+    let preview_dir = match params.get("previewDir") {
+        None => None,
+        Some(value) => match value.as_str() {
+            Some(path) => Some(path),
+            None => {
+                return err(
+                    id,
+                    "PRECONDITION_FAILED",
+                    -32005,
+                    "previewDir must be a string",
+                    false,
+                    None,
+                )
+            }
+        },
+    };
     let path_secret = params.get("pathSecret").and_then(Value::as_str);
     let allow_globs: Vec<String> = allow
         .as_array()
@@ -481,10 +544,20 @@ async fn serve_add(
                 .collect()
         })
         .unwrap_or_default();
-    let cfg = match build_serve_config(name, &target, allow_globs, tls, path_secret) {
+    let cfg = match build_serve_config(ServeConfigInput {
+        serve_id,
+        name,
+        target: &target,
+        listen_port,
+        preview_dir,
+        allow: allow_globs,
+        tls,
+        path_secret,
+    }) {
         Ok(c) => c,
         Err(msg) => return err(id, "PRECONDITION_FAILED", -32005, &msg, false, None),
     };
+    let effective_listen_port = cfg.listen_port;
     match node.proxy().add(cfg).await {
         Ok(info) => {
             // Cache the FULL declared config (incl. tls + pathSecret) so serve.list /
@@ -492,20 +565,36 @@ async fn serve_add(
             // `serve_entry_json` projects only {target, allow, tls} to the wire and
             // NEVER emits pathSecret. The secret's canonical home is fieldd + the
             // sidecar route config (thinking-c3 §1) — this cache copy is never re-shared.
-            let mut record = json!({"target": target, "allow": allow});
+            let mut record = json!({
+                "serveId": serve_id,
+                "name": name,
+                "listenPort": effective_listen_port,
+                "target": target,
+                "allow": allow,
+            });
             if let Some(tls) = tls {
                 record["tls"] = json!(tls);
+            }
+            if let Some(preview_dir) = preview_dir {
+                record["previewDir"] = json!(preview_dir);
             }
             if let Some(secret) = path_secret {
                 record["pathSecret"] = json!(secret);
             }
-            state.mesh.record_serve(name, record).await;
+            state.mesh.record_serve(serve_id, record).await;
             // The add response echoes the declared config back to fieldd (which already
             // holds the secret); it deliberately carries neither tls nor pathSecret —
             // clients read live status via serve.list / serve.subscribe.
             ok(
                 id,
-                json!({"name": name, "target": target, "url": info.url, "allow": allow}),
+                json!({
+                    "serveId": serve_id,
+                    "name": name,
+                    "listenPort": info.listen_port,
+                    "target": target,
+                    "url": info.url,
+                    "allow": allow,
+                }),
             )
         }
         Err(e) => map_node_err(state, id, &e.to_string()),
@@ -522,14 +611,54 @@ async fn serve_add(
 /// through the tailnet sidecar (only the sidecar's route config and fieldd's memory
 /// hold the secret). A `dir` serve is a static surface where a secret path proves
 /// nothing, so `path_secret` there is rejected rather than silently served.
-fn build_serve_config(
-    name: &str,
-    target: &Value,
+struct ServeConfigInput<'a> {
+    serve_id: &'a str,
+    name: &'a str,
+    target: &'a Value,
+    listen_port: Option<u64>,
+    preview_dir: Option<&'a str>,
     allow: Vec<String>,
     tls: Option<bool>,
-    path_secret: Option<&str>,
-) -> Result<ProxyConfig, String> {
+    path_secret: Option<&'a str>,
+}
+
+fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, String> {
+    let ServeConfigInput {
+        serve_id,
+        name,
+        target,
+        listen_port,
+        preview_dir,
+        allow,
+        tls,
+        path_secret,
+    } = input;
     let tls = tls.unwrap_or(true); // upstream default; the product serve passes false
+    if path_secret.is_some() && preview_dir.is_some() {
+        return Err("previewDir is not supported with pathSecret".into());
+    }
+    let explicit_listen_port = listen_port.is_some();
+    let parse_listen_port = |legacy: u16| -> Result<u16, String> {
+        match listen_port {
+            Some(0) => Err("listenPort must be nonzero".into()),
+            Some(value) => u16::try_from(value).map_err(|_| "listenPort out of range".to_string()),
+            None => Ok(legacy),
+        }
+    };
+    let mut preview_routes = Vec::new();
+    if let Some(dir) = preview_dir {
+        if !std::path::Path::new(dir).is_absolute() {
+            return Err("previewDir must be an absolute path".into());
+        }
+        preview_routes.push(ProxyRoute {
+            prefix: "/.vibefield/preview".into(),
+            target_url: None,
+            dir: Some(dir.into()),
+            fallback: None,
+            strip_prefix: false,
+            allow: vec![],
+        });
+    }
     match target.get("kind").and_then(Value::as_str) {
         Some("port") => {
             let port_u64 = target
@@ -538,32 +667,49 @@ fn build_serve_config(
                 .ok_or("target.port required")?;
             let port =
                 u16::try_from(port_u64).map_err(|_| "target.port out of range".to_string())?;
-            let routes = match path_secret {
-                Some(secret) => vec![ProxyRoute {
+            let scheme = target
+                .get("scheme")
+                .and_then(Value::as_str)
+                .unwrap_or("http");
+            if scheme != "http" && scheme != "https" {
+                return Err("target.scheme must be http|https".into());
+            }
+            let listen_port = parse_listen_port(port)?;
+            let mut routes = preview_routes;
+            match path_secret {
+                Some(secret) => routes.push(ProxyRoute {
                     prefix: format!("/t/{secret}"),
-                    target_url: Some(format!("http://127.0.0.1:{port}")),
+                    target_url: Some(format!("{scheme}://127.0.0.1:{port}")),
                     dir: None,
                     fallback: None,
                     strip_prefix: false, // LOAD-BEARING — see fn doc (EL7 provenance proof)
                     allow: vec![],
-                }],
-                None => vec![],
-            };
+                }),
+                None if explicit_listen_port || !routes.is_empty() => routes.push(ProxyRoute {
+                    prefix: "/".into(),
+                    target_url: Some(format!("{scheme}://127.0.0.1:{port}")),
+                    dir: None,
+                    fallback: None,
+                    strip_prefix: false,
+                    allow: vec![],
+                }),
+                None => {}
+            }
             // Routes mode ignores the top-level target (truffle: "Ignored when routes is
             // non-empty"); the bare v1 shape carries it. Today's plain-port shape preserved.
             let target = if routes.is_empty() {
                 ProxyTarget {
                     host: "127.0.0.1".into(),
                     port,
-                    scheme: "http".into(),
+                    scheme: scheme.into(),
                 }
             } else {
                 ProxyTarget::default()
             };
             Ok(ProxyConfig {
-                id: name.into(),
+                id: serve_id.into(),
                 name: name.into(),
-                listen_port: port,
+                listen_port,
                 target,
                 // Explicit FALSE (review 2026-07-21): announce is a no-op until
                 // truffle RFC-023 P5 ships discovery — at which point upstream
@@ -586,23 +732,33 @@ fn build_serve_config(
                 .get("path")
                 .and_then(Value::as_str)
                 .ok_or("target.path required")?;
+            if !std::path::Path::new(path).is_absolute() {
+                return Err("target.path must be an absolute path".into());
+            }
+            let fallback = target.get("fallback").and_then(Value::as_str);
+            if fallback.is_some_and(|value| value != "/index.html") {
+                return Err("target.fallback must be /index.html".into());
+            }
+            let listen_port = parse_listen_port(0)?;
+            let mut routes = preview_routes;
+            routes.push(ProxyRoute {
+                prefix: "/".into(),
+                target_url: None,
+                dir: Some(path.into()),
+                fallback: fallback.map(str::to_string),
+                strip_prefix: false,
+                allow: vec![],
+            });
             Ok(ProxyConfig {
-                id: name.into(),
+                id: serve_id.into(),
                 name: name.into(),
-                listen_port: 0,
+                listen_port,
                 target: ProxyTarget::default(),
                 announce: false, // same law as the port arm — no surprise broadcasts
                 tls,
                 allow_non_loopback: false,
                 allow,
-                routes: vec![ProxyRoute {
-                    prefix: "/".into(),
-                    target_url: None,
-                    dir: Some(path.into()),
-                    fallback: None,
-                    strip_prefix: false,
-                    allow: vec![],
-                }],
+                routes,
             })
         }
         _ => Err("target.kind must be port|dir".into()),
@@ -614,9 +770,18 @@ fn build_serve_config(
 /// The cache `cfg` may hold `pathSecret` (a daemon secret); this projection reads
 /// ONLY `{target, allow, tls}` from it — `pathSecret` is never emitted (EL7 redaction,
 /// thinking-c3 §1). Pure so the redaction is unit-testable without a node.
-fn serve_entry_json(name: &str, url: &str, status: &ProxyStatus, cfg: Option<&Value>) -> Value {
+fn serve_entry_json(
+    serve_id: &str,
+    name: &str,
+    listen_port: u16,
+    url: &str,
+    status: &ProxyStatus,
+    cfg: Option<&Value>,
+) -> Value {
     let mut entry = json!({
+        "serveId": serve_id,
         "name": name,
+        "listenPort": listen_port,
         "target": cfg.and_then(|c| c.get("target")).cloned(),
         "url": url,
         "allow": cfg.and_then(|c| c.get("allow")).cloned(),
@@ -641,9 +806,11 @@ fn serve_entry_json(name: &str, url: &str, status: &ProxyStatus, cfg: Option<&Va
 async fn serve_entries(state: &Arc<DaemonState>, node: &Arc<MeshNode>) -> Vec<Value> {
     let mut serves = Vec::new();
     for info in node.proxy().list() {
-        let cfg = state.mesh.serve_config(&info.name).await;
+        let cfg = state.mesh.serve_config(&info.id).await;
         serves.push(serve_entry_json(
+            &info.id,
             &info.name,
+            info.listen_port,
             &info.url,
             &info.status,
             cfg.as_ref(),
@@ -720,9 +887,9 @@ fn spawn_store_forwarder(tx: Tx, store: Arc<JsonStore>, sub_id: String) {
 
 /// serve.subscribe forwarder over `node.proxy().subscribe()` (broadcast cap 64),
 /// mirroring `spawn_store_forwarder`. The delta payload is a PARTIAL ServeEntry keyed
-/// by `name` — `{name, status, url?, error?}` — that the client merges into the
-/// snapshot entry of the same name (same shape family as the `{serves:[…]}` snapshot).
-/// `ProxyEvent.id` is the serve name (serve_add sets `ProxyConfig.id = name`), so no
+/// by `serveId` — `{serveId, status, url?, error?}` — that the client merges into the
+/// snapshot entry of the same identity (same shape family as the `{serves:[…]}` snapshot).
+/// `ProxyEvent.id` is the serve id, so no
 /// cache lookup is needed to correlate. On broadcast Lagged we re-project a full
 /// snapshot (P5) — the Stopped proxy is already gone from `proxy().list()`, so the
 /// per-event delta (not a list rebuild) is what carries a stop honestly.
@@ -734,13 +901,15 @@ fn spawn_serve_forwarder(state: Arc<DaemonState>, tx: Tx, node: Arc<MeshNode>, s
                 Ok(ev) => {
                     let payload = match ev {
                         ProxyEvent::Started { id, url, .. } => {
-                            json!({"name": id, "status": "running", "url": url})
+                            json!({"serveId": id, "status": "running", "url": url})
                         }
-                        ProxyEvent::Stopped { id } => json!({"name": id, "status": "stopped"}),
+                        ProxyEvent::Stopped { id } => {
+                            json!({"serveId": id, "status": "stopped"})
+                        }
                         // Match serve_entry_json's error string: record_runtime_error
                         // stores ProxyStatus::Error("[code] message"), so format alike.
                         ProxyEvent::Error { id, code, message } => {
-                            json!({"name": id, "status": "error", "error": format!("[{code}] {message}")})
+                            json!({"serveId": id, "status": "error", "error": format!("[{code}] {message}")})
                         }
                     };
                     let note = json!({"jsonrpc":"2.0","method":"native.mesh.serve.delta","params":{"subId": sub_id, "payload": payload}});
@@ -770,11 +939,28 @@ mod tests {
     //! integration harness.
     use super::*;
 
+    fn serve_input<'a>(serve_id: &'a str, target: &'a Value) -> ServeConfigInput<'a> {
+        ServeConfigInput {
+            serve_id,
+            name: serve_id,
+            target,
+            listen_port: None,
+            preview_dir: None,
+            allow: vec![],
+            tls: None,
+            path_secret: None,
+        }
+    }
+
     #[test]
     fn port_with_secret_builds_secret_route_strip_false_tls_false() {
         let target = json!({"kind": "port", "port": 9410});
-        let cfg = build_serve_config("product", &target, vec![], Some(false), Some("s3cr3t"))
-            .expect("routes-mode config builds");
+        let cfg = build_serve_config(ServeConfigInput {
+            tls: Some(false),
+            path_secret: Some("s3cr3t"),
+            ..serve_input("product", &target)
+        })
+        .expect("routes-mode config builds");
         assert!(!cfg.tls, "tls:false must thread through to ProxyConfig");
         assert_eq!(cfg.routes.len(), 1, "port+secret is exactly one route");
         let route = &cfg.routes[0];
@@ -799,8 +985,8 @@ mod tests {
     #[test]
     fn port_plain_preserves_bare_target_v1_shape() {
         let target = json!({"kind": "port", "port": 3000});
-        let cfg = build_serve_config("web", &target, vec![], None, None)
-            .expect("bare-target config builds");
+        let cfg =
+            build_serve_config(serve_input("web", &target)).expect("bare-target config builds");
         assert!(
             cfg.routes.is_empty(),
             "plain port keeps the v1 bare-target shape"
@@ -818,8 +1004,11 @@ mod tests {
     #[test]
     fn dir_with_secret_is_rejected() {
         let target = json!({"kind": "dir", "path": "/srv/pub"});
-        let err = build_serve_config("static", &target, vec![], None, Some("nope"))
-            .expect_err("dir + pathSecret must be rejected");
+        let err = build_serve_config(ServeConfigInput {
+            path_secret: Some("nope"),
+            ..serve_input("static", &target)
+        })
+        .expect_err("dir + pathSecret must be rejected");
         assert!(
             err.contains("pathSecret"),
             "message names the offending field: {err}"
@@ -829,8 +1018,11 @@ mod tests {
     #[test]
     fn dir_plain_builds_static_route() {
         let target = json!({"kind": "dir", "path": "/srv/pub"});
-        let cfg = build_serve_config("static", &target, vec!["*@corp.com".into()], None, None)
-            .expect("dir config builds");
+        let cfg = build_serve_config(ServeConfigInput {
+            allow: vec!["*@corp.com".into()],
+            ..serve_input("static", &target)
+        })
+        .expect("dir config builds");
         assert_eq!(cfg.routes.len(), 1);
         assert_eq!(cfg.routes[0].prefix, "/");
         assert_eq!(cfg.routes[0].dir.as_deref(), Some("/srv/pub"));
@@ -840,17 +1032,13 @@ mod tests {
 
     #[test]
     fn bad_kind_and_bad_port_are_precondition_failures() {
-        assert!(build_serve_config("x", &json!({"kind": "nope"}), vec![], None, None).is_err());
-        assert!(build_serve_config("x", &json!({"kind": "port"}), vec![], None, None).is_err());
+        let bad_kind = json!({"kind": "nope"});
+        assert!(build_serve_config(serve_input("x", &bad_kind)).is_err());
+        let missing_port = json!({"kind": "port"});
+        assert!(build_serve_config(serve_input("x", &missing_port)).is_err());
+        let oversized_port = json!({"kind": "port", "port": 99_999});
         assert!(
-            build_serve_config(
-                "x",
-                &json!({"kind": "port", "port": 99_999}),
-                vec![],
-                None,
-                None
-            )
-            .is_err(),
+            build_serve_config(serve_input("x", &oversized_port)).is_err(),
             "ports above u16::MAX are rejected, not truncated"
         );
     }
@@ -866,6 +1054,8 @@ mod tests {
         });
         let entry = serve_entry_json(
             "product",
+            "product",
+            9410,
             "https://h.ts.net:9410",
             &ProxyStatus::Running,
             Some(&cfg),
@@ -938,11 +1128,60 @@ mod tests {
     fn serve_entry_json_maps_error_status_and_message() {
         let entry = serve_entry_json(
             "web",
+            "web",
+            8443,
             "https://h.ts.net:8443",
             &ProxyStatus::Error("[SERVE_ERROR] boom".into()),
             None,
         );
         assert_eq!(entry["status"], "error");
         assert_eq!(entry["error"], "[SERVE_ERROR] boom");
+    }
+
+    #[test]
+    fn artifact_proxy_separates_engine_id_name_listener_source_and_preview() {
+        let target = json!({"kind": "port", "port": 3000, "scheme": "https"});
+        let cfg = build_serve_config(ServeConfigInput {
+            name: "artifact:01ARZ3NDEKTSV4RRFFQ69G5FAV",
+            listen_port: Some(12_345),
+            preview_dir: Some("/var/lib/vibefield/previews/01"),
+            allow: vec!["*@corp.com".into()],
+            tls: Some(true),
+            ..serve_input("artifact-01-fingerprint", &target)
+        })
+        .expect("AH proxy config builds");
+        assert_eq!(cfg.id, "artifact-01-fingerprint");
+        assert_eq!(cfg.name, "artifact:01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(cfg.listen_port, 12_345);
+        assert!(cfg.tls);
+        assert_eq!(cfg.routes.len(), 2);
+        assert_eq!(cfg.routes[0].prefix, "/.vibefield/preview");
+        assert_eq!(
+            cfg.routes[0].dir.as_deref(),
+            Some("/var/lib/vibefield/previews/01")
+        );
+        assert_eq!(cfg.routes[1].prefix, "/");
+        assert_eq!(
+            cfg.routes[1].target_url.as_deref(),
+            Some("https://127.0.0.1:3000")
+        );
+        assert_eq!(cfg.allow, vec!["*@corp.com".to_string()]);
+    }
+
+    #[test]
+    fn artifact_folder_uses_stable_port_and_optional_spa_fallback() {
+        let target = json!({"kind": "dir", "path": "/srv/pub", "fallback": "/index.html"});
+        let cfg = build_serve_config(ServeConfigInput {
+            name: "artifact:01ARZ3NDEKTSV4RRFFQ69G5FAW",
+            listen_port: Some(19_999),
+            preview_dir: Some("/var/lib/vibefield/previews/02"),
+            tls: Some(true),
+            ..serve_input("artifact-folder-fingerprint", &target)
+        })
+        .expect("AH folder config builds");
+        assert_eq!(cfg.listen_port, 19_999);
+        assert_eq!(cfg.routes.len(), 2);
+        assert_eq!(cfg.routes[1].dir.as_deref(), Some("/srv/pub"));
+        assert_eq!(cfg.routes[1].fallback.as_deref(), Some("/index.html"));
     }
 }

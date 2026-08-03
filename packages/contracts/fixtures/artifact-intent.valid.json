@@ -1,0 +1,13 @@
+{
+  "artifactId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "title": "Static docs",
+  "source": { "kind": "folder", "path": "/srv/docs", "spaFallback": "/index.html" },
+  "listenPort": 17180,
+  "allow": [],
+  "publicTls": true,
+  "desired": "published",
+  "retiringServeIds": [],
+  "lastPublishedUrl": "https://mac.tail1234.ts.net:17180",
+  "createdAt": 1700000000000,
+  "updatedAt": 1700000000001
+}

@@ -88,3 +88,10 @@ minimumReleaseAgeExclude:
   - '@vibecook/ghosttea-react@0.8.0'
   - '@vibecook/ghosttea-frame@0.8.0'
   - '@vibecook/ghosttea@0.8.0'
+  # AH-1b — the exact T2 release is a reviewed executable input, not an
+  # unreviewed transitive update. All platform packages move in lockstep.
+  - '@vibecook/truffle-sidecar-darwin-arm64@0.7.12'
+  - '@vibecook/truffle-sidecar-darwin-x64@0.7.12'
+  - '@vibecook/truffle-sidecar-linux-arm64@0.7.12'
+  - '@vibecook/truffle-sidecar-linux-x64@0.7.12'
+  - '@vibecook/truffle-sidecar-win32-x64@0.7.12'

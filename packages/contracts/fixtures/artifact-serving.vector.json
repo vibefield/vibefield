@@ -1,0 +1,20 @@
+{
+  "intent": {
+    "artifactId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "title": "Workbench",
+    "source": { "kind": "proxy", "port": 3000, "scheme": "https" },
+    "listenPort": 17180,
+    "allow": ["*@corp.example"],
+    "publicTls": true,
+    "desired": "published",
+    "retiringServeIds": [],
+    "createdAt": 1700000000000,
+    "updatedAt": 1700000000000
+  },
+  "previewDir": "/var/lib/vibefield/artifacts/previews/01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "portCandidate": 17180,
+  "canonicalJson": "{\"allow\":[\"*@corp.example\"],\"listenPort\":17180,\"routes\":[{\"allow\":[],\"dir\":\"/var/lib/vibefield/artifacts/previews/01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"prefix\":\"/.vibefield/preview\",\"stripPrefix\":false},{\"allow\":[],\"prefix\":\"/\",\"stripPrefix\":false,\"targetUrl\":\"https://127.0.0.1:3000\"}],\"tls\":true,\"v\":1}",
+  "sha256": "4b1a4375807896fd1cf8922582abff4bcc0bfd527c33f6e8f78b959f91579c22",
+  "fingerprint": "jmneg5mapclp2hhy",
+  "serveId": "artifact-01ARZ3NDEKTSV4RRFFQ69G5FAV-jmneg5mapclp2hhy"
+}

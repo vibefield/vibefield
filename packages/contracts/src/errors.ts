@@ -13,6 +13,7 @@ export const ErrorKind = z.enum([
   "AUDIT_UNAVAILABLE",
   "TIMEOUT",
   "INCOMPATIBLE",
+  "RESOURCE_EXHAUSTED",
   "INTERNAL",
 ]);
 export type ErrorKind = z.infer<typeof ErrorKind>;
@@ -49,4 +50,5 @@ export const RPC_ERROR_CODES: Record<ErrorKind, number> = {
   AUDIT_UNAVAILABLE: -32007,
   TIMEOUT: -32008,
   INCOMPATIBLE: -32009,
+  RESOURCE_EXHAUSTED: -32010,
 };

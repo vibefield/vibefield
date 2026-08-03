@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ZodTypeAny } from "zod";
+import { ArtifactPublishV2Params, ArtifactStatus, LocalArtifactIntent } from "../src/artifacts";
 import { DeviceInfo, DeviceSlice } from "../src/devices";
 import {
   AuditRecordV1,
@@ -50,6 +51,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "rpc-request": RpcRequest,
   "rpc-response": RpcResponse,
   "error-data": ErrorData,
+  "artifact-publish": ArtifactPublishV2Params,
+  "artifact-intent": LocalArtifactIntent,
+  "artifact-status": ArtifactStatus,
   "native-health": NativeHealth,
   "desired-state": DesiredState,
   "observed-state": ObservedState,
