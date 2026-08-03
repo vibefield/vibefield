@@ -7,7 +7,8 @@
 > GT-2e `a3babb7` + GT-3 `af316db` — the one-authority correction, then restore/kill/config;
 > AH-0 ratified; T2 consumed in exact-pinned Truffle v0.7.12; AH-1a/1b serving
 > implementation landed at `9f80f0c` with its physical two-client tailnet proof still owed;
-> AH-2 global validated catalog landed at `9c17c46`).
+> AH-2 global validated catalog landed at `9c17c46`; AH-3 presentation amended to the
+> right-edge `hud.side-panel`).
 >
 > Lives in main-tracked `docs/` (moved from `draft/` 2026-08-02). Corpus citations here
 > (`specs/…`, `thinking-…`, `predesign-…`, `research/…`, `petitions/…`) resolve under
@@ -26,7 +27,7 @@ product: AH-1 persists source-local Proxy/Folder intent, allocates stable HTTPS 
 reconciles exact configs, and packages Truffle's hardened static sidecar; AH-2 publishes
 bounded safe self-slices and makes `artifact.list/subscribe` a validated union fused with
 authenticated origin identity, boot, and liveness. The missing product half is presentation:
-AH-3 is the desktop sheet and shell-provider bridge before preview capture and phone.
+AH-3 is the desktop right-side panel and shell-provider bridge before preview capture and phone.
 
 ## Tracks
 
@@ -34,9 +35,9 @@ AH-3 is the desktop sheet and shell-provider bridge before preview capture and p
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE for the prior surface set; spec remains governing | `specs/plugin-architecture.md` | AH-3 adds the earned `hud.sheet` fixed slot; other dogfood through AR/GT; public index repo = James's op |
+| PLUG — plugins | P0–P7 COMPLETE for the prior surface set; spec remains governing | `specs/plugin-architecture.md` | AH-3 adds the earned `hud.side-panel` fixed slot; other dogfood through AR/GT; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
-| AH — Artifact Hub | **IN FLIGHT (implementation)** — AH-0 ratified; AH-1a/1b serving landed at `9f80f0c`; AH-2 global catalog landed at `9c17c46`; live AH-1 two-client field proof owed | `specs/artifact-hub.md` | **AH-3** sheet + shell provider → AH-4 preview capture → AH-5 phone |
+| AH — Artifact Hub | **IN FLIGHT (implementation)** — AH-0 ratified; AH-1a/1b serving landed at `9f80f0c`; AH-2 global catalog landed at `9c17c46`; live AH-1 two-client field proof owed | `specs/artifact-hub.md` | **AH-3** right-side panel + shell provider → AH-4 preview capture → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
@@ -71,13 +72,13 @@ public cache. The post-landing review debt is paid in-tree: DeviceSlice owner bi
 trust projection, raw URL grammar, generated end-to-end transport budgets, bounded ProductAPI
 backpressure, async/coalesced cache checkpoints, durable preview cleanup retries, isolated
 legacy migration, and drainable ArtifactService shutdown all precede AH-3.
-**AH-3** now adds the earned `hud.sheet` slot and turns Electron main's existing authenticated
+**AH-3** now adds the earned `hud.side-panel` slot and turns Electron main's existing authenticated
 loopback client into the static `shell.*` provider; no ProductAPI UDS or renderer relay is
 added.
 
 ## Next up — the options on the table (James's call)
 
-- **AH-3** — ship the desktop artifact sheet, Proxy/Folder flows, and static `shell.*`
+- **AH-3** — ship the desktop artifact side panel, Proxy/Folder flows, and static `shell.*`
   provider bridge. AH-4/5 then add preview capture and phone; the AH-1 physical two-client
   proof can run alongside this work.
 - **AR** — the agent tracks; the reason everything else exists.
@@ -132,7 +133,7 @@ added.
 - Open an old board once; watch the C2 id-migration log line.
 - Settings Plugins section (P2) · toggle widgetlab → placeholders swap LIVE + tray thins (P3).
 - Mesh sync rows + the file pill's standing-state dot, both themes (C6-4).
-- Artifact Hub grid + Proxy/Folder add flows, both themes and reduced motion (AH-3).
+- Artifact Hub list + Proxy/Folder add flows, both themes and reduced motion (AH-3).
 - The Godview deck end-to-end (⌘G): the zsh first pane, the consent face after a session
   dies, the kill chip's two steps, Settings → Terminal editor with a live reload (GT-2e/3).
 

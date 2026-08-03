@@ -403,6 +403,14 @@ already exist, so no new data plane is needed. At ratification the pass identifi
 upstream hardening gate: T2 would make static roots symlink-confined before Folder or
 URL-served previews shipped; root-only Proxy did not wait.
 
+**AH-0 PRESENTATION AMENDMENT RATIFIED (2026-08-03 — documentation event; no runtime landing
+claimed).** James replaced the unimplemented bottom-island artifact sheet with a toggleable,
+non-modal right-edge side panel and a 40px round outermost top-right toggle. The spine still
+owns the stage, arbitration, motion, focus, and teardown; `vibefield.browser` still owns the
+catalog and Proxy/Folder flows. The panel overlays without resizing, dimming, or receding the
+field. Artifact Hub v0.4, plugin architecture, design-03, DESIGN, DECISIONS, and ROADMAP now
+carry that one direction; no serving, catalog, permission, or Truffle decision changed.
+
 **T2 LANDED UPSTREAM / RELEASED (2026-08-02 PDT; Truffle v0.7.12 — no VibeField runtime
 landing claimed).** Truffle implemented the petition directly: `13a283b` raises the sidecar
 and release floor to Go 1.26.5, binds static routes through `os.OpenRoot`, adds tri-state

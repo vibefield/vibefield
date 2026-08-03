@@ -150,6 +150,7 @@ dark, or hard. The exact recipes (do not eyeball new ones):
 | Card, lifted | `0 30px 60px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06)` |
 | Island / floating chrome | `0 8px 30px rgba(0,0,0,0.08)` · dark `rgba(0,0,0,0.4)` |
 | Sheet (rises from bottom) | `0 -20px 40px rgba(0,0,0,0.08)` · dark `0.4` |
+| Side panel (enters from right) | `-20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` |
 | Drag proxy (above everything) | `drop-shadow(0 24px 48px rgba(0,0,0,0.35))` |
 | Tray tile | `drop-shadow(0 10px 18px rgba(0,0,0,0.16))` |
 
@@ -225,23 +226,34 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
 - **HUD island**: one morphing element (§6 M1), island material, centered-bottom;
   `64px` closed; opens to a sheet with pull bar (48×6 rounded-full, `black/20`),
   morphing ⊕→✕ (135° rotation), edge-fade scroll masks, no visible scrollbars.
-- **Artifact Hub sheet** (AH-3/4): a `vibefield.browser` contribution inside that same
-  bottom island — never a second panel. Header = “Artifacts” + quiet count + one round Add
-  action. The catalog is a responsive two-column grid collapsing to one; tiles use a
-  `aspect-[16/10] rounded-[10px]` clipped preview, then title at 12px medium and one 11px `/50`
-  fact line (`origin · proxy|folder`). Availability is an honest dot + word, with color only
-  from §2.5: active green, source-unavailable orange, error red, and
+- **Artifact Hub side panel** (AH-3/4; amended 2026-08-03): a `vibefield.browser`
+  contribution inside the spine-owned `hud.side-panel` stage, separate from the bottom island.
+  Its persistent 40px round toggle is the outermost control in the top-right chrome cluster:
+  zoom pill · theme · Artifacts, with 8px gaps, anchored `top-4 right-4`. It uses the floating
+  round-button recipe and the inverted active state; the same button toggles open/closed and
+  carries the matching tooltip/accessible name.
+  The panel is fixed `top-16 right-0 bottom-0 w-[min(92vw,26rem)]`, with
+  `rounded-l-[2.5rem]`, sheet material, a left-cast side-panel shadow from §5, and internal
+  edge-faded scrolling. The same physical panel translates from the right on the 600ms island
+  curve; it is never a crossfade. It overlays without resizing the infinite canvas and is
+  deliberately non-modal: no backdrop, canvas recede, stage hold, or focus trap. The spine
+  still arbitrates one expanded focus surface across the side panel, docs, tray, settings, and
+  Godview; Escape closes, focus returns to the toggle, plugin disable/hot-reload closes, and
+  M6 applies.
+  Header = “Artifacts” + quiet count + one round Add action. The catalog is a single-column
+  list; each row uses a left `w-28 aspect-[16/10] rounded-[10px]` clipped preview, then title at
+  12px medium, one 11px `/50` fact line (`origin · proxy|folder`), and an honest status dot +
+  word. Color comes only from §2.5: active green, source-unavailable orange, error red, and
   starting/removing/offline/unknown muted. Offline/unknown keeps the cached image at `/55`,
   never turns it into a skeleton.
-  Openable tile click opens externally; overflow holds copy URL and, for the local owner only,
+  Openable row click opens externally; overflow holds copy URL and, for the local owner only,
   refresh preview and remove. A first-publish failure has no guessed URL, so open/copy are
-  disabled. Add morphs the sheet in place (M1) to a two-choice Proxy/Folder step: protocol uses
-  the segmented control, port uses `tabular-nums`, and Folder is a single native-picker row —
-  no renderer path textbox. Starting is immediate but visually quiet; success returns to the
-  catalog, while errors stay inline with a plain corrective sentence. The confirm step carries
-  one `/50` factual line: “Opens on devices connected to this tailnet with Tailscale”; it is not
-  a warning banner or a green reachability promise. One sheet arbitration,
-  backdrop/recede/hold, Escape, focus return, and reduced-motion behavior follow M1/M5/M6.
+  disabled. Add changes the panel content in place to a two-choice Proxy/Folder step: protocol
+  uses the segmented control, port uses `tabular-nums`, and Folder is a single native-picker
+  row — no renderer path textbox. Starting is immediate but visually quiet; success returns to
+  the catalog, while errors stay inline with a plain corrective sentence. The confirm step
+  carries one `/50` factual line: “Opens on devices connected to this tailnet with Tailscale”;
+  it is not a warning banner or a green reachability promise.
 - **Segmented control**: full-round track in `--vf-fill`, sliding solid thumb
   (white / `#2C2C2E`, hairline + `shadow-sm`), 300ms island ease; labels 13px medium,
   active full-opacity, rest `/50`.
@@ -251,7 +263,7 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
   carries tier + `ObservationLevel` provenance; wait times in `tabular-nums`. Change
   badges (±%) are solid green/red with white text, `rounded px-1`.
 - **Floating round buttons**: 40px, solid chrome surface, `shadow-lg`, icon at
-  `neutral-500` → full on hover.
+  `neutral-500` → full on hover; persistent active/toggled state is inverted solid.
 - **The file pill** (B4): top-center chrome, `top-4`, **40px tall** (the top-chrome
   control height — 64px stays the bottom island's) — ⊕ new doc · the doc name (13px
   medium, click-to-rename in place: transparent input, Enter/blur commits, Esc reverts)
@@ -365,7 +377,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   over the canvas, there is no app bar; dev-facing diagnostics render as *sections inside
   the Settings panel* (`SystemSection` is the template) — never as standalone pages.
   Top-row slots (all inside the 52px drag strip, all `no-drag`): breadcrumbs left
-  (`left-24`, clearing the traffic lights) · **the file pill center** · theme fab right.
+  (`left-24`, clearing the traffic lights) · **the file pill center** · the right chrome
+  cluster anchored `top-4 right-4` (zoom pill · theme FAB · Artifact FAB outermost).
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
