@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "node tooling/dev-runner/src/cli.mjs",
+    "dev": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs",
     "smoke": "pnpm --filter @vibefield/desktop smoke",
     "smoke:canvas": "pnpm --filter @vibefield/desktop smoke:canvas",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",
