@@ -72,6 +72,8 @@ export class MockMgmtServer {
   private storeVersion = 0;
   private nextSub = 1;
   private issued: Array<{ sock: Socket; subId: string; method: string; storeId?: string }> = [];
+  /** Historical subscribe requests, retained across scripted reconnects. */
+  readonly subscriptionRequests: string[] = [];
 
   constructor(public readonly socketPath: string) {}
 
@@ -211,6 +213,7 @@ export class MockMgmtServer {
       return;
     }
     if (msg.method.endsWith(".subscribe")) {
+      this.subscriptionRequests.push(msg.method);
       if (this.rejectedSubscriptions.has(msg.method)) {
         sock.write(
           JSON.stringify({

@@ -37,6 +37,18 @@ pub mod stores {
     pub const DEVICES: &str = "field.devices.v1";
 }
 
+pub mod mesh_control_limits {
+    pub const REMOTE_ORIGINS: usize = 256;
+    pub const OWNER_CHARS: usize = 256;
+    pub const ARTIFACT_SLICE_BYTES: usize = 262144;
+    pub const DEVICE_SLICE_BYTES: usize = 65536;
+    pub const MGMT_FRAME_BYTES: usize = 83886080;
+    pub const MGMT_QUEUED_BYTES: usize = 100663296;
+    pub const MGMT_OUTBOX_MESSAGES: usize = 64;
+    pub const PRODUCT_FRAME_BYTES: usize = 134217728;
+    pub const PRODUCT_QUEUED_BYTES: usize = 134217728;
+}
+
 /// File names beneath a daemon's own data directory. The plane that OWNS the
 /// file joins the name to its data dir; readers ask that plane for the path.
 pub mod files {

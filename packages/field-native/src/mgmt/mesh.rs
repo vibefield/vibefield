@@ -9,19 +9,48 @@
 //! Handlers send their own responses (subscribe paths must order the response
 //! line before any forwarded event).
 
+use crate::registries::{mesh_control_limits, stores};
 use crate::services::mesh::{JsonStore, MeshNode};
 use crate::services::mesh_bridge::{Lane, LaneClass, LaneEvent, INBOUND_LANE_ID_BASE};
-use crate::state::{DaemonState, OutMsg};
+use crate::state::{DaemonState, MgmtOutbox, OutMsg};
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::broadcast;
 use truffle_core::proxy::{ProxyConfig, ProxyEvent, ProxyRoute, ProxyStatus, ProxyTarget};
 use truffle_core::session::PeerEvent;
 use truffle_core::synced_store::StoreEvent;
 
 use super::{err, ok, send};
 
-type Tx = mpsc::UnboundedSender<OutMsg>;
+type Tx = MgmtOutbox;
+
+const STORE_OWNER_CHARS: usize = mesh_control_limits::OWNER_CHARS;
+const STORE_REMOTE_ORIGINS: usize = mesh_control_limits::REMOTE_ORIGINS;
+const ARTIFACT_SLICE_BYTES: usize = mesh_control_limits::ARTIFACT_SLICE_BYTES;
+const DEVICE_SLICE_BYTES: usize = mesh_control_limits::DEVICE_SLICE_BYTES;
+
+fn store_slice_limit(store_id: &str) -> Option<usize> {
+    match store_id {
+        stores::ARTIFACTS => Some(ARTIFACT_SLICE_BYTES),
+        stores::DEVICES => Some(DEVICE_SLICE_BYTES),
+        _ => None,
+    }
+}
+
+fn store_data_allowed(store_id: &str, owner: &str, data: &Value) -> bool {
+    if owner.is_empty() || owner.len() > STORE_OWNER_CHARS {
+        return false;
+    }
+    store_slice_limit(store_id)
+        .is_none_or(|limit| serde_json::to_vec(data).is_ok_and(|encoded| encoded.len() <= limit))
+}
+
+fn wrapped_store_slice_allowed(store_id: &str, owner: &str, slice: &Value) -> bool {
+    slice
+        .get("data")
+        .is_some_and(|data| store_data_allowed(store_id, owner, data))
+}
 
 pub async fn handle(
     state: &Arc<DaemonState>,
@@ -75,16 +104,22 @@ pub async fn handle(
                         let slice = store
                             .get(dev)
                             .await
-                            .map(|s| serde_json::to_value(s).unwrap());
+                            .and_then(|s| serde_json::to_value(s).ok())
+                            .filter(|slice| wrapped_store_slice_allowed(store_id, dev, slice));
                         ok(
                             id,
                             json!({"storeId": store_id, "deviceId": dev, "slice": slice}),
                         )
                     }
-                    None => ok(
-                        id,
-                        json!({"storeId": store_id, "deviceId": store.device_id(), "data": store.local().await}),
-                    ),
+                    None => {
+                        let owner = store.device_id();
+                        let data = store.local().await;
+                        let safe = data.filter(|value| store_data_allowed(store_id, owner, value));
+                        ok(
+                            id,
+                            json!({"storeId": store_id, "deviceId": owner, "data": safe}),
+                        )
+                    }
                 },
                 _ => {
                     let Some(data) = params.get("data") else {
@@ -101,6 +136,24 @@ pub async fn handle(
                         );
                         return;
                     };
+                    if !store_data_allowed(store_id, store.device_id(), data) {
+                        send(
+                            tx,
+                            err(
+                                id,
+                                "RESOURCE_EXHAUSTED",
+                                -32008,
+                                "store slice exceeds its transport limit",
+                                false,
+                                Some(json!({
+                                    "resource": "store-slice",
+                                    "storeId": store_id,
+                                    "limit": store_slice_limit(store_id),
+                                })),
+                            ),
+                        );
+                        return;
+                    }
                     store.set(data.clone()).await;
                     ok(id, json!({"storeId": store_id, "version": store.version()}))
                 }
@@ -461,13 +514,45 @@ async fn list_peers(node: &Arc<MeshNode>) -> Vec<Value> {
 }
 
 async fn store_snapshot(store: &Arc<JsonStore>) -> Value {
-    let slices: serde_json::Map<String, Value> = store
+    let store_id = store.store_id();
+    let local = store.device_id();
+    let mut all: Vec<(String, Value)> = store
         .all()
         .await
         .into_iter()
-        .map(|(dev, slice)| (dev, serde_json::to_value(slice).unwrap()))
+        .filter_map(|(dev, slice)| serde_json::to_value(slice).ok().map(|value| (dev, value)))
         .collect();
-    json!({"storeId": store.store_id(), "slices": slices})
+    all.sort_by(|(left, _), (right, _)| {
+        (left != local)
+            .cmp(&(right != local))
+            .then_with(|| left.cmp(right))
+    });
+    let mut remote = 0;
+    let mut slices = serde_json::Map::new();
+    for (dev, slice) in all {
+        if store_slice_limit(store_id).is_some() {
+            if dev != local && remote >= STORE_REMOTE_ORIGINS {
+                continue;
+            }
+            if !wrapped_store_slice_allowed(store_id, &dev, &slice) {
+                continue;
+            }
+        }
+        if dev != local {
+            remote += 1;
+        }
+        slices.insert(dev, slice);
+    }
+    json!({"storeId": store_id, "slices": slices})
+}
+
+async fn bounded_store_owners(store: &Arc<JsonStore>) -> HashSet<String> {
+    store_snapshot(store)
+        .await
+        .get("slices")
+        .and_then(Value::as_object)
+        .map(|slices| slices.keys().cloned().collect())
+        .unwrap_or_default()
 }
 
 async fn serve_add(
@@ -846,11 +931,16 @@ fn spawn_peer_forwarder(tx: Tx, node: Arc<MeshNode>, sub_id: String) {
 fn spawn_store_forwarder(tx: Tx, store: Arc<JsonStore>, sub_id: String) {
     tokio::spawn(async move {
         let mut rx = store.subscribe();
+        let mut admitted = bounded_store_owners(&store).await;
         loop {
             match rx.recv().await {
                 Ok(ev) => {
                     let payload = match ev {
                         StoreEvent::LocalChanged(data) => {
+                            if !store_data_allowed(store.store_id(), store.device_id(), &data) {
+                                continue;
+                            }
+                            admitted.insert(store.device_id().to_string());
                             json!({"kind": "localChanged", "deviceId": store.device_id(), "data": data})
                         }
                         StoreEvent::PeerUpdated {
@@ -858,9 +948,24 @@ fn spawn_store_forwarder(tx: Tx, store: Arc<JsonStore>, sub_id: String) {
                             data,
                             version,
                         } => {
+                            if !store_data_allowed(store.store_id(), &device_id, &data) {
+                                continue;
+                            }
+                            if store_slice_limit(store.store_id()).is_some()
+                                && !admitted.contains(&device_id)
+                                && admitted
+                                    .iter()
+                                    .filter(|owner| owner.as_str() != store.device_id())
+                                    .count()
+                                    >= STORE_REMOTE_ORIGINS
+                            {
+                                continue;
+                            }
+                            admitted.insert(device_id.clone());
                             json!({"kind": "peerUpdated", "deviceId": device_id, "data": data, "version": version})
                         }
                         StoreEvent::PeerRemoved { device_id } => {
+                            admitted.remove(&device_id);
                             json!({"kind": "peerRemoved", "deviceId": device_id})
                         }
                         // tolerant: future upstream event kinds must not break the stream
@@ -874,7 +979,13 @@ fn spawn_store_forwarder(tx: Tx, store: Arc<JsonStore>, sub_id: String) {
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                     // dropped events → fresh snapshot (P5: server may re-snapshot)
-                    let note = json!({"jsonrpc":"2.0","method":"native.mesh.store.snapshot","params":{"subId": sub_id, "payload": store_snapshot(&store).await}});
+                    let snapshot = store_snapshot(&store).await;
+                    admitted = snapshot
+                        .get("slices")
+                        .and_then(Value::as_object)
+                        .map(|slices| slices.keys().cloned().collect())
+                        .unwrap_or_default();
+                    let note = json!({"jsonrpc":"2.0","method":"native.mesh.store.snapshot","params":{"subId": sub_id, "payload": snapshot}});
                     if tx.send(OutMsg::Line(note.to_string())).is_err() {
                         break;
                     }
@@ -938,6 +1049,31 @@ mod tests {
     //! (serve.subscribe → UNAVAILABLE when mesh is down) lives in the mgmt_server
     //! integration harness.
     use super::*;
+
+    #[test]
+    fn public_store_slice_limits_are_enforced_before_management_projection() {
+        let artifact_ok = json!({"v": 1, "artifacts": []});
+        assert!(store_data_allowed(
+            stores::ARTIFACTS,
+            "peer-a",
+            &artifact_ok
+        ));
+        assert!(!store_data_allowed(
+            stores::ARTIFACTS,
+            "peer-a",
+            &json!({"v": 1, "artifacts": [], "padding": "x".repeat(ARTIFACT_SLICE_BYTES)})
+        ));
+        assert!(!store_data_allowed(
+            stores::DEVICES,
+            &"x".repeat(STORE_OWNER_CHARS + 1),
+            &json!({})
+        ));
+        assert!(!store_data_allowed(
+            stores::DEVICES,
+            "peer-a",
+            &json!({"padding": "x".repeat(DEVICE_SLICE_BYTES)})
+        ));
+    }
 
     fn serve_input<'a>(serve_id: &'a str, target: &'a Value) -> ServeConfigInput<'a> {
         ServeConfigInput {

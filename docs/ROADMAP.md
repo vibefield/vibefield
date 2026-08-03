@@ -67,7 +67,10 @@ in both Rust and the packaged platform sidecar. Folder + optional SPA fallback n
 same listener as an empty, T2-confined preview route. `9c17c46` makes the catalog one validated
 global view: safe self-slices, transport-derived MagicDNS binding, boot/liveness folding,
 narrow hostile-input projection, tick-coalesced subscription snapshots, and a bounded retained
-public cache.
+public cache. The post-landing review debt is paid in-tree: DeviceSlice owner binding and narrow
+trust projection, raw URL grammar, generated end-to-end transport budgets, bounded ProductAPI
+backpressure, async/coalesced cache checkpoints, durable preview cleanup retries, isolated
+legacy migration, and drainable ArtifactService shutdown all precede AH-3.
 **AH-3** now adds the earned `hud.sheet` slot and turns Electron main's existing authenticated
 loopback client into the static `shell.*` provider; no ProductAPI UDS or renderer relay is
 added.

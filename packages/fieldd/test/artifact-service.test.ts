@@ -163,9 +163,16 @@ class FakeCatalog implements ArtifactCatalogBridge {
     return this.deviceRows;
   }
 
-  async subscribe(cb: (payload: unknown, kind: "snapshot" | "delta") => void): Promise<unknown> {
+  async subscribe(
+    cb: (payload: unknown, kind: "snapshot" | "delta") => void,
+  ): Promise<{ snapshot: unknown; dispose: () => void }> {
     this.event = cb;
-    return { storeId: "field.artifacts.v1", slices: structuredClone(this.slices) };
+    return {
+      snapshot: { storeId: "field.artifacts.v1", slices: structuredClone(this.slices) },
+      dispose: () => {
+        if (this.event === cb) this.event = null;
+      },
+    };
   }
 
   async publish(slice: ArtifactCatalogSlice): Promise<void> {
@@ -255,6 +262,9 @@ function service(
   options: {
     probe?: (source: ArtifactSource) => Promise<boolean>;
     writeIntent?: (path: string, body: string) => void;
+    writeCatalogCache?: (path: string, body: string) => Promise<void>;
+    ensurePreviewDir?: (path: string) => void;
+    removePreviewDir?: (path: string) => void;
     catalog?: ArtifactCatalogBridge;
   } = {},
 ): ArtifactService {
@@ -265,6 +275,15 @@ function service(
     probe: options.probe ?? (async () => true),
     ...(options.catalog !== undefined ? { catalog: options.catalog } : {}),
     ...(options.writeIntent !== undefined ? { writeIntent: options.writeIntent } : {}),
+    ...(options.writeCatalogCache !== undefined
+      ? { writeCatalogCache: options.writeCatalogCache }
+      : {}),
+    ...(options.ensurePreviewDir !== undefined
+      ? { ensurePreviewDir: options.ensurePreviewDir }
+      : {}),
+    ...(options.removePreviewDir !== undefined
+      ? { removePreviewDir: options.removePreviewDir }
+      : {}),
   });
 }
 
@@ -396,7 +415,7 @@ describe("ArtifactService (AH-1 unit)", () => {
     expect(replacing.status).toBe("removing");
     expect(firstBridge.last()).toEqual([]); // replacement never races the failed removal
     expect(intentFile(dataDir).artifacts[0]).toMatchObject({ retiringServeIds: [oldId] });
-    first.dispose();
+    await first.dispose();
 
     const secondBridge = new FakeBridge();
     secondBridge.native = new Map(firstBridge.native);
@@ -423,7 +442,7 @@ describe("ArtifactService (AH-1 unit)", () => {
       desired: "absent",
       retiringServeIds: [serveId],
     });
-    first.dispose();
+    await first.dispose();
 
     // The listener disappeared while fieldd was down. FakeBridge implements
     // the bridge law: native NOT_FOUND converges as successful removal.
@@ -571,9 +590,13 @@ describe("ArtifactService (AH-1 unit)", () => {
 
   it("does not add or mutate memory when the durable intent write fails", async () => {
     const bridge = new FakeBridge();
+    let previewPreparations = 0;
     const svc = service(makeDataDir(), bridge, {
       writeIntent: () => {
         throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+      },
+      ensurePreviewDir: () => {
+        previewPreparations += 1;
       },
     });
     await svc.start();
@@ -582,6 +605,37 @@ describe("ArtifactService (AH-1 unit)", () => {
     expect(svc.health()).toMatchObject({ count: 0, storage: "failed" });
     expect(bridge.last()).toEqual([]);
     expect(bridge.native.size).toBe(0);
+    expect(previewPreparations).toBe(0);
+  });
+
+  it("keeps absent intent as the durable retry record until preview cleanup succeeds", async () => {
+    const dataDir = makeDataDir();
+    let failCleanup = true;
+    const svc = service(dataDir, new FakeBridge(), {
+      removePreviewDir: (path) => {
+        if (failCleanup) throw Object.assign(new Error("busy"), { code: "EBUSY" });
+        rmSync(path, { recursive: true, force: true });
+      },
+    });
+    await svc.start();
+    await svc.publish(proxy());
+
+    await svc.unpublish({ artifactId: A });
+    expect(svc.statuses()[0]).toMatchObject({
+      artifactId: A,
+      status: "removing",
+      error: "artifact preview cleanup is retrying",
+    });
+    expect(intentFile(dataDir).artifacts[0]).toMatchObject({
+      artifactId: A,
+      desired: "absent",
+      retiringServeIds: [],
+    });
+
+    failCleanup = false;
+    await svc.unpublish({ artifactId: A });
+    expect(svc.statuses()).toEqual([]);
+    expect(intentFile(dataDir).artifacts).toEqual([]);
   });
 
   it("migrates C6 intent once, retires the old listener, and preserves evidence", async () => {
@@ -625,6 +679,59 @@ describe("ArtifactService (AH-1 unit)", () => {
     const names = readdirSync(registryDir);
     expect(names).toContain(ARTIFACT_INTENT_FILE);
     expect(names.some((name) => name.startsWith("field.artifacts.v1.json.migrated-"))).toBe(true);
+  });
+
+  it("drops one malformed legacy row without rejecting migration or daemon startup", async () => {
+    const dataDir = makeDataDir();
+    const registryDir = join(dataDir, "registries");
+    mkdirSync(registryDir, { recursive: true });
+    writeFileSync(
+      join(registryDir, "field.artifacts.v1.json"),
+      `${JSON.stringify({
+        v: 1,
+        artifacts: [
+          {
+            name: "bad",
+            target: { kind: "port", port: 3_001 },
+            allow: ["[z-a]"],
+            publishedAt: 41,
+          },
+          {
+            name: "good",
+            target: { kind: "port", port: 3_000 },
+            allow: ["*@example.com"],
+            publishedAt: 42,
+          },
+        ],
+      })}\n`,
+    );
+    const svc = service(dataDir, new FakeBridge());
+    await expect(svc.start()).resolves.toBeUndefined();
+    expect(svc.statuses()).toHaveLength(1);
+    expect(svc.statuses()[0]).toMatchObject({ title: "good", name: "good" });
+    expect(intentFile(dataDir).artifacts).toHaveLength(1);
+  });
+
+  it("rejects queued mutations once disposal starts and resolves after accepted work drains", async () => {
+    let releaseProbe: ((ready: boolean) => void) | undefined;
+    const probe = new Promise<boolean>((resolve) => {
+      releaseProbe = resolve;
+    });
+    const dataDir = makeDataDir();
+    const svc = service(dataDir, new FakeBridge(), { probe: async () => await probe });
+    await svc.start();
+
+    const accepted = svc.publish(proxy(A));
+    await until(() => svc.statuses().some((status) => status.artifactId === A));
+    const queued = svc.publish(proxy(B));
+    const drained = svc.dispose();
+    releaseProbe!(true);
+
+    await accepted;
+    await expect(queued).rejects.toMatchObject({ kind: "UNAVAILABLE" });
+    await drained;
+    expect(intentFile(dataDir).artifacts).toHaveLength(1);
+    expect(intentFile(dataDir).artifacts[0]).toMatchObject({ artifactId: A });
   });
 
   it("quarantines unreadable v2 evidence and keeps boot alive", async () => {
@@ -750,6 +857,69 @@ describe("ArtifactService (AH-2 catalog)", () => {
     expect(catalog.publishes.length).toBeGreaterThan(initialWrites);
   });
 
+  it("coalesces a store burst into one catalog emission and one async cache checkpoint", async () => {
+    const catalog = new FakeCatalog();
+    let cacheWrites = 0;
+    const svc = service(makeDataDir(), new FakeBridge(), {
+      catalog,
+      writeCatalogCache: async () => {
+        cacheWrites += 1;
+      },
+    });
+    await svc.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const emissions: ArtifactView[][] = [];
+    svc.onCatalogChanged((artifacts) => emissions.push(artifacts));
+
+    catalog.push("peer-a", { v: 1, artifacts: [catalogEntry("peer-a", A)] });
+    catalog.push("peer-b", { v: 1, artifacts: [catalogEntry("peer-b", B)] });
+    catalog.push("peer-c", { v: 1, artifacts: [catalogEntry("peer-c", C)] });
+
+    await until(() => cacheWrites > 0 && emissions.at(-1)?.length === 3);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(cacheWrites).toBe(1);
+    expect(emissions).toHaveLength(1);
+    await svc.dispose();
+    expect(catalog.event).toBeNull();
+  });
+
+  it("admits 256 remote origins in addition to the local self slice", async () => {
+    const catalog = new FakeCatalog();
+    catalog.slices[catalog.deviceId] = { data: { v: 1, artifacts: [] } };
+    for (let index = 0; index < 256; index += 1) {
+      const owner = `peer-${index.toString().padStart(3, "0")}`;
+      catalog.slices[owner] = {
+        data: { v: 1, artifacts: [catalogEntry(owner, A)] },
+      };
+    }
+    const svc = service(makeDataDir(), new FakeBridge(), { catalog });
+    await svc.start();
+    expect(svc.artifacts()).toHaveLength(256);
+  });
+
+  it("ignores a forged self cache row without consuming a remote-origin slot", async () => {
+    const dataDir = makeDataDir();
+    const slices: Record<string, unknown> = {
+      "dev-self": { v: 1, artifacts: [catalogEntry("dev-self", A)] },
+    };
+    for (let index = 0; index < 256; index += 1) {
+      const owner = `peer-${index.toString().padStart(3, "0")}`;
+      slices[owner] = { v: 1, artifacts: [catalogEntry(owner, A)] };
+    }
+    const registryDir = join(dataDir, "registries");
+    mkdirSync(registryDir, { recursive: true });
+    writeFileSync(
+      join(registryDir, "field.artifact-catalog-cache.v1.json"),
+      JSON.stringify({ v: 1, slices }),
+    );
+
+    const svc = service(dataDir, new FakeBridge(), { catalog: new FakeCatalog() });
+    await svc.start();
+
+    expect(svc.artifacts()).toHaveLength(256);
+    expect(svc.artifacts().some((artifact) => artifact.originDeviceId === "dev-self")).toBe(false);
+  });
+
   it("isolates poisoned entries, binds URLs, and keeps colliding origin ids distinct", async () => {
     const catalog = new FakeCatalog();
     const self = catalog.deviceRows[0]!;
@@ -848,7 +1018,7 @@ describe("ArtifactService (AH-2 catalog)", () => {
     firstCatalog.push("peer-a", { v: 1, artifacts: [catalogEntry("peer-a", A)] });
     await until(() => first.artifacts().some((view) => view.originDeviceId === "peer-a"));
     firstCatalog.remove("peer-a");
-    first.dispose();
+    await first.dispose();
 
     const secondCatalog = new FakeCatalog();
     const second = service(dataDir, new FakeBridge(), { catalog: secondCatalog });
@@ -923,6 +1093,46 @@ describe("Artifact Hub over a real daemon", () => {
     if (slice === undefined) throw new Error("artifact store has not been written");
     return slice;
   }
+
+  it("does not open a remote URL from a DeviceSlice-authored DNS claim", async () => {
+    const dataDir = makeDataDir();
+    const started = await boot(dataDir, (mock) => {
+      mock.meshPeers = [
+        { id: "node-peer", deviceId: "dev-peer", online: true }, // no authenticated DNS
+      ];
+      mock.storeSlices.set("dev-peer", {
+        deviceId: "dev-peer",
+        name: "peer",
+        platform: "linux",
+        headless: false,
+        fielddVersion: "0.1.0",
+        contractsVersion: CONTRACTS_VERSION,
+        capabilities: { terminalHost: false, docHost: true, push: false },
+        bootId: "boot-peer",
+        publishedAt: 1,
+        tailnetDnsName: "evil.example.com",
+      });
+      mock.artifactStoreSlices.set("dev-peer", {
+        v: 1,
+        artifacts: [
+          catalogEntry("dev-peer", A, {
+            url: "https://evil.example.com:17180",
+            originBootId: "boot-peer",
+          }),
+        ],
+      });
+    });
+    cleanup.push(() => started.daemon.stop());
+    cleanup.push(() => started.mock.stop());
+
+    await until(() => started.daemon.artifacts.artifacts().length === 1);
+    expect(started.daemon.devices.get("dev-peer")?.tailnetDnsName).toBeUndefined();
+    expect(started.daemon.artifacts.artifacts()[0]).toMatchObject({
+      originDeviceId: "dev-peer",
+      openable: false,
+    });
+    expect(started.daemon.artifacts.artifacts()[0]?.url).toBeUndefined();
+  });
 
   it("publishes an exact artifact URL, keeps the product secret separate, replays, and removes", async () => {
     const dataDir = makeDataDir();

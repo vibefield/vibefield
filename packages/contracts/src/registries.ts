@@ -43,6 +43,21 @@ export const STORES = {
   DEVICES: "field.devices.v1",
 } as const;
 
+/** Cross-plane bounds for the opaque SyncedStore → native mgmt → fieldd path
+ * and its ProductAPI projection. Generated into Rust with the store names so
+ * neither side can silently accept a larger trust envelope than the other. */
+export const MESH_CONTROL_LIMITS = {
+  REMOTE_ORIGINS: 256,
+  OWNER_CHARS: 256,
+  ARTIFACT_SLICE_BYTES: 256 * 1024,
+  DEVICE_SLICE_BYTES: 64 * 1024,
+  MGMT_FRAME_BYTES: 80 * 1024 * 1024,
+  MGMT_QUEUED_BYTES: 96 * 1024 * 1024,
+  MGMT_OUTBOX_MESSAGES: 64,
+  PRODUCT_FRAME_BYTES: 128 * 1024 * 1024,
+  PRODUCT_QUEUED_BYTES: 128 * 1024 * 1024,
+} as const;
+
 /** Mesh namespaces. `ss:*` is reserved to SyncedStore; `x.<pluginId>.*` is the dynamic service namespace (D19). */
 export const NAMESPACES = {
   RPC: "field.rpc",

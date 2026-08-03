@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  DEVICE_LIMITS,
   type DeviceInfo,
   DeviceSlice,
   PeerInfo,
@@ -69,6 +70,7 @@ export class DeviceService extends EventEmitter {
    * durable ULID correlation; DeviceSlice can never assert this value. */
   private dnsByUlid = new Map<string, string>();
   private storeSubscribed = false;
+  private storeOff: (() => void) | null = null;
   private lastRosterSig = "";
   /** syncs SERIALIZE (the MeshClient chain law): each pass sees its trigger's state */
   private chain: Promise<void> = Promise.resolve();
@@ -130,6 +132,8 @@ export class DeviceService extends EventEmitter {
 
   dispose(): void {
     this.disposed = true;
+    this.storeOff?.();
+    this.storeOff = null;
     this.removeAllListeners();
   }
 
@@ -144,11 +148,17 @@ export class DeviceService extends EventEmitter {
         this.deviceId = self.deviceId; // the mesh identity supersedes the local fallback (D30)
       }
       if (!this.storeSubscribed) {
-        const snapshot = await this.opts.mesh.subscribeStore(STORES.DEVICES, (payload, kind) =>
-          this.onStoreEvent(payload, kind),
+        const subscription = await this.opts.mesh.subscribeStoreManaged(
+          STORES.DEVICES,
+          (payload, kind) => this.onStoreEvent(payload, kind),
         );
+        if (this.disposed) {
+          subscription.dispose();
+          return;
+        }
+        this.storeOff = subscription.dispose;
         this.storeSubscribed = true; // NativeLink replays across reconnects (P5)
-        this.applyStoreSnapshot(snapshot);
+        this.applyStoreSnapshot(subscription.snapshot);
       }
       await this.refreshPeers();
       await this.publish();
@@ -227,17 +237,55 @@ export class DeviceService extends EventEmitter {
 
   private applyStoreSnapshot(payload: unknown): void {
     const snap = payload as { slices?: Record<string, { data?: unknown }> } | null;
-    if (snap === null || typeof snap.slices !== "object" || snap.slices === null) return;
+    if (
+      snap === null ||
+      typeof snap.slices !== "object" ||
+      snap.slices === null ||
+      Array.isArray(snap.slices)
+    )
+      return;
     this.slices.clear();
-    for (const [deviceId, wrapped] of Object.entries(snap.slices)) {
+    const self = Object.hasOwn(snap.slices, this.deviceId) ? snap.slices[this.deviceId] : undefined;
+    if (self !== undefined) this.adoptSlice(this.deviceId, self?.data);
+    let remotes = 0;
+    for (const deviceId in snap.slices) {
+      if (!Object.hasOwn(snap.slices, deviceId)) continue;
+      if (deviceId === this.deviceId) continue;
+      if (remotes >= DEVICE_LIMITS.REMOTE_ORIGINS) break;
+      const wrapped = snap.slices[deviceId];
       this.adoptSlice(deviceId, wrapped?.data);
+      if (this.slices.has(deviceId)) remotes += 1;
     }
   }
 
   private adoptSlice(deviceId: string, data: unknown): void {
+    if (deviceId.length === 0 || deviceId.length > DEVICE_LIMITS.DEVICE_ID_CHARS) return;
+    if (
+      deviceId !== this.deviceId &&
+      !this.slices.has(deviceId) &&
+      this.remoteSliceCount() >= DEVICE_LIMITS.REMOTE_ORIGINS
+    )
+      return;
+    let encoded: string | undefined;
+    try {
+      encoded = JSON.stringify(data);
+    } catch {
+      return;
+    }
+    if (encoded === undefined || Buffer.byteLength(encoded, "utf8") > DEVICE_LIMITS.SLICE_BYTES)
+      return;
     const parsed = DeviceSlice.safeParse(data);
-    if (!parsed.success) return; // tolerant reader: never fatal, never fabricated
-    this.slices.set(deviceId, parsed.data);
+    if (!parsed.success || parsed.data.deviceId !== deviceId) return;
+    // Tolerant readers may accept future fields. The retained roster is a
+    // narrow writer: in particular, transport-derived DNS/node/link facts can
+    // never survive here as peer-authored extension fields.
+    this.slices.set(deviceId, narrowDeviceSlice(parsed.data));
+  }
+
+  private remoteSliceCount(): number {
+    let count = 0;
+    for (const deviceId of this.slices.keys()) if (deviceId !== this.deviceId) count += 1;
+    return count;
   }
 
   /** Fuse slices with liveness. Self is always online; a peer is online per the
@@ -256,7 +304,29 @@ export class DeviceService extends EventEmitter {
       // link is OUR verdict about the connection to a peer — never self (C5/D32)
       const link = self ? undefined : this.peers?.linkState(deviceId);
       out.push({
-        ...slice,
+        deviceId: slice.deviceId,
+        name: slice.name,
+        platform: slice.platform,
+        headless: slice.headless,
+        fielddVersion: slice.fielddVersion,
+        contractsVersion: slice.contractsVersion,
+        capabilities: {
+          terminalHost: slice.capabilities.terminalHost,
+          docHost: slice.capabilities.docHost,
+          push: slice.capabilities.push,
+        },
+        ...(slice.productEndpoint !== undefined
+          ? {
+              productEndpoint: {
+                serve: slice.productEndpoint.serve,
+                ...(slice.productEndpoint.url !== undefined
+                  ? { url: slice.productEndpoint.url }
+                  : {}),
+              },
+            }
+          : {}),
+        bootId: slice.bootId,
+        publishedAt: slice.publishedAt,
         self,
         online: self ? true : (live?.online ?? false),
         lastSeenAt: Math.max(slice.publishedAt, live?.lastSeen ?? 0),
@@ -319,6 +389,32 @@ export class DeviceService extends EventEmitter {
     }
     return id;
   }
+}
+
+function narrowDeviceSlice(slice: DeviceSlice): DeviceSlice {
+  return {
+    deviceId: slice.deviceId,
+    name: slice.name,
+    platform: slice.platform,
+    headless: slice.headless,
+    fielddVersion: slice.fielddVersion,
+    contractsVersion: slice.contractsVersion,
+    capabilities: {
+      terminalHost: slice.capabilities.terminalHost,
+      docHost: slice.capabilities.docHost,
+      push: slice.capabilities.push,
+    },
+    ...(slice.productEndpoint !== undefined
+      ? {
+          productEndpoint: {
+            serve: slice.productEndpoint.serve,
+            ...(slice.productEndpoint.url !== undefined ? { url: slice.productEndpoint.url } : {}),
+          },
+        }
+      : {}),
+    bootId: slice.bootId,
+    publishedAt: slice.publishedAt,
+  };
 }
 
 /** Canonical form used by Artifact Hub URL binding: ASCII lowercase, exactly

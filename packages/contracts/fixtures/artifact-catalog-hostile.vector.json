@@ -6,6 +6,13 @@
     "https://peer-a.tailnet.ts.net:17180/?token=secret",
     "https://peer-a.tailnet.ts.net:17180/#fragment",
     "https://peer-a.tailnet.ts.net:17180/not-root",
+    "https://p%65er-a.tailnet.ts.net:17180",
+    "https://peer-a.tailnet.ts.net:17180/%2e%2e",
+    "https://peer-a.tailnet.ts.net:17180\\evil",
+    "https://peer-a.tailnet.ts.net:017180",
+    "HTTPS://peer-a.tailnet.ts.net:17180",
+    "https://PEER-A.tailnet.ts.net:17180",
+    "https://peer-a.tailnet.ts.net.:17180",
     "https://peer-a.tailnet.ts.net:9999",
     "https://peer-a.tailnet.ts.net:20000"
   ],

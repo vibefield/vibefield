@@ -405,6 +405,13 @@ export class MeshClient extends EventEmitter {
     );
     return snapshot;
   }
+
+  async subscribeStoreManaged(
+    storeId: string,
+    onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+  ): Promise<{ snapshot: unknown; dispose: () => void }> {
+    return await this.link.subscribe("native.mesh.store.subscribe", { storeId }, onEvent);
+  }
 }
 
 /** Tolerant reader for a serve stream entry — full (snapshot) or partial (delta).

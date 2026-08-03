@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { NativeLink } from "../src/native-link";
+import { NativeLink, type NativeLinkOptions } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -17,7 +17,9 @@ afterEach(async () => {
   cleanup = [];
 });
 
-async function setup(): Promise<{ mock: MockMgmtServer; link: NativeLink }> {
+async function setup(
+  options: Pick<NativeLinkOptions, "maxFrameBytes" | "reconnect"> = {},
+): Promise<{ mock: MockMgmtServer; link: NativeLink }> {
   const dir = mkdtempSync(join(tmpdir(), "vf-mock-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const pairingFile = join(dir, "pairing");
@@ -26,7 +28,7 @@ async function setup(): Promise<{ mock: MockMgmtServer; link: NativeLink }> {
   const mock = new MockMgmtServer(socketPath);
   await mock.start();
   cleanup.push(() => mock.stop());
-  const link = new NativeLink({ socketPath, pairingFile, bootId: "test-boot" });
+  const link = new NativeLink({ socketPath, pairingFile, bootId: "test-boot", ...options });
   cleanup.push(() => link.close());
   return { mock, link };
 }
@@ -145,6 +147,33 @@ describe("NativeLink concurrency", () => {
     await sleep(900);
     expect(link.connected).toBe(true);
     expect(mock.connections).toBe(2);
+  });
+
+  it("a disposed subscription is not replayed after reconnect", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    const subscription = await link.subscribe("x.disposed.subscribe", {}, () => {});
+    expect(
+      mock.subscriptionRequests.filter((method) => method === "x.disposed.subscribe"),
+    ).toHaveLength(1);
+    subscription.dispose();
+
+    mock.killClients();
+    await sleep(900);
+    expect(link.connected).toBe(true);
+    expect(
+      mock.subscriptionRequests.filter((method) => method === "x.disposed.subscribe"),
+    ).toHaveLength(1);
+  });
+
+  it("closes the native connection when one unterminated frame exceeds the cap", async () => {
+    const { mock, link } = await setup({ maxFrameBytes: 128, reconnect: false });
+    await link.connect();
+    for (const socket of mock.sockets) socket.write("x".repeat(129));
+
+    await sleep(50);
+    expect(link.connected).toBe(false);
+    expect(mock.sockets.size).toBe(0);
   });
 
   it("cancels an in-flight dial when close makes the link terminal", async () => {

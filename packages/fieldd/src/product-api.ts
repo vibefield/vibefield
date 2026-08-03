@@ -6,6 +6,7 @@ import {
   CONTRACTS_VERSION,
   type ErrorKind,
   Hello,
+  MESH_CONTROL_LIMITS,
   METHODS,
   type MethodDef,
   NAMESPACES,
@@ -37,6 +38,9 @@ import { RpcCallError } from "./native-link";
 // the D32 TAILNET_SCOPES preset.
 
 const WS_OPEN = 1;
+const PRODUCT_WS_MAX_INBOUND_BYTES = 4 * 1024 * 1024;
+const PRODUCT_WS_MAX_OUTBOUND_BYTES = MESH_CONTROL_LIMITS.PRODUCT_FRAME_BYTES;
+const PRODUCT_WS_MAX_BUFFERED_BYTES = MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES;
 const SOURCE_LOCAL_ARTIFACT_METHODS = new Set([
   "artifact.publish",
   "artifact.update",
@@ -198,13 +202,11 @@ export class ProductApi extends EventEmitter {
       let active = true;
       const emit = (payload: unknown) => {
         if (active && ws.readyState === WS_OPEN)
-          ws.send(
-            JSON.stringify({
-              jsonrpc: "2.0",
-              method: `${method}.delta`,
-              params: { subId, payload },
-            }),
-          );
+          this.sendBounded(ws, {
+            jsonrpc: "2.0",
+            method: `${method}.delta`,
+            params: { subId, payload },
+          });
       };
       const { snapshot, dispose } = await router.subscribe(ctx, method, params, emit);
       state.subs.set(subId, () => {
@@ -261,7 +263,11 @@ export class ProductApi extends EventEmitter {
   }
 
   async listen(): Promise<number> {
-    const wss = new WebSocketServer({ port: this.opts.port, host: "127.0.0.1" });
+    const wss = new WebSocketServer({
+      port: this.opts.port,
+      host: "127.0.0.1",
+      maxPayload: PRODUCT_WS_MAX_INBOUND_BYTES,
+    });
     this.wss = wss;
     wss.on("connection", (ws, req) => this.onConnection(ws, req));
     wss.once("close", () => {
@@ -359,20 +365,18 @@ export class ProductApi extends EventEmitter {
     try {
       msg = JSON.parse(raw);
     } catch {
-      ws.send(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: null,
-          error: { code: -32700, message: "parse error" },
-        }),
-      );
+      this.sendBounded(ws, {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32700, message: "parse error" },
+      });
       return;
     }
     const id = msg["id"];
     const method = String(msg["method"] ?? "");
     const params = msg["params"];
     const reply = (v: unknown) => {
-      if (id !== undefined && id !== null) ws.send(JSON.stringify(v));
+      if (id !== undefined && id !== null) this.sendBounded(ws, v);
     };
 
     if (method === "system.hello") {
@@ -545,13 +549,11 @@ export class ProductApi extends EventEmitter {
             let active = true;
             const emit = (payload: unknown, kind: "delta" | "snapshot" = "delta") => {
               if (active && ws.readyState === WS_OPEN)
-                ws.send(
-                  JSON.stringify({
-                    jsonrpc: "2.0",
-                    method: `${base}.${kind}`,
-                    params: { subId, payload },
-                  }),
-                );
+                this.sendBounded(ws, {
+                  jsonrpc: "2.0",
+                  method: `${base}.${kind}`,
+                  params: { subId, payload },
+                });
             };
             const { snapshot, dispose } = await subForwarder(
               device,
@@ -607,13 +609,11 @@ export class ProductApi extends EventEmitter {
       let active = true;
       const emit = (payload: unknown, kind: "delta" | "snapshot" = "delta") => {
         if (active && ws.readyState === WS_OPEN)
-          ws.send(
-            JSON.stringify({
-              jsonrpc: "2.0",
-              method: `${base}.${kind}`,
-              params: { subId, payload },
-            }),
-          );
+          this.sendBounded(ws, {
+            jsonrpc: "2.0",
+            method: `${base}.${kind}`,
+            params: { subId, payload },
+          });
       };
       const { snapshot, dispose } = await subHandler(ctx, params, emit);
       state.subs.set(subId, () => {
@@ -625,6 +625,32 @@ export class ProductApi extends EventEmitter {
     }
     const result = await handler!(ctx, params);
     reply({ jsonrpc: "2.0", id, result });
+  }
+
+  /** Bound both a single projection and the ws library's queued bytes. On
+   * overload the connection is shed; reconnect gives state subscriptions a
+   * fresh authoritative snapshot instead of retaining an unbounded delta tail. */
+  private sendBounded(ws: WebSocket, value: unknown): boolean {
+    if (ws.readyState !== WS_OPEN) return false;
+    let encoded: string;
+    try {
+      encoded = JSON.stringify(value);
+    } catch {
+      ws.terminate();
+      return false;
+    }
+    const bytes = Buffer.byteLength(encoded, "utf8");
+    if (
+      bytes > PRODUCT_WS_MAX_OUTBOUND_BYTES ||
+      ws.bufferedAmount + bytes > PRODUCT_WS_MAX_BUFFERED_BYTES
+    ) {
+      ws.close(1013, "client is not keeping up");
+      return false;
+    }
+    ws.send(encoded, (error) => {
+      if (error) ws.terminate();
+    });
+    return true;
   }
 
   private err(

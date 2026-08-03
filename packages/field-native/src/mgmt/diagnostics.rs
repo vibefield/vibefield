@@ -1,9 +1,8 @@
 use super::{err, ok, send_raw};
-use crate::state::{DaemonState, OutMsg};
+use crate::state::{DaemonState, MgmtOutbox, OutMsg};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::mpsc;
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
@@ -108,12 +107,7 @@ pub fn lease_revoke(state: &Arc<DaemonState>, params: &Value, id: Option<Value>)
     }
 }
 
-pub fn subscribe(
-    state: &Arc<DaemonState>,
-    tx: &mpsc::UnboundedSender<OutMsg>,
-    params: &Value,
-    id: Option<Value>,
-) {
+pub fn subscribe(state: &Arc<DaemonState>, tx: &MgmtOutbox, params: &Value, id: Option<Value>) {
     let Some(logging) = state.logging.as_ref().cloned() else {
         send_raw(tx, OutMsg::Line(unavailable(id).to_string()));
         return;

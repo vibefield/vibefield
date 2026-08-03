@@ -1782,7 +1782,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         bootId,
         currentDeviceId: () => devices.currentDeviceId(),
         devices: () => devices.list(),
-        subscribe: async (cb) => await mesh.subscribeStore(STORES.ARTIFACTS, cb),
+        subscribe: async (cb) => await mesh.subscribeStoreManaged(STORES.ARTIFACTS, cb),
         publish: async (slice) => {
           await mesh.setSlice(STORES.ARTIFACTS, slice);
         },
@@ -1828,7 +1828,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         docSync?.stop();
         laneLink.close();
         docs.dispose();
-        artifacts.dispose();
+        const artifactDrain = artifacts.dispose();
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
         devices.dispose();
@@ -1838,6 +1838,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         plugins.dispose();
         diagnosticsService.dispose();
         native.close();
+        await artifactDrain;
         await audit.close().catch(() => undefined);
         await closeLogging();
       })().finally(() => config.onFatal?.(reason));
@@ -1851,6 +1852,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       controlPort = await api.listen();
       if (fatalReason || native.superseded || native.closed)
         throw new Error(fatalReason ?? "native link closed during Product API startup");
+      // Bind is intentionally included in the same rollback scope as the
+      // post-bind service initialization. A migration/storage failure may not
+      // leave a zombie ProductAPI listener behind.
+      await devices.sync();
+      await artifacts.start();
+      if (fatalReason || native.superseded || native.closed)
+        throw new Error(fatalReason ?? "native link closed during service initialization");
     } catch (e) {
       detachHealthSources?.();
       api.close();
@@ -1858,12 +1866,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docSync?.stop();
       laneLink.close();
       docs.dispose();
+      const artifactDrain = artifacts.dispose();
+      federatedSubs.dispose();
+      peers.dispose();
       devices.dispose();
       terminals.dispose();
       services.dispose();
       settings.dispose();
       plugins.dispose();
       diagnosticsService.dispose();
+      native.close();
+      await artifactDrain;
       throw e;
     }
 
@@ -1879,8 +1892,6 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AH-2 binds every public slice to the durable mesh device id. Resolve and
     // publish DeviceService first; mesh-down still resolves into its stable
     // local fallback and a later reconnect moves/re-publishes the self slice.
-    await devices.sync();
-    await artifacts.start();
     detachArtifactHealth = artifacts.onChanged(() => emitHealth());
     api.register("artifact.publish", async (ctx, params) => {
       const parsed = ArtifactPublishParams.safeParse(params);
@@ -2090,7 +2101,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           api.close();
           docLane.close();
           docs.dispose();
-          artifacts.dispose();
+          const artifactDrain = artifacts.dispose();
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
           devices.dispose();
@@ -2105,6 +2116,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           plugins.dispose();
           diagnosticsService.dispose();
           native.close();
+          await artifactDrain;
           // a superseding fieldd rewrites these for the same dataDir — never
           // delete what is no longer ours
           if (!native.superseded) {

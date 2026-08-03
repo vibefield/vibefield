@@ -1,10 +1,26 @@
 import { z } from "zod";
+import { MESH_CONTROL_LIMITS } from "./registries";
 
 // DeviceService wire shapes (design-04 §3.1, D31 — the C4 P1-lite subset).
 // The roster fuses self-slices in the `field.devices.v1` SyncedStore with
 // tailnet peer liveness; presence heartbeats (source 3) are deferred with the
-// spec's own verify-item. TS-only — nothing here crosses to Rust (the store
-// carries opaque JSON slices; field-native never reads them).
+// spec's own verify-item. TS-only — the shape does not cross to Rust (the store
+// carries opaque JSON; field-native enforces only generated transport budgets).
+
+/** Hostile-store and projection bounds. Device slices are tiny identity rows;
+ * accepting arbitrary strings here would let one peer amplify every roster and
+ * Artifact Hub snapshot that names it. */
+export const DEVICE_LIMITS = {
+  REMOTE_ORIGINS: MESH_CONTROL_LIMITS.REMOTE_ORIGINS,
+  SLICE_BYTES: MESH_CONTROL_LIMITS.DEVICE_SLICE_BYTES,
+  DEVICE_ID_CHARS: MESH_CONTROL_LIMITS.OWNER_CHARS,
+  NAME_CHARS: 128,
+  PLATFORM_CHARS: 64,
+  VERSION_CHARS: 64,
+  BOOT_ID_CHARS: 256,
+  ENDPOINT_SERVE_CHARS: 128,
+  ENDPOINT_URL_CHARS: 2_048,
+} as const;
 
 /** Honest per-device capability facts (D31: "capabilities honest per device"). */
 export const DeviceCapabilities = z
@@ -23,8 +39,8 @@ export type DeviceCapabilities = z.infer<typeof DeviceCapabilities>;
  * only while the serve is active. */
 export const ProductEndpoint = z
   .object({
-    serve: z.string(),
-    url: z.string().optional(),
+    serve: z.string().min(1).max(DEVICE_LIMITS.ENDPOINT_SERVE_CHARS),
+    url: z.string().min(1).max(DEVICE_LIMITS.ENDPOINT_URL_CHARS).optional(),
   })
   .passthrough();
 export type ProductEndpoint = z.infer<typeof ProductEndpoint>;
@@ -33,15 +49,15 @@ export type ProductEndpoint = z.infer<typeof ProductEndpoint>;
  * and on change; the slice key IS the writer's mesh deviceId — D30). */
 export const DeviceSlice = z
   .object({
-    deviceId: z.string(),
-    name: z.string(),
-    platform: z.string(),
+    deviceId: z.string().min(1).max(DEVICE_LIMITS.DEVICE_ID_CHARS),
+    name: z.string().min(1).max(DEVICE_LIMITS.NAME_CHARS),
+    platform: z.string().min(1).max(DEVICE_LIMITS.PLATFORM_CHARS),
     headless: z.boolean(),
-    fielddVersion: z.string(),
-    contractsVersion: z.string(),
+    fielddVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS),
+    contractsVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS),
     capabilities: DeviceCapabilities,
     productEndpoint: ProductEndpoint.optional(),
-    bootId: z.string(),
+    bootId: z.string().min(1).max(DEVICE_LIMITS.BOOT_ID_CHARS),
     publishedAt: z.number().int(),
   })
   .passthrough();

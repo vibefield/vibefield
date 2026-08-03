@@ -238,6 +238,54 @@ describe("DeviceService — roster fusion", () => {
     expect(health.nativeConnected).toBe(true);
   });
 
+  it("binds a slice to its store owner and strips peer-authored trust fields", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.meshPeers = [
+      {
+        id: "nodeid-peer",
+        deviceId: "dev-peer",
+        online: true,
+        // Deliberately no WhoIs DNS name: the slice may not fill this blank.
+      },
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await until(() => mock.storeWrites.length > 0);
+
+    mock.pushStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-owner",
+      data: peerSlice({ deviceId: "dev-claim" }),
+      version: 1,
+    });
+    mock.pushStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-peer",
+      data: {
+        ...peerSlice(),
+        tailnetDnsName: "evil.example.com",
+        tailscaleId: "attacker-node",
+        link: "connected",
+      },
+      version: 2,
+    });
+
+    const roster = await pollDevices(rpc, (devices) =>
+      devices.some((device) => device.deviceId === "dev-peer"),
+    );
+    expect(roster.some((device) => device.deviceId === "dev-owner")).toBe(false);
+    expect(roster.some((device) => device.deviceId === "dev-claim")).toBe(false);
+    const peer = roster.find((device) => device.deviceId === "dev-peer")!;
+    expect(peer.tailscaleId).toBe("nodeid-peer");
+    expect(peer.tailnetDnsName).toBeUndefined();
+    expect(peer.link).toBeUndefined();
+    expect(JSON.stringify(peer)).not.toContain("evil.example.com");
+    expect(JSON.stringify(peer)).not.toContain("attacker-node");
+  });
+
   it("streams device.delta over the product WS when a peer joins", async () => {
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);

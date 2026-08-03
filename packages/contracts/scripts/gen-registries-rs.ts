@@ -5,7 +5,15 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { APP_ID, ENV_PREFIXES, FILES, PORTS, SOCKETS, STORES } from "../src/registries";
+import {
+  APP_ID,
+  ENV_PREFIXES,
+  FILES,
+  MESH_CONTROL_LIMITS,
+  PORTS,
+  SOCKETS,
+  STORES,
+} from "../src/registries";
 
 const OUT = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -39,6 +47,10 @@ const lines: string[] = [
   "",
   "pub mod stores {",
   ...Object.entries(STORES).map(([k, v]) => `    pub const ${k}: &str = "${v}";`),
+  "}",
+  "",
+  "pub mod mesh_control_limits {",
+  ...Object.entries(MESH_CONTROL_LIMITS).map(([k, v]) => `    pub const ${k}: usize = ${v};`),
   "}",
   "",
   "/// File names beneath a daemon's own data directory. The plane that OWNS the",

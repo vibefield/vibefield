@@ -537,3 +537,40 @@ whole-list subscription, and remove. Hostile vectors plus restart/replay tests p
 narrow projection, origin binding, boot/offline folds, and retained safe metadata. This is a
 mock transport proof, not the still-open AH-1 physical second-tailnet-client witness. Next:
 AH-3 desktop sheet + Electron-main shell provider; AH-4 capture; AH-5 phone.
+
+## AH-1/AH-2 — review hardening closes the trust, bound, and lifecycle gaps
+
+**AH-1/AH-2 REVIEW HARDENING LANDED (2026-08-03; artifact-hub v0.3 fold-back).** The
+post-implementation review found one blocker and eight coupled lifecycle/load debts. The
+blocker is structurally dead: a DeviceSlice is admitted only when its claimed `deviceId`
+equals the SyncedStore owner, and DeviceService narrows every retained/projected field, so a
+peer-authored extension can never become transport-derived DNS, Tailscale id, or link state.
+The real-daemon proof carries the exploit through ArtifactService: the poisoned matching URL
+remains metadata-only and non-openable without WhoIs DNS.
+
+The opaque-store path now has one contracts-owned `MESH_CONTROL_LIMITS` registry generated
+into Rust: artifact slices 256 KiB, device slices 64 KiB, 256 remote origins plus self, native
+management frames 80 MiB, a 64-message/96-MiB native outbox, and a 128-MiB ProductAPI
+projection/queue ceiling. field-native filters known public
+store sets/snapshots/deltas before management projection; NativeLink rejects an unterminated
+oversize frame without quadratic string concatenation; ProductAPI caps individual/queued
+output and sheds a slow connection so reconnect can re-snapshot. Raw artifact URLs are checked
+before WHATWG normalization and admit only exact lowercase HTTPS root-authority spelling with
+a canonical decimal AH port—percent escapes, backslashes, protocol case, normalized paths,
+and alternate port spellings join the hostile fixture.
+
+Catalog snapshots now checkpoint the reconstructible cache once, asynchronously and serially,
+with in-flight changes coalesced; subscription snapshots coalesce on the next event-loop turn;
+self no longer steals one remote-origin slot. Native store subscriptions return a real local
+disposer. ArtifactService disposal detaches callbacks, rejects queued-but-unstarted mutations,
+then drains already-running work and the final cache checkpoint; daemon shutdown closes NativeLink
+before awaiting that barrier, and the post-bind bootstrap scope rolls ProductAPI back if
+artifact initialization fails.
+
+Preview directories are prepared only after durable publish intent. After listener removal,
+preview cleanup must succeed before final intent deletion; failure keeps the absent row as the
+durable retry record and stays visibly `removing`. Legacy migration isolates canonical
+validation per row, so one malformed Go glob cannot reject bootstrap. Final proof: focused
+fieldd hardening 54/54; full fieldd 361/361; contracts 162/162; field-native 114 passed with
+four explicit benchmark/real-tailnet ignores. All-target field-native Clippy, Rust formatting,
+targeted Biome, TypeScript typechecks, generated registry refresh, and diff hygiene are clean.

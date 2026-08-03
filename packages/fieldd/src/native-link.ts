@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
-import { CONTRACTS_VERSION, TerminalEndpoints } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, MESH_CONTROL_LIMITS, TerminalEndpoints } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { computePairingMac } from "./pairing";
 
@@ -36,8 +36,15 @@ export interface NativeLinkOptions {
   reconnect?: boolean;
   /** how long to wait for field-native to create socket/pairing on first boot */
   waitForDaemonMs?: number;
+  /** Test seam; production uses NATIVE_MGMT_MAX_FRAME_BYTES. */
+  maxFrameBytes?: number;
   logger?: Logger;
 }
+
+/** Large enough for the bounded 256-origin artifact snapshot, finite enough
+ * that a compromised/native-buggy peer cannot grow fieldd without limit. */
+export const NATIVE_MGMT_MAX_FRAME_BYTES = MESH_CONTROL_LIMITS.MGMT_FRAME_BYTES;
+const NATIVE_MGMT_RETAINED_FRAME_BYTES = 1024 * 1024;
 
 type SubEventKind = "snapshot" | "delta";
 interface QueuedSubEvent {
@@ -66,7 +73,8 @@ export class NativeLink extends EventEmitter {
   private sock: Socket | null = null;
   private connectingSock: Socket | null = null;
   private dialPromise: Promise<void> | null = null;
-  private buf = "";
+  private frameBuffer = Buffer.alloc(0);
+  private frameBytes = 0;
   private nextId = 1;
   private pending = new Map<number, Pending>();
   private subs = new Map<number, SubEntry>();
@@ -140,9 +148,10 @@ export class NativeLink extends EventEmitter {
       this.assertOpen();
     }
     this.sock = sock;
-    this.buf = "";
+    this.frameBuffer = Buffer.alloc(0);
+    this.frameBytes = 0;
     sock.on("data", (d) => {
-      if (this.sock === sock) this.onData(d.toString("utf8"));
+      if (this.sock === sock) this.onData(d);
     });
     sock.on("close", () => this.onSockClose(sock));
     sock.on("error", () => {
@@ -225,15 +234,53 @@ export class NativeLink extends EventEmitter {
     this.emit("terminal-endpoints");
   }
 
-  private onData(chunk: string): void {
-    this.buf += chunk;
-    let idx: number;
-    // biome-ignore lint/suspicious/noAssignInExpressions: canonical newline-split loop
-    while ((idx = this.buf.indexOf("\n")) >= 0) {
-      const line = this.buf.slice(0, idx);
-      this.buf = this.buf.slice(idx + 1);
-      if (line.trim()) this.onLine(line);
+  private onData(chunk: Buffer): void {
+    let offset = 0;
+    for (;;) {
+      const newline = chunk.indexOf(0x0a, offset);
+      const end = newline === -1 ? chunk.length : newline;
+      const segment = chunk.subarray(offset, end);
+      if (!this.appendFrameSegment(segment)) return;
+      if (newline === -1) return;
+
+      const text = this.frameBuffer.toString("utf8", 0, this.frameBytes);
+      this.frameBytes = 0;
+      if (this.frameBuffer.length > NATIVE_MGMT_RETAINED_FRAME_BYTES)
+        this.frameBuffer = Buffer.alloc(0);
+      if (text.trim()) this.onLine(text);
+      offset = newline + 1;
+      if (offset >= chunk.length) return;
     }
+  }
+
+  private appendFrameSegment(segment: Buffer): boolean {
+    const limit = this.opts.maxFrameBytes ?? NATIVE_MGMT_MAX_FRAME_BYTES;
+    const required = this.frameBytes + segment.length;
+    if (required > limit) {
+      this.logger.error(
+        "fieldd.native_link.frame_too_large",
+        "The native management connection sent an oversized frame",
+        { limit },
+      );
+      this.frameBuffer = Buffer.alloc(0);
+      this.frameBytes = 0;
+      this.sock?.destroy();
+      return false;
+    }
+    if (segment.length > 0) {
+      if (required > this.frameBuffer.length) {
+        const capacity = Math.min(
+          limit,
+          Math.max(required, Math.max(4_096, this.frameBuffer.length * 2)),
+        );
+        const next = Buffer.allocUnsafe(capacity);
+        this.frameBuffer.copy(next, 0, 0, this.frameBytes);
+        this.frameBuffer = next;
+      }
+      segment.copy(this.frameBuffer, this.frameBytes);
+      this.frameBytes = required;
+    }
+    return true;
   }
 
   private onLine(line: string): void {
@@ -420,7 +467,7 @@ export class NativeLink extends EventEmitter {
     method: string,
     params: unknown,
     onEvent: (payload: unknown, kind: SubEventKind) => void,
-  ): Promise<{ snapshot: unknown }> {
+  ): Promise<{ snapshot: unknown; dispose: () => void }> {
     const key = this.nextSubKey++;
     const entry: SubEntry = { method, params, onEvent, buffering: true, queued: [] };
     this.subs.set(key, entry);
@@ -432,7 +479,15 @@ export class NativeLink extends EventEmitter {
         if (this.subs.get(key) === entry && !this.closed && !this.superseded)
           this.activateSubscription(entry);
       });
-      return { snapshot: res.snapshot };
+      let disposed = false;
+      return {
+        snapshot: res.snapshot,
+        dispose: () => {
+          if (disposed) return;
+          disposed = true;
+          this.removeSubscription(key, entry);
+        },
+      };
     } catch (e) {
       this.removeSubscription(key, entry);
       throw e;

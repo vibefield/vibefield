@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { ARTIFACT_LIMITS } from "../src/artifacts";
+import { DEVICE_LIMITS } from "../src/devices";
 import { LOCALITIES, METHODS, SURFACES } from "../src/methods";
 import {
   DESKTOP_APP_ID,
   DESKTOP_TRAY_GUID,
   LOG_STREAMS,
+  MESH_CONTROL_LIMITS,
   PORTS,
   SCOPES,
   TAILNET_SCOPES,
@@ -29,6 +32,17 @@ describe("port registry", () => {
   it("no port is assigned twice", () => {
     const values = Object.values(PORTS);
     expect(new Set(values).size).toBe(values.length);
+  });
+});
+
+describe("mesh control limits", () => {
+  it("keeps public-store readers on the generated cross-plane budgets", () => {
+    expect(ARTIFACT_LIMITS.SLICE_BYTES).toBe(MESH_CONTROL_LIMITS.ARTIFACT_SLICE_BYTES);
+    expect(DEVICE_LIMITS.SLICE_BYTES).toBe(MESH_CONTROL_LIMITS.DEVICE_SLICE_BYTES);
+    expect(DEVICE_LIMITS.REMOTE_ORIGINS).toBe(MESH_CONTROL_LIMITS.REMOTE_ORIGINS);
+    expect(MESH_CONTROL_LIMITS.MGMT_QUEUED_BYTES).toBeGreaterThan(
+      MESH_CONTROL_LIMITS.MGMT_FRAME_BYTES,
+    );
   });
 });
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MESH_CONTROL_LIMITS } from "./registries";
 
 // Artifact Hub wire shapes (AH-1/AH-2; design-02 §3 ArtifactService ·
 // specs/artifact-hub §4). Local source details are accepted only by mutation
@@ -18,7 +19,7 @@ export const ARTIFACT_LIMITS = {
   ALLOW_GLOB_CHARS: 256,
   URL_CHARS: 2048,
   ERROR_CHARS: 256,
-  SLICE_BYTES: 256 * 1024,
+  SLICE_BYTES: MESH_CONTROL_LIMITS.ARTIFACT_SLICE_BYTES,
   LISTEN_PORT_MIN: 10_000,
   LISTEN_PORT_MAX: 19_999,
 } as const;

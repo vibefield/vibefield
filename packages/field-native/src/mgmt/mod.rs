@@ -22,14 +22,13 @@ use crate::contracts::{DesiredState, Hello};
 use crate::pairing;
 use crate::services::terminal;
 use crate::services::terminal_client::ControlClient;
-use crate::state::{ClientHandle, DaemonState, OutMsg};
+use crate::state::{ClientHandle, DaemonState, MgmtOutbox, OutMsg, MGMT_MAX_FRAME_BYTES};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
-use tokio::sync::mpsc;
 
 const CONTRACTS_VERSION: &str = "0.1.0";
 
@@ -107,28 +106,66 @@ pub async fn serve(listener: UnixListener, state: Arc<DaemonState>) {
 async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
     let conn_id = state.conn_id();
     let (read_half, mut write_half) = stream.into_split();
-    let (tx, mut rx) = mpsc::unbounded_channel::<OutMsg>();
+    let (tx, mut rx, mut close_rx) = MgmtOutbox::channel();
 
     // single writer task; Close tears the socket down
+    let writer_outbox = tx.clone();
     let writer = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            match msg {
-                OutMsg::Line(mut line) => {
-                    line.push('\n');
-                    if write_half.write_all(line.as_bytes()).await.is_err() {
+        loop {
+            tokio::select! {
+                changed = close_rx.changed() => {
+                    if changed.is_err() || *close_rx.borrow() {
                         break;
                     }
                 }
-                OutMsg::Close => break,
+                msg = rx.recv() => {
+                    let Some(msg) = msg else { break };
+                    match &msg {
+                        OutMsg::Line(line) => {
+                            let result = async {
+                                write_half.write_all(line.as_bytes()).await?;
+                                write_half.write_all(b"\n").await
+                            }
+                            .await;
+                            writer_outbox.release(&msg);
+                            if result.is_err() {
+                                break;
+                            }
+                        }
+                        OutMsg::Close => break,
+                    }
+                }
             }
         }
         let _ = write_half.shutdown().await;
     });
 
-    let mut lines = BufReader::new(read_half).lines();
+    let mut reader = BufReader::new(read_half);
     let mut authed = false;
 
-    while let Ok(Some(line)) = lines.next_line().await {
+    loop {
+        let mut raw = Vec::new();
+        let read = (&mut reader)
+            .take((MGMT_MAX_FRAME_BYTES + 2) as u64)
+            .read_until(b'\n', &mut raw)
+            .await;
+        let Ok(bytes) = read else { break };
+        if bytes == 0 {
+            break;
+        }
+        if raw.last() != Some(&b'\n') || raw.len() - 1 > MGMT_MAX_FRAME_BYTES {
+            tracing::warn!(
+                event = "field_native.mgmt.frame_too_large",
+                component = "mgmt",
+                limit = MGMT_MAX_FRAME_BYTES,
+                "The management client sent an oversized or unterminated frame"
+            );
+            break;
+        }
+        raw.pop();
+        let Ok(line) = String::from_utf8(raw) else {
+            break;
+        };
         if line.trim().is_empty() {
             continue;
         }
@@ -265,7 +302,7 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
 async fn handle_hello(
     state: &Arc<DaemonState>,
     conn_id: u64,
-    tx: &mpsc::UnboundedSender<OutMsg>,
+    tx: &MgmtOutbox,
     params: &Value,
     id: Option<Value>,
 ) -> (Value, bool) {
@@ -764,7 +801,7 @@ fn terminal_state(state: &DaemonState) -> Value {
 }
 
 fn spawn_forwarder<T>(
-    tx: mpsc::UnboundedSender<OutMsg>,
+    tx: MgmtOutbox,
     mut rx: tokio::sync::watch::Receiver<T>,
     method: &'static str,
     sub_id: String,
@@ -797,10 +834,10 @@ fn superseded(id: Option<Value>) -> Value {
     )
 }
 
-fn send(tx: &mpsc::UnboundedSender<OutMsg>, v: Value) {
+fn send(tx: &MgmtOutbox, v: Value) {
     let _ = tx.send(OutMsg::Line(v.to_string()));
 }
-fn send_raw(tx: &mpsc::UnboundedSender<OutMsg>, m: OutMsg) {
+fn send_raw(tx: &MgmtOutbox, m: OutMsg) {
     let _ = tx.send(m);
 }
 fn ok(id: Option<Value>, result: Value) -> Value {
