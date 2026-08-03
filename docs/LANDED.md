@@ -399,9 +399,19 @@ with previews; and exact Truffle-returned URLs opened by the system browser on a
 tailnet client whose OS Tailscale route is connected. Local Truffle v0.7.11 was inspected
 through the Rust/JS/Go seam: proxying,
 static serving, TLS/MagicDNS, WebSockets, longest-prefix routes, allow globs, and runtime events
-already exist, so no new data plane is needed. The pass did find one narrow upstream hardening
-gate: T2 makes static roots symlink-confined before Folder or URL-served previews ship;
-root-only Proxy does not wait.
+already exist, so no new data plane is needed. At ratification the pass identified one narrow
+upstream hardening gate: T2 would make static roots symlink-confined before Folder or
+URL-served previews shipped; root-only Proxy did not wait.
+
+**T2 LANDED UPSTREAM / RELEASED (2026-08-02 PDT; Truffle v0.7.12 — no VibeField runtime
+landing claimed).** Truffle implemented the petition directly: `13a283b` raises the sidecar
+and release floor to Go 1.26.5, binds static routes through `os.OpenRoot`, adds tri-state
+fallback denial plus `STATIC_ROOT_INVALID`, and owns rooted handles across pending add,
+post-drain teardown, and shutdown; `1466c13` completes traversal-shaped coverage. Release
+commit `2cf5732` published the fix as `v0.7.12` / `truffle-v0.7.12`, and post-release main
+`9588694` pins the checksums. The petition is retired without filing. VibeField still
+exact-pins `truffle-core =0.7.11`, so this closes the upstream blocker but does not land AH-1b
+or AH-4; those static routes activate only after exact v0.7.12 consumption.
 
 Twelve AH decisions lock live-source semantics, one-node custody, public HTTPS, persisted stable
 ports, private intent vs synced catalog, local-only mutation, spine-stage/plugin-actor
@@ -461,5 +471,6 @@ health, folder port zero, the too-narrow VibeField serve facade, and Truffle lis
 config echo (handled by fingerprinted serve ids). It also records that `shell.*` scopes and
 main's recovering ProductAPI client are landed, but its callable bidirectional provider half is
 not; AH-3/4 own that bridge. Runtime remains exactly C6-6 until AH-1a;
-AH-1a is the unblocked root-only Proxy/core slice, AH-1b consumes T2 for Folder and makes the
-hardened preview route available, and AH-2…AH-5 finish catalog, desktop, previews, and phone.
+AH-1a is the unblocked root-only Proxy/core slice, AH-1b consumes released T2 through exact
+Truffle v0.7.12 for Folder and makes the hardened preview route available, and AH-2…AH-5
+finish catalog, desktop, previews, and phone.

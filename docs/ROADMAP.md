@@ -5,7 +5,8 @@
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
 > stays in the design docs + specs. Last rewritten: **2026-08-02** (GT caught up through
 > GT-2e `a3babb7` + GT-3 `af316db` — the one-authority correction, then restore/kill/config;
-> AH-0 ratified; runtime remains C6-6).
+> AH-0 ratified; T2 released upstream in Truffle v0.7.12 while VibeField remains pinned to
+> v0.7.11; runtime remains C6-6).
 >
 > Lives in main-tracked `docs/` (moved from `draft/` 2026-08-02). Corpus citations here
 > (`specs/…`, `thinking-…`, `predesign-…`, `research/…`, `petitions/…`) resolve under
@@ -32,7 +33,7 @@ between those two facts; its unblocked first landing is AH-1a.
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
 | PLUG — plugins | P0–P7 COMPLETE for the prior surface set; spec remains governing | `specs/plugin-architecture.md` | AH-3 adds the earned `hud.sheet` fixed slot; other dogfood through AR/GT; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
-| AH — Artifact Hub | **IN FLIGHT (design)** — C6-6 substrate landed; AH-0 ratified; AH-1a/1b + AH-2…5 open | `specs/artifact-hub.md` | **AH-1a** root-only Proxy/core now; AH-1b Folder consumes T2 and unlocks hardened preview routes; then AH-2 catalog → AH-3 sheet + shell provider → AH-4 previews → AH-5 phone |
+| AH — Artifact Hub | **IN FLIGHT (design)** — C6-6 substrate landed; AH-0 ratified; T2 released upstream; AH-1a/1b + AH-2…5 open | `specs/artifact-hub.md` | **AH-1a** root-only Proxy/core now; AH-1b consumes exact Truffle v0.7.12 for Folder and hardened preview routes (current pin v0.7.11); then AH-2 catalog → AH-3 sheet + shell provider → AH-4 previews → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
@@ -60,17 +61,18 @@ Truffle URL, one safe catalog across devices, and source-local mutation. Next sl
 replaces C6's `{name,target}` contract behind a compatibility window, assigns stable nonzero
 ports, extends the native facade to Truffle's mixed-route/source-scheme shape, enables public
 TLS, reconciles config-fingerprinted serve ids with retries, and fixes source/health projection.
-It can land directly without a static route. **AH-1b** consumes T2 static-root confinement for
-Folder and the later preview route without blocking AH-2, which fixes the device-key join and
-makes the validated catalog global before UI work.
+It can land directly without a static route. T2 static-root confinement is released upstream;
+**AH-1b** consumes exact Truffle v0.7.12 for Folder and the later preview route without
+blocking AH-2, which fixes the device-key join and makes the validated catalog global before
+UI work.
 AH-3 then adds the earned `hud.sheet` slot and turns Electron main's existing authenticated
 loopback client into the static `shell.*` provider; no ProductAPI UDS or renderer relay is added.
 
 ## Next up — the options on the table (James's call)
 
 - **AH-1a → AH-2** — make root-only Proxy/core true, then make the validated catalog global;
-  AH-1b closes Folder and unlocks hardened preview routes as soon as T2 lands, while AH-3/4/5
-  add desktop, previews, and phone.
+  AH-1b closes Folder and unlocks hardened preview routes after exact v0.7.12 consumption,
+  while AH-3/4/5 add desktop, previews, and phone.
 - **AR** — the agent tracks; the reason everything else exists.
 - **GT-4 → GT-5** — the remote floor, then the phone attaches.
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).
@@ -90,10 +92,11 @@ loopback client into the static `shell.*` provider; no ProductAPI UDS or rendere
 - **C6 artifact correctness** — name-only config matching, dropped failed-removal retries,
   product-secret pollution of artifact health URLs, missing storage-health aggregation, and
   folder `listen_port:0`; the core corrections move together in AH-1a (AH §2.3, 2026-08-02).
-- **T2 Truffle static-root confinement** — v0.7.11 static routes follow an in-root symlink
-  outside the selected tree. Petition drafted, not filed; blocks AH-1b Folder and AH-4
-  preview-static exits, not root-only Proxy
-  (`petitions/T2-truffle-static-root-confinement.md`, 2026-08-02).
+- **T2 Truffle static-root consumption** — upstream hardening is closed and released in
+  v0.7.12 (`13a283b` + `1466c13`; release `2cf5732`); the petition retired without filing.
+  VibeField still exact-pins v0.7.11, so the remaining debt is the normal EL8-style pin and
+  sidecar consumption before AH-1b Folder/AH-4 preview-static activation. Root-only Proxy is
+  unaffected (`petitions/T2-truffle-static-root-confinement.md`, 2026-08-02).
 - **CAS blob store / deny-by-default pull root** — not an Artifact Hub v1 dependency. Its own
   contracts+Rust slice begins only when canvas blob refs, peer-CAS fetching, or an explicit
   offline/immutable artifact mode exists (AH-D10; C6-6).
@@ -128,7 +131,8 @@ loopback client into the static `shell.*` provider; no ProductAPI UDS or rendere
 
 ## Upstream / sibling pins (the EL8 watch)
 
-truffle `=0.7.11` (exact crates-io) · ghosttea `=0.8.0` on all planes · chopsticks 0.1.4 ·
-strata 0.10.0 (via ICE) · `@vibecook/ice` 0.2.0 (registry pin). G7/G8/G9 consumed at NF-7;
-G10 candidate named at GT-2e/3, unfiled; C7 implemented upstream, consumption rides AR. Full
-petition status: `petitions/README.md`.
+truffle `=0.7.11` (exact crates-io; T2-bearing v0.7.12 released, AH consumption open) ·
+ghosttea `=0.8.0` on all planes · chopsticks 0.1.4 · strata 0.10.0 (via ICE) ·
+`@vibecook/ice` 0.2.0 (registry pin). G7/G8/G9 consumed at NF-7; G10 candidate named at
+GT-2e/3, unfiled; C7 implemented upstream, consumption rides AR. Full petition status:
+`petitions/README.md`.
