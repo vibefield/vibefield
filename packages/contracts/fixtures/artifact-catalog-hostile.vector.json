@@ -1,0 +1,14 @@
+{
+  "owner": "peer-a",
+  "poisonedUrls": [
+    "http://peer-a.tailnet.ts.net:17180",
+    "https://user:secret@peer-a.tailnet.ts.net:17180",
+    "https://peer-a.tailnet.ts.net:17180/?token=secret",
+    "https://peer-a.tailnet.ts.net:17180/#fragment",
+    "https://peer-a.tailnet.ts.net:17180/not-root",
+    "https://peer-a.tailnet.ts.net:9999",
+    "https://peer-a.tailnet.ts.net:20000"
+  ],
+  "oversizePaddingBytes": 262144,
+  "overCount": 129
+}

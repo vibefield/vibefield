@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Artifact Hub wire shapes (AH-1; design-02 §3 ArtifactService ·
+// Artifact Hub wire shapes (AH-1/AH-2; design-02 §3 ArtifactService ·
 // specs/artifact-hub §4). Local source details are accepted only by mutation
 // methods and persisted in fieldd's private intent file. List/status shapes are
 // safe projections and never contain a directory path, source port, scheme, or
@@ -152,5 +152,72 @@ export const ArtifactStatus = z
   .passthrough();
 export type ArtifactStatus = z.infer<typeof ArtifactStatus>;
 
-export const ArtifactListResult = z.object({ artifacts: z.array(ArtifactStatus) }).passthrough();
+/** Coarse origin truth that is safe to replicate in `field.artifacts.v1`.
+ * Native error strings stay local; clients fuse this claim with authenticated
+ * origin identity, boot identity, and liveness before presenting it. */
+export const ArtifactAdvertisedAvailability = z.enum([
+  "active",
+  "starting",
+  "removing",
+  "source-unavailable",
+  "error",
+]);
+export type ArtifactAdvertisedAvailability = z.infer<typeof ArtifactAdvertisedAvailability>;
+
+export const ArtifactAvailability = z.enum([
+  ...ArtifactAdvertisedAvailability.options,
+  "offline",
+  "unknown",
+]);
+export type ArtifactAvailability = z.infer<typeof ArtifactAvailability>;
+
+/** One safe public row in an origin-owned SyncedStore slice. This is not a
+ * directly renderable shape: in particular, `url` is still an untrusted claim
+ * until ArtifactService binds it to DeviceService's transport-derived DNS
+ * identity. */
+export const ArtifactCatalogEntry = z
+  .object({
+    artifactId: ArtifactId,
+    title: ArtifactTitle,
+    kind: z.enum(["proxy", "folder"]),
+    originDeviceId: z.string().min(1),
+    originBootId: z.string().min(1),
+    url: z.string().min(1).max(ARTIFACT_LIMITS.URL_CHARS).optional(),
+    previewRevision: z.number().int().nonnegative().safe().optional(),
+    advertisedAvailability: ArtifactAdvertisedAvailability,
+    availabilityAt: z.number().int().nonnegative(),
+    publishedAt: z.number().int().nonnegative(),
+    updatedAt: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type ArtifactCatalogEntry = z.infer<typeof ArtifactCatalogEntry>;
+
+/** Whole-file self slice. Runtime readers additionally byte/count gate the raw
+ * object before invoking the per-entry tolerant schema. */
+export const ArtifactCatalogSlice = z
+  .object({
+    v: z.literal(1),
+    artifacts: z.array(ArtifactCatalogEntry).max(ARTIFACT_LIMITS.LOCAL_OBJECTS),
+  })
+  .passthrough();
+export type ArtifactCatalogSlice = z.infer<typeof ArtifactCatalogSlice>;
+
+/** Client-safe global projection. `url` and `thumbnailUrl` are present only
+ * after origin binding; the raw catalog claim never crosses ProductAPI. */
+export const ArtifactView = ArtifactCatalogEntry.omit({ url: true })
+  .extend({
+    artifactKey: z.string().min(1),
+    originDeviceName: z.string().min(1),
+    originOnline: z.boolean(),
+    url: z.string().min(1).max(ARTIFACT_LIMITS.URL_CHARS).optional(),
+    thumbnailUrl: z.string().min(1).max(ARTIFACT_LIMITS.URL_CHARS).optional(),
+    openable: z.boolean(),
+    availability: ArtifactAvailability,
+    editable: z.boolean(),
+    error: z.string().max(ARTIFACT_LIMITS.ERROR_CHARS).optional(),
+  })
+  .passthrough();
+export type ArtifactView = z.infer<typeof ArtifactView>;
+
+export const ArtifactListResult = z.object({ artifacts: z.array(ArtifactView) }).passthrough();
 export type ArtifactListResult = z.infer<typeof ArtifactListResult>;

@@ -44,6 +44,7 @@ import {
   SettingsResetParams,
   SettingsSetParams,
   SettingsSubscribeParams,
+  STORES,
   type TerminalConfigDocument,
   TerminalConfigWriteParams,
   type TerminalConfigWriteResult,
@@ -1777,6 +1778,27 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           return () => mesh.off("serves-changed", cb);
         },
       },
+      catalog: {
+        bootId,
+        currentDeviceId: () => devices.currentDeviceId(),
+        devices: () => devices.list(),
+        subscribe: async (cb) => await mesh.subscribeStore(STORES.ARTIFACTS, cb),
+        publish: async (slice) => {
+          await mesh.setSlice(STORES.ARTIFACTS, slice);
+        },
+        onMeshWake: (cb) => {
+          // On a first transition from meshless local identity, the catalog
+          // must not publish until DeviceService has adopted the real store
+          // owner. Its sync queue is the ordering barrier.
+          const wake = () => void devices.sync().then(cb, cb);
+          mesh.on("reconciled", wake);
+          return () => mesh.off("reconciled", wake);
+        },
+        onDevicesChanged: (cb) => {
+          devices.on("changed", cb);
+          return () => devices.off("changed", cb);
+        },
+      },
       logger: logger.child({ component: "artifacts" }),
     });
     artifactsRef = artifacts;
@@ -1854,6 +1876,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // every native (re)connect. Initialization is awaited so a one-time C6
     // migration is durable before the product methods become callable; mesh
     // disabled still resolves promptly into honest `starting` states.
+    // AH-2 binds every public slice to the durable mesh device id. Resolve and
+    // publish DeviceService first; mesh-down still resolves into its stable
+    // local fallback and a later reconnect moves/re-publishes the self slice.
+    await devices.sync();
     await artifacts.start();
     detachArtifactHealth = artifacts.onChanged(() => emitHealth());
     api.register("artifact.publish", async (ctx, params) => {
@@ -1924,16 +1950,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("PRECONDITION_FAILED", "expected { artifactId: ULID }", false);
       return artifacts.refreshPreview(parsed.data.artifactId);
     });
-    api.register("artifact.list", () => ({ artifacts: artifacts.statuses() }));
+    api.register("artifact.list", () => ({ artifacts: artifacts.artifacts() }));
     api.registerSubscription("artifact.subscribe", (_ctx, _params, emit) => {
-      const off = artifacts.onChanged((statuses) => emit(statuses));
-      return { snapshot: artifacts.statuses(), dispose: off };
+      const off = artifacts.onCatalogChanged((catalog) => emit(catalog));
+      return { snapshot: artifacts.artifacts(), dispose: off };
     });
     mesh.on("reconciled", emitHealth);
     mesh.on("serves-changed", emitHealth);
-    // C4: first roster sync (identity + publish); later syncs ride the mesh
-    // events DeviceService wires itself. Fire-and-forget — mesh-down is normal.
-    void devices.sync();
 
     // -- ServiceHost (PLUG-P4, §14.2/§18): workers for service entries --
     serviceHost = new ServiceHost({

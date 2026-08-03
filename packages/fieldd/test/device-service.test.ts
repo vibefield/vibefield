@@ -186,7 +186,13 @@ describe("DeviceService — roster fusion", () => {
     // slice ULID → PeerInfo.deviceId → tailscale id, or it lands on nothing —
     // which is the bug this test exists to keep dead.
     mock.meshPeers = [
-      { id: "nodeid-peer", deviceId: "dev-peer", online: true, lastSeen: 1_700_000_200_000 },
+      {
+        id: "nodeid-peer",
+        deviceId: "dev-peer",
+        online: true,
+        lastSeen: 1_700_000_200_000,
+        whois: { login: "me@example.com", deviceName: "PEER.TAILNET.TS.NET." },
+      },
       { id: "nodeid-loner", online: true }, // no published ULID — stays uncorrelated
     ];
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
@@ -202,6 +208,7 @@ describe("DeviceService — roster fusion", () => {
     const peer = roster.find((x) => x.deviceId === "dev-peer") as DeviceInfo;
     expect(peer.online).toBe(true); // the join hit — a live tailnet peer reads online
     expect(peer.tailscaleId).toBe("nodeid-peer"); // the dial keyspace, exposed for liveness consumers
+    expect(peer.tailnetDnsName).toBe("peer.tailnet.ts.net"); // transport-derived, canonical
     expect(peer.lastSeenAt).toBe(1_700_000_200_000); // liveness lastSeen beats publishedAt
   });
 

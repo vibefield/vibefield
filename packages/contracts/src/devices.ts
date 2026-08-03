@@ -63,6 +63,11 @@ export const DeviceInfo = DeviceSlice.extend({
    * and must never be joined against each other (T1 §6). Absent for self and
    * for devices the registry does not currently list. */
   tailscaleId: z.string().optional(),
+  /** Authenticated MagicDNS hostname derived from PeerInfo.whois.deviceName
+   * only after the lawful ULID → Tailscale-id registry join. It is deliberately
+   * absent from DeviceSlice: a peer may not self-assert the host used to bind
+   * an Artifact Hub URL. */
+  tailnetDnsName: z.string().min(1).max(253).optional(),
 }).passthrough();
 export type DeviceInfo = z.infer<typeof DeviceInfo>;
 

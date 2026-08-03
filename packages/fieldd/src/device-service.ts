@@ -64,6 +64,10 @@ export class DeviceService extends EventEmitter {
    * it produces carry `tailscaleId` so downstream consumers (doc-sync
    * liveness, the future node-id-header principal) join in the dial keyspace. */
   private tsByUlid = new Map<string, string>();
+  /** ULID deviceId → authenticated MagicDNS hostname. This map is populated
+   * in the same registry pass as tsByUlid and only after PeerInfo supplies the
+   * durable ULID correlation; DeviceSlice can never assert this value. */
+  private dnsByUlid = new Map<string, string>();
   private storeSubscribed = false;
   private lastRosterSig = "";
   /** syncs SERIALIZE (the MeshClient chain law): each pass sees its trigger's state */
@@ -187,6 +191,7 @@ export class DeviceService extends EventEmitter {
     const raw = await this.opts.mesh.peers();
     this.peerLiveness.clear();
     this.tsByUlid.clear();
+    this.dnsByUlid.clear();
     for (const p of raw) {
       const parsed = PeerInfo.safeParse(p);
       if (!parsed.success) continue; // tolerant: a malformed peer never breaks the roster
@@ -197,8 +202,11 @@ export class DeviceService extends EventEmitter {
       });
       // a peer without a published ULID stays uncorrelated — its slice (if
       // any) reads offline honestly rather than joining on a guessed key
-      if (parsed.data.deviceId !== undefined)
+      if (parsed.data.deviceId !== undefined) {
         this.tsByUlid.set(parsed.data.deviceId, parsed.data.id);
+        const dnsName = canonicalTailnetDnsName(parsed.data.whois?.deviceName);
+        if (dnsName !== undefined) this.dnsByUlid.set(parsed.data.deviceId, dnsName);
+      }
     }
   }
 
@@ -243,6 +251,7 @@ export class DeviceService extends EventEmitter {
       // ULID directly is the T1 §6 bug: the map is keyed by the tailnet's own
       // node id, and the two keyspaces never intersect.
       const tailscaleId = self ? undefined : this.tsByUlid.get(deviceId);
+      const tailnetDnsName = self ? undefined : this.dnsByUlid.get(deviceId);
       const live = tailscaleId !== undefined ? this.peerLiveness.get(tailscaleId) : undefined;
       // link is OUR verdict about the connection to a peer — never self (C5/D32)
       const link = self ? undefined : this.peers?.linkState(deviceId);
@@ -252,6 +261,7 @@ export class DeviceService extends EventEmitter {
         online: self ? true : (live?.online ?? false),
         lastSeenAt: Math.max(slice.publishedAt, live?.lastSeen ?? 0),
         ...(tailscaleId !== undefined ? { tailscaleId } : {}),
+        ...(tailnetDnsName !== undefined ? { tailnetDnsName } : {}),
         ...(link !== undefined ? { link } : {}),
       });
       seen.add(deviceId);
@@ -279,6 +289,9 @@ export class DeviceService extends EventEmitter {
         // a correlation appearing matters even while online stays false: it is
         // what lets doc-sync's liveness fold see the peer at all
         d.tailscaleId ?? null,
+        // AH-2's URL binding wakes as soon as authenticated MagicDNS identity
+        // appears, disappears, or changes even if liveness itself is stable.
+        d.tailnetDnsName ?? null,
         // capabilities flip at runtime (terminalHost follows the NF-D8 hello);
         // omitting them made the flip invisible to device.subscribe (NF-6)
         d.capabilities,
@@ -306,4 +319,28 @@ export class DeviceService extends EventEmitter {
     }
     return id;
   }
+}
+
+/** Canonical form used by Artifact Hub URL binding: ASCII lowercase, exactly
+ * one optional terminal root dot removed, and ordinary DNS hostname syntax.
+ * A second trailing dot is rejected after the single permitted removal. */
+export function canonicalTailnetDnsName(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length === 0 || !/^[!-~]+$/.test(value)) {
+    return undefined;
+  }
+  let canonical = value.toLowerCase();
+  if (canonical.endsWith(".")) canonical = canonical.slice(0, -1);
+  if (canonical.length === 0 || canonical.length > 253 || !canonical.includes(".")) {
+    return undefined;
+  }
+  const labels = canonical.split(".");
+  if (
+    labels.some(
+      (label) =>
+        label.length === 0 || label.length > 63 || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
+    )
+  ) {
+    return undefined;
+  }
+  return canonical;
 }

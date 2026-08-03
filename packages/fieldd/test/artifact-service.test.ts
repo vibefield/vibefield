@@ -18,19 +18,26 @@ import { dirname, join } from "node:path";
 import {
   ARTIFACT_INTENT_FILE,
   ARTIFACT_LIMITS,
+  type ArtifactCatalogEntry,
+  type ArtifactCatalogSlice,
   type ArtifactSource,
   type ArtifactStatus,
+  type ArtifactView,
+  CONTRACTS_VERSION,
+  type DeviceInfo,
   LocalArtifactIntent,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import {
+  type ArtifactCatalogBridge,
   type ArtifactServeBridge,
   ArtifactService,
   artifactPortCandidate,
   artifactServeId,
   canonicalArtifactServingConfig,
   canonicalJson,
+  parseCatalogSlice,
 } from "../src/artifact-service";
 import { bootstrap } from "../src/index";
 import type { ObservedServe, ServeSpec, ServeState } from "../src/mesh-client";
@@ -138,12 +145,117 @@ class FakeBridge implements ArtifactServeBridge {
   }
 }
 
+class FakeCatalog implements ArtifactCatalogBridge {
+  bootId = "boot-self";
+  deviceId = "dev-self";
+  deviceRows: DeviceInfo[] = [deviceInfo("dev-self", { self: true, bootId: "boot-self" })];
+  slices: Record<string, { data: unknown }> = {};
+  publishes: ArtifactCatalogSlice[] = [];
+  event: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
+  meshListeners = new Set<() => void>();
+  deviceListeners = new Set<() => void>();
+
+  currentDeviceId(): string {
+    return this.deviceId;
+  }
+
+  devices(): DeviceInfo[] {
+    return this.deviceRows;
+  }
+
+  async subscribe(cb: (payload: unknown, kind: "snapshot" | "delta") => void): Promise<unknown> {
+    this.event = cb;
+    return { storeId: "field.artifacts.v1", slices: structuredClone(this.slices) };
+  }
+
+  async publish(slice: ArtifactCatalogSlice): Promise<void> {
+    const copy = structuredClone(slice);
+    this.publishes.push(copy);
+    this.slices[this.deviceId] = { data: copy };
+  }
+
+  onMeshWake(cb: () => void): () => void {
+    this.meshListeners.add(cb);
+    return () => this.meshListeners.delete(cb);
+  }
+
+  onDevicesChanged(cb: () => void): () => void {
+    this.deviceListeners.add(cb);
+    return () => this.deviceListeners.delete(cb);
+  }
+
+  push(owner: string, slice: unknown): void {
+    this.slices[owner] = { data: structuredClone(slice) };
+    this.event?.(
+      { kind: "peerUpdated", deviceId: owner, data: structuredClone(slice), version: 1 },
+      "delta",
+    );
+  }
+
+  remove(owner: string): void {
+    delete this.slices[owner];
+    this.event?.({ kind: "peerRemoved", deviceId: owner }, "delta");
+  }
+
+  replay(): void {
+    this.event?.(
+      { storeId: "field.artifacts.v1", slices: structuredClone(this.slices) },
+      "snapshot",
+    );
+  }
+
+  setDevices(rows: DeviceInfo[]): void {
+    this.deviceRows = rows;
+    for (const cb of this.deviceListeners) cb();
+  }
+}
+
+function deviceInfo(deviceId: string, over: Partial<DeviceInfo> = {}): DeviceInfo {
+  const publishedAt = 1_700_000_000_000;
+  return {
+    deviceId,
+    name: `${deviceId}-name`,
+    platform: "linux",
+    headless: false,
+    fielddVersion: "0.1.0",
+    contractsVersion: CONTRACTS_VERSION,
+    capabilities: { terminalHost: false, docHost: true, push: false },
+    bootId: `boot-${deviceId}`,
+    publishedAt,
+    self: false,
+    online: true,
+    lastSeenAt: publishedAt,
+    ...over,
+  };
+}
+
+function catalogEntry(
+  owner: string,
+  artifactId: string,
+  over: Partial<ArtifactCatalogEntry> = {},
+): ArtifactCatalogEntry {
+  return {
+    artifactId,
+    title: `${owner} artifact`,
+    kind: "proxy",
+    originDeviceId: owner,
+    originBootId: `boot-${owner}`,
+    url: `https://${owner}.tailnet.ts.net:17180`,
+    advertisedAvailability: "active",
+    availabilityAt: 1_700_000_000_100,
+    publishedAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_001,
+    ...over,
+  };
+}
+
 function service(
   dataDir: string,
   bridge: FakeBridge,
   options: {
     probe?: (source: ArtifactSource) => Promise<boolean>;
     writeIntent?: (path: string, body: string) => void;
+    catalog?: ArtifactCatalogBridge;
   } = {},
 ): ArtifactService {
   return new ArtifactService({
@@ -151,6 +263,7 @@ function service(
     bridge,
     maintenanceMs: false,
     probe: options.probe ?? (async () => true),
+    ...(options.catalog !== undefined ? { catalog: options.catalog } : {}),
     ...(options.writeIntent !== undefined ? { writeIntent: options.writeIntent } : {}),
   });
 }
@@ -569,11 +682,193 @@ describe("ArtifactService (AH-1 unit)", () => {
   });
 });
 
+describe("ArtifactService (AH-2 catalog)", () => {
+  it("pins the hostile URL and whole-slice cap vectors", () => {
+    const vector = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../contracts/fixtures/artifact-catalog-hostile.vector.json"),
+        "utf8",
+      ),
+    ) as {
+      owner: string;
+      poisonedUrls: string[];
+      oversizePaddingBytes: number;
+      overCount: number;
+    };
+    for (const url of vector.poisonedUrls) {
+      const parsed = parseCatalogSlice(vector.owner, {
+        v: 1,
+        artifacts: [catalogEntry(vector.owner, A, { url })],
+      });
+      expect(parsed).toMatchObject({ ok: true, entries: [], dropped: 1 });
+    }
+    expect(
+      parseCatalogSlice(vector.owner, {
+        v: 1,
+        artifacts: [],
+        padding: "x".repeat(vector.oversizePaddingBytes),
+      }),
+    ).toMatchObject({ ok: false, issue: "encoded slice exceeds limit" });
+    expect(
+      parseCatalogSlice(vector.owner, {
+        v: 1,
+        artifacts: Array.from({ length: vector.overCount }, () => null),
+      }),
+    ).toMatchObject({ ok: false, issue: "entry count exceeds limit" });
+  });
+
+  it("publishes a narrow whole self-slice and republishes it after store replay", async () => {
+    const dataDir = makeDataDir();
+    const bridge = new FakeBridge();
+    const catalog = new FakeCatalog();
+    const svc = service(dataDir, bridge, { catalog });
+    await svc.start();
+    const initialWrites = catalog.publishes.length;
+
+    await svc.publish(proxy(A, { allow: ["*@example.com"] }));
+    await until(() => catalog.publishes.at(-1)?.artifacts[0]?.artifactId === A);
+    const slice = catalog.publishes.at(-1)!;
+    expect(slice.artifacts[0]).toMatchObject({
+      artifactId: A,
+      originDeviceId: "dev-self",
+      originBootId: "boot-self",
+      advertisedAvailability: "active",
+      url: `https://unit.ts.net:${artifactPortCandidate(A)}`,
+    });
+    expect(JSON.stringify(slice)).not.toMatch(/source|scheme|allow|3000/);
+    expect(svc.artifacts()[0]).toMatchObject({
+      artifactKey: `dev-self:${A}`,
+      availability: "active",
+      editable: true,
+      openable: true,
+    });
+
+    const beforeReplay = catalog.publishes.length;
+    catalog.replay();
+    await until(() => catalog.publishes.length > beforeReplay);
+    expect(catalog.publishes.at(-1)).toEqual(slice);
+    expect(catalog.publishes.length).toBeGreaterThan(initialWrites);
+  });
+
+  it("isolates poisoned entries, binds URLs, and keeps colliding origin ids distinct", async () => {
+    const catalog = new FakeCatalog();
+    const self = catalog.deviceRows[0]!;
+    catalog.deviceRows = [
+      self,
+      deviceInfo("peer-a", {
+        bootId: "boot-peer-a",
+        tailnetDnsName: "peer-a.tailnet.ts.net",
+      }),
+      deviceInfo("peer-b", {
+        bootId: "boot-peer-b",
+        tailnetDnsName: "peer-b.tailnet.ts.net",
+      }),
+      deviceInfo("peer-c", { bootId: "boot-peer-c" }), // host binding unavailable
+    ];
+    const svc = service(makeDataDir(), new FakeBridge(), { catalog });
+    await svc.start();
+
+    catalog.push("peer-a", {
+      v: 1,
+      artifacts: [
+        {
+          ...catalogEntry("peer-a", A),
+          source: { kind: "folder", path: "/private/secret" },
+          allow: ["*"],
+          nativeError: "bind failed at /private/secret",
+        },
+        catalogEntry("peer-a", B, { url: "https://evil.tailnet.ts.net:17180" }),
+        catalogEntry("peer-a", C, { url: undefined }),
+      ],
+    });
+    catalog.push("peer-b", { v: 1, artifacts: [catalogEntry("peer-b", A)] });
+    catalog.push("peer-c", { v: 1, artifacts: [catalogEntry("peer-c", A)] });
+    catalog.push("peer-d", {
+      v: 1,
+      artifacts: [],
+      padding: "x".repeat(ARTIFACT_LIMITS.SLICE_BYTES),
+    });
+
+    await until(() => svc.artifacts().length === 3);
+    const views = svc.artifacts();
+    expect(views.map((view) => view.artifactKey).sort()).toEqual([
+      `peer-a:${A}`,
+      `peer-b:${A}`,
+      `peer-c:${A}`,
+    ]);
+    expect(JSON.stringify(views)).not.toMatch(/private\/secret|nativeError|"allow"|"source"/);
+    expect(views.find((view) => view.originDeviceId === "peer-a")).toMatchObject({
+      url: "https://peer-a.tailnet.ts.net:17180",
+      openable: true,
+    });
+    const unbound = views.find((view) => view.originDeviceId === "peer-c")!;
+    expect(unbound.openable).toBe(false);
+    expect(unbound.url).toBeUndefined();
+
+    catalog.setDevices(
+      catalog.deviceRows.map((device) =>
+        device.deviceId === "peer-a" ? { ...device, online: false } : device,
+      ),
+    );
+    await until(
+      () =>
+        svc.artifacts().find((view) => view.originDeviceId === "peer-a")?.availability ===
+        "offline",
+    );
+    const offline = svc.artifacts().find((view) => view.originDeviceId === "peer-a")!;
+    expect(offline.openable).toBe(true); // authenticated binding survives liveness lag
+
+    catalog.setDevices(
+      catalog.deviceRows.map((device) =>
+        device.deviceId === "peer-b" ? { ...device, bootId: "new-boot" } : device,
+      ),
+    );
+    await until(
+      () =>
+        svc.artifacts().find((view) => view.originDeviceId === "peer-b")?.availability ===
+        "unknown",
+    );
+    catalog.remove("peer-a");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(svc.artifacts().some((view) => view.originDeviceId === "peer-a")).toBe(true);
+    expect(svc.artifacts().some((view) => view.originDeviceId === "peer-d")).toBe(false);
+  });
+
+  it("retains last-known safe metadata across peer removal and a fieldd restart", async () => {
+    const dataDir = makeDataDir();
+    const firstCatalog = new FakeCatalog();
+    firstCatalog.deviceRows.push(
+      deviceInfo("peer-a", {
+        bootId: "boot-peer-a",
+        tailnetDnsName: "peer-a.tailnet.ts.net",
+      }),
+    );
+    const first = service(dataDir, new FakeBridge(), { catalog: firstCatalog });
+    await first.start();
+    firstCatalog.push("peer-a", { v: 1, artifacts: [catalogEntry("peer-a", A)] });
+    await until(() => first.artifacts().some((view) => view.originDeviceId === "peer-a"));
+    firstCatalog.remove("peer-a");
+    first.dispose();
+
+    const secondCatalog = new FakeCatalog();
+    const second = service(dataDir, new FakeBridge(), { catalog: secondCatalog });
+    await second.start();
+    const retained = second.artifacts().find((view) => view.originDeviceId === "peer-a");
+    expect(retained).toMatchObject({
+      artifactId: A,
+      availability: "offline",
+      openable: false,
+    });
+    expect(retained?.url).toBeUndefined();
+  });
+});
+
 describe("Artifact Hub over a real daemon", () => {
-  async function boot(dataDir: string) {
+  async function boot(dataDir: string, configure?: (mock: MockMgmtServer) => void) {
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
     const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    configure?.(mock);
     await mock.start();
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     return { mock, daemon };
@@ -604,6 +899,29 @@ describe("Artifact Hub over a real daemon", () => {
     const rpc = new WsRpc(ws);
     await helloAs(rpc, token, "shell-main");
     return rpc;
+  }
+
+  function relayDevice(from: MockMgmtServer, to: MockMgmtServer, originDeviceId: string): void {
+    const slice = structuredClone(from.storeWrites.at(-1));
+    to.storeSlices.set(originDeviceId, slice);
+    to.pushStoreDelta({ kind: "peerUpdated", deviceId: originDeviceId, data: slice, version: 1 });
+  }
+
+  function relayArtifacts(from: MockMgmtServer, to: MockMgmtServer, originDeviceId: string): void {
+    const slice = structuredClone(lastArtifactSlice(from));
+    to.artifactStoreSlices.set(originDeviceId, slice);
+    to.pushArtifactStoreDelta({
+      kind: "peerUpdated",
+      deviceId: originDeviceId,
+      data: slice,
+      version: 1,
+    });
+  }
+
+  function lastArtifactSlice(mock: MockMgmtServer): ArtifactCatalogSlice {
+    const slice = mock.artifactStoreWrites.at(-1) as ArtifactCatalogSlice | undefined;
+    if (slice === undefined) throw new Error("artifact store has not been written");
+    return slice;
   }
 
   it("publishes an exact artifact URL, keeps the product secret separate, replays, and removes", async () => {
@@ -637,12 +955,12 @@ describe("Artifact Hub over a real daemon", () => {
     cleanup.push(() => second.stop());
     await until(() => second.artifacts.statuses()[0]?.status === "active", 8_000);
     const rpc2 = await rpcFor(second.controlPort, second.shellToken);
-    const listed = (await rpc2.call("artifact.list", {})) as { artifacts: ArtifactStatus[] };
+    const listed = (await rpc2.call("artifact.list", {})) as { artifacts: ArtifactView[] };
     expect(listed.artifacts).toHaveLength(1);
     expect(listed.artifacts[0]).toMatchObject({
       artifactId: A,
       title: "Live app",
-      status: "active",
+      availability: "active",
       url: published.url,
     });
     expect(JSON.stringify(listed)).not.toContain(String(source.port));
@@ -675,5 +993,134 @@ describe("Artifact Hub over a real daemon", () => {
     expect((await observer.call("artifact.list", {})) as { artifacts: unknown[] }).toEqual({
       artifacts: [],
     });
+  }, 30_000);
+
+  it("converges add, collision, update, status, subscription, and removal across two daemon stacks", async () => {
+    const source = await localSource();
+    const a = await boot(makeDataDir(), (mock) => {
+      mock.meshDeviceId = "dev-a";
+      mock.storeSlices.clear();
+      mock.meshPeers = [
+        {
+          id: "node-b",
+          deviceId: "dev-b",
+          online: true,
+          whois: { login: "me@example.com", deviceName: "MOCK.TS.NET." },
+        },
+      ];
+    });
+    const b = await boot(makeDataDir(), (mock) => {
+      mock.meshDeviceId = "dev-b";
+      mock.storeSlices.clear();
+      mock.meshPeers = [
+        {
+          id: "node-a",
+          deviceId: "dev-a",
+          online: true,
+          whois: { login: "me@example.com", deviceName: "mock.ts.net" },
+        },
+      ];
+    });
+    cleanup.push(() => a.daemon.stop());
+    cleanup.push(() => b.daemon.stop());
+    cleanup.push(() => a.mock.stop());
+    cleanup.push(() => b.mock.stop());
+    relayDevice(a.mock, b.mock, "dev-a");
+    relayDevice(b.mock, a.mock, "dev-b");
+    await until(
+      () =>
+        a.daemon.devices.get("dev-b")?.tailnetDnsName === "mock.ts.net" &&
+        b.daemon.devices.get("dev-a")?.tailnetDnsName === "mock.ts.net",
+    );
+
+    const rpcA = await rpcFor(a.daemon.controlPort, a.daemon.shellToken);
+    const rpcB = await rpcFor(b.daemon.controlPort, b.daemon.shellToken);
+    const subscription = (await rpcB.call("artifact.subscribe", {})) as {
+      subId: string;
+      snapshot: ArtifactView[];
+    };
+    expect(subscription.snapshot).toEqual([]);
+
+    await rpcA.call("artifact.publish", {
+      artifactId: A,
+      title: "A workbench",
+      source: { kind: "proxy", port: source.port, scheme: "http" },
+    });
+    await until(() => lastArtifactSlice(a.mock).artifacts[0]?.advertisedAvailability === "active");
+    relayArtifacts(a.mock, b.mock, "dev-a");
+    await until(() =>
+      b.daemon.artifacts.artifacts().some((view) => view.artifactKey === `dev-a:${A}`),
+    );
+    expect(b.daemon.artifacts.artifacts()[0]).toMatchObject({
+      artifactKey: `dev-a:${A}`,
+      availability: "active",
+      openable: true,
+      editable: false,
+    });
+
+    // Same artifactId is legal in another origin slice; the global identity is
+    // composite and neither writer overwrites the other.
+    await rpcB.call("artifact.publish", {
+      artifactId: A,
+      title: "B workbench",
+      source: { kind: "proxy", port: source.port, scheme: "http" },
+    });
+    await until(() => b.daemon.artifacts.artifacts().length === 2);
+    expect(
+      b.daemon.artifacts
+        .artifacts()
+        .map((view) => view.artifactKey)
+        .sort(),
+    ).toEqual([`dev-a:${A}`, `dev-b:${A}`]);
+
+    await rpcA.call("artifact.update", { artifactId: A, title: "A renamed" });
+    await until(() => lastArtifactSlice(a.mock).artifacts[0]?.title === "A renamed");
+    relayArtifacts(a.mock, b.mock, "dev-a");
+    await until(
+      () =>
+        b.daemon.artifacts.artifacts().find((view) => view.artifactKey === `dev-a:${A}`)?.title ===
+        "A renamed",
+    );
+
+    const closedPort = await new Promise<number>((resolvePort, reject) => {
+      const reservation = createServer();
+      reservation.once("error", reject);
+      reservation.listen(0, "127.0.0.1", () => {
+        const address = reservation.address();
+        if (address === null || typeof address === "string") {
+          reject(new Error("reservation did not bind"));
+          return;
+        }
+        reservation.close(() => resolvePort(address.port));
+      });
+    });
+    await rpcA.call("artifact.update", {
+      artifactId: A,
+      source: { kind: "proxy", port: closedPort, scheme: "http" },
+    });
+    await until(
+      () => lastArtifactSlice(a.mock).artifacts[0]?.advertisedAvailability === "source-unavailable",
+    );
+    relayArtifacts(a.mock, b.mock, "dev-a");
+    await until(
+      () =>
+        b.daemon.artifacts.artifacts().find((view) => view.artifactKey === `dev-a:${A}`)
+          ?.availability === "source-unavailable",
+    );
+    expect(
+      rpcB.notifications.some(
+        (notification) =>
+          notification.method === "artifact.delta" &&
+          notification.params.subId === subscription.subId,
+      ),
+    ).toBe(true);
+
+    await rpcA.call("artifact.unpublish", { artifactId: A });
+    await until(() => lastArtifactSlice(a.mock).artifacts.length === 0);
+    relayArtifacts(a.mock, b.mock, "dev-a");
+    await until(
+      () => !b.daemon.artifacts.artifacts().some((view) => view.artifactKey === `dev-a:${A}`),
+    );
+    expect(b.daemon.artifacts.artifacts().map((view) => view.artifactKey)).toEqual([`dev-b:${A}`]);
   }, 30_000);
 });

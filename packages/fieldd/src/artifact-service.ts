@@ -21,17 +21,22 @@ import {
   ARTIFACT_LIMITS,
   ARTIFACT_SERVE_PREFIX,
   ARTIFACT_TECHNICAL_NAME_PREFIX,
+  ArtifactCatalogEntry,
+  type ArtifactCatalogSlice,
   type ArtifactPublishParams,
   ArtifactPublishV2Params,
   type ArtifactSource,
   ArtifactStatus,
   type ArtifactUnpublishParams,
   type ArtifactUpdateParams,
+  ArtifactView,
+  type DeviceInfo,
   LegacyArtifactPublishParams,
   LocalArtifactIntent,
   STORES,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { canonicalTailnetDnsName } from "./device-service";
 import type { ObservedServe, ServeSpec, ServeState } from "./mesh-client";
 import { RpcCallError } from "./native-link";
 
@@ -55,9 +60,24 @@ export interface ArtifactServeBridge {
   on(cb: () => void): () => void;
 }
 
+/** AH-2's narrow catalog seam. SyncedStore remains an opaque-JSON transport;
+ * this service owns validation, self-slice authority, and global projection. */
+export interface ArtifactCatalogBridge {
+  bootId: string;
+  currentDeviceId(): string;
+  devices(): DeviceInfo[];
+  subscribe(cb: (payload: unknown, kind: "snapshot" | "delta") => void): Promise<unknown>;
+  publish(slice: ArtifactCatalogSlice): Promise<void>;
+  onMeshWake(cb: () => void): () => void;
+  onDevicesChanged(cb: () => void): () => void;
+}
+
 export interface ArtifactServiceOptions {
   dataDir: string;
   bridge: ArtifactServeBridge;
+  /** Required by production from AH-2 onward; optional only for focused AH-1
+   * unit tests that exercise the local serving state machine in isolation. */
+  catalog?: ArtifactCatalogBridge;
   logger?: Logger;
   now?: () => number;
   random?: () => number;
@@ -109,6 +129,9 @@ const PROBE_TIMEOUT_MS = 1_000;
 const PROBE_CONCURRENCY = 4;
 const DEFAULT_MAINTENANCE_MS = 10_000;
 const MAX_RETIRING_IDS = 16;
+const CATALOG_CACHE_FILE = "field.artifact-catalog-cache.v1.json";
+const MAX_CACHED_ORIGINS = 256;
+const MAX_CATALOG_CACHE_BYTES = MAX_CACHED_ORIGINS * ARTIFACT_LIMITS.SLICE_BYTES * 2;
 
 /** AH-D4's frozen first candidate. Linear probing is performed by the service. */
 export function artifactPortCandidate(artifactId: string): number {
@@ -169,6 +192,7 @@ export function artifactServeId(intent: LocalArtifactIntent, previewDir: string)
 
 export class ArtifactService {
   readonly #bridge: ArtifactServeBridge;
+  readonly #catalog: ArtifactCatalogBridge | undefined;
   readonly #logger: Logger;
   readonly #now: () => number;
   readonly #random: () => number;
@@ -178,6 +202,7 @@ export class ArtifactService {
   readonly #registryDir: string;
   readonly #intentPath: string;
   readonly #legacyPath: string;
+  readonly #catalogCachePath: string;
   readonly #previewRoot: string;
 
   #entries = new Map<string, LocalArtifactIntent>();
@@ -185,16 +210,33 @@ export class ArtifactService {
   readonly #probes = new Map<string, ProbeState>();
   readonly #removeErrors = new Set<string>();
   readonly #listeners = new Set<(statuses: ArtifactStatus[]) => void>();
+  readonly #catalogListeners = new Set<(artifacts: ArtifactView[]) => void>();
+  /** Last validated public slices. Peer removal deliberately does not erase a
+   * row: DeviceService supplies liveness and a future retirement policy owns
+   * garbage collection. The bounded safe cache survives fieldd restarts. */
+  readonly #catalogSlices = new Map<string, ArtifactCatalogEntry[]>();
+  readonly #availability = new Map<string, { state: ArtifactStatus["status"]; at: number }>();
   #bridgeOff: (() => void) | null = null;
+  #catalogMeshOff: (() => void) | null = null;
+  #catalogDevicesOff: (() => void) | null = null;
   #maintenance: NodeJS.Timeout | null = null;
   #chain: Promise<void> = Promise.resolve();
   #lastSig = "";
+  #lastCatalogSig = "";
+  #catalogEmitQueued = false;
+  #pendingCatalogArtifacts: ArtifactView[] | null = null;
+  #lastPublishedCatalogSig = "";
+  #catalogSelfDeviceId: string | null = null;
+  #catalogSubscribed = false;
+  #catalogSyncQueued = false;
+  #catalogDirty = true;
   #storageOk = true;
   #started = false;
   #disposed = false;
 
   constructor(opts: ArtifactServiceOptions) {
     this.#bridge = opts.bridge;
+    this.#catalog = opts.catalog;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "artifacts" });
     this.#now = opts.now ?? Date.now;
     this.#random = opts.random ?? Math.random;
@@ -204,8 +246,10 @@ export class ArtifactService {
     this.#registryDir = join(opts.dataDir, "registries");
     this.#intentPath = join(this.#registryDir, ARTIFACT_INTENT_FILE);
     this.#legacyPath = join(this.#registryDir, `${STORES.ARTIFACTS}.json`);
+    this.#catalogCachePath = join(this.#registryDir, CATALOG_CACHE_FILE);
     this.#previewRoot = join(opts.dataDir, "artifacts", "previews");
     this.#load();
+    this.#loadCatalogCache();
   }
 
   /** Load/migrate, drain durable removals, and declare eligible serves. Mesh
@@ -220,8 +264,17 @@ export class ArtifactService {
           this.#emit();
         });
       });
+      if (this.#catalog !== undefined) {
+        this.#catalogMeshOff = this.#catalog.onMeshWake(() => this.#scheduleCatalogSync());
+        this.#catalogDevicesOff = this.#catalog.onDevicesChanged(() => {
+          this.#refreshLocalCatalog(this.statuses());
+          this.#emitCatalog();
+          this.#scheduleCatalogSync();
+        });
+      }
       await this.#migrateLegacy();
       await this.#reconcile();
+      await this.#syncCatalog();
       void this.#enqueue(async () => {
         await this.#probeAll();
         this.#emit();
@@ -345,9 +398,37 @@ export class ArtifactService {
       .sort((a, b) => b.updatedAt - a.updatedAt || a.title.localeCompare(b.title));
   }
 
+  /** AH-2 authoritative global union. Remote URL claims cross this boundary
+   * only after transport-owned origin binding; local source details never do. */
+  artifacts(): ArtifactView[] {
+    if (this.#catalog === undefined) return [];
+    const selfDeviceId = this.#catalog.currentDeviceId();
+    const devices = new Map(this.#catalog.devices().map((device) => [device.deviceId, device]));
+    const out: ArtifactView[] = [];
+    for (const [owner, entries] of this.#catalogSlices) {
+      const origin = devices.get(owner);
+      const self = owner === selfDeviceId;
+      for (const entry of entries) {
+        const projected = projectCatalogEntry(entry, owner, origin, self);
+        if (projected !== null) out.push(projected);
+      }
+    }
+    return out.sort(
+      (a, b) =>
+        b.updatedAt - a.updatedAt ||
+        a.title.localeCompare(b.title) ||
+        a.artifactKey.localeCompare(b.artifactKey),
+    );
+  }
+
   onChanged(fn: (statuses: ArtifactStatus[]) => void): () => void {
     this.#listeners.add(fn);
     return () => this.#listeners.delete(fn);
+  }
+
+  onCatalogChanged(fn: (artifacts: ArtifactView[]) => void): () => void {
+    this.#catalogListeners.add(fn);
+    return () => this.#catalogListeners.delete(fn);
   }
 
   health(): ArtifactServiceHealth {
@@ -371,9 +452,14 @@ export class ArtifactService {
     this.#disposed = true;
     this.#bridgeOff?.();
     this.#bridgeOff = null;
+    this.#catalogMeshOff?.();
+    this.#catalogMeshOff = null;
+    this.#catalogDevicesOff?.();
+    this.#catalogDevicesOff = null;
     if (this.#maintenance !== null) clearTimeout(this.#maintenance);
     this.#maintenance = null;
     this.#listeners.clear();
+    this.#catalogListeners.clear();
   }
 
   // ---- normalization and identity ---------------------------------------
@@ -653,16 +739,286 @@ export class ArtifactService {
   #emit(): void {
     const statuses = this.statuses();
     const sig = JSON.stringify(statuses);
-    if (sig === this.#lastSig) return;
-    this.#lastSig = sig;
-    for (const fn of this.#listeners) {
-      try {
-        fn(statuses);
-      } catch (error) {
-        this.#logger.warn("fieldd.artifacts.listener_failed", "An artifact listener threw", {
-          error: errorName(error),
-        });
+    if (sig !== this.#lastSig) {
+      this.#lastSig = sig;
+      for (const fn of this.#listeners) {
+        try {
+          fn(statuses);
+        } catch (error) {
+          this.#logger.warn("fieldd.artifacts.listener_failed", "An artifact listener threw", {
+            error: errorName(error),
+          });
+        }
       }
+    }
+    if (this.#catalog !== undefined) {
+      this.#refreshLocalCatalog(statuses);
+      this.#emitCatalog();
+      this.#scheduleCatalogSync();
+    }
+  }
+
+  // ---- AH-2 public catalog ----------------------------------------------
+
+  /** Replace only this device's public slice from durable local truth. */
+  #refreshLocalCatalog(statuses: ArtifactStatus[]): void {
+    const catalog = this.#catalog;
+    if (catalog === undefined) return;
+    const owner = catalog.currentDeviceId();
+    if (this.#catalogSelfDeviceId !== null && this.#catalogSelfDeviceId !== owner) {
+      this.#catalogSlices.delete(this.#catalogSelfDeviceId);
+      this.#lastPublishedCatalogSig = "";
+      this.#catalogDirty = true;
+    }
+    this.#catalogSelfDeviceId = owner;
+
+    const seen = new Set<string>();
+    const artifacts = statuses.map((status) => {
+      seen.add(status.artifactId);
+      const prior = this.#availability.get(status.artifactId);
+      const availability =
+        prior?.state === status.status
+          ? prior
+          : { state: status.status, at: Math.max(0, Math.trunc(this.#now())) };
+      this.#availability.set(status.artifactId, availability);
+      return ArtifactCatalogEntry.parse({
+        artifactId: status.artifactId,
+        title: status.title,
+        kind: status.kind,
+        originDeviceId: owner,
+        originBootId: catalog.bootId,
+        ...(status.url !== undefined ? { url: status.url } : {}),
+        ...(status.previewRevision !== undefined
+          ? { previewRevision: status.previewRevision }
+          : {}),
+        advertisedAvailability: status.status,
+        availabilityAt: availability.at,
+        publishedAt: status.publishedAt,
+        updatedAt: status.updatedAt,
+      });
+    });
+    for (const artifactId of this.#availability.keys()) {
+      if (!seen.has(artifactId)) this.#availability.delete(artifactId);
+    }
+    this.#catalogSlices.set(owner, artifacts);
+    const sig = canonicalJson({ v: 1, artifacts });
+    if (sig !== this.#lastPublishedCatalogSig) this.#catalogDirty = true;
+  }
+
+  #emitCatalog(): void {
+    const artifacts = this.artifacts();
+    const sig = JSON.stringify(artifacts);
+    if (sig === this.#lastCatalogSig) return;
+    this.#lastCatalogSig = sig;
+    this.#pendingCatalogArtifacts = artifacts;
+    if (this.#catalogEmitQueued) return;
+    this.#catalogEmitQueued = true;
+    queueMicrotask(() => {
+      this.#catalogEmitQueued = false;
+      const pending = this.#pendingCatalogArtifacts;
+      this.#pendingCatalogArtifacts = null;
+      if (pending === null || this.#disposed) return;
+      for (const fn of this.#catalogListeners) {
+        try {
+          fn(pending);
+        } catch (error) {
+          this.#logger.warn(
+            "fieldd.artifacts.catalog_listener_failed",
+            "An artifact catalog listener threw",
+            { error: errorName(error) },
+          );
+        }
+      }
+    });
+  }
+
+  #scheduleCatalogSync(): void {
+    if (this.#catalog === undefined || this.#disposed || this.#catalogSyncQueued) return;
+    this.#catalogSyncQueued = true;
+    void this.#enqueue(async () => {
+      this.#catalogSyncQueued = false;
+      await this.#syncCatalog();
+    });
+  }
+
+  async #syncCatalog(): Promise<void> {
+    const catalog = this.#catalog;
+    if (catalog === undefined || this.#disposed) return;
+    this.#refreshLocalCatalog(this.statuses());
+    if (!this.#catalogSubscribed) {
+      try {
+        const snapshot = await catalog.subscribe((payload, kind) => {
+          void this.#enqueue(async () => {
+            this.#onCatalogEvent(payload, kind);
+            if (kind === "snapshot") {
+              // NativeLink replay means the native store may have restarted or
+              // missed our previous best-effort write. Republish whole truth.
+              this.#lastPublishedCatalogSig = "";
+              this.#catalogDirty = true;
+            }
+            this.#refreshLocalCatalog(this.statuses());
+            this.#emitCatalog();
+            await this.#publishCatalogIfNeeded();
+          });
+        });
+        this.#catalogSubscribed = true;
+        this.#applyCatalogSnapshot(snapshot);
+        this.#lastPublishedCatalogSig = "";
+        this.#catalogDirty = true;
+      } catch (error) {
+        this.#logger.info(
+          "fieldd.artifacts.catalog_subscribe_deferred",
+          "Artifact catalog subscription will be retried",
+          { error: errorName(error) },
+        );
+        this.#emitCatalog();
+        return;
+      }
+    }
+    this.#refreshLocalCatalog(this.statuses());
+    this.#emitCatalog();
+    await this.#publishCatalogIfNeeded();
+  }
+
+  async #publishCatalogIfNeeded(): Promise<void> {
+    const catalog = this.#catalog;
+    const owner = this.#catalogSelfDeviceId;
+    if (catalog === undefined || owner === null || !this.#catalogDirty) return;
+    const slice: ArtifactCatalogSlice = {
+      v: 1,
+      artifacts: this.#catalogSlices.get(owner) ?? [],
+    };
+    const encoded = canonicalJson(slice);
+    if (Buffer.byteLength(encoded, "utf8") > ARTIFACT_LIMITS.SLICE_BYTES) {
+      // The writer is narrower than the tolerant reader; this is an internal
+      // invariant failure, never a partially published slice.
+      this.#logger.error(
+        "fieldd.artifacts.catalog_self_oversize",
+        "The local artifact catalog exceeded its encoded limit",
+        { bytes: Buffer.byteLength(encoded, "utf8"), limit: ARTIFACT_LIMITS.SLICE_BYTES },
+      );
+      return;
+    }
+    try {
+      await catalog.publish(slice);
+      this.#lastPublishedCatalogSig = encoded;
+      this.#catalogDirty = false;
+    } catch (error) {
+      this.#catalogDirty = true;
+      this.#logger.info(
+        "fieldd.artifacts.catalog_publish_deferred",
+        "The local artifact catalog will be republished",
+        { error: errorName(error) },
+      );
+    }
+  }
+
+  #onCatalogEvent(payload: unknown, kind: "snapshot" | "delta"): void {
+    if (kind === "snapshot") {
+      this.#applyCatalogSnapshot(payload);
+      return;
+    }
+    const event = payload as { kind?: unknown; deviceId?: unknown; data?: unknown } | null;
+    if (event === null || typeof event.deviceId !== "string") return;
+    // SyncedStore emits peerRemoved when transport removes a peer slice. AH-D6
+    // retains last-known safe metadata; DeviceService liveness makes it offline.
+    if (event.kind === "peerRemoved") return;
+    this.#adoptCatalogSlice(event.deviceId, event.data);
+  }
+
+  #applyCatalogSnapshot(payload: unknown): void {
+    const snapshot = payload as { slices?: Record<string, { data?: unknown }> } | null;
+    if (snapshot === null || typeof snapshot.slices !== "object" || snapshot.slices === null) {
+      return;
+    }
+    // Merge owners present in the authoritative snapshot but retain absent
+    // owners as last-known metadata. An explicit empty owner slice still
+    // removes that origin's artifacts immediately.
+    for (const [owner, wrapped] of Object.entries(snapshot.slices)) {
+      this.#adoptCatalogSlice(owner, wrapped?.data);
+    }
+  }
+
+  #adoptCatalogSlice(owner: string, raw: unknown): void {
+    if (owner === this.#catalog?.currentDeviceId()) return;
+    const parsed = parseCatalogSlice(owner, raw);
+    if (!parsed.ok) {
+      this.#logger.warn(
+        "fieldd.artifacts.catalog_slice_dropped",
+        "One artifact catalog slice was rejected",
+        { owner: bounded(owner, 128), issue: parsed.issue },
+      );
+      return;
+    }
+    if (!this.#catalogSlices.has(owner) && this.#catalogSlices.size >= MAX_CACHED_ORIGINS) {
+      this.#logger.warn(
+        "fieldd.artifacts.catalog_origin_limit",
+        "An artifact catalog origin was dropped at the cache limit",
+        { limit: MAX_CACHED_ORIGINS },
+      );
+      return;
+    }
+    this.#catalogSlices.set(owner, parsed.entries);
+    if (parsed.dropped > 0) {
+      this.#logger.warn(
+        "fieldd.artifacts.catalog_entries_dropped",
+        "Malformed artifact catalog entries were dropped",
+        { owner: bounded(owner, 128), dropped: parsed.dropped },
+      );
+    }
+    this.#persistCatalogCache();
+  }
+
+  #loadCatalogCache(): void {
+    if (this.#catalog === undefined) return;
+    let raw: unknown;
+    try {
+      if (statSync(this.#catalogCachePath).size > MAX_CATALOG_CACHE_BYTES) {
+        throw new Error("catalog cache exceeds limit");
+      }
+      raw = JSON.parse(readFileSync(this.#catalogCachePath, "utf8")) as unknown;
+    } catch (error) {
+      if (!isCode(error, "ENOENT")) {
+        this.#logger.warn(
+          "fieldd.artifacts.catalog_cache_unreadable",
+          "The retained artifact catalog cache was ignored",
+          { error: errorName(error) },
+        );
+      }
+      return;
+    }
+    const cache = raw as { v?: unknown; slices?: unknown } | null;
+    if (
+      cache === null ||
+      cache.v !== 1 ||
+      typeof cache.slices !== "object" ||
+      cache.slices === null ||
+      Array.isArray(cache.slices)
+    ) {
+      return;
+    }
+    for (const [owner, slice] of Object.entries(cache.slices).slice(0, MAX_CACHED_ORIGINS)) {
+      const parsed = parseCatalogSlice(owner, slice);
+      if (parsed.ok) this.#catalogSlices.set(owner, parsed.entries);
+    }
+  }
+
+  #persistCatalogCache(): void {
+    const self = this.#catalogSelfDeviceId;
+    const slices: Record<string, ArtifactCatalogSlice> = {};
+    for (const [owner, artifacts] of this.#catalogSlices) {
+      if (owner !== self) slices[owner] = { v: 1, artifacts };
+    }
+    try {
+      atomicWriteIntent(this.#catalogCachePath, `${JSON.stringify({ v: 1, slices }, null, 2)}\n`);
+    } catch (error) {
+      // This cache is reconstructible public metadata. A failed cache write
+      // never contaminates private intent storage health or local mutation.
+      this.#logger.warn(
+        "fieldd.artifacts.catalog_cache_write_failed",
+        "The retained artifact catalog cache could not be written",
+        { error: errorName(error) },
+      );
     }
   }
 
@@ -1140,6 +1496,200 @@ function atomicWriteIntent(path: string, body: string): void {
   } finally {
     if (directory !== null) closeSync(directory);
   }
+}
+
+type ParsedCatalogSlice =
+  | { ok: true; entries: ArtifactCatalogEntry[]; dropped: number }
+  | { ok: false; issue: string };
+
+/** Hostile-input gate. Encoded bytes and entry count are checked before any
+ * per-entry schema allocation; then one malformed entry is isolated rather
+ * than poisoning its siblings. */
+export function parseCatalogSlice(owner: string, raw: unknown): ParsedCatalogSlice {
+  let encoded: string | undefined;
+  try {
+    encoded = JSON.stringify(raw);
+  } catch {
+    return { ok: false, issue: "not JSON-encodable" };
+  }
+  if (encoded === undefined) return { ok: false, issue: "not a JSON object" };
+  if (owner.length === 0 || owner.length > 256) {
+    return { ok: false, issue: "owner id exceeds limit" };
+  }
+  if (Buffer.byteLength(encoded, "utf8") > ARTIFACT_LIMITS.SLICE_BYTES) {
+    return { ok: false, issue: "encoded slice exceeds limit" };
+  }
+  const candidate = raw as { v?: unknown; artifacts?: unknown } | null;
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    candidate.v !== 1 ||
+    !Array.isArray(candidate.artifacts)
+  ) {
+    return { ok: false, issue: "malformed slice envelope" };
+  }
+  if (candidate.artifacts.length > ARTIFACT_LIMITS.LOCAL_OBJECTS) {
+    return { ok: false, issue: "entry count exceeds limit" };
+  }
+
+  const entries: ArtifactCatalogEntry[] = [];
+  const seen = new Set<string>();
+  let dropped = 0;
+  for (const item of candidate.artifacts) {
+    const parsed = ArtifactCatalogEntry.safeParse(item);
+    if (!parsed.success || parsed.data.originDeviceId !== owner) {
+      dropped += 1;
+      continue;
+    }
+    if (seen.has(parsed.data.artifactId)) {
+      dropped += 1;
+      continue;
+    }
+    if (parsed.data.url === undefined) {
+      if (
+        parsed.data.advertisedAvailability !== "starting" &&
+        parsed.data.advertisedAvailability !== "error"
+      ) {
+        dropped += 1;
+        continue;
+      }
+    } else if (catalogUrlClaim(parsed.data.url) === null) {
+      dropped += 1;
+      continue;
+    }
+    seen.add(parsed.data.artifactId);
+    // Tolerant object readers accept future fields, but the retained cache and
+    // ProductAPI projection are narrow writers. Never preserve an extension
+    // field such as a path, source port, allow-list, or native error string.
+    entries.push(narrowCatalogEntry(parsed.data));
+  }
+  return { ok: true, entries, dropped };
+}
+
+function narrowCatalogEntry(entry: ArtifactCatalogEntry): ArtifactCatalogEntry {
+  return {
+    artifactId: entry.artifactId,
+    title: entry.title,
+    kind: entry.kind,
+    originDeviceId: entry.originDeviceId,
+    originBootId: entry.originBootId,
+    ...(entry.url !== undefined ? { url: entry.url } : {}),
+    ...(entry.previewRevision !== undefined ? { previewRevision: entry.previewRevision } : {}),
+    advertisedAvailability: entry.advertisedAvailability,
+    availabilityAt: entry.availabilityAt,
+    publishedAt: entry.publishedAt,
+    updatedAt: entry.updatedAt,
+  };
+}
+
+interface CatalogUrlClaim {
+  raw: string;
+  hostname: string;
+}
+
+/** Validate every URL property that does not depend on knowing the origin.
+ * The hostname equality check happens later against DeviceService. */
+function catalogUrlClaim(raw: string): CatalogUrlClaim | null {
+  if (raw !== raw.trim() || !/^[!-~]+$/.test(raw) || raw.includes("?") || raw.includes("#")) {
+    return null;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  const hostname = canonicalTailnetDnsName(parsed.hostname);
+  const port = Number(parsed.port);
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username !== "" ||
+    parsed.password !== "" ||
+    parsed.pathname !== "/" ||
+    hostname === undefined ||
+    parsed.port === "" ||
+    !Number.isInteger(port) ||
+    port < ARTIFACT_LIMITS.LISTEN_PORT_MIN ||
+    port > ARTIFACT_LIMITS.LISTEN_PORT_MAX
+  ) {
+    return null;
+  }
+  return { raw, hostname };
+}
+
+function projectCatalogEntry(
+  entry: ArtifactCatalogEntry,
+  owner: string,
+  origin: DeviceInfo | undefined,
+  self: boolean,
+): ArtifactView | null {
+  const { url: _untrustedUrl, ...safeEntry } = entry;
+  const claim = entry.url === undefined ? null : catalogUrlClaim(entry.url);
+  let url: string | undefined;
+  if (claim !== null) {
+    if (self) {
+      // The local URL is the exact result adopted from our own Truffle add.
+      url = claim.raw;
+    } else {
+      const authenticatedHost = canonicalTailnetDnsName(origin?.tailnetDnsName);
+      if (authenticatedHost !== undefined) {
+        if (authenticatedHost !== claim.hostname) return null;
+        url = claim.raw;
+      }
+      // Missing transport binding is non-fatal: keep metadata, strip address.
+    }
+  }
+
+  const originOnline = self || origin?.online === true;
+  const availability = self
+    ? entry.advertisedAvailability
+    : !originOnline
+      ? "offline"
+      : origin?.bootId !== entry.originBootId
+        ? "unknown"
+        : entry.advertisedAvailability;
+  let thumbnailUrl: string | undefined;
+  if (url !== undefined && entry.previewRevision !== undefined) {
+    const thumbnail = new URL(url);
+    thumbnail.pathname = "/.vibefield/preview/thumbnail.jpg";
+    thumbnail.search = `?v=${entry.previewRevision}`;
+    thumbnailUrl = thumbnail.toString();
+  }
+  const error = projectedAvailabilityError(availability);
+  return ArtifactView.parse({
+    ...safeEntry,
+    artifactKey: `${owner}:${entry.artifactId}`,
+    originDeviceName:
+      origin?.name !== undefined && origin.name.trim().length > 0 ? origin.name : owner,
+    originOnline,
+    ...(url !== undefined ? { url } : {}),
+    ...(thumbnailUrl !== undefined ? { thumbnailUrl } : {}),
+    openable: url !== undefined,
+    availability,
+    editable: self,
+    ...(error !== undefined ? { error } : {}),
+  });
+}
+
+function projectedAvailabilityError(
+  availability: ArtifactView["availability"],
+): string | undefined {
+  switch (availability) {
+    case "source-unavailable":
+      return "source is unavailable";
+    case "error":
+      return "artifact listener is unavailable";
+    case "offline":
+      return "origin device is offline";
+    case "unknown":
+      return "origin status is not current";
+    default:
+      return undefined;
+  }
+}
+
+function bounded(value: string, chars: number): string {
+  return value.length <= chars ? value : `${value.slice(0, chars - 1)}…`;
 }
 
 function isSourceRuntimeError(error: string | undefined): boolean {

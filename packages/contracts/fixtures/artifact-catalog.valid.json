@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "artifacts": [
+    {
+      "artifactId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "title": "Static docs",
+      "kind": "folder",
+      "originDeviceId": "01J00000000000000000000001",
+      "originBootId": "fieldd-a1b2c3d4e5f60718",
+      "url": "https://mac.tail1234.ts.net:17180",
+      "previewRevision": 2,
+      "advertisedAvailability": "active",
+      "availabilityAt": 1700000000002,
+      "publishedAt": 1700000000000,
+      "updatedAt": 1700000000001
+    }
+  ]
+}
