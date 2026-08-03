@@ -5,7 +5,8 @@
 > decision lives and whether it still stands. Full-corpus sweep: 2026-08-02. Update the
 > relevant row when a decision is ratified, amended, superseded, or consumed. Siblings:
 > `ROADMAP.md` (now/next) · `LANDED.md` (history) · `draft/petitions/README.md` (upstream
-> petitions). Lives in main-tracked `docs/` (moved from `draft/` 2026-08-02); owning-doc
+> petitions). AH status advanced 2026-08-03. Lives in main-tracked `docs/` (moved from
+> `draft/` 2026-08-02); owning-doc
 > citations (`native-floor §3`, `thinking-c6`, …) resolve under `draft/`, dev-local-only.
 
 ## The core D-series (D1–D39 + D29′ — contiguous, no gaps)
@@ -28,7 +29,7 @@ M1–M5 contract milestones — design-01 §11 (M1+M2 implemented, green cross-l
 
 ## Spec decision namespaces
 
-| Namespace | Home | Status (2026-08-02) |
+| Namespace | Home | Status (2026-08-03) |
 |---|---|---|
 | NF-D1…NF-D10 | native-floor §3 | track complete; NF-D1 resolved upstream (ghosttea 0.6.0) · NF-D3's gap filled at NF-7 · NF-D10's mechanism half retired when G7 landed. §3's heading undercount (…D9) fixed 2026-08-02 |
 | PA-1…PA-36 | plugin-architecture §1.1 | all binding; the §21 ladder (P0–P7) implemented; distribution staged — only rung R3 stays fenced (PA-24). AH-3's additive `hud.sheet` fixed slot is ratified/open and does not reopen the prior ladder; AH-D10 gates PA-31's peer-CAS optimization (registry fetch landed, peer fetch did not) |
@@ -36,7 +37,7 @@ M1–M5 contract milestones — design-01 §11 (M1+M2 implemented, green cross-l
 | ESP-1…ESP-17 | electron-security-packaging §1.1 | in force; §9.3 (operationalizing ESP-3) CLOSED 2026-07-25 (WP9) |
 | ESR-1…ESR-15 | electron-shell-refactor §1.1 | ESR COMPLETE as specced (§17) |
 | GT-D1…GT-D8 | godview-terminal §3 (v0.2) | LIVE track; GT-D9 refuted and deleted in v0.2 — retired, never reissued |
-| AH-D1…AH-D12 | artifact-hub §3 (v0.1) | RATIFIED 2026-08-02; AH-1a/1b serving implementation landed at `9f80f0c` and consumes exact Truffle v0.7.12 in Rust + packaged platform sidecars; the live second-client field proof remains open, as do AH-2…AH-5; CAS/file transfer stays gated by AH-D10; AH-D11 reuses Electron main's authenticated loopback ProductAPI connection for the static `shell.*` provider — no ProductAPI UDS or renderer relay; AH-D12 records that per-port origins do not isolate browser cookies |
+| AH-D1…AH-D12 | artifact-hub §3 (v0.2) | RATIFIED 2026-08-02; AH-D6 AMENDED 2026-08-03 by the AH-2 as-built retained-public-cache mechanism: last-known safe slices survive Truffle peer removal until a future device-retirement policy, while explicit empty origin slices remove immediately. AH-1a/1b serving landed at `9f80f0c`; AH-2 global validated catalog landed at `9c17c46` and consumes AH-D5/D6 plus T1's lawful identity join. The live AH-1 second-client field proof remains open; AH-3…AH-5 remain open. CAS/file transfer stays gated by AH-D10; AH-D11 reuses Electron main's authenticated loopback ProductAPI connection for the static `shell.*` provider — no ProductAPI UDS or renderer relay; AH-D12 records that per-port origins do not isolate browser cookies |
 | LOG-1…LOG-44 | logging-and-diagnostics §1.1 (glosses in its own table) | all binding; LOG-41…44 folded in v0.2; slices LOG-L0…L6 all complete; **LOG-39 release-gated (open)**; verify-items LOG-V1 (Windows half) / V5 / V8 open, V7 optional-deferred |
 
 ## Work / finding namespaces (status lives in their own tables — pointers only)
@@ -52,7 +53,7 @@ M1–M5 contract milestones — design-01 §11 (M1+M2 implemented, green cross-l
   publish).
 - **AH-0…AH-5** (AH-1a/1b split) — artifact-hub §10. AH-0 design ratified 2026-08-02;
   AH-1a/1b implementation landed at `9f80f0c` (physical second-client proof open);
-  AH-2…AH-5 open.
+  AH-2 implementation landed at `9c17c46`; AH-3…AH-5 open.
 - **U1–U15** — thinking-auto-update §4 (+8 unprefixed closed decisions §8; all consumed by
   EDP v0.3).
 - **P-1…P-8 / V-1…V-6 / P-D1…P-D4** — thinking-widgetlab-port (all executed 2026-07-21).

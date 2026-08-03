@@ -3,10 +3,11 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-02** (GT caught up through
+> stays in the design docs + specs. Last rewritten: **2026-08-03** (GT caught up through
 > GT-2e `a3babb7` + GT-3 `af316db` — the one-authority correction, then restore/kill/config;
 > AH-0 ratified; T2 consumed in exact-pinned Truffle v0.7.12; AH-1a/1b serving
-> implementation landed at `9f80f0c` with its physical two-client tailnet proof still owed).
+> implementation landed at `9f80f0c` with its physical two-client tailnet proof still owed;
+> AH-2 global validated catalog landed at `9c17c46`).
 >
 > Lives in main-tracked `docs/` (moved from `draft/` 2026-08-02). Corpus citations here
 > (`specs/…`, `thinking-…`, `predesign-…`, `research/…`, `petitions/…`) resolve under
@@ -20,10 +21,12 @@ NF kill matrix), docs sync across the mesh (C6), and the plugin/settings/logging
 rails are in. **The missing half is the agents themselves** — the AR track, running over the
 landed native floor, watched from the GT deck.
 
-The artifact serving foundation is now real but is not yet the whole product: AH-1 persists
-source-local Proxy/Folder intent, allocates stable HTTPS listeners, reconciles exact configs,
-and packages Truffle's hardened static sidecar. `artifact.list` is still only this device's
-safe projection. AH-2 is the global-catalog bridge before the desktop and phone clients.
+The artifact serving foundation and global catalog are now real but are not yet the whole
+product: AH-1 persists source-local Proxy/Folder intent, allocates stable HTTPS listeners,
+reconciles exact configs, and packages Truffle's hardened static sidecar; AH-2 publishes
+bounded safe self-slices and makes `artifact.list/subscribe` a validated union fused with
+authenticated origin identity, boot, and liveness. The missing product half is presentation:
+AH-3 is the desktop sheet and shell-provider bridge before preview capture and phone.
 
 ## Tracks
 
@@ -33,7 +36,7 @@ safe projection. AH-2 is the global-catalog bridge before the desktop and phone 
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
 | PLUG — plugins | P0–P7 COMPLETE for the prior surface set; spec remains governing | `specs/plugin-architecture.md` | AH-3 adds the earned `hud.sheet` fixed slot; other dogfood through AR/GT; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
-| AH — Artifact Hub | **IN FLIGHT (implementation)** — AH-0 ratified; AH-1a/1b serving implementation landed at `9f80f0c`; exact Truffle v0.7.12 consumed; live two-client field proof owed | `specs/artifact-hub.md` | **AH-2** global validated catalog → AH-3 sheet + shell provider → AH-4 preview capture → AH-5 phone |
+| AH — Artifact Hub | **IN FLIGHT (implementation)** — AH-0 ratified; AH-1a/1b serving landed at `9f80f0c`; AH-2 global catalog landed at `9c17c46`; live AH-1 two-client field proof owed | `specs/artifact-hub.md` | **AH-3** sheet + shell provider → AH-4 preview capture → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
@@ -56,21 +59,24 @@ fixture; `keystrokeEchoMs: 3` report-only). Next slice **GT-4**: `with_terminal_
 config + `terminal.v1.hosts` + mirror-write v1 — the desktop deck's ⌘⇧O remote panes are the
 test row, and NF-remote rides it.
 
-**AH.** The serving seam is landed. `9f80f0c` replaces C6's `{name,target}` writer behind its
-one-window adapter, persists v2 source-local intent, assigns stable nonzero ports, fingerprints
-the full two-route config, retries durable remove-before-add work, separates source/listener
-health, enables public TLS, and consumes exact Truffle v0.7.12 in both Rust and the packaged
-platform sidecar. Folder + optional SPA fallback now ride the same listener as an empty,
-T2-confined preview route. What is not global yet is the catalog: **AH-2** fixes the device-key
-join, publishes validated self-slices, and folds authenticated origin/liveness before any UI
-work. AH-3 then adds the earned `hud.sheet` slot and turns Electron main's existing
-authenticated loopback client into the static `shell.*` provider; no ProductAPI UDS or
-renderer relay is added.
+**AH.** The serving seam and global catalog are landed. `9f80f0c` replaces C6's
+`{name,target}` writer behind its one-window adapter, persists v2 source-local intent, assigns
+stable nonzero ports, fingerprints the full two-route config, retries durable remove-before-add
+work, separates source/listener health, enables public TLS, and consumes exact Truffle v0.7.12
+in both Rust and the packaged platform sidecar. Folder + optional SPA fallback now ride the
+same listener as an empty, T2-confined preview route. `9c17c46` makes the catalog one validated
+global view: safe self-slices, transport-derived MagicDNS binding, boot/liveness folding,
+narrow hostile-input projection, tick-coalesced subscription snapshots, and a bounded retained
+public cache.
+**AH-3** now adds the earned `hud.sheet` slot and turns Electron main's existing authenticated
+loopback client into the static `shell.*` provider; no ProductAPI UDS or renderer relay is
+added.
 
 ## Next up — the options on the table (James's call)
 
-- **AH-2** — make the validated catalog global; AH-3/4/5 then add desktop, preview capture,
-  and phone. The AH-1 physical two-client proof can run alongside this work.
+- **AH-3** — ship the desktop artifact sheet, Proxy/Folder flows, and static `shell.*`
+  provider bridge. AH-4/5 then add preview capture and phone; the AH-1 physical two-client
+  proof can run alongside this work.
 - **AR** — the agent tracks; the reason everything else exists.
 - **GT-4 → GT-5** — the remote floor, then the phone attaches.
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).
@@ -91,6 +97,10 @@ renderer relay is added.
   packaged-sidecar gates are green, but this workspace had no authenticated second tailnet
   client. Run real HTTP + HTTPS Proxy and Folder URLs from another desktop/phone before
   declaring the physical AH-1 exit fully witnessed (AH §10, 2026-08-02).
+- **Artifact device-retirement GC** — AH-2 retains last-known validated public slices across
+  Truffle peer removal (bounded to 256 origins) so transport departure cannot silently erase
+  user objects. A future explicit device-retirement policy owns deletion; valid empty origin
+  slices already remove immediately (AH-D6, 2026-08-03).
 - **CAS blob store / deny-by-default pull root** — not an Artifact Hub v1 dependency. Its own
   contracts+Rust slice begins only when canvas blob refs, peer-CAS fetching, or an explicit
   offline/immutable artifact mode exists (AH-D10; C6-6).

@@ -503,3 +503,37 @@ typechecks and targeted formatting green. The ignored real-tailnet tests still r
 key, so HTTP + HTTPS Proxy and Folder opening from a second desktop/phone is carried explicitly
 as the remaining AH-1 field witness—not silently claimed. AH-2 still owns the synced global
 catalog; AH-3 the desktop sheet/shell provider; AH-4 capture; AH-5 phone UI.
+
+## AH-2 — one validated global catalog
+
+**AH-2 LANDED (2026-08-03, `9c17c46`; artifact-hub v0.2 folds back the AH-D6 as-built
+amendment).** `field.artifacts.v1` is now the public SyncedStore
+catalog it was designed to be. ArtifactService publishes a whole origin-owned self slice after
+durable intent, exact Truffle URL, boot, preview revision, or coarse availability changes; a
+store replay republishes the same local truth. `artifact.list/subscribe` now return the global
+`ArtifactView[]` union, sorted by recency/title, with tick-coalesced authoritative snapshots.
+Mutation remains local and source intent remains private.
+
+The reader is hostile by construction: encoded bytes and count are gated before entry parsing;
+one malformed entry drops alone; owner/id mismatch, HTTP, credentials, query, fragment,
+non-root path, and ports outside 10000–19999 never project. Tolerant future fields are narrowed
+before cache/ProductAPI, so injected paths, ports, schemes, allow-lists, native errors, and raw
+URL claims cannot hitchhike. Same `artifactId` from two origins remains two composite keys.
+Missing authenticated host binding keeps safe metadata but strips URL/openability; a known host
+mismatch drops the entry.
+
+DeviceService now derives `tailnetDnsName` only from `PeerInfo.whois.deviceName` after T1's
+ULID→Tailscale-id join; it never enters the peer-authored `DeviceSlice`. Remote availability
+folds offline first, then origin boot, then advertised state; self uses exact fresh serving
+truth. Truffle can remove a departed peer's store slice, so fieldd retains only validated public
+remote rows in `field.artifact-catalog-cache.v1.json`, bounded to 256 origins. `peerRemoved` or
+snapshot absence cannot silently erase user objects; an explicit empty valid origin slice does.
+A future device-retirement policy owns stale-origin GC.
+
+Proofs: contracts 161/161; fieldd 349/349; full 16-project TypeScript graph and workspace test
+graph green; generated-contract parity clean; targeted Biome and diff checks green. The
+two-daemon stack row proves add, colliding identity, update, source-status transition,
+whole-list subscription, and remove. Hostile vectors plus restart/replay tests prove caps,
+narrow projection, origin binding, boot/offline folds, and retained safe metadata. This is a
+mock transport proof, not the still-open AH-1 physical second-tailnet-client witness. Next:
+AH-3 desktop sheet + Electron-main shell provider; AH-4 capture; AH-5 phone.
