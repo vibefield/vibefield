@@ -468,9 +468,38 @@ re-run by the orchestrator. Full record: `specs/godview-terminal.md` (GT-3 findi
 The governing design docs and DESIGN.md carry the fold-backs; C6's as-built record carries a
 dated forward correction for name-only reconcile, failed-removal retry, health URL/storage
 health, folder port zero, the too-narrow VibeField serve facade, and Truffle list's missing
-config echo (handled by fingerprinted serve ids). It also records that `shell.*` scopes and
-main's recovering ProductAPI client are landed, but its callable bidirectional provider half is
-not; AH-3/4 own that bridge. Runtime remains exactly C6-6 until AH-1a;
-AH-1a is the unblocked root-only Proxy/core slice, AH-1b consumes released T2 through exact
-Truffle v0.7.12 for Folder and makes the hardened preview route available, and AH-2…AH-5
-finish catalog, desktop, previews, and phone.
+config echo. AH-1 now pays those serving debts through fingerprinted ids and exact v0.7.12
+consumption. `shell.*` scopes and main's recovering ProductAPI client are landed, but its
+callable bidirectional provider half is not; AH-3/4 own that bridge.
+
+## AH-1 — durable live serving
+
+**AH-1a/1b SERVING IMPLEMENTATION LANDED (2026-08-02, `9f80f0c`; physical second-client
+field proof remains open).** The product contract is now v2 source-local intent: caller-minted
+ULID, title, HTTP/HTTPS loopback source or realpathed Folder + optional `/index.html` fallback,
+allow globs, stable 10000–19999 listener, exact returned URL, safe status, and one-window C6
+adapters. Mutation left the tailnet preset and rejects `device?`; update, unpublish, refresh,
+`RESOURCE_EXHAUSTED`, limits, golden fingerprint/port vectors, and Rust-generated schema parity
+land together.
+
+fieldd now fsyncs a private v2 intent file, migrates C6 once with evidence retained, separates
+technical serve identity from title, fingerprints the complete TLS/allow/two-route config, and
+serializes durable remove-before-add work. Failed removals survive restart; NOT_FOUND converges;
+stable ports never silently drift; source probes recover independently from Truffle's sticky
+runtime errors; artifact health carries the exact URL rather than the product secret and folds
+storage health. Folder and Proxy both declare an empty, T2-confined preview mount ahead of the
+root source route; capture deliberately remains AH-4.
+
+field-native now carries `serveId`, display name, listener port, source scheme/fallback, mixed
+routes, TLS, and raw listener inventory across the management seam. The workspace exact-pin is
+`truffle-core =0.7.12`; desktop packaging exact-pins all five published 0.7.12 platform sidecar
+packages and stages the current executable beside field-native. The staged Darwin arm64 binary
+matched Truffle's published SHA-256
+`ac8431894bb8c3685b47721fb869183de504e6e963191a1ce34ffa9ab8077a2c`.
+
+Proofs: contracts 159/159; full fieldd 344/344; full Rust workspace green plus clippy/fmt;
+Truffle `packages/sidecar-slim` Go suite green; package staging green; contract/fieldd
+typechecks and targeted formatting green. The ignored real-tailnet tests still require an auth
+key, so HTTP + HTTPS Proxy and Folder opening from a second desktop/phone is carried explicitly
+as the remaining AH-1 field witness—not silently claimed. AH-2 still owns the synced global
+catalog; AH-3 the desktop sheet/shell provider; AH-4 capture; AH-5 phone UI.
