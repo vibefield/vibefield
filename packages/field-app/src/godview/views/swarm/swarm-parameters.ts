@@ -4,6 +4,7 @@ export interface SwarmParameters {
   gravityPull: number;
   restitution: number;
   frictionAir: number;
+  bubbleFillOpacity: number;
   radiusIdle: number;
   radiusWorking: number;
   radiusWaiting: number;
@@ -15,6 +16,7 @@ export const DEFAULT_SWARM_PARAMETERS: Readonly<SwarmParameters> = {
   gravityPull: 0.0002,
   restitution: 0,
   frictionAir: 0.2,
+  bubbleFillOpacity: 0.72,
   radiusIdle: 40,
   radiusWorking: 50,
   radiusWaiting: 70,
@@ -40,6 +42,19 @@ export const SWARM_PARAMETER_GROUPS: readonly MonitorParameterGroup[] = [
         max: 0.2,
         step: 0.01,
         defaultValue: 0.2,
+      },
+    ],
+  },
+  {
+    title: "PRESENTATION",
+    controls: [
+      {
+        key: "bubbleFillOpacity",
+        label: "Bubble fill opacity",
+        min: 0,
+        max: 1,
+        step: 0.01,
+        defaultValue: 0.72,
       },
     ],
   },

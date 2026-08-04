@@ -36,9 +36,10 @@ export interface GodviewDeckFacts {
   /** GT-3v: the glass, as structure rather than pixels. `paneBackgroundAlpha`
    * is the alpha the RENDERER was handed for its pane ground — below 1 is the
    * whole claim of this slice, and it is checkable without reading a frame.
-   * `themeName` is null for the deck's own `--vf-*` palette. Whether the result
-   * LOOKS right is James's eye; that a non-opaque background reached the
-   * renderer is a fact a harness can hold. */
+   * `themeName` is the active light/dark mode's choice and is null for that
+   * mode's built-in Godview palette. Whether the result LOOKS right is James's
+   * eye; that a non-opaque background reached the renderer is a fact a harness
+   * can hold. */
   glass: { paneBackgroundAlpha: number; opacityCells: boolean; themeName: string | null };
 }
 

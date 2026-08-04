@@ -79,6 +79,22 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
       palette: [],
     },
   ],
+  TERMINAL_THEMES: {
+    daylight: {
+      background: [0.925, 0.91, 0.86, 1],
+      foreground: [0.12, 0.12, 0.12, 1],
+      cursor: [0.12, 0.12, 0.12, 1],
+      selection: [0.3, 0.3, 0.3, 1],
+      selectionForeground: [1, 1, 1, 1],
+    },
+    midnight: {
+      background: [0.157, 0.173, 0.204, 1],
+      foreground: [1, 1, 1, 1],
+      cursor: [1, 1, 1, 1],
+      selection: [0.3, 0.3, 0.3, 1],
+      selectionForeground: [1, 1, 1, 1],
+    },
+  },
 }));
 
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
@@ -147,12 +163,12 @@ vi.mock("@vibefield/fieldd-client/react", () => ({
 /** Mount, and let the two awaited round trips (ticket, then floor) settle.
  * `act` is flushed repeatedly rather than once: the deck's gate is two
  * promises deep, and one flush would assert on a state it has not reached. */
-async function mountDeck(): Promise<void> {
+async function mountDeck(theme: "light" | "dark" = "light"): Promise<void> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(<GodviewDeck active />);
+    root?.render(<GodviewDeck active theme={theme} />);
   });
   await settle();
 }
@@ -300,7 +316,11 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
   it("carries a named catalog theme through to the renderer's palette", async () => {
     await mountDeck();
     await act(async () => {
-      setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, themeName: "Test Amber", opacity: 0.7 });
+      setDeckAppearance({
+        ...DEFAULT_DECK_APPEARANCE,
+        lightThemeName: "Test Amber",
+        opacity: 0.7,
+      });
     });
     await settle();
 
@@ -315,6 +335,24 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     expect(theme.foreground[1]).toBeCloseTo(0xcc / 255);
     expect(theme.foreground[2]).toBeCloseTo(0x66 / 255);
     expect(latest().glass.themeName).toBe("Test Amber");
+  });
+
+  it("keeps the light and dark terminal color-theme choices independent", async () => {
+    await mountDeck("dark");
+    await act(async () => {
+      setDeckAppearance({
+        ...DEFAULT_DECK_APPEARANCE,
+        lightThemeName: null,
+        darkThemeName: "Test Amber",
+      });
+    });
+    await settle();
+
+    expect(latest().glass.themeName).toBe("Test Amber");
+    expect(
+      (workspaceMounts[workspaceMounts.length - 1]!.theme as { background: number[] })
+        .background[0],
+    ).toBeCloseTo(0x20 / 255);
   });
 
   it("mints a fresh runtime on retry, because the spent wait can never resolve", async () => {

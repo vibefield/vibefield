@@ -450,6 +450,7 @@ export function AgentSwarm({
     "--vf-monitor-working": palette.status.working,
     "--vf-monitor-waiting": palette.status.waiting,
     "--vf-monitor-idle": palette.status.idle,
+    "--vf-monitor-bubble-fill-opacity": `${swarm.bubbleFillOpacity * 100}%`,
   } as CSSProperties;
 
   return (
@@ -499,6 +500,7 @@ export function AgentSwarm({
         if (longPressRef.current?.pointerId === event.pointerId) cancelLongPress();
       }}
     >
+      <div className="vf-monitor-swarm-grid" aria-hidden="true" />
       {longPressPosition ? (
         <span
           className="vf-monitor-long-press"
@@ -508,8 +510,8 @@ export function AgentSwarm({
       ) : null}
       {agents.length === 0 ? (
         <div className="vf-monitor-empty">
-          <span>No agents</span>
-          <small>The mock field is empty — nothing is running here.</small>
+          <span>NO ACTIVE AGENTS</span>
+          <small>Launch Claude, Codex, or Grok from a terminal pane.</small>
         </div>
       ) : null}
       {agents.map((agent) => {
@@ -523,8 +525,8 @@ export function AgentSwarm({
         const contextPercent = contextWindow ? Math.floor(contextWindow.usedPercent) : undefined;
         const contextLabel =
           contextPercent === undefined
-            ? "CTX --%"
-            : `CTX ${contextPercent.toString().padStart(2, "0")}%`;
+            ? "CTX:--%"
+            : `CTX:${contextPercent.toString().padStart(2, "0")}%`;
         return (
           <div
             key={agent.id}

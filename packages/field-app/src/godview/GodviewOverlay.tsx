@@ -6,65 +6,67 @@ import { GodviewDeck } from "./GodviewDeck";
 import { GodviewMonitor } from "./GodviewMonitor";
 import {
   defaultGodviewTuning,
+  type GodviewTheme,
   type GodviewTuning,
   GodviewTuningPanel,
   godviewTuningStyle,
 } from "./GodviewTuningPanel";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
-import { MONITOR_VIEWS } from "./monitor/registry";
+import {
+  SCANLINE_DENSITY_KEY,
+  SCANLINE_OPACITY_KEY,
+  VIGNETTE_OPACITY_KEY,
+} from "./monitor/stage-parameters";
 import { useGodviewOpen } from "./overlay-state";
 
-// The Godview overlay — the control room (DESIGN.md §1: "may commit to dark —
-// it is a stage, not a document"). Spine UI in the canvas window (GT-D2),
-// mounted above the field by ChromeLayer, toggled by ⌘G, the View menu, or the
-// toolbar button, all of which are the same request to the same owner.
-//
-// It commits to dark in BOTH app themes and does not apologize for it: this is
-// where terminals live, and a terminal on a white stage is a document pretending
-// to be a machine. The palette is still §2's — the dark card surface at the §5
-// sheet tier, hairlines at white/10, the text opacity ramp — so nothing here is
-// a bespoke color.
-//
-// LIFETIME (PF6): closed by default and NOT mounted until the first open, so a
-// user who never presses ⌘G forks no bridge and spawns no shell. After that the
-// deck stays mounted for the life of the document and only its `active` prop
-// moves — reopening is instant, the layout survives, and every hidden surface
-// is silenced at ghosttea's own visibility seam rather than by unmounting the
-// world and rebuilding it.
+const THEME_STORAGE_KEY = "vf-godview-color-theme-v1";
 
-/** The honest word for a bridge that is not up. `bridge-up` says nothing —
- * a working transport is not news, and DESIGN.md's rule for standing states is
- * that no facts means no row (§8 doc sync). */
+function initialGodviewTheme(): GodviewTheme {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+/** A healthy bridge is a standing fact and gets no badge. */
 function bridgeNotice(status: TerminalBridgeStatus | null): string | null {
   if (status === null || status.state === "bridge-up") return null;
-  if (status.state === "bridge-down") return "terminal bridge down · rebuilding";
-  return "terminal bridge unavailable · reconnecting";
+  if (status.state === "bridge-down") return "TERMINAL BRIDGE DOWN · REBUILDING";
+  return "TERMINAL BRIDGE UNAVAILABLE · RECONNECTING";
 }
 
 export function GodviewOverlay(): ReactElement | null {
   const open = useGodviewOpen();
-  /** Once true, stays true. The deck is expensive to build and instant to
-   * reveal, so it is built once — on the first open — and hidden thereafter. */
   const [everOpened, setEverOpened] = useState(false);
   const [bridge, setBridge] = useState<TerminalBridgeStatus | null>(null);
-  // TEMPORARY visual-pass state. The STAGE values are deliberately memory-only:
-  // this panel is a measuring instrument, not a settings surface or a new
-  // product contract. The pane opacity beside them is NOT this panel's — it is
-  // the viewer's real appearance, which the lab drives live and Settings edits.
-  const [tuning, setTuning] = useState(defaultGodviewTuning);
+  const [theme, setTheme] = useState<GodviewTheme>(initialGodviewTheme);
+  const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning(theme));
+  const [tuningOpen, setTuningOpen] = useState(false);
   const appearance = useDeckAppearance();
-  /** The monitor's view and tunables (GT-3m). Held HERE, above the stage, so
-   * they survive the stage's PF6 unmount — see `monitor-tuning.ts`. */
   const monitor = useMonitorTuning();
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
   }, []);
-  const resetTuning = useCallback(() => setTuning(defaultGodviewTuning()), []);
+  const resetTuning = useCallback(() => setTuning(defaultGodviewTuning(theme)), [theme]);
+  const changeTheme = useCallback((next: GodviewTheme) => {
+    setTheme(next);
+    setTuning(defaultGodviewTuning(next));
+  }, []);
 
   useEffect(() => {
     if (open) setEverOpened(true);
+    else setTuningOpen(false);
   }, [open]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // A disabled storage partition should not disable the switch itself.
+    }
+  }, [theme]);
 
   useEffect(() => {
     const terminal = getHost().terminal;
@@ -72,106 +74,86 @@ export function GodviewOverlay(): ReactElement | null {
     return terminal.onStatus(setBridge);
   }, []);
 
-  // Esc closes, consistently (DESIGN.md §7). Capture phase, so a focused
-  // terminal surface cannot swallow the one key that gets the user out.
+  // The first Escape closes the reference-style system-control panel; the next
+  // closes Godview. Capture phase keeps terminals from swallowing either one.
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
+      if (tuningOpen) {
+        setTuningOpen(false);
+        return;
+      }
       void getHost().godview?.set(false);
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [open]);
+  }, [open, tuningOpen]);
 
   if (!everOpened) return null;
 
   const notice = bridgeNotice(bridge);
   const terminalAvailable = getHost().terminal !== undefined;
+  const stage = monitor.stageParameters;
+  const screenStyle = {
+    ...godviewTuningStyle(tuning),
+    "--vf-monitor-stage-height": `${monitor.stageHeight}%`,
+    "--vf-scanline-density": `${stage[SCANLINE_DENSITY_KEY] ?? 2}px`,
+    "--vf-scanline-opacity": stage[SCANLINE_OPACITY_KEY] ?? 0.4,
+    "--vf-vignette-opacity": stage[VIGNETTE_OPACITY_KEY] ?? 1,
+  } as CSSProperties;
 
   return (
     <div
-      // aria-hidden while closed: it is still in the tree for PF6's sake, and a
-      // screen reader should no more find it than an eye should.
       aria-hidden={!open}
-      // The attribute IS the state: every material, easing and duration lives
-      // in styles.css under `.vf-godview` (M3 — CSS transitions, not WAAPI, and
-      // a media query can reach them for M6).
       data-godview-open={open ? "true" : "false"}
-      className="vf-godview"
-      style={
-        {
-          ...godviewTuningStyle(tuning),
-          "--vf-monitor-stage-height": `${monitor.stageHeight}%`,
-        } as CSSProperties
-      }
+      data-godview-tuning-open={tuningOpen ? "true" : "false"}
+      className={`vf-godview theme-${theme}`}
+      style={screenStyle}
     >
-      {/* The eyebrow row (§3): what this is on the left, what is wrong on the
-          right. Nothing in the middle — the deck is the content. */}
-      <header className="vf-godview-header flex items-center justify-between px-5 py-3">
-        <span
-          className="font-medium text-[10px] uppercase tracking-[0.08em]"
-          style={{ color: "rgba(255,255,255,0.6)" }}
-        >
-          Godview
-        </span>
-        <span className="flex items-center gap-3">
-          {notice !== null && (
-            <span className="text-[11px]" style={{ color: "var(--vf-orange)" }}>
-              {notice}
-            </span>
-          )}
-          {/* The view switcher (GT-3m), in the eyebrow row's meta position —
-              where the reference app puts it too. A select and not a segmented
-              control: three views today and a registry designed to grow, and
-              §8's segmented control is for a set that stays small. */}
-          <select
-            className="vf-godview-view-switch"
-            aria-label="Monitor view"
-            value={monitor.view.id}
-            onChange={(event) => monitor.selectView(event.currentTarget.value)}
-          >
-            {MONITOR_VIEWS.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.label}
-              </option>
-            ))}
-          </select>
-          <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>
-            esc to close
-          </span>
-        </span>
-      </header>
-      {/* The reference app's composition: monitor stage above, terminal deck
-          below, the stage's share of the height a tunable. The monitor mounts
-          only while OPEN (PF6 — see GodviewMonitor); the deck stays mounted
-          because its layout and its panes are worth keeping. */}
-      {open && <GodviewMonitor view={monitor.view} parameters={monitor.parameters} />}
-      <div className="relative min-h-0 flex-1">
+      <div className="vf-godview-scanlines" aria-hidden="true" />
+      <div className="vf-godview-vignette" aria-hidden="true" />
+
+      {open && (
+        <GodviewMonitor
+          view={monitor.view}
+          parameters={monitor.parameters}
+          theme={theme}
+          notice={notice}
+          tuningOpen={tuningOpen}
+          onSelectView={monitor.selectView}
+          onToggleTuning={() => setTuningOpen((current) => !current)}
+          onThemeChange={changeTheme}
+        />
+      )}
+
+      <GodviewTuningPanel
+        open={open && tuningOpen}
+        theme={theme}
+        value={tuning}
+        appearance={appearance}
+        monitorSections={monitorTuningSections(monitor)}
+        onClose={() => setTuningOpen(false)}
+        onThemeChange={changeTheme}
+        onChange={changeTuning}
+        onReset={resetTuning}
+        onResetMonitor={monitor.resetParameters}
+      />
+
+      <section
+        className="vf-godview-terminal-deck relative min-h-0 flex-1"
+        aria-label="Terminal panes"
+      >
         {terminalAvailable ? (
-          <GodviewDeck active={open} />
+          <GodviewDeck active={open} theme={theme} />
         ) : (
-          // The degraded face (§8 "a state is rendered, never blank space"):
-          // a host with no terminal bridge cannot show terminals, and saying so
-          // beats an empty stage that looks like a bug.
-          <p
-            className="absolute inset-0 flex items-center justify-center text-[13px]"
-            style={{ color: "rgba(255,255,255,0.7)" }}
-          >
-            This host has no terminal bridge — the deck is unavailable here.
+          <p className="vf-godview-unavailable">
+            THIS HOST HAS NO TERMINAL BRIDGE — THE DECK IS UNAVAILABLE HERE.
           </p>
         )}
-        <GodviewTuningPanel
-          value={tuning}
-          appearance={appearance}
-          monitorSections={monitorTuningSections(monitor)}
-          onChange={changeTuning}
-          onReset={resetTuning}
-          onResetMonitor={monitor.resetParameters}
-        />
-      </div>
+      </section>
     </div>
   );
 }

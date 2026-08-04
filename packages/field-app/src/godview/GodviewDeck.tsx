@@ -16,7 +16,7 @@ import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } 
 import { emitGodviewDeckMarker } from "../development-console";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
-import { useDeckAppearance } from "./deck-appearance";
+import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
 import {
   paneCwd,
   type RestoreQuestion,
@@ -25,6 +25,7 @@ import {
   savedPaneSessionIds,
 } from "./deck-restore";
 import { godviewTerminalTheme } from "./deck-theme";
+import type { GodviewTheme } from "./GodviewTuningPanel";
 import { KillActivePane } from "./KillActivePane";
 import { describePane } from "./pane-faces";
 import "@vibecook/ghosttea-react/styles.css";
@@ -114,9 +115,15 @@ export interface GodviewDeckProps {
    * and are decoded, which is why the screen is current the instant it comes
    * back; what stops is all render and GPU work. */
   active: boolean;
+  /** The reference app's local light/dark mode. It changes terminal colors but
+   * never the renderer-owned alpha in the appearance store. */
+  theme?: GodviewTheme;
 }
 
-export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
+export function GodviewDeck({
+  active,
+  theme: godviewTheme = "light",
+}: GodviewDeckProps): ReactElement | null {
   const fieldd = useFielddClient();
   const [runtime, setRuntime] = useState(makeRuntime);
   /** Bumped by a recovery. A runtime holds its ports for life, so a rebuilt
@@ -209,7 +216,11 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
   // the panes without re-initializing the deck — an appearance change applies
   // to an open deck with no remount, no reclaim, and no new pane.
   const appearance = useDeckAppearance();
-  const theme = useMemo(() => godviewTerminalTheme(appearance), [appearance]);
+  const terminalTheme = useMemo(
+    () => godviewTerminalTheme(appearance, godviewTheme),
+    [appearance, godviewTheme],
+  );
+  const activeThemeName = deckThemeNameForMode(appearance, godviewTheme);
   /** Stable by construction: `sidebar` is a component TYPE, and a fresh arrow
    * on every render would remount the probe — and re-run its publish — forever. */
   const Sidebar = useMemo(
@@ -482,9 +493,9 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
       // appearance the store holds: what the renderer received is the fact
       // worth publishing, and the two could only differ because of a bug.
       glass: {
-        paneBackgroundAlpha: theme.background[3],
-        opacityCells: theme.backgroundOpacityCells === true,
-        themeName: appearance.themeName,
+        paneBackgroundAlpha: terminalTheme.background[3],
+        opacityCells: terminalTheme.backgroundOpacityCells === true,
+        themeName: activeThemeName,
       },
       ...(error !== null ? { error } : {}),
       ...(consent !== null && consent !== "go" ? { consent } : {}),
@@ -493,7 +504,7 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
         ? { activeSessionId: workspace.activeSession.id }
         : {}),
     });
-  }, [active, workspace, runtime, error, consent, theme, appearance.themeName]);
+  }, [active, workspace, runtime, error, consent, terminalTheme, activeThemeName]);
 
   const platform: GhostteaWorkspacePlatform | null =
     shell === null
@@ -581,7 +592,7 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
       )}
       <GhostteaWorkspace
         platform={platform}
-        theme={theme}
+        theme={terminalTheme}
         storageKey={DECK_STORAGE_KEY}
         sidebar={Sidebar}
         decoratePane={describePane}

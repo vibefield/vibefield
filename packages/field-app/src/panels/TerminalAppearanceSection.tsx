@@ -34,9 +34,8 @@ import { fieldCls, labelCls, SettingsRow, SettingsSection, SettingsSwitch } from
 /** The stack DESIGN.md §3 reserves for data, paths, and ids. */
 const MONO = 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace';
 
-/** The deck's own palette, offered as a first-class choice rather than an empty
- * selection: `--vf-*` is what GT-2 chose so panes sit in this design system,
- * and "no theme" would misname it. */
+/** The built-in palette for each Godview mode, offered as a first-class choice
+ * rather than an empty selection; "no theme" would misname it. */
 const DECK_DEFAULT_VALUE = "";
 
 export function TerminalAppearanceSection(): ReactElement {
@@ -54,24 +53,48 @@ export function TerminalAppearanceSection(): ReactElement {
   return (
     <SettingsSection
       title="Deck appearance"
-      description="How the Godview deck draws on this device. Terminal appearance belongs to the viewer, so these follow this window — not the sessions, which look the same to whatever else attaches to them."
+      description="How the Godview deck draws on this device. Light and dark keep separate color-theme choices; opacity is shared. These follow this window — not the sessions, which look the same to whatever else attaches to them."
     >
       <SettingsRow
-        title="Color theme"
-        description={`The deck's own palette follows this app's colors. The rest are Ghostty themes bundled with the terminal.`}
+        title="Light color theme"
+        description="Used whenever Godview is in Light mode. The first choice is Godview's built-in daylight palette; the rest are Ghostty themes bundled with the terminal."
       >
         <select
-          aria-label="Terminal color theme"
+          aria-label="Light terminal color theme"
           className={fieldCls}
-          value={appearance.themeName ?? DECK_DEFAULT_VALUE}
+          value={appearance.lightThemeName ?? DECK_DEFAULT_VALUE}
           onChange={(event) =>
             update({
-              themeName:
+              lightThemeName:
                 event.currentTarget.value === DECK_DEFAULT_VALUE ? null : event.currentTarget.value,
             })
           }
         >
-          <option value={DECK_DEFAULT_VALUE}>VibeField deck</option>
+          <option value={DECK_DEFAULT_VALUE}>Godview Daylight</option>
+          {themeOptions.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </SettingsRow>
+
+      <SettingsRow
+        title="Dark color theme"
+        description="Used whenever Godview is in Dark mode. Its choice is independent from Light mode."
+      >
+        <select
+          aria-label="Dark terminal color theme"
+          className={fieldCls}
+          value={appearance.darkThemeName ?? DECK_DEFAULT_VALUE}
+          onChange={(event) =>
+            update({
+              darkThemeName:
+                event.currentTarget.value === DECK_DEFAULT_VALUE ? null : event.currentTarget.value,
+            })
+          }
+        >
+          <option value={DECK_DEFAULT_VALUE}>Godview Midnight</option>
           {themeOptions.map((name) => (
             <option key={name} value={name}>
               {name}

@@ -53,11 +53,12 @@ describe("monitor parameters", () => {
 });
 
 describe("swarm parameters", () => {
-  it("matches the original prototype defaults", () => {
+  it("keeps the prototype physics and adds VibeField's glass-body default", () => {
     expect(DEFAULT_SWARM_PARAMETERS).toEqual({
       gravityPull: 0.0002,
       restitution: 0,
       frictionAir: 0.2,
+      bubbleFillOpacity: 0.72,
       radiusIdle: 40,
       radiusWorking: 50,
       radiusWaiting: 70,

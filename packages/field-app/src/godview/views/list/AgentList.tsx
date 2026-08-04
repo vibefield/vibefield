@@ -38,21 +38,19 @@ export function AgentList({
   return (
     <section className="vf-monitor-list" style={style} aria-label="Running agent list">
       <div className="vf-monitor-list-toolbar">
-        <span className="vf-monitor-list-count">
-          {ordered.length} session{ordered.length === 1 ? "" : "s"}
-        </span>
+        <span className="vf-monitor-list-count">{ordered.length} SESSIONS</span>
         <button
           type="button"
           className="vf-monitor-list-new"
           onClick={() => void actions.createAt()}
         >
-          New terminal
+          ＋ TERMINAL
         </button>
       </div>
       {ordered.length === 0 ? (
         <div className="vf-monitor-empty">
-          <span>No agents</span>
-          <small>The mock field is empty — nothing is running here.</small>
+          <span>NO ACTIVE AGENTS</span>
+          <small>Launch Claude, Codex, or Grok from a terminal pane.</small>
         </div>
       ) : (
         <ul className="vf-monitor-list-rows">

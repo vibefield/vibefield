@@ -1,5 +1,4 @@
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { hexToRgb255 } from "../../../field/theme-constants";
 import type { MonitorPalette } from "../../monitor/monitor-palette";
 import type { AgentMonitorProps, MonitorAgent } from "../../monitor/types";
 import { normalizeRainParameters, type RainParameters } from "./rain-parameters";
@@ -62,9 +61,20 @@ function statusPresentation(
   palette: MonitorPalette,
 ): Record<MonitorAgent["status"], { head: string; tail: string; speed?: number }> {
   return {
-    working: { head: palette.text.primary, tail: palette.statusRgb.working },
-    waiting: { head: palette.status.waiting, tail: palette.statusRgb.waiting, speed: 0.02 },
-    idle: { head: palette.status.idle, tail: palette.statusRgb.idle, speed: 0.1 },
+    working: {
+      head: palette.rain.status.working.head,
+      tail: palette.rain.status.working.tailRgb,
+    },
+    waiting: {
+      head: palette.rain.status.waiting.head,
+      tail: palette.rain.status.waiting.tailRgb,
+      speed: 0.02,
+    },
+    idle: {
+      head: palette.rain.status.idle.head,
+      tail: palette.rain.status.idle.tailRgb,
+      speed: 0.1,
+    },
   };
 }
 
@@ -158,7 +168,7 @@ export function RainView({
       const byId = agentsRef.current;
       const colors = paletteRef.current;
       const presentationByStatus = statusPresentation(colors);
-      context2d.fillStyle = colors.stage;
+      context2d.fillStyle = colors.rain.stage;
       context2d.fillRect(0, 0, width, height);
 
       // Pane linkage rides its own channel — a wash behind the column — so the
@@ -181,7 +191,7 @@ export function RainView({
 
       // §3: data is the mono stack. Terminal text belongs to Ghosttea's
       // renderer; this is our own drawing of our own data, so it takes ours.
-      context2d.font = `bold ${cell}px ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace`;
+      context2d.font = `bold ${cell}px "Courier New", Courier, monospace`;
       context2d.textAlign = "center";
 
       for (const [column, drop] of drops) {
@@ -196,8 +206,8 @@ export function RainView({
         // The mounted session is marked by its own §2.6 accent — "this session",
         // the same color its bubble wears in the swarm — while status keeps the
         // whole green/orange/muted scale. Hover only brightens; it takes no hue.
-        const headColor = hoveredHere || agent.active ? colors.text.primary : presentation.head;
-        const tailColor = agent.active ? hexToRgb255(agent.color) : presentation.tail;
+        const headColor = hoveredHere || agent.active ? colors.rain.activeHead : presentation.head;
+        const tailColor = hoveredHere ? colors.rain.hoverTailRgb : presentation.tail;
 
         drop.y += presentation.speed ?? drop.speed * settings.speedMultiplier;
         if (drop.y - tailLength > rows) drop.y = 0;
@@ -268,8 +278,8 @@ export function RainView({
       <canvas ref={canvasRef} />
       {agents.length === 0 ? (
         <div className="vf-monitor-empty">
-          <span>No agents</span>
-          <small>The mock field is empty — nothing is running here.</small>
+          <span>NO ACTIVE AGENTS</span>
+          <small>Launch Claude, Codex, or Grok from a terminal pane.</small>
         </div>
       ) : null}
       {/* A pointer hit-target over the canvas, and DELIBERATELY out of the

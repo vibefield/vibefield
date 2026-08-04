@@ -35,6 +35,53 @@
   --vf-accent-7: #ef4444;
   --vf-accent-8: #3b82f6;
 
+  /* §2.7 Godview instrument palette — exact values from the Chopsticks
+     Godview reference. Both modes live here because Godview owns a local theme
+     switch independent of the field behind it. */
+  --vf-godview-light-monitor-bg: #f7f7f7;
+  --vf-godview-light-panel-bg: #ffffff;
+  --vf-godview-light-panel-border: #e0e0e0;
+  --vf-godview-light-text-main: #111111;
+  --vf-godview-light-text-muted: #888888;
+  --vf-godview-light-text-faint: #b8b8b8;
+  --vf-godview-light-control-hover-border: #777777;
+  --vf-godview-light-control-hover-bg: #f2f2f2;
+  --vf-godview-light-idle-bg: #e5e5e5;
+  --vf-godview-light-idle-text: #666666;
+  --vf-godview-light-working-bg: #222222;
+  --vf-godview-light-working-text: #ffffff;
+  --vf-godview-light-working-border: #111111;
+  --vf-godview-light-terminal-bg: #ece8dc;
+  --vf-godview-light-terminal-divider: #d2cec3;
+
+  --vf-godview-dark-monitor-bg: #0a0a0a;
+  --vf-godview-dark-panel-bg: #111111;
+  --vf-godview-dark-panel-border: #333333;
+  --vf-godview-dark-text-main: #ffffff;
+  --vf-godview-dark-text-muted: #777777;
+  --vf-godview-dark-text-faint: #555555;
+  --vf-godview-dark-control-hover-border: #a8a8a8;
+  --vf-godview-dark-control-hover-bg: #242424;
+  --vf-godview-dark-idle-bg: #2a2a2a;
+  --vf-godview-dark-idle-text: #aaaaaa;
+  --vf-godview-dark-working-bg: #eeeeee;
+  --vf-godview-dark-working-text: #111111;
+  --vf-godview-dark-working-border: #ffffff;
+  --vf-godview-dark-terminal-bg: #282c34;
+  --vf-godview-dark-terminal-divider: #414650;
+
+  --vf-godview-rain-green: #4ade80;
+  --vf-godview-rain-green-focus: #22c55e;
+  --vf-godview-rain-waiting: #fde047;
+  --vf-godview-rain-idle: #cbd5e1;
+  --vf-godview-rain-working-head: #ffffff;
+  --vf-godview-rain-working-tail: #00ff00;
+  --vf-godview-rain-waiting-head: #fef08a;
+  --vf-godview-rain-waiting-tail: #eab308;
+  --vf-godview-rain-idle-head: #94a3b8;
+  --vf-godview-rain-idle-tail: #475569;
+  --vf-godview-rain-hover-tail: #d946ef;
+
   /* §4 Geometry */
   --vf-radius-card: 22px;
   --vf-radius-island: 32px;

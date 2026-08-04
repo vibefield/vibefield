@@ -36,6 +36,14 @@ export interface MonitorPalette {
   stage: string;
   /** §2.4's ramp on a dark surface: primary, secondary, tertiary. */
   text: { primary: string; secondary: string; tertiary: string };
+  /** Canvas-only colors from the Chopsticks rain view. DOM views consume the
+   * scoped Godview CSS palette directly; canvas needs these resolved values. */
+  rain: {
+    stage: string;
+    activeHead: string;
+    hoverTailRgb: string;
+    status: Readonly<Record<AgentVisualStatus, { head: string; tailRgb: string; speed?: number }>>;
+  };
 }
 
 /** DESIGN.md §2.4 — text is surface color + opacity, never a fixed gray. The
@@ -81,6 +89,27 @@ export function readMonitorPalette(): MonitorPalette {
     },
     stage,
     text: { primary: TEXT_PRIMARY, secondary: TEXT_SECONDARY, tertiary: TEXT_TERTIARY },
+    rain: {
+      stage: readToken("--vf-card-deep", "#000000"),
+      activeHead: readToken("--vf-godview-rain-working-head", "#ffffff"),
+      hoverTailRgb: hexToRgb255(readToken("--vf-godview-rain-hover-tail", "#000000")),
+      status: {
+        working: {
+          head: readToken("--vf-godview-rain-working-head", "#ffffff"),
+          tailRgb: hexToRgb255(readToken("--vf-godview-rain-working-tail", "#000000")),
+        },
+        waiting: {
+          head: readToken("--vf-godview-rain-waiting-head", "#ffffff"),
+          tailRgb: hexToRgb255(readToken("--vf-godview-rain-waiting-tail", "#000000")),
+          speed: 0.02,
+        },
+        idle: {
+          head: readToken("--vf-godview-rain-idle-head", "#ffffff"),
+          tailRgb: hexToRgb255(readToken("--vf-godview-rain-idle-tail", "#000000")),
+          speed: 0.1,
+        },
+      },
+    },
   };
 }
 

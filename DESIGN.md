@@ -31,6 +31,18 @@ Three surface families, one physics:
 | **The chrome** (HUD islands, tray, panels, palette) | Floating translucent materials over the field. Dual-theme, near-colorless, hairline-bordered, blurred. |
 | **The control room** (Godview, diagnostics) | May commit to dark — it is a stage, not a document. Its palette still derives from §2 (no bespoke greens). |
 
+### 1.1 Godview visual source
+
+Godview is the deliberate control-room exception to the iOS-widget chrome around it. Its
+visual source of truth is `p008/chopsticks/apps/godview`: a flat 40px instrument bar, compact
+monospace controls, a gridded agent stage, stark monochrome status bodies, a parchment terminal
+deck in light mode, a graphite terminal deck in dark mode, and the reference scanline/vignette
+treatment. VibeField keeps its own host mechanics, honest mock label, and renderer-native terminal
+alpha, but does not reinterpret that reference through rounded cards, colorful agent fills, or
+floating pills. The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
+composites those status-body colors at 72% by default so they remain legible glass over the field;
+the temporary system-control panel exposes that alpha for live tuning.
+
 **The two signatures** (spend boldness here, keep everything else quiet):
 1. **The living card** — CardShell physics: lift-on-grab, hot-point glow and rim on overlap,
    the sole-selection ring. A VibeField card feels *held*, not dragged.
@@ -97,6 +109,21 @@ orange · `waiting`/`idle` muted (text ramp, no hue) · `done` muted with green 
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
 #06B6D4 · #8B5CF6 · #EF4444 · #3B82F6`. Tint recipe: body fill at 12% (`{hex}1F`),
 hairline at ~35%, label at full. These group and label; they never signal state.
+
+### 2.7 Godview instrument palette
+
+These values are scoped to Godview and reproduce the Chopsticks reference rather than extending
+the general chrome palette.
+
+| Role | Light | Dark |
+|---|---|---|
+| monitor ground | `#F7F7F7` | `#0A0A0A` |
+| panel | `#FFFFFF` | `#111111` |
+| panel border | `#E0E0E0` | `#333333` |
+| text main / muted / faint | `#111111 / #888888 / #B8B8B8` | `#FFFFFF / #777777 / #555555` |
+| idle body / text | `#E5E5E5 / #666666` | `#2A2A2A / #AAAAAA` |
+| working body / text | `#222222 / #FFFFFF` | `#EEEEEE / #111111` |
+| terminal ground / divider | `#ECE8DC / #D2CEC3` | `#282C34 / #414650` |
 
 ---
 

@@ -35,10 +35,12 @@ import { getRendererLogger } from "../logging";
 const APPEARANCE_STORAGE_KEY = "vf-godview-appearance-v1";
 
 export interface DeckAppearance {
-  /** A `GHOSTTY_COLOR_THEMES` entry name, or `null` for the deck's own palette
-   * — the live `--vf-*` tokens GT-2 chose so panes sit in this design system.
-   * Null is a real choice and the default one, not an absence. */
-  themeName: string | null;
+  /** `GHOSTTY_COLOR_THEMES` entry names, or `null` for Godview's built-in
+   * palette for that mode. Light and dark are intentionally independent: a
+   * palette chosen to sit well on one surface should not be forced onto the
+   * other when the viewer flips modes. */
+  lightThemeName: string | null;
+  darkThemeName: string | null;
   /** The terminal background's alpha, 0–1. The renderer applies it (0.9.0
    * premultiplies the theme background into its clear color), which is what
    * makes this true transparency rather than a composite. */
@@ -50,10 +52,27 @@ export interface DeckAppearance {
 }
 
 export const DEFAULT_DECK_APPEARANCE: DeckAppearance = {
-  themeName: null,
+  lightThemeName: null,
+  darkThemeName: null,
   opacity: 0.82,
   opacityCells: false,
 };
+
+export type DeckAppearanceMode = "light" | "dark";
+
+/** The catalog choice active for a Godview color mode. Kept beside the schema
+ * so every consumer — panel, renderer, and diagnostics — resolves it the same
+ * way. */
+export function deckThemeNameForMode(
+  appearance: DeckAppearance,
+  mode: DeckAppearanceMode,
+): string | null {
+  return mode === "dark" ? appearance.darkThemeName : appearance.lightThemeName;
+}
+
+function parsedThemeName(value: unknown): string | null {
+  return typeof value === "string" && value !== "" ? value : null;
+}
 
 /** Tolerant reader (design-00): anything unreadable is the default, and a
  * partly-readable record keeps the fields that parsed. A preference is never
@@ -69,9 +88,15 @@ export function parseDeckAppearance(raw: string | null): DeckAppearance {
   if (typeof value !== "object" || value === null) return DEFAULT_DECK_APPEARANCE;
   const record = value as Record<string, unknown>;
   const opacity = record.opacity;
+  // `themeName` was the original single-selection schema. Seed BOTH new mode
+  // slots from it so an upgrade preserves the user's existing choice; once
+  // either new field is written, each mode evolves independently.
+  const legacyThemeName = parsedThemeName(record.themeName);
   return {
-    themeName:
-      typeof record.themeName === "string" && record.themeName !== "" ? record.themeName : null,
+    lightThemeName:
+      "lightThemeName" in record ? parsedThemeName(record.lightThemeName) : legacyThemeName,
+    darkThemeName:
+      "darkThemeName" in record ? parsedThemeName(record.darkThemeName) : legacyThemeName,
     // Clamped rather than rejected: a value outside 0–1 is a version of this
     // file the writer got wrong, and the nearest legal opacity is a better
     // answer than reverting a user's whole appearance.

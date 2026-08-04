@@ -1,66 +1,75 @@
+import { GHOSTTY_COLOR_THEMES } from "@vibecook/ghosttea-react/workspace";
 import { CARD_BG } from "@vibefield/shell-ui";
-import { type CSSProperties, type ReactElement, useState } from "react";
-import { type DeckAppearance, setDeckAppearance } from "./deck-appearance";
+import { type CSSProperties, type ReactElement, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { type DeckAppearance, deckThemeNameForMode, setDeckAppearance } from "./deck-appearance";
 import type { MonitorTuningSection } from "./monitor/monitor-tuning";
 import type { MonitorParameterDefinition } from "./monitor/parameters";
 
-// TEMPORARY: an in-product surface lab for James's Godview visual pass. The
-// STAGE values are deliberately local state — no setting, storage key, contract
-// or synced doc. Once the chosen recipe moves into DESIGN.md + styles.css,
-// delete this file and leave only the resulting CSS variables/defaults behind.
-//
-// GT-3v rebased it onto the real knobs. It was born over the screen-composite
-// interim and half its controls existed to compensate for that trick: a blend
-// mode, a canvas opacity, and brightness/contrast/saturation filters over the
-// terminal canvas. 0.9.0 makes the pane transparent in the RENDERER, so there
-// is nothing left to compensate and those controls are gone with the mechanism.
-//
-// The pane opacity survived, but it is no longer this panel's own value: it
-// writes the viewer's real appearance (`deck-appearance.ts`), the same value
-// Settings → Terminal edits and the deck renders. A lab slider holding a second
-// pane opacity beside the product's would be exactly the duplicate authority
-// this slice deleted everywhere else — so what remains here is a live handle on
-// the one truth, not a copy of it.
+// TEMPORARY: the live measuring instrument requested for the Godview visual
+// pass. The controls remain memory-only except terminal appearance and monitor
+// parameters, whose existing stores are the real product authorities.
+
+export type GodviewTheme = "light" | "dark";
+
+const DECK_DEFAULT_THEME_VALUE = "";
 
 export interface GodviewTuning {
   stageColor: string;
   stageOpacity: number;
   stageBlur: number;
+  bubbleIdleColor: string;
+  bubbleWorkingColor: string;
+  bubbleWaitingColor: string;
 }
 
 function tokenColor(name: string, fallback: string): string {
   if (typeof document === "undefined") return fallback;
   const resolved = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   if (resolved === "") return fallback;
-  // A color input is a useful normalizer here: the source tokens are hex, and
-  // the browser owns the exact lowercase six-digit value the control expects.
   const input = document.createElement("input");
   input.type = "color";
   input.value = resolved;
   return input.value;
 }
 
-/** DESIGN.md §5's Sheet tier — `surface /90` + `backdrop-blur-3xl` — which is
- * the material a full-stage panel takes. The overlay was tuned to 92%/48px over
- * the composited stack; the ground beneath it has changed, so the defaults go
- * back to the documented recipe and the lab reaches the rest. */
-export function defaultGodviewTuning(): GodviewTuning {
+/** The Chopsticks reference is flat and opaque by default. The pane renderer's
+ * own alpha remains independent, so a transparent terminal is still real. */
+export function defaultGodviewTuning(theme: GodviewTheme = "light"): GodviewTuning {
+  const light = theme === "light";
   return {
-    stageColor: tokenColor("--vf-card", CARD_BG),
-    stageOpacity: 90,
-    stageBlur: 64,
+    stageColor: tokenColor(`--vf-godview-${theme}-monitor-bg`, CARD_BG),
+    stageOpacity: 100,
+    stageBlur: 0,
+    bubbleIdleColor: tokenColor(`--vf-godview-${theme}-idle-bg`, light ? "#e5e5e5" : "#2a2a2a"),
+    bubbleWorkingColor: tokenColor(
+      `--vf-godview-${theme}-working-bg`,
+      light ? "#222222" : "#eeeeee",
+    ),
+    bubbleWaitingColor: tokenColor(
+      light ? "--vf-card-deep" : "--vf-godview-dark-text-main",
+      light ? "#000000" : "#ffffff",
+    ),
   };
 }
 
 type GodviewTuningStyle = CSSProperties & Record<`--vf-godview-${string}`, string>;
 
-/** Convert human-readable panel values into the variables styles.css consumes. */
 export function godviewTuningStyle(value: GodviewTuning): GodviewTuningStyle {
   return {
     "--vf-godview-stage-color": value.stageColor,
     "--vf-godview-stage-opacity": `${value.stageOpacity}%`,
     "--vf-godview-stage-blur": `${value.stageBlur}px`,
+    "--vf-godview-bubble-idle": value.bubbleIdleColor ?? "var(--idle-bg)",
+    "--vf-godview-bubble-working": value.bubbleWorkingColor ?? "var(--working-bg)",
+    "--vf-godview-bubble-waiting": value.bubbleWaitingColor ?? "var(--waiting-bg)",
   };
+}
+
+function displayedValue(definition: MonitorParameterDefinition, value: number): string {
+  if (definition.step >= 1) return String(Math.round(value));
+  const precision = Math.max(0, Math.ceil(-Math.log10(definition.step)));
+  return value.toFixed(precision);
 }
 
 function RangeControl({
@@ -68,6 +77,7 @@ function RangeControl({
   value,
   min,
   max,
+  step = 1,
   unit,
   onChange,
 }: {
@@ -75,24 +85,24 @@ function RangeControl({
   value: number;
   min: number;
   max: number;
+  step?: number;
   unit: string;
   onChange: (value: number) => void;
 }): ReactElement {
   return (
-    <label className="vf-godview-tuner-control">
-      <span className="vf-godview-tuner-label">
-        <span>{label}</span>
-        <output>
-          {value}
-          {unit}
-        </output>
-      </span>
+    <label className="vf-godview-tweak-control">
+      <span>{label}</span>
+      <output>
+        {value}
+        {unit}
+      </output>
       <input
         type="range"
         min={min}
         max={max}
+        step={step}
         value={value}
-        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        onChange={(event) => onChange(event.currentTarget.valueAsNumber)}
       />
     </label>
   );
@@ -108,42 +118,24 @@ function ColorControl({
   onChange: (value: string) => void;
 }): ReactElement {
   return (
-    <label className="vf-godview-tuner-color">
+    <label className="vf-godview-tweak-control is-color">
       <span>{label}</span>
-      <span className="vf-godview-tuner-color-value">
-        <input
-          type="color"
-          value={value}
-          onChange={(event) => onChange(event.currentTarget.value)}
-        />
-        <output>{value}</output>
-      </span>
+      <output>{value}</output>
+      <input type="color" value={value} onChange={(event) => onChange(event.currentTarget.value)} />
     </label>
   );
 }
 
-/** A declared control, drawn. The reference app's `TweakPanel` renders exactly
- * this and nothing else; folding it in here rather than porting that panel is
- * GT-D13's "one tuning instrument, not two" — a second floating panel over the
- * same stage would be two answers to "where do I change this?". */
-function displayedValue(definition: MonitorParameterDefinition, value: number): string {
-  if (definition.step >= 1) return String(Math.round(value));
-  const precision = Math.max(0, Math.ceil(-Math.log10(definition.step)));
-  return value.toFixed(precision);
-}
-
 function MonitorGroup({ group, values, onChange }: Omit<MonitorTuningSection, "id">): ReactElement {
   return (
-    <fieldset>
+    <fieldset className="vf-godview-tweak-group">
       <legend>{group.title}</legend>
       {group.controls.map((definition) => {
         const value = values[definition.key] ?? definition.defaultValue;
         return (
-          <label className="vf-godview-tuner-control" key={definition.key}>
-            <span className="vf-godview-tuner-label">
-              <span>{definition.label}</span>
-              <output>{displayedValue(definition, value)}</output>
-            </span>
+          <label className="vf-godview-tweak-control" key={definition.key}>
+            <span>{definition.label}</span>
+            <output>{displayedValue(definition, value)}</output>
             <input
               type="range"
               min={definition.min}
@@ -160,109 +152,173 @@ function MonitorGroup({ group, values, onChange }: Omit<MonitorTuningSection, "i
 }
 
 export function GodviewTuningPanel({
+  open,
+  theme,
   value,
   appearance,
   monitorSections,
+  onClose,
+  onThemeChange,
   onChange,
   onReset,
   onResetMonitor,
 }: {
+  open: boolean;
+  theme: GodviewTheme;
   value: GodviewTuning;
   appearance: DeckAppearance;
-  /** GT-3m: the stage's groups then the active view's own, already bound to
-   * their stores. Unlike the stage knobs above them these DO persist — the
-   * monitor unmounts on every close, so memory-only would reset every open. */
   monitorSections: readonly MonitorTuningSection[];
+  onClose: () => void;
+  onThemeChange: (theme: GodviewTheme) => void;
   onChange: (patch: Partial<GodviewTuning>) => void;
   onReset: () => void;
   onResetMonitor: () => void;
-}): ReactElement {
-  const [collapsed, setCollapsed] = useState(false);
+}): ReactElement | null {
+  const colorThemeNames = useMemo(() => GHOSTTY_COLOR_THEMES.map((entry) => entry.name), []);
 
-  return (
+  if (!open) return null;
+
+  const selectedColorTheme = deckThemeNameForMode(appearance, theme);
+  const setSelectedColorTheme = (themeName: string | null): void => {
+    setDeckAppearance({
+      ...appearance,
+      ...(theme === "dark" ? { darkThemeName: themeName } : { lightThemeName: themeName }),
+    });
+  };
+
+  return createPortal(
     <aside
-      className="vf-godview-tuner"
-      data-collapsed={collapsed ? "true" : "false"}
-      aria-label="Godview live surface tuning"
+      id="vf-godview-tweak-panel"
+      className={`vf-godview-tweak-panel theme-${theme}`}
+      aria-label="Godview system controls"
     >
-      <header className="vf-godview-tuner-header">
-        <span>
-          <strong>Surface lab</strong>
-          <small>temporary · live</small>
-        </span>
-        <span className="vf-godview-tuner-actions">
-          <button
-            type="button"
-            onClick={() => {
-              onReset();
-              onResetMonitor();
-            }}
-          >
-            reset
-          </button>
-          <button
-            type="button"
-            aria-expanded={!collapsed}
-            onClick={() => setCollapsed((current) => !current)}
-          >
-            {collapsed ? "show" : "hide"}
-          </button>
-        </span>
+      <header className="vf-godview-tweak-header">
+        <span>SYSTEM CONTROL</span>
+        <button type="button" aria-label="Close system controls" onClick={onClose}>
+          ×
+        </button>
       </header>
 
-      {!collapsed && (
-        <div className="vf-godview-tuner-body">
-          <fieldset>
-            <legend>Stage</legend>
-            <ColorControl
-              label="color"
-              value={value.stageColor}
-              onChange={(stageColor) => onChange({ stageColor })}
-            />
-            <RangeControl
-              label="opacity"
-              value={value.stageOpacity}
-              min={0}
-              max={100}
-              unit="%"
-              onChange={(stageOpacity) => onChange({ stageOpacity })}
-            />
-            <RangeControl
-              label="backdrop blur"
-              value={value.stageBlur}
-              min={0}
-              max={80}
-              unit="px"
-              onChange={(stageBlur) => onChange({ stageBlur })}
-            />
-          </fieldset>
+      <label className="vf-godview-tweak-theme">
+        <span>Theme</span>
+        <select
+          value={theme}
+          onChange={(event) => onThemeChange(event.currentTarget.value as GodviewTheme)}
+        >
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
 
-          <fieldset>
-            <legend>Terminal panes</legend>
-            <RangeControl
-              label="background opacity"
-              value={Math.round(appearance.opacity * 100)}
-              min={0}
-              max={100}
-              unit="%"
-              onChange={(percent) => setDeckAppearance({ ...appearance, opacity: percent / 100 })}
-            />
-            <p>
-              The renderer's own background alpha — the same setting as Settings → Terminal, saved
-              for this device.
-            </p>
-          </fieldset>
+      <fieldset className="vf-godview-tweak-group">
+        <legend>STAGE SURFACE</legend>
+        <ColorControl
+          label="Stage color"
+          value={value.stageColor}
+          onChange={(stageColor) => onChange({ stageColor })}
+        />
+        <RangeControl
+          label="Stage opacity"
+          value={value.stageOpacity}
+          min={0}
+          max={100}
+          unit="%"
+          onChange={(stageOpacity) => onChange({ stageOpacity })}
+        />
+        <RangeControl
+          label="Backdrop blur"
+          value={value.stageBlur}
+          min={0}
+          max={80}
+          unit="px"
+          onChange={(stageBlur) => onChange({ stageBlur })}
+        />
+      </fieldset>
 
-          {monitorSections.map((section) => (
-            <MonitorGroup
-              key={section.id}
-              group={section.group}
-              values={section.values}
-              onChange={section.onChange}
-            />
-          ))}
-        </div>
-      )}
-    </aside>
+      <fieldset className="vf-godview-tweak-group">
+        <legend>TERMINAL PANES</legend>
+        <label className="vf-godview-tweak-control is-select">
+          <span>Color theme · {theme === "dark" ? "Dark" : "Light"}</span>
+          <select
+            aria-label={`${theme === "dark" ? "Dark" : "Light"} terminal color theme`}
+            value={selectedColorTheme ?? DECK_DEFAULT_THEME_VALUE}
+            onChange={(event) =>
+              setSelectedColorTheme(
+                event.currentTarget.value === DECK_DEFAULT_THEME_VALUE
+                  ? null
+                  : event.currentTarget.value,
+              )
+            }
+          >
+            <option value={DECK_DEFAULT_THEME_VALUE}>
+              Godview {theme === "dark" ? "Midnight" : "Daylight"}
+            </option>
+            {colorThemeNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <RangeControl
+          label="Background opacity"
+          value={Math.round(appearance.opacity * 100)}
+          min={0}
+          max={100}
+          unit="%"
+          onChange={(percent) => setDeckAppearance({ ...appearance, opacity: percent / 100 })}
+        />
+        <label className="vf-godview-tweak-check">
+          <span>Fade cell backgrounds</span>
+          <input
+            type="checkbox"
+            checked={appearance.opacityCells}
+            onChange={(event) =>
+              setDeckAppearance({ ...appearance, opacityCells: event.currentTarget.checked })
+            }
+          />
+        </label>
+      </fieldset>
+
+      <fieldset className="vf-godview-tweak-group">
+        <legend>BUBBLE COLORS</legend>
+        <ColorControl
+          label="Idle fill"
+          value={value.bubbleIdleColor ?? defaultGodviewTuning(theme).bubbleIdleColor}
+          onChange={(bubbleIdleColor) => onChange({ bubbleIdleColor })}
+        />
+        <ColorControl
+          label="Working fill"
+          value={value.bubbleWorkingColor ?? defaultGodviewTuning(theme).bubbleWorkingColor}
+          onChange={(bubbleWorkingColor) => onChange({ bubbleWorkingColor })}
+        />
+        <ColorControl
+          label="Waiting fill"
+          value={value.bubbleWaitingColor ?? defaultGodviewTuning(theme).bubbleWaitingColor}
+          onChange={(bubbleWaitingColor) => onChange({ bubbleWaitingColor })}
+        />
+      </fieldset>
+
+      {monitorSections.map((section) => (
+        <MonitorGroup
+          key={section.id}
+          group={section.group}
+          values={section.values}
+          onChange={section.onChange}
+        />
+      ))}
+
+      <button
+        className="vf-godview-tweak-reset"
+        type="button"
+        onClick={() => {
+          onReset();
+          onResetMonitor();
+        }}
+      >
+        RESET DEFAULTS
+      </button>
+    </aside>,
+    document.body,
   );
 }
