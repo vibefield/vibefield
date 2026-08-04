@@ -163,7 +163,18 @@ interface DeckFacts {
   activeSessionId?: string;
   /** GT-3v: the alpha the RENDERER was handed, and whose palette it came from */
   glass: { paneBackgroundAlpha: number; opacityCells: boolean; themeName: string | null };
+  /** GT-3f: the shader the renderer was handed. Null means the deck passed no
+   * `effects` prop at all, which is how an unchosen shader is spelled. */
+  effects: { shaderEffect: string | null; animate: boolean };
 }
+
+/** The renderer-local home of the viewer's appearance (GT-D12). Named here so
+ * the smoke seeds the same key the deck reads, and so a rename of that key
+ * fails this harness rather than silently seeding nothing. */
+const GODVIEW_APPEARANCE_STORAGE_KEY = "vf-godview-appearance-v1";
+/** The port the smoke selects — a `GHOSTTEA_SHADER_OPTIONS` id, static by
+ * choice (see row 5b). */
+const SMOKE_SHADER_EFFECT = "ghosttea:crt";
 
 /** A running tail of the deck's markers, armed BEFORE the load so a fast deck
  * cannot report into a gap. Every wait is a predicate over the LATEST line,
@@ -756,6 +767,21 @@ export async function runSmokeGodview(opts: {
     opts.toggleGodview(); // closed, so the reload comes up with the deck unmounted
     await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
     await win.webContents.executeJavaScript("localStorage.clear()");
+    // 5b. GT-3f: seed the VIEWER's shader the way a returning user's would
+    //     already be sitting there. The appearance store reads localStorage
+    //     synchronously at module init, so the fresh document below comes up
+    //     with the port chosen — the real production path, and it rides the
+    //     reload this row was already doing rather than adding one.
+    //
+    //     A NON-animated port deliberately: the claim under test is that a
+    //     viewer-local selection reached the renderer, and an animated one
+    //     would make that fact depend on frame timing. Whether CRT LOOKS right
+    //     is James's eye; that its id crossed is what a harness can hold.
+    await win.webContents.executeJavaScript(
+      `localStorage.setItem(${JSON.stringify(GODVIEW_APPEARANCE_STORAGE_KEY)}, ${JSON.stringify(
+        JSON.stringify({ shaderEffect: SMOKE_SHADER_EFFECT }),
+      )})`,
+    );
     const reloaded = waitForConsole(win, "CANVAS_READY ", 60_000);
     reloaded.catch(() => undefined);
     deck.reset();
@@ -1075,6 +1101,37 @@ export async function runSmokeGodview(opts: {
         `the device config moved the viewer's appearance: ${glassBefore.paneBackgroundAlpha} → ${glassAfter.paneBackgroundAlpha}`,
       );
     }
+
+    // 11c. THE EFFECTS ROW (GT-3f / petition G11). The same two-homes law as
+    //      the glass, now for the third of appearance that could not be
+    //      viewer-local until 0.9.1 — and it is proven in both directions,
+    //      because one direction alone is what a regression would satisfy.
+    //
+    //      Direction one: the port this viewer chose reached the renderer. The
+    //      deck reads this off the object it actually handed the workspace, so
+    //      the line is what the panes were told and not what the store holds.
+    const effects = deck.current()?.effects;
+    if (effects === undefined) throw new Error("the deck stopped reporting its effects");
+    verdict["shaderEffect"] = effects.shaderEffect;
+    verdict["shaderAnimate"] = effects.animate;
+    if (effects.shaderEffect !== SMOKE_SHADER_EFFECT) {
+      throw new Error(
+        `the viewer's shader never reached the renderer: expected ${SMOKE_SHADER_EFFECT}, deck reported ${String(effects.shaderEffect)}`,
+      );
+    }
+    // Direction two: choosing it wrote NOTHING into the device document. The
+    // file is read back whole against the exact bytes row 11 wrote, so any key
+    // the appearance path might have appended — a `custom-shader`, a managed
+    // block — fails here. If a shader ever does appear in this file because a
+    // viewer picked one, the homes have merged and GT-5's phone inherits this
+    // desktop's CRT, which is the thing 0.9.0's own changelog forbids.
+    const configAfterShader = readFileSync(document.path, "utf8");
+    if (configAfterShader !== configText) {
+      throw new Error(
+        `the viewer's shader leaked into the device config document: ${JSON.stringify(configAfterShader)}`,
+      );
+    }
+    verdict["shaderLeftConfigAlone"] = true;
 
     // 12. The recovery row, inherited from the GT-1 spike: SIGKILL the bridge
     //    and watch the deck come back on a new runtime with the same sessions.

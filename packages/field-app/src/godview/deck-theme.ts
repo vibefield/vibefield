@@ -2,16 +2,20 @@ import {
   GHOSTTY_COLOR_THEMES,
   type GhostteaColorTheme,
   type GhostteaWorkspaceProps,
+  isGhostteaShaderEffect,
   TERMINAL_THEMES,
 } from "@vibecook/ghosttea-react/workspace";
 import { hexToRgb01 } from "../field/theme-constants";
 import { type DeckAppearance, deckThemeNameForMode } from "./deck-appearance";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 
-// The deck's terminal palette projection. Each Godview mode resolves its OWN
-// catalog selection; without one it uses the exact Daylight/Midnight terminal
-// palette from the Chopsticks reference rather than borrowing the other mode's
-// choice.
+// The deck's terminal projection: the viewer's stored appearance turned into
+// the two props the workspace takes for it, `theme` and `effects`. Both live
+// here because both answer the same question — what this VIEWER draws, as
+// opposed to what the floor below configures. Each Godview mode resolves its
+// OWN catalog selection; without one it uses the exact Daylight/Midnight
+// terminal palette from the Chopsticks reference rather than borrowing the
+// other mode's choice.
 //
 // Terminal TEXT is not ours to color (§3: it belongs to Ghosttea's renderer and
 // to the program running). These values give the renderer its ground, caret and
@@ -28,6 +32,7 @@ import type { GodviewTheme } from "./GodviewTuningPanel";
 // this viewer's own choice, not from the floor's configuration document.
 
 type TerminalTheme = NonNullable<GhostteaWorkspaceProps["theme"]>;
+type TerminalEffects = NonNullable<GhostteaWorkspaceProps["effects"]>;
 type Rgba = TerminalTheme["background"];
 
 function hex(value: string, alpha: number): Rgba {
@@ -78,4 +83,35 @@ export function godviewTerminalTheme(
     ],
     backgroundOpacityCells: appearance.opacityCells,
   };
+}
+
+/** The viewer's shader, as the `effects` prop — or `undefined`, which means the
+ * prop is not passed at all (GT-3f / petition G11).
+ *
+ * `undefined` and `{postProcess: "none", shaderEffects: []}` are NOT the same
+ * statement. The first leaves ghosttea's own precedence intact — `effects ??
+ * (config ? terminalEffectsFromConfig(config) : DEFAULT_EFFECTS)` — so a floor
+ * that configures a shader still gets it; the second is this viewer overriding
+ * that floor with nothing. We have no reason to make the second claim, so an
+ * unselected deck says nothing and the deck omits the prop.
+ *
+ * `postProcess` stays `"none"` for every selection, including Better CRT. The
+ * renderer reads `shaderEffects` first and only falls back to `postProcess`
+ * when that list is empty (webgpu-renderer `#shaderStack`), so naming the port
+ * in both places would be one choice with two authorities — and upstream's own
+ * contract test writes it exactly this way.
+ *
+ * An id upstream no longer publishes resolves to `undefined` rather than being
+ * handed over: same posture as `findDeckColorTheme` above, because a pinned
+ * catalog dropping an entry is a real event and a shader the renderer cannot
+ * compile is a worse answer than the pane the viewer had yesterday.
+ *
+ * Worth knowing at this seam: effects are a WEBGPU-only capability upstream —
+ * the Canvas2D fallback renderer has no notion of them and draws panes plain.
+ * Nothing here can change that, so the Settings copy says it rather than the
+ * control pretending otherwise. */
+export function godviewTerminalEffects(appearance: DeckAppearance): TerminalEffects | undefined {
+  const id = appearance.shaderEffect;
+  if (id === null || !isGhostteaShaderEffect(id)) return undefined;
+  return { postProcess: "none", shaderEffects: [id], animate: appearance.shaderAnimate };
 }

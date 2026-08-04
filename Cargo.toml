@@ -25,5 +25,8 @@ truffle-core = "=0.7.12"
 # 0.9.0 still requires truffle-core =0.7.11 and therefore MUST upgrade before
 # GT-4 can add it; it is not in this workspace today. `ghosttea` itself carries
 # no Truffle dependency, so AH-1b's 0.7.12 pin remains the workspace's one
-# Arc<Node> type.
-ghosttea = "=0.9.0"
+# Arc<Node> type. GT-3f (2026-08-04) bumped 0.9.0 → 0.9.1 for G11's `effects`
+# prop, which is an npm-side release: the crate tree's diff across the two tags
+# is version strings only — zero Rust source delta — so this pin moves solely to
+# keep the one-version law true across crates, npm, and SwiftPM.
+ghosttea = "=0.9.1"

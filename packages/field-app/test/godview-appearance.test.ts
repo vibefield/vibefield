@@ -9,6 +9,7 @@
  * that replaced GT-3's screen-composite interim — if that alpha stops arriving,
  * the panes go opaque and no test that only counts renders would notice.
  */
+import { GHOSTTEA_SHADER_OPTIONS } from "@vibecook/ghosttea-react/workspace";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_DECK_APPEARANCE,
@@ -19,6 +20,7 @@ import {
   setDeckAppearance,
   subscribeDeckAppearance,
 } from "../src/godview/deck-appearance";
+import { godviewTerminalEffects } from "../src/godview/deck-theme";
 
 beforeEach(() => resetDeckAppearanceForTest());
 afterEach(() => resetDeckAppearanceForTest());
@@ -32,6 +34,8 @@ describe("the deck appearance store", () => {
           darkThemeName: "Solarized Dark",
           opacity: 0.5,
           opacityCells: true,
+          shaderEffect: "ghosttea:vhs",
+          shaderAnimate: true,
         }),
       ),
     ).toEqual({
@@ -39,7 +43,21 @@ describe("the deck appearance store", () => {
       darkThemeName: "Solarized Dark",
       opacity: 0.5,
       opacityCells: true,
+      shaderEffect: "ghosttea:vhs",
+      shaderAnimate: true,
     });
+  });
+
+  it("reads a record written before shaders existed as no shader", () => {
+    // Every deck saved by GT-3v holds one of these. It must open unchanged —
+    // adding a control cannot restyle panes that were never asked about it.
+    const legacy = parseDeckAppearance(
+      JSON.stringify({ lightThemeName: null, darkThemeName: null, opacity: 0.7 }),
+    );
+
+    expect(legacy.shaderEffect).toBeNull();
+    expect(legacy.shaderAnimate).toBe(false);
+    expect(godviewTerminalEffects(legacy)).toBeUndefined();
   });
 
   it("migrates the old shared color theme into both modes", () => {
@@ -60,11 +78,17 @@ describe("the deck appearance store", () => {
   it("keeps the fields that parsed when a record is only partly readable", () => {
     // A preference is not worth failing over, and a half-written record is
     // still evidence of what the user chose.
-    expect(parseDeckAppearance(JSON.stringify({ opacity: 0.4, lightThemeName: 42 }))).toEqual({
+    expect(
+      parseDeckAppearance(
+        JSON.stringify({ opacity: 0.4, lightThemeName: 42, shaderEffect: { id: "vhs" } }),
+      ),
+    ).toEqual({
       lightThemeName: null,
       darkThemeName: null,
       opacity: 0.4,
       opacityCells: false,
+      shaderEffect: null,
+      shaderAnimate: false,
     });
   });
 
@@ -86,6 +110,8 @@ describe("the deck appearance store", () => {
       darkThemeName: "Catppuccin Mocha",
       opacity: 0.33,
       opacityCells: true,
+      shaderEffect: "ghosttea:crt",
+      shaderAnimate: false,
     });
 
     expect(announced).toBe(1);
@@ -97,6 +123,8 @@ describe("the deck appearance store", () => {
       darkThemeName: "Catppuccin Mocha",
       opacity: 0.33,
       opacityCells: true,
+      shaderEffect: "ghosttea:crt",
+      shaderAnimate: false,
     });
     stop();
   });
@@ -107,5 +135,80 @@ describe("the deck appearance store", () => {
     expect(DEFAULT_DECK_APPEARANCE.opacity).toBeLessThan(1);
     expect(DEFAULT_DECK_APPEARANCE.lightThemeName).toBeNull();
     expect(DEFAULT_DECK_APPEARANCE.darkThemeName).toBeNull();
+    expect(DEFAULT_DECK_APPEARANCE.shaderEffect).toBeNull();
+  });
+});
+
+/**
+ * The effects projection (GT-3f / petition G11) — against the REAL shader
+ * metadata, unlike the theme catalog the deck fixture stubs. Four entries is a
+ * table worth reading, and the ids are the whole contract: a projection tested
+ * against invented ids would pass while handing the renderer a shader ghosttea
+ * has never compiled.
+ */
+describe("the viewer's shader, as the effects prop", () => {
+  it("omits the prop entirely when nothing is chosen", () => {
+    // Not `{postProcess: "none", shaderEffects: []}`. Absent hands ghosttea its
+    // own config-derived path back; an empty object is this viewer overriding
+    // that floor with nothing, which is a claim we have no reason to make.
+    expect(godviewTerminalEffects(DEFAULT_DECK_APPEARANCE)).toBeUndefined();
+  });
+
+  it("names the chosen port in shaderEffects and leaves postProcess alone", () => {
+    for (const shader of GHOSTTEA_SHADER_OPTIONS) {
+      expect(
+        godviewTerminalEffects({ ...DEFAULT_DECK_APPEARANCE, shaderEffect: shader.id }),
+      ).toEqual({ postProcess: "none", shaderEffects: [shader.id], animate: false });
+    }
+  });
+
+  it("keeps postProcess at none even for the legacy Better CRT port", () => {
+    // The one port `postProcess` could also name. The renderer reads
+    // `shaderEffects` first and only falls back to `postProcess` when that list
+    // is empty, so saying it twice would be one choice with two authorities.
+    const effects = godviewTerminalEffects({
+      ...DEFAULT_DECK_APPEARANCE,
+      shaderEffect: "ghosttea:better-crt",
+    });
+
+    expect(effects?.postProcess).toBe("none");
+    expect(effects?.shaderEffects).toEqual(["ghosttea:better-crt"]);
+  });
+
+  it("carries the animate flag through for an animated port", () => {
+    const animated = GHOSTTEA_SHADER_OPTIONS.find((shader) => shader.animated);
+    expect(animated, "upstream still bundles at least one animated port").toBeDefined();
+
+    expect(
+      godviewTerminalEffects({
+        ...DEFAULT_DECK_APPEARANCE,
+        shaderEffect: animated?.id ?? "",
+        shaderAnimate: true,
+      })?.animate,
+    ).toBe(true);
+  });
+
+  it("answers no effect for an id this build no longer carries", () => {
+    // A pinned catalog can drop a port between releases. Falling back to the
+    // pane the viewer had yesterday beats asking the renderer for a shader it
+    // cannot compile — the same posture `findDeckColorTheme` takes for themes.
+    expect(
+      godviewTerminalEffects({
+        ...DEFAULT_DECK_APPEARANCE,
+        shaderEffect: "ghosttea:retired-in-some-future-release",
+        shaderAnimate: true,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("returns a value that survives ghosttea's own equality key", () => {
+    // 0.9.1 canonicalizes equal effect objects behind `workspaceEffectsKey`
+    // (JSON of postProcess, animate, shaderEffects). Two projections of the
+    // same stored selection must land on the same key or every parent rerender
+    // would invalidate terminals the viewer never touched.
+    const appearance = { ...DEFAULT_DECK_APPEARANCE, shaderEffect: "ghosttea:crt" };
+    expect(JSON.stringify(godviewTerminalEffects(appearance))).toBe(
+      JSON.stringify(godviewTerminalEffects({ ...appearance })),
+    );
   });
 });

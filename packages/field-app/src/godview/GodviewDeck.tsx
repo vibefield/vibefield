@@ -24,7 +24,7 @@ import {
   restoreSentence,
   savedPaneSessionIds,
 } from "./deck-restore";
-import { godviewTerminalTheme } from "./deck-theme";
+import { godviewTerminalEffects, godviewTerminalTheme } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { KillActivePane } from "./KillActivePane";
 import { describePane } from "./pane-faces";
@@ -220,6 +220,12 @@ export function GodviewDeck({
     () => godviewTerminalTheme(appearance, godviewTheme),
     [appearance, godviewTheme],
   );
+  // Memoized on the STORED selection, so the object handed over is the same one
+  // until the viewer actually changes something. 0.9.1 canonicalizes equal
+  // effect objects behind `workspaceEffectsKey` and would forgive a fresh one
+  // each render, but leaning on that would be asking a library to clean up
+  // after a prop this component controls completely.
+  const terminalEffects = useMemo(() => godviewTerminalEffects(appearance), [appearance]);
   const activeThemeName = deckThemeNameForMode(appearance, godviewTheme);
   /** Stable by construction: `sidebar` is a component TYPE, and a fresh arrow
    * on every render would remount the probe — and re-run its publish — forever. */
@@ -497,6 +503,13 @@ export function GodviewDeck({
         opacityCells: terminalTheme.backgroundOpacityCells === true,
         themeName: activeThemeName,
       },
+      // Same rule as the glass: read off what the workspace was HANDED, which
+      // for effects also carries the omission — no selection means no prop, and
+      // this line says so with a null rather than by falling silent.
+      effects: {
+        shaderEffect: terminalEffects?.shaderEffects?.[0] ?? null,
+        animate: terminalEffects?.animate === true,
+      },
       ...(error !== null ? { error } : {}),
       ...(consent !== null && consent !== "go" ? { consent } : {}),
       ...(exited.length > 0 ? { exitedSessionIds: exited } : {}),
@@ -504,7 +517,7 @@ export function GodviewDeck({
         ? { activeSessionId: workspace.activeSession.id }
         : {}),
     });
-  }, [active, workspace, runtime, error, consent, terminalTheme, activeThemeName]);
+  }, [active, workspace, runtime, error, consent, terminalTheme, terminalEffects, activeThemeName]);
 
   const platform: GhostteaWorkspacePlatform | null =
     shell === null
@@ -593,6 +606,12 @@ export function GodviewDeck({
       <GhostteaWorkspace
         platform={platform}
         theme={terminalTheme}
+        // Spread rather than `effects={terminalEffects}` because `undefined`
+        // and absent are the same to React but NOT to a tolerant reader of this
+        // code: the prop is omitted when nothing is selected, which is what
+        // hands ghosttea's config-derived path back to it intact (GT-D12 — the
+        // floor keeps its own answer, this viewer only overrides when asked).
+        {...(terminalEffects !== undefined ? { effects: terminalEffects } : {})}
         storageKey={DECK_STORAGE_KEY}
         sidebar={Sidebar}
         decoratePane={describePane}

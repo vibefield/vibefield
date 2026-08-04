@@ -79,6 +79,13 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
       palette: [],
     },
   ],
+  // The real id set, spelled out: the deck's effects projection refuses an id
+  // upstream does not know, so a stub that said yes to everything would let a
+  // typo'd shader reach the workspace in a test and only fail in James's eye.
+  isGhostteaShaderEffect: (id: string) =>
+    ["ghosttea:better-crt", "ghosttea:crt", "ghosttea:vhs", "ghosttea:sparks-from-fire"].includes(
+      id,
+    ),
   TERMINAL_THEMES: {
     daylight: {
       background: [0.925, 0.91, 0.86, 1],
@@ -353,6 +360,102 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
       (workspaceMounts[workspaceMounts.length - 1]!.theme as { background: number[] })
         .background[0],
     ).toBeCloseTo(0x20 / 255);
+  });
+
+  it("passes NO effects prop while no shader is chosen (GT-3f)", async () => {
+    // The distinction the whole slice rests on. `undefined` and absent look the
+    // same to React, so this asserts the KEY is missing: with the prop absent
+    // ghosttea keeps its own config-derived path, and a deck that sent an empty
+    // override instead would silently blank a floor-configured shader for
+    // anyone whose floor has one.
+    await mountDeck();
+    const props = workspaceMounts[workspaceMounts.length - 1]!;
+
+    expect("effects" in props, "an unchosen shader is a prop that was never sent").toBe(false);
+    expect(latest().effects).toEqual({ shaderEffect: null, animate: false });
+  });
+
+  it("hands a chosen shader over live, without re-initializing (GT-3f)", async () => {
+    // Same property the theme has, for the prop that arrived at 0.9.1: `effects`
+    // is not among the workspace's initialization deps, so picking a shader
+    // re-renders the panes rather than claiming sessions and spawning one.
+    await mountDeck();
+    const before = workspaceMounts[workspaceMounts.length - 1]!;
+
+    await act(async () => {
+      setDeckAppearance({
+        ...DEFAULT_DECK_APPEARANCE,
+        shaderEffect: "ghosttea:crt",
+        shaderAnimate: false,
+      });
+    });
+    await settle();
+
+    const after = workspaceMounts[workspaceMounts.length - 1]!;
+    expect(after.effects).toEqual({
+      postProcess: "none",
+      shaderEffects: ["ghosttea:crt"],
+      animate: false,
+    });
+    expect(runtimes, "a shader is a repaint, not a rebuild").toHaveLength(1);
+    expect(connects, "nothing re-redeemed a ticket").toBe(1);
+    for (const key of ["storageKey", "claimExistingSessions", "initialCwd"] as const) {
+      expect(after[key], `${key} moved under the workspace`).toEqual(before[key]);
+    }
+    // And the marker says what the renderer was told, which is what the smoke
+    // reads back out of the real thing.
+    expect(latest().effects).toEqual({ shaderEffect: "ghosttea:crt", animate: false });
+  });
+
+  it("holds one effects object still across renders the viewer did not cause", async () => {
+    // 0.9.1 canonicalizes equal effect objects behind `workspaceEffectsKey`, so
+    // a fresh-object-per-render would still draw correctly — and would still be
+    // this component asking the library to clean up after a prop it owns. The
+    // memo is on the stored selection; an unrelated rerender must not move it.
+    await mountDeck();
+    await act(async () => {
+      setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, shaderEffect: "ghosttea:vhs" });
+    });
+    await settle();
+    const chosen = workspaceMounts[workspaceMounts.length - 1]!.effects;
+
+    // A republished bridge state: the deck rerenders and changes nothing else.
+    await act(async () => publishStatus?.({ state: "bridge-up" }));
+    await settle();
+
+    expect(workspaceMounts[workspaceMounts.length - 1]!.effects).toBe(chosen);
+  });
+
+  it("keeps feeding the occlusion gate while an animated shader is on (PF6)", async () => {
+    // PF6's mechanism is upstream's — a surface that is not visible schedules
+    // zero shader frames, and 0.9.1's own suite proves it for prop-fed effects.
+    // What is OURS is the gate's INPUT: `active` is how the workspace learns
+    // the overlay closed. A deck that stopped reporting it whenever a shader
+    // was on would leave upstream's test passing and VHS animating behind the
+    // canvas forever.
+    await mountDeck();
+    await act(async () => {
+      setDeckAppearance({
+        ...DEFAULT_DECK_APPEARANCE,
+        shaderEffect: "ghosttea:vhs",
+        shaderAnimate: true,
+      });
+    });
+    await settle();
+    expect(workspaceMounts[workspaceMounts.length - 1]!.active).toBe(true);
+
+    await act(async () => {
+      root?.render(<GodviewDeck active={false} theme="light" />);
+    });
+    await settle();
+
+    const hidden = workspaceMounts[workspaceMounts.length - 1]!;
+    expect(hidden.active, "the overlay closed and the workspace was told").toBe(false);
+    expect(hidden.effects, "the shader stays selected — it just stops animating").toEqual({
+      postProcess: "none",
+      shaderEffects: ["ghosttea:vhs"],
+      animate: true,
+    });
   });
 
   it("mints a fresh runtime on retry, because the spent wait can never resolve", async () => {

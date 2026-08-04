@@ -41,18 +41,22 @@ overrides:
   # bumped 0.6.0 → 0.7.0 with the cargo pin (G7/G8/G9 landings; one version law).
   # GT-3v (2026-08-04) bumped 0.8.0 → 0.9.0 for the shared terminal-appearance
   # system (renderer-true background opacity, the theme catalog, shader ports).
-  "@vibecook/ghosttea-client": 0.9.0
+  # GT-3f (2026-08-04) bumped 0.9.0 → 0.9.1 — petition G11 landed upstream: an
+  # `effects` prop makes shaders viewer-local like `theme`, and the appearance
+  # DATA exports our Settings section is built from became a semver-protected
+  # host contract.
+  "@vibecook/ghosttea-client": 0.9.1
   # GT-0 (2026-08-01): the Godview terminal planes join at the same exact version
   # (one-version law) — electron-shell consumes ghosttea-electron, field-app
   # consumes ghosttea-react; packages ask for "*".
-  "@vibecook/ghosttea-electron": 0.9.0
-  "@vibecook/ghosttea-react": 0.9.0
+  "@vibecook/ghosttea-electron": 0.9.1
+  "@vibecook/ghosttea-react": 0.9.1
   # GT-3m (2026-08-04): field-app declares the wire vocabulary directly — the
   # monitor's rows ARE floor sessions, so `SessionSummary` is the honest type for
   # them. Types-and-constants only (zero dependencies), already resolved at this
   # version transitively; declaring it puts it under the one-version law rather
   # than leaving a hoisted transitive to drift.
-  "@vibecook/ghosttea-protocol": 0.9.0
+  "@vibecook/ghosttea-protocol": 0.9.1
   # chopsticks graduated at 0.1.4 (2026-07-28, C7 spawn-through aboard). Consumed
   # by the AR track; pinned at the same pin event. @vibecook/chopsticks-node is
   # unpublished and deliberately absent.
@@ -81,8 +85,8 @@ catalog:
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.11.0'
   - '@vibecook/ice@0.2.0'
-  - '@vibecook/ghosttea-client@0.9.0'
-  - '@vibecook/ghosttea-protocol@0.9.0'
+  - '@vibecook/ghosttea-client@0.9.1'
+  - '@vibecook/ghosttea-protocol@0.9.1'
   - '@vibecook/chopsticks-adapter-acp@0.1.4'
   - '@vibecook/chopsticks-adapter-claude@0.1.4'
   - '@vibecook/chopsticks-adapter-codex@0.1.4'
@@ -92,10 +96,10 @@ minimumReleaseAgeExclude:
   - '@vibecook/chopsticks-runtime@0.1.4'
   - '@vibecook/chopsticks-testing@0.1.4'
   - '@vibecook/chopsticks-workspaces@0.1.4'
-  - '@vibecook/ghosttea-electron@0.9.0'
-  - '@vibecook/ghosttea-react@0.9.0'
-  - '@vibecook/ghosttea-frame@0.9.0'
-  - '@vibecook/ghosttea@0.9.0'
+  - '@vibecook/ghosttea-electron@0.9.1'
+  - '@vibecook/ghosttea-react@0.9.1'
+  - '@vibecook/ghosttea-frame@0.9.1'
+  - '@vibecook/ghosttea@0.9.1'
   # AH-1b — the exact T2 release is a reviewed executable input, not an
   # unreviewed transitive update. All platform packages move in lockstep.
   - '@vibecook/truffle-sidecar-darwin-arm64@0.7.12'

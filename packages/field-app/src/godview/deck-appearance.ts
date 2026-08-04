@@ -6,6 +6,10 @@ import { getRendererLogger } from "../logging";
 // 0.9.0's law is that a session carries terminal SEMANTICS while theme,
 // background opacity and shaders are each viewer's own — this desktop tunes its
 // glass, and GT-5's phone will render the same session through its own palette.
+// The shader third of that law only became reachable by an embedding host at
+// 0.9.1 (petition G11): until the workspace took an `effects` prop, the sole
+// channel was the floor's shared config document, so a shader chosen here would
+// have followed the session onto the phone — the precise thing the law forbids.
 // That law is why this is NOT `config.ghostty`: the floor's configuration
 // document is one field-native's, served to every viewer that attaches to it,
 // so appearance kept there would follow a session onto the phone. The config
@@ -49,6 +53,23 @@ export interface DeckAppearance {
    * same alpha. Off by default: a program that paints a background usually
    * means it, and dissolving it hides output rather than framing it. */
   opacityCells: boolean;
+  /** A `GHOSTTEA_SHADER_OPTIONS` port id, or `null` for no effect at all.
+   *
+   * Held as a NAME rather than a resolved effect for the same reason the theme
+   * is (`lightThemeName` above): a pinned catalog can drop a port between
+   * releases, and the projection that resolves it — `godviewTerminalEffects` —
+   * is where an id upstream no longer knows becomes "no effect" instead of
+   * something the renderer is asked to draw.
+   *
+   * `null` is the default and it means the prop is OMITTED, not sent empty:
+   * ghosttea reads its own configuration when `effects` is absent, and an empty
+   * object would silently override that path for every viewer that ever runs
+   * with a floor-configured shader. */
+  shaderEffect: string | null;
+  /** Whether an animated port animates. Kept across a change of port so
+   * switching VHS → CRT → VHS does not silently forget the answer; upstream's
+   * own gate ignores it for a port that has no animation. */
+  shaderAnimate: boolean;
 }
 
 export const DEFAULT_DECK_APPEARANCE: DeckAppearance = {
@@ -56,6 +77,11 @@ export const DEFAULT_DECK_APPEARANCE: DeckAppearance = {
   darkThemeName: null,
   opacity: 0.82,
   opacityCells: false,
+  // No shader is the deck's default because it is what GT-3v shipped: this
+  // slice adds a control, and adding a control must not restyle every existing
+  // viewer's panes on its way in.
+  shaderEffect: null,
+  shaderAnimate: false,
 };
 
 export type DeckAppearanceMode = "light" | "dark";
@@ -70,7 +96,10 @@ export function deckThemeNameForMode(
   return mode === "dark" ? appearance.darkThemeName : appearance.lightThemeName;
 }
 
-function parsedThemeName(value: unknown): string | null {
+/** A stored NAME — a catalog theme or a shader port id. Neither is resolved
+ * here: this store keeps what the viewer chose, and the projections in
+ * `deck-theme.ts` decide what upstream still recognizes. */
+function parsedName(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
 }
 
@@ -91,12 +120,11 @@ export function parseDeckAppearance(raw: string | null): DeckAppearance {
   // `themeName` was the original single-selection schema. Seed BOTH new mode
   // slots from it so an upgrade preserves the user's existing choice; once
   // either new field is written, each mode evolves independently.
-  const legacyThemeName = parsedThemeName(record.themeName);
+  const legacyThemeName = parsedName(record.themeName);
   return {
     lightThemeName:
-      "lightThemeName" in record ? parsedThemeName(record.lightThemeName) : legacyThemeName,
-    darkThemeName:
-      "darkThemeName" in record ? parsedThemeName(record.darkThemeName) : legacyThemeName,
+      "lightThemeName" in record ? parsedName(record.lightThemeName) : legacyThemeName,
+    darkThemeName: "darkThemeName" in record ? parsedName(record.darkThemeName) : legacyThemeName,
     // Clamped rather than rejected: a value outside 0–1 is a version of this
     // file the writer got wrong, and the nearest legal opacity is a better
     // answer than reverting a user's whole appearance.
@@ -105,6 +133,8 @@ export function parseDeckAppearance(raw: string | null): DeckAppearance {
         ? Math.min(1, Math.max(0, opacity))
         : DEFAULT_DECK_APPEARANCE.opacity,
     opacityCells: record.opacityCells === true,
+    shaderEffect: parsedName(record.shaderEffect),
+    shaderAnimate: record.shaderAnimate === true,
   };
 }
 
@@ -152,7 +182,7 @@ export function setDeckAppearance(next: DeckAppearance): void {
 
 /** Read by BOTH the open deck and the Settings panel, which is what makes an
  * appearance change apply live: they are the same value, so a save re-renders
- * the deck's `theme` prop — and `theme` is not among the workspace's
+ * the deck's `theme` and `effects` props — and neither is among the workspace's
  * initialization deps, so the panes re-theme without re-initializing. */
 export function useDeckAppearance(): DeckAppearance {
   return useSyncExternalStore(subscribeDeckAppearance, getDeckAppearance, getDeckAppearance);

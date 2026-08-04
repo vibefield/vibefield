@@ -701,9 +701,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a4618453d68dad8ec8c15040f55283366e62473330fb42396fb51be8cc68d45"
+checksum = "2dc5800824aa2e37a7492fa0a2bf823fc138592839014c6572a57372e49cfdd4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -724,9 +724,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-config"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d1b479ef304492349d362520b6ec2475c00f0b55706a163760da9fe044c8b54"
+checksum = "03dfc08c2432e67e62739af783ab4949a9494ced001379637574444b46b4eb94"
 dependencies = [
  "libc",
  "serde",
@@ -737,9 +737,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-core"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "008846db54c3cfa487f759ed8270a7b25615f46cb084a98fa562a83bccfeb773"
+checksum = "21b7c93290df5a5bff78a520b584fe5becbe0672e39fee7fe7e2719f6741278b"
 dependencies = [
  "anyhow",
  "ghosttea-text",
@@ -750,9 +750,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-text"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1035a7bb3c575ed7d6efe7d4baaa26145f66a7627dba28873f01c661e6435813"
+checksum = "e4ecc77ac01b64d3a40a08fc9aa8345c41ce9a37ad6c8f088086a609488eb307"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -764,18 +764,18 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-vt"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2825ded930efae0d9c14c73aac35a55b16fbec2cd5bbb04f1915a33c73bd8345"
+checksum = "187117a6ebd476c163251c041d785549d2fccb0a0bfe6540697d227a249439c2"
 dependencies = [
  "ghosttea-vt-sys",
 ]
 
 [[package]]
 name = "ghosttea-vt-sys"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bfddbf0985b7dd35426d0235a2da2f01b0cacb1e07f60946e99a93dbf4d97fd"
+checksum = "98f15de90737e1f06a0fcf4669c1c04a89fb8d86773f751948ffa7261c710d35"
 dependencies = [
  "cc",
  "serde",

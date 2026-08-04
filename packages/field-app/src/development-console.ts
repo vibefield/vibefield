@@ -41,6 +41,13 @@ export interface GodviewDeckFacts {
    * eye; that a non-opaque background reached the renderer is a fact a harness
    * can hold. */
   glass: { paneBackgroundAlpha: number; opacityCells: boolean; themeName: string | null };
+  /** GT-3f: the viewer's shader, as the renderer was told it. `shaderEffect` is
+   * null exactly when the deck passed NO `effects` prop — the two states
+   * coincide by construction (nothing selected ⇒ nothing sent), which is what
+   * lets one field prove both that a selection arrived and that an empty one
+   * never overrides the floor's own configuration. Whether the CRT curve looks
+   * right is James's eye; that the id reached the renderer is a fact. */
+  effects: { shaderEffect: string | null; animate: boolean };
 }
 
 export function emitGodviewDeckMarker(facts: GodviewDeckFacts): void {
