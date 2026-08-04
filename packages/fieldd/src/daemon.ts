@@ -1864,6 +1864,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
       },
       logger: logger.child({ component: "artifacts" }),
+      capturePreviewAvailable: () => api.artifactPreviewCaptureAvailable(),
+      capturePreview: async (params) =>
+        await audit.requiredSystem(
+          {
+            action: "artifact.preview.capture",
+            target: { kind: "artifact", id: params.artifactId },
+          },
+          async () => await api.captureArtifactPreview(params),
+          () => ({ outcome: "succeeded" }),
+        ),
     });
     artifactsRef = artifacts;
 

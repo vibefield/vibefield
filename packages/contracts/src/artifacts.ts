@@ -112,6 +112,25 @@ export type ArtifactUnpublishParams = z.infer<typeof ArtifactUnpublishParams>;
 export const ArtifactRefreshPreviewParams = z.object({ artifactId: ArtifactId }).passthrough();
 export type ArtifactRefreshPreviewParams = z.infer<typeof ArtifactRefreshPreviewParams>;
 
+export const ArtifactRefreshPreviewResult = z.union([
+  z
+    .object({
+      artifactId: ArtifactId,
+      captured: z.literal(true),
+      previewRevision: z.number().int().nonnegative().safe(),
+      title: ArtifactTitle.optional(),
+    })
+    .passthrough(),
+  z
+    .object({
+      artifactId: ArtifactId,
+      captured: z.literal(false),
+      reason: z.string().min(1).max(ARTIFACT_LIMITS.ERROR_CHARS),
+    })
+    .passthrough(),
+]);
+export type ArtifactRefreshPreviewResult = z.infer<typeof ArtifactRefreshPreviewResult>;
+
 export const LocalArtifactIntent = z
   .object({
     artifactId: ArtifactId,

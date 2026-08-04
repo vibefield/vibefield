@@ -26,8 +26,13 @@ import {
   CONTRACTS_VERSION,
   type DeviceInfo,
   LocalArtifactIntent,
+  SHELL_PROVIDER_METHODS,
+  ShellProviderCallParams,
+  type ShellWebContentsCaptureArtifactPreviewParams,
+  type ShellWebContentsCaptureArtifactPreviewResult,
 } from "@vibefield/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import {
   type ArtifactCatalogBridge,
@@ -39,7 +44,7 @@ import {
   canonicalJson,
   parseCatalogSlice,
 } from "../src/artifact-service";
-import { bootstrap } from "../src/index";
+import { bootstrap, verifyAuditSegment } from "../src/index";
 import type { ObservedServe, ServeSpec, ServeState } from "../src/mesh-client";
 import { RpcCallError } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -265,6 +270,10 @@ function service(
     writeCatalogCache?: (path: string, body: string) => Promise<void>;
     ensurePreviewDir?: (path: string) => void;
     removePreviewDir?: (path: string) => void;
+    capturePreview?: (
+      params: ShellWebContentsCaptureArtifactPreviewParams,
+    ) => Promise<ShellWebContentsCaptureArtifactPreviewResult>;
+    capturePreviewAvailable?: () => boolean;
     catalog?: ArtifactCatalogBridge;
   } = {},
 ): ArtifactService {
@@ -283,6 +292,10 @@ function service(
       : {}),
     ...(options.removePreviewDir !== undefined
       ? { removePreviewDir: options.removePreviewDir }
+      : {}),
+    ...(options.capturePreview !== undefined ? { capturePreview: options.capturePreview } : {}),
+    ...(options.capturePreviewAvailable !== undefined
+      ? { capturePreviewAvailable: options.capturePreviewAvailable }
       : {}),
   });
 }
@@ -306,6 +319,17 @@ function intentFile(dataDir: string): { v: number; artifacts: unknown[] } {
     v: number;
     artifacts: unknown[];
   };
+}
+
+async function auditRecords(dataDir: string): Promise<AuditRecordV1[]> {
+  const records: AuditRecordV1[] = [];
+  for (const name of readdirSync(join(dataDir, "audit")).sort()) {
+    if (!name.endsWith(".jsonl")) continue;
+    const verified = await verifyAuditSegment(join(dataDir, "audit", name));
+    expect(verified.valid, `${name}: ${verified.reason}`).toBe(true);
+    records.push(...verified.records);
+  }
+  return records;
 }
 
 describe("ArtifactService (AH-1 unit)", () => {
@@ -360,6 +384,152 @@ describe("ArtifactService (AH-1 unit)", () => {
       desired: "published",
       retiringServeIds: [],
     });
+  });
+
+  it("captures after first publish, refines only a generated title, and advances revisions", async () => {
+    const dataDir = makeDataDir();
+    const bridge = new FakeBridge();
+    const catalog = new FakeCatalog();
+    const calls: ShellWebContentsCaptureArtifactPreviewParams[] = [];
+    let pageTitle = "Captured workbench";
+    const svc = service(dataDir, bridge, {
+      catalog,
+      capturePreview: async (params) => {
+        calls.push(structuredClone(params));
+        return { captured: true, title: pageTitle };
+      },
+    });
+    await svc.start();
+    await svc.publish(proxy(A, { title: "localhost:3000" }));
+    await until(() => svc.statuses()[0]?.previewRevision === 1);
+
+    expect(calls).toEqual([
+      {
+        artifactId: A,
+        url: `https://unit.ts.net:${artifactPortCandidate(A)}`,
+      },
+    ]);
+    expect(svc.statuses()[0]).toMatchObject({
+      artifactId: A,
+      title: "Captured workbench",
+      previewRevision: 1,
+      status: "active",
+    });
+    expect(intentFile(dataDir).artifacts[0]).toMatchObject({
+      title: "Captured workbench",
+      previewRevision: 1,
+    });
+
+    pageTitle = "Refreshed workbench";
+    const refreshed = await svc.refreshPreview(A);
+    expect(refreshed).toEqual({ artifactId: A, captured: true, previewRevision: 2 });
+    expect(svc.statuses()[0]).toMatchObject({
+      title: "Captured workbench",
+      previewRevision: 2,
+    });
+    await until(() => catalog.publishes.at(-1)?.artifacts[0]?.previewRevision === 2);
+    expect(catalog.publishes.at(-1)?.artifacts[0]).toMatchObject({
+      previewRevision: 2,
+      title: "Captured workbench",
+    });
+  });
+
+  it("serializes preview work without blocking later artifact publication", async () => {
+    const calls: ShellWebContentsCaptureArtifactPreviewParams[] = [];
+    const releases = new Map<
+      string,
+      (result: ShellWebContentsCaptureArtifactPreviewResult) => void
+    >();
+    const svc = service(makeDataDir(), new FakeBridge(), {
+      capturePreview: (params) =>
+        new Promise((resolve) => {
+          calls.push(structuredClone(params));
+          releases.set(params.artifactId, resolve);
+        }),
+    });
+    await svc.start();
+    await svc.publish(proxy(A));
+    await until(() => calls.length === 1);
+
+    await expect(svc.publish(proxy(B))).resolves.toMatchObject({ artifactId: B });
+    expect(calls.map((call) => call.artifactId)).toEqual([A]);
+
+    releases.get(A)?.({ captured: true });
+    await until(() => calls.length === 2);
+    expect(calls.map((call) => call.artifactId)).toEqual([A, B]);
+    releases.get(B)?.({ captured: true });
+    await until(() => svc.statuses().every((status) => status.previewRevision === 1));
+  });
+
+  it("defers unpublish cleanup until an in-flight preview write has settled", async () => {
+    const dataDir = makeDataDir();
+    let release!: (result: ShellWebContentsCaptureArtifactPreviewResult) => void;
+    let captureStarted = false;
+    const removed: string[] = [];
+    const svc = service(dataDir, new FakeBridge(), {
+      capturePreview: () =>
+        new Promise((resolve) => {
+          captureStarted = true;
+          release = resolve;
+        }),
+      removePreviewDir: (path) => removed.push(path),
+    });
+    await svc.start();
+    await svc.publish(proxy(A));
+    await until(() => captureStarted);
+
+    await expect(svc.unpublish({ artifactId: A })).resolves.toEqual({ removed: true });
+    expect(removed).toEqual([]);
+    expect(svc.statuses()[0]?.status).toBe("removing");
+
+    release({ captured: true });
+    await until(() => svc.statuses().length === 0);
+    expect(removed).toEqual([join(dataDir, "artifacts", "previews", A)]);
+  });
+
+  it("keeps a user title and active artifact truth when capture is unavailable", async () => {
+    const bridge = new FakeBridge();
+    let attempts = 0;
+    const svc = service(makeDataDir(), bridge, {
+      capturePreview: async () => {
+        attempts += 1;
+        throw new RpcCallError("UNAVAILABLE", "desktop shell provider is unavailable", true);
+      },
+    });
+    await svc.start();
+    await svc.publish(proxy(A, { title: "My named app" }));
+    await until(() => attempts === 1);
+    const refreshed = await svc.refreshPreview(A);
+
+    expect(refreshed).toEqual({
+      artifactId: A,
+      captured: false,
+      reason: "desktop preview capture is unavailable",
+    });
+    expect(svc.statuses()[0]).toMatchObject({
+      title: "My named app",
+      status: "active",
+    });
+    expect(svc.statuses()[0]?.previewRevision).toBeUndefined();
+  });
+
+  it("schedules no add-time capture when the desktop provider is absent", async () => {
+    const capturePreview = vi.fn(async () => ({ captured: true as const }));
+    const svc = service(makeDataDir(), new FakeBridge(), {
+      capturePreview,
+      capturePreviewAvailable: () => false,
+    });
+    await svc.start();
+    await svc.publish(proxy());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(capturePreview).not.toHaveBeenCalled();
+    await expect(svc.refreshPreview(A)).resolves.toEqual({
+      artifactId: A,
+      captured: false,
+      reason: "desktop preview capture is unavailable",
+    });
+    expect(capturePreview).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1093,6 +1263,91 @@ describe("Artifact Hub over a real daemon", () => {
     if (slice === undefined) throw new Error("artifact store has not been written");
     return slice;
   }
+
+  it("mediates add-time and explicit preview capture without image bytes on ProductAPI", async () => {
+    const dataDir = makeDataDir();
+    const source = await localSource();
+    const { mock, daemon } = await boot(dataDir);
+    cleanup.push(() => mock.stop());
+    cleanup.push(() => daemon.stop());
+    const shell = await rpcFor(daemon.controlPort, daemon.shellToken);
+    await shell.call("shell.provider.register", { methods: [...SHELL_PROVIDER_METHODS] });
+
+    await shell.call("artifact.publish", {
+      artifactId: A,
+      title: `localhost:${source.port}`,
+      source: { kind: "proxy", port: source.port, scheme: "http" },
+    });
+    await until(
+      () =>
+        shell.notifications.filter((notification) => notification.method === "shell.provider.call")
+          .length === 1,
+    );
+    const first = ShellProviderCallParams.parse(
+      shell.notifications.find((notification) => notification.method === "shell.provider.call")
+        ?.params,
+    );
+    expect(first).toMatchObject({
+      method: "shell.webcontents.captureArtifactPreview",
+      params: {
+        artifactId: A,
+        url: `https://mock.ts.net:${artifactPortCandidate(A)}`,
+      },
+      caller: { kind: "local-token", clientKind: "fieldd" },
+    });
+    expect(JSON.stringify(first)).not.toContain("thumbnail.jpg");
+    await shell.call("shell.provider.resolve", {
+      callId: first.callId,
+      outcome: { result: { captured: true, title: "Captured app" } },
+    });
+    await until(() => daemon.artifacts.statuses()[0]?.previewRevision === 1);
+
+    const refresh = shell.call("artifact.refreshPreview", { artifactId: A });
+    await until(
+      () =>
+        shell.notifications.filter((notification) => notification.method === "shell.provider.call")
+          .length === 2,
+    );
+    const second = ShellProviderCallParams.parse(
+      shell.notifications.filter((notification) => notification.method === "shell.provider.call")[1]
+        ?.params,
+    );
+    await shell.call("shell.provider.resolve", {
+      callId: second.callId,
+      outcome: { result: { captured: true, title: "Ignored after refinement" } },
+    });
+    await expect(refresh).resolves.toEqual({
+      artifactId: A,
+      captured: true,
+      previewRevision: 2,
+    });
+    const listed = (await shell.call("artifact.list", {})) as { artifacts: ArtifactView[] };
+    expect(listed.artifacts[0]).toMatchObject({
+      title: "Captured app",
+      previewRevision: 2,
+      thumbnailUrl: `https://mock.ts.net:${artifactPortCandidate(A)}/.vibefield/preview/thumbnail.jpg?v=2`,
+    });
+    await daemon.stop();
+    const previewOutcomes = (await auditRecords(dataDir)).filter(
+      (record) => record.action === "artifact.preview.capture" && record.phase === "outcome",
+    );
+    expect(previewOutcomes).toHaveLength(2);
+    expect(previewOutcomes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actor: { kind: "system", id: "fieldd" },
+          target: { kind: "artifact", id: A },
+          outcome: "succeeded",
+        }),
+      ]),
+    );
+    const persistedAudit = readdirSync(join(dataDir, "audit"))
+      .filter((name) => name.endsWith(".jsonl"))
+      .map((name) => readFileSync(join(dataDir, "audit", name), "utf8"))
+      .join("\n");
+    expect(persistedAudit).not.toContain(`https://mock.ts.net:${artifactPortCandidate(A)}`);
+    expect(persistedAudit).not.toContain("thumbnail.jpg");
+  }, 30_000);
 
   it("does not open a remote URL from a DeviceSlice-authored DNS claim", async () => {
     const dataDir = makeDataDir();

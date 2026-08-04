@@ -54,16 +54,18 @@ export function installNavigationPolicy(win: BrowserWindow, mode: ShellMode): vo
 }
 
 /** Defense in depth for surfaces the factory did not create (ESP §7.2): every
- * WebContents gets the policy at birth, before it can load anything. This does
- * NOT authorize creating surfaces outside the factory — an unregistered one is
- * reported so it is found in review, not in the wild. The registered window is
- * covered twice (here, then explicitly); the verdicts are identical because both
- * paths run the same pure decisions. */
+ * WebContents gets this policy at birth unless its unique Session was already
+ * marked as independently guarded before construction. That narrow exception
+ * lets AH-4 install a stricter same-origin request policy instead of the main
+ * renderer's no-navigation policy. It does NOT authorize arbitrary surfaces:
+ * every other unregistered WebContents is reported for review. */
 export function installWebContentsBackstop(
   mode: ShellMode,
   onUnregistered?: (contents: WebContents) => void,
+  independentlyGuarded?: (contents: WebContents) => boolean,
 ): void {
   app.on("web-contents-created", (_event, contents) => {
+    if (independentlyGuarded?.(contents) === true) return;
     applyContentsPolicy(contents, mode);
     onUnregistered?.(contents);
   });

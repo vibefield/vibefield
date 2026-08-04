@@ -12,7 +12,9 @@ import {
   NAMESPACES,
   RPC_ERROR_CODES,
   type Scope,
-  type ShellProviderMethod,
+  type ShellClientProviderMethod,
+  type ShellWebContentsCaptureArtifactPreviewParams,
+  type ShellWebContentsCaptureArtifactPreviewResult,
   TAILNET_SCOPES,
 } from "@vibefield/contracts";
 import { type WebSocket, WebSocketServer } from "ws";
@@ -193,10 +195,23 @@ export class ProductApi extends EventEmitter {
 
   callShellProvider(
     ctx: CallerContext,
-    method: ShellProviderMethod,
+    method: ShellClientProviderMethod,
     params: unknown,
   ): Promise<unknown> {
     return this.shellProvider.call(ctx, method, params);
+  }
+
+  captureArtifactPreview(
+    params: ShellWebContentsCaptureArtifactPreviewParams,
+  ): Promise<ShellWebContentsCaptureArtifactPreviewResult> {
+    return this.shellProvider.callInternal(
+      "shell.webcontents.captureArtifactPreview",
+      params,
+    ) as Promise<ShellWebContentsCaptureArtifactPreviewResult>;
+  }
+
+  artifactPreviewCaptureAvailable(): boolean {
+    return this.shellProvider.provides("shell.webcontents.captureArtifactPreview");
   }
 
   /** The dynamic execution tail: the router owns gating and validation; this

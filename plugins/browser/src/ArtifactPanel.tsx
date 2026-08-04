@@ -1,4 +1,8 @@
-import { type ArtifactView, ArtifactView as ArtifactViewSchema } from "@vibefield/contracts";
+import {
+  ArtifactRefreshPreviewResult,
+  type ArtifactView,
+  ArtifactView as ArtifactViewSchema,
+} from "@vibefield/contracts";
 import type { PluginProductClient, PluginSurfaceProps } from "@vibefield/plugin-sdk";
 import {
   type FormEvent,
@@ -12,6 +16,7 @@ import {
 import "./artifact-panel.css";
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const THUMBNAIL_RETRY_DELAYS_MS = [500, 1_500] as const;
 
 export function createUlid(now = Date.now()): string {
   let time = BigInt(now);
@@ -83,6 +88,13 @@ function statusColor(status: ArtifactView["availability"]): string {
 
 function statusLabel(status: ArtifactView["availability"]): string {
   return status.replaceAll("-", " ");
+}
+
+function thumbnailAttemptUrl(url: string, attempt: number): string {
+  if (attempt === 0) return url;
+  const retry = new URL(url);
+  retry.searchParams.set("vf-preview-attempt", String(attempt));
+  return retry.toString();
 }
 
 type Screen =
@@ -246,6 +258,31 @@ export function ArtifactPanel({
     [beginPending, client, confirmRemove, finishPending],
   );
 
+  const refreshPreview = useCallback(
+    async (artifact: ArtifactView) => {
+      if (!artifact.editable) return;
+      const operation = `preview:${artifact.artifactKey}`;
+      if (!beginPending(operation)) return;
+      setMutationError(null);
+      try {
+        const raw = await client.request("artifact.refreshPreview", {
+          artifactId: artifact.artifactId,
+        });
+        const result = ArtifactRefreshPreviewResult.safeParse(raw);
+        if (!result.success) {
+          setMutationError("The preview service returned an unreadable result.");
+        } else if (!result.data.captured) {
+          setMutationError(result.data.reason);
+        }
+      } catch (error) {
+        setMutationError(friendlyError(error, "refresh this preview"));
+      } finally {
+        finishPending(operation);
+      }
+    },
+    [beginPending, client, finishPending],
+  );
+
   const renameArtifact = useCallback(
     async (event: FormEvent, artifact: ArtifactView) => {
       event.preventDefault();
@@ -385,6 +422,7 @@ export function ArtifactPanel({
             onRenameChange={(title) => setRenaming({ artifactId: artifact.artifactId, title })}
             onRename={(event) => void renameArtifact(event, artifact)}
             onCancelRename={() => setRenaming(null)}
+            onRefresh={() => void refreshPreview(artifact)}
             onRemove={() => void removeArtifact(artifact)}
           />
         ))}
@@ -399,6 +437,7 @@ export function ArtifactPanel({
     openArtifact,
     pending,
     publish,
+    refreshPreview,
     removeArtifact,
     renameArtifact,
     renaming,
@@ -658,6 +697,7 @@ function ArtifactRow({
   onRenameChange,
   onRename,
   onCancelRename,
+  onRefresh,
   onRemove,
 }: {
   artifact: ArtifactView;
@@ -670,6 +710,7 @@ function ArtifactRow({
   onRenameChange: (title: string) => void;
   onRename: (event: FormEvent) => void;
   onCancelRename: () => void;
+  onRefresh: () => void;
   onRemove: () => void;
 }): ReactElement {
   return (
@@ -689,11 +730,10 @@ function ArtifactRow({
         }
       >
         <span className="vf-artifact-preview">
-          {artifact.thumbnailUrl !== undefined ? (
-            <img src={artifact.thumbnailUrl} alt="" />
-          ) : (
-            <span aria-hidden="true" />
-          )}
+          <ArtifactThumbnail
+            key={artifact.thumbnailUrl ?? "placeholder"}
+            url={artifact.thumbnailUrl}
+          />
         </span>
         <span className="vf-artifact-row__facts">
           <strong>{artifact.title}</strong>
@@ -714,6 +754,11 @@ function ArtifactRow({
           <button type="button" onClick={onCopy} disabled={artifact.url === undefined || busy}>
             Copy URL
           </button>
+          {artifact.editable && (
+            <button type="button" onClick={onRefresh} disabled={busy}>
+              Refresh preview
+            </button>
+          )}
           {artifact.editable && (
             <button type="button" onClick={onBeginRename} disabled={busy}>
               Rename
@@ -743,6 +788,45 @@ function ArtifactRow({
         </form>
       )}
     </li>
+  );
+}
+
+/** A newly published tailnet listener can lose its first image race even
+ * though the atomic preview file is already committed. Retry that transport
+ * read twice with a distinct cache key; capture remains add-time/gesture-only
+ * and a persistent failure settles on the bundled placeholder. */
+function ArtifactThumbnail({ url }: { url: string | undefined }): ReactElement {
+  const [attempt, setAttempt] = useState(0);
+  const [waiting, setWaiting] = useState(false);
+  const [exhausted, setExhausted] = useState(false);
+
+  useEffect(() => {
+    if (!waiting) return;
+    const delay = THUMBNAIL_RETRY_DELAYS_MS[attempt];
+    if (delay === undefined) return;
+    const timer = window.setTimeout(() => {
+      setAttempt((value) => value + 1);
+      setWaiting(false);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [attempt, waiting]);
+
+  if (url === undefined || waiting || exhausted) return <span aria-hidden="true" />;
+  const src = thumbnailAttemptUrl(url, attempt);
+  return (
+    <img
+      key={src}
+      src={src}
+      alt=""
+      referrerPolicy="no-referrer"
+      onError={() => {
+        if (attempt >= THUMBNAIL_RETRY_DELAYS_MS.length) {
+          setExhausted(true);
+        } else {
+          setWaiting(true);
+        }
+      }}
+    />
   );
 }
 

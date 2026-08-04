@@ -432,7 +432,9 @@ export const METHODS: MethodDef[] = [
     surface: "product",
     method: "artifact.refreshPreview",
     scope: "artifact.publish",
-    idempotent: true,
+    // Every successful gesture creates a new image and monotonic revision;
+    // reconnect logic must never replay it as a read-like request.
+    idempotent: false,
     locality: "local",
   }),
   defineMethod({

@@ -60,6 +60,13 @@ describe("buildCsp", () => {
       expect(csp).not.toContain("'unsafe-eval'");
     });
   });
+
+  it.each(NON_DEV)("%s admits only image loading from custom-port MagicDNS hosts", (mode) => {
+    const csp = buildCsp(mode) as string;
+    expect(csp).toContain("img-src 'self' data: https://*.ts.net:*");
+    expect(csp).not.toContain("frame-src");
+    expect(csp).not.toContain("connect-src https://");
+  });
 });
 
 describe("decideNavigation", () => {

@@ -17,6 +17,7 @@ afterEach(() => {
   root = null;
   container?.remove();
   container = null;
+  vi.useRealTimers();
 });
 
 function deferred<T>() {
@@ -175,5 +176,44 @@ describe("ArtifactPanel", () => {
     expect(container?.textContent).toContain(
       "Desktop services are unavailable. Try again in a moment.",
     );
+  });
+
+  it("refreshes only through ArtifactService and bounds transient thumbnail retries", async () => {
+    vi.useFakeTimers();
+    const artifact = {
+      ...ARTIFACT,
+      previewRevision: 1,
+      thumbnailUrl: "https://studio-mac.example.ts.net:12000/.vibefield/preview/thumbnail.jpg?v=1",
+    };
+    const request = vi.fn(async () => ({
+      artifactId: ARTIFACT.artifactId,
+      captured: true,
+      previewRevision: 2,
+    }));
+    await mount(client([artifact], request));
+
+    const image = container?.querySelector<HTMLImageElement>(".vf-artifact-preview img");
+    expect(image?.src).toBe(artifact.thumbnailUrl);
+    expect(image?.referrerPolicy).toBe("no-referrer");
+    act(() => image?.dispatchEvent(new Event("error")));
+    expect(container?.querySelector(".vf-artifact-preview img")).toBeNull();
+
+    await act(async () => vi.advanceTimersByTime(500));
+    const firstRetry = container?.querySelector<HTMLImageElement>(".vf-artifact-preview img");
+    expect(new URL(firstRetry?.src ?? "").searchParams.get("vf-preview-attempt")).toBe("1");
+    act(() => firstRetry?.dispatchEvent(new Event("error")));
+
+    await act(async () => vi.advanceTimersByTime(1_500));
+    const secondRetry = container?.querySelector<HTMLImageElement>(".vf-artifact-preview img");
+    expect(new URL(secondRetry?.src ?? "").searchParams.get("vf-preview-attempt")).toBe("2");
+    act(() => secondRetry?.dispatchEvent(new Event("error")));
+    expect(container?.querySelector(".vf-artifact-preview img")).toBeNull();
+    await act(async () => vi.advanceTimersByTime(10_000));
+    expect(container?.querySelector(".vf-artifact-preview img")).toBeNull();
+
+    await act(async () => button("Refresh preview").click());
+    expect(request).toHaveBeenCalledWith("artifact.refreshPreview", {
+      artifactId: ARTIFACT.artifactId,
+    });
   });
 });

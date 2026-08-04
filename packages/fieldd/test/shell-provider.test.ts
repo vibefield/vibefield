@@ -1,4 +1,4 @@
-import type { CallerContext } from "@vibefield/contracts";
+import { type CallerContext, SHELL_PROVIDER_METHODS } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { RpcCallError } from "../src/native-link";
 import { ShellProviderBroker, type ShellProviderTransport } from "../src/shell-provider";
@@ -39,7 +39,7 @@ function transport(): ShellProviderTransport & {
   return value;
 }
 
-const METHODS = ["shell.dialog.pickFolder", "shell.openExternal"] as const;
+const METHODS = SHELL_PROVIDER_METHODS;
 
 function notificationCallId(lane: ReturnType<typeof transport>, index: number): string {
   const params = lane.notifications.at(index)?.params;
@@ -93,6 +93,41 @@ describe("ShellProviderBroker", () => {
       }),
     ).toEqual({ accepted: true });
     await expect(result).resolves.toEqual({ opened: true });
+  });
+
+  it("dispatches bounded preview capture only through the internal broker door", async () => {
+    const broker = new ShellProviderBroker();
+    const lane = transport();
+    expect(broker.provides("shell.webcontents.captureArtifactPreview")).toBe(false);
+    broker.register(shellContext(), lane, { methods: METHODS });
+    expect(broker.provides("shell.webcontents.captureArtifactPreview")).toBe(true);
+    const result = broker.callInternal("shell.webcontents.captureArtifactPreview", {
+      artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      url: "https://host.tail1234.ts.net:12000/",
+    });
+    expect(lane.notifications[0]).toMatchObject({
+      method: "shell.provider.call",
+      params: {
+        method: "shell.webcontents.captureArtifactPreview",
+        caller: { kind: "local-token", clientKind: "fieldd" },
+      },
+    });
+    const callId = notificationCallId(lane, 0);
+    expect(
+      broker.resolve(shellContext(), lane, {
+        callId,
+        outcome: { result: { captured: true, title: "Workbench" } },
+      }),
+    ).toEqual({ accepted: true });
+    await expect(result).resolves.toEqual({ captured: true, title: "Workbench" });
+    await expect(
+      broker.callInternal("shell.webcontents.captureArtifactPreview", {
+        artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        url: "https://evil.example:12000/",
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    broker.withdraw(lane);
+    expect(broker.provides("shell.webcontents.captureArtifactPreview")).toBe(false);
   });
 
   it("rejects provider loss and ignores its late answer", async () => {

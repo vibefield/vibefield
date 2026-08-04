@@ -21,6 +21,7 @@ describe("plugin-browser", () => {
       "shell.dialog",
       "shell.open",
     ]);
+    expect(browserManifest.capabilities).not.toContain("shell.webcontents");
   });
 
   it("activation binds exactly the declared side-panel surface", async () => {

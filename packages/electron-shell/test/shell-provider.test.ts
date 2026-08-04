@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { SHELL_PROVIDER_METHODS } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { createNoopLogger } from "@vibefield/logging";
 import type { BrowserWindow } from "electron";
@@ -38,7 +39,7 @@ class FakeClient {
   async request(method: string, params?: unknown): Promise<unknown> {
     this.requests.push({ method, params });
     return method === "shell.provider.register"
-      ? { registered: ["shell.dialog.pickFolder", "shell.openExternal"] }
+      ? { registered: [...SHELL_PROVIDER_METHODS] }
       : { accepted: true };
   }
 
@@ -59,15 +60,24 @@ function fakeHandle(bootId: string, client: FakeClient): FielddHandle {
   } as unknown as FielddHandle;
 }
 
-function fakeWindow(): BrowserWindow {
-  const emitter = new EventEmitter() as EventEmitter & { isDestroyed(): boolean };
+function fakeWindow(visible = true): BrowserWindow {
+  const emitter = new EventEmitter() as EventEmitter & {
+    isDestroyed(): boolean;
+    isMinimized(): boolean;
+    isVisible(): boolean;
+  };
   emitter.isDestroyed = () => false;
+  emitter.isMinimized = () => false;
+  emitter.isVisible = () => visible;
   return emitter as unknown as BrowserWindow;
 }
 
 function call(
   callId: string,
-  method: "shell.dialog.pickFolder" | "shell.openExternal",
+  method:
+    | "shell.dialog.pickFolder"
+    | "shell.openExternal"
+    | "shell.webcontents.captureArtifactPreview",
   params: unknown,
 ) {
   return {
@@ -90,6 +100,7 @@ async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
     parentWindow: vi.fn(() => parent),
     showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
     openExternal: vi.fn(async () => undefined),
+    captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
     ...nativeOverrides,
   };
   const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
@@ -97,7 +108,7 @@ async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
   await vi.waitFor(() =>
     expect(client.requests[0]).toEqual({
       method: "shell.provider.register",
-      params: { methods: ["shell.dialog.pickFolder", "shell.openExternal"] },
+      params: { methods: [...SHELL_PROVIDER_METHODS] },
     }),
   );
   return { client, coordinator, native, parent, provider };
@@ -112,7 +123,7 @@ describe("RecoveringShellProvider", () => {
         .spyOn(client, "request")
         .mockResolvedValueOnce({ registered: ["shell.openExternal"] })
         .mockResolvedValue({
-          registered: ["shell.dialog.pickFolder", "shell.openExternal"],
+          registered: [...SHELL_PROVIDER_METHODS],
         });
       const coordinator = new FielddHandleCoordinator(
         vi.fn(async () => fakeHandle("boot-1", client)) as unknown as FielddSupervisor["ensure"],
@@ -121,6 +132,7 @@ describe("RecoveringShellProvider", () => {
         parentWindow: () => fakeWindow(),
         showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
         openExternal: vi.fn(async () => undefined),
+        captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
       };
       const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
 
@@ -152,6 +164,74 @@ describe("RecoveringShellProvider", () => {
         },
       }),
     );
+    provider.dispose();
+  });
+
+  it("runs one preview capture and aborts it when fieldd cancels", async () => {
+    let captureSignal: AbortSignal | undefined;
+    const capture = deferred<{ captured: true; title: string }>();
+    const captureArtifactPreview = vi.fn<ShellProviderNative["captureArtifactPreview"]>(
+      (_params, signal) => {
+        captureSignal = signal;
+        return capture.promise;
+      },
+    );
+    const { client, provider } = await fixture({ captureArtifactPreview });
+    const callId = "shell-previewabcdefghij";
+    client.emit(
+      "shell.provider.call",
+      call(callId, "shell.webcontents.captureArtifactPreview", {
+        artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        url: "https://host.tail1234.ts.net:12000/",
+      }),
+    );
+    await vi.waitFor(() => expect(captureArtifactPreview).toHaveBeenCalledTimes(1));
+    expect(captureSignal?.aborted).toBe(false);
+    client.emit("shell.provider.cancel", { callId });
+    expect(captureSignal?.aborted).toBe(true);
+    capture.resolve({ captured: true, title: "Late title" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(
+      client.requests.some(
+        (request) =>
+          request.method === "shell.provider.resolve" &&
+          (request.params as { callId?: string }).callId === callId,
+      ),
+    ).toBe(false);
+    provider.dispose();
+  });
+
+  it("does not create preview work while the desktop window is hidden", async () => {
+    const captureArtifactPreview = vi.fn(async () => ({ captured: true as const }));
+    const { client, provider } = await fixture({
+      parentWindow: () => fakeWindow(false),
+      captureArtifactPreview,
+    });
+    const callId = "shell-hiddenabcdefghijk";
+    client.emit(
+      "shell.provider.call",
+      call(callId, "shell.webcontents.captureArtifactPreview", {
+        artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        url: "https://host.tail1234.ts.net:12000/",
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId,
+          outcome: {
+            error: {
+              kind: "UNAVAILABLE",
+              message: "preview capture is unavailable",
+              retryable: true,
+            },
+          },
+        },
+      }),
+    );
+    expect(captureArtifactPreview).not.toHaveBeenCalled();
     provider.dispose();
   });
 
@@ -244,6 +324,7 @@ describe("RecoveringShellProvider", () => {
       parentWindow: () => fakeWindow(),
       showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
       openExternal: vi.fn(async () => undefined),
+      captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
     };
     const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
     await coordinator.ensure();

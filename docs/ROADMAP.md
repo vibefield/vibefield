@@ -9,7 +9,8 @@
 > implementation landed at `9f80f0c` with its physical two-client tailnet proof still owed;
 > AH-2 global validated catalog landed at `9c17c46`; AH-3 desktop runtime landed at
 > `8c07bf4`, with WP8 packaged-plugin discovery and the physical UI/native-picker closeout
-> still explicit).
+> still explicit; AH-4's preview runtime is in implementation, with physical tailnet proof
+> deliberately still open).
 >
 > Lives in main-tracked `docs/` (moved from `draft/` 2026-08-02). Corpus citations here
 > (`specs/…`, `thinking-…`, `predesign-…`, `research/…`, `petitions/…`) resolve under
@@ -27,7 +28,8 @@ The artifact serving foundation, global catalog, and desktop runtime are now rea
 yet the whole product: AH-1 owns durable Proxy/Folder serving; AH-2 owns the bounded validated
 global view; AH-3 adds the browser-plugin catalog/add flows, spine-owned right-side panel, and
 authenticated Electron-main shell-provider bridge. Its packaged-plugin staging and physical
-UI/native-picker closeout remain visible. AH-4 still owns preview capture and AH-5 the phone.
+UI/native-picker closeout remain visible. AH-4 preview capture is now in implementation;
+its two-device/Tailscale acceptance witness remains open. AH-5 still owns the phone.
 
 ## Tracks
 
@@ -37,7 +39,7 @@ UI/native-picker closeout remain visible. AH-4 still owns preview capture and AH
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
 | PLUG — plugins | P0–P7 COMPLETE for the prior surface set; AH-3 added `hud.side-panel` at `8c07bf4` | `specs/plugin-architecture.md` | WP8 stages/signs bundled manifests for packaged discovery; other dogfood through AR/GT; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
-| AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; live AH-1 proof + AH-3 packaging/physical closeout owed | `specs/artifact-hub.md` | close AH-3 witness/WP8 gate → AH-4 preview capture → AH-5 phone |
+| AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
@@ -77,12 +79,21 @@ bundled browser-plugin catalog/Proxy/Folder flows, and the validated static `she
 Electron main's existing authenticated loopback client. No ProductAPI UDS, renderer relay,
 artifact IPC, or renderer path textbox was added. Packaged discovery remains behind WP8's
 signed bundled-plugin index; the final both-theme/reduced-motion/native-picker witness is owed.
+AH-4's current implementation adds the internal-only bounded capture provider, a separately
+serialized ArtifactService preview lane, one-shot permissionless same-origin Electron
+WebContents, atomic 640×400 bounded JPEG replacement, monotonic revisions, explicit refresh,
+placeholder fallback with a bounded thumbnail-read retry, and the image-only MagicDNS CSP
+aperture. Refresh is non-idempotent and never replay-safe. Automated contracts/service/Electron/UI
+coverage and production builds are green; the physical desktop-B fetch/refresh, Truffle
+symlink/allow, and cross-origin witnesses
+remain gates, so this work is not recorded in LANDED yet.
 
 ## Next up — the options on the table (James's call)
 
-- **AH-3 closeout → AH-4** — stage/sign the bundled browser plugin through WP8, run the
-  both-theme/reduced-motion/native-picker add/open witness, then add preview capture. AH-5 adds
-  the phone list; the AH-1 physical two-client proof can run alongside this work.
+- **AH-4 closeout** — review and land the preview runtime, stage/sign the bundled browser
+  plugin through WP8, then run the both-theme/native-picker plus desktop-B preview/refresh,
+  Truffle symlink/allow, and cross-origin physical witnesses. AH-5 adds the phone list; the
+  AH-1 physical two-client proof can run alongside this work.
 - **AR** — the agent tracks; the reason everything else exists.
 - **GT-4 → GT-5** — the remote floor, then the phone attaches.
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).

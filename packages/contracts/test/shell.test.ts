@@ -11,6 +11,7 @@ import {
   GodviewSetRequest,
   GodviewState,
   ProductInfo,
+  SHELL_PROVIDER_METHODS,
   ShellCommandRequest,
   ShellDialogPickFolderParams,
   ShellDialogPickFolderResult,
@@ -19,6 +20,8 @@ import {
   ShellProviderOutcome,
   ShellProviderRegisterParams,
   ShellProviderRegisterResult,
+  ShellWebContentsCaptureArtifactPreviewParams,
+  ShellWebContentsCaptureArtifactPreviewResult,
   WindowConnection,
 } from "../src/shell";
 
@@ -293,7 +296,7 @@ describe("tray shell commands and app preferences", () => {
   });
 });
 
-describe("AH-3 static shell provider", () => {
+describe("AH-3/AH-4 static shell provider", () => {
   it("pins the folder picker to its one purpose and bounded result union", () => {
     expect(ShellDialogPickFolderParams.parse({ purpose: "artifact.publish" })).toEqual({
       purpose: "artifact.publish",
@@ -334,7 +337,7 @@ describe("AH-3 static shell provider", () => {
   it("requires a unique registered static method set and exactly one outcome arm", () => {
     expect(
       ShellProviderRegisterParams.safeParse({
-        methods: ["shell.dialog.pickFolder", "shell.openExternal"],
+        methods: [...SHELL_PROVIDER_METHODS],
       }).success,
     ).toBe(true);
     expect(
@@ -344,7 +347,7 @@ describe("AH-3 static shell provider", () => {
     ).toBe(false);
     expect(
       ShellProviderRegisterResult.safeParse({
-        registered: ["shell.dialog.pickFolder", "shell.openExternal"],
+        registered: [...SHELL_PROVIDER_METHODS],
       }).success,
     ).toBe(true);
     expect(
@@ -376,5 +379,40 @@ describe("AH-3 static shell provider", () => {
         deadlineAt: Date.now() + 5_000,
       }).caller,
     ).toMatchObject({ kind: "plugin", pluginId: "vibefield.browser" });
+  });
+
+  it("confines preview capture to a local artifact id and canonical AH root URL", () => {
+    expect(
+      ShellWebContentsCaptureArtifactPreviewParams.parse({
+        artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        url: "https://device.tail1234.ts.net:12000/",
+      }),
+    ).toMatchObject({ artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV" });
+    for (const url of [
+      "http://device.tail1234.ts.net:12000/",
+      "https://device.tail1234.ts.net:9999/",
+      "https://device.tail1234.ts.net:12000/path",
+      "https://device.tail1234.ts.net:12000/?query=1",
+      "https://device.example.com:12000/",
+      "https://DEVICE.tail1234.ts.net:12000/",
+      "https://user@device.tail1234.ts.net:12000/",
+    ]) {
+      expect(
+        ShellWebContentsCaptureArtifactPreviewParams.safeParse({
+          artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+          url,
+        }).success,
+        url,
+      ).toBe(false);
+    }
+    expect(
+      ShellWebContentsCaptureArtifactPreviewResult.parse({ captured: true, title: "Workbench" }),
+    ).toEqual({ captured: true, title: "Workbench" });
+    expect(
+      ShellWebContentsCaptureArtifactPreviewResult.safeParse({
+        captured: true,
+        title: "x".repeat(129),
+      }).success,
+    ).toBe(false);
   });
 });

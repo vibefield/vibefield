@@ -20,7 +20,7 @@ import {
   writeFile as writeFileAsync,
 } from "node:fs/promises";
 import { connect as connectTcp } from "node:net";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { connect as connectTls } from "node:tls";
 import {
   ARTIFACT_INTENT_FILE,
@@ -31,6 +31,7 @@ import {
   type ArtifactCatalogSlice,
   type ArtifactPublishParams,
   ArtifactPublishV2Params,
+  ArtifactRefreshPreviewResult,
   type ArtifactSource,
   ArtifactStatus,
   type ArtifactUnpublishParams,
@@ -40,6 +41,9 @@ import {
   LegacyArtifactPublishParams,
   LocalArtifactIntent,
   MESH_CONTROL_LIMITS,
+  ShellArtifactPreviewUrl,
+  type ShellWebContentsCaptureArtifactPreviewParams,
+  type ShellWebContentsCaptureArtifactPreviewResult,
   STORES,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -100,6 +104,14 @@ export interface ArtifactServiceOptions {
   writeCatalogCache?: (path: string, body: string) => Promise<void>;
   ensurePreviewDir?: (path: string) => void;
   removePreviewDir?: (path: string) => void;
+  /** AH-4 control-only shell seam. Electron owns all page/image bytes and the
+   * destination path; ArtifactService supplies only revalidated identity. */
+  capturePreview?: (
+    params: ShellWebContentsCaptureArtifactPreviewParams,
+  ) => Promise<ShellWebContentsCaptureArtifactPreviewResult>;
+  /** Cheap liveness gate used to avoid scheduling add-time browser work when
+   * no desktop provider is registered. Explicit refresh remains best-effort. */
+  capturePreviewAvailable?: () => boolean;
 }
 
 interface IntentFileShape {
@@ -216,6 +228,12 @@ export class ArtifactService {
   readonly #writeCatalogCache: (path: string, body: string) => Promise<void>;
   readonly #ensurePreviewDir: (path: string) => void;
   readonly #removePreviewDir: (path: string) => void;
+  readonly #capturePreview:
+    | ((
+        params: ShellWebContentsCaptureArtifactPreviewParams,
+      ) => Promise<ShellWebContentsCaptureArtifactPreviewResult>)
+    | undefined;
+  readonly #capturePreviewAvailable: () => boolean;
   readonly #registryDir: string;
   readonly #intentPath: string;
   readonly #legacyPath: string;
@@ -244,6 +262,8 @@ export class ArtifactService {
   #catalogCacheDirty = false;
   #catalogCacheWrite: Promise<void> = Promise.resolve();
   #chain: Promise<void> = Promise.resolve();
+  #previewChain: Promise<void> = Promise.resolve();
+  #activePreviewArtifactId: string | null = null;
   #lastSig = "";
   #lastCatalogSig = "";
   #catalogEmitQueued = false;
@@ -272,6 +292,9 @@ export class ArtifactService {
       opts.ensurePreviewDir ?? ((path) => mkdirSync(path, { recursive: true, mode: 0o700 }));
     this.#removePreviewDir =
       opts.removePreviewDir ?? ((path) => rmSync(path, { recursive: true, force: true }));
+    this.#capturePreview = opts.capturePreview;
+    this.#capturePreviewAvailable =
+      opts.capturePreviewAvailable ?? (() => opts.capturePreview !== undefined);
     this.#registryDir = join(opts.dataDir, "registries");
     this.#intentPath = join(this.#registryDir, ARTIFACT_INTENT_FILE);
     this.#legacyPath = join(this.#registryDir, `${STORES.ARTIFACTS}.json`);
@@ -316,7 +339,7 @@ export class ArtifactService {
   }
 
   publish(params: ArtifactPublishParams): Promise<ArtifactStatus> {
-    return this.#enqueue(async () => {
+    const published = this.#enqueue(async () => {
       const normalized = await this.#normalizePublish(params);
       const existing = this.#entries.get(normalized.artifactId);
       if (existing === undefined && this.#entries.size >= ARTIFACT_LIMITS.LOCAL_OBJECTS) {
@@ -359,6 +382,13 @@ export class ArtifactService {
       await this.#reconcile();
       return this.#statusFor(this.#entries.get(next.artifactId) ?? next);
     }, true);
+    if (this.#capturePreview !== undefined && this.#capturePreviewAvailable()) {
+      void published.then(
+        (status) => this.#scheduleInitialPreview(status.artifactId),
+        () => undefined,
+      );
+    }
+    return published;
   }
 
   update(params: ArtifactUpdateParams): Promise<ArtifactStatus> {
@@ -415,13 +445,169 @@ export class ArtifactService {
     }, true);
   }
 
-  refreshPreview(artifactId: string): { artifactId: string; captured: false; reason: string } {
-    this.#assertActive();
-    if (!this.#entries.has(artifactId)) throw artifactNotFound(artifactId);
-    // AH-4 installs the shell capture provider. The hardened route exists now,
-    // but its directory remains intentionally empty until a bounded capture is
-    // atomically committed.
-    return { artifactId, captured: false, reason: "preview capture is not available" };
+  refreshPreview(artifactId: string): Promise<ArtifactRefreshPreviewResult> {
+    return this.#enqueuePreview(() => this.#captureArtifactPreview(artifactId, false));
+  }
+
+  #scheduleInitialPreview(artifactId: string): void {
+    if (this.#disposed || this.#capturePreview === undefined || !this.#capturePreviewAvailable())
+      return;
+    void this.#enqueuePreview(() => this.#captureArtifactPreview(artifactId, true)).catch(
+      (error: unknown) => {
+        this.#logger.info(
+          "fieldd.artifacts.initial_preview_deferred",
+          "The add-time artifact preview did not complete",
+          { artifactId, error: errorName(error) },
+        );
+      },
+    );
+  }
+
+  async #captureArtifactPreview(
+    artifactId: string,
+    initialOnly: boolean,
+  ): Promise<ArtifactRefreshPreviewResult> {
+    const prepared = await this.#prepareArtifactPreview(artifactId, initialOnly);
+    if (!prepared.ready) return prepared.result;
+
+    try {
+      let captured: ShellWebContentsCaptureArtifactPreviewResult;
+      try {
+        captured = await prepared.capture(prepared.params);
+      } catch (error) {
+        const reason = previewCaptureFailure(error);
+        this.#logger.info(
+          "fieldd.artifacts.preview_capture_failed",
+          "An artifact preview capture failed safely",
+          { artifactId, error: errorName(error) },
+        );
+        return ArtifactRefreshPreviewResult.parse({ artifactId, captured: false, reason });
+      }
+
+      return await this.#enqueue(async () => {
+        const current = this.#entries.get(artifactId);
+        if (current === undefined || current.desired === "absent") {
+          return ArtifactRefreshPreviewResult.parse({
+            artifactId,
+            captured: false,
+            reason: "artifact is no longer published",
+          });
+        }
+        // Re-read the authoritative intent after browser work. The listener
+        // may have been reconfigured while capture ran; it must still own a
+        // validated root URL on its reserved port before a revision can move.
+        if (captureUrlFor(current) === undefined) {
+          return ArtifactRefreshPreviewResult.parse({
+            artifactId,
+            captured: false,
+            reason: "artifact URL changed during preview capture",
+          });
+        }
+        if (current.previewRevision === Number.MAX_SAFE_INTEGER) {
+          return ArtifactRefreshPreviewResult.parse({
+            artifactId,
+            captured: false,
+            reason: "preview revision limit reached",
+          });
+        }
+
+        const title =
+          captured.title !== undefined &&
+          current.previewRevision === undefined &&
+          current.title === generatedArtifactTitle(current)
+            ? captured.title
+            : current.title;
+        const next = LocalArtifactIntent.parse({
+          ...current,
+          title,
+          previewRevision: (current.previewRevision ?? 0) + 1,
+          updatedAt: this.#now(),
+        });
+        const entries = new Map(this.#entries);
+        entries.set(artifactId, next);
+        this.#commit(entries);
+        this.#emit();
+        return ArtifactRefreshPreviewResult.parse({
+          artifactId,
+          captured: true,
+          previewRevision: next.previewRevision,
+          ...(title !== current.title ? { title } : {}),
+        });
+      }, true);
+    } finally {
+      // The Electron operation, including its atomic file replace, has
+      // settled. Unpublish cleanup may now remove the preview directory.
+      this.#activePreviewArtifactId = null;
+      await this.#enqueue(async () => {
+        if (!this.#disposed && this.#entries.get(artifactId)?.desired === "absent") {
+          await this.#reconcile();
+        }
+      });
+    }
+  }
+
+  #prepareArtifactPreview(
+    artifactId: string,
+    initialOnly: boolean,
+  ): Promise<
+    | { ready: false; result: ArtifactRefreshPreviewResult }
+    | {
+        ready: true;
+        capture: NonNullable<ArtifactServiceOptions["capturePreview"]>;
+        params: ShellWebContentsCaptureArtifactPreviewParams;
+      }
+  > {
+    return this.#enqueue(async () => {
+      const current = this.#entries.get(artifactId);
+      if (current === undefined) throw artifactNotFound(artifactId);
+      if (current.desired === "absent") {
+        throw new RpcCallError("CONFLICT", "artifact removal is already in progress", true);
+      }
+      if (initialOnly && current.previewRevision !== undefined) {
+        return {
+          ready: false as const,
+          result: ArtifactRefreshPreviewResult.parse({
+            artifactId,
+            captured: false,
+            reason: "artifact already has a preview",
+          }),
+        };
+      }
+      if (current.previewRevision === Number.MAX_SAFE_INTEGER) {
+        return {
+          ready: false as const,
+          result: ArtifactRefreshPreviewResult.parse({
+            artifactId,
+            captured: false,
+            reason: "preview revision limit reached",
+          }),
+        };
+      }
+      const capture = this.#capturePreview;
+      if (capture === undefined || !this.#capturePreviewAvailable()) {
+        return {
+          ready: false as const,
+          result: ArtifactRefreshPreviewResult.parse({
+            artifactId,
+            captured: false,
+            reason: "desktop preview capture is unavailable",
+          }),
+        };
+      }
+      const url = captureUrlFor(current);
+      if (url === undefined) {
+        return {
+          ready: false as const,
+          result: ArtifactRefreshPreviewResult.parse({
+            artifactId,
+            captured: false,
+            reason: "artifact URL is not ready",
+          }),
+        };
+      }
+      this.#activePreviewArtifactId = artifactId;
+      return { ready: true as const, capture, params: { artifactId, url } };
+    }, true);
   }
 
   statuses(): ArtifactStatus[] {
@@ -502,6 +688,9 @@ export class ArtifactService {
     this.#listeners.clear();
     this.#catalogListeners.clear();
     this.#disposePromise = (async () => {
+      await Promise.all([this.#chain, this.#previewChain]);
+      // Preview completion may append its revision/cleanup checkpoint after
+      // disposal began, so take one final mutation-lane barrier.
       await this.#chain;
       await this.#flushCatalogCache();
       await this.#catalogCacheWrite;
@@ -648,6 +837,7 @@ export class ArtifactService {
     // preview directory forever.
     for (const entry of [...this.#entries.values()]) {
       if (entry.desired !== "absent" || entry.retiringServeIds.length > 0) continue;
+      if (entry.artifactId === this.#activePreviewArtifactId) continue;
       try {
         this.#removePreviewDir(this.#previewDir(entry.artifactId));
         this.#previewErrors.delete(entry.artifactId);
@@ -1454,6 +1644,45 @@ export class ArtifactService {
     );
     return run;
   }
+
+  /** Preview work is serialized separately from durable artifact mutations.
+   * Publishing B therefore never waits for A's browser load, while Electron
+   * still sees at most one capture operation at a time. */
+  #enqueuePreview<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.#previewChain.then(operation);
+    this.#previewChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+}
+
+function captureUrlFor(intent: LocalArtifactIntent): string | undefined {
+  const parsed = ShellArtifactPreviewUrl.safeParse(intent.lastPublishedUrl);
+  if (!parsed.success) return undefined;
+  const url = new URL(parsed.data);
+  return Number(url.port) === intent.listenPort ? parsed.data : undefined;
+}
+
+function generatedArtifactTitle(intent: LocalArtifactIntent): string {
+  return intent.source.kind === "proxy"
+    ? `localhost:${intent.source.port}`
+    : basename(intent.source.path) || "Folder";
+}
+
+function previewCaptureFailure(error: unknown): string {
+  if (error instanceof RpcCallError) {
+    if (error.kind === "UNAVAILABLE") return "desktop preview capture is unavailable";
+    if (error.kind === "TIMEOUT") return "preview capture timed out; check Tailscale HTTPS";
+    if (error.kind === "CONFLICT") return "another preview capture is in progress";
+    if (error.kind === "PRECONDITION_FAILED") {
+      return "artifact preview was refused; check tailnet access and try again";
+    }
+    if (error.kind === "RESOURCE_EXHAUSTED") return "preview image exceeds the 256 KiB limit";
+    if (error.kind === "AUDIT_UNAVAILABLE") return "preview capture audit is unavailable";
+  }
+  return "preview capture failed; check Tailscale HTTPS and try again";
 }
 
 function normalizeSource(source: ArtifactSource, requireReadableFolder: boolean): ArtifactSource {

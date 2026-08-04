@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle } from "./artifacts";
 import { ClientKind, SemverString } from "./envelope";
 import { ErrorKind } from "./errors";
 import { PluginId } from "./plugins";
@@ -164,10 +165,32 @@ export type AppPreferenceSetParams = z.infer<typeof AppPreferenceSetParams>;
 // not renderer IPC: main registers on its existing authenticated shell link,
 // receives bounded notifications, and resolves them on the same connection.
 
-export const SHELL_PROVIDER_METHODS = ["shell.dialog.pickFolder", "shell.openExternal"] as const;
+export const SHELL_CLIENT_PROVIDER_METHODS = [
+  "shell.dialog.pickFolder",
+  "shell.openExternal",
+] as const;
+export const SHELL_INTERNAL_PROVIDER_METHODS = [
+  "shell.webcontents.captureArtifactPreview",
+] as const;
+export const SHELL_PROVIDER_METHODS = [
+  ...SHELL_CLIENT_PROVIDER_METHODS,
+  ...SHELL_INTERNAL_PROVIDER_METHODS,
+] as const;
 
 export const ShellProviderMethod = z.enum(SHELL_PROVIDER_METHODS);
 export type ShellProviderMethod = z.infer<typeof ShellProviderMethod>;
+export const ShellClientProviderMethod = z.enum(SHELL_CLIENT_PROVIDER_METHODS);
+export type ShellClientProviderMethod = z.infer<typeof ShellClientProviderMethod>;
+export const ShellInternalProviderMethod = z.enum(SHELL_INTERNAL_PROVIDER_METHODS);
+export type ShellInternalProviderMethod = z.infer<typeof ShellInternalProviderMethod>;
+
+export const ARTIFACT_PREVIEW_LIMITS = {
+  WIDTH: 640,
+  HEIGHT: 400,
+  JPEG_BYTES: 256 * 1024,
+  DEADLINE_MS: 8_000,
+  JPEG_QUALITIES: [82, 70, 55, 40],
+} as const;
 
 export const ShellDialogPickFolderParams = z
   .object({ purpose: z.literal("artifact.publish") })
@@ -232,6 +255,54 @@ export type ShellOpenExternalParams = z.infer<typeof ShellOpenExternalParams>;
 
 export const ShellOpenExternalResult = z.object({ opened: z.literal(true) }).passthrough();
 export type ShellOpenExternalResult = z.infer<typeof ShellOpenExternalResult>;
+
+/** The exact root-authority form returned by an AH Truffle listener. The
+ * ArtifactService additionally proves this is the local intent's own last
+ * published URL before dispatch; Electron independently rejects any broader
+ * URL so a compromised daemon call cannot turn capture into a web crawler. */
+export const ShellArtifactPreviewUrl = z
+  .string()
+  .min(1)
+  .max(ARTIFACT_LIMITS.URL_CHARS)
+  .superRefine((raw, ctx) => {
+    const match =
+      /^https:\/\/([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.ts\.net):(\d{5})\/?$/.exec(
+        raw,
+      );
+    const hostname = match?.[1];
+    const portText = match?.[2];
+    const port = Number(portText);
+    if (
+      match === null ||
+      hostname === undefined ||
+      hostname.length > 253 ||
+      portText === undefined ||
+      !Number.isInteger(port) ||
+      String(port) !== portText ||
+      port < ARTIFACT_LIMITS.LISTEN_PORT_MIN ||
+      port > ARTIFACT_LIMITS.LISTEN_PORT_MAX
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "expected a canonical root Artifact Hub HTTPS URL",
+      });
+    }
+  });
+export type ShellArtifactPreviewUrl = z.infer<typeof ShellArtifactPreviewUrl>;
+
+export const ShellWebContentsCaptureArtifactPreviewParams = z
+  .object({ artifactId: ArtifactId, url: ShellArtifactPreviewUrl })
+  .passthrough();
+export type ShellWebContentsCaptureArtifactPreviewParams = z.infer<
+  typeof ShellWebContentsCaptureArtifactPreviewParams
+>;
+
+export const ShellWebContentsCaptureArtifactPreviewResult = z
+  .object({ captured: z.literal(true), title: ArtifactTitle.optional() })
+  .passthrough();
+export type ShellWebContentsCaptureArtifactPreviewResult = z.infer<
+  typeof ShellWebContentsCaptureArtifactPreviewResult
+>;
 
 export const ShellProviderRegisterParams = z
   .object({ methods: z.array(ShellProviderMethod).min(1).max(SHELL_PROVIDER_METHODS.length) })

@@ -44,6 +44,13 @@ describe("mesh control limits", () => {
       MESH_CONTROL_LIMITS.MGMT_FRAME_BYTES,
     );
   });
+
+  it("does not classify a state-advancing preview refresh as replay-safe", () => {
+    expect(METHODS.find((method) => method.method === "artifact.refreshPreview")).toMatchObject({
+      idempotent: false,
+      locality: "local",
+    });
+  });
 });
 
 describe("installed desktop identity", () => {

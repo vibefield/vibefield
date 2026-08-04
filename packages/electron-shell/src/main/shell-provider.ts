@@ -8,6 +8,9 @@ import {
   ShellProviderCallParams as ShellProviderCallParamsSchema,
   type ShellProviderError,
   ShellProviderRegisterResult,
+  ShellWebContentsCaptureArtifactPreviewParams,
+  type ShellWebContentsCaptureArtifactPreviewResult,
+  ShellWebContentsCaptureArtifactPreviewResult as ShellWebContentsCaptureArtifactPreviewResultSchema,
 } from "@vibefield/contracts";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
@@ -27,14 +30,22 @@ export interface ShellProviderNative {
     options: OpenDialogOptions,
   ): Promise<{ canceled: boolean; filePaths: string[] }>;
   openExternal(url: string): Promise<void>;
+  captureArtifactPreview(
+    params: ShellWebContentsCaptureArtifactPreviewParams,
+    signal: AbortSignal,
+  ): Promise<ShellWebContentsCaptureArtifactPreviewResult>;
 }
 
 interface ActiveCall {
   cancelled: boolean;
+  controller: AbortController;
   method: ShellProviderCallParams["method"];
 }
 
-function safeProviderError(error: unknown): ShellProviderError {
+function safeProviderError(
+  error: unknown,
+  method: ShellProviderCallParams["method"],
+): ShellProviderError {
   const kind =
     typeof error === "object" && error !== null && "kind" in error
       ? String((error as { kind: unknown }).kind)
@@ -56,10 +67,16 @@ function safeProviderError(error: unknown): ShellProviderError {
     kind: allowed.has(kind) ? (kind as ShellProviderError["kind"]) : "INTERNAL",
     message:
       kind === "CONFLICT"
-        ? "another folder dialog is already open"
+        ? method === "shell.webcontents.captureArtifactPreview"
+          ? "another preview capture is already running"
+          : "another folder dialog is already open"
         : kind === "UNAVAILABLE"
-          ? "the primary window is unavailable"
-          : "the desktop operation failed",
+          ? method === "shell.webcontents.captureArtifactPreview"
+            ? "preview capture is unavailable"
+            : "the primary window is unavailable"
+          : kind === "RESOURCE_EXHAUSTED"
+            ? "the preview could not fit within the image budget"
+            : "the desktop operation failed",
     retryable: kind === "UNAVAILABLE" || kind === "TIMEOUT" || kind === "CONFLICT",
   };
 }
@@ -76,6 +93,7 @@ export class RecoveringShellProvider {
   private registrationRetryMs = REGISTRATION_RETRY_MIN_MS;
   private registrationRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private dialogBusy = false;
+  private captureBusy = false;
   private statusStop: Stop | null = null;
   private notificationStops: Stop[] = [];
   private readonly calls = new Map<string, ActiveCall>();
@@ -203,13 +221,17 @@ export class RecoveringShellProvider {
     }
     const call = parsed.data;
     if (this.calls.has(call.callId)) return;
-    const active: ActiveCall = { cancelled: false, method: call.method };
+    const active: ActiveCall = {
+      cancelled: false,
+      controller: new AbortController(),
+      method: call.method,
+    };
     this.calls.set(call.callId, active);
-    void this.execute(call).then(
+    void this.execute(call, active.controller.signal).then(
       (result) => this.resolve(generation, client, call.callId, active, { result }),
       (error: unknown) =>
         this.resolve(generation, client, call.callId, active, {
-          error: safeProviderError(error),
+          error: safeProviderError(error, call.method),
         }),
     );
   }
@@ -221,10 +243,11 @@ export class RecoveringShellProvider {
     const call = this.calls.get(callId);
     if (call === undefined) return;
     call.cancelled = true;
+    call.controller.abort();
     this.calls.delete(callId);
   }
 
-  private async execute(call: ShellProviderCallParams): Promise<unknown> {
+  private async execute(call: ShellProviderCallParams, signal: AbortSignal): Promise<unknown> {
     if (call.deadlineAt < Date.now()) {
       throw { kind: "TIMEOUT" };
     }
@@ -232,6 +255,22 @@ export class RecoveringShellProvider {
       const params = ShellOpenExternalParams.parse(call.params);
       await this.native.openExternal(params.url);
       return ShellOpenExternalResult.parse({ opened: true });
+    }
+    if (call.method === "shell.webcontents.captureArtifactPreview") {
+      const params = ShellWebContentsCaptureArtifactPreviewParams.parse(call.params);
+      const parent = this.native.parentWindow();
+      if (parent === null || parent.isDestroyed() || !parent.isVisible() || parent.isMinimized()) {
+        throw { kind: "UNAVAILABLE" };
+      }
+      if (this.captureBusy) throw { kind: "CONFLICT" };
+      this.captureBusy = true;
+      try {
+        return ShellWebContentsCaptureArtifactPreviewResultSchema.parse(
+          await this.native.captureArtifactPreview(params, signal),
+        );
+      } finally {
+        this.captureBusy = false;
+      }
     }
 
     const params = ShellDialogPickFolderParams.parse(call.params);
@@ -290,7 +329,10 @@ export class RecoveringShellProvider {
   }
 
   private cancelAll(): void {
-    for (const call of this.calls.values()) call.cancelled = true;
+    for (const call of this.calls.values()) {
+      call.cancelled = true;
+      call.controller.abort();
+    }
     this.calls.clear();
   }
 

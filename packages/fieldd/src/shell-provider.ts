@@ -1,9 +1,12 @@
 import { randomBytes } from "node:crypto";
 import {
+  ARTIFACT_PREVIEW_LIMITS,
   type CallerContext,
   SHELL_PROVIDER_METHODS,
+  type ShellClientProviderMethod,
   ShellDialogPickFolderParams,
   ShellDialogPickFolderResult,
+  type ShellInternalProviderMethod,
   ShellOpenExternalParams,
   ShellOpenExternalResult,
   type ShellProviderCallParams,
@@ -12,6 +15,8 @@ import {
   type ShellProviderRegisterResult,
   ShellProviderResolveParams,
   type ShellProviderResolveResult,
+  ShellWebContentsCaptureArtifactPreviewParams,
+  ShellWebContentsCaptureArtifactPreviewResult,
 } from "@vibefield/contracts";
 import { RpcCallError } from "./native-link";
 
@@ -47,6 +52,11 @@ const METHOD_CONTRACTS: Record<ShellProviderMethod, MethodContract> = {
     input: ShellOpenExternalParams,
     output: ShellOpenExternalResult,
     deadlineMs: OPEN_EXTERNAL_DEADLINE_MS,
+  },
+  "shell.webcontents.captureArtifactPreview": {
+    input: ShellWebContentsCaptureArtifactPreviewParams,
+    output: ShellWebContentsCaptureArtifactPreviewResult,
+    deadlineMs: ARTIFACT_PREVIEW_LIMITS.DEADLINE_MS,
   },
 };
 
@@ -90,6 +100,12 @@ function safeCaller(ctx: CallerContext): ShellProviderCallParams["caller"] {
 export class ShellProviderBroker {
   private provider: Provider | null = null;
   private readonly pending = new Map<string, PendingCall>();
+
+  /** In-process capability fact only; this never exposes provider identity or
+   * grants a caller access to the internal capture method. */
+  provides(method: ShellProviderMethod): boolean {
+    return this.provider?.methods.has(method) === true;
+  }
 
   register(
     ctx: CallerContext,
@@ -167,7 +183,11 @@ export class ShellProviderBroker {
     return { accepted: true };
   }
 
-  async call(ctx: CallerContext, method: ShellProviderMethod, raw: unknown): Promise<unknown> {
+  async call(
+    ctx: CallerContext,
+    method: ShellClientProviderMethod,
+    raw: unknown,
+  ): Promise<unknown> {
     if (ctx.transport !== "ws-loopback") {
       throw new RpcCallError(
         "FORBIDDEN_SCOPE",
@@ -175,6 +195,30 @@ export class ShellProviderBroker {
         false,
       );
     }
+    return await this.dispatch(ctx, method, raw);
+  }
+
+  /** AH-4's capture door is deliberately not a ProductAPI method. Only
+   * fieldd's ArtifactService adapter can enter here, and the provider sees an
+   * explicit fieldd caller rather than inheriting a renderer's authority. */
+  callInternal(method: ShellInternalProviderMethod, raw: unknown): Promise<unknown> {
+    return this.dispatch(
+      {
+        principal: { kind: "local-token", tokenId: "artifact-service", scopes: [] },
+        transport: "inproc-port",
+        receivedAt: Date.now(),
+        clientKind: "fieldd",
+      },
+      method,
+      raw,
+    );
+  }
+
+  private async dispatch(
+    ctx: CallerContext,
+    method: ShellProviderMethod,
+    raw: unknown,
+  ): Promise<unknown> {
     const contract = METHOD_CONTRACTS[method];
     const input = contract.input.safeParse(raw);
     if (!input.success) {

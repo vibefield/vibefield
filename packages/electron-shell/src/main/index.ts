@@ -29,6 +29,7 @@ import {
 import { applyDevelopmentDockIcon } from "./app-branding";
 import { installAppMenu } from "./app-menu";
 import { installAppProtocol, registerAppScheme } from "./app-protocol";
+import { ArtifactPreviewCapture, isArtifactPreviewSession } from "./artifact-preview-capture";
 import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
@@ -285,14 +286,18 @@ async function main(
       { permission },
     );
   });
-  installWebContentsBackstop(MODE, (contents) => {
-    if (registry.owns(contents)) return;
-    logger.warn(
-      "desktop.security.unregistered_webcontents",
-      "A WebContents was created outside the window factory and received the backstop policy",
-      { webContentsId: contents.id, type: contents.getType() },
-    );
-  });
+  installWebContentsBackstop(
+    MODE,
+    (contents) => {
+      if (registry.owns(contents)) return;
+      logger.warn(
+        "desktop.security.unregistered_webcontents",
+        "A WebContents was created outside the window factory and received the backstop policy",
+        { webContentsId: contents.id, type: contents.getType() },
+      );
+    },
+    (contents) => isArtifactPreviewSession(contents.session),
+  );
   app.on("child-process-gone", (_event, details) => {
     logger.warn("desktop.process.child_gone", "An Electron child process exited", {
       type: details.type,
@@ -466,12 +471,39 @@ async function main(
     },
   });
   shellDisposers.add(() => fielddObservers.dispose());
+  const artifactPreviewCapture = new ArtifactPreviewCapture({
+    dataDir: root,
+    native: {
+      createSession: (partition) => session.fromPartition(partition, { cache: false }),
+      createWindow: ({ width, height, partition, webPreferences }) =>
+        new BrowserWindow({
+          show: false,
+          frame: false,
+          focusable: false,
+          resizable: false,
+          skipTaskbar: true,
+          width,
+          height,
+          useContentSize: true,
+          paintWhenInitiallyHidden: true,
+          webPreferences: {
+            partition,
+            ...webPreferences,
+            experimentalFeatures: false,
+            spellcheck: false,
+            backgroundThrottling: false,
+          },
+        }),
+      decodeImage: (bytes) => nativeImage.createFromBuffer(bytes),
+    },
+  });
   const shellProvider = new RecoveringShellProvider(
     fielddHandles,
     {
       parentWindow: () => BrowserWindow.getFocusedWindow() ?? registry.primary(),
       showOpenDialog: (parent, options) => dialog.showOpenDialog(parent, options),
       openExternal: (url) => shell.openExternal(url),
+      captureArtifactPreview: (params, signal) => artifactPreviewCapture.capture(params, signal),
     },
     logger.child({ component: "shell.provider" }),
   );

@@ -19,7 +19,7 @@ export function buildCsp(mode: ShellMode): string | null {
       : "ws://127.0.0.1:*";
   return (
     "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
-    `img-src 'self' data:; connect-src ${connect}; base-uri 'none'; object-src 'none'`
+    `img-src 'self' data: https://*.ts.net:*; connect-src ${connect}; base-uri 'none'; object-src 'none'`
   );
 }
 

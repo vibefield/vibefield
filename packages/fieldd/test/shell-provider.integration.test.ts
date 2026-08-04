@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ShellProviderCallParams } from "@vibefield/contracts";
+import { SHELL_PROVIDER_METHODS, ShellProviderCallParams } from "@vibefield/contracts";
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -70,7 +70,7 @@ describe("AH-3 shell provider ProductAPI boundary", () => {
     const { rpc: claimedShell } = await openRpc(daemon, claimedShellGrant.token, "shell-main");
     expect(
       await claimedShell.callErr("shell.provider.register", {
-        methods: ["shell.dialog.pickFolder", "shell.openExternal"],
+        methods: [...SHELL_PROVIDER_METHODS],
       }),
     ).toMatchObject({ data: { kind: "FORBIDDEN_SCOPE" } });
 
@@ -81,10 +81,10 @@ describe("AH-3 shell provider ProductAPI boundary", () => {
     );
     await expect(
       shell.call("shell.provider.register", {
-        methods: ["shell.dialog.pickFolder", "shell.openExternal"],
+        methods: [...SHELL_PROVIDER_METHODS],
       }),
     ).resolves.toEqual({
-      registered: ["shell.dialog.pickFolder", "shell.openExternal"],
+      registered: [...SHELL_PROVIDER_METHODS],
     });
 
     const pluginGrant = daemon.tokens.mint(
@@ -93,6 +93,12 @@ describe("AH-3 shell provider ProductAPI boundary", () => {
       { pluginId: "vibefield.browser" },
     );
     const { rpc: plugin } = await openRpc(daemon, pluginGrant.token, "renderer");
+    expect(
+      await plugin.callErr("shell.webcontents.captureArtifactPreview", {
+        artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        url: "https://artifact-host.example.ts.net:12000/",
+      }),
+    ).toMatchObject({ data: { kind: "NOT_FOUND" } });
 
     const externalUrl = "https://artifact-host.example.ts.net:12000/private-page";
     const opened = plugin.call("shell.openExternal", { url: externalUrl });

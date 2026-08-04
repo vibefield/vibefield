@@ -4,6 +4,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SHELL_PROVIDER_METHODS } from "@vibefield/contracts";
 import {
   bootstrap,
   type FielddDaemon,
@@ -152,7 +153,7 @@ describe("FielddClient", () => {
     await provider.ready();
     await caller.ready();
     await provider.request("shell.provider.register", {
-      methods: ["shell.dialog.pickFolder", "shell.openExternal"],
+      methods: [...SHELL_PROVIDER_METHODS],
     });
     await expect(
       caller.request("shell.openExternal", {
@@ -168,7 +169,7 @@ describe("FielddClient", () => {
     );
     await until(() => provider.status === "ready" && caller.status === "ready", 6_000);
     await provider.request("shell.provider.register", {
-      methods: ["shell.dialog.pickFolder", "shell.openExternal"],
+      methods: [...SHELL_PROVIDER_METHODS],
     });
     await expect(
       caller.request("shell.openExternal", {
