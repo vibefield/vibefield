@@ -701,9 +701,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86740f96de5b9f21c7c3b36ff6c1c7ee3d579e58e6185761d0303a886afc8798"
+checksum = "3a4618453d68dad8ec8c15040f55283366e62473330fb42396fb51be8cc68d45"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -724,10 +724,11 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-config"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10e4cb17c790ed1a36456d627478649eaa5564301aa7f5d6c80c866de4ddc582"
+checksum = "0d1b479ef304492349d362520b6ec2475c00f0b55706a163760da9fe044c8b54"
 dependencies = [
+ "libc",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -736,9 +737,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-core"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44a48c82d2dbda8d4712ce84cb93990f2b16a6c189bce68832bd8d5527058565"
+checksum = "008846db54c3cfa487f759ed8270a7b25615f46cb084a98fa562a83bccfeb773"
 dependencies = [
  "anyhow",
  "ghosttea-text",
@@ -749,9 +750,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-text"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e830e5cc127b8970d12a602505350d0ad2d9fbdcc99615bceffec677ad394a7"
+checksum = "1035a7bb3c575ed7d6efe7d4baaa26145f66a7627dba28873f01c661e6435813"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -763,18 +764,18 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-vt"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3c250667e05fe2df2a2d9d2fb9fece5885217bc8f65e6ce2056c622eac8f2dd"
+checksum = "2825ded930efae0d9c14c73aac35a55b16fbec2cd5bbb04f1915a33c73bd8345"
 dependencies = [
  "ghosttea-vt-sys",
 ]
 
 [[package]]
 name = "ghosttea-vt-sys"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0015f1f5b774e01b285dd1c45769ed79da8628a8d12253f3ef7b94bac4c724c0"
+checksum = "9bfddbf0985b7dd35426d0235a2da2f01b0cacb1e07f60946e99a93dbf4d97fd"
 dependencies = [
  "cc",
  "serde",

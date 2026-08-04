@@ -1,6 +1,7 @@
 import type { TerminalBridgeStatus } from "@vibefield/contracts";
 import { type ReactElement, useCallback, useEffect, useState } from "react";
 import { getHost } from "../host";
+import { useDeckAppearance } from "./deck-appearance";
 import { GodviewDeck } from "./GodviewDeck";
 import {
   defaultGodviewTuning,
@@ -43,9 +44,12 @@ export function GodviewOverlay(): ReactElement | null {
    * reveal, so it is built once — on the first open — and hidden thereafter. */
   const [everOpened, setEverOpened] = useState(false);
   const [bridge, setBridge] = useState<TerminalBridgeStatus | null>(null);
-  // TEMPORARY visual-pass state. Deliberately memory-only: this panel is a
-  // measuring instrument, not a settings surface or a new product contract.
+  // TEMPORARY visual-pass state. The STAGE values are deliberately memory-only:
+  // this panel is a measuring instrument, not a settings surface or a new
+  // product contract. The pane opacity beside them is NOT this panel's — it is
+  // the viewer's real appearance, which the lab drives live and Settings edits.
   const [tuning, setTuning] = useState(defaultGodviewTuning);
+  const appearance = useDeckAppearance();
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -127,7 +131,12 @@ export function GodviewOverlay(): ReactElement | null {
             This host has no terminal bridge — the deck is unavailable here.
           </p>
         )}
-        <GodviewTuningPanel value={tuning} onChange={changeTuning} onReset={resetTuning} />
+        <GodviewTuningPanel
+          value={tuning}
+          appearance={appearance}
+          onChange={changeTuning}
+          onReset={resetTuning}
+        />
       </div>
     </div>
   );

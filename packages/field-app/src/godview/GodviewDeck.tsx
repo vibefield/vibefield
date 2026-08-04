@@ -16,6 +16,7 @@ import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } 
 import { emitGodviewDeckMarker } from "../development-console";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
+import { useDeckAppearance } from "./deck-appearance";
 import {
   paneCwd,
   type RestoreQuestion,
@@ -201,9 +202,14 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
       }
     }
   }, [runtime]);
-  // Read once per mount: the tokens do not move under a running deck, and
-  // re-reading them every render would restyle every surface for nothing.
-  const theme = useMemo(godviewTerminalTheme, []);
+  // The viewer's own appearance (GT-D12), read from the store Settings writes.
+  // Recomputed when it moves and ONLY then: `theme` is not among the
+  // workspace's initialization deps (`storageKey ∥ defaultShell ∥
+  // claimExistingSessions ∥ initialCwd ∥ runtime`), so a new theme re-renders
+  // the panes without re-initializing the deck — an appearance change applies
+  // to an open deck with no remount, no reclaim, and no new pane.
+  const appearance = useDeckAppearance();
+  const theme = useMemo(() => godviewTerminalTheme(appearance), [appearance]);
   /** Stable by construction: `sidebar` is a component TYPE, and a fresh arrow
    * on every render would remount the probe — and re-run its publish — forever. */
   const Sidebar = useMemo(
@@ -472,6 +478,14 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
       sessions: workspace?.sessions.length ?? 0,
       sessionIds: panes.map((pane) => pane.session.id),
       rendererBackend: runtime.rendererBackend,
+      // Read off the theme the workspace was actually handed, not off the
+      // appearance the store holds: what the renderer received is the fact
+      // worth publishing, and the two could only differ because of a bug.
+      glass: {
+        paneBackgroundAlpha: theme.background[3],
+        opacityCells: theme.backgroundOpacityCells === true,
+        themeName: appearance.themeName,
+      },
       ...(error !== null ? { error } : {}),
       ...(consent !== null && consent !== "go" ? { consent } : {}),
       ...(exited.length > 0 ? { exitedSessionIds: exited } : {}),
@@ -479,7 +493,7 @@ export function GodviewDeck({ active }: GodviewDeckProps): ReactElement | null {
         ? { activeSessionId: workspace.activeSession.id }
         : {}),
     });
-  }, [active, workspace, runtime, error, consent]);
+  }, [active, workspace, runtime, error, consent, theme, appearance.themeName]);
 
   const platform: GhostteaWorkspacePlatform | null =
     shell === null

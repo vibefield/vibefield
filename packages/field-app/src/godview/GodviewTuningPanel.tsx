@@ -1,36 +1,29 @@
 import { CARD_BG } from "@vibefield/shell-ui";
 import { type CSSProperties, type ReactElement, useState } from "react";
+import { type DeckAppearance, setDeckAppearance } from "./deck-appearance";
 
-// TEMPORARY: an in-product surface lab for James's Godview visual pass. It is
-// deliberately local state — no setting, storage key, contract, or synced doc.
-// Once the chosen recipe moves into DESIGN.md + styles.css, delete this file and
-// leave only the resulting CSS variables/defaults behind.
-
-export const GODVIEW_BLEND_MODES = [
-  "normal",
-  "screen",
-  "lighten",
-  "plus-lighter",
-  "multiply",
-  "overlay",
-  "soft-light",
-  "color-dodge",
-  "difference",
-] as const;
-
-export type GodviewBlendMode = (typeof GODVIEW_BLEND_MODES)[number];
+// TEMPORARY: an in-product surface lab for James's Godview visual pass. The
+// STAGE values are deliberately local state — no setting, storage key, contract
+// or synced doc. Once the chosen recipe moves into DESIGN.md + styles.css,
+// delete this file and leave only the resulting CSS variables/defaults behind.
+//
+// GT-3v rebased it onto the real knobs. It was born over the screen-composite
+// interim and half its controls existed to compensate for that trick: a blend
+// mode, a canvas opacity, and brightness/contrast/saturation filters over the
+// terminal canvas. 0.9.0 makes the pane transparent in the RENDERER, so there
+// is nothing left to compensate and those controls are gone with the mechanism.
+//
+// The pane opacity survived, but it is no longer this panel's own value: it
+// writes the viewer's real appearance (`deck-appearance.ts`), the same value
+// Settings → Terminal edits and the deck renders. A lab slider holding a second
+// pane opacity beside the product's would be exactly the duplicate authority
+// this slice deleted everywhere else — so what remains here is a live handle on
+// the one truth, not a copy of it.
 
 export interface GodviewTuning {
   stageColor: string;
   stageOpacity: number;
   stageBlur: number;
-  paneColor: string;
-  paneOpacity: number;
-  blendMode: GodviewBlendMode;
-  canvasOpacity: number;
-  brightness: number;
-  contrast: number;
-  saturation: number;
 }
 
 function tokenColor(name: string, fallback: string): string {
@@ -45,18 +38,15 @@ function tokenColor(name: string, fallback: string): string {
   return input.value;
 }
 
+/** DESIGN.md §5's Sheet tier — `surface /90` + `backdrop-blur-3xl` — which is
+ * the material a full-stage panel takes. The overlay was tuned to 92%/48px over
+ * the composited stack; the ground beneath it has changed, so the defaults go
+ * back to the documented recipe and the lab reaches the rest. */
 export function defaultGodviewTuning(): GodviewTuning {
   return {
     stageColor: tokenColor("--vf-card", CARD_BG),
-    stageOpacity: 92,
-    stageBlur: 48,
-    paneColor: tokenColor("--vf-card-deep", CARD_BG),
-    paneOpacity: 0,
-    blendMode: "screen",
-    canvasOpacity: 100,
-    brightness: 100,
-    contrast: 100,
-    saturation: 100,
+    stageOpacity: 90,
+    stageBlur: 64,
   };
 }
 
@@ -68,13 +58,6 @@ export function godviewTuningStyle(value: GodviewTuning): GodviewTuningStyle {
     "--vf-godview-stage-color": value.stageColor,
     "--vf-godview-stage-opacity": `${value.stageOpacity}%`,
     "--vf-godview-stage-blur": `${value.stageBlur}px`,
-    "--vf-godview-pane-color": value.paneColor,
-    "--vf-godview-pane-opacity": `${value.paneOpacity}%`,
-    "--vf-godview-terminal-blend-mode": value.blendMode,
-    "--vf-godview-terminal-opacity": String(value.canvasOpacity / 100),
-    "--vf-godview-terminal-brightness": `${value.brightness}%`,
-    "--vf-godview-terminal-contrast": `${value.contrast}%`,
-    "--vf-godview-terminal-saturation": `${value.saturation}%`,
   };
 }
 
@@ -139,10 +122,12 @@ function ColorControl({
 
 export function GodviewTuningPanel({
   value,
+  appearance,
   onChange,
   onReset,
 }: {
   value: GodviewTuning;
+  appearance: DeckAppearance;
   onChange: (patch: Partial<GodviewTuning>) => void;
   onReset: () => void;
 }): ReactElement {
@@ -201,72 +186,19 @@ export function GodviewTuningPanel({
           </fieldset>
 
           <fieldset>
-            <legend>Terminal background</legend>
-            <ColorControl
-              label="color"
-              value={value.paneColor}
-              onChange={(paneColor) => onChange({ paneColor })}
-            />
+            <legend>Terminal panes</legend>
             <RangeControl
-              label="opacity"
-              value={value.paneOpacity}
+              label="background opacity"
+              value={Math.round(appearance.opacity * 100)}
               min={0}
               max={100}
               unit="%"
-              onChange={(paneOpacity) => onChange({ paneOpacity })}
+              onChange={(percent) => setDeckAppearance({ ...appearance, opacity: percent / 100 })}
             />
-            <p>Background sits behind the canvas; screen and lighten reveal it.</p>
-          </fieldset>
-
-          <fieldset>
-            <legend>Terminal canvas</legend>
-            <label className="vf-godview-tuner-select">
-              <span>blend mode</span>
-              <select
-                value={value.blendMode}
-                onChange={(event) =>
-                  onChange({ blendMode: event.currentTarget.value as GodviewBlendMode })
-                }
-              >
-                {GODVIEW_BLEND_MODES.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {mode}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <RangeControl
-              label="opacity"
-              value={value.canvasOpacity}
-              min={0}
-              max={100}
-              unit="%"
-              onChange={(canvasOpacity) => onChange({ canvasOpacity })}
-            />
-            <RangeControl
-              label="brightness"
-              value={value.brightness}
-              min={0}
-              max={200}
-              unit="%"
-              onChange={(brightness) => onChange({ brightness })}
-            />
-            <RangeControl
-              label="contrast"
-              value={value.contrast}
-              min={0}
-              max={200}
-              unit="%"
-              onChange={(contrast) => onChange({ contrast })}
-            />
-            <RangeControl
-              label="saturation"
-              value={value.saturation}
-              min={0}
-              max={200}
-              unit="%"
-              onChange={(saturation) => onChange({ saturation })}
-            />
+            <p>
+              The renderer's own background alpha — the same setting as Settings → Terminal, saved
+              for this device.
+            </p>
           </fieldset>
         </div>
       )}

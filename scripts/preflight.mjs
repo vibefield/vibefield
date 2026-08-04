@@ -40,11 +40,21 @@ try {
 // pin means editing the pin AND this table in one commit — that is the ritual.
 const PIN_EXPECTATIONS = [
   { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.12"/m, label: 'truffle-core = "=0.7.12"' },
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.8\.0"/m, label: 'ghosttea = "=0.8.0"' },
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.9\.0"/m, label: 'ghosttea = "=0.9.0"' },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.8\.0/,
-    label: '"@vibecook/ghosttea-client": 0.8.0',
+    re: /"@vibecook\/ghosttea-client":\s*0\.9\.0/,
+    label: '"@vibecook/ghosttea-client": 0.9.0',
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/ghosttea-electron":\s*0\.9\.0/,
+    label: '"@vibecook/ghosttea-electron": 0.9.0',
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/ghosttea-react":\s*0\.9\.0/,
+    label: '"@vibecook/ghosttea-react": 0.9.0',
   },
 ];
 for (const { file, re, label } of PIN_EXPECTATIONS) {

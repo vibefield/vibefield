@@ -33,6 +33,13 @@ export interface GodviewDeckFacts {
    * every workspace hotkey already means — so a harness driving it has to be
    * told which one that is rather than guessing from the DOM. */
   activeSessionId?: string;
+  /** GT-3v: the glass, as structure rather than pixels. `paneBackgroundAlpha`
+   * is the alpha the RENDERER was handed for its pane ground — below 1 is the
+   * whole claim of this slice, and it is checkable without reading a frame.
+   * `themeName` is null for the deck's own `--vf-*` palette. Whether the result
+   * LOOKS right is James's eye; that a non-opaque background reached the
+   * renderer is a fact a harness can hold. */
+  glass: { paneBackgroundAlpha: number; opacityCells: boolean; themeName: string | null };
 }
 
 export function emitGodviewDeckMarker(facts: GodviewDeckFacts): void {

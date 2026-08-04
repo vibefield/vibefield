@@ -296,18 +296,12 @@ body {
    Written here and not inline so the reduced-motion override below can simply
    win on specificity instead of shouting !important at an inline style. */
 .vf-godview {
-  /* Temporary live-tuning defaults. GodviewTuningPanel overrides these on the
-     element; deleting the panel leaves the chosen final recipe here. */
+  /* The glass, at DESIGN.md §5's Sheet tier (surface /90 + backdrop-blur-3xl) —
+     the material a full-stage panel takes. GodviewTuningPanel overrides these on
+     the element; deleting the panel leaves the chosen final recipe here. */
   --vf-godview-stage-color: var(--vf-card);
-  --vf-godview-stage-opacity: 92%;
-  --vf-godview-stage-blur: 48px;
-  --vf-godview-pane-color: var(--vf-card-deep);
-  --vf-godview-pane-opacity: 0%;
-  --vf-godview-terminal-blend-mode: screen;
-  --vf-godview-terminal-opacity: 1;
-  --vf-godview-terminal-brightness: 100%;
-  --vf-godview-terminal-contrast: 100%;
-  --vf-godview-terminal-saturation: 100%;
+  --vf-godview-stage-opacity: 90%;
+  --vf-godview-stage-blur: 64px;
   position: absolute;
   inset: 0;
   z-index: 60;
@@ -348,24 +342,14 @@ body {
   background: transparent;
 }
 
+/* The pane's ground belongs to the RENDERER now (GT-D12's layering: canvas →
+   this overlay's glass → panes at their own background alpha). 0.9.0 honours
+   that alpha in both paths — WebGPU premultiplies the theme background into its
+   clear color, Canvas2D asks for an alpha context — so the deck's theme is the
+   one place pane transparency is set. A tint here would be a fourth layer over
+   a three-layer stack, and a second opacity over the one the user chose. */
 .vf-godview .ghostty-pane {
-  background: color-mix(
-    in srgb,
-    var(--vf-godview-pane-color) var(--vf-godview-pane-opacity),
-    transparent
-  );
-}
-
-/* Ghosttea 0.8.0 flattens each terminal into an opaque canvas: its WebGPU
-   damage rows deliberately reset with alpha 1, and its Canvas2D fallback asks
-   for an alpha-less context. Screen's neutral black makes the renderer's
-   --vf-card-deep ground optically transparent in both paths without disabling
-   partial rendering or changing the opacity of text and program-owned cells. */
-.vf-godview .terminal-surface canvas {
-  mix-blend-mode: var(--vf-godview-terminal-blend-mode);
-  opacity: var(--vf-godview-terminal-opacity);
-  filter: brightness(var(--vf-godview-terminal-brightness))
-    contrast(var(--vf-godview-terminal-contrast)) saturate(var(--vf-godview-terminal-saturation));
+  background: transparent;
 }
 
 /* TEMPORARY — Godview's floating surface lab. It is intentionally compact and

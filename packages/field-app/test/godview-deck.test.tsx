@@ -63,9 +63,28 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
     workspaceMounts.push(props);
     return null;
   },
+  // 0.9.0's pinned color catalog, as the two entries these tests select
+  // between. Stubbed rather than real because the fixture's whole point is to
+  // hold the library still: a 602-entry catalog would make an assertion about
+  // "the theme the deck handed over" depend on upstream's data.
+  GHOSTTY_COLOR_THEMES: [
+    {
+      name: "Test Amber",
+      background: "#201000",
+      foreground: "#ffcc66",
+      cursor: "#ffcc66",
+      cursorText: "#201000",
+      selection: "#553300",
+      selectionForeground: "#ffffff",
+      palette: [],
+    },
+  ],
 }));
 
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
+const { DEFAULT_DECK_APPEARANCE, resetDeckAppearanceForTest, setDeckAppearance } = await import(
+  "../src/godview/deck-appearance"
+);
 
 const DECK_STORAGE_KEY = "vf-godview-deck-v1";
 
@@ -155,6 +174,7 @@ beforeEach(() => {
   connects = 0;
   publishStatus = null;
   localStorage.clear();
+  resetDeckAppearanceForTest();
   installHost();
   vi.spyOn(console, "log").mockImplementation((line: unknown) => {
     if (typeof line === "string" && line.startsWith("GODVIEW_DECK ")) {
@@ -240,6 +260,61 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     expect(runtimes, "a republished state is not a transition").toHaveLength(2);
     expect(connects).toBe(2);
     expect(workspaceMounts.length).toBe(mountsAfterRecovery);
+  });
+
+  it("re-themes an OPEN deck without re-initializing it (GT-3v)", async () => {
+    // The property GT-D12's live-apply rests on. The workspace keys its
+    // initialization on `storageKey ∥ defaultShell ∥ claimExistingSessions ∥
+    // initialCwd ∥ runtime` — `theme` is deliberately not among them — so an
+    // appearance change must reach the panes as a new prop and NOTHING else.
+    // The failure this guards is not cosmetic: a re-initialization here claims
+    // sessions and creates a pane, so a user sliding an opacity control would
+    // spawn shells.
+    await mountDeck();
+    const before = workspaceMounts[workspaceMounts.length - 1]!;
+    expect((before.theme as { background: number[] }).background[3]).toBeCloseTo(
+      DEFAULT_DECK_APPEARANCE.opacity,
+    );
+
+    await act(async () => {
+      setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, opacity: 0.5 });
+    });
+    await settle();
+
+    const after = workspaceMounts[workspaceMounts.length - 1]!;
+    expect((after.theme as { background: number[] }).background[3]).toBeCloseTo(0.5);
+    expect(runtimes, "a repaint is not a rebuild").toHaveLength(1);
+    expect(connects, "nothing re-redeemed a ticket").toBe(1);
+    // The init key, field by field: identical across the change is the whole
+    // claim. Comparing the values (not the props object) is deliberate — the
+    // deck rebuilds its platform object every render by design, and only
+    // `defaultShell` off it is read by the library's initialization.
+    for (const key of ["storageKey", "claimExistingSessions", "initialCwd"] as const) {
+      expect(after[key], `${key} moved under the workspace`).toEqual(before[key]);
+    }
+    expect((after.platform as { defaultShell: string }).defaultShell).toBe(
+      (before.platform as { defaultShell: string }).defaultShell,
+    );
+  });
+
+  it("carries a named catalog theme through to the renderer's palette", async () => {
+    await mountDeck();
+    await act(async () => {
+      setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, themeName: "Test Amber", opacity: 0.7 });
+    });
+    await settle();
+
+    const theme = workspaceMounts[workspaceMounts.length - 1]!.theme as {
+      background: number[];
+      foreground: number[];
+    };
+    // The chosen palette is taken WHOLE — its own foreground, not this app's
+    // white — while the viewer's alpha still rides on its background.
+    expect(theme.background[3]).toBeCloseTo(0.7);
+    expect(theme.foreground[0]).toBeCloseTo(1);
+    expect(theme.foreground[1]).toBeCloseTo(0xcc / 255);
+    expect(theme.foreground[2]).toBeCloseTo(0x66 / 255);
+    expect(latest().glass.themeName).toBe("Test Amber");
   });
 
   it("mints a fresh runtime on retry, because the spent wait can never resolve", async () => {

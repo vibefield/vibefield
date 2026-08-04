@@ -27,6 +27,7 @@ import {
   SettingsSection,
   SettingsSwitch,
 } from "./settings-ui";
+import { TerminalAppearanceSection } from "./TerminalAppearanceSection";
 import { TerminalSection } from "./TerminalSection";
 import type { OverlapGlowConfig, OverlapGlowThemeColors, ThemeColors } from "./types";
 
@@ -949,7 +950,14 @@ export function SettingsPanel({
   } else if (activePage === "mesh") {
     pageContent = <MeshSection />;
   } else if (activePage === "terminal") {
-    pageContent = <TerminalSection />;
+    // Two owners, in the order a reader meets them: how this viewer draws the
+    // deck, then the device-wide file every terminal loads (GT-D12).
+    pageContent = (
+      <div className="space-y-4">
+        <TerminalAppearanceSection />
+        <TerminalSection />
+      </div>
+    );
   } else if (activePage === "diagnostics") {
     pageContent = (
       <div className="space-y-4">

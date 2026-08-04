@@ -161,6 +161,8 @@ interface DeckFacts {
   exitedSessionIds?: string[];
   /** the pane the deck's own affordances act on */
   activeSessionId?: string;
+  /** GT-3v: the alpha the RENDERER was handed, and whose palette it came from */
+  glass: { paneBackgroundAlpha: number; opacityCells: boolean; themeName: string | null };
 }
 
 /** A running tail of the deck's markers, armed BEFORE the load so a fast deck
@@ -965,9 +967,19 @@ export async function runSmokeGodview(opts: {
     );
     verdict["configPath"] = document.path;
     verdict["configExisted"] = document.exists;
+    // GT-3v: the written text now carries an APPEARANCE-class key. It is the
+    // interesting case for this document precisely because 0.9.0 gave the same
+    // concept a second, viewer-local home — so the write proves the device file
+    // still owns its key, and the deck's own glass (asserted below) proves the
+    // two homes do not leak into one another.
+    const configText = `# written by pnpm smoke:godview\nfont-size = 13\nbackground-opacity = 0.62\n`;
+    const glassBefore = deck.current()?.glass;
+    if (glassBefore === undefined) {
+      throw new Error("the deck reported no glass before the config write");
+    }
     const wrote = TerminalConfigWriteResult.parse(
       await opts.handle.client.request("terminal.config.write", {
-        text: `# written by pnpm smoke:godview\nfont-size = 13\n`,
+        text: configText,
         revision: document.revision,
       }),
     );
@@ -982,10 +994,15 @@ export async function runSmokeGodview(opts: {
     if (!wrote.ok) {
       throw new Error(`the floor refused a benign config: ${JSON.stringify(wrote.diagnostics)}`);
     }
-    if (
-      readFileSync(document.path, "utf8") !== "# written by pnpm smoke:godview\nfont-size = 13\n"
-    ) {
+    if (readFileSync(document.path, "utf8") !== configText) {
       throw new Error(`the config file does not hold what was written: ${document.path}`);
+    }
+    // `effectiveChanged` is the floor's own verdict that the reload moved its
+    // effective configuration — which for an appearance key is the round trip
+    // worth naming: the document authority accepted it, the loader read it, and
+    // it landed somewhere real rather than being parsed and dropped.
+    if (!wrote.effectiveChanged) {
+      throw new Error("background-opacity reached the file but changed no effective configuration");
     }
     // A settings change must not be a kill. Read PAST the observed round trip
     // before believing the good news, the same way row 6 does.
@@ -1000,6 +1017,28 @@ export async function runSmokeGodview(opts: {
       throw new Error(`a config reload ended ${lost.map((row) => row.sessionId).join(",")}`);
     }
     verdict["configSurvivors"] = afterConfig.length;
+
+    // 11b. THE GLASS ROW (GT-3v / GT-D12). Structure, not pixels — whether the
+    //      result looks right is James's eye; that a non-opaque background
+    //      reached the RENDERER is a fact, and so is which home it came from.
+    const glassAfter = deck.current()?.glass;
+    if (glassAfter === undefined) throw new Error("the deck stopped reporting its glass");
+    verdict["glassPaneAlpha"] = glassAfter.paneBackgroundAlpha;
+    verdict["glassThemeName"] = glassAfter.themeName;
+    if (!(glassAfter.paneBackgroundAlpha < 1)) {
+      throw new Error(
+        `the deck handed the renderer an opaque pane background (${glassAfter.paneBackgroundAlpha})`,
+      );
+    }
+    // The other direction, and the one a regression would take: appearance is
+    // the VIEWER's (GT-D12), so the 0.62 just written into the DEVICE file must
+    // not have moved this deck. If these ever agree, the two homes have merged
+    // and GT-5's phone would inherit this desktop's glass.
+    if (glassAfter.paneBackgroundAlpha !== glassBefore.paneBackgroundAlpha) {
+      throw new Error(
+        `the device config moved the viewer's appearance: ${glassBefore.paneBackgroundAlpha} → ${glassAfter.paneBackgroundAlpha}`,
+      );
+    }
 
     // 12. The recovery row, inherited from the GT-1 spike: SIGKILL the bridge
     //    and watch the deck come back on a new runtime with the same sessions.

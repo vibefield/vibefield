@@ -3,6 +3,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_DECK_APPEARANCE,
+  getDeckAppearance,
+  resetDeckAppearanceForTest,
+} from "../src/godview/deck-appearance";
+import {
   defaultGodviewTuning,
   GodviewTuningPanel,
   godviewTuningStyle,
@@ -18,6 +23,7 @@ afterEach(() => {
   host?.remove();
   root = null;
   host = null;
+  resetDeckAppearanceForTest();
 });
 
 function mountPanel(onChange = vi.fn(), onReset = vi.fn()): HTMLElement {
@@ -26,7 +32,12 @@ function mountPanel(onChange = vi.fn(), onReset = vi.fn()): HTMLElement {
   root = createRoot(host);
   act(() =>
     root?.render(
-      <GodviewTuningPanel value={defaultGodviewTuning()} onChange={onChange} onReset={onReset} />,
+      <GodviewTuningPanel
+        value={defaultGodviewTuning()}
+        appearance={DEFAULT_DECK_APPEARANCE}
+        onChange={onChange}
+        onReset={onReset}
+      />,
     ),
   );
   return host;
@@ -50,53 +61,63 @@ function setControlValue(control: HTMLInputElement | HTMLSelectElement, value: s
 }
 
 describe("the temporary Godview surface lab", () => {
-  it("turns every exposed value into a live CSS variable", () => {
+  it("projects the stage values it still owns, and nothing else", () => {
     const style = godviewTuningStyle({
       ...defaultGodviewTuning(),
       stageOpacity: 73,
       stageBlur: 22,
-      paneOpacity: 41,
-      blendMode: "lighten",
-      canvasOpacity: 88,
-      brightness: 112,
-      contrast: 93,
-      saturation: 76,
     });
 
     expect(style["--vf-godview-stage-opacity"]).toBe("73%");
     expect(style["--vf-godview-stage-blur"]).toBe("22px");
-    expect(style["--vf-godview-pane-opacity"]).toBe("41%");
-    expect(style["--vf-godview-terminal-blend-mode"]).toBe("lighten");
-    expect(style["--vf-godview-terminal-opacity"]).toBe("0.88");
-    expect(style["--vf-godview-terminal-brightness"]).toBe("112%");
-    expect(style["--vf-godview-terminal-contrast"]).toBe("93%");
-    expect(style["--vf-godview-terminal-saturation"]).toBe("76%");
+    // The compositing variables retired with the mechanism they drove: pane
+    // transparency is the renderer's background alpha now, so a lab that still
+    // published a blend mode would be publishing a knob nothing reads.
+    expect(Object.keys(style).filter((key) => key.includes("terminal"))).toEqual([]);
+    expect(Object.keys(style)).not.toContain("--vf-godview-pane-opacity");
   });
 
-  it("publishes color, range, and blend edits immediately", () => {
+  it("defaults the stage to DESIGN.md §5's Sheet tier", () => {
+    const tuning = defaultGodviewTuning();
+    expect(tuning.stageOpacity).toBe(90);
+    expect(tuning.stageBlur).toBe(64);
+  });
+
+  it("publishes stage edits immediately", () => {
     const onChange = vi.fn();
     const element = mountPanel(onChange);
 
-    const stageOpacity = fieldsetNamed(element, "Stage").querySelector<HTMLInputElement>(
-      'input[type="range"]',
-    );
-    const paneColor = fieldsetNamed(element, "Terminal background").querySelector<HTMLInputElement>(
-      'input[type="color"]',
-    );
-    const blendMode = fieldsetNamed(element, "Terminal canvas").querySelector<HTMLSelectElement>(
-      "select",
-    );
-    if (stageOpacity === null || paneColor === null || blendMode === null) {
+    const stage = fieldsetNamed(element, "Stage");
+    const stageOpacity = stage.querySelector<HTMLInputElement>('input[type="range"]');
+    const stageColor = stage.querySelector<HTMLInputElement>('input[type="color"]');
+    if (stageOpacity === null || stageColor === null) {
       throw new Error("the tuning controls did not render");
     }
 
     act(() => setControlValue(stageOpacity, "64"));
-    act(() => setControlValue(paneColor, "#123456"));
-    act(() => setControlValue(blendMode, "overlay"));
+    act(() => setControlValue(stageColor, "#123456"));
 
     expect(onChange).toHaveBeenCalledWith({ stageOpacity: 64 });
-    expect(onChange).toHaveBeenCalledWith({ paneColor: "#123456" });
-    expect(onChange).toHaveBeenCalledWith({ blendMode: "overlay" });
+    expect(onChange).toHaveBeenCalledWith({ stageColor: "#123456" });
+  });
+
+  it("drives the REAL appearance from the pane slider, not a second copy", () => {
+    // The handover, asserted where it could regress: the lab's pane control
+    // writes the viewer's appearance store — the same value Settings edits and
+    // the deck renders — rather than a memory-only duplicate.
+    const onChange = vi.fn();
+    const element = mountPanel(onChange);
+    const paneOpacity = fieldsetNamed(element, "Terminal panes").querySelector<HTMLInputElement>(
+      'input[type="range"]',
+    );
+    if (paneOpacity === null) throw new Error("the pane opacity control did not render");
+
+    act(() => setControlValue(paneOpacity, "45"));
+
+    expect(getDeckAppearance().opacity).toBeCloseTo(0.45);
+    // It is NOT the panel's own state: nothing about a pane went through the
+    // stage patch channel.
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("resets on demand and collapses without losing the floating handle", () => {
