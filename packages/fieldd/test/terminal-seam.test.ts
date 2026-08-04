@@ -4,7 +4,7 @@
 // ticket attaches an external ghosttea client, the epoch path accepts
 // automation input, and terminate runs the real ladder. This is the seam half
 // of the spec's §9 NF-3 gate; the kill matrix proper is NF-4.
-import { type ChildProcess, execSync, spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -22,8 +22,17 @@ const BIN = join(ROOT, "target/debug/field-native");
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
 
-beforeAll(() => {
-  execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
+beforeAll(async () => {
+  // Async on purpose: a synchronous build blocks the vitest worker's event
+  // loop, and on a cold CI cache that starves the worker→host RPC past its
+  // timeout (the "onTaskUpdate" red with every test green).
+  await new Promise<void>((resolveBuild, reject) => {
+    const build = spawn("cargo", ["build", "-p", "field-native"], { cwd: ROOT, stdio: "ignore" });
+    build.once("error", reject);
+    build.once("exit", (code) =>
+      code === 0 ? resolveBuild() : reject(new Error(`cargo build -p field-native exited ${code}`)),
+    );
+  });
 }, 180_000);
 
 afterEach(async () => {

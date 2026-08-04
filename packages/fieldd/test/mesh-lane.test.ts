@@ -7,7 +7,7 @@
 //     a bare daemon cannot produce because inbound delivery needs a transport
 //     and there is no mesh node in tests. The fake is not a shortcut around the
 //     real thing; it is the only way to drive bytes INTO fieldd today.
-import { type ChildProcess, execSync, spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
@@ -25,8 +25,17 @@ let children: ChildProcess[] = [];
 let dirs: string[] = [];
 let closers: (() => void)[] = [];
 
-beforeAll(() => {
-  execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
+beforeAll(async () => {
+  // Async on purpose: a synchronous build blocks the vitest worker's event
+  // loop, and on a cold CI cache that starves the worker→host RPC past its
+  // timeout (the "onTaskUpdate" red with every test green).
+  await new Promise<void>((resolveBuild, reject) => {
+    const build = spawn("cargo", ["build", "-p", "field-native"], { cwd: ROOT, stdio: "ignore" });
+    build.once("error", reject);
+    build.once("exit", (code) =>
+      code === 0 ? resolveBuild() : reject(new Error(`cargo build -p field-native exited ${code}`)),
+    );
+  });
 }, 180_000);
 
 afterEach(async () => {

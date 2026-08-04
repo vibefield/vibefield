@@ -1,7 +1,7 @@
 // THE handshake test: fieldd (TypeScript) pairs with the REAL field-native
 // (Rust binary) over the mgmt UDS — D8 end to end, then the full spine:
 // WS client → ProductAPI → NativeLink → field-native and back.
-import { type ChildProcess, execSync, spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -27,8 +27,17 @@ function nativeEnv(dataDir: string): NodeJS.ProcessEnv {
   };
 }
 
-beforeAll(() => {
-  execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
+beforeAll(async () => {
+  // Async on purpose: a synchronous build blocks the vitest worker's event
+  // loop, and on a cold CI cache that starves the worker→host RPC past its
+  // timeout (the "onTaskUpdate" red with every test green).
+  await new Promise<void>((resolveBuild, reject) => {
+    const build = spawn("cargo", ["build", "-p", "field-native"], { cwd: ROOT, stdio: "ignore" });
+    build.once("error", reject);
+    build.once("exit", (code) =>
+      code === 0 ? resolveBuild() : reject(new Error(`cargo build -p field-native exited ${code}`)),
+    );
+  });
 }, 180_000);
 
 afterEach(async () => {

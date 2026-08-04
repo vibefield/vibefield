@@ -4,7 +4,7 @@
 // env strip holds through the real spawn path; epoch arbitration reaches
 // through the D6 ticket; churn leaves no residue. Row 2 (field-native's own
 // SIGTERM sweep) is pinned Rust-side in field-native/tests/terminal_unit.rs.
-import { type ChildProcess, execSync, spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,8 +21,17 @@ const BIN = join(ROOT, "target/debug/field-native");
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
 
-beforeAll(() => {
-  execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
+beforeAll(async () => {
+  // Async on purpose: a synchronous build blocks the vitest worker's event
+  // loop, and on a cold CI cache that starves the worker→host RPC past its
+  // timeout (the "onTaskUpdate" red with every test green).
+  await new Promise<void>((resolveBuild, reject) => {
+    const build = spawn("cargo", ["build", "-p", "field-native"], { cwd: ROOT, stdio: "ignore" });
+    build.once("error", reject);
+    build.once("exit", (code) =>
+      code === 0 ? resolveBuild() : reject(new Error(`cargo build -p field-native exited ${code}`)),
+    );
+  });
 }, 180_000);
 
 afterEach(async () => {
