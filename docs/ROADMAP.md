@@ -3,8 +3,9 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-03** (GT caught up through
-> GT-2e `a3babb7` + GT-3 `af316db` — the one-authority correction, then restore/kill/config;
+> stays in the design docs + specs. Last rewritten: **2026-08-04** (GT-3v `440b04e` — the
+> glass deck on ghosttea 0.9.0, appearance viewer-local; earlier: GT-2e `a3babb7` + GT-3
+> `af316db` — the one-authority correction, then restore/kill/config;
 > AH-0 ratified; T2 consumed in exact-pinned Truffle v0.7.12; AH-1a/1b serving
 > implementation landed at `9f80f0c` with its physical two-client tailnet proof still owed;
 > AH-2 global validated catalog landed at `9c17c46`; AH-3 desktop runtime landed at
@@ -44,7 +45,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
-| GT — Godview terminal | **IN FLIGHT** — GT-0…3 landed, incl. the **GT-2e one-authority correction** (spec v0.3) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach |
+| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + **3v glass deck on 0.9.0** landed (spec v0.3, GT-D10…D12) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
@@ -58,9 +59,13 @@ before anything relaunches; `paneMeta` carries `{cwd, title}`; dead panes come b
 in their folders), the audited two-step kill chip, the `config.ghostty` surface (Settings →
 Terminal raw editor; atomic write + live reload through the floor's own document API; the
 user's real Ghostty config imported underneath), and paid both named test debts (deck-mount
-fixture; `keystrokeEchoMs: 3` report-only). Next slice **GT-4**: `with_terminal_mesh` behind
-config + `terminal.v1.hosts` + mirror-write v1 — the desktop deck's ⌘⇧O remote panes are the
-test row, and NF-remote rides it.
+fixture; `keystrokeEchoMs` report-only). GT-3v put the deck on ghosttea **0.9.0** and made it
+glass: renderer-true semi-transparent panes over the blurred canvas (James's screen-composite
+interim retired), appearance viewer-local per GT-D12 — 602 themes + shader catalog built from
+upstream's exported data in our design system, persisted beside the layout, never in the
+floor's config; the surface lab stays as the stage-tuning instrument. Next slice **GT-4**:
+`with_terminal_mesh` behind config + `terminal.v1.hosts` + mirror-write v1 — the desktop
+deck's ⌘⇧O remote panes are the test row, and NF-remote rides it.
 
 **AH.** The serving seam and global catalog are landed. `9f80f0c` replaces C6's
 `{name,target}` writer behind its one-window adapter, persists v2 source-local intent, assigns
@@ -142,6 +147,22 @@ remain gates, so this work is not recorded in LANDED yet.
   (deletes the sub-second persistence-flip window) + a login/default-args knob (panes are
   non-login interactive shells today; packaged-run PATH poverty is the risk) (GT-2e/GT-3,
   2026-08-02).
+- **G11 ghosttea petition candidate, unfiled** — `effects?: TerminalEffects` as `theme`'s
+  sibling on `GhostteaWorkspaceProps` (0.9.0's viewer-local law is two-thirds implementable
+  by a host without it; shaders ship honest-UNAVAILABLE meanwhile) + export
+  `AppearanceSettings` or document data-only as the host contract (GT-3v, 2026-08-04).
+- **`configEditor` bridge** — the 0.9.0 two-track editor seam needs `terminal.config.validate`
+  (new product method) + three main-side file dialogs; GT-3's raw editor is the raw track
+  meanwhile (GT-3v, 2026-08-04).
+- **Surface lab is not dev-gated** — renders in production builds; field-app has no dev-gate
+  idiom to borrow. James's call: gate it, keep it, or retire it after the visual pass
+  (GT-3v, 2026-08-04).
+- **`prefers-reduced-transparency` has no policy** — DESIGN.md has M6 for motion and no
+  transparency stance; proposal in `440b04e`'s body (glass falls back to §5 tint at full
+  opacity); the doc changes first (GT-3v, 2026-08-04).
+- **Godview smoke reload rows are load-flaky** — 2/3 builder failures with a packaged app +
+  dev session running, pass on retry with identical code; orchestrator passed under the same
+  load. Pre-existing, not GT-3v's; watch it (2026-08-04).
 
 ## Eyeballs owed (James's standing visual passes)
 
@@ -154,11 +175,17 @@ remain gates, so this work is not recorded in LANDED yet.
   (AH-3 closeout; runtime implementation `8c07bf4`).
 - The Godview deck end-to-end (⌘G): the zsh first pane, the consent face after a session
   dies, the kill chip's two steps, Settings → Terminal editor with a live reload (GT-2e/3).
+- **The glass pass (GT-3v)**: canvas ghosting through semi-transparent panes at the §5 SHEET
+  tier · the surface lab's stage knobs · Settings → Terminal appearance section (theme
+  catalog, shader cards incl. the honest UNAVAILABLE ports, opacity slider) · a theme +
+  opacity change applying to an open deck live — then decide the lab's fate and the
+  reduced-transparency stance.
 
 ## Upstream / sibling pins (the EL8 watch)
 
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
-ghosttea `=0.8.0` on all planes · chopsticks 0.1.4 · strata 0.10.0 (via ICE) ·
-`@vibecook/ice` 0.2.0 (registry pin). G7/G8/G9 consumed at NF-7; G10 candidate named at
-GT-2e/3, unfiled; C7 implemented upstream, consumption rides AR. Full petition status:
+ghosttea `=0.9.0` on all planes (GT-3v + IOS-EL8, 2026-08-04; preflight now also pins
+`-electron`/`-react`) · chopsticks 0.1.4 · strata 0.10.0 (via ICE) · `@vibecook/ice` 0.2.0
+(registry pin). G7/G8/G9 consumed at NF-7; G10 + G11 candidates named at GT-2e/3 and GT-3v,
+unfiled; C7 implemented upstream, consumption rides AR. Full petition status:
 `petitions/README.md`.

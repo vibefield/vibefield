@@ -621,3 +621,28 @@ zoom/theme/Artifacts cluster, and the 416px right-edge overlay without field ref
 owns staging/signing bundled plugin manifests for packaged discovery, and James's both-theme,
 reduced-motion, native Folder picker, and real add/open visual pass remains an explicit AH-3
 closeout rather than an inferred claim. AH-4 adds preview capture; AH-5 adds the phone list.
+
+## GT-3v — the deck turns to glass
+
+**GT-3v LANDED (2026-08-04, `440b04e` — builder + orchestrator re-verification).** Ghosttea
+**0.9.0** consumed as one EL8 event (Cargo `=0.9.0` + npm overrides + preflight guards — which
+gained two rows that could previously drift silently; the event split honestly with IOS-EL8
+`7c017f5` taking SwiftPM, no overlapping files). James's screen-composite interim (`b87927a`)
+retired: 0.9.0 honours background alpha in BOTH renderer paths, so panes are semi-transparent
+the renderer's way — ICE canvas → overlay glass at DESIGN.md §5 SHEET tier → transparent cell
+backgrounds. Appearance is the VIEWER's (GT-D12): built from upstream's exported DATA (602
+themes + revision, shader ports with license badges, honest UNAVAILABLE for rights-unclear
+ports) in our design system, persisted in renderer localStorage beside the layout it
+decorates — `saveAppearance` deliberately unwired (it patches the config document: a second
+appearance authority, the GT-D10 smell) and `configEditor` a named follow-up (needs
+`terminal.config.validate` + file dialogs). The surface lab survives as the stage instrument;
+its pane-opacity knob is now a live handle on the real store. Verified in source: control
+minor 13 unchanged both versions; PF6 holds under animated shaders (hidden deck schedules
+zero frames). Smoke proves GT-D12 both ways: `glassPaneAlpha 0.82` at the renderer, unmoved
+by `background-opacity 0.62` in the device config — the two homes never merged, which is what
+keeps GT-5's phone from inheriting desktop glass. Petition material for **G11**: an
+`effects?: TerminalEffects` sibling of `theme` (viewer-local shaders are blocked without it)
++ export-or-document `AppearanceSettings`. Verify + smoke exit 0, re-run by the orchestrator
+under the same machine load that flaked the builder's reload rows (passed; flake is
+load-correlated, pre-existing). Full record: `specs/godview-terminal.md` (GT-D12 erratum +
+GT-3v findings).
