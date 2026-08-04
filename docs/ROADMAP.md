@@ -45,7 +45,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
-| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + **3v glass deck on 0.9.0** landed (spec v0.3, GT-D10…D12) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach |
+| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + **3v glass** + **3m mocked monitor** landed (spec v0.3, GT-D10…D13) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach; AR replaces the monitor's one mock module |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
@@ -63,7 +63,11 @@ fixture; `keystrokeEchoMs` report-only). GT-3v put the deck on ghosttea **0.9.0*
 glass: renderer-true semi-transparent panes over the blurred canvas (James's screen-composite
 interim retired), appearance viewer-local per GT-D12 — 602 themes + shader catalog built from
 upstream's exported data in our design system, persisted beside the layout, never in the
-floor's config; the surface lab stays as the stage-tuning instrument. Next slice **GT-4**:
+floor's config; the surface lab stays as the stage-tuning instrument. GT-3m ported the
+reference app's agent monitor (swarm/list/rain, matter-js) into the overlay behind an
+explicitly labeled MOCK source — the smoke fails if the label goes missing — with agent
+colors in the §2.6 accent slots (`--vf-accent-1..8` now real tokens); AR replaces exactly
+one module (`MockAgentField`) and deletes the label. Next slice **GT-4**:
 `with_terminal_mesh` behind config + `terminal.v1.hosts` + mirror-write v1 — the desktop
 deck's ⌘⇧O remote panes are the test row, and NF-remote rides it.
 
@@ -180,6 +184,10 @@ remain gates, so this work is not recorded in LANDED yet.
   catalog, shader cards incl. the honest UNAVAILABLE ports, opacity slider) · a theme +
   opacity change applying to an open deck live — then decide the lab's fate and the
   reduced-transparency stance.
+- **The swarm pass (GT-3m)**: nine mock agents swimming over the stage (swarm default;
+  list and rain via the switcher) · accent-slot colors + working/waiting state reads in
+  both themes · the "preview — mock agents" label · the monitor section in the surface
+  lab · select/create acknowledging without mounting (GT-3m).
 
 ## Upstream / sibling pins (the EL8 watch)
 

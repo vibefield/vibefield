@@ -646,3 +646,26 @@ keeps GT-5's phone from inheriting desktop glass. Petition material for **G11**:
 under the same machine load that flaked the builder's reload rows (passed; flake is
 load-correlated, pre-existing). Full record: `specs/godview-terminal.md` (GT-D12 erratum +
 GT-3v findings).
+
+## GT-3m — the swarm arrives, mocked
+
+**GT-3m LANDED (2026-08-04, `7dea861` — builder + orchestrator re-verification).** The
+reference app's agent monitor, ported into the Godview overlay and fed by an explicitly
+labeled MOCK (GT-D13): `monitor/` + three views (swarm default · list · rain, matter-js
+`0.19.0` exact) verbatim at the module boundary — a view stays a PURE function of
+`{agents, parameters, actions}` that can reach no runtime, workspace, or terminal. Adapted
+with reasons: agent colors hash into DESIGN.md §2.6 accent SLOTS (a free hue wheel can
+collide with state meanings), the rain re-said in our state/ramp/accent tokens, the
+reference TweakPanel folded into the surface lab, `--vf-accent-1..8` materialized into
+shell-ui tokens (a doc-only set becoming tokens; DESIGN.md unchanged). Facet types decided
+from source: the terminal half is REAL (`SessionSummary`; ghosttea-protocol newly declared +
+preflight-pinned), the agent half mirrored AR-replaceable (three of four types live in no
+chopsticks package; the fourth would drag the Node-plane runtime into the renderer graph).
+`MockAgentField`: seeded, pure-in-tick, eight agents across the pinned providers plus one
+unclaimed terminal, an exit at tick 24 and an arrival at 33 — it emits STATE so the real
+classifier stays on the path. Mock actions acknowledge and mount nothing — structurally,
+the stage holds no door. PF6 verified two ways (stage disposal; overlay causation). The
+smoke's monitor row FAILS if the "preview — mock agents" label goes missing — the
+honest-states law enforced by the harness. AR replaces exactly one module and deletes the
+label. Verify + smoke exit 0, re-run by the orchestrator. Full record:
+`specs/godview-terminal.md` (GT-D13 + GT-3m findings).
