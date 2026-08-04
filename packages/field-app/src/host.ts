@@ -68,7 +68,7 @@ export interface FieldTerminalHost {
   onStatus(handler: (status: TerminalBridgeStatus) => void): () => void;
 }
 
-/** The Godview overlay's open bit, which the HOST owns (GT-D2): ⌘G is an
+/** The Godview overlay's open bit, which the HOST owns (GT-D2): ⌘⎋ is an
  * application accelerator and never reaches this page, so the renderer reads
  * the state rather than keeping one. `set` with no argument is a flip. */
 export interface FieldGodviewHost {

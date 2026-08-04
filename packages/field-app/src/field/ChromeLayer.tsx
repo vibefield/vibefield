@@ -150,7 +150,7 @@ export function ChromeLayer({
   const activeSidePanel =
     sidePanelSurface?.surfaceId === sidePanelSurfaceId ? sidePanelSurface : null;
   // One state, three readers: the overlay, the toolbar button, and the stage
-  // hold. Owned by main (GT-D2) because ⌘G never reaches this page.
+  // hold. Owned by main (GT-D2) because ⌘⎋ never reaches this page.
   const godviewOpen = useGodviewOpen();
 
   const closeSidePanel = useCallback((returnFocus: boolean) => {

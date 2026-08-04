@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
  * The Godview's renderer-side laws (GT-2), at the grain the repo tests chrome:
- * the pure pane rules, and the overlay state that ⌘G, the View menu, and the
+ * the pure pane rules, and the overlay state that ⌘⎋, the View menu, and the
  * toolbar button all move. The deck itself is not mounted here — it needs a
  * bridge, a floor, and a GPU, and `pnpm smoke:godview` drives all three.
  */
@@ -331,7 +331,7 @@ describe("the bridge notice", () => {
 });
 
 describe("the toggle button", () => {
-  it("presses the same door ⌘G presses", () => {
+  it("presses the same door ⌘⎋ presses", () => {
     const button = mountProbe();
     const click = vi.fn();
     button.addEventListener("click", click);

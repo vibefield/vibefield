@@ -565,7 +565,7 @@ async function main(
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
       // The accelerator's own action, handed over rather than re-implemented:
-      // the harness must exercise the path ⌘G takes, not a parallel one.
+      // the harness must exercise the path ⌘⎋ takes, not a parallel one.
       toggleGodview,
       beforeExit: closeEvidence,
       onWindow: (window) => {

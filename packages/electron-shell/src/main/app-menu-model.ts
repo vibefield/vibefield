@@ -4,7 +4,7 @@
 // The shell had no application menu until GT-2 — Electron's built-in default
 // was serving. Godview's toggle has to be an APP-LEVEL accelerator (GT-D2 /
 // design-04 §8.3): a menu accelerator is consumed before any renderer sees a
-// keystroke, so ⌘G reaches the overlay even while a terminal pane holds
+// keystroke, so ⌘⎋ reaches the overlay even while a terminal pane holds
 // keyboard focus, which a renderer-level listener could never promise. Owning
 // the menu means owning the whole thing — replacing Electron's default with one
 // that omits Copy or Quit would be a regression the accelerator paid for — so
@@ -42,9 +42,19 @@ export interface AppMenuState {
   godviewOpen: boolean;
 }
 
-/** GT-D2, James 2026-08-01. Electron resolves `CommandOrControl` per platform,
- * so one string is the whole cross-platform statement. */
-export const GODVIEW_ACCELERATOR = "CommandOrControl+G";
+/** GT-D2, James 2026-08-01; moved off ⌘G 2026-08-04. Electron resolves
+ * `CommandOrControl` per platform, so one string is the whole cross-platform
+ * statement.
+ *
+ * It was ⌘G until the collision got paid for twice. ⌘G is find-next in every
+ * macOS text surface and in ghostty, and an application accelerator always wins
+ * — so the overlay's toggle ate the deck's search-next for as long as the deck
+ * was up (GT-2's named cost). ⌘⎋ collides with nothing: macOS reserves
+ * ⌘⌥⎋ (Force Quit), not this, and a terminal reads a BARE Escape — the modifier
+ * is what keeps vim's Escape out of this menu's reach. ⌘G goes back to the
+ * panes, unconditionally, which is why the close item's conditional dance below
+ * has no twin here. */
+export const GODVIEW_ACCELERATOR = "CommandOrControl+Escape";
 
 /** The id the Window section's close item carries, so the adapter can find it
  * again when the overlay opens. Named here because the reason is policy: the

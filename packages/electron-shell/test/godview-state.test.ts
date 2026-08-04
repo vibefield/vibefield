@@ -3,7 +3,7 @@ import type { WebContents } from "electron";
 import { describe, expect, it, vi } from "vitest";
 import { GodviewRegistry, GodviewWindowState } from "../src/main/godview";
 
-// Main owns the overlay bit (GT-D2) because ⌘G is an application accelerator
+// Main owns the overlay bit (GT-D2) because ⌘⎋ is an application accelerator
 // and never reaches the renderer. These lock the consequences: a flip is a
 // flip, every change reaches both the page and the menu, and a destroyed
 // window is never written to.

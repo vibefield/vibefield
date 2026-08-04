@@ -9,7 +9,7 @@ import type { WebContents } from "electron";
 // The Godview overlay's open bit, per window, owned by MAIN (GT-D2).
 //
 // It lives here and not in the renderer because the toggle is an application
-// accelerator: the menu consumes ⌘G before any renderer is offered the
+// accelerator: the menu consumes ⌘⎋ before any renderer is offered the
 // keystroke — which is the whole reason it works while a terminal pane holds
 // focus — so main learns of every toggle whether it owns the bit or not. Two
 // copies would then need reconciling, and the menu's checkmark would be the one

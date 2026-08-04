@@ -160,7 +160,7 @@ remain gates, so this work is not recorded in LANDED yet.
   2026-08-02).
 - **Shaders are WebGPU-only** — on the Canvas2D fallback the chips select something that
   will not draw; the section's copy says so, but a deck that KNEW its backend could show a
-  live honest-UNAVAILABLE — the panel can't know it today, the deck mounts on first ⌘G
+  live honest-UNAVAILABLE — the panel can't know it today, the deck mounts on first ⌘⎋
   (GT-3f, 2026-08-04).
 - **`configEditor` bridge** — the 0.9.0 two-track editor seam needs `terminal.config.validate`
   (new product method) + three main-side file dialogs; GT-3's raw editor is the raw track
@@ -188,7 +188,7 @@ remain gates, so this work is not recorded in LANDED yet.
 - Mesh sync rows + the file pill's standing-state dot, both themes (C6-4).
 - Artifact Hub list + Proxy/Folder native-picker/add/open flows, both themes and reduced motion
   (AH-3 closeout; runtime implementation `8c07bf4`).
-- The Godview deck end-to-end (⌘G): the zsh first pane, the consent face after a session
+- The Godview deck end-to-end (⌘⎋): the zsh first pane, the consent face after a session
   dies, the kill chip's two steps, Settings → Terminal editor with a live reload (GT-2e/3).
 - **The glass pass (GT-3v)**: canvas ghosting through semi-transparent panes at the §5 SHEET
   tier · the surface lab's stage knobs · Settings → Terminal appearance section (theme

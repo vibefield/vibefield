@@ -9,7 +9,7 @@ import {
 } from "../src/main/app-menu-model";
 
 // The application menu is where Godview's accelerator lives (GT-D2), which
-// makes two of its properties load-bearing rather than cosmetic: ⌘G must exist
+// makes two of its properties load-bearing rather than cosmetic: ⌘⎋ must exist
 // as an APP-level binding, and ⌘W must get out of the deck's way while the
 // overlay is up. Both are asserted on the template, before Electron sees it.
 
@@ -24,7 +24,7 @@ const noActions = {};
 const actions = { toggleGodview: () => undefined };
 
 describe("buildAppMenu", () => {
-  it.each(PLATFORMS)("puts Godview on ⌘G as a checkbox (%s)", (platform) => {
+  it.each(PLATFORMS)("puts Godview on ⌘⎋ as a checkbox (%s)", (platform) => {
     const item = find(buildAppMenu(platform, { godviewOpen: false }, actions), GODVIEW_ITEM_ID);
     expect(item).toMatchObject({
       type: "checkbox",
@@ -32,7 +32,20 @@ describe("buildAppMenu", () => {
       checked: false,
       enabled: true,
     });
-    expect(GODVIEW_ACCELERATOR).toBe("CommandOrControl+G");
+    expect(GODVIEW_ACCELERATOR).toBe("CommandOrControl+Escape");
+  });
+
+  it.each(PLATFORMS)("leaves ⌘G to the deck's panes at every state (%s)", (platform) => {
+    // The toggle moved off ⌘G on 2026-08-04 precisely to end a collision: ⌘G is
+    // find-next in ghostty, and an app accelerator always wins. Unlike ⌘W, which
+    // the close item lends out and takes back, no item declares ⌘G in either
+    // state — so search-next is the panes' whether the overlay is up or not.
+    for (const godviewOpen of [false, true]) {
+      const accelerators = flatten(buildAppMenu(platform, { godviewOpen }, actions)).map(
+        (item) => item.accelerator,
+      );
+      expect(accelerators).not.toContain("CommandOrControl+G");
+    }
   });
 
   it.each(PLATFORMS)("checks the box from main's own bit, never a guess (%s)", (platform) => {

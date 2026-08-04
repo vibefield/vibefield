@@ -229,6 +229,6 @@ export const IPC_CHANNELS = {
    * menu item and the renderer must read ONE state, and it has to be main's) */
   godviewState: "vibefield:godview:state",
   /** renderer → main invoke: GodviewSetRequest — the toolbar button asking for
-   * the same transition ⌘G asks for; answers with the resulting GodviewState */
+   * the same transition ⌘⎋ asks for; answers with the resulting GodviewState */
   godviewSet: "vibefield:godview:set",
 } as const;

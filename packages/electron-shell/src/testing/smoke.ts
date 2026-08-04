@@ -627,7 +627,7 @@ export async function runSmokeGodview(opts: {
     // previous run's saved layout is still sitting there — and since GT-3 that
     // layout is not silently dropped, it is a QUESTION (every session it names
     // died with the last run's floor). Clearing here rather than reloading
-    // because nothing has mounted yet: the deck is not built until ⌘G.
+    // because nothing has mounted yet: the deck is not built until ⌘⎋.
     await win.webContents.executeJavaScript("localStorage.clear()");
 
     // GT-3m: armed BEFORE the toggle, because the monitor stage mounts WITH the
@@ -636,7 +636,7 @@ export async function runSmokeGodview(opts: {
     const monitorLine = waitForConsole(win, "GODVIEW_MONITOR ", 90_000);
     monitorLine.catch(() => undefined);
 
-    // 1. ⌘G's own action. The overlay opens, the deck redeems a ticket for the
+    // 1. ⌘⎋'s own action. The overlay opens, the deck redeems a ticket for the
     //    CONNECTION — no session — and the workspace then creates its own first
     //    pane through its own door (GT-D10). Nothing outside it asked for a
     //    shell; there is one because the workspace decided there should be.

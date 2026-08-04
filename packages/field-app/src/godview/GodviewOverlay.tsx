@@ -74,23 +74,22 @@ export function GodviewOverlay(): ReactElement | null {
     return terminal.onStatus(setBridge);
   }, []);
 
-  // The first Escape closes the reference-style system-control panel; the next
-  // closes Godview. Capture phase keeps terminals from swallowing either one.
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (tuningOpen) {
-        setTuningOpen(false);
-        return;
-      }
-      void getHost().godview?.set(false);
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [open, tuningOpen]);
+  // BARE Escape IS DELIBERATELY UNBOUND HERE (James, 2026-08-04).
+  //
+  // Until now this page held a capture-phase Escape ladder: first press closed
+  // the system-control panel, second closed Godview. Capture was the point — it
+  // beat the deck to the key. That is also what was wrong with it: a terminal
+  // pane holding focus NEVER received a literal Escape, so vim could not leave
+  // insert mode inside the deck, and the ladder outranked every TUI a user came
+  // here to run. The known cost was documented; it was still a cost.
+  //
+  // One door instead: ⌘⎋, which is an application accelerator and reaches main
+  // whatever holds focus (GT-D2), so nothing on this page needs to race the
+  // terminal for a key. Escape now belongs entirely to whatever has focus.
+  // The panel keeps its own × (`Close system controls`) and its toolbar toggle,
+  // so the affordance is lost only from the keyboard, and only for the panel.
+  // KillActivePane's Esc-disarms stays: it is bubble-phase, armed-only, and
+  // withdrawing a destructive confirm is DESIGN.md §7's law, not this ladder's.
 
   if (!everOpened) return null;
 
