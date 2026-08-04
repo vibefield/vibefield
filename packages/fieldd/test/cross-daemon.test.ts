@@ -31,10 +31,26 @@ beforeAll(() => {
   execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
 }, 180_000);
 
-afterEach(() => {
+afterEach(async () => {
+  // SIGKILL is asynchronous: a dying daemon (or its segment writer) can still
+  // be creating files while rmSync walks the tree — the ENOTEMPTY teardown
+  // race that broke three verify runs. Await the real exits, then remove with
+  // Node's own ENOTEMPTY retry loop as the backstop.
+  const exits = children.map((c) =>
+    c.exitCode !== null || c.signalCode !== null
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 2_000);
+          c.once("exit", () => {
+            clearTimeout(timer);
+            resolve();
+          });
+        }),
+  );
   for (const c of children) c.kill("SIGKILL");
+  await Promise.all(exits);
   children = [];
-  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  for (const d of dirs) rmSync(d, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
   dirs = [];
 });
 
