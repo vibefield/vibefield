@@ -669,3 +669,35 @@ smoke's monitor row FAILS if the "preview — mock agents" label goes missing �
 honest-states law enforced by the harness. AR replaces exactly one module and deletes the
 label. Verify + smoke exit 0, re-run by the orchestrator. Full record:
 `specs/godview-terminal.md` (GT-D13 + GT-3m findings).
+
+## Godview visual pass — James's hands (recorded at GT-3f close-out)
+
+**LANDED (2026-08-04, `6646f1b`, James).** Godview matched to the chopsticks UI + per-mode
+terminal themes: monitor views touched (list/rain/swarm + swarm parameters), the appearance
+section renamed/reworked (`TerminalAppearanceSection`), ~1.6k styles lines and 47 token
+lines. No ledger entry was written at landing; recorded here at the next close-out. GT-3f
+stacked cleanly on it.
+
+## GT-3f — the shaders wake
+
+**GT-3f LANDED (2026-08-04, `7a76f4d` — builder + orchestrator re-verification).** G11
+consumed the day it was drafted: EL8 0.9.0→0.9.1 (upstream's Rust diff EMPTY — crate moves
+for the one-version law; the age gate needed transitional rows because 0.9.0 was published
+the same morning — the "no transitional rows" note from GT-3v holds only for aged-out
+versions). Viewer-local effects: shader stored as a NAME resolved through upstream's own
+guard (a pinned catalog can drop a port → `undefined`, not a crash); **absent means the prop
+is OMITTED** (conditional spread — an empty object would override a floor-configured shader
+with nothing); the object memoized so `workspaceEffectsKey` is a safety net, not a crutch.
+The four bundled ports are live §8 chips (one fieldset, one answer) with licenses always
+visible; GT-3v's honest-UNAVAILABLE face is gone WITH a test asserting its words left the
+screen — and an erratum: the withheld-upstream list (32 rights-unclear ports) had never
+actually rendered before; it does now, with its reason, kept by a test. PF6 split honestly:
+upstream's 0.9.1 suite proves the gate, our fixture proves the gate's INPUT (the deck
+reports inactive under an animated selection). Smoke: `shaderEffect:"ghosttea:crt"` at the
+renderer + the device config byte-identical — two-homes extended to effects, both
+directions. The reload-row flake got a CONTROL: an identical no-shader harness failed the
+same rows (effects exonerated by experiment); builder green on attempt 8, orchestrator on
+attempt 3 at load ~14; the named real fix (wait on something stronger than a 60s console
+deadline) is a standing debt. Verify exit 0 (field-app 199). Shaders are WebGPU-only —
+stated in the copy; a backend-aware live UNAVAILABLE is a named residual. Full record:
+`specs/godview-terminal.md` (GT-3f findings) + `petitions/G11-…md` §Resolution.

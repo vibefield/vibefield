@@ -3,8 +3,10 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-04** (GT-3v `440b04e` — the
-> glass deck on ghosttea 0.9.0, appearance viewer-local; earlier: GT-2e `a3babb7` + GT-3
+> stays in the design docs + specs. Last rewritten: **2026-08-04** (GT-3f `7a76f4d` —
+> shaders live viewer-local, G11 drafted→landed upstream 0.9.1→consumed the same day;
+> GT-3m `7dea861` mocked monitor; GT-3v `440b04e` glass deck; James's own `6646f1b`
+> chopsticks-UI match between them; earlier: GT-2e `a3babb7` + GT-3
 > `af316db` — the one-authority correction, then restore/kill/config;
 > AH-0 ratified; T2 consumed in exact-pinned Truffle v0.7.12; AH-1a/1b serving
 > implementation landed at `9f80f0c` with its physical two-client tailnet proof still owed;
@@ -67,9 +69,14 @@ floor's config; the surface lab stays as the stage-tuning instrument. GT-3m port
 reference app's agent monitor (swarm/list/rain, matter-js) into the overlay behind an
 explicitly labeled MOCK source — the smoke fails if the label goes missing — with agent
 colors in the §2.6 accent slots (`--vf-accent-1..8` now real tokens); AR replaces exactly
-one module (`MockAgentField`) and deletes the label. Next slice **GT-4**:
-`with_terminal_mesh` behind config + `terminal.v1.hosts` + mirror-write v1 — the desktop
-deck's ⌘⇧O remote panes are the test row, and NF-remote rides it.
+one module (`MockAgentField`) and deletes the label. GT-3f closed the G11 loop inside one
+day — drafted morning, landed upstream in 0.9.1, consumed by evening: shaders are LIVE and
+viewer-local (four ports as §8 chips; the withheld-upstream list renders honestly for the
+first time; the floor's config document provably untouched by a viewer's choice). James's
+own `6646f1b` (chopsticks-UI match, per-mode themes) landed between slices and everything
+stacked cleanly. Next slice **GT-4**: `with_terminal_mesh` behind config +
+`terminal.v1.hosts` + mirror-write v1 — the desktop deck's ⌘⇧O remote panes are the test
+row, and NF-remote rides it.
 
 **AH.** The serving seam and global catalog are landed. `9f80f0c` replaces C6's
 `{name,target}` writer behind its one-window adapter, persists v2 source-local intent, assigns
@@ -151,10 +158,10 @@ remain gates, so this work is not recorded in LANDED yet.
   (deletes the sub-second persistence-flip window) + a login/default-args knob (panes are
   non-login interactive shells today; packaged-run PATH poverty is the risk) (GT-2e/GT-3,
   2026-08-02).
-- **G11 ghosttea petition candidate, unfiled** — `effects?: TerminalEffects` as `theme`'s
-  sibling on `GhostteaWorkspaceProps` (0.9.0's viewer-local law is two-thirds implementable
-  by a host without it; shaders ship honest-UNAVAILABLE meanwhile) + export
-  `AppearanceSettings` or document data-only as the host contract (GT-3v, 2026-08-04).
+- **Shaders are WebGPU-only** — on the Canvas2D fallback the chips select something that
+  will not draw; the section's copy says so, but a deck that KNEW its backend could show a
+  live honest-UNAVAILABLE — the panel can't know it today, the deck mounts on first ⌘G
+  (GT-3f, 2026-08-04).
 - **`configEditor` bridge** — the 0.9.0 two-track editor seam needs `terminal.config.validate`
   (new product method) + three main-side file dialogs; GT-3's raw editor is the raw track
   meanwhile (GT-3v, 2026-08-04).
@@ -164,9 +171,13 @@ remain gates, so this work is not recorded in LANDED yet.
 - **`prefers-reduced-transparency` has no policy** — DESIGN.md has M6 for motion and no
   transparency stance; proposal in `440b04e`'s body (glass falls back to §5 tint at full
   opacity); the doc changes first (GT-3v, 2026-08-04).
-- **Godview smoke reload rows are load-flaky** — 2/3 builder failures with a packaged app +
-  dev session running, pass on retry with identical code; orchestrator passed under the same
-  load. Pre-existing, not GT-3v's; watch it (2026-08-04).
+- **Godview smoke reload rows are load-flaky — now with a CONTROL and a named fix** — GT-3f's
+  builder went green on attempt 8 (fails at three different points, loads 4–30) and ran an
+  identical no-shader harness that failed the same rows, exonerating the new code by
+  experiment; the orchestrator saw 2 fails then green at load ~14. The class is the
+  `CANVAS_READY` wait (canvas/plugin-registry mount — the overlay is closed there). Real
+  fix named: the reload rows should wait on something stronger than a 60s console deadline
+  (GT-3v residual, measured at GT-3f, 2026-08-04).
 
 ## Eyeballs owed (James's standing visual passes)
 
@@ -188,12 +199,15 @@ remain gates, so this work is not recorded in LANDED yet.
   list and rain via the switcher) · accent-slot colors + working/waiting state reads in
   both themes · the "preview — mock agents" label · the monitor section in the surface
   lab · select/create acknowledging without mounting (GT-3m).
+- **The shader pass (GT-3f)**: whether CRT, VHS and Sparks actually look right over the
+  glass · the four chips + No effect, animate only where it means something · licenses
+  visible · the withheld-upstream list rendering with its reason (GT-3f).
 
 ## Upstream / sibling pins (the EL8 watch)
 
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
-ghosttea `=0.9.0` on all planes (GT-3v + IOS-EL8, 2026-08-04; preflight now also pins
-`-electron`/`-react`) · chopsticks 0.1.4 · strata 0.10.0 (via ICE) · `@vibecook/ice` 0.2.0
-(registry pin). G7/G8/G9 consumed at NF-7; G10 + G11 candidates named at GT-2e/3 and GT-3v,
-unfiled; C7 implemented upstream, consumption rides AR. Full petition status:
-`petitions/README.md`.
+ghosttea `=0.9.1` on all planes (GT-3f, 2026-08-04; preflight pins all five npm rows) ·
+chopsticks 0.1.4 · strata 0.10.0 (via ICE) · `@vibecook/ice` 0.2.0
+(registry pin). G7/G8/G9 consumed at NF-7; **G11 filed, landed upstream in 0.9.1, and
+consumed at GT-3f — same day**; G10 candidate still unfiled (GT-2e/3); C7 implemented
+upstream, consumption rides AR. Full petition status: `petitions/README.md`.
