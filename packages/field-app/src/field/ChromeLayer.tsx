@@ -6,7 +6,7 @@ import {
   type WidgetType,
 } from "@vibecook/ice";
 import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
-import { useStageHold } from "@vibecook/ice/react";
+import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
 import type { DesktopShellState } from "@vibefield/contracts";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
@@ -256,9 +256,16 @@ export function ChromeLayer({
   useStageHold(ce, docsOpen, "docs-explorer");
   useStageHold(ce, showSettings, "settings-panel");
   useStageHold(ce, docState.phase === "loading", "loading-veil");
-  // M5, the strongest case for it: the Godview covers the window outright, so
-  // every canvas frame drawn behind it is work nobody can see.
-  useStageHold(ce, godviewOpen, "godview");
+  // Godview gets the STRICTER gate (ice 0.3.0). A stage hold is
+  // presentation policy over a world that keeps stepping — right for the
+  // sheets above, which recede a canvas that stays visible behind them. But
+  // Godview COVERS the window, so the engine was still ticking at display rate
+  // for pixels nobody could see: the hold quiets the GL compositor and nothing
+  // else. A freeze parks the loop outright — no step, no systems, no notify,
+  // no reflectors, no rAF — after walking a settle so the frozen image is
+  // whole. Thaw drops the input banked behind the overlay and resumes on a
+  // clamped dt, so nothing teleports.
+  useFrameFreeze(ce, godviewOpen, "godview");
   useEffect(() => {
     if (docsOpen || showSettings) ce.ops.cancelActiveGestures();
   }, [docsOpen, showSettings, ce]);

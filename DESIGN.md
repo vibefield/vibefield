@@ -219,6 +219,11 @@ read as an immediate response to the hold").
   along their travel; only cancelled ghosts fade.
 - **M5 — The stage recedes.** When a sheet opens, the canvas eases to `scale(0.98)` and
   discretionary per-frame work pauses (stage hold) — focus is physical.
+  *Correction, 2026-08-04:* "discretionary per-frame work" is narrower than it reads. A
+  stage hold freezes GL island repaints and parks the compositor's demand loop; the world
+  keeps stepping, which is what keeps undo and collab landing visibly behind a partial
+  overlay. Chrome that COVERS the window instead takes `useFrameFreeze` (ice 0.3.0), which
+  parks the engine outright. Sheets recede → hold. Godview covers → freeze.
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
 

@@ -34,7 +34,11 @@ overrides:
   # floor silently wins, which is how the tree sat on 1.13.7 while ICE asked for
   # 1.13.8: the single-version law held, at the wrong version.
   loro-crdt: ^1.13.8
-  "@vibecook/ice": 0.2.0
+  # 2026-08-04 bumped 0.2.0 → 0.3.0 for the frame gate: `ce.frame.freeze`
+  # parks the engine outright (no step, no reflectors, no rAF) where a stage hold
+  # only quiets the GL compositor over a still-stepping world. Godview covers the
+  # window, so the freeze is what its overlay wanted all along.
+  "@vibecook/ice": 0.3.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -84,7 +88,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.11.0'
-  - '@vibecook/ice@0.2.0'
+  - '@vibecook/ice@0.3.0'
   - '@vibecook/ghosttea-client@0.9.1'
   - '@vibecook/ghosttea-protocol@0.9.1'
   - '@vibecook/chopsticks-adapter-acp@0.1.4'
