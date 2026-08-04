@@ -196,7 +196,13 @@ function generateAssets({
 }
 
 async function compileAppleIconAssets() {
-  const toolchain = await findAppleIconToolchain();
+  // Check mode NEVER invokes the Apple toolchain: Icon Composer's render is
+  // not byte-stable across machines even at the IDENTICAL Xcode build (CI
+  // run 30879428413: a 17F113 runner re-rendered 17F113-authored assets to
+  // different bytes — the OS rendering stack is part of the output). The
+  // committed bytes are the truth everywhere; re-rendering is exclusively
+  // the deliberate `icons:generate` act on the authoring machine.
+  const toolchain = checkOnly ? null : await findAppleIconToolchain();
   if (toolchain === null) {
     let committed;
     try {
@@ -216,7 +222,9 @@ async function compileAppleIconAssets() {
     validateAppleComposerRendition(committed.appleComposerRendition);
     validateAppleFallbackIcns(committed.appleFallbackIcns);
     console.warn(
-      "Xcode Icon Composer and actool are unavailable; validated the committed macOS PNG and ICNS without regenerating them",
+      checkOnly
+        ? "check mode validates the committed macOS PNG and ICNS as-is; re-rendering them is icons:generate's act"
+        : "Xcode Icon Composer and actool are unavailable; validated the committed macOS PNG and ICNS without regenerating them",
     );
     return committed;
   }
