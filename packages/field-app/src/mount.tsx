@@ -4,6 +4,7 @@ import { BootRoot } from "./boot/BootRoot";
 import { createBootMachine } from "./boot/machine";
 import { type FieldHost, setHost } from "./host";
 import { setRendererLogger } from "./logging";
+import { mountFrameStatsOverlay } from "./perf/frame-stats-overlay";
 import "./tw.css";
 
 // The window IS the field (2026-07-21, James): no app bar, no tabs — chrome
@@ -59,4 +60,12 @@ export function mountFieldApp(opts: { container: HTMLElement; host: FieldHost })
   dragRegion.className = "app-drag";
   dragRegion.setAttribute("aria-hidden", "true");
   document.body.prepend(dragRegion);
+
+  // App-level frame stats (⌘⌥⇧F, or `__vfFrameStats` from the console). Mounted
+  // beside the drag region rather than inside the tree so it outlives every
+  // remount below it — the canvas stack remounts on doc generation, the Godview
+  // monitor unmounts on close — and so its 4Hz repaint never enters React's
+  // reconciliation. Hidden until asked for, and its rAF loop only runs while it
+  // is showing.
+  mountFrameStatsOverlay();
 }

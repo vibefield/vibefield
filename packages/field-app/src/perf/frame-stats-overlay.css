@@ -1,0 +1,95 @@
+/* The frame-stats readout (DESIGN.md §2.5, §3).
+ *
+ * Two rules this surface follows more strictly than most chrome, because it is
+ * an instrument and an instrument that changes the reading is worthless:
+ *
+ *   - NO backdrop-filter. Every other floating surface in this app has one; a
+ *     blurred FPS meter would add exactly the compositor cost it exists to
+ *     measure. Flat fill only.
+ *   - pointer-events: none. It floats over everything including the deck, and
+ *     must never take a click meant for a pane.
+ *
+ * Color follows §2.5: orange is "needs attention" and carries BOTH fault
+ * verdicts — the label says which. Red is reserved for failed/destructive and a
+ * dropped frame is neither, so it is not used here (honesty over rainbow). */
+
+.vf-frame-stats {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  /* Above the Godview stage (z-index 60) and any pane chrome — an instrument
+     that can be occluded by the thing under test is not readable when it counts. */
+  z-index: 99999;
+  pointer-events: none;
+  user-select: none;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 168px;
+  padding: 8px 10px;
+
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  /* Tabular figures matter here: a readout whose width jitters every frame is
+     harder to read than one digit less precision. */
+
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(10, 10, 10, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+}
+
+.vf-frame-stats[hidden] {
+  display: none;
+}
+
+.vf-frame-stats-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.vf-frame-stats-fps {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.vf-frame-stats-refresh,
+.vf-frame-stats-hint {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.vf-frame-stats-row {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.vf-frame-stats-verdict {
+  margin-top: 3px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.vf-frame-stats-hint {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.vf-frame-stats[data-verdict="healthy"] .vf-frame-stats-verdict {
+  color: var(--vf-green, #30d158);
+}
+
+.vf-frame-stats[data-verdict="main-thread"] .vf-frame-stats-verdict,
+.vf-frame-stats[data-verdict="off-main-thread"] .vf-frame-stats-verdict {
+  color: var(--vf-orange, #ff9f0a);
+}
+
+/* Unknown is muted rather than colored — "we did not measure the cause" is not
+   a state, and giving it a hue would read as one. */
+.vf-frame-stats[data-verdict="unknown"] .vf-frame-stats-verdict {
+  color: rgba(255, 255, 255, 0.42);
+  font-style: italic;
+}
