@@ -12,8 +12,9 @@ import { hexToRgb01 } from "../field/theme-constants";
 // `--vf-*` being the single source actually means (§10).
 //
 // Terminal TEXT is not ours to color (§3: it belongs to Ghosttea's renderer and
-// to the program running). What these five values set is the surface the text
-// sits on, the caret, and the selection — chrome, in other words.
+// to the program running). These values give the renderer its black compositing
+// key, caret, and selection; styles.css lets the deck stage show through that
+// key without altering Ghosttea's rendered-cell semantics.
 
 type TerminalTheme = NonNullable<GhostteaWorkspaceProps["theme"]>;
 type Rgba = TerminalTheme["background"];
@@ -36,8 +37,10 @@ const WHITE: Rgba = [1, 1, 1, 1];
  * whatever was there at import time. */
 export function godviewTerminalTheme(): TerminalTheme {
   return {
-    // §2.2 — `--vf-card-deep` is the surface for data-dense content, and a
-    // terminal is the densest thing this app draws.
+    // §2.2 — keep Ghosttea's flattened canvas black internally. The Godview
+    // canvas rule screen-blends that neutral key away, making the pane ground
+    // transparent while preserving renderer correctness across WebGPU damage
+    // redraws and the opaque Canvas2D fallback.
     background: token("--vf-card-deep", 1),
     // §2.4 — primary text on a dark surface is white; the program's own colors
     // ride over this as they always have.

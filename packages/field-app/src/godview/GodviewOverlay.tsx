@@ -1,7 +1,13 @@
 import type { TerminalBridgeStatus } from "@vibefield/contracts";
-import { type ReactElement, useEffect, useState } from "react";
+import { type ReactElement, useCallback, useEffect, useState } from "react";
 import { getHost } from "../host";
 import { GodviewDeck } from "./GodviewDeck";
+import {
+  defaultGodviewTuning,
+  type GodviewTuning,
+  GodviewTuningPanel,
+  godviewTuningStyle,
+} from "./GodviewTuningPanel";
 import { useGodviewOpen } from "./overlay-state";
 
 // The Godview overlay — the control room (DESIGN.md §1: "may commit to dark —
@@ -37,6 +43,14 @@ export function GodviewOverlay(): ReactElement | null {
    * reveal, so it is built once — on the first open — and hidden thereafter. */
   const [everOpened, setEverOpened] = useState(false);
   const [bridge, setBridge] = useState<TerminalBridgeStatus | null>(null);
+  // TEMPORARY visual-pass state. Deliberately memory-only: this panel is a
+  // measuring instrument, not a settings surface or a new product contract.
+  const [tuning, setTuning] = useState(defaultGodviewTuning);
+
+  const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
+    setTuning((current) => ({ ...current, ...patch }));
+  }, []);
+  const resetTuning = useCallback(() => setTuning(defaultGodviewTuning()), []);
 
   useEffect(() => {
     if (open) setEverOpened(true);
@@ -77,6 +91,7 @@ export function GodviewOverlay(): ReactElement | null {
       // a media query can reach them for M6).
       data-godview-open={open ? "true" : "false"}
       className="vf-godview"
+      style={godviewTuningStyle(tuning)}
     >
       {/* The eyebrow row (§3): what this is on the left, what is wrong on the
           right. Nothing in the middle — the deck is the content. */}
@@ -112,6 +127,7 @@ export function GodviewOverlay(): ReactElement | null {
             This host has no terminal bridge — the deck is unavailable here.
           </p>
         )}
+        <GodviewTuningPanel value={tuning} onChange={changeTuning} onReset={resetTuning} />
       </div>
     </div>
   );
