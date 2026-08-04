@@ -24,10 +24,11 @@ let package = Package(
     // The Ghosttea Apple stack (terminal + Truffle mesh). Exact pin — EL8:
     // bumping it is a deliberate upgrade event, moved in lockstep with
     // field-native's truffle-core pin (both planes ride truffle 0.7.11).
-    // 0.7.0 brings the remote-reconnect layer (protocol minor 6, legacy hosts
-    // fenced) — field-native's embedded ghosttea crate is 0.6.0 until the NF
-    // track's next pin event, and 0.7.0 treats such hosts as quiet legacy.
-    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.7.0")
+    // 0.9.0 brings terminal appearance/config parity to iOS (themes, WebGPU
+    // shader stack, clipboard write-out) on top of 0.7.0's reconnect layer —
+    // the surface the IOS-3 session card consumes. The desktop planes pin
+    // ghosttea 0.8.0 today; the reconnect fencing keeps mixed minors honest.
+    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.9.0")
   ],
   targets: [
     // Design tokens and shared chrome — the godview monochrome language.

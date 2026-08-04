@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vibecook-dev/ghosttea.git",
       "state" : {
-        "revision" : "560c53a4b58a2c65496608ea620c42a72c333920",
-        "version" : "0.7.0"
+        "revision" : "866052f3b8d03a11c2484adeefbe8fff8acf5676",
+        "version" : "0.9.0"
       }
     },
     {

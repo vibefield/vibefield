@@ -16,13 +16,13 @@ connection, whole mesh through it), EL3/EL7 as ever.
 
 | Path | What |
 |---|---|
-| `VibeField.xcodeproj` | thin composition shell — hand-authored pbxproj (objectVersion 56, synthetic IDs, the GhostteaApp convention); no product code |
+| `VibeField.xcodeproj` | thin composition shell — hand-authored pbxproj (synthetic IDs, the GhostteaApp convention; objectVersion 60 since Xcode touched it); no product code |
 | `App/` | `@main` + assets + privacy manifest, nothing else |
 | `VibeFieldKit/` | the real code, one SPM package, four targets |
 | `VibeFieldKit/Sources/FieldDesign` | godview monochrome tokens (palette light+dark, mono type ramp, motion constants, grid/scanlines/vignette) |
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested |
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
-| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.7.0), login sheet, peer roster, the mesh chip |
+| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.0), login sheet, peer roster, the mesh chip |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition |
 
 Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`) · iOS **18.1** floor (the pinned
@@ -64,9 +64,9 @@ headless simulator run exercises the real runtime path — TailscaleKit start �
 control dial → the honest sign-in state — without touch injection. Not
 compiled into Release.
 
-Device runs: open the project in Xcode and let automatic signing pick the team
-(`DEVELOPMENT_TEAM` is deliberately empty in the pbxproj — inject it at the
-command line, the Ghosttea runner pattern).
+Device runs: open the project in Xcode — automatic signing with the committed
+team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
+precedent; a Team ID is public material).
 
 This app is deliberately **outside `pnpm verify`** (the gate must not require
 Xcode); the commands above are its gate until an iOS lane exists in CI.
@@ -80,7 +80,7 @@ Real: the full-screen bubble field (physics, tiers, ignition, drag, tap-nudge,
 hold-to-create, spawn pop, empty state), both themes, the session card with
 live status, the mock fleet driving the **same** snapshot shape and classifier
 the daemon feed will drive, and — since IOS-2 — the mesh leg: `ghosttea`
-pinned `exact: "0.7.0"` (truffle 0.7.11, lockstep with field-native), the
+pinned `exact: "0.9.0"` (truffle 0.7.11, lockstep with field-native), the
 in-process Tailscale runtime behind a deliberate CONNECT act, in-app login
 (Safari sheet), the online-peer roster, and the mesh chip the bubbles
 physically flow around (`.swarmObstacle()` — the desktop obstacle pattern).
