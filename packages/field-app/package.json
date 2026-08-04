@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@react-three/fiber": "^9.6.1",
+    "@vibecook/ghosttea-protocol": "*",
     "@vibecook/ghosttea-react": "*",
     "@vibecook/ice": "*",
     "@vibefield/contracts": "workspace:*",
@@ -26,11 +27,13 @@
     "@vibefield/plugin-widgetlab": "workspace:*",
     "@vibefield/shell-ui": "workspace:*",
     "loro-crdt": "^1.13.6",
+    "matter-js": "0.19.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "three": "^0.185.0"
   },
   "devDependencies": {
+    "@types/matter-js": "^0.19.0",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

@@ -47,6 +47,12 @@ overrides:
   # consumes ghosttea-react; packages ask for "*".
   "@vibecook/ghosttea-electron": 0.9.0
   "@vibecook/ghosttea-react": 0.9.0
+  # GT-3m (2026-08-04): field-app declares the wire vocabulary directly — the
+  # monitor's rows ARE floor sessions, so `SessionSummary` is the honest type for
+  # them. Types-and-constants only (zero dependencies), already resolved at this
+  # version transitively; declaring it puts it under the one-version law rather
+  # than leaving a hoisted transitive to drift.
+  "@vibecook/ghosttea-protocol": 0.9.0
   # chopsticks graduated at 0.1.4 (2026-07-28, C7 spawn-through aboard). Consumed
   # by the AR track; pinned at the same pin event. @vibecook/chopsticks-node is
   # unpublished and deliberately absent.

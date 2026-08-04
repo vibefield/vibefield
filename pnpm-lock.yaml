@@ -46,6 +46,7 @@ overrides:
   '@vibecook/ghosttea-client': 0.9.0
   '@vibecook/ghosttea-electron': 0.9.0
   '@vibecook/ghosttea-react': 0.9.0
+  '@vibecook/ghosttea-protocol': 0.9.0
   '@vibecook/chopsticks-adapter-acp': 0.1.4
   '@vibecook/chopsticks-adapter-claude': 0.1.4
   '@vibecook/chopsticks-adapter-codex': 0.1.4
@@ -261,6 +262,9 @@ importers:
       '@react-three/fiber':
         specifier: ^9.6.1
         version: 9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@vibecook/ghosttea-protocol':
+        specifier: 0.9.0
+        version: 0.9.0
       '@vibecook/ghosttea-react':
         specifier: 0.9.0
         version: 0.9.0(react@19.2.7)
@@ -297,6 +301,9 @@ importers:
       loro-crdt:
         specifier: ^1.13.8
         version: 1.13.8
+      matter-js:
+        specifier: 0.19.0
+        version: 0.19.0
       react:
         specifier: 'catalog:'
         version: 19.2.7
@@ -307,6 +314,9 @@ importers:
         specifier: ^0.185.0
         version: 0.185.1
     devDependencies:
+      '@types/matter-js':
+        specifier: ^0.19.0
+        version: 0.19.8
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -1550,6 +1560,9 @@ packages:
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
+  '@types/matter-js@0.19.8':
+    resolution: {integrity: sha512-W2ZWG58Lijv/4v768NgpeyFqqiOyslmAU7qqM1Lhz4XBoUgGtZtPz4CjcOKYtqHIak14dvPldslQhltqLTWwsw==}
+
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
@@ -2580,6 +2593,9 @@ packages:
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
+
+  matter-js@0.19.0:
+    resolution: {integrity: sha512-v2huwvQGOHTGOkMqtHd2hercCG3f6QAObTisPPHg8TZqq2lz7eIY/5i/5YUV8Ibf3mEioFEmwibcPUF2/fnKKQ==}
 
   meshline@3.3.1:
     resolution: {integrity: sha512-/TQj+JdZkeSUOl5Mk2J7eLcYTLiQm2IDzmlSvYm7ov15anEcDJ92GHqqazxTSreeNgfnYu24kiEvvv0WlbCdFQ==}
@@ -4176,6 +4192,8 @@ snapshots:
     dependencies:
       '@types/node': 24.13.3
 
+  '@types/matter-js@0.19.8': {}
+
   '@types/ms@2.1.0': {}
 
   '@types/node@24.13.3':
@@ -5253,6 +5271,8 @@ snapshots:
     optional: true
 
   math-intrinsics@1.1.0: {}
+
+  matter-js@0.19.0: {}
 
   meshline@3.3.1(three@0.185.1):
     dependencies:

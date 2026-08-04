@@ -619,6 +619,12 @@ export async function runSmokeGodview(opts: {
     // because nothing has mounted yet: the deck is not built until ⌘G.
     await win.webContents.executeJavaScript("localStorage.clear()");
 
+    // GT-3m: armed BEFORE the toggle, because the monitor stage mounts WITH the
+    // overlay and its field is already populated at tick 0 — a wait placed after
+    // the open would be racing a line that has already been printed.
+    const monitorLine = waitForConsole(win, "GODVIEW_MONITOR ", 90_000);
+    monitorLine.catch(() => undefined);
+
     // 1. ⌘G's own action. The overlay opens, the deck redeems a ticket for the
     //    CONNECTION — no session — and the workspace then creates its own first
     //    pane through its own door (GT-D10). Nothing outside it asked for a
@@ -643,6 +649,36 @@ export async function runSmokeGodview(opts: {
       )
       .then((facts) => facts.rendererBackend)
       .catch(() => opened.rendererBackend);
+
+    // 1b. THE MONITOR ROW (GT-3m). The stage above the deck, on the registry's
+    //     default view, with the mock field on it and WEARING ITS LABEL.
+    //
+    //     The label is the assertion that earns this row. Everything the monitor
+    //     draws is invented, and GT-D13 makes saying so a law rather than a
+    //     courtesy — so the smoke fails if the words are missing, exactly as it
+    //     would for a pane that lied about its shell. The other two facts are
+    //     structure, not pixels: which view mounted, and that it has rows. What
+    //     it LOOKS like is James's eye, as with the glass.
+    const monitor = JSON.parse(await monitorLine) as {
+      viewId: string;
+      agents: number;
+      agentBacked: number;
+      mockLabel: string;
+    };
+    verdict["monitorView"] = monitor.viewId;
+    verdict["monitorAgents"] = monitor.agents;
+    verdict["monitorMockLabel"] = monitor.mockLabel;
+    if (monitor.viewId !== "swarm") {
+      throw new Error(`the monitor opened on "${monitor.viewId}", not the default swarm`);
+    }
+    if (!(monitor.agents > 0)) {
+      throw new Error("the monitor stage mounted with no agents on it");
+    }
+    if (!monitor.mockLabel.includes("mock")) {
+      throw new Error(
+        `the monitor is showing ${monitor.agents} invented agents without saying so (label: ${JSON.stringify(monitor.mockLabel)})`,
+      );
+    }
 
     // The pane is a FLOOR session, not a renderer's idea of one.
     const afterOpen = await untilFloor(

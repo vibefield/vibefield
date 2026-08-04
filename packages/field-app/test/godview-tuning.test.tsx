@@ -35,8 +35,13 @@ function mountPanel(onChange = vi.fn(), onReset = vi.fn()): HTMLElement {
       <GodviewTuningPanel
         value={defaultGodviewTuning()}
         appearance={DEFAULT_DECK_APPEARANCE}
+        // GT-3m folded the monitor's groups into this one instrument. Empty
+        // here on purpose: these tests are about the STAGE knobs, and the
+        // monitor's own wiring is asserted in godview-monitor.test.tsx.
+        monitorSections={[]}
         onChange={onChange}
         onReset={onReset}
+        onResetMonitor={vi.fn()}
       />,
     ),
   );

@@ -1,6 +1,8 @@
 import { CARD_BG } from "@vibefield/shell-ui";
 import { type CSSProperties, type ReactElement, useState } from "react";
 import { type DeckAppearance, setDeckAppearance } from "./deck-appearance";
+import type { MonitorTuningSection } from "./monitor/monitor-tuning";
+import type { MonitorParameterDefinition } from "./monitor/parameters";
 
 // TEMPORARY: an in-product surface lab for James's Godview visual pass. The
 // STAGE values are deliberately local state — no setting, storage key, contract
@@ -120,16 +122,60 @@ function ColorControl({
   );
 }
 
+/** A declared control, drawn. The reference app's `TweakPanel` renders exactly
+ * this and nothing else; folding it in here rather than porting that panel is
+ * GT-D13's "one tuning instrument, not two" — a second floating panel over the
+ * same stage would be two answers to "where do I change this?". */
+function displayedValue(definition: MonitorParameterDefinition, value: number): string {
+  if (definition.step >= 1) return String(Math.round(value));
+  const precision = Math.max(0, Math.ceil(-Math.log10(definition.step)));
+  return value.toFixed(precision);
+}
+
+function MonitorGroup({ group, values, onChange }: Omit<MonitorTuningSection, "id">): ReactElement {
+  return (
+    <fieldset>
+      <legend>{group.title}</legend>
+      {group.controls.map((definition) => {
+        const value = values[definition.key] ?? definition.defaultValue;
+        return (
+          <label className="vf-godview-tuner-control" key={definition.key}>
+            <span className="vf-godview-tuner-label">
+              <span>{definition.label}</span>
+              <output>{displayedValue(definition, value)}</output>
+            </span>
+            <input
+              type="range"
+              min={definition.min}
+              max={definition.max}
+              step={definition.step}
+              value={value}
+              onChange={(event) => onChange(definition.key, event.currentTarget.valueAsNumber)}
+            />
+          </label>
+        );
+      })}
+    </fieldset>
+  );
+}
+
 export function GodviewTuningPanel({
   value,
   appearance,
+  monitorSections,
   onChange,
   onReset,
+  onResetMonitor,
 }: {
   value: GodviewTuning;
   appearance: DeckAppearance;
+  /** GT-3m: the stage's groups then the active view's own, already bound to
+   * their stores. Unlike the stage knobs above them these DO persist — the
+   * monitor unmounts on every close, so memory-only would reset every open. */
+  monitorSections: readonly MonitorTuningSection[];
   onChange: (patch: Partial<GodviewTuning>) => void;
   onReset: () => void;
+  onResetMonitor: () => void;
 }): ReactElement {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -145,7 +191,13 @@ export function GodviewTuningPanel({
           <small>temporary · live</small>
         </span>
         <span className="vf-godview-tuner-actions">
-          <button type="button" onClick={onReset}>
+          <button
+            type="button"
+            onClick={() => {
+              onReset();
+              onResetMonitor();
+            }}
+          >
             reset
           </button>
           <button
@@ -200,6 +252,15 @@ export function GodviewTuningPanel({
               for this device.
             </p>
           </fieldset>
+
+          {monitorSections.map((section) => (
+            <MonitorGroup
+              key={section.id}
+              group={section.group}
+              values={section.values}
+              onChange={section.onChange}
+            />
+          ))}
         </div>
       )}
     </aside>

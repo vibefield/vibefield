@@ -22,6 +22,19 @@
   --vf-cyan: #5ac8fa;
   --vf-select: #4a90d9;
 
+  /* §2.6 Organizational accents — the curated set, assigned per object and used
+     as TINT. They group and label; they never signal state (that is §2.5's job,
+     above). Transcribed here rather than at each use site because this file is
+     the one place transcription is legitimate: the doc moves first, then this. */
+  --vf-accent-1: #6366f1;
+  --vf-accent-2: #ec4899;
+  --vf-accent-3: #22c55e;
+  --vf-accent-4: #f59e0b;
+  --vf-accent-5: #06b6d4;
+  --vf-accent-6: #8b5cf6;
+  --vf-accent-7: #ef4444;
+  --vf-accent-8: #3b82f6;
+
   /* §4 Geometry */
   --vf-radius-card: 22px;
   --vf-radius-island: 32px;

@@ -1,14 +1,17 @@
 import type { TerminalBridgeStatus } from "@vibefield/contracts";
-import { type ReactElement, useCallback, useEffect, useState } from "react";
+import { type CSSProperties, type ReactElement, useCallback, useEffect, useState } from "react";
 import { getHost } from "../host";
 import { useDeckAppearance } from "./deck-appearance";
 import { GodviewDeck } from "./GodviewDeck";
+import { GodviewMonitor } from "./GodviewMonitor";
 import {
   defaultGodviewTuning,
   type GodviewTuning,
   GodviewTuningPanel,
   godviewTuningStyle,
 } from "./GodviewTuningPanel";
+import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
+import { MONITOR_VIEWS } from "./monitor/registry";
 import { useGodviewOpen } from "./overlay-state";
 
 // The Godview overlay — the control room (DESIGN.md §1: "may commit to dark —
@@ -50,6 +53,9 @@ export function GodviewOverlay(): ReactElement | null {
   // the viewer's real appearance, which the lab drives live and Settings edits.
   const [tuning, setTuning] = useState(defaultGodviewTuning);
   const appearance = useDeckAppearance();
+  /** The monitor's view and tunables (GT-3m). Held HERE, above the stage, so
+   * they survive the stage's PF6 unmount — see `monitor-tuning.ts`. */
+  const monitor = useMonitorTuning();
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -95,7 +101,12 @@ export function GodviewOverlay(): ReactElement | null {
       // a media query can reach them for M6).
       data-godview-open={open ? "true" : "false"}
       className="vf-godview"
-      style={godviewTuningStyle(tuning)}
+      style={
+        {
+          ...godviewTuningStyle(tuning),
+          "--vf-monitor-stage-height": `${monitor.stageHeight}%`,
+        } as CSSProperties
+      }
     >
       {/* The eyebrow row (§3): what this is on the left, what is wrong on the
           right. Nothing in the middle — the deck is the content. */}
@@ -112,11 +123,32 @@ export function GodviewOverlay(): ReactElement | null {
               {notice}
             </span>
           )}
+          {/* The view switcher (GT-3m), in the eyebrow row's meta position —
+              where the reference app puts it too. A select and not a segmented
+              control: three views today and a registry designed to grow, and
+              §8's segmented control is for a set that stays small. */}
+          <select
+            className="vf-godview-view-switch"
+            aria-label="Monitor view"
+            value={monitor.view.id}
+            onChange={(event) => monitor.selectView(event.currentTarget.value)}
+          >
+            {MONITOR_VIEWS.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.label}
+              </option>
+            ))}
+          </select>
           <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>
             esc to close
           </span>
         </span>
       </header>
+      {/* The reference app's composition: monitor stage above, terminal deck
+          below, the stage's share of the height a tunable. The monitor mounts
+          only while OPEN (PF6 — see GodviewMonitor); the deck stays mounted
+          because its layout and its panes are worth keeping. */}
+      {open && <GodviewMonitor view={monitor.view} parameters={monitor.parameters} />}
       <div className="relative min-h-0 flex-1">
         {terminalAvailable ? (
           <GodviewDeck active={open} />
@@ -134,8 +166,10 @@ export function GodviewOverlay(): ReactElement | null {
         <GodviewTuningPanel
           value={tuning}
           appearance={appearance}
+          monitorSections={monitorTuningSections(monitor)}
           onChange={changeTuning}
           onReset={resetTuning}
+          onResetMonitor={monitor.resetParameters}
         />
       </div>
     </div>

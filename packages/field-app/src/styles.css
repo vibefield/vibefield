@@ -652,3 +652,619 @@ body {
   cursor: default;
   opacity: 0.4;
 }
+
+/* ── GT-3m: the monitor stage ────────────────────────────────────────────────
+   The reference app's monitor⇄workspace composition, wearing DESIGN.md. Colors
+   are §2.5 (state) and §2.6 (organizational accents, arriving as --agent-color
+   already resolved from the tokens); text is §2.4's opacity ramp on the control
+   room's dark surface; motion uses the named easings (§6) and gives way to M6.
+   No hex literal appears below — a monitor is chrome, and chrome consumes
+   tokens (§10). */
+.vf-godview-monitor-stage {
+  position: relative;
+  flex-shrink: 0;
+  height: var(--vf-monitor-stage-height, 34%);
+  min-height: 120px;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* §2.3 hairline, dark */
+}
+
+/* The mock label, and the acknowledgement that shares its row. GT-D13 makes
+   this furniture rather than decoration: it is `data-monitor-chrome`, so the
+   swarm gives it a solid body to settle around, and views that lay out in flow
+   clear it with --vf-monitor-chrome-height. */
+.vf-monitor-chrome {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+/* §3 eyebrow: 10px, medium, uppercase, tracked. §5 overlay-chip material
+   (surface /90 + blur) because it floats over a moving field and still has to
+   be legible; --vf-orange because "these agents are not real" is exactly the
+   needs-attention meaning §2.5 assigns it. */
+.vf-monitor-mock-chip {
+  border: 1px solid color-mix(in srgb, var(--vf-orange) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vf-card) 90%, transparent);
+  backdrop-filter: blur(24px);
+  padding: 4px 10px;
+  color: var(--vf-orange);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The only confirmation a mock action gets. Sentence case (§9), tertiary ramp,
+   and it fades rather than pops — nothing travelled, so nothing should look
+   like it did (M4). */
+.vf-monitor-ack {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.vf-monitor-ack:empty {
+  display: none;
+}
+
+/* A stage with nothing on it says so (§8: a state is rendered, never blank). */
+.vf-monitor-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.vf-monitor-empty span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.vf-monitor-empty small {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+}
+
+/* ── the swarm ───────────────────────────────────────────────────────────── */
+.vf-monitor-swarm {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.vf-monitor-bubble-positioner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+/* The body. --agent-color is the session's §2.6 accent, used as TINT exactly as
+   §2.6 prescribes: fill at 12%, hairline at ~35%, label at full. */
+.vf-monitor-bubble {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 100%;
+  height: 100%;
+  padding: 0 8%;
+  border: 1px solid color-mix(in srgb, var(--agent-color) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--agent-color) 12%, transparent);
+  cursor: pointer;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  /* §7 hover/active steps, on the §6 lift curve. */
+  transition:
+    border-color 120ms ease,
+    box-shadow 220ms ease,
+    background 120ms ease;
+}
+
+.vf-monitor-bubble:hover {
+  border-color: color-mix(in srgb, var(--agent-color) 60%, transparent);
+  background: color-mix(in srgb, var(--agent-color) 18%, transparent);
+}
+
+/* Status is a RING, never the body color — the body is the organizational
+   accent and must keep meaning "this session" (§2.6). */
+.vf-monitor-bubble.is-working {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--vf-monitor-working) 70%, transparent);
+}
+
+.vf-monitor-bubble.is-waiting {
+  box-shadow: 0 0 0 1.5px var(--vf-monitor-waiting);
+}
+
+.vf-monitor-bubble.is-idle {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+/* An unclaimed terminal is quieter than every agent, on purpose: it is the one
+   body on the stage nobody is driving. */
+.vf-monitor-bubble.is-unassigned {
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* §7 selection: 1.5px inside ring in --vf-select, 120ms. Interaction, never
+   status — which is why it rides on top of the status ring rather than
+   replacing it. */
+.vf-monitor-bubble.is-active {
+  outline: 1.5px solid var(--vf-select);
+  outline-offset: -3px;
+}
+
+.vf-monitor-bubble:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* Context fill: the window as a rising ground inside the body. */
+.vf-monitor-bubble-context-fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: color-mix(in srgb, var(--agent-color) 22%, transparent);
+  pointer-events: none;
+  transition: height 240ms var(--vf-ease-island);
+}
+
+.vf-monitor-bubble-ignition,
+.vf-monitor-bubble-particles,
+.vf-monitor-bubble-mirrors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.vf-monitor-bubble-core-glow {
+  position: absolute;
+  inset: 18%;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--vf-monitor-working) 45%, transparent) 0%,
+    transparent 70%
+  );
+  animation: vf-monitor-pulse var(--vf-monitor-pulse-duration, 2.4s) ease-in-out infinite;
+}
+
+.vf-monitor-bubble-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--ignition-size);
+  height: var(--ignition-size);
+  border-radius: 999px;
+  background: var(--vf-monitor-working);
+  opacity: 0;
+  animation: vf-monitor-ignite var(--ignition-duration) var(--vf-ease-island) var(--ignition-delay)
+    infinite;
+}
+
+.vf-monitor-bubble-mirrors i {
+  position: absolute;
+  border: 1px solid;
+  border-radius: 999px;
+}
+
+@keyframes vf-monitor-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@keyframes vf-monitor-ignite {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--ignition-angle)) translateX(0);
+  }
+  35% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--ignition-angle)) translateX(var(--ignition-distance));
+  }
+}
+
+.vf-monitor-bubble-glyph {
+  color: var(--agent-color);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.vf-monitor-bubble-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+}
+
+/* §3 title: 12px semibold. The name of the thing, at full opacity. */
+.vf-monitor-bubble-copy strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* §3 caption: 9–10px at 40%. */
+.vf-monitor-bubble-branch,
+.vf-monitor-bubble-provider {
+  max-width: 100%;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* §3: every number that can change is tabular. */
+.vf-monitor-bubble-context {
+  color: rgba(255, 255, 255, 0.5);
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-monitor-long-press {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 999px;
+  background: var(--vf-select);
+  pointer-events: none;
+  animation: vf-monitor-long-press 520ms var(--vf-ease-island) forwards;
+}
+
+@keyframes vf-monitor-long-press {
+  from {
+    opacity: 0.9;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(4);
+  }
+}
+
+/* ── the list ────────────────────────────────────────────────────────────── */
+.vf-monitor-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.vf-monitor-list-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  /* Clear the chrome floating over this row. Our chrome is anchored top-RIGHT
+     and does not occupy a full band, so the measure a flow view needs from it is
+     its WIDTH — which is what the stage publishes. (The reference publishes a
+     height because its chrome is a full-width panel; same contract, our
+     geometry.) */
+  padding: 10px calc(20px + var(--vf-monitor-chrome-width, 0px)) 8px 14px;
+}
+
+.vf-monitor-list-count {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vf-monitor-list-new {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 4px 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.vf-monitor-list-new:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.vf-monitor-list-rows {
+  flex: 1;
+  margin: 0;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.vf-monitor-list-row {
+  display: grid;
+  grid-template-columns: 10px var(--vf-monitor-project-width, 150px) 1fr 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: var(--vf-monitor-row-height, 38px);
+  border: 0;
+  border-left: 2px solid var(--agent-color);
+  border-radius: 6px;
+  background: transparent;
+  padding: 0 10px;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.vf-monitor-list-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vf-monitor-list-row.is-active {
+  outline: 1.5px solid var(--vf-select);
+  outline-offset: -1px;
+}
+
+.vf-monitor-list-row:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: -1px;
+}
+
+/* §2.5's mapping, as the only color in the row. */
+.vf-monitor-list-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.vf-monitor-list-row.is-working .vf-monitor-list-status {
+  background: var(--vf-monitor-working);
+}
+
+.vf-monitor-list-row.is-waiting .vf-monitor-list-status {
+  background: var(--vf-monitor-waiting);
+}
+
+.vf-monitor-list-project {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.vf-monitor-list-project strong {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-monitor-list-project small,
+.vf-monitor-list-terminal {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-monitor-list-agent {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-monitor-list-agent i {
+  color: var(--agent-color);
+  font-size: 13px;
+  line-height: 0;
+}
+
+.vf-monitor-list-detail {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-monitor-list-context {
+  color: rgba(255, 255, 255, 0.5);
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ── the rain ────────────────────────────────────────────────────────────── */
+.vf-monitor-rain {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.vf-monitor-rain canvas,
+.vf-monitor-rain-surface {
+  position: absolute;
+  inset: 0;
+}
+
+.vf-monitor-rain-surface {
+  cursor: crosshair;
+}
+
+/* §5 overlay-chip material; §2.3 hairline. */
+.vf-monitor-rain-tooltip {
+  position: absolute;
+  z-index: 4;
+  min-width: 180px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vf-card) 92%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4); /* §5 island/floating chrome, dark */
+  padding: 8px 10px;
+  pointer-events: none;
+}
+
+.vf-monitor-rain-tooltip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.vf-monitor-rain-tooltip-head strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vf-monitor-rain-tooltip-head span {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vf-monitor-rain-tooltip.is-working .vf-monitor-rain-tooltip-head span {
+  color: var(--vf-green);
+}
+
+.vf-monitor-rain-tooltip.is-waiting .vf-monitor-rain-tooltip-head span {
+  color: var(--vf-orange);
+}
+
+.vf-monitor-rain-tooltip dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin: 0;
+}
+
+.vf-monitor-rain-tooltip dt {
+  color: rgba(255, 255, 255, 0.4);
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+}
+
+.vf-monitor-rain-tooltip dd {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+}
+
+.vf-monitor-rain-context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-monitor-rain-context-track {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.vf-monitor-rain-context-track i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--vf-cyan); /* §2.5 info/live-data accent */
+}
+
+/* The canvas has no accessible tree, so the rain also offers its agents as real
+   controls. Visually hidden, never `display: none` — a screen reader has to be
+   able to reach them. */
+.vf-monitor-rain-agents {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  list-style: none;
+  white-space: nowrap;
+}
+
+/* The view switcher, in the header's meta position. Quiet by default; it is a
+   control on an eyebrow row, not a call to action. */
+.vf-godview-view-switch {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 3px 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.vf-godview-view-switch:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 1px;
+}
+
+/* M6, non-negotiable: the swarm's decorative loops stop, and nothing about the
+   monitor's MEANING was carried by them — status is a ring and a size, context
+   is a height, and all three survive. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-monitor-bubble-core-glow,
+  .vf-monitor-bubble-particle,
+  .vf-monitor-long-press {
+    animation: none;
+  }
+
+  .vf-monitor-bubble-context-fill {
+    transition: none;
+  }
+
+  .vf-monitor-bubble-particle {
+    opacity: 0;
+  }
+}

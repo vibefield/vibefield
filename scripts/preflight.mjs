@@ -56,6 +56,11 @@ const PIN_EXPECTATIONS = [
     re: /"@vibecook\/ghosttea-react":\s*0\.9\.0/,
     label: '"@vibecook/ghosttea-react": 0.9.0',
   },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.9\.0/,
+    label: '"@vibecook/ghosttea-protocol": 0.9.0',
+  },
 ];
 for (const { file, re, label } of PIN_EXPECTATIONS) {
   try {

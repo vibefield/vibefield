@@ -45,3 +45,27 @@ export interface GodviewDeckFacts {
 export function emitGodviewDeckMarker(facts: GodviewDeckFacts): void {
   console.log(`GODVIEW_DECK ${JSON.stringify(facts)}`);
 }
+
+/** What the Godview MONITOR currently is (GT-3m) — the deck marker's sibling,
+ * for the stage above it.
+ *
+ * A separate line rather than a field on the deck's, because the two have
+ * different lifetimes and the difference is the point: the deck stays mounted
+ * while the overlay is closed, the monitor does not (PF6). A monitor marker is
+ * therefore evidence that the stage EXISTS at the moment it was printed, which a
+ * field on a still-mounted deck's line could never be. */
+export interface GodviewMonitorFacts {
+  /** Which view is on the stage. `swarm` is the registry's default. */
+  viewId: string;
+  /** Rows the stage is showing, and how many of them an agent has claimed. */
+  agents: number;
+  agentBacked: number;
+  /** GT-D13's law, as a fact a harness can hold: the words on the stage saying
+   * these agents are invented. Absent from this line would mean absent from the
+   * screen — which is the failure it exists to catch. */
+  mockLabel: string;
+}
+
+export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {
+  console.log(`GODVIEW_MONITOR ${JSON.stringify(facts)}`);
+}
