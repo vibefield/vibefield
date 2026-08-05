@@ -60,7 +60,14 @@ function host(usersUpdate: NonNullable<FieldHost["usersUpdate"]> | null): void {
 /** The product half. `link` undefined makes `user.link.subscribe` REJECT, which
  * is what a daemon without the UA-3 method actually does. */
 function client(options: { link?: unknown; preferences?: Record<string, unknown> }): FielddClient {
-  const preferences = options.preferences ?? { showTray: true, backgroundShell: true };
+  // UA-6 made syncPosture REQUIRED in the effective snapshot — a real daemon
+  // always folds it, so the fake must too (a partial snapshot reads as
+  // unavailable, which is its own test below, not this one's subject).
+  const preferences = options.preferences ?? {
+    showTray: true,
+    backgroundShell: true,
+    syncPosture: "automatic",
+  };
   return {
     status: "ready",
     onStatusChange: () => () => undefined,
