@@ -107,6 +107,14 @@ export function publishUsersFile(rootReal: string, file: UsersFile): void {
 export interface MintOptions {
   now?: () => number;
   name?: string;
+  /** The minted record's `onboarded` (UA-3w). False is the product default —
+   * a fresh user meets the §6 Setup Assistant. Test-harness supervisors mint
+   * true so a smoke never opens a wizard it cannot answer. */
+  onboarded?: boolean;
+  /** A PASSTHROUGH marker (UA-3w), deliberately outside `UserRecord`'s schema:
+   * the wizard reads it to pick its short migration variant, and no wire shape
+   * depends on it. Only the flat-v1 migration sets it. */
+  setupVariant?: "migrated";
   /** Fired when another writer minted first — not a failure (`mint_lost`). */
   onMintLost?: () => void;
 }
@@ -127,8 +135,9 @@ export function mintLockedUsersFile(
     fuid: 1,
     name: opts.name ?? defaultUserName(),
     resident: true,
-    onboarded: false,
+    onboarded: opts.onboarded ?? false,
     createdAt: new Date(at).toISOString(),
+    ...(opts.setupVariant !== undefined ? { setupVariant: opts.setupVariant } : {}),
   };
   const file: UsersFile = {
     version: USERS_FILE_VERSION,

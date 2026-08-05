@@ -46,8 +46,14 @@ function fakeMachine() {
     get client() {
       return null;
     },
+    // UA-3w: this suite is about the reveal, so the wizard never opens here.
+    // The layer swap it drives has its own coverage in onboarding-wizard.test.
+    get onboarding() {
+      return null;
+    },
     start: () => {},
     retry: () => {},
+    completeOnboarding: () => {},
   };
   const set = (patch: Partial<BootView>): void => {
     view = { ...view, ...patch };

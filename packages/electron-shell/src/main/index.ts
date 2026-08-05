@@ -65,6 +65,7 @@ import {
   installWebContentsBackstop,
 } from "./security";
 import { buildCsp } from "./security-policy";
+import { backfillMigratedSetupVariant } from "./setup-variant";
 import { RecoveringShellProvider } from "./shell-provider";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { TerminalBackendRegistry } from "./terminal-backend";
@@ -908,11 +909,25 @@ if (!hasInstanceLock) {
     // injected FIELDD_DATA_DIR is someone else's data (the smoke.ts law,
     // extended from deletion to writing).
     const usersLogger = logging.logger.child({ component: "users" });
+    // The same condition twice, named once: a smoke-like run with an INJECTED
+    // root may neither mint into nor amend someone else's users.json.
+    const mayWriteUsers = !(isSmokeLike(MODE) && process.env["FIELDD_DATA_DIR"] !== undefined);
     const ensured = await ensureUsersRoot(root, {
-      allowMint: !(isSmokeLike(MODE) && process.env["FIELDD_DATA_DIR"] !== undefined),
+      allowMint: mayWriteUsers,
+      // UA-3w — a test harness never meets the Setup Assistant: it has no hands
+      // to answer it with, and a held boot would read as a hung smoke.
+      mintOnboarded: isSmokeLike(MODE),
       onEvent: (event, attrs) => usersLogger.info(event, "user-directory event", attrs),
     });
     const userRoot = ensured.userRoot;
+    if (mayWriteUsers) {
+      // UA-3w — roots migrated before the marker existed still deserve the
+      // welcome-back wording. Awaited (it is one lock round-trip on a path that
+      // just took several) but never fatal — it swallows its own failures.
+      await backfillMigratedSetupVariant(ensured.rootReal, ensured.user.userId, {
+        onEvent: (event, message, attrs) => usersLogger.info(event, message, attrs),
+      });
+    }
     if (ensured.migrated || ensured.created) {
       usersLogger.info(
         ensured.migrated ? "desktop.users.migrated" : "desktop.users.minted",

@@ -1,6 +1,8 @@
-import { AppPreferences } from "@vibefield/contracts";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
+import { AccentChip, AccentPicker } from "../account/AccentPicker";
+import { linkFace, readableTime, type UserLinkStatus } from "../account/link";
+import { POSTURE_CHOICES, useSyncPosture } from "../account/posture";
 import { type FieldUserProfile, getHost } from "../host";
 import {
   buttonCls,
@@ -14,7 +16,8 @@ import {
 // The Account surface (UA-3; spec §6.3) — the Setup Assistant's permanent home.
 // Everything the wizard asks lives on here, and the two skins drive the same
 // machinery: `usersUpdate` for the profile, the §7.1 link flow, the posture
-// preference.
+// preference. Since UA-3w that is literal — the shared pieces live in
+// `src/account/` and the wizard imports the same ones.
 //
 // Two owners, deliberately not one. Profile and residency are SUPERVISOR facts
 // (`users.json`, UA-D10) and travel over the host bridge, because main is the
@@ -22,53 +25,6 @@ import {
 // product socket like every other preference. The page does not hide that split
 // — a device with a working daemon and no supervisor bridge shows exactly which
 // half is reachable, rather than greying out the lot.
-
-/** §7.1's `link.json`, as the subscription reports it. Local rather than
- * imported: `user.link.subscribe` is fieldd's to define and lands with the
- * daemon half of this slice. Kept a tolerant shape so an early daemon that
- * omits a field renders honestly instead of throwing. */
-type UserLinkStatus = {
-  link: { login: string | null; tailnet?: string; linkedAt: string } | null;
-  meshEnabled: boolean;
-  nodeState: string | null;
-  authUrl: string | null;
-};
-
-type SyncPosture = "automatic" | "opt-in";
-
-/** The eight §2.6 accent slots by NAME (DESIGN.md: slot names, never hex — the
- * value belongs to the token, so a palette revision moves one file). */
-const ACCENT_SLOTS = [
-  "accent-1",
-  "accent-2",
-  "accent-3",
-  "accent-4",
-  "accent-5",
-  "accent-6",
-  "accent-7",
-  "accent-8",
-] as const;
-
-/** The posture key as `storage.appPreferences.set` takes it (spec §8). Written
- * as a plain string: UA-6 owns its registration in `APP_PREFERENCE_KEYS`, and
- * this surface asks for it by name until that lands. */
-const SYNC_POSTURE_KEY = "mesh.syncPosture";
-
-/** Tolerant read (design-00): the snapshot's field name for a key UA-6 has not
- * shipped yet is not knowable here — today's daemon shortens `desktop.showTray`
- * to `showTray`, so accept both spellings and default to today's behavior. */
-function readPosture(raw: unknown): SyncPosture {
-  if (typeof raw !== "object" || raw === null) return "automatic";
-  const record = raw as Record<string, unknown>;
-  const value = record.syncPosture ?? record[SYNC_POSTURE_KEY];
-  return value === "opt-in" ? "opt-in" : "automatic";
-}
-
-/** A timestamp reads as a time or as itself — never as "Invalid Date". */
-function readableTime(iso: string): string {
-  const parsed = new Date(iso);
-  return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleString();
-}
 
 /** How the profile half of the page currently reads. `loading` is the honest
  * first beat: the record is read through the same door that writes it. */
@@ -184,75 +140,12 @@ export function AccountSection({
           align="start"
         >
           <div className="flex flex-col items-end gap-2">
-            <div
-              role="radiogroup"
-              aria-label="Accent color"
-              className="flex flex-wrap justify-end gap-1.5"
-            >
-              {/* Real radios, not buttons wearing the role: arrow-key traversal
-                  and the group semantics come free, and the swatch is the
-                  label's own face. */}
-              {ACCENT_SLOTS.map((slot) => {
-                const selected = accent === slot;
-                return (
-                  <label
-                    key={slot}
-                    className={`inline-flex rounded-full transition-transform focus-within:ring-2 focus-within:ring-[var(--vf-select)] ${
-                      editable ? "cursor-pointer hover:scale-105 active:scale-95" : "opacity-40"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="vf-account-accent"
-                      className="sr-only"
-                      aria-label={slot}
-                      checked={selected}
-                      disabled={!editable}
-                      onChange={() => void write({ color: slot })}
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="block h-7 w-7 rounded-full"
-                      style={{
-                        background: `var(--vf-${slot})`,
-                        // §7: the sole-selection ring, 1.5px in --vf-select.
-                        ...(selected
-                          ? { outline: "1.5px solid var(--vf-select)", outlineOffset: "2px" }
-                          : {}),
-                      }}
-                    />
-                  </label>
-                );
-              })}
-            </div>
-            {/* The live chip — the §2.6 tint recipe (12% body, 35% hairline,
-                label at full), so the choice is shown doing its actual job
-                rather than as a bare swatch. */}
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium text-black/75 dark:text-white/75"
-              style={{
-                background:
-                  accent === null
-                    ? "transparent"
-                    : `color-mix(in srgb, var(--vf-${accent}) 12%, transparent)`,
-                borderColor:
-                  accent === null
-                    ? "color-mix(in srgb, currentColor 15%, transparent)"
-                    : `color-mix(in srgb, var(--vf-${accent}) 35%, transparent)`,
-              }}
-            >
-              <span
-                aria-hidden="true"
-                className="h-1.5 w-1.5 rounded-full"
-                style={{
-                  background:
-                    accent === null
-                      ? "color-mix(in srgb, currentColor 30%, transparent)"
-                      : `var(--vf-${accent})`,
-                }}
-              />
-              {name.trim().length > 0 ? name : "your field"}
-            </span>
+            <AccentPicker
+              value={accent}
+              disabled={!editable}
+              onSelect={(slot) => void write({ color: slot })}
+            />
+            <AccentChip accent={accent} label={name} />
           </div>
         </SettingsRow>
 
@@ -348,12 +241,13 @@ function LinkBlock(): ReactElement {
     }
   };
 
-  const data = status.status === "live" ? (status.data ?? null) : null;
+  // One reading of the snapshot, shared with the Setup Assistant's pane 4.
+  const face = linkFace(status.status, status.status === "live" ? (status.data ?? null) : null);
 
   let body: ReactElement;
-  if (status.status === "loading") {
+  if (face.kind === "loading") {
     body = <div className={labelCls}>Reading link status…</div>;
-  } else if (status.status === "error" || data === null) {
+  } else if (face.kind === "unavailable") {
     // The daemon half of this slice may not be there yet, and a page that
     // crashes on a missing method is worse than one that says so.
     body = (
@@ -362,7 +256,7 @@ function LinkBlock(): ReactElement {
         working.
       </div>
     );
-  } else if (!data.meshEnabled) {
+  } else if (face.kind === "mesh-off") {
     body = (
       <div className="space-y-1">
         <div className={labelCls}>
@@ -370,16 +264,16 @@ function LinkBlock(): ReactElement {
           <span className="font-mono">FIELD_NATIVE_MESH</span>), so there is nothing to link from
           here yet.
         </div>
-        {data.link !== null && (
+        {face.link !== null && (
           <div className={labelCls}>
-            A link is on file for {data.link.login ?? "this device"} — it takes effect when the mesh
+            A link is on file for {face.link.login ?? "this device"} — it takes effect when the mesh
             is enabled.
           </div>
         )}
       </div>
     );
-  } else if (data.link !== null) {
-    const link = data.link;
+  } else if (face.kind === "linked") {
+    const link = face.link;
     body = (
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
@@ -396,10 +290,10 @@ function LinkBlock(): ReactElement {
           <span className={labelCls}>linked</span>
           <span className="tabular-nums">{readableTime(link.linkedAt)}</span>
         </div>
-        {data.nodeState !== null && (
+        {face.nodeState !== null && (
           <div className="flex items-center justify-between gap-2">
             <span className={labelCls}>node</span>
-            <span>{data.nodeState}</span>
+            <span>{face.nodeState}</span>
           </div>
         )}
 
@@ -447,14 +341,14 @@ function LinkBlock(): ReactElement {
         </div>
       </div>
     );
-  } else if (data.authUrl !== null) {
+  } else if (face.kind === "authenticating") {
     body = (
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <span className={labelCls}>node</span>
           <span className="flex items-center gap-1.5">
             <a
-              href={data.authUrl}
+              href={face.authUrl}
               target="_blank"
               rel="noreferrer"
               className="underline"
@@ -462,7 +356,7 @@ function LinkBlock(): ReactElement {
             >
               authenticate
             </a>
-            {data.nodeState ?? "waiting for authentication"}
+            {face.nodeState ?? "waiting for authentication"}
           </span>
         </div>
         <div className={labelCls}>
@@ -476,7 +370,7 @@ function LinkBlock(): ReactElement {
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <span className={labelCls}>node</span>
-          <span>{data.nodeState ?? "not linked"}</span>
+          <span>{face.nodeState ?? "not linked"}</span>
         </div>
         <div className={labelCls}>
           No account linked yet. When the node offers a sign-in address it appears here.
@@ -502,41 +396,8 @@ function SyncPostureSection({
   // optional prop is a value that may BE undefined, not an absent one.
   onSettingsChanged?: ((undoable: boolean) => void) | undefined;
 }): ReactElement {
-  const client = useFielddClient();
-  const subscription = useSubscription<unknown>("storage.appPreferences.subscribe", {});
-  const parsed = AppPreferences.safeParse(subscription.data);
-  const preferences = parsed.success ? parsed.data : null;
-  const [pending, setPending] = useState(false);
-  const [writeError, setWriteError] = useState<string | null>(null);
-
-  const unavailable = subscription.status !== "live" || preferences === null;
-  const posture = readPosture(subscription.data);
-
-  const setPosture = async (value: SyncPosture): Promise<void> => {
-    setPending(true);
-    setWriteError(null);
-    try {
-      await client.request("storage.appPreferences.set", { key: SYNC_POSTURE_KEY, value });
-      onSettingsChanged?.(true);
-    } catch (error) {
-      setWriteError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setPending(false);
-    }
-  };
-
-  const cards = [
-    {
-      value: "automatic" as const,
-      title: "Sync new projects automatically",
-      description: "New documents join your mesh as you make them.",
-    },
-    {
-      value: "opt-in" as const,
-      title: "Ask per project",
-      description: "New documents stay on this device until you say otherwise.",
-    },
-  ];
+  const posture = useSyncPosture();
+  const locked = posture.unavailable || posture.pending;
 
   return (
     <SettingsSection
@@ -544,13 +405,12 @@ function SyncPostureSection({
       description="What a new document does by default. You can change any single document afterwards."
     >
       <div role="radiogroup" aria-label="Sync posture" className="grid gap-2 sm:grid-cols-2">
-        {cards.map((card) => {
-          const selected = posture === card.value;
-          const locked = unavailable || pending;
+        {POSTURE_CHOICES.map((card) => {
+          const selected = posture.posture === card.value;
           return (
             <label
               key={card.value}
-              className={`rounded-[14px] border p-3 text-left transition-[background-color,border-color,transform] focus-within:ring-2 focus-within:ring-[var(--vf-select)] ${
+              className={`rounded-[14px] border p-3 text-left transition-[background-color,border-color,transform] focus-within:ring-2 focus-within:ring-[var(--vf-select)] motion-reduce:transition-none ${
                 selected
                   ? "border-black/25 bg-black/[0.04] dark:border-white/30 dark:bg-white/[0.08]"
                   : "border-black/10 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/[0.04]"
@@ -562,7 +422,11 @@ function SyncPostureSection({
                 className="sr-only"
                 checked={selected}
                 disabled={locked}
-                onChange={() => void setPosture(card.value)}
+                onChange={() => {
+                  void posture.set(card.value).then((landed) => {
+                    if (landed) onSettingsChanged?.(true);
+                  });
+                }}
               />
               <div className="text-[13px] font-medium leading-5 text-black/80 dark:text-white/80">
                 {card.title}
@@ -572,16 +436,18 @@ function SyncPostureSection({
           );
         })}
       </div>
-      {subscription.status === "loading" && (
+      {posture.status === "loading" && (
         <div className={`pt-2 ${labelCls}`}>Loading preferences…</div>
       )}
-      {subscription.status === "error" && (
+      {posture.status === "error" && (
         <div className="pt-2 text-[12px] text-amber-600 dark:text-amber-400">
           Preferences unavailable.
         </div>
       )}
-      {writeError !== null && (
-        <div className="pt-2 text-[12px] text-amber-600 dark:text-amber-400">{writeError}</div>
+      {posture.writeError !== null && (
+        <div className="pt-2 text-[12px] text-amber-600 dark:text-amber-400">
+          {posture.writeError}
+        </div>
       )}
     </SettingsSection>
   );

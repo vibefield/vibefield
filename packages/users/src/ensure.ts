@@ -27,6 +27,8 @@ export function detectLayoutState(rootReal: string): LayoutState {
   return "fresh";
 }
 
+/** Options for the one door. `mintOnboarded` (UA-3w) rides in from
+ * `MigrateOptions` so a mint and a migration cannot disagree about it. */
 export interface EnsureOptions extends MigrateOptions {
   /** False in smoke-like modes with an INJECTED root: "don't write someone
    * else's users.json" (§3.3). Fresh/legacy roots then refuse typed. */
@@ -76,6 +78,7 @@ export async function ensureUsersRoot(
       const minted = mintLockedUsersFile(rootReal, {
         ...(opts.now !== undefined ? { now: opts.now } : {}),
         ...(opts.name !== undefined ? { name: opts.name } : {}),
+        ...(opts.mintOnboarded !== undefined ? { onboarded: opts.mintOnboarded } : {}),
       });
       writeLayoutStamp(rootReal, "fresh", opts.now ?? Date.now);
       return minted.created;

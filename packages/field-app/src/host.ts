@@ -89,6 +89,12 @@ export interface FieldUserProfile {
   color?: string;
   resident: boolean;
   onboarded: boolean;
+  /** UA-3w — set to "migrated" on the user the flat-v1 migration minted. A
+   * PASSTHROUGH field on the record, deliberately absent from the `UserRecord`
+   * schema: the Setup Assistant reads it to pick its two-decision variant, and
+   * the tolerant reader carries it through untouched. Typed `string` because a
+   * future writer may say something this build has never heard of. */
+  setupVariant?: string;
 }
 
 export interface FieldHost {
@@ -110,6 +116,9 @@ export interface FieldHost {
     name?: string;
     color?: string;
     resident?: boolean;
+    /** The §6 completion flag (UA-3w). Written ONCE, by the wizard's last pane,
+     * and only after everything it promised to record actually landed. */
+    onboarded?: boolean;
   }) => Promise<FieldUserProfile>;
   getConnection(): Promise<{ port: number; token: string }>;
   onPrepareClose(handler: (requestId: string) => void): () => void;

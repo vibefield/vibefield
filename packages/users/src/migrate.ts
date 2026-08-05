@@ -38,6 +38,11 @@ export function v1TopEntries(): string[] {
 export interface MigrateOptions extends UsersLockDeps {
   now?: () => number;
   name?: string;
+  /** UA-3w — what a MINTED record's `onboarded` starts as. Absent means false:
+   * a new user meets the §6 Setup Assistant. Only test-harness supervisors set
+   * it true, and only for roots they own. Inherited by `EnsureOptions`, so the
+   * mint and migrate paths honor one flag. */
+  mintOnboarded?: boolean;
   onEvent?: (event: string, attrs?: Record<string, string | number>) => void;
   /** TEST ONLY: observe each landed move; throwing simulates a crash between
    * two entries — the kill-matrix convergence fixture. */
@@ -121,9 +126,14 @@ export async function migrateFlatV1(
   return withUsersLock(rootReal, "migrate", opts, async () => {
     if (readLayoutStamp(rootReal) !== null) return { migrated: false }; // finished by another hand
     await stopLegacyPair(rootReal, opts);
+    // The migrated user is not a fresh one: their field already exists, it
+    // just moved under a user. UA-3w's wizard reads `setupVariant` and asks
+    // its two-decision variant instead of the full first-run walk.
     const { file } = mintLockedUsersFile(rootReal, {
       ...(opts.now !== undefined ? { now: opts.now } : {}),
       ...(opts.name !== undefined ? { name: opts.name } : {}),
+      ...(opts.mintOnboarded !== undefined ? { onboarded: opts.mintOnboarded } : {}),
+      setupVariant: "migrated",
     });
     const target = userRootFor(rootReal, activeUser(file));
     mkdirSync(target, { recursive: true });
