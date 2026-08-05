@@ -86,6 +86,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       opts.adoptProbeMs ?? ADOPT_PROBE_MS,
       signal,
       opts.expectedBuildId,
+      opts.userId,
     );
     throwIfAborted(signal);
     if (adopted.ok) {
@@ -142,7 +143,13 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
             lastFailure,
           );
         }
-        const probe = await tryAdopt(opts.dataRoot, POLL_PROBE_MS, signal, opts.expectedBuildId);
+        const probe = await tryAdopt(
+          opts.dataRoot,
+          POLL_PROBE_MS,
+          signal,
+          opts.expectedBuildId,
+          opts.userId,
+        );
         if (probe.ok) {
           const ownership = probe.info.pid === spawned.pid ? "spawned" : "adopted";
           if (ownership === "adopted") {
@@ -212,6 +219,9 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       // ensure (a bare run without it treats FIELDD_DATA_DIR as the VibeField
       // root and is its own supervisor).
       FIELDD_USER_ROOT: opts.dataRoot,
+      // UA-2 — and WHICH user that root serves; fieldd records it in
+      // product.json and asserts it in every hello ack.
+      ...(opts.userId !== undefined ? { FIELDD_USER_ID: opts.userId } : {}),
       ...(opts.nativeExecutable ? { FIELDD_NATIVE_BIN: opts.nativeExecutable } : {}),
       ...(opts.allowedOrigins && opts.allowedOrigins.length > 0
         ? { FIELDD_ALLOWED_ORIGINS: opts.allowedOrigins.join(",") }

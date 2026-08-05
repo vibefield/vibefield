@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { Hello, HelloAck } from "../src/envelope";
+import { ProductInfo } from "../src/shell";
 import { LayoutStamp, UserRecord, UsersFile } from "../src/users";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -44,5 +46,37 @@ describe("UsersFile (golden vector)", () => {
           .previous,
       ).toBe(previous);
     }
+  });
+});
+
+// UA-2 — identity threading shapes: the pair asserts which user it serves.
+describe("identity threading (UA-2)", () => {
+  const base = { contractsVersion: "1.0.0", minCompatible: "1.0.0", clientKind: "shell-main" };
+
+  it("Hello carries an optional user expectation", () => {
+    expect(Hello.parse({ ...base, userId: "01X" }).userId).toBe("01X");
+    expect(Hello.parse(base).userId).toBeUndefined();
+  });
+
+  it("HelloAck asserts the server's user — string, null, or pre-UA-2 absent", () => {
+    const ack = { contractsVersion: "1.0.0", serverKind: "fieldd", grantedScopes: [] };
+    expect(HelloAck.parse({ ...ack, userId: "01X" }).userId).toBe("01X");
+    expect(HelloAck.parse({ ...ack, userId: null }).userId).toBeNull();
+    expect(HelloAck.parse(ack).userId).toBeUndefined();
+  });
+
+  it("ProductInfo records the served user; absence stays adoptable (tolerance)", () => {
+    const info = {
+      port: 4242,
+      pid: 1,
+      bootId: "b",
+      contractsVersion: "1.0.0",
+      startedAt: 0,
+      nativePid: null,
+    };
+    expect(ProductInfo.parse({ ...info, userId: "01X" }).userId).toBe("01X");
+    expect(ProductInfo.parse({ ...info, userId: null }).userId).toBeNull();
+    expect(ProductInfo.parse(info).userId).toBeUndefined();
+    expect(() => ProductInfo.parse({ ...info, userId: "" })).toThrow();
   });
 });

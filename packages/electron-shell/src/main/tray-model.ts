@@ -11,6 +11,9 @@ export interface TraySnapshot {
   readonly link: TrayLinkState;
   readonly evidence: TrayEvidenceState;
   readonly update: TrayUpdateState;
+  /** UA-2 — the attached user's display name; absent hides the row (older
+   * callers, tests). Static per boot until UA-3's Account section can rename. */
+  readonly userName?: string;
   readonly backgroundShell: boolean;
   readonly showTray: boolean;
   readonly windowOpen: boolean;
@@ -123,6 +126,15 @@ export function buildTrayMenu(
       ...availability(platform, actionable),
       ...(actionable ? { click: actions.openPrimaryWindow } : {}),
     },
+    ...(snapshot.userName !== undefined
+      ? [
+          {
+            id: "user",
+            label: `User: ${snapshot.userName}`,
+            ...availability(platform, false),
+          },
+        ]
+      : []),
     {
       id: "status",
       label: serviceStatus(snapshot),

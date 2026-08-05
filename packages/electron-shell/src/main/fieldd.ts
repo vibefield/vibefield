@@ -30,6 +30,9 @@ export function buildSupervisor(opts: {
   viteUrl: string;
   logRoot: string;
   logger: Logger;
+  /** UA-2 — the attached user this pair must serve; gates adoption and rides
+   * the spawn env as FIELDD_USER_ID. */
+  userId?: string;
 }): FielddSupervisor {
   // Env overrides still win — they are how smoke harnesses and a developer
   // testing a packaged layout redirect the daemon — but the DEFAULT now comes
@@ -99,6 +102,7 @@ export function buildSupervisor(opts: {
     allowedOrigins: [APP_ORIGIN, ...(opts.mode === "dev" ? [new URL(opts.viteUrl).origin] : [])],
     ...(isolatePorts ? { controlPort: 0, dataPort: 0 } : {}),
     ...(expectedBuildId ? { expectedBuildId } : {}),
+    ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
     shutdownPolicy: policy,
     ...(policy === "stop-owned"
       ? { stopDeadlineMs: PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS + 2_000 }

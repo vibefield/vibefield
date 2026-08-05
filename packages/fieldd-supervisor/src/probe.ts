@@ -18,6 +18,7 @@ export async function tryAdopt(
   probeMs: number,
   signal?: AbortSignal,
   expectedBuildId?: string,
+  expectedUserId?: string,
 ): Promise<ProbeResult> {
   let rawProduct: string;
   let token: string;
@@ -77,6 +78,13 @@ export async function tryAdopt(
     if (expectedBuildId !== undefined && info.buildId !== expectedBuildId) {
       client.close();
       return { ok: false, failure: "incompatible-build" };
+    }
+    // UA-2 — identity is stricter than build: an absent userId is a daemon
+    // from before the partition (or another user's), and adopting it would
+    // cross the wall. Exact match or nothing.
+    if (expectedUserId !== undefined && info.userId !== expectedUserId) {
+      client.close();
+      return { ok: false, failure: "user-mismatch" };
     }
     return { ok: true, client, info };
   }

@@ -47,6 +47,11 @@ export const Hello = z
      * the grant stays the D32 preset either way, so the claim cannot escalate.
      * Retires when the sidecar injects the node id (truffle petition). */
     deviceId: z.string().optional(),
+    /** UA-2 — the client's EXPECTATION of which user this daemon serves.
+     * Restrict-only, like clientKind: a configured daemon refuses a mismatch
+     * the way it refuses a version mismatch (INCOMPATIBLE); the claim can
+     * narrow a connection, never escalate one. */
+    userId: z.string().optional(),
   })
   .passthrough();
 export type Hello = z.infer<typeof Hello>;
@@ -80,6 +85,10 @@ export const HelloAck = z
      * being inferred from missing capabilities. Opaque provenance, never parsed
      * for behavior. Absence is itself the tell: a daemon predating GT-2d. */
     nativeBuild: z.string().optional(),
+    /** UA-2 — the SERVER's assertion of which user this pair serves. null =
+     * unconfigured (embedded/unit daemons); absent = a pre-UA-2 daemon.
+     * Display + verification truth; never a grant. */
+    userId: z.string().nullable().optional(),
   })
   .passthrough();
 export type HelloAck = z.infer<typeof HelloAck>;

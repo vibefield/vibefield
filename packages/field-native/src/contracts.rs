@@ -809,6 +809,9 @@ impl ::std::convert::TryFrom<::std::string::String> for ErrorKind {
 #[doc = "    },"]
 #[doc = "    \"minCompatible\": {"]
 #[doc = "      \"$ref\": \"#/definitions/SemverString\""]
+#[doc = "    },"]
+#[doc = "    \"userId\": {"]
+#[doc = "      \"type\": \"string\""]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": true"]
@@ -831,6 +834,12 @@ pub struct Hello {
     pub device_id: ::std::option::Option<::std::string::String>,
     #[serde(rename = "minCompatible")]
     pub min_compatible: SemverString,
+    #[serde(
+        rename = "userId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub user_id: ::std::option::Option<::std::string::String>,
 }
 impl Hello {
     pub fn builder() -> builder::Hello {
@@ -867,6 +876,12 @@ impl Hello {
 #[doc = "    },"]
 #[doc = "    \"terminal\": {"]
 #[doc = "      \"$ref\": \"#/definitions/TerminalEndpoints\""]
+#[doc = "    },"]
+#[doc = "    \"userId\": {"]
+#[doc = "      \"type\": ["]
+#[doc = "        \"string\","]
+#[doc = "        \"null\""]
+#[doc = "      ]"]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": true"]
@@ -889,6 +904,12 @@ pub struct HelloAck {
     pub server_kind: ServerKind,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub terminal: ::std::option::Option<TerminalEndpoints>,
+    #[serde(
+        rename = "userId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub user_id: ::std::option::Option<::std::string::String>,
 }
 impl HelloAck {
     pub fn builder() -> builder::HelloAck {
@@ -6590,6 +6611,10 @@ pub mod builder {
             ::std::string::String,
         >,
         min_compatible: ::std::result::Result<super::SemverString, ::std::string::String>,
+        user_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
     }
     impl ::std::default::Default for Hello {
         fn default() -> Self {
@@ -6599,6 +6624,7 @@ pub mod builder {
                 credential: Ok(Default::default()),
                 device_id: Ok(Default::default()),
                 min_compatible: Err("no value supplied for min_compatible".to_string()),
+                user_id: Ok(Default::default()),
             }
         }
     }
@@ -6653,6 +6679,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for min_compatible: {e}"));
             self
         }
+        pub fn user_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.user_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for user_id: {e}"));
+            self
+        }
     }
     impl ::std::convert::TryFrom<Hello> for super::Hello {
         type Error = super::error::ConversionError;
@@ -6663,6 +6699,7 @@ pub mod builder {
                 credential: value.credential?,
                 device_id: value.device_id?,
                 min_compatible: value.min_compatible?,
+                user_id: value.user_id?,
             })
         }
     }
@@ -6674,6 +6711,7 @@ pub mod builder {
                 credential: Ok(value.credential),
                 device_id: Ok(value.device_id),
                 min_compatible: Ok(value.min_compatible),
+                user_id: Ok(value.user_id),
             }
         }
     }
@@ -6691,6 +6729,10 @@ pub mod builder {
             ::std::option::Option<super::TerminalEndpoints>,
             ::std::string::String,
         >,
+        user_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
     }
     impl ::std::default::Default for HelloAck {
         fn default() -> Self {
@@ -6700,6 +6742,7 @@ pub mod builder {
                 native_build: Ok(Default::default()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
                 terminal: Ok(Default::default()),
+                user_id: Ok(Default::default()),
             }
         }
     }
@@ -6754,6 +6797,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for terminal: {e}"));
             self
         }
+        pub fn user_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.user_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for user_id: {e}"));
+            self
+        }
     }
     impl ::std::convert::TryFrom<HelloAck> for super::HelloAck {
         type Error = super::error::ConversionError;
@@ -6764,6 +6817,7 @@ pub mod builder {
                 native_build: value.native_build?,
                 server_kind: value.server_kind?,
                 terminal: value.terminal?,
+                user_id: value.user_id?,
             })
         }
     }
@@ -6775,6 +6829,7 @@ pub mod builder {
                 native_build: Ok(value.native_build),
                 server_kind: Ok(value.server_kind),
                 terminal: Ok(value.terminal),
+                user_id: Ok(value.user_id),
             }
         }
     }

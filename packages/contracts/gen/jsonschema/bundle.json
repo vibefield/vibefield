@@ -1316,6 +1316,12 @@
         },
         "nativeBuild": {
           "type": "string"
+        },
+        "userId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -1498,6 +1504,9 @@
           ]
         },
         "deviceId": {
+          "type": "string"
+        },
+        "userId": {
           "type": "string"
         }
       },

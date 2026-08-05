@@ -126,6 +126,10 @@ export interface FielddConfig {
   nativePid?: number;
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
+  /** UA-2 — the user this daemon serves (users.json userId). Recorded in
+   * product.json and asserted in every hello ack; the supervisor probe refuses
+   * a mismatch. Unset for embedded/unit daemons. */
+  userId?: string;
   /** PLUG-P2 — plugin discovery roots (§9.1): dirs whose children are plugin
    * dirs. Unset ⇒ an empty registry (honest, never a scan of guessed paths). */
   pluginRoots?: { bundled?: string[]; devLinked?: string[] };
@@ -274,6 +278,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     socketPath: join(config.dataDir, ...LAYOUT.MGMT_SOCKET),
     pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
     bootId,
+    ...(config.userId !== undefined ? { userId: config.userId } : {}),
     logger: logger.child({ component: "native_link" }),
   });
   let diagnostics: DiagnosticsService | null = null;
@@ -592,6 +597,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.allowedOrigins ? { allowedOrigins: config.allowedOrigins } : {}),
       tailnetPathSecret: servePathSecret,
       correlateNodeId: (nodeId) => devicesRef?.deviceIdByNodeId(nodeId),
+      ...(config.userId !== undefined ? { userId: config.userId } : {}),
     });
     diagnosticsService.register(api);
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));
@@ -2159,6 +2165,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           startedAt,
           nativePid: config.nativePid ?? null,
           buildId: config.buildId ?? null,
+          userId: config.userId ?? null,
         } satisfies ProductInfo, // the shell/supervisor adoption contract (shell.ts)
         null,
         2,

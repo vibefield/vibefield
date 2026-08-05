@@ -30,16 +30,20 @@ async function main(): Promise<void> {
   // and is its own supervisor: migrate-or-mint under the §3.3 lock, then run
   // out of the attached user's root.
   const explicitUserRoot = process.env["FIELDD_USER_ROOT"];
-  const dataDir =
-    explicitUserRoot ??
-    (
-      await ensureUsersRoot(
-        process.env["FIELDD_DATA_DIR"] ??
-          (process.platform === "darwin"
-            ? join(homedir(), "Library", "Application Support", "VibeField")
-            : join(homedir(), ".local", "share", "VibeField")),
-      )
-    ).userRoot;
+  let userId = process.env["FIELDD_USER_ID"];
+  let dataDir: string;
+  if (explicitUserRoot !== undefined) {
+    dataDir = explicitUserRoot;
+  } else {
+    const ensured = await ensureUsersRoot(
+      process.env["FIELDD_DATA_DIR"] ??
+        (process.platform === "darwin"
+          ? join(homedir(), "Library", "Application Support", "VibeField")
+          : join(homedir(), ".local", "share", "VibeField")),
+    );
+    dataDir = ensured.userRoot;
+    userId ??= ensured.user.userId;
+  }
   const portEnv = process.env["FIELDD_CONTROL_PORT"];
   // the data lane binds the registered port by default (the daemon's own default
   // is ephemeral, for test isolation) — FIELDD_DATA_PORT overrides, 0 = ephemeral.
@@ -109,6 +113,7 @@ async function main(): Promise<void> {
     serviceHarnessPath,
     ...(nativePid !== undefined ? { nativePid } : {}),
     ...(process.env["FIELDD_BUILD_ID"] ? { buildId: process.env["FIELDD_BUILD_ID"] } : {}),
+    ...(userId !== undefined ? { userId } : {}),
     onFatal: (reason) => {
       process.stderr.write(`fieldd fatal: ${reason}\n`);
       process.exit(1);

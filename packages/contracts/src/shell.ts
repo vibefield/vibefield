@@ -28,6 +28,10 @@ export const ProductInfo = z
     /** Development build identity. Production writes null; optional keeps
      * adoption compatible with product files written by older daemons. */
     buildId: z.string().min(1).max(128).nullable().optional(),
+    /** UA-2 — the user this daemon serves (users.json userId). The supervisor
+     * probe refuses a mismatch the way it refuses incompatible-build; null =
+     * unconfigured, optional keeps pre-UA-2 product files adoptable. */
+    userId: z.string().min(1).nullable().optional(),
   })
   .passthrough();
 export type ProductInfo = z.infer<typeof ProductInfo>;

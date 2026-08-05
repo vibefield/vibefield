@@ -78,6 +78,10 @@ export interface ProductApiOptions {
    * claim remains the peer label (the mixed-fleet fallback; it dies with
    * fleet-v3). */
   correlateNodeId?: (nodeId: string) => string | undefined;
+  /** UA-2 — the user this daemon serves (users.json userId). Asserted in every
+   * hello ack; a client hello carrying a DIFFERENT expectation is refused
+   * INCOMPATIBLE. Unset for embedded/unit daemons (ack reports null). */
+  userId?: string;
 }
 
 export type DeviceForwarder = (
@@ -442,6 +446,25 @@ export class ProductApi extends EventEmitter {
         ws.close(1008, "incompatible");
         return;
       }
+      // UA-2 — identity threading: the client MAY carry its expectation of
+      // which user this daemon serves; a configured daemon refuses a mismatch
+      // the way it refuses a version mismatch. Restrict-only: the claim can
+      // narrow a connection, never escalate one.
+      const expectedUser = parsed.data.userId;
+      if (
+        expectedUser !== undefined &&
+        this.opts.userId !== undefined &&
+        expectedUser !== this.opts.userId
+      ) {
+        reply(
+          this.err(id, "INCOMPATIBLE", "user mismatch", false, {
+            server: this.opts.userId,
+            client: expectedUser,
+          }),
+        );
+        ws.close(1008, "user mismatch");
+        return;
+      }
       const token = parsed.data.credential;
       const grant = typeof token === "string" ? this.opts.tokens.verify(token) : null;
       if (grant) {
@@ -507,6 +530,8 @@ export class ProductApi extends EventEmitter {
           contractsVersion: CONTRACTS_VERSION,
           serverKind: "fieldd",
           grantedScopes: state.scopes,
+          // UA-2 — the pair asserts which user it serves (null = unconfigured)
+          userId: this.opts.userId ?? null,
         },
       });
       return;

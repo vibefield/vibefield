@@ -151,6 +151,9 @@ async function main(
   diagnostics: ElectronLocalDiagnostics,
   crashes: CrashArtifactManager,
   support: SupportBundleService,
+  /** UA-2 — the attached user (users.json): identity for the supervisor gate,
+   * name for the tray. */
+  user: { userId: string; name: string },
 ): Promise<void> {
   const logger = shellLogging.logger;
   let crashEvidenceAvailable = true;
@@ -372,6 +375,7 @@ async function main(
     viteUrl: VITE_URL,
     logRoot,
     logger,
+    userId: user.userId,
   });
   const pluginProvenance = new RendererPluginProvenanceCatalog();
   let observedLink: TrayLinkState = "starting";
@@ -728,6 +732,7 @@ async function main(
       link: observedLink,
       evidence: evidenceMonitor.current(),
       update: { kind: "idle" },
+      userName: user.name,
       backgroundShell: true,
       // Preference truth belongs to fieldd's D29′ settings document. Starting
       // absent avoids flashing a status item a returning user explicitly hid;
@@ -955,7 +960,10 @@ if (!hasInstanceLock) {
       installDevSignalQuit(process, () => app.quit());
     }
     try {
-      await main(userRoot, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles);
+      await main(userRoot, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles, {
+        userId: ensured.user.userId,
+        name: ensured.user.name,
+      });
     } catch (error) {
       flow.fatal(error);
     }

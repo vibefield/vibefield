@@ -33,6 +33,8 @@ export interface NativeLinkOptions {
   pairingFile: string;
   /** fieldd's per-process boot id (stable across reconnects within one boot) */
   bootId: string;
+  /** UA-2 — the user this pair serves; carried on the mgmt hello. */
+  userId?: string;
   reconnect?: boolean;
   /** how long to wait for field-native to create socket/pairing on first boot */
   waitForDaemonMs?: number;
@@ -219,6 +221,9 @@ export class NativeLink extends EventEmitter {
       minCompatible: CONTRACTS_VERSION,
       clientKind: "fieldd",
       credential: { bootId: this.opts.bootId, ts, mac },
+      // UA-2 — the pair asserts which user it serves, on the mgmt surface too;
+      // field-native carries it tolerantly (no consumer until UA-5).
+      ...(this.opts.userId !== undefined ? { userId: this.opts.userId } : {}),
     });
     // NF-D8: a fresh native boot means fresh endpoints + token; a re-pair to
     // the same boot re-delivers the same ones. The tolerant gate keeps a

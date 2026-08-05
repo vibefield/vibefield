@@ -741,6 +741,9 @@
         },
         "deviceId": {
           "type": "string"
+        },
+        "userId": {
+          "type": "string"
         }
       },
       "required": [

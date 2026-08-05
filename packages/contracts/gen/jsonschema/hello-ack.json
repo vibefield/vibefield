@@ -737,6 +737,12 @@
         },
         "nativeBuild": {
           "type": "string"
+        },
+        "userId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
