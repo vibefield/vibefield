@@ -53,7 +53,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
 | GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v glass + 3m mocked monitor + 3f shaders + 3p perf (cold 443ms → warm 36ms) + **3c physics-in-worker** landed (spec v0.3, GT-D10…D16) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach; James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module |
-| UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05 (UA-D1…D16 + W1–W6; verify-items S1/V2–V5 all spike-resolved same day); **UA-0 layout registry landed `fcd0af9`** | `specs/users-and-accounts.md` | UA-1 user-shaped storage + migration → UA-2 identity thread → UA-3 link + Account page → UA-3w Setup Assistant → **UA-4 self/guest door (gates ANY shared-tailnet login)** → UA-5 second user · UA-6 sync intent (independent) |
+| UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05 (UA-D1…D16 + W1–W6; S1/V2–V5 all spike-resolved same day); UA-0 layout registry `fcd0af9`; **UA-1 user-shaped storage + migration landed `ca1ce49`** (live dev-root migration witness owed — first `pnpm dev` runs it) | `specs/users-and-accounts.md` | UA-2 identity thread → UA-3 link + Account page → UA-3w Setup Assistant → **UA-4 self/guest door (gates ANY shared-tailnet login)** → UA-5 second user · UA-6 sync intent (independent, unblocked now) |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
@@ -124,8 +124,11 @@ replaced it; a resident pair costs ~85 MB, so resident-by-default; vendor reloca
 Claude-first) → ratification + fold-backs into five design docs → **UA-0 landed
 (`fcd0af9`)**: 21 LAYOUT segments in registries.ts, generated to Rust, pinned by a
 cross-language vector, twelve consumers boundary-tested, the macOS-only bin.ts default
-fixed. UA-1 re-roots the same segments under `users/<fuid>/` behind a supervisor-run
-migration; UA-4 gates any shared-tailnet login and carries the two named physical
+fixed. **UA-1 landed the same day (`ca1ce49`)**: the tree now lives at `users/<fuid>/`
+behind the §3.3 lock — eight real processes raced a mint and exactly one ULID survived;
+the migration's move list derives from LAYOUT itself; field-native changed zero lines. The
+one owed witness: the first `pnpm dev` stops the running pair and migrates the dev root
+live. UA-4 still gates any shared-tailnet login and carries the two named physical
 witnesses (second-account guest refusal; the S1 live probe).
 
 ## Next up — the options on the table (James's call)
@@ -134,9 +137,9 @@ witnesses (second-account guest refusal; the S1 live probe).
   plugin through WP8, then run the both-theme/native-picker plus desktop-B preview/refresh,
   Truffle symlink/allow, and cross-origin physical witnesses. AH-5 adds the phone list; the
   AH-1 physical two-client proof can run alongside this work.
-- **UA-1** — user-shaped storage: `users.json` + `layout.json` + auto-mint + the §4
-  migration under the §3.3 lock; the `users/<fuid>/` tree becomes real. Cheapest while AR
-  hasn't started writing state.
+- **UA-2** — identity threading: `FIELDD_USER_ID` + `Hello.userId` on both surfaces,
+  `product.json.userId`, probe mismatch refusal, tray user label. Small; completes the
+  storage story UA-1 opened.
 - **AR** — the agent tracks; the reason everything else exists.
 - **GT-4 → GT-5** — the remote floor, then the phone attaches.
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).

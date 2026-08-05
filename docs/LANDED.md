@@ -805,3 +805,33 @@ is `pnpm gen && git diff --exit-code`, so the freshness gate reds on UNCOMMITTED
 output — stage gen artifacts before reading the verdict; and a `| tail` pipeline masks the
 real exit code, so capture `$?` explicitly. Verify exit 0. UA-1 (user-shaped storage +
 migration) is next; the segments are the migration's manifest.
+
+## UA-1 — user-shaped storage: the tree moves under users/<fuid>, behind the lock
+
+**UA-1 LANDED (2026-08-05, `ca1ce49`).** The migration slice, hours after UA-0 laid its
+manifest. NEW `@vibefield/users` (contracts-only deps — a supervisor-package home would have
+made fieldd ⇄ fieldd-supervisor circular; recorded delta: the §3.3 error kinds live on
+`UsersError`, not `SupervisorErrorKind`): the users.json lock exactly as specced (O_EXCL
+identity record; unreadable-FRESH is live and only >30s artifacts reclaim — the
+segment-writer lesson, one directory up; migrate incumbents stretch waiters to 60s; a live
+pid is never broken), mint-if-absent with the `"wx"` belt (losers ADOPT the winning ULID),
+fsync'd atomic mutation publish preserving unknown keys, best-effort `lastAttached`, and
+the flat-v1 → users-v2 migration whose move manifest **derives from LAYOUT's first
+segments** — the registry landed in UA-0 is literally the list of what moves. Contracts:
+`UserRecord`/`UsersFile`/`LayoutStamp` + `users.vector.json` (TS-only per design-01 §7's
+no-native-consumer law — the spec's "both languages" fixture line lands as the honest
+subset); LAYOUT gains the four root-level entries that never re-root. The exit ladder ran
+green: **eight real child processes racing one empty root → exactly one users.json, one
+ULID, seven adoptions**; broken-lock mint still exclusive; eight mutators, zero lost
+updates; a 500-mutation torn-read storm, zero torn; stale/live/unreadable-fresh;
+symlinked-root contention; migrate-vs-mint race refusing typed then converging;
+kill-between-two-moves re-running to convergence; both-sides entries refusing typed;
+smoke-injected roots refusing to mint. Integration stayed thin: main ensures right after
+logging and roots crash/support/previews/the pair at `users/<fuid>`; the supervisor passes
+`FIELDD_USER_ROOT`; standalone fieldd is its own supervisor (V5 scenario b is now real
+code); the dev-runner resolves the pair root from users.json with a legacy fallback;
+field-native changed **zero lines**. Verify exit 0 (captured explicitly). **OWED, named:**
+the live dev-root migration witness — the first `pnpm dev` after this lands stops the
+running pair and moves `.vibefield/dev/data` under `users/1/`; deliberately not run from
+the landing session while James's stack was live on that root. UA-2 (identity threading)
+is next; UA-6 (sync intent) is now unblocked in parallel.
