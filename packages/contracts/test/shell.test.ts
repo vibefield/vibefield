@@ -160,7 +160,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the twelve channel keys, in order", () => {
+  it("exposes exactly the fifteen channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -174,6 +174,9 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "godviewState",
       "godviewSet",
       "usersUpdate", // UA-3 — the Account page's profile write (main owns users.json)
+      "usersList", // UA-5 — the roster; one truth for switcher + tray submenu
+      "usersCreate", // UA-5 — mint user N under the §3.3 lock, then attach
+      "usersSwitch", // UA-5/UA-D15 — attach re-target + window reload
     ]);
   });
 
@@ -191,6 +194,9 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       godviewState: "vibefield:godview:state",
       godviewSet: "vibefield:godview:set",
       usersUpdate: "vibefield:users:update",
+      usersList: "vibefield:users:list",
+      usersCreate: "vibefield:users:create",
+      usersSwitch: "vibefield:users:switch",
     });
   });
 });

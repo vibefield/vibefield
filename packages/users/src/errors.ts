@@ -15,7 +15,11 @@ export type UsersErrorKind =
   | "users-mint-refused"
   /** the flat-v1 → users-v2 move could not complete (live pid that would not
    * die; an entry present on both sides) — manual remedy, stated in message */
-  | "users-migration-failed";
+  | "users-migration-failed"
+  /** UA-5/UA-D9: the new fuid's root would push a socket path past the OS
+   * sun_path limit — refused at create, naming the socket, before any
+   * directory exists (the spawn guard would only catch it later) */
+  | "user-root-too-long";
 
 export class UsersError extends Error {
   constructor(

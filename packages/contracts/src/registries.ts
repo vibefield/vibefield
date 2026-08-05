@@ -288,4 +288,14 @@ export const IPC_CHANNELS = {
    * page's profile write. Main owns users.json (UA-D10); fieldd never writes
    * it, which is what keeps the boundary lint honest. */
   usersUpdate: "vibefield:users:update",
+  /** renderer → main invoke: {} → UsersListSnapshot — the roster + attached
+   * (UA-5; the Account switcher and the tray submenu read one truth) */
+  usersList: "vibefield:users:list",
+  /** renderer → main invoke: UsersCreateParams → UserRecord — mints user N
+   * under the §3.3 lock, then attaches to it (UA-5; the reloaded window runs
+   * the wizard's second-user variant) */
+  usersCreate: "vibefield:users:create",
+  /** renderer → main invoke: UsersSwitchParams → UserRecord — attach
+   * re-target + window reload (UA-D15); same-user switch is a no-op */
+  usersSwitch: "vibefield:users:switch",
 } as const;

@@ -19,6 +19,9 @@ export { type MigrateOptions, migrateFlatV1, v1TopEntries } from "./migrate";
 export { ulid } from "./ulid";
 export {
   activeUser,
+  assertUserRootBudget,
+  type CreateUserOptions,
+  createUser,
   defaultUserName,
   layoutStampPath,
   mintLockedUsersFile,

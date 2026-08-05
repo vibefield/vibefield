@@ -223,6 +223,69 @@ export async function mutateUsersFile(
   });
 }
 
+// UA-D9's mint-time assertion for CREATED users (UA-5): walk every
+// socket-bearing LAYOUT row under the root the new fuid would own. The
+// supervisor's spawn guard would catch the overflow later; a create refuses
+// BEFORE any directory exists, naming the socket. 103 = macOS sun_path − NUL.
+const SUN_PATH_MAX_BYTES = 103;
+
+export function assertUserRootBudget(rootReal: string, fuid: number): void {
+  const userRoot = join(rootReal, ...LAYOUT.USERS_DIR, String(fuid));
+  for (const segments of Object.values(LAYOUT)) {
+    const last = segments[segments.length - 1];
+    if (typeof last !== "string" || !last.endsWith(".sock")) continue;
+    const sock = join(userRoot, ...segments);
+    const bytes = Buffer.byteLength(sock, "utf8");
+    if (bytes > SUN_PATH_MAX_BYTES) {
+      throw new UsersError(
+        "user-root-too-long",
+        `users/${fuid} makes ${last} ${bytes} bytes (> ${SUN_PATH_MAX_BYTES}, the OS sun_path limit): ${sock}`,
+      );
+    }
+  }
+}
+
+export interface CreateUserOptions {
+  name?: string;
+  color?: string;
+  now?: () => number;
+  /** extra passthrough fields minted onto the record (e.g. the wizard's
+   * `setupVariant: "second-user"` — a UI concern the store stays agnostic to) */
+  extras?: Record<string, unknown>;
+}
+
+/** UA-5 — mint user N under the §3.3 lock. `nextFuid` allocates and never
+ * reuses; `onboarded` starts false so the reloaded window runs the §6.2
+ * wizard variant; the user root directory is created after publish (the
+ * mintLockedUsersFile ordering). */
+export async function createUser(
+  rootReal: string,
+  deps: UsersLockDeps,
+  opts: CreateUserOptions = {},
+): Promise<{ file: UsersFile; user: UserRecord }> {
+  let user: UserRecord | null = null;
+  const file = await mutateUsersFile(rootReal, deps, (f) => {
+    assertUserRootBudget(rootReal, f.nextFuid);
+    const at = (opts.now ?? Date.now)();
+    const record: UserRecord = {
+      userId: ulid(at),
+      fuid: f.nextFuid,
+      name: opts.name ?? defaultUserName(),
+      ...(opts.color !== undefined ? { color: opts.color } : {}),
+      resident: true,
+      onboarded: false,
+      createdAt: new Date(at).toISOString(),
+      ...(opts.extras ?? {}),
+    };
+    f.nextFuid += 1;
+    f.users.push(record);
+    user = record;
+  });
+  if (user === null) throw new UsersError("users-corrupt", "create mutation did not run");
+  mkdirSync(userRootFor(rootReal, user), { recursive: true });
+  return { file, user };
+}
+
 /** `lastAttached` is a hint for next boot: best-effort, bounded to 200ms,
  * never blocking or interrupting a switch (§3.3 exception). */
 export async function setLastAttached(

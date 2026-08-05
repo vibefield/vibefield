@@ -88,6 +88,36 @@ export const UsersUpdateParams = z
   .passthrough();
 export type UsersUpdateParams = z.infer<typeof UsersUpdateParams>;
 
+/** UA-5 — the roster read behind `users:list`: one truth for the Account
+ * switcher and the tray submenu. `attachedUserId` is main's live attachment,
+ * not `lastAttached` (which is only the next-boot hint). */
+export const UsersListSnapshot = z
+  .object({
+    attachedUserId: z.string().nullable(),
+    users: z.array(UserRecord),
+  })
+  .passthrough();
+export type UsersListSnapshot = z.infer<typeof UsersListSnapshot>;
+
+/** UA-5 — `users:create`: mint user N under the §3.3 lock, then attach. Both
+ * fields optional — the wizard's second-user variant is where identity is
+ * actually decided (§6.2); the mint only needs to exist. */
+export const UsersCreateParams = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    color: z.string().min(1).max(64).optional(),
+  })
+  .passthrough();
+export type UsersCreateParams = z.infer<typeof UsersCreateParams>;
+
+/** UA-5 — `users:switch` (UA-D15: attach re-target + window reload). */
+export const UsersSwitchParams = z
+  .object({
+    userId: z.string().min(1),
+  })
+  .passthrough();
+export type UsersSwitchParams = z.infer<typeof UsersSwitchParams>;
+
 /** `layout.json` — the migration's commit marker, written LAST (spec §4). */
 export const LayoutStamp = z
   .object({
