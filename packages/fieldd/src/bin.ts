@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { LAYOUT, PORTS } from "@vibefield/contracts";
 import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
+import { ensureUsersRoot } from "@vibefield/users";
 import { bootstrap } from "./daemon";
 
 function nativeAlive(socketPath: string): Promise<boolean> {
@@ -23,14 +24,22 @@ function nativeAlive(socketPath: string): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
-  // Default data root mirrors field-native's config.rs default_data_dir()
-  // exactly — two planes, one answer per platform (the macOS-only hardcode
-  // this used to be disagreed with the Rust default off-macOS; UA-0).
+  // UA-1 — a supervisor-spawned fieldd receives the resolved USER root
+  // explicitly; a standalone/headless run receives the VibeField ROOT (or the
+  // platform default, mirroring config.rs default_data_dir() exactly — UA-0)
+  // and is its own supervisor: migrate-or-mint under the §3.3 lock, then run
+  // out of the attached user's root.
+  const explicitUserRoot = process.env["FIELDD_USER_ROOT"];
   const dataDir =
-    process.env["FIELDD_DATA_DIR"] ??
-    (process.platform === "darwin"
-      ? join(homedir(), "Library", "Application Support", "VibeField")
-      : join(homedir(), ".local", "share", "VibeField"));
+    explicitUserRoot ??
+    (
+      await ensureUsersRoot(
+        process.env["FIELDD_DATA_DIR"] ??
+          (process.platform === "darwin"
+            ? join(homedir(), "Library", "Application Support", "VibeField")
+            : join(homedir(), ".local", "share", "VibeField")),
+      )
+    ).userRoot;
   const portEnv = process.env["FIELDD_CONTROL_PORT"];
   // the data lane binds the registered port by default (the daemon's own default
   // is ephemeral, for test isolation) — FIELDD_DATA_PORT overrides, 0 = ephemeral.

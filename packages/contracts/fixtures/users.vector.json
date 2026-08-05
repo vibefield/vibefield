@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "nextFuid": 3,
+  "lastAttached": "01J1QDXWDCQ8Z1H8V0M3S5T9BQ",
+  "users": [
+    {
+      "userId": "01J1QDXWDCQ8Z1H8V0M3S5T9BQ",
+      "fuid": 1,
+      "name": "james",
+      "color": "accent-3",
+      "resident": true,
+      "onboarded": true,
+      "createdAt": "2026-08-05T07:00:00.000Z",
+      "futureUserField": "must survive a read-modify-write"
+    },
+    {
+      "userId": "01J1QDY55S3GVMFC0J8B2R7NWE",
+      "fuid": 2,
+      "name": "acme",
+      "resident": true,
+      "onboarded": false,
+      "createdAt": "2026-08-05T07:30:00.000Z"
+    }
+  ],
+  "futureTopLevel": { "alsoSurvives": true }
+}

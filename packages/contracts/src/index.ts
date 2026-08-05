@@ -20,3 +20,4 @@ export * from "./plugins";
 export * from "./registries";
 export * from "./shell";
 export * from "./terminal";
+export * from "./users";

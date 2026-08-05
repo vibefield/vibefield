@@ -22,8 +22,9 @@ import { isPidAlive, waitForPidExit } from "./processes.mjs";
 
 const execFileAsync = promisify(execFile);
 
-/** Bounds the dev-data walk: `data/<plane>/run/*.sock` is depth 3 today. */
-const SOCKET_WALK_DEPTH = 4;
+/** Bounds the dev-data walk: `data/users/<fuid>/<plane>/run/*.sock` is depth 5
+ * since UA-1 (the flat `data/<plane>/run/*.sock` was 3); one level of margin. */
+const SOCKET_WALK_DEPTH = 6;
 
 export const REAP_STALE_SNAPSHOT = "stale-snapshot";
 export const REAP_SOCKET_SQUATTER = "socket-squatter";

@@ -207,6 +207,11 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     const env: Record<string, string | undefined> = {
       ...opts.environment,
       FIELDD_DATA_DIR: opts.dataRoot,
+      // UA-1 — the supervisor already resolved the attached USER root; the
+      // explicit variable tells fieldd's standalone entry to skip its own
+      // ensure (a bare run without it treats FIELDD_DATA_DIR as the VibeField
+      // root and is its own supervisor).
+      FIELDD_USER_ROOT: opts.dataRoot,
       ...(opts.nativeExecutable ? { FIELDD_NATIVE_BIN: opts.nativeExecutable } : {}),
       ...(opts.allowedOrigins && opts.allowedOrigins.length > 0
         ? { FIELDD_ALLOWED_ORIGINS: opts.allowedOrigins.join(",") }

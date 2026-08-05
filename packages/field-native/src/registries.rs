@@ -79,6 +79,10 @@ pub mod layout {
     pub const TERMINAL_FRAME_SOCKET: &[&str] = &["native", "run", "terminal-frame.sock"];
     pub const CRASH_DIR: &[&str] = &["crash"];
     pub const EXPORTS_STAGING_DIR: &[&str] = &["exports", ".staging"];
+    pub const USERS_DIR: &[&str] = &["users"];
+    pub const USERS_FILE: &[&str] = &["users.json"];
+    pub const USERS_LOCK: &[&str] = &["users.json.lock"];
+    pub const LAYOUT_STAMP: &[&str] = &["layout.json"];
     /// Every entry, for the cross-language fixture test.
     pub const ALL: &[(&str, &[&str])] = &[
         ("FIELDD_RUN_DIR", FIELDD_RUN_DIR),
@@ -102,5 +106,9 @@ pub mod layout {
         ("TERMINAL_FRAME_SOCKET", TERMINAL_FRAME_SOCKET),
         ("CRASH_DIR", CRASH_DIR),
         ("EXPORTS_STAGING_DIR", EXPORTS_STAGING_DIR),
+        ("USERS_DIR", USERS_DIR),
+        ("USERS_FILE", USERS_FILE),
+        ("USERS_LOCK", USERS_LOCK),
+        ("LAYOUT_STAMP", LAYOUT_STAMP),
     ];
 }

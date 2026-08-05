@@ -232,6 +232,13 @@ export const LAYOUT = {
   TERMINAL_FRAME_SOCKET: ["native", "run", SOCKETS.TERMINAL_FRAME],
   CRASH_DIR: ["crash"],
   EXPORTS_STAGING_DIR: ["exports", ".staging"],
+  /** UA-1 — the user directory ABOVE the per-user roots. `users/<fuid>/` holds
+   * a full tree of the segments above; these four live at the VibeField root
+   * itself and are the only segments that never re-root. */
+  USERS_DIR: ["users"],
+  USERS_FILE: ["users.json"],
+  USERS_LOCK: ["users.json.lock"],
+  LAYOUT_STAMP: ["layout.json"],
 } as const;
 
 /** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): these channels, nothing

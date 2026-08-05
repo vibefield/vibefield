@@ -16,6 +16,7 @@ import {
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
+import { ensureUsersRoot } from "@vibefield/users";
 import {
   app,
   BrowserWindow,
@@ -854,8 +855,30 @@ if (!hasInstanceLock) {
       bootId: DESKTOP_BOOT_ID,
     });
     localDiagnostics = new ElectronLocalDiagnostics(logging);
+    // UA-1 — resolve the attached user BEFORE anything touches product state:
+    // migrate-or-mint under the users.json lock (§3.3/§4). Everything holding
+    // product state below (crash, support, previews, the daemon pair) roots at
+    // the USER root; logging and the instance lock stay on the VibeField root
+    // above it. Smoke-like runs with an INJECTED root may not mint — an
+    // injected FIELDD_DATA_DIR is someone else's data (the smoke.ts law,
+    // extended from deletion to writing).
+    const usersLogger = logging.logger.child({ component: "users" });
+    const ensured = await ensureUsersRoot(root, {
+      allowMint: !(isSmokeLike(MODE) && process.env["FIELDD_DATA_DIR"] !== undefined),
+      onEvent: (event, attrs) => usersLogger.info(event, "user-directory event", attrs),
+    });
+    const userRoot = ensured.userRoot;
+    if (ensured.migrated || ensured.created) {
+      usersLogger.info(
+        ensured.migrated ? "desktop.users.migrated" : "desktop.users.minted",
+        ensured.migrated
+          ? "The flat-v1 tree moved under users/<fuid>"
+          : "A fresh user was minted for this machine",
+        { userId: ensured.user.userId, fuid: ensured.user.fuid },
+      );
+    }
     crashArtifacts = new CrashArtifactManager({
-      dataRoot: root,
+      dataRoot: userRoot,
       crashDumpsRoot: isSmokeLike(MODE) ? join(root, "crashes") : app.getPath("crashDumps"),
       bootId: DESKTOP_BOOT_ID,
       appVersion: app.getVersion(),
@@ -863,7 +886,7 @@ if (!hasInstanceLock) {
     });
     const evidenceLogging = logging;
     supportBundles = new SupportBundleService({
-      dataRoot: root,
+      dataRoot: userRoot,
       logRoot,
       crashArtifacts,
       logger: logging.logger.child({ component: "support.bundle" }),
@@ -932,7 +955,7 @@ if (!hasInstanceLock) {
       installDevSignalQuit(process, () => app.quit());
     }
     try {
-      await main(root, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles);
+      await main(userRoot, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles);
     } catch (error) {
       flow.fatal(error);
     }

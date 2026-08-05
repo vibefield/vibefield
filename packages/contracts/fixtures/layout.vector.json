@@ -19,5 +19,9 @@
   "TERMINAL_CONTROL_SOCKET": ["native", "run", "terminal-control.sock"],
   "TERMINAL_FRAME_SOCKET": ["native", "run", "terminal-frame.sock"],
   "CRASH_DIR": ["crash"],
-  "EXPORTS_STAGING_DIR": ["exports", ".staging"]
+  "EXPORTS_STAGING_DIR": ["exports", ".staging"],
+  "USERS_DIR": ["users"],
+  "USERS_FILE": ["users.json"],
+  "USERS_LOCK": ["users.json.lock"],
+  "LAYOUT_STAMP": ["layout.json"]
 }

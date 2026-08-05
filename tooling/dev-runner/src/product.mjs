@@ -11,9 +11,26 @@ const LAYOUT = createRequire(import.meta.url)(
   join(repoRoot, "packages", "contracts", "gen", "layout.json"),
 );
 
+/** UA-1 — run files live under the attached user's root. Resolve it from
+ * users.json (lastAttached → fuid); a pre-user-shaped root answers itself,
+ * so the runner keeps working across the migration boundary. */
+export async function resolvePairRoot(dataRoot) {
+  try {
+    const users = JSON.parse(await readFile(join(dataRoot, ...LAYOUT.USERS_FILE), "utf8"));
+    const active = users.users?.find?.((u) => u.userId === users.lastAttached) ?? users.users?.[0];
+    if (active && Number.isInteger(active.fuid) && active.fuid > 0) {
+      return join(dataRoot, ...LAYOUT.USERS_DIR, String(active.fuid));
+    }
+  } catch {
+    /* absent or unreadable users.json — legacy root */
+  }
+  return dataRoot;
+}
+
 export async function readDevProduct(dataRoot) {
   try {
-    const value = JSON.parse(await readFile(join(dataRoot, ...LAYOUT.PRODUCT_JSON), "utf8"));
+    const pairRoot = await resolvePairRoot(dataRoot);
+    const value = JSON.parse(await readFile(join(pairRoot, ...LAYOUT.PRODUCT_JSON), "utf8"));
     if (
       !Number.isInteger(value.pid) ||
       value.pid <= 0 ||
@@ -67,8 +84,9 @@ export async function clearDeadDevProductFiles(dataRoot, expectedProduct, pidAli
   const live = [current.pid, current.nativePid].filter((pid) => pid !== null && pidAlive(pid));
   if (live.length > 0) return false;
 
-  await unlinkIfPresent(join(dataRoot, ...LAYOUT.SHELL_TOKEN));
-  await unlinkIfPresent(join(dataRoot, ...LAYOUT.PRODUCT_JSON));
+  const pairRoot = await resolvePairRoot(dataRoot);
+  await unlinkIfPresent(join(pairRoot, ...LAYOUT.SHELL_TOKEN));
+  await unlinkIfPresent(join(pairRoot, ...LAYOUT.PRODUCT_JSON));
   return true;
 }
 

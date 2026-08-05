@@ -20,7 +20,8 @@
     "@vibefield/contracts": "workspace:*",
     "@vibefield/field-app": "workspace:*",
     "@vibefield/fieldd-supervisor": "workspace:*",
-    "@vibefield/logging": "workspace:*"
+    "@vibefield/logging": "workspace:*",
+    "@vibefield/users": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:",
