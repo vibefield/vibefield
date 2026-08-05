@@ -40,6 +40,9 @@ mountFieldApp({
       copyText: (text) => window.vibefield.diagnostics.copyText(text),
     },
     getConnection: () => window.vibefield.getConnection(),
+    // UA-3 — the Account page's profile door (host.ts declares it optional;
+    // this adapter is the one place the preload global becomes FieldHost)
+    usersUpdate: (params) => window.vibefield.usersUpdate(params),
     onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
     completeClose: (result) => window.vibefield.completeClose(result),
     onShellCommand: (handler) => window.vibefield.onShellCommand(handler),

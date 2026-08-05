@@ -26,6 +26,20 @@ declare global {
       readonly platform: ShellPlatform;
       submitRendererLogs(serializedBatch: string): boolean;
       getConnection(): Promise<{ port: number; token: string }>;
+      /** UA-3 — one door, two verbs: empty params READ the current record. */
+      usersUpdate(params: {
+        name?: string;
+        color?: string;
+        resident?: boolean;
+        onboarded?: boolean;
+      }): Promise<{
+        userId: string;
+        fuid: number;
+        name: string;
+        color?: string;
+        resident: boolean;
+        onboarded: boolean;
+      }>;
       onPrepareClose(handler: (requestId: string) => void): () => void;
       completeClose(result: { requestId: string; ok: boolean; error?: string }): void;
       onShellCommand(handler: (command: ShellCommand) => void): () => void;
