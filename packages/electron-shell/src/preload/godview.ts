@@ -2,7 +2,7 @@ import { type GodviewState, GodviewState as StateSchema } from "@vibefield/contr
 
 /** Latest-value bridge for this window's Godview state (the terminal-status
  * bridge's shape, for the same reason): main publishes the truth on load and on
- * every ⌘⎋, and a page that subscribes late — the chrome mounts well after the
+ * every ⇧⇧, and a page that subscribes late — the chrome mounts well after the
  * document does — must still learn what it missed rather than assume closed. */
 export class PreloadGodviewStateBridge {
   private readonly handlers = new Set<(state: GodviewState) => void>();

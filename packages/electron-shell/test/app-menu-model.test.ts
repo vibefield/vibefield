@@ -3,15 +3,15 @@ import {
   type AppMenuItem,
   buildAppMenu,
   CLOSE_WINDOW_ITEM_ID,
-  GODVIEW_ACCELERATOR,
+  GODVIEW_GESTURE_HINT,
   GODVIEW_ITEM_ID,
   type MenuPlatform,
 } from "../src/main/app-menu-model";
 
-// The application menu is where Godview's accelerator lives (GT-D2), which
-// makes two of its properties load-bearing rather than cosmetic: ⌘⎋ must exist
-// as an APP-level binding, and ⌘W must get out of the deck's way while the
-// overlay is up. Both are asserted on the template, before Electron sees it.
+// Godview's gesture is ⇧⇧ and lives OUTSIDE this template (a double tap is a
+// rhythm; accelerators describe chords) — see godview-state.test.ts. What stays
+// load-bearing here is what the menu must not do: claim an accelerator it does
+// not own, take ⌘G back from the deck, or hold ⌘W while the overlay is up.
 
 const flatten = (items: readonly AppMenuItem[]): AppMenuItem[] =>
   items.flatMap((item) => [item, ...flatten(item.submenu ?? [])]);
@@ -24,15 +24,21 @@ const noActions = {};
 const actions = { toggleGodview: () => undefined };
 
 describe("buildAppMenu", () => {
-  it.each(PLATFORMS)("puts Godview on ⌘⎋ as a checkbox (%s)", (platform) => {
+  it.each(PLATFORMS)("offers Godview as a checkbox carrying NO accelerator (%s)", (platform) => {
+    // The absence is the assertion. ⌘⎋ sat here looking bound and firing
+    // nothing, because macOS never delivers Command+Escape to an application —
+    // a menu item that claims a key it cannot answer is worse than a silent one.
     const item = find(buildAppMenu(platform, { godviewOpen: false }, actions), GODVIEW_ITEM_ID);
-    expect(item).toMatchObject({
-      type: "checkbox",
-      accelerator: GODVIEW_ACCELERATOR,
-      checked: false,
-      enabled: true,
-    });
-    expect(GODVIEW_ACCELERATOR).toBe("CommandOrControl+Escape");
+    expect(item).toMatchObject({ type: "checkbox", checked: false, enabled: true });
+    expect(item?.accelerator).toBeUndefined();
+  });
+
+  it.each(PLATFORMS)("teaches the gesture in the label instead (%s)", (platform) => {
+    // A Godview row showing no way to reach it by keyboard would teach that
+    // there isn't one, so the hint rides in the label the accelerator vacated.
+    const item = find(buildAppMenu(platform, { godviewOpen: false }, actions), GODVIEW_ITEM_ID);
+    expect(item?.label).toContain("Godview");
+    expect(item?.label).toContain(GODVIEW_GESTURE_HINT);
   });
 
   it.each(PLATFORMS)("leaves ⌘G to the deck's panes at every state (%s)", (platform) => {

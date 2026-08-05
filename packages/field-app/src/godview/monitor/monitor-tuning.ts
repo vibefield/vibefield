@@ -14,7 +14,7 @@ import type { AgentMonitorView } from "./types";
 // The monitor's chosen view and its tunables — state that lives ABOVE the stage.
 //
 // It has to: the stage unmounts on every close (PF6), and state inside it would
-// reset every time James pressed ⌘⎋. The overlay outlives the stage, so this
+// reset every time James pressed ⇧⇧. The overlay outlives the stage, so this
 // hook lives there and the numbers come down as props — which also mirrors the
 // reference app, where the same state sits in its window component and feeds
 // both the tweak panel and the view.

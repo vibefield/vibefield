@@ -627,7 +627,7 @@ export async function runSmokeGodview(opts: {
     // previous run's saved layout is still sitting there — and since GT-3 that
     // layout is not silently dropped, it is a QUESTION (every session it names
     // died with the last run's floor). Clearing here rather than reloading
-    // because nothing has mounted yet: the deck is not built until ⌘⎋.
+    // because nothing has mounted yet: the deck is not built until ⇧⇧.
     await win.webContents.executeJavaScript("localStorage.clear()");
 
     // GT-3m: armed BEFORE the toggle, because the monitor stage mounts WITH the
@@ -641,7 +641,7 @@ export async function runSmokeGodview(opts: {
     const coldOpenLine = waitForConsole(win, "GODVIEW_COLD_OPEN ", 90_000);
     coldOpenLine.catch(() => undefined);
 
-    // 1. ⌘⎋'s own action. The overlay opens, the deck redeems a ticket for the
+    // 1. ⇧⇧'s own action. The overlay opens, the deck redeems a ticket for the
     //    CONNECTION — no session — and the workspace then creates its own first
     //    pane through its own door (GT-D10). Nothing outside it asked for a
     //    shell; there is one because the workspace decided there should be.
@@ -1190,7 +1190,7 @@ export async function runSmokeGodview(opts: {
     // machine load — the same load that already makes the reload rows flaky.
     //
     // THE COLD OPEN, and it is genuinely cold even though the prewarm is on:
-    // row 1 presses ⌘⎋ the moment the canvas reports, and `claimWarmTransport`
+    // row 1 presses ⇧⇧ the moment the canvas reports, and `claimWarmTransport`
     // deliberately never blocks an open on a warm still in flight (GT-D14) — so
     // the first open of this harness takes the cold path by construction, and
     // `prewarmed: false` in this object is the proof rather than a disappointment.

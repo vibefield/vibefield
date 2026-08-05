@@ -37,7 +37,7 @@ import { installDevSignalQuit } from "./dev-signals";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
-import { GodviewRegistry, installGodviewChord } from "./godview";
+import { GodviewRegistry, installGodviewDoubleShift } from "./godview";
 import { registerGodviewToggle, registerTerminalBackend, registerWindowBootstrap } from "./ipc";
 import { installLifecycle } from "./lifecycle";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
@@ -565,7 +565,7 @@ async function main(
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
       // The accelerator's own action, handed over rather than re-implemented:
-      // the harness must exercise the path ⌘⎋ takes, not a parallel one.
+      // the harness must exercise the path ⇧⇧ takes, not a parallel one.
       toggleGodview,
       beforeExit: closeEvidence,
       onWindow: (window) => {
@@ -665,10 +665,10 @@ async function main(
             },
           });
           installDiagnostics(window);
-          // ⌘⎋'s live binding on darwin — the View item's accelerator is only
-          // the label there (see installGodviewChord). Installed per window and
-          // dies with its webContents, so it cannot outlive what it toggles.
-          installGodviewChord(window.webContents, toggleGodview);
+          // ⇧⇧ — the whole binding, since a double tap is a rhythm and no menu
+          // accelerator can express one. Installed per window and dies with its
+          // webContents, so it cannot outlive what it toggles.
+          installGodviewDoubleShift(window.webContents, toggleGodview);
           installNavigationPolicy(window, MODE);
           installDurableClose(
             window,

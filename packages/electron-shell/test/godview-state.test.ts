@@ -3,10 +3,10 @@ import type { WebContents } from "electron";
 import { describe, expect, it, vi } from "vitest";
 import {
   type ChordInput,
+  DoubleShiftDetector,
   GodviewRegistry,
   GodviewWindowState,
-  installGodviewChord,
-  isGodviewChord,
+  installGodviewDoubleShift,
 } from "../src/main/godview";
 
 // Main owns the overlay bit (GT-D2) because the chord is answered above the
@@ -119,59 +119,156 @@ describe("GodviewRegistry", () => {
   });
 });
 
-// The chord matcher (2026-08-04). macOS does not deliver ⌘⎋ to a menu key
-// equivalent, so the binding moved to `before-input-event` in main — which
-// means the thing that decides "is this the toggle?" is now OUR code, and gets
-// held to the same standard as the menu template it replaced.
+// ⇧⇧ — the gesture (2026-08-04), after ⌘⎋ was measured unreachable: macOS eats
+// Command+Escape before the app sees it, so no mechanism could have bound it.
+// The rules below are JetBrains' `ModifierKeyDoubleClickHandler` transcribed,
+// which is why the numbers are theirs and not ours to round off. A rhythm has no
+// menu template to assert against, so THIS is where the gesture is pinned down.
 
-const press = (patch: Partial<ChordInput> = {}): ChordInput => ({
-  type: "keyDown",
-  key: "Escape",
-  meta: true,
+const shift = (type: "keyDown" | "keyUp", patch: Partial<ChordInput> = {}): ChordInput => ({
+  type,
+  key: "Shift",
+  meta: false,
   control: false,
   alt: false,
-  shift: false,
+  shift: true,
   ...patch,
 });
 
-describe("isGodviewChord", () => {
-  it("matches ⌘⎋ on darwin and ⌃⎋ elsewhere", () => {
-    expect(isGodviewChord(press(), "darwin")).toBe(true);
-    expect(isGodviewChord(press({ meta: false, control: true }), "other")).toBe(true);
+const other = (key: string): ChordInput => ({
+  type: "keyDown",
+  key,
+  meta: false,
+  control: false,
+  alt: false,
+  shift: false,
+});
+
+/** Feed a whole sequence of [input, atMs] and report every moment it fired. */
+function play(steps: readonly [ChordInput, number][]): number[] {
+  const detector = new DoubleShiftDetector();
+  const fired: number[] = [];
+  for (const [input, at] of steps) {
+    if (detector.accept(input, at)) fired.push(at);
+  }
+  return fired;
+}
+
+describe("DoubleShiftDetector", () => {
+  it("fires once on the SECOND RELEASE of a clean double tap", () => {
+    // Not the second press: holding Shift after the second tap must do nothing
+    // until it is let go, so Shift-drag and Shift-click never trip the overlay.
+    expect(
+      play([
+        [shift("keyDown"), 0],
+        [shift("keyUp"), 40],
+        [shift("keyDown"), 120],
+        [shift("keyUp"), 160],
+      ]),
+    ).toEqual([160]);
   });
 
-  it("does not answer the platform's OTHER modifier", () => {
-    // ⌃⎋ on a Mac is not this gesture, and ⌘⎋ on Windows is not either. The
-    // accelerator string says CommandOrControl; so does this.
-    expect(isGodviewChord(press({ meta: false, control: true }), "darwin")).toBe(false);
-    expect(isGodviewChord(press(), "other")).toBe(false);
+  it("does not fire on a single tap, however deliberate", () => {
+    expect(
+      play([
+        [shift("keyDown"), 0],
+        [shift("keyUp"), 40],
+      ]),
+    ).toEqual([]);
   });
 
-  it("leaves ⌥⌘⎋ and ⇧⌘⎋ alone — Force Quit is not ours to eat", () => {
-    expect(isGodviewChord(press({ alt: true }), "darwin")).toBe(false);
-    expect(isGodviewChord(press({ shift: true }), "darwin")).toBe(false);
+  it("lets the window lapse — 300ms between taps is the whole gesture", () => {
+    expect(
+      play([
+        [shift("keyDown"), 0],
+        [shift("keyUp"), 40],
+        [shift("keyDown"), 400], // > 300 since the release
+        [shift("keyUp"), 440],
+      ]),
+    ).toEqual([]);
   });
 
-  it("ignores BARE Escape, which belongs to whatever has focus", () => {
-    // The whole reason the overlay's Escape ladder was dropped: a terminal pane
-    // must get its own Escape, or vim cannot leave insert mode inside the deck.
-    expect(isGodviewChord(press({ meta: false }), "darwin")).toBe(false);
+  it("does not fire while typing capitals — the 100ms guard", () => {
+    // The failure mode this exists to prevent: Shift+A, then Shift again fast
+    // because the next word is also capitalised. That is typing, not a gesture.
+    expect(
+      play([
+        [shift("keyDown"), 0],
+        [other("a"), 20],
+        [shift("keyUp"), 30],
+        [shift("keyDown"), 60], // within 100ms of the other key
+        [shift("keyUp"), 90],
+      ]),
+    ).toEqual([]);
   });
 
-  it("answers the press, never the release — one keystroke is one toggle", () => {
-    expect(isGodviewChord(press({ type: "keyUp" }), "darwin")).toBe(false);
+  it("a key pressed BETWEEN the taps ends the gesture", () => {
+    expect(
+      play([
+        [shift("keyDown"), 0],
+        [shift("keyUp"), 40],
+        [other("k"), 60],
+        [shift("keyDown"), 200],
+        [shift("keyUp"), 240],
+      ]),
+    ).toEqual([]);
   });
 
-  it("ignores every other key held with the platform modifier", () => {
-    expect(isGodviewChord(press({ key: "g" }), "darwin")).toBe(false);
+  it("ignores Shift held with another modifier — ⇧⌘ is a chord, not a tap", () => {
+    expect(
+      play([
+        [shift("keyDown", { meta: true }), 0],
+        [shift("keyUp", { meta: true }), 40],
+        [shift("keyDown", { meta: true }), 120],
+        [shift("keyUp", { meta: true }), 160],
+      ]),
+    ).toEqual([]);
+  });
+
+  it("gives Escape and Tab a hard reset, so the next Shift starts clean", () => {
+    // JetBrains zero the timestamp for these two: after Esc the very next tap
+    // must count as a first tap rather than be swallowed by the typing guard.
+    expect(
+      play([
+        [other("Escape"), 1000],
+        [shift("keyDown"), 1010], // would be inside the 100ms guard but for the zeroing
+        [shift("keyUp"), 1040],
+        [shift("keyDown"), 1120],
+        [shift("keyUp"), 1160],
+      ]),
+    ).toEqual([1160]);
+  });
+
+  it("re-arms — a second gesture fires as readily as the first", () => {
+    expect(
+      play([
+        [shift("keyDown"), 0],
+        [shift("keyUp"), 40],
+        [shift("keyDown"), 120],
+        [shift("keyUp"), 160],
+        [shift("keyDown"), 900],
+        [shift("keyUp"), 940],
+        [shift("keyDown"), 1020],
+        [shift("keyUp"), 1060],
+      ]),
+    ).toEqual([160, 1060]);
+  });
+
+  it("does not fire twice for one gesture, however long Shift is held after", () => {
+    expect(
+      play([
+        [shift("keyDown"), 0],
+        [shift("keyUp"), 40],
+        [shift("keyDown"), 120],
+        [shift("keyUp"), 160],
+        [shift("keyUp"), 200], // a stray release must not re-fire
+      ]),
+    ).toEqual([160]);
   });
 });
 
-describe("installGodviewChord", () => {
-  function fakeInput(): {
-    contents: WebContents;
-    fire: (input: ChordInput) => boolean;
-  } {
+describe("installGodviewDoubleShift", () => {
+  function fakeInput(): { contents: WebContents; fire: (i: ChordInput) => boolean } {
     let listener: ((event: { preventDefault: () => void }, input: ChordInput) => void) | undefined;
     const contents = {
       on: (event: string, handler: typeof listener) => {
@@ -188,22 +285,32 @@ describe("installGodviewChord", () => {
     };
   }
 
-  it("toggles on the chord and swallows it, so no terminal below ever sees it", () => {
+  it("toggles on the gesture and SWALLOWS NOTHING", () => {
+    // Every Shift must reach the pane below: eating a keyUp would leave ghosttea
+    // believing Shift was still held, and a lone Shift means nothing to a shell
+    // anyway — so the gesture is invisible rather than intercepted.
     const { contents, fire } = fakeInput();
     const toggle = vi.fn();
-    installGodviewChord(contents, toggle, "darwin");
-    expect(fire(press())).toBe(true);
+    let clock = 0;
+    installGodviewDoubleShift(contents, toggle, () => clock);
+    for (const [input, at] of [
+      [shift("keyDown"), 0],
+      [shift("keyUp"), 40],
+      [shift("keyDown"), 120],
+      [shift("keyUp"), 160],
+    ] as [ChordInput, number][]) {
+      clock = at;
+      expect(fire(input)).toBe(false);
+    }
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 
-  it("passes everything else through untouched", () => {
+  it("leaves ordinary typing entirely alone", () => {
     const { contents, fire } = fakeInput();
     const toggle = vi.fn();
-    installGodviewChord(contents, toggle, "darwin");
-    // A bare Escape must reach the page — preventDefault here would be the old
-    // capture-phase ladder wearing a different coat.
-    expect(fire(press({ meta: false }))).toBe(false);
-    expect(fire(press({ key: "g" }))).toBe(false);
+    installGodviewDoubleShift(contents, toggle, () => 0);
+    expect(fire(other("g"))).toBe(false);
+    expect(fire(other("Escape"))).toBe(false);
     expect(toggle).not.toHaveBeenCalled();
   });
 });

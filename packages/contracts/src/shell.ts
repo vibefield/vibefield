@@ -81,15 +81,15 @@ export type ShellCommandRequest = z.infer<typeof ShellCommandRequest>;
 
 /** main → renderer: whether THIS window's Godview overlay is open (GT-D2).
  *
- * Main owns this bit rather than the renderer because the toggle is an
- * application accelerator: ⌘⎋ is consumed by the menu before any renderer sees
- * a keystroke, so a renderer-owned flag would be a second copy that main must
- * be told about to keep its own menu honest. One owner, one truth, and the
- * menu's checkmark is a fact instead of a guess. */
+ * Main owns this bit rather than the renderer because the toggle is answered
+ * above the page: ⇧⇧ is detected in main before any renderer sees a keystroke,
+ * so a renderer-owned flag would be a second copy that main must be told about
+ * to keep its own menu honest. One owner, one truth, and the menu's checkmark
+ * is a fact instead of a guess. */
 export const GodviewState = z.object({ open: z.boolean() }).passthrough();
 export type GodviewState = z.infer<typeof GodviewState>;
 
-/** renderer → main: the toolbar button asking for the transition ⌘⎋ asks for.
+/** renderer → main: the toolbar button asking for the transition ⇧⇧ asks for.
  * `open` omitted means "flip whatever it is" — the button and the accelerator
  * are the same request, so neither can drift by holding its own idea of the
  * current value. */

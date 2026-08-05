@@ -77,7 +77,7 @@ own `6646f1b` (chopsticks-UI match, per-mode themes) landed between slices and e
 stacked cleanly. Next slice **GT-4**: `with_terminal_mesh` behind config +
 `terminal.v1.hosts` + mirror-write v1 — the desktop deck's ⌘⇧O remote panes are the test
 row, and NF-remote rides it. GT-3p made the deck fast the honest way: James's own groundwork
-(the ICE frame gate, the rAF×LoAF frame counter, the ⌘⎋ one-door) plus the warm transport —
+(the ICE frame gate, the rAF×LoAF frame counter, the ⇧⇧ one-door) plus the warm transport —
 bridge, worker, and WebGPU device ready at app-idle, sessions still born only on ⌘G — took a
 cold open from ~443ms to a ~36ms warm one, with the phase breakdown riding the smoke verdict
 and the surface lab wearing a perf readout. The one-runtime law (exactly one ports-wait
@@ -165,7 +165,7 @@ remain gates, so this work is not recorded in LANDED yet.
   2026-08-02).
 - **Shaders are WebGPU-only** — on the Canvas2D fallback the chips select something that
   will not draw; the section's copy says so, but a deck that KNEW its backend could show a
-  live honest-UNAVAILABLE — the panel can't know it today, the deck mounts on first ⌘⎋
+  live honest-UNAVAILABLE — the panel can't know it today, the deck mounts on first ⇧⇧
   (GT-3f, 2026-08-04).
 - **`configEditor` bridge** — the 0.9.0 two-track editor seam needs `terminal.config.validate`
   (new product method) + three main-side file dialogs; GT-3's raw editor is the raw track
@@ -215,7 +215,7 @@ remain gates, so this work is not recorded in LANDED yet.
 - Mesh sync rows + the file pill's standing-state dot, both themes (C6-4).
 - Artifact Hub list + Proxy/Folder native-picker/add/open flows, both themes and reduced motion
   (AH-3 closeout; runtime implementation `8c07bf4`).
-- The Godview deck end-to-end (⌘⎋): the zsh first pane, the consent face after a session
+- The Godview deck end-to-end (⇧⇧): the zsh first pane, the consent face after a session
   dies, the kill chip's two steps, Settings → Terminal editor with a live reload (GT-2e/3).
 - **The glass pass (GT-3v)**: canvas ghosting through semi-transparent panes at the §5 SHEET
   tier · the surface lab's stage knobs · Settings → Terminal appearance section (theme

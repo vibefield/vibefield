@@ -4,9 +4,9 @@ import { getRendererLogger } from "../logging";
 
 // The renderer's view of the overlay bit (GT-D2) — a MIRROR, not a copy.
 //
-// The host owns the value because ⌘⎋ is an application accelerator: it is
-// consumed before this page is offered the keystroke, so a renderer that kept
-// its own flag would be wrong every time the menu was used. The store below
+// The host owns the value because ⇧⇧ is detected in main: it is answered before
+// this page is offered the keystroke, so a renderer that kept its own flag
+// would be wrong every time the menu was used. The store below
 // holds only what the host last said, which is why the toolbar button and the
 // menu's checkmark can never disagree — there is one value and everyone reads
 // it.
@@ -50,7 +50,7 @@ export function isGodviewOpen(): boolean {
   return open;
 }
 
-/** Ask the host to flip it — the same request ⌘⎋ makes. No optimistic echo:
+/** Ask the host to flip it — the same request ⇧⇧ makes. No optimistic echo:
  * the store moves when the host says so, so a refused or lost transition never
  * leaves the button lit over a closed overlay. */
 export function requestGodviewToggle(): void {

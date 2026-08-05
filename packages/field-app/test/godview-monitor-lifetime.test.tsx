@@ -101,7 +101,7 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
   it("does not exist until the Godview has been opened once", () => {
     const host = mountOverlay();
     // The overlay itself is not in the tree before a first open, so nothing
-    // below it can be either — a user who never presses ⌘⎋ runs no monitor.
+    // below it can be either — a user who never presses ⇧⇧ runs no monitor.
     expect(host.querySelector(".vf-godview")).toBeNull();
     expect(openedIntervals, "a closed Godview started a timer").toHaveLength(0);
   });

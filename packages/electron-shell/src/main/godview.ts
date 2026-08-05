@@ -8,13 +8,14 @@ import type { WebContents } from "electron";
 
 // The Godview overlay's open bit, per window, owned by MAIN (GT-D2).
 //
-// It lives here and not in the renderer because the toggle is an application
-// accelerator: the menu consumes ⌘⎋ before any renderer is offered the
-// keystroke — which is the whole reason it works while a terminal pane holds
-// focus — so main learns of every toggle whether it owns the bit or not. Two
-// copies would then need reconciling, and the menu's checkmark would be the one
-// that goes stale. One owner instead: main flips, main publishes, and the
-// renderer's toolbar button asks for the same flip the accelerator asks for.
+// It lives here and not in the renderer because the toggle is answered ABOVE
+// the page: ⇧⇧ is detected in main from `before-input-event`, before any
+// renderer or terminal pane is offered the keystroke — which is the whole
+// reason it works while a pane holds focus — so main learns of every toggle
+// whether it owns the bit or not. Two copies would then need reconciling, and
+// the menu's checkmark would be the one that goes stale. One owner instead:
+// main flips, main publishes, and the renderer's toolbar button asks for the
+// same flip the gesture asks for.
 //
 // The bit is not persisted. Closed on every launch is the honest default (GT-2
 // mounts no deck until asked, so a window nobody opens forks no bridge); GT-3's
@@ -32,44 +33,140 @@ export interface ChordInput {
   readonly shift: boolean;
 }
 
-/** Is this keystroke the Godview chord?
+// DOUBLE-SHIFT (James, 2026-08-04), after ⌘⎋ was proven unreachable.
+//
+// ⌘⎋ was tried first and cannot be made to work by ANY mechanism: macOS eats
+// Command+Escape before the application sees it. Measured, not assumed — with
+// the app focused, ⌘G and a bare ⎋ both arrived at `before-input-event` and ⌘⎋
+// never did, while ⇧⌘⎋ and ⌃⌘⎋ both did. The combination is the OS's, not ours.
+//
+// So the gesture is now a DOUBLE TAP of Shift, the one WebStorm/IntelliJ use for
+// Search Everywhere. It costs no chord at all — nothing in ghostty, macOS or
+// this shell binds a lone Shift — which is what finally ends the collision
+// bookkeeping that ⌘G and ⌘W needed.
+//
+// The rules below are JetBrains' own, transcribed from
+// `ModifierKeyDoubleClickHandler.Dispatcher` (platform-impl, Apache 2.0) rather
+// than invented, because their timings are tuned by a decade of people typing
+// capitals at speed and are the reason double-Shift feels deliberate instead of
+// twitchy. Their file says so itself: "Timings ... were tuned for
+// SearchEverywhere functionality (invoked on double Shift)".
+
+/** Max gap between EACH transition of the gesture (press→release→press→release).
+ * JetBrains' `handleModifier`. */
+const DOUBLE_TAP_WINDOW_MS = 300;
+/** A first tap older than this is stale even before the window check — their
+ * outer guard in `dispatch`. */
+const STALE_TAP_MS = 500;
+/** A Shift arriving within this of another key is part of TYPING, not a gesture.
+ * This is the guard that keeps fast capitals from opening the overlay. */
+const AFTER_OTHER_KEY_MS = 100;
+
+/** The double-tap state machine, pure so the whole gesture can be tested without
+ * a keyboard. Feed it every key event; it answers true exactly once, on the
+ * SECOND RELEASE of a clean double tap.
  *
- * EXACT modifiers, deliberately. ⌥⌘⎋ is Force Quit and ⇧⌘⎋ is nothing we own —
- * matching loosely would have this shell answering chords it was never given.
- * The platform modifier mirrors what `CommandOrControl` resolves to, so the
- * accelerator string and this predicate cannot drift apart in meaning. */
-export function isGodviewChord(input: ChordInput, platform: "darwin" | "other"): boolean {
-  if (input.type !== "keyDown" || input.key !== "Escape") return false;
-  if (input.alt || input.shift) return false;
-  return platform === "darwin" ? input.meta && !input.control : input.control && !input.meta;
+ * Firing on the release rather than the press is JetBrains' choice and worth
+ * keeping: it means holding Shift down after the second tap does nothing until
+ * the user lets go, so Shift-dragging and Shift-clicking never trip it. */
+export class DoubleShiftDetector {
+  private firstPressed = false;
+  private firstReleased = false;
+  private secondPressed = false;
+  private otherKeyWasPressed = false;
+  private lastAt = 0;
+
+  /** JetBrains resets only the three gesture flags here — `otherKeyWasPressed`
+   * and the timestamp deliberately survive, because they describe what the
+   * KEYBOARD just did, not where the gesture had got to. */
+  reset(): void {
+    this.firstPressed = false;
+    this.firstReleased = false;
+    this.secondPressed = false;
+  }
+
+  accept(input: ChordInput, now: number): boolean {
+    if (input.key !== "Shift") {
+      // Any other key ends any gesture in progress and marks the keyboard busy.
+      this.lastAt = now;
+      this.otherKeyWasPressed = true;
+      // Escape and Tab get a HARD reset in their implementation — a zeroed
+      // timestamp, so the very next Shift is treated as a fresh first tap
+      // instead of being suppressed by the typing guard.
+      if (input.key === "Escape" || input.key === "Tab") this.lastAt = 0;
+      this.reset();
+      return false;
+    }
+    // A Shift held WITH another modifier is someone building a chord, not
+    // tapping. (Note: `input.shift` itself is not read — for the Shift key the
+    // flag describes the key being pressed, not a separate held modifier.)
+    if (input.meta || input.control || input.alt) {
+      this.reset();
+      return false;
+    }
+    if (this.otherKeyWasPressed && now - this.lastAt < AFTER_OTHER_KEY_MS) {
+      this.reset();
+      return false;
+    }
+    this.otherKeyWasPressed = false;
+    if (this.firstPressed && now - this.lastAt > STALE_TAP_MS) this.reset();
+    return this.handleShift(input, now);
+  }
+
+  private handleShift(input: ChordInput, now: number): boolean {
+    if (this.firstPressed && now - this.lastAt > DOUBLE_TAP_WINDOW_MS) {
+      this.reset();
+      return false;
+    }
+    if (input.type === "keyDown") {
+      if (!this.firstPressed) {
+        this.reset();
+        this.firstPressed = true;
+        this.lastAt = now;
+        return false;
+      }
+      if (this.firstReleased) {
+        this.secondPressed = true;
+        this.lastAt = now;
+        return false;
+      }
+    } else if (input.type === "keyUp") {
+      if (!this.firstReleased && this.firstPressed) {
+        this.firstReleased = true;
+        this.lastAt = now;
+        return false;
+      }
+      if (this.firstPressed && this.firstReleased && this.secondPressed) {
+        this.reset();
+        return true;
+      }
+    }
+    this.reset();
+    return false;
+  }
 }
 
-/** ⌘⎋ WHERE THE MENU CANNOT CARRY IT (James, 2026-08-04).
+/** ⇧⇧ ABOVE THE PAGE (GT-D2's requirement, kept).
  *
- * GT-D2 put the toggle on an application accelerator for one reason: a menu key
- * equivalent is consumed before any renderer sees the keystroke, so the chord
- * works while a terminal pane holds focus. That reason still stands — but macOS
- * does not deliver ⌘⎋ to a menu key equivalent, so on darwin the menu item's
- * accelerator is a LABEL, not a live binding, and pressing it did nothing.
+ * `before-input-event` fires in MAIN before the page or any terminal inside it
+ * is offered the key, which is the one property the menu accelerator was ever
+ * chosen for — and a double tap could not be a menu key equivalent anyway, since
+ * accelerators describe chords and this is a rhythm.
  *
- * `before-input-event` restores the property the menu was chosen for without
- * the menu: it fires in MAIN, before the page or any terminal inside it is
- * offered the key, and `preventDefault` stops it there. Main still owns the bit
- * and still learns of every toggle, which is all GT-D2 ever asked for.
- *
- * NOT a globalShortcut: that would take ⌘⎋ from every other app for as long as
- * VibeField runs, and this chord belongs to a focused window or to nobody.
- *
- * Double-fire is not possible. Where the menu DOES match the chord it consumes
- * the key and this never sees it; where it does not, this is the only handler. */
-export function installGodviewChord(
+ * NOTHING IS EVER SWALLOWED. Unlike the ⌘⎋ interceptor this replaces, no
+ * `preventDefault` is called — not even on the firing event. Shift is a live
+ * modifier the terminal needs for capitals, and eating its keyUp would leave
+ * ghosttea believing Shift was still held. Letting every Shift through costs us
+ * nothing: a lone Shift means nothing to a shell, so the gesture is invisible to
+ * the pane it fires over. */
+export function installGodviewDoubleShift(
   target: WebContents,
   toggle: () => void,
-  platform: "darwin" | "other" = process.platform === "darwin" ? "darwin" : "other",
+  now: () => number = Date.now,
 ): void {
-  target.on("before-input-event", (event, input) => {
-    if (!isGodviewChord(input as ChordInput, platform)) return;
-    event.preventDefault();
+  const detector = new DoubleShiftDetector();
+  target.on("before-input-event", (_event, input) => {
+    if (!detector.accept(input as ChordInput, now())) return;
     toggle();
   });
 }

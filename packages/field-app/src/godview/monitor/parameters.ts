@@ -11,7 +11,7 @@
  * deliberate and the reason is lifetime: the lab's stage values are a temporary
  * measuring instrument with no home outside a session, while the monitor stage
  * UNMOUNTS on every close (PF6), so a memory-only radius would reset every time
- * James pressed ⌘⎋. Persisting them is what makes tuning possible at all.
+ * James pressed ⇧⇧. Persisting them is what makes tuning possible at all.
  */
 export interface MonitorParameterDefinition {
   key: string;

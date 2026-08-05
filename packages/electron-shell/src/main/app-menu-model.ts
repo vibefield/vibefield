@@ -5,8 +5,9 @@
 // was serving. Godview's toggle has to be answered ABOVE the page (GT-D2 /
 // design-04 §8.3) so it reaches the overlay even while a terminal pane holds
 // keyboard focus, which a renderer-level listener could never promise. A menu
-// key equivalent was how that was done until 2026-08-04; on darwin it no longer
-// is — see GODVIEW_ACCELERATOR below and `installGodviewChord`. Owning
+// key equivalent was how that was done until 2026-08-04; it no longer is — the
+// gesture became ⇧⇧, which no accelerator can express. See
+// GODVIEW_GESTURE_HINT below and `installGodviewDoubleShift`. Owning
 // the menu means owning the whole thing — replacing Electron's default with one
 // that omits Copy or Quit would be a regression the accelerator paid for — so
 // every standard section below is present by ROLE, which is how Electron keeps
@@ -43,26 +44,30 @@ export interface AppMenuState {
   godviewOpen: boolean;
 }
 
-/** GT-D2, James 2026-08-01; moved off ⌘G 2026-08-04. Electron resolves
- * `CommandOrControl` per platform, so one string is the whole cross-platform
- * statement.
+/** THE GODVIEW ITEM CARRIES NO ACCELERATOR, and the absence is the design.
  *
- * ON DARWIN THIS IS A LABEL, NOT A BINDING. Electron accepts the string and the
- * View menu draws ⌘⎋ beside Godview, but macOS does not deliver ⌘⎋ to a menu
- * key equivalent — the item never fired. `installGodviewChord` (main/godview.ts)
- * is what actually answers the chord, above the page, where GT-D2 needs it. The
- * accelerator stays here because the menu is where a user LOOKS to learn the
- * gesture, and it remains the live binding wherever the platform honours it.
+ * The gesture is ⇧⇧ — a double tap of Shift, WebStorm's Search Everywhere
+ * gesture — and an accelerator cannot express it. Accelerators describe chords,
+ * one key held with modifiers; this is a rhythm, two taps inside 300ms. It is
+ * detected in main by `installGodviewDoubleShift` (main/godview.ts), which keeps
+ * GT-D2's actual requirement: answered above the page, so it works while a
+ * terminal pane holds focus.
  *
- * It was ⌘G until the collision got paid for twice. ⌘G is find-next in every
- * macOS text surface and in ghostty, and an application accelerator always wins
- * — so the overlay's toggle ate the deck's search-next for as long as the deck
- * was up (GT-2's named cost). ⌘⎋ collides with nothing: macOS reserves
- * ⌘⌥⎋ (Force Quit), not this, and a terminal reads a BARE Escape — the modifier
- * is what keeps vim's Escape out of this menu's reach. ⌘G goes back to the
- * panes, unconditionally, which is why the close item's conditional dance below
- * has no twin here. */
-export const GODVIEW_ACCELERATOR = "CommandOrControl+Escape";
+ * The road here, so nobody re-walks it (all three states were shipped):
+ *   ⌘G  — worked, but IS find-next in ghostty and every macOS text surface, and
+ *         an application accelerator always wins, so the deck lost search-next
+ *         for as long as the overlay was up. GT-2 named that cost and paid it.
+ *   ⌘⎋  — never worked, and never can: macOS eats Command+Escape before the
+ *         application sees it. MEASURED, with the app focused — ⌘G and a bare ⎋
+ *         both arrived at `before-input-event`, ⌘⎋ never did. (⇧⌘⎋ and ⌃⌘⎋ do
+ *         arrive, if a chord is ever wanted again.) A menu accelerator, a
+ *         `before-input-event` interceptor and a globalShortcut would all fail
+ *         identically, because the key never reaches the process.
+ *   ⇧⇧  — costs no chord at all. Nothing in ghostty, macOS or this shell binds a
+ *         lone Shift, so there is no collision to arbitrate and ⌘G stays the
+ *         panes' — which is why the close item's conditional ⌘W dance below has
+ *         no twin here. */
+export const GODVIEW_GESTURE_HINT = "⇧ ⇧";
 
 /** The id the Window section's close item carries, so the adapter can find it
  * again when the overlay opens. Named here because the reason is policy: the
@@ -72,14 +77,19 @@ export const CLOSE_WINDOW_ITEM_ID = "window-close";
 
 export const GODVIEW_ITEM_ID = "view-godview";
 
-/** `Toggle Godview` — a checkbox, because main knows the answer (§9 voice:
- * buttons say what they do; a state we hold is stated, not implied). */
+/** `Godview` — a checkbox, because main knows the answer (§9 voice: buttons say
+ * what they do; a state we hold is stated, not implied).
+ *
+ * The gesture rides in the LABEL because it cannot ride in the accelerator
+ * column (see GODVIEW_GESTURE_HINT). The menu is still where a user looks to
+ * learn a gesture, and a Godview row that showed no way to reach it by keyboard
+ * would teach that there isn't one. WebStorm does the same for Search
+ * Everywhere, for the same reason. */
 function godviewItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem {
   return {
     id: GODVIEW_ITEM_ID,
     type: "checkbox",
-    label: "Godview",
-    accelerator: GODVIEW_ACCELERATOR,
+    label: `Godview  (${GODVIEW_GESTURE_HINT})`,
     checked: state.godviewOpen,
     enabled: actions.toggleGodview !== undefined,
     ...(actions.toggleGodview !== undefined ? { click: actions.toggleGodview } : {}),

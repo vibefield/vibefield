@@ -165,9 +165,10 @@ export function GodviewOverlay(): ReactElement | null {
   // insert mode inside the deck, and the ladder outranked every TUI a user came
   // here to run. The known cost was documented; it was still a cost.
   //
-  // One door instead: ⌘⎋, which is an application accelerator and reaches main
-  // whatever holds focus (GT-D2), so nothing on this page needs to race the
-  // terminal for a key. Escape now belongs entirely to whatever has focus.
+  // One door instead: ⇧⇧, a double tap of Shift detected in main from
+  // `before-input-event`, which reaches it whatever holds focus (GT-D2) — so
+  // nothing on this page needs to race the terminal for a key, and Escape now
+  // belongs entirely to whatever has focus.
   // The panel keeps its own × (`Close system controls`) and its toolbar toggle,
   // so the affordance is lost only from the keyboard, and only for the panel.
   // KillActivePane's Esc-disarms stays: it is bubble-phase, armed-only, and

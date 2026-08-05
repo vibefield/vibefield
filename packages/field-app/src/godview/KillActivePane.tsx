@@ -51,7 +51,7 @@ export function KillActivePane({
 
   // Esc disarms, consistently (DESIGN.md §7). Still not capture-phase, though
   // the reason changed on 2026-08-04: the overlay's own Escape ladder is gone
-  // (⌘⎋ is the only Godview toggle now) and Escape belongs to whatever holds
+  // (⇧⇧ is the only Godview toggle now) and Escape belongs to whatever holds
   // focus. Bubble phase is how this stays the narrow exception — it is armed
   // only while a question is on screen, and a terminal that wants the key keeps
   // it, because a pane with a kill confirm up is not a pane being typed into.
