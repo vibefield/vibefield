@@ -1,5 +1,5 @@
 {
-  "controlSocket": "/data/native/run/terminal-control.sock",
-  "frameSocket": "/data/native/run/terminal-frame.sock",
+  "controlSocket": "/data/native/run/termctl.sock",
+  "frameSocket": "/data/native/run/termframe.sock",
   "token": "per-boot-native-token"
 }

@@ -25,8 +25,8 @@ pub mod sockets {
     pub const FIELDD: &str = "fieldd.sock";
     pub const MGMT: &str = "mgmt.sock";
     pub const MESHDATA: &str = "meshdata.sock";
-    pub const TERMINAL_CONTROL: &str = "terminal-control.sock";
-    pub const TERMINAL_FRAME: &str = "terminal-frame.sock";
+    pub const TERMINAL_CONTROL: &str = "termctl.sock";
+    pub const TERMINAL_FRAME: &str = "termframe.sock";
 }
 
 pub mod stores {
@@ -76,8 +76,8 @@ pub mod layout {
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
     pub const MESHDATA_SOCKET: &[&str] = &["native", "run", "meshdata.sock"];
-    pub const TERMINAL_CONTROL_SOCKET: &[&str] = &["native", "run", "terminal-control.sock"];
-    pub const TERMINAL_FRAME_SOCKET: &[&str] = &["native", "run", "terminal-frame.sock"];
+    pub const TERMINAL_CONTROL_SOCKET: &[&str] = &["native", "run", "termctl.sock"];
+    pub const TERMINAL_FRAME_SOCKET: &[&str] = &["native", "run", "termframe.sock"];
     pub const CRASH_DIR: &[&str] = &["crash"];
     pub const EXPORTS_STAGING_DIR: &[&str] = &["exports", ".staging"];
     pub const USERS_DIR: &[&str] = &["users"];

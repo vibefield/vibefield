@@ -190,9 +190,15 @@ export const SOCKETS = {
   /** NF — Ghosttea control/frame endpoints under native/run/: bound by
    * field-native (which owns creation, permissions, and stale-unlink), dialed
    * by ticket holders. Path stability across fieldd restarts is what lets
-   * ghosttea clients read endpoints once at construction. */
-  TERMINAL_CONTROL: "terminal-control.sock",
-  TERMINAL_FRAME: "terminal-frame.sock",
+   * ghosttea clients read endpoints once at construction.
+   * RENAMED 2026-08-05 (UA-D9 regression, live dev root): the user tree
+   * (`users/<fuid>/`) pushed `terminal-control.sock` to 108 bytes on the
+   * repo-nested dev root — past the macOS sun_path ceiling — so field-native
+   * could not bind and the terminal plane crashed while mgmt.sock (96) sailed
+   * through the old shortest-name guard. Socket names live under the tightest
+   * path budget in the product; keep them ≤ 14 chars (registry lint). */
+  TERMINAL_CONTROL: "termctl.sock",
+  TERMINAL_FRAME: "termframe.sock",
 } as const;
 
 /** File names VibeField owns beneath a daemon's own data directory. A name here

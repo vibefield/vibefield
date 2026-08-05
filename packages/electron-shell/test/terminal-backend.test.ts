@@ -17,8 +17,8 @@ import {
 // four of its members, so a structural fake drives the whole ladder.
 
 const TICKET = {
-  controlSocket: "/run/terminal-control.sock",
-  frameSocket: "/run/terminal-frame.sock",
+  controlSocket: "/run/termctl.sock",
+  frameSocket: "/run/termframe.sock",
   token: "per-boot-token",
 };
 

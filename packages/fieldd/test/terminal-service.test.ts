@@ -68,8 +68,8 @@ async function openRpc(port: number): Promise<WsRpc> {
 }
 
 const ENDPOINTS = {
-  controlSocket: "/mock/native/run/terminal-control.sock",
-  frameSocket: "/mock/native/run/terminal-frame.sock",
+  controlSocket: "/mock/native/run/termctl.sock",
+  frameSocket: "/mock/native/run/termframe.sock",
   authToken: "mock-per-boot-token",
 };
 

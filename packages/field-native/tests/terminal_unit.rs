@@ -34,7 +34,7 @@ fn short_tempdir() -> tempfile::TempDir {
         .prefix("vfnf")
         .tempdir_in("/tmp")
         .expect("tempdir under /tmp");
-    let probe = dir.path().join("native/run/terminal-control.sock");
+    let probe = dir.path().join("native/run/termctl.sock");
     assert!(
         probe.as_os_str().len() < 100,
         "socket path would risk sun_path truncation: {}",
@@ -340,18 +340,18 @@ async fn hello_carries_private_terminal_endpoints() {
     let run_dir = dir.path().join("native/run");
     assert_eq!(
         terminal["controlSocket"].as_str().unwrap(),
-        run_dir.join("terminal-control.sock").to_str().unwrap(),
+        run_dir.join("termctl.sock").to_str().unwrap(),
         "control socket must be the registries path under this daemon's run dir"
     );
     assert_eq!(
         terminal["frameSocket"].as_str().unwrap(),
-        run_dir.join("terminal-frame.sock").to_str().unwrap()
+        run_dir.join("termframe.sock").to_str().unwrap()
     );
     let token = terminal["authToken"].as_str().expect("authToken");
     assert_eq!(token.len(), 64, "32 random bytes, hex");
     assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
 
-    for name in ["terminal-control.sock", "terminal-frame.sock"] {
+    for name in ["termctl.sock", "termframe.sock"] {
         let path = run_dir.join(name);
         let mode = std::fs::metadata(&path)
             .unwrap_or_else(|e| panic!("stat {}: {e}", path.display()))
@@ -1461,7 +1461,7 @@ async fn stale_endpoints_are_rebound_on_the_next_boot() {
         wait_until_gone(pid, Duration::from_secs(5)).await,
         "the first boot's session must not survive its daemon"
     );
-    let socket_path = dir.path().join("native/run/terminal-control.sock");
+    let socket_path = dir.path().join("native/run/termctl.sock");
     assert!(
         socket_path.exists(),
         "the socket file is expected to be left behind — that is what makes this a rebind"

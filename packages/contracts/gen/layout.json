@@ -75,12 +75,12 @@
   "TERMINAL_CONTROL_SOCKET": [
     "native",
     "run",
-    "terminal-control.sock"
+    "termctl.sock"
   ],
   "TERMINAL_FRAME_SOCKET": [
     "native",
     "run",
-    "terminal-frame.sock"
+    "termframe.sock"
   ],
   "CRASH_DIR": [
     "crash"

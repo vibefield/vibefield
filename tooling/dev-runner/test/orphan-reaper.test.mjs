@@ -98,7 +98,7 @@ test("anything holding a dev socket is a squatter, whatever its executable is", 
     ],
     socketOwners: [
       { pid: 601, socketPath: mgmtSocket },
-      { pid: 602, socketPath: `${DATA_ROOT}/native/run/terminal-control.sock` },
+      { pid: 602, socketPath: `${DATA_ROOT}/native/run/termctl.sock` },
     ],
   });
 
@@ -242,7 +242,7 @@ test("lsof records attribute every name to the pid that opened the record", () =
     "f6",
     "n->0x50cbe09e4899729a",
     "f13",
-    `n${DATA_ROOT}/native/run/terminal-control.sock`,
+    `n${DATA_ROOT}/native/run/termctl.sock`,
     "p502",
     "f9",
     `n${mgmtSocket}`,
