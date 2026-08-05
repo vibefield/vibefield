@@ -988,3 +988,37 @@ socket-bearing LAYOUT row at the true 103-byte limit naming the offender (pinned
 byte-exactly at 103/104), and a 14-char socket-name lint in the contracts registry.
 Sockets are ephemeral — no migration; the next daemon start binds the new names. The
 spec's §1 miscalibrated citation carries the dated correction at source.
+
+## UA-5 — the second user: the track's last rung
+
+**UA-5 LANDED (2026-08-05, three commits: `cfe87b8` storage+channels · `f3aa78a` main
+half · `e83033a` renderer half by worktree agent — split hands, clean picks, green
+verbatim gates throughout).** The multi-persona field is real: `createUser` mints user N
+under the §3.3 lock with the UA-D9 budget assert (a too-deep root refuses TYPED before
+any directory exists, naming the socket); `users:list/create/switch` join the closed IPC
+surface (fifteen-key pin); electron main holds a cached **PairBundle per user** — a
+resident user's pair survives switch-away headless, the attachment wiring (observers,
+shell provider, preview capture) rebuilds per switch — and `attachUser` is
+build-before-break: the target pair answers `ensure()` before anything detaches, a
+failed spawn leaves the current user whole. The module-let swap redirects every
+late-bound reader without re-registration (the once-per-channel ipcMain law, honored by
+reading the live attachment at call time). **UA-D12 landed in full**: ephemeral ports
+unconditional in every mode — the recon trace showed the doc lane's fixed 9411 was the
+FIRST-colliding bind and dev was ephemeral only by env inheritance. The tray grew its
+Switch User submenu (one level of TrayMenuItem.submenu, recursive native mapping); the
+Account page grew the Users block; the wizard grew the `second-user` variant (enters at
+pane 2, ends in a zero-beat `finishing` — §6.2's substance kept, its pre-attach modal
+frame amended at source: the variant rides the boot wizard through the
+`setupVariant` passthrough stamp). **The audit exits ran on REAL daemons**
+(`two-pairs.test.ts`): two full pairs under `users/1` and `users/2` of one root — four
+distinct ephemeral ports, own-root sockets, both product planes answering health
+SIMULTANEOUSLY, and users.json's mtime unchanged across the run (UA-D10 held
+physically). The V5 accidental mutex has a tombstone. **Open, physical, James's:** the
+kill-matrix switch row — a live session in user 1 survives switch-away-and-back
+unnoticed — rides the first real multi-user session. Honest v1 bounds recorded:
+crash/support evidence roots stay on the BOOT user's tree; an adopted non-resident pair
+is not ours to kill; a partial bridge renders honest dead rows with an explanatory line
+(the agent's judgment call, adopted). Side-note for the ledger: the renderer agent also
+wrote the FIRST test of `preload/index.ts` itself (reusing the package's own electron
+mock harness) and properly controlled a transient electron-binary flake before clearing
+itself of it.
