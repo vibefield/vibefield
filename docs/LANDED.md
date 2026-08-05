@@ -755,3 +755,25 @@ specificity loss, verified in Chromium) — behavior preserved; the fix is a vis
 so it waits on DESIGN.md §M6 (named debt). Residual: ~18 cached shadow surfaces (~160KB
 each) traded for the per-frame gaussian. Orchestrator verify + smoke exit 0, first attempt
 at load 18. James's eyeball remains the final authority — the revert is exactly two files.
+
+## GT-3c — the physics leaves the main thread
+
+**GT-3c LANDED (2026-08-05, `e69e849` — builder + orchestrator re-verification).** GT-D16
+built: matter + the accumulator + drag springs (keyed by id — multi-drag survives) +
+hit-tests in a module worker (the repo's existing Vite worker mechanism, zero config;
+90.7kB chunk, same-origin, CSP `'self'`); frames as bare transferred Float32Arrays with a
+generation header, idTable only on membership change, both-buffers-outstanding ⇒ dropped
+not allocated. SAB verdict measured, not assumed: no crossOriginIsolation in the shell by
+design, ping-pong shipped. Zero visual delta proved structurally (no className/style/aria
+change in the view diff; interpolation unchanged, main-side). The substrate is VISIBLE —
+`swarmPhysics: worker|inline|none` in the monitor marker, and the smoke asserts `worker`
+in the packaged renderer. The `adoptCanvas` socket is held no-op, pinned by a fixture —
+James's SDF/WebGPU renderer plugs in there in his own session. **The honest instrument
+verdict**: frame counters cannot resolve this change (p50 pinned at 8.3ms — the display was
+already at cadence; LoAF zero everywhere); the measured truth is the extracted core — 1.48
+ms/s of main-thread work removed at the 30Hz default — and the value is the worker HOME,
+exactly as GT-D16 predicted. Deliberate residuals: a dying worker leaves the field
+motionless (logged loudly, not respawned — respawn would replay a world mid-gesture);
+drag feel unchanged by construction, not measurement (physicsHz A/B stays James's judge).
+Verify + smoke exit 0 both hands (orchestrator: first attempt at load 69.8). Full record:
+`specs/godview-terminal.md` (GT-D16 + GT-3c findings).
