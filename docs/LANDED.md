@@ -973,3 +973,18 @@ value) — a resumed linked wizard lands ON the posture question, preselected, n
 fake-skipping to Ready. Tests: 14 wizard + 9 machine + 5 users + 6 backfill cases new;
 306/28/406 green across the three packages. Eyeball owed: the fresh-root run-through and
 the one-time migration-variant wizard on the next `pnpm dev`, both themes, keyboard-only.
+
+## UA — the sun_path regression: the budget measures the longest socket
+
+**FIXED (2026-08-05, `d6f8489`), found by James's first post-migration `pnpm dev`.** The
+user tree's 8 extra path bytes pushed `terminal-control.sock` to 108 — past macOS
+`sun_path` — so field-native could not bind either terminal socket: diagnostics said
+native degraded / terminal crashed (honest states over a bind that never happened) and
+the shell's connect died EINVAL on the same too-long path. The UA-D9 guard existed for
+exactly this and passed the root anyway: it measured only `mgmt.sock`, the SHORTEST
+name in the registry. Three layers now: `termctl.sock`/`termframe.sock` renames
+(hyphen-less like their siblings; dev paths 99/101), the guard walks every
+socket-bearing LAYOUT row at the true 103-byte limit naming the offender (pinned
+byte-exactly at 103/104), and a 14-char socket-name lint in the contracts registry.
+Sockets are ephemeral — no migration; the next daemon start binds the new names. The
+spec's §1 miscalibrated citation carries the dated correction at source.
