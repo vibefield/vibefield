@@ -331,8 +331,23 @@ export function RainView({
                 <dd>{hovered.agent.branch}</dd>
               </>
             ) : null}
+            {hovered.remote ? (
+              <>
+                <dt>HOST</dt>
+                <dd>
+                  {hovered.remote.deviceName}
+                  {hovered.remote.readWrite ? "" : " · view only"}
+                </dd>
+              </>
+            ) : null}
             <dt>MOD</dt>
-            <dd>{hovered.agent ? (hovered.agent.model ?? hovered.agent.provider) : "terminal"}</dd>
+            <dd>
+              {hovered.agent
+                ? (hovered.agent.model ?? hovered.agent.provider)
+                : hovered.remote
+                  ? "remote session"
+                  : "terminal"}
+            </dd>
             <dt>ACT</dt>
             <dd>{hovered.detail}</dd>
           </dl>
@@ -352,10 +367,17 @@ export function RainView({
           <li key={agent.id}>
             <button
               type="button"
+              className={agent.remote ? "is-remote" : undefined}
               onClick={() => actions.select(agent)}
               aria-current={agent.active ? "true" : undefined}
             >
-              {`${agent.project}, ${agent.agent ? (agent.agent.model ?? agent.agent.provider) : "terminal"}, ${agent.status}: ${agent.detail}`}
+              {`${agent.remote ? `on ${agent.remote.deviceName}, ` : ""}${agent.project}, ${
+                agent.agent
+                  ? (agent.agent.model ?? agent.agent.provider)
+                  : agent.remote
+                    ? "remote session"
+                    : "terminal"
+              }, ${agent.status}${agent.remote && !agent.remote.readWrite ? ", view only" : ""}: ${agent.detail}`}
             </button>
           </li>
         ))}

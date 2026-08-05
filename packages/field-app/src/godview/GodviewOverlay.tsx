@@ -15,11 +15,13 @@ import {
 } from "./GodviewTuningPanel";
 import { useLabSwitches } from "./lab-switches";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
+import type { RemoteSessionDoor } from "./monitor/remote-door";
 import {
   SCANLINE_DENSITY_KEY,
   SCANLINE_OPACITY_KEY,
   VIGNETTE_OPACITY_KEY,
 } from "./monitor/stage-parameters";
+import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { useGodviewOpen } from "./overlay-state";
 import {
   discardWarmTransport,
@@ -90,6 +92,12 @@ export function GodviewOverlay(): ReactElement | null {
    * drawing, because the deck tells it. Null until a deck has existed — the
    * backend is not a fact before a render worker is. */
   const [rendererBackend, setRendererBackend] = useState<string | null>(null);
+  /** GT-D17's wiring, and the whole of it: the deck builds a two-verb door and
+   * publishes its pane facts; this holds both and hands them to the monitor.
+   * The overlay is where the two surfaces are siblings, so it is where they
+   * meet — nothing about a runtime or a workspace passes through here. */
+  const [remoteDoor, setRemoteDoor] = useState<RemoteSessionDoor | null>(null);
+  const [panes, setPanes] = useState<MonitorPaneFacts>({ sessionIds: [] });
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -209,6 +217,8 @@ export function GodviewOverlay(): ReactElement | null {
           theme={theme}
           notice={notice}
           tuningOpen={tuningOpen}
+          door={remoteDoor}
+          panes={panes}
           onSelectView={monitor.selectView}
           onToggleTuning={() => setTuningOpen((current) => !current)}
           onThemeChange={changeTheme}
@@ -234,7 +244,13 @@ export function GodviewOverlay(): ReactElement | null {
         aria-label="Terminal panes"
       >
         {terminalAvailable ? (
-          <GodviewDeck active={open} theme={theme} onRendererBackend={setRendererBackend} />
+          <GodviewDeck
+            active={open}
+            theme={theme}
+            onRendererBackend={setRendererBackend}
+            onRemoteDoor={setRemoteDoor}
+            onPanes={setPanes}
+          />
         ) : (
           <p className="vf-godview-unavailable">
             THIS HOST HAS NO TERMINAL BRIDGE — THE DECK IS UNAVAILABLE HERE.

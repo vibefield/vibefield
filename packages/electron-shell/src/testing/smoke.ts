@@ -176,15 +176,40 @@ const GODVIEW_APPEARANCE_STORAGE_KEY = "vf-godview-appearance-v1";
  * choice (see row 5b). */
 const SMOKE_SHADER_EFFECT = "ghosttea:crt";
 
-/** A running tail of the deck's markers, armed BEFORE the load so a fast deck
+/** One `GODVIEW_MONITOR {…}` line, as the monitor stage published it. */
+interface MonitorFacts {
+  viewId: string;
+  agents: number;
+  agentBacked: number;
+  mockLabel: string;
+  /** GT-4: the split, counted — how many rows each source contributed. */
+  mockAgents: number;
+  remoteSessions: number;
+  remoteHosts: number;
+  /** `no-door` · `serving` · `unavailable`; the second is what makes an empty
+   * mesh distinguishable from a mesh nobody asked. */
+  remoteState: string;
+  remoteReason?: string;
+  swarmPhysics: string;
+}
+
+/** A running tail of one marker channel, armed BEFORE the load so a fast page
  * cannot report into a gap. Every wait is a predicate over the LATEST line,
- * because the deck says what it is on every change and the interesting states
- * are transient. */
-class DeckWatch {
-  private latest: DeckFacts | null = null;
+ * because these surfaces say what they are on every change and the interesting
+ * states are transient.
+ *
+ * Generic since GT-4: the monitor needs the same tail the deck has had since
+ * GT-2 — a wait armed once and re-read after a gesture — and two copies of this
+ * class would be two answers to "what did it last say".
+ */
+class MarkerWatch<T> {
+  private latest: T | null = null;
   private readonly waiters = new Set<() => void>();
 
-  constructor(win: BrowserWindow) {
+  constructor(
+    win: BrowserWindow,
+    private readonly prefix: string,
+  ) {
     win.webContents.on("console-message", (...args: unknown[]) => {
       for (const arg of args) {
         const text =
@@ -193,9 +218,9 @@ class DeckWatch {
             : arg && typeof arg === "object" && "message" in arg
               ? String((arg as { message: unknown }).message)
               : "";
-        if (!text.startsWith("GODVIEW_DECK ")) continue;
+        if (!text.startsWith(this.prefix)) continue;
         try {
-          this.latest = JSON.parse(text.slice("GODVIEW_DECK ".length)) as DeckFacts;
+          this.latest = JSON.parse(text.slice(this.prefix.length)) as T;
         } catch {
           continue;
         }
@@ -204,7 +229,7 @@ class DeckWatch {
     });
   }
 
-  current(): DeckFacts | null {
+  current(): T | null {
     return this.latest;
   }
 
@@ -218,9 +243,9 @@ class DeckWatch {
 
   /** Resolve on the first marker satisfying `predicate`, including one already
    * seen — a state reached before the wait began is still the state. */
-  async until(predicate: (facts: DeckFacts) => boolean, what: string, timeoutMs: number) {
+  async until(predicate: (facts: T) => boolean, what: string, timeoutMs: number) {
     if (this.latest !== null && predicate(this.latest)) return this.latest;
-    return new Promise<DeckFacts>((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.waiters.delete(notify);
         reject(
@@ -440,6 +465,84 @@ async function clickDeckButton(win: BrowserWindow, label: string): Promise<void>
   throw new Error(`no "${label}" button appeared within 20s (${seen})`);
 }
 
+/**
+ * Click a bubble on the MONITOR stage, by CSS selector (GT-4).
+ *
+ * A DOM click for `clickDeckButton`'s reason (GT-2 finding 4: a synthesized
+ * mousedown skips Chromium's default actions and blurs a terminal on the way
+ * past), and selected by class rather than by text because a bubble's words are
+ * a project name — the fact under test is which SOURCE the row came from, and
+ * that is what the class says.
+ *
+ * Returns the bubble's accessible name, so the verdict records what was
+ * actually clicked instead of asserting that something was.
+ */
+async function clickMonitorBubble(win: BrowserWindow, selector: string): Promise<string> {
+  const deadline = Date.now() + 20_000;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const clicked = (await win.webContents.executeJavaScript(
+      `(() => {
+        const bubble = document.querySelector(${JSON.stringify(selector)});
+        if (!bubble) return "absent";
+        const label = bubble.getAttribute("aria-label") ?? "";
+        bubble.click();
+        return "ok:" + label;
+      })()`,
+    )) as string;
+    if (clicked.startsWith("ok:")) return clicked.slice(3);
+    seen = clicked;
+    await sleep(200);
+  }
+  throw new Error(`no monitor bubble matched ${selector} within 20s (${seen})`);
+}
+
+/**
+ * Wait until the deck has published nothing new for `quietMs` (GT-4).
+ *
+ * A before/after comparison needs a BEFORE that is not still moving. This row's
+ * predecessor is the bridge kill, and a recovered deck goes on working after it
+ * reports: a new runtime remounts the workspace, which re-reads the saved
+ * layout, which rehydrates the pane whose session the kill row ended — a birth
+ * that lands a second or two later and has nothing to do with the click under
+ * test. The first version of this row sampled into that window and blamed a
+ * mock agent for it (measured, not imagined: the id it saw replaced was
+ * `killedSession`).
+ *
+ * Quiescence rather than a fixed sleep, because the settling time is the
+ * machine's, not ours.
+ */
+async function deckSettled(
+  deck: MarkerWatch<DeckFacts>,
+  quietMs: number,
+  timeoutMs: number,
+): Promise<DeckFacts> {
+  const deadline = Date.now() + timeoutMs;
+  let last = JSON.stringify(deck.current());
+  let quietSince = Date.now();
+  while (Date.now() < deadline) {
+    await sleep(250);
+    const now = JSON.stringify(deck.current());
+    if (now !== last) {
+      last = now;
+      quietSince = Date.now();
+      continue;
+    }
+    const facts = deck.current();
+    if (facts !== null && Date.now() - quietSince >= quietMs) return facts;
+  }
+  throw new Error(`the deck never settled for ${quietMs}ms within ${timeoutMs}ms (last: ${last})`);
+}
+
+/** What the stage last said out loud about a gesture. The acknowledgement is
+ * the monitor's honest confirmation, and reading it is how the harness checks
+ * the WORDS a person would have read rather than only the state behind them. */
+async function readMonitorAck(win: BrowserWindow): Promise<string> {
+  return (await win.webContents.executeJavaScript(
+    `(document.querySelector(".vf-monitor-ack")?.textContent ?? "").trim()`,
+  )) as string;
+}
+
 /** The deck's saved layout, as the page holds it. Read so the smoke can assert
  * what `paneMeta` actually persisted rather than trusting that it did. */
 async function readDeckLayout(win: BrowserWindow): Promise<string | null> {
@@ -453,7 +556,7 @@ async function readDeckLayout(win: BrowserWindow): Promise<string | null> {
  * staged: the document dies and comes back while the FLOOR does not. */
 async function reopenAfterReload(opts: {
   win: BrowserWindow;
-  deck: DeckWatch;
+  deck: MarkerWatch<DeckFacts>;
   toggleGodview: () => void;
   viteUrl: string;
 }): Promise<void> {
@@ -608,7 +711,11 @@ export async function runSmokeGodview(opts: {
         console.log(`[renderer] ${args.map((a) => JSON.stringify(a)).join(" ")}`);
       });
     }
-    const deck = new DeckWatch(win);
+    const deck = new MarkerWatch<DeckFacts>(win, "GODVIEW_DECK ");
+    // GT-4: the monitor's own tail, armed with the deck's and for the same
+    // reason — the door rows below re-read the stage AFTER a click, and a
+    // one-shot line wait can only ever answer about the mount.
+    const monitorWatch = new MarkerWatch<MonitorFacts>(win, "GODVIEW_MONITOR ");
     const canvas = waitForConsole(win, "CANVAS_READY ", 60_000);
     canvas.catch(() => undefined);
     await loadRenderer(win, "smoke-godview", opts.viteUrl);
@@ -675,13 +782,7 @@ export async function runSmokeGodview(opts: {
     //     would for a pane that lied about its shell. The other two facts are
     //     structure, not pixels: which view mounted, and that it has rows. What
     //     it LOOKS like is James's eye, as with the glass.
-    const monitor = JSON.parse(await monitorLine) as {
-      viewId: string;
-      agents: number;
-      agentBacked: number;
-      mockLabel: string;
-      swarmPhysics: string;
-    };
+    const monitor = JSON.parse(await monitorLine) as MonitorFacts;
     verdict["monitorView"] = monitor.viewId;
     verdict["monitorAgents"] = monitor.agents;
     verdict["monitorMockLabel"] = monitor.mockLabel;
@@ -695,6 +796,16 @@ export async function runSmokeGodview(opts: {
     if (!monitor.mockLabel.includes("mock")) {
       throw new Error(
         `the monitor is showing ${monitor.agents} invented agents without saying so (label: ${JSON.stringify(monitor.mockLabel)})`,
+      );
+    }
+    // GT-4: the label's claim must also be SCOPED once real rows join it —
+    // "these are mock" over a real remote session is the lie GT-D17 forbids.
+    // With no peer serving there is nothing to scope and the whole-stage
+    // sentence is correct, which is why this row reads the counts and not a
+    // fixed string.
+    if (monitor.remoteSessions > 0 && !/\d/.test(monitor.mockLabel)) {
+      throw new Error(
+        `${monitor.remoteSessions} real remote session(s) are sitting under an unscoped mock label: ${JSON.stringify(monitor.mockLabel)}`,
       );
     }
     // GT-3c: the substrate, pinned. The swarm's physics has an honest fallback
@@ -1182,6 +1293,106 @@ export async function runSmokeGodview(opts: {
       "still listed every session after the bridge died",
       15_000,
     );
+
+    // ── 13. THE GT-4 DOOR ROWS (GT-D17) ───────────────────────────────────
+    //
+    // Placed after the recovery deliberately: an attach REPLACES what the
+    // active pane is showing, and every row above asserts about the sessions
+    // this deck was holding. Nothing below them asserts anything.
+    //
+    // 13a. THE SPLIT-HONESTY ROW, and it runs on every machine: a mock agent
+    //      still mounts NOTHING. The monitor now has a real door beside it, so
+    //      "the stage holds no runtime" stopped being the structural guarantee
+    //      it was at GT-3m — this row is what replaces that guarantee with a
+    //      measurement.
+    //
+    //      The claim is asserted two ways, and NEITHER is "the pane ids did not
+    //      change" — the first draft of this row said that and failed twice on
+    //      a truth about the deck rather than about the click: the pane whose
+    //      session row 10 killed rehydrates into a fresh shell some seconds
+    //      after the recovery above reports, and the id it replaces is exactly
+    //      `killedSession`. What holds regardless:
+    //
+    //        · the pane COUNT is unchanged (a mount that split would raise it)
+    //        · every pane holds a session THE FLOOR KNOWS
+    //
+    //      The second is the one that means what this row is about. The mock's
+    //      sessions are inventions — they exist in a seeded generator and
+    //      nowhere else — so an invented row reaching a pane could only ever
+    //      put an id there that `terminal.list` has never heard of, and the
+    //      rehydrated shell (a real floor session) passes it untouched.
+    const beforeMockClick = await deckSettled(deck, 2_000, 60_000);
+    const mockClicked = await clickMonitorBubble(win, ".vf-monitor-bubble:not(.is-remote)");
+    verdict["mockBubbleClicked"] = mockClicked;
+    await sleep(1_500);
+    const afterMockClick = deck.current();
+    if (afterMockClick === null) throw new Error("the deck stopped reporting after a mock click");
+    const mockAck = await readMonitorAck(win);
+    verdict["mockAck"] = mockAck;
+    // The words a person would have read. GT-D13 makes the acknowledgement the
+    // mock's whole answer, so a silent mock is as wrong as a mounting one.
+    if (!mockAck.includes("nothing was mounted")) {
+      throw new Error(
+        `the preview acknowledged a mock selection without saying nothing was mounted: ${JSON.stringify(mockAck)}`,
+      );
+    }
+    if (afterMockClick.panes !== beforeMockClick.panes) {
+      throw new Error(
+        `clicking an invented agent changed the deck's shape (${beforeMockClick.panes} → ${afterMockClick.panes} panes)`,
+      );
+    }
+    const paneSessions = afterMockClick.sessionIds;
+    await untilFloor(
+      opts.handle,
+      (terminals) => paneSessions.every((id) => terminals.some((t) => t.sessionId === id)),
+      `list every session the deck's panes hold after a mock click (${JSON.stringify(paneSessions)}) — an invented agent that mounted would put an id here the floor never created`,
+      20_000,
+    );
+    verdict["mockMountsNothing"] = true;
+    verdict["mockPaneSessions"] = paneSessions.length;
+
+    // 13b. THE DOOR ROW. A peer's session is a bubble in the swarm, and
+    //      CLICKING it attaches the active pane to it — no palette anywhere in
+    //      this path (⌘⇧O stays off; GT-D7's amendment).
+    //
+    //      Behind an honest capability check, because a peer is not something
+    //      this harness can conjure: the mesh floor is GT-4's other half, and
+    //      two floors on a tailnet are not stageable here yet. With no peer the
+    //      row REPORTS `unavailable` with the monitor's own state — it never
+    //      fakes a host, and it never passes silently as though it had run.
+    const monitorNow = monitorWatch.current();
+    verdict["remoteState"] = monitorNow?.remoteState ?? "unreported";
+    verdict["remoteSessions"] = monitorNow?.remoteSessions ?? 0;
+    verdict["remoteHosts"] = monitorNow?.remoteHosts ?? 0;
+    if (monitorNow?.remoteReason !== undefined) verdict["remoteReason"] = monitorNow.remoteReason;
+    if (monitorNow === null || monitorNow === undefined || monitorNow.remoteSessions === 0) {
+      // The monitor asked and got nothing, or had nobody to ask. Both are
+      // states with names, and neither is a remote session.
+      verdict["remotePeer"] = "unavailable";
+    } else {
+      verdict["remotePeer"] = "available";
+      const beforeAttach = deck.current();
+      if (beforeAttach === null) throw new Error("the deck said nothing before the attach");
+      const attachedLabel = await clickMonitorBubble(win, ".vf-monitor-bubble.is-remote");
+      verdict["remoteBubbleClicked"] = attachedLabel;
+      const attached = await deck.until(
+        (facts) =>
+          facts.activeSessionId !== undefined &&
+          !beforeAttach.sessionIds.includes(facts.activeSessionId),
+        "the active pane to be showing the peer's session",
+        30_000,
+      );
+      verdict["remoteAttachedSessionId"] = attached.activeSessionId ?? null;
+      verdict["remoteAttachAck"] = await readMonitorAck(win);
+      // The pane COUNT is unchanged: GT-D17 attaches the pane the user is in,
+      // it does not split one open. That is the difference between our door
+      // and upstream's palette, and it is worth asserting rather than assuming.
+      if (attached.panes !== beforeAttach.panes) {
+        throw new Error(
+          `the attach changed the deck's shape (${beforeAttach.panes} → ${attached.panes} panes); GT-D17 attaches the ACTIVE pane`,
+        );
+      }
+    }
 
     // ── GT-3p, REPORT-ONLY ────────────────────────────────────────────────
     // Everything below records numbers and asserts nothing. A performance row

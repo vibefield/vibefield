@@ -28,7 +28,9 @@ import {
 import { godviewTerminalEffects, godviewTerminalTheme } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { KillActivePane } from "./KillActivePane";
-import { describePane } from "./pane-faces";
+import type { RemoteSessionDoor } from "./monitor/remote-door";
+import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
+import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
 import { pendingWarmTransport, takeTransportForDeck } from "./warm-transport";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
@@ -124,12 +126,28 @@ export interface GodviewDeckProps {
    * because only the deck's runtime knows. Reported when the worker announces
    * it, so the readout shows a measured backend and never a guessed one. */
   onRendererBackend?: (backend: string) => void;
+  /**
+   * THE DOOR (GT-D17), published upward.
+   *
+   * The monitor is a sibling of this deck, not a child, and it needs to reach
+   * the mesh and the active pane — both of which exist only in here. What
+   * crosses the boundary is a two-verb object built where the runtime already
+   * is; the runtime itself never leaves this file, and no view ever sees
+   * either. Null while there is nothing to open (no transport yet).
+   */
+  onRemoteDoor?: (door: RemoteSessionDoor | null) => void;
+  /** The deck's pane facts, for a monitor that must say which of its rows are
+   * actually showing somewhere. Read-only in both directions of meaning: the
+   * monitor never drives panes with them. */
+  onPanes?: (facts: MonitorPaneFacts) => void;
 }
 
 export function GodviewDeck({
   active,
   theme: godviewTheme = "light",
   onRendererBackend,
+  onRemoteDoor,
+  onPanes,
 }: GodviewDeckProps): ReactElement | null {
   const fieldd = useFielddClient();
   /** THE deck's runtime, and `null` until the transport has been ACQUIRED.
@@ -153,6 +171,17 @@ export function GodviewDeck({
    * (the marker below); the deck does not drive panes through it any more —
    * that was the adopt sweep GT-2e deleted. */
   const [workspace, setWorkspace] = useState<GhostteaWorkspaceContext>();
+  /** The same context, reachable WITHOUT a render (GT-D17). The door is built
+   * once per runtime and lives longer than any one context object — ghosttea
+   * publishes a fresh one on every pane change — so an attach reads the current
+   * one at call time instead of closing over whichever existed at build time. */
+  const workspaceRef = useRef<GhostteaWorkspaceContext>(undefined);
+  /** Session id → the monitor row's accent that brought it here. The pane wears
+   * the bubble's color, which is the deck↔monitor link the reference app draws
+   * (GT-3m ported `PaneAttachment` for exactly this and could not feed it). A
+   * ref because `decoratePane` must stay referentially stable, and the mount
+   * that follows an attach re-renders the workspace anyway. */
+  const paneColors = useRef(new Map<string, string>());
   /** The shell every pane is born with, and where. Main's answer to the connect
    * (GT-D10) — `null` until it lands, which is what gates the workspace's first
    * mount below. */
@@ -173,7 +202,10 @@ export function GodviewDeck({
    * an updater or an unmount cleanup would double-fire there. */
   const retiredRuntimes = useRef(new Set<GhostteaTerminalRuntime>());
 
-  const publish = useCallback((next: GhostteaWorkspaceContext) => setWorkspace(next), []);
+  const publish = useCallback((next: GhostteaWorkspaceContext) => {
+    workspaceRef.current = next;
+    setWorkspace(next);
+  }, []);
   /** GT-2b: a failed deck must offer its own way back. Bumping the generation
    * births a runtime with a FRESH ports wait and re-runs the connect ask — the
    * same path `bridge-up` takes, available to a human when no bridge-up is
@@ -596,6 +628,121 @@ export function GodviewDeck({
     [runtime, shell],
   );
 
+  // THE DOOR (GT-D17). Two verbs, built where the runtime and the workspace
+  // already are, so the monitor beside this deck can list the mesh and mount
+  // one of its sessions without ever touching either.
+  //
+  // This is the narrow, deliberate widening of GT-D13's structural guarantee —
+  // "the stage holds no runtime" is still literally true, because what the
+  // stage holds is this object. The views below it hold even less: they get
+  // `actions`, as they always have.
+  //
+  // Keyed on the RUNTIME alone. The workspace context is read through its ref
+  // at call time (ghosttea republishes it on every pane change, and a door
+  // rebuilt that often would restart the monitor's poll for no reason), while a
+  // new runtime is a new control connection and genuinely a different door.
+  const door = useMemo<RemoteSessionDoor | null>(() => {
+    if (runtime === null) return null;
+    return {
+      // `enableRemoteSessions={false}` below turns off upstream's palette and
+      // its ⌘⇧O binding — it does NOT gate these calls, which live on the
+      // runtime and speak to the floor's control connection directly. That is
+      // exactly what GT-D7's amendment asked for: their door closed, ours open.
+      listHosts: () => runtime.listRemoteHosts(),
+      attach: async (request) => {
+        const active = workspaceRef.current?.activeSession;
+        if (active === undefined) return { state: "no-pane" };
+        try {
+          // Sized to the pane it is about to live in, like upstream's own
+          // palette open — a replica born at the wrong geometry redraws once
+          // and reflows the peer's screen for everyone watching it.
+          const session = await runtime.openRemoteSession(
+            request.deviceId,
+            request.remoteSessionId,
+            active.cols,
+            active.rows,
+            request.deviceName,
+          );
+          const context = workspaceRef.current;
+          if (context === undefined || context.activePaneId === undefined) {
+            // The pane went away while the mesh was answering. Upstream's own
+            // cleanup for this exact case, and the same call: for a session the
+            // local registry does not hold, ghosttea 0.9.1's `Terminate` routes
+            // to the MESH runtime's `close_session` (service.rs:2894-2909) —
+            // the replica layer, not the peer's PTY. Named residual: that
+            // trait method carries no doc comment and its implementation ships
+            // in `ghosttea-truffle`, so "it closes only our replica" is read
+            // from the routing, not from a contract test. Sub-millisecond
+            // window; the alternative is leaking a replica nothing can reach.
+            runtime.terminate(session.id);
+            return { state: "no-pane" };
+          }
+          paneColors.current.set(session.id, request.color);
+          // THE MOUNT. `mountSession` puts a session in the ACTIVE pane and
+          // activates it — the workspace's own door (GT-D10), the same one the
+          // reference app's select flow drives. Note what it is not: `addSession`,
+          // which upstream's palette uses to SPLIT. GT-D17 says attach the pane
+          // the user is in, so the deck's shape is the user's, not ours.
+          //
+          // The session the pane was showing is detached, never killed: the
+          // pane leaf's session is replaced (pane-layout's `mountSessionInPane`)
+          // and nothing terminates it — GT-D5's close-detaches law, arriving
+          // here for free because the library obeys it too.
+          context.mountSession(session);
+          return { state: "attached", sessionId: session.id, readWrite: session.readWrite };
+        } catch (cause) {
+          // The floor's own words, carried whole. A mesh that refuses is a
+          // state to report, not an exception to swallow.
+          return {
+            state: "failed",
+            reason: cause instanceof Error ? cause.message : String(cause),
+          };
+        }
+      },
+    };
+  }, [runtime]);
+
+  useEffect(() => {
+    onRemoteDoor?.(door);
+    // The deck going away takes the door with it: a monitor still holding one
+    // would be polling a control connection nobody owns.
+    return () => onRemoteDoor?.(null);
+  }, [door, onRemoteDoor]);
+
+  // The pane facts the monitor reads (GT-D17). Published on CHANGE only — this
+  // fires on every workspace republish, and an unchanged array would re-run the
+  // monitor's projection at ghosttea's cadence rather than at the panes'.
+  const lastPaneFacts = useRef("");
+  useEffect(() => {
+    const sessionIds = (workspace?.panes ?? []).map((pane) => pane.session.id);
+    const activeSessionId = workspace?.activeSession?.id;
+    const key = `${sessionIds.join("\0")}${activeSessionId ?? ""}`;
+    if (key === lastPaneFacts.current) return;
+    lastPaneFacts.current = key;
+    // A color belongs to a pane, so it leaves with one. Pruned HERE rather than
+    // on close because this is where the deck learns its panes changed, whatever
+    // changed them — and a map that only ever grew would hand a stale accent
+    // back if the floor ever reused a session id.
+    for (const sessionId of paneColors.current.keys()) {
+      if (!sessionIds.includes(sessionId)) paneColors.current.delete(sessionId);
+    }
+    onPanes?.({ sessionIds, ...(activeSessionId !== undefined ? { activeSessionId } : {}) });
+  }, [workspace, onPanes]);
+
+  /** The pane's face, plus the monitor link (GT-D17).
+   *
+   * `describePane` stays a pure function of the session and keeps its own law
+   * (a live pane says nothing). What this adds is a §2.6 accent for a pane a
+   * monitor row put there — an accent GROUPS and labels and never signals
+   * state, which is why an exit's `--vf-red` still wins: a state outranks a
+   * label, always. */
+  const decorate = useCallback((session: DeckSession): PaneFace | undefined => {
+    const face = describePane(session);
+    const color = paneColors.current.get(session.id);
+    if (color === undefined) return face;
+    return { ...face, color: face?.color ?? color };
+  }, []);
+
   // Whatever the deck currently is, said out loud once per change. The canvas
   // smoke's CANVAS_READY precedent: the headless harness reads renderer console
   // output because there is no other way to ask a page what it drew.
@@ -732,7 +879,7 @@ export function GodviewDeck({
         {...(terminalEffects !== undefined ? { effects: terminalEffects } : {})}
         storageKey={DECK_STORAGE_KEY}
         sidebar={Sidebar}
-        decoratePane={describePane}
+        decoratePane={decorate}
         paneMeta={paneMeta}
         // Armed only on consent. Unarmed, the library's default applies and a
         // dead pane is dropped — which is what "start clean" asked for and what
@@ -747,8 +894,12 @@ export function GodviewDeck({
         // made this deck an authority it should never have been.
         initialCwd={shell.home}
         claimExistingSessions
-        // GT-4's floor work is what lights these up; until field-native serves
-        // the mesh the palette would list nothing and promise something.
+        // STAYS OFF, and no longer as a wait (GT-D7's 2026-08-05 amendment):
+        // ⌘⇧O's palette was upstream's door to remote sessions, not ours. Ours
+        // is the monitor — a peer's session is a bubble in the swarm, and
+        // clicking it attaches this pane (GT-D17). The prop gates that palette
+        // and its hotkey only; the runtime calls the door above makes are
+        // untouched by it.
         enableRemoteSessions={false}
         showTitlebar={false}
         active={active}

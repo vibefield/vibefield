@@ -702,6 +702,25 @@ body {
   white-space: nowrap;
 }
 
+/* THE OTHER CLAIM (GT-D17). Same chip anatomy as the mock label beside it and
+   deliberately not the same color: --vf-cyan is §2.5's info / live-data accent,
+   and these rows ARE live data from somewhere else. Two chips, two claims, and
+   neither one covering the other's rows. */
+.vf-monitor-remote-chip {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--vf-cyan) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vf-card) 90%, transparent);
+  backdrop-filter: blur(24px);
+  padding: 4px 10px;
+  color: var(--vf-cyan);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 /* The only confirmation a mock action gets. Sentence case (§9), tertiary ramp,
    and it fades rather than pops — nothing travelled, so nothing should look
    like it did (M4). */
@@ -914,6 +933,24 @@ body {
   white-space: nowrap;
 }
 
+/* THE HOST EYEBROW (GT-D17) — the remote bubble's whole visual distinction, and
+   built from §3's eyebrow rather than from a new mark: 9px, medium, uppercase,
+   tracked, in the session's OWN §2.6 accent instead of the 40% caption ramp its
+   neighbours use. It is therefore the loudest small text on the body, which is
+   correct — "this session is on another machine" changes the meaning of every
+   other word on the bubble. No local row ever has one. */
+.vf-monitor-bubble-host {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--agent-color);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 /* §3 caption: 9–10px at 40%. */
 .vf-monitor-bubble-branch,
 .vf-monitor-bubble-provider {
@@ -1079,6 +1116,35 @@ body {
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* THE HOST CHIP (GT-D17). It stands where a model name stands, in the row's own
+   §2.6 accent and §3's eyebrow — the same distinction the swarm draws, said in
+   the vocabulary of a list. */
+.vf-monitor-list-host {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--agent-color);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Mirror-write, refused: a FACT in the muted ramp (the §8 plugin-source-badge
+   rule — a source is not a state of concern, so it gets no hue) and never an
+   error face. The peer is sharing a screen; that is worth having. */
+.vf-monitor-list-host em {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .vf-monitor-list-agent {
@@ -1889,6 +1955,24 @@ body {
   white-space: nowrap;
 }
 
+/* The real rows' claim, in the instrument's type but not its monochrome: this
+   is the one place a hue earns itself here, because two claims that look alike
+   are one claim (GT-D17). --vf-cyan is §2.5's live-data accent. */
+.vf-monitor-remote-chip {
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--vf-cyan);
+  background: transparent;
+  backdrop-filter: none;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .vf-monitor-ack {
   overflow: hidden;
   color: var(--text-faint);
@@ -2127,6 +2211,17 @@ body {
   box-shadow: none;
 }
 
+/* A PEER'S BODY (GT-D17). The instrument stays monochrome, so the distinction
+   is drawn in the one slot every other bubble here leaves empty: the body's
+   hairline, which is `1px solid transparent` by default and visible only on a
+   linked bubble. A remote session shows it in its own §2.6 accent — a hairline
+   (§2.3), an accent used as identity and never as state (§2.6), and a mark no
+   local row on this stage can have. It sits BEFORE `.is-linked` so that a
+   remote actually mounted in a pane still gets the stronger link ring. */
+.vf-monitor-bubble.is-remote {
+  border-color: color-mix(in srgb, var(--agent-color) 55%, transparent);
+}
+
 .vf-monitor-bubble.is-linked {
   border-color: var(--agent-color);
   box-shadow:
@@ -2269,6 +2364,24 @@ body {
   font-weight: 800;
   letter-spacing: 0.1em;
   opacity: 0.58;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The host eyebrow in the instrument's own grammar: no hue on a monochrome
+   stage, so loudness is opacity. Its neighbours sit at 0.58 (provider) and
+   0.67 (branch); the machine's name sits at full, because it is the fact that
+   changes what the rest of the bubble means. */
+.vf-monitor-bubble-host {
+  max-width: 100%;
+  margin-bottom: 4px;
+  overflow: hidden;
+  color: currentcolor;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  opacity: 1;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
@@ -2556,6 +2669,32 @@ body {
 .vf-monitor-list-terminal {
   color: var(--text-faint);
   font-style: italic;
+}
+
+/* The list's host chip, in the row's accent — the same distinction the swarm's
+   bubble border draws, where a list can carry it. */
+.vf-monitor-list-host {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 5px;
+  overflow: hidden;
+  color: var(--agent-color);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vf-monitor-list-host em {
+  color: var(--text-faint);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .vf-monitor-list-context {

@@ -534,14 +534,23 @@ export function AgentSwarm({
               }}
               type="button"
               className={`vf-monitor-bubble is-${appearance}${ignited ? " is-ignited" : ""}${
-                facet ? "" : " is-unassigned"
-              }${linkedColor ? " is-linked" : ""}${agent.active ? " is-active" : ""}`}
+                // "Unassigned" means a terminal of OURS that no agent claimed.
+                // A peer's session is claimed — by the peer — so it takes the
+                // remote mark instead and never the unclaimed one.
+                facet || agent.remote ? "" : " is-unassigned"
+              }${linkedColor ? " is-linked" : ""}${agent.active ? " is-active" : ""}${
+                agent.remote ? " is-remote" : ""
+              }`}
               style={style}
               aria-current={agent.active ? "true" : undefined}
               aria-label={
-                facet
-                  ? `${agent.project}, ${facet.model ?? facet.provider}, ${agent.status}: ${agent.detail}, ${contextLabel}`
-                  : `${agent.project}, unassigned terminal, ${agent.status}`
+                agent.remote
+                  ? `on ${agent.remote.deviceName}, ${agent.project}, remote session, ${agent.status}${
+                      agent.remote.readWrite ? "" : ", view only"
+                    }`
+                  : facet
+                    ? `${agent.project}, ${facet.model ?? facet.provider}, ${agent.status}: ${agent.detail}, ${contextLabel}`
+                    : `${agent.project}, unassigned terminal, ${agent.status}`
               }
               title={
                 facet
@@ -632,11 +641,21 @@ export function AgentSwarm({
                 {facet?.branch ? (
                   <span className="vf-monitor-bubble-branch">{facet.branch}</span>
                 ) : null}
+                {/* THE HOST CHIP (GT-D17), in the branch's slot: both answer
+                    "where does this live", and a peer's name is the stronger
+                    version of that question. It is the reason a remote bubble
+                    can never be mistaken for one of the invented ones. */}
+                {agent.remote ? (
+                  <span className="vf-monitor-bubble-host">{agent.remote.deviceName}</span>
+                ) : null}
                 <strong>{agent.project}</strong>
                 {facet ? (
                   <span className="vf-monitor-bubble-provider">
                     {facet.model ?? facet.provider}
                   </span>
+                ) : null}
+                {agent.remote && !agent.remote.readWrite ? (
+                  <span className="vf-monitor-bubble-provider">view only</span>
                 ) : null}
               </span>
               {facet ? <span className="vf-monitor-bubble-context">{contextLabel}</span> : null}

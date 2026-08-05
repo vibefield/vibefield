@@ -70,8 +70,26 @@ export interface GodviewMonitorFacts {
   agentBacked: number;
   /** GT-D13's law, as a fact a harness can hold: the words on the stage saying
    * these agents are invented. Absent from this line would mean absent from the
-   * screen — which is the failure it exists to catch. */
+   * screen — which is the failure it exists to catch.
+   *
+   * Since GT-D17 the sentence NARROWS when real rows join it (it starts naming
+   * how many of the rows are invented), so a harness asserts what it means —
+   * that the claim is present and scoped — rather than one fixed string. */
   mockLabel: string;
+  /** The split, counted (GT-D17): how many rows each source put on the stage. */
+  mockAgents: number;
+  remoteSessions: number;
+  /** Online peers behind those remote rows. */
+  remoteHosts: number;
+  /**
+   * The remote field's honest state, which is the fact a harness needs BEFORE
+   * it can judge an empty mesh: `no-door` (no deck, so nobody was asked),
+   * `serving` (the floor answered — zero rows then means an empty mesh), and
+   * `unavailable` (the ask failed, and `remoteReason` carries the floor's own
+   * words). Without it, "no peers" and "never asked" are the same empty line.
+   */
+  remoteState: string;
+  remoteReason?: string;
   /**
    * Where the swarm's physics is actually running (GT-3c, GT-D16): `worker` is
    * the slice's whole point, `inline` is the honest fallback for a renderer that

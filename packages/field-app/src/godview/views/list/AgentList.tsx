@@ -16,7 +16,7 @@ function compareAgents(left: MonitorAgent, right: MonitorAgent): number {
   // Agents outrank unclaimed terminals, then the ones asking for something.
   if (Boolean(left.agent) !== Boolean(right.agent)) return left.agent ? -1 : 1;
   const byStatus = STATUS_ORDER[left.status] - STATUS_ORDER[right.status];
-  return byStatus !== 0 ? byStatus : left.session.createdAtMs - right.session.createdAtMs;
+  return byStatus !== 0 ? byStatus : left.createdAtMs - right.createdAtMs;
 }
 
 export function AgentList({
@@ -62,19 +62,27 @@ export function AgentList({
             const rowStyle = {
               "--agent-color": agent.attachment?.primary ?? agent.color,
             } as CSSProperties;
+            const remote = agent.remote;
             return (
               <li key={agent.id}>
                 <button
                   type="button"
                   className={`vf-monitor-list-row is-${agent.status}${agent.active ? " is-active" : ""}${
                     agent.attachment ? " is-linked" : ""
-                  }`}
+                  }${remote ? " is-remote" : ""}`}
                   style={rowStyle}
                   aria-current={agent.active ? "true" : undefined}
                   // The status belongs to the ROW's name, not to the dot: a
                   // labelled dot reads out as a bare "waiting" with nothing
                   // attached, while the row is the thing being described.
-                  aria-label={`${agent.project}, ${facet ? (facet.model ?? facet.provider) : "terminal"}, ${agent.status}: ${agent.detail}`}
+                  //
+                  // A remote row names its peer FIRST (GT-D17): the machine is
+                  // the fact that changes what the row means, and a screen
+                  // reader must not have to reach the end of the line to learn
+                  // that this session is not on this computer.
+                  aria-label={`${remote ? `on ${remote.deviceName}, ` : ""}${agent.project}, ${
+                    facet ? (facet.model ?? facet.provider) : remote ? "remote session" : "terminal"
+                  }, ${agent.status}${remote && !remote.readWrite ? ", view only" : ""}: ${agent.detail}`}
                   onClick={() => actions.select(agent)}
                 >
                   <span className="vf-monitor-list-status" aria-hidden="true" />
@@ -90,6 +98,17 @@ export function AgentList({
                         </i>
                         {facet.model ?? facet.provider}
                       </>
+                    ) : remote ? (
+                      // THE HOST CHIP (GT-D17). It stands where the model name
+                      // stands, because it answers the same question — what is
+                      // this session — and it is the one word that must not be
+                      // read as "another terminal of mine".
+                      <span className="vf-monitor-list-host">
+                        {remote.deviceName}
+                        {remote.readWrite ? null : (
+                          <em title="the peer refuses mirror-write">view only</em>
+                        )}
+                      </span>
                     ) : (
                       <span className="vf-monitor-list-terminal">terminal</span>
                     )}
