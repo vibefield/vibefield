@@ -835,3 +835,23 @@ the live dev-root migration witness — the first `pnpm dev` after this lands st
 running pair and moves `.vibefield/dev/data` under `users/1/`; deliberately not run from
 the landing session while James's stack was live on that root. UA-2 (identity threading)
 is next; UA-6 (sync intent) is now unblocked in parallel.
+
+## UA-2 — identity threading: the pair says which user it serves
+
+**UA-2 LANDED (2026-08-05, `3750f20`).** The small slice that makes UA-1's partition
+*verifiable*: `FIELDD_USER_ID` rides the spawn env; fieldd records the served user in
+`product.json`, asserts it in every product hello ack (`userId: string | null` — null is
+unconfigured, absent is a pre-UA-2 daemon), and carries it on the mgmt hello, where
+field-native accepts it through the regenerated contracts with **zero hand-written Rust**.
+The probe's user gate mirrors `expectedBuildId` but stricter: an absent `userId` is NOT a
+match — a daemon from before the partition, or another user's stray, is never adopted
+across the wall; with no expectation set, pre-UA-2 adoption keeps working (new
+`ProbeFailure: "user-mismatch"`). The hello gate is restrict-only like `clientKind`: a
+client MAY carry its expectation, a configured daemon refuses a mismatch INCOMPATIBLE
+(terminal), an unconfigured daemon accepts anything. The tray gains the attached user's
+name as a disabled row above service status (conditional — existing tray tests untouched);
+the "`pnpm dev` shows the user label" witness rides James's next dev run, together with
+UA-1's owed live migration. Fourteen tests pin the exits. Finding for the walls' honor
+roll: **R7 caught this slice's own test** hardcoding port 9410 in a shape fixture — the
+walls don't exempt tests, and that is exactly why they work. Verify exit 0. Next: UA-3
+(link + Account page) or UA-6 (sync intent) — both open.

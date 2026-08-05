@@ -53,7 +53,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
 | GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v glass + 3m mocked monitor + 3f shaders + 3p perf (cold 443ms → warm 36ms) + **3c physics-in-worker** landed (spec v0.3, GT-D10…D16) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach; James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module |
-| UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05 (UA-D1…D16 + W1–W6; S1/V2–V5 all spike-resolved same day); UA-0 layout registry `fcd0af9`; **UA-1 user-shaped storage + migration landed `ca1ce49`** (live dev-root migration witness owed — first `pnpm dev` runs it) | `specs/users-and-accounts.md` | UA-2 identity thread → UA-3 link + Account page → UA-3w Setup Assistant → **UA-4 self/guest door (gates ANY shared-tailnet login)** → UA-5 second user · UA-6 sync intent (independent, unblocked now) |
+| UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05 (UA-D1…D16 + W1–W6; S1/V2–V5 all spike-resolved same day); UA-0 `fcd0af9` · UA-1 `ca1ce49` · **UA-2 identity threading `3750f20`** — one landing day, spec to running code; owed to the next `pnpm dev`: the live dev-root migration + the tray user label | `specs/users-and-accounts.md` | UA-3 link + Account page → UA-3w Setup Assistant → **UA-4 self/guest door (gates ANY shared-tailnet login)** → UA-5 second user · UA-6 sync intent (independent, unblocked now) |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
@@ -137,9 +137,9 @@ witnesses (second-account guest refusal; the S1 live probe).
   plugin through WP8, then run the both-theme/native-picker plus desktop-B preview/refresh,
   Truffle symlink/allow, and cross-origin physical witnesses. AH-5 adds the phone list; the
   AH-1 physical two-client proof can run alongside this work.
-- **UA-2** — identity threading: `FIELDD_USER_ID` + `Hello.userId` on both surfaces,
-  `product.json.userId`, probe mismatch refusal, tray user label. Small; completes the
-  storage story UA-1 opened.
+- **UA-3** — the link lifecycle: `link.json`, the Account settings page (profile,
+  link/unlink, sync posture, residency), unlink retirement, S1 login capture. The first
+  UA slice with a face.
 - **AR** — the agent tracks; the reason everything else exists.
 - **GT-4 → GT-5** — the remote floor, then the phone attaches.
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).
