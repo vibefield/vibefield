@@ -16,6 +16,9 @@ export default defineConfig({
   // dist so the shell is self-contained (main loads ../renderer from dist/main).
   root: join(import.meta.dirname, "src", "renderer-host"),
   base: "./",
+  // The dev runner overrides this one compile-time capability for
+  // `dev:onboarding`. Packaged and smoke renderers always get the safe default.
+  define: { __VIBEFIELD_FORCE_ONBOARDING__: "false" },
   plugins: [tailwindcss(), react()],
   resolve: {
     alias: [{ find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],

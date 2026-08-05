@@ -16,6 +16,7 @@ window.addEventListener("pagehide", () => logging.close(), { once: true });
 mountFieldApp({
   container: root,
   host: {
+    forceOnboarding: __VIBEFIELD_FORCE_ONBOARDING__,
     platform: window.vibefield.platform,
     logger: logging.logger,
     diagnostics: {

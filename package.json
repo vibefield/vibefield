@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs",
+    "dev:onboarding": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --force-onboarding",
     "smoke": "pnpm --filter @vibefield/desktop smoke",
     "smoke:canvas": "pnpm --filter @vibefield/desktop smoke:canvas",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",

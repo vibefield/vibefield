@@ -108,6 +108,9 @@ export interface FieldUserRoster {
 
 export interface FieldHost {
   readonly logger: RendererLogger;
+  /** Development renderer capability: reopen setup from its fresh-user pane on
+   * every boot without changing the supervisor-owned durable profile. */
+  readonly forceOnboarding?: boolean;
   readonly diagnostics?: FieldDiagnosticsHost;
   readonly platform?: ShellPlatform;
   readonly terminal?: FieldTerminalHost;

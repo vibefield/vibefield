@@ -165,6 +165,22 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
         );
         return null;
       }
+      if (deps.host.forceOnboarding === true) {
+        log.info(
+          "renderer.boot.onboarding_forced",
+          "Opening a fresh setup wizard because the development preview mode is enabled",
+        );
+        // Project a fresh-user view for this boot only. Omitting color and
+        // setupVariant makes the assistant begin at Welcome even when the
+        // durable account has already completed onboarding.
+        return {
+          userId: profile.userId,
+          fuid: profile.fuid,
+          name: profile.name,
+          resident: profile.resident,
+          onboarded: false,
+        };
+      }
       return profile.onboarded ? null : profile;
     } catch (error) {
       log.warn("renderer.boot.onboarding_skipped", "The supervisor refused the profile read", {

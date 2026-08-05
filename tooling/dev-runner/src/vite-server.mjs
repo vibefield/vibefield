@@ -1,10 +1,17 @@
 import { createServer } from "vite";
 
-export async function startRendererServer(paths) {
+export function rendererDevelopmentDefines({ forceOnboarding = false } = {}) {
+  return {
+    __VIBEFIELD_FORCE_ONBOARDING__: JSON.stringify(forceOnboarding),
+  };
+}
+
+export async function startRendererServer(paths, options = {}) {
   const server = await createServer({
     configFile: paths.viteConfig,
     mode: "development",
     clearScreen: false,
+    define: rendererDevelopmentDefines(options),
     server: {
       host: "127.0.0.1",
       port: 0,

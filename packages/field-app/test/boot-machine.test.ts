@@ -80,6 +80,7 @@ function harness(
     /** Absent = a shell with no supervisor bridge, which is the default a
      * browser harness has and the state every pre-UA-3w test ran in. */
     usersUpdate?: FieldHost["usersUpdate"];
+    forceOnboarding?: boolean;
   } = {},
 ) {
   const marks: string[] = [];
@@ -106,6 +107,7 @@ function harness(
     getConnection,
     onPrepareClose: () => () => {},
     completeClose: () => {},
+    ...(opts.forceOnboarding === undefined ? {} : { forceOnboarding: opts.forceOnboarding }),
     ...(opts.usersUpdate === undefined ? {} : { usersUpdate: opts.usersUpdate }),
   } as unknown as FieldHost;
 
@@ -481,6 +483,31 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
       "stabilizing",
       "interactive",
     ]);
+  });
+
+  it("the development preview reopens a fresh wizard without changing the durable profile", async () => {
+    const durableProfile = {
+      ...NEW_USER,
+      color: "accent-5",
+      setupVariant: "second-user",
+      onboarded: true,
+    };
+    const usersUpdate = vi.fn(async () => durableProfile);
+    const h = harness({ forceOnboarding: true, usersUpdate });
+
+    await bootToOnboarding(h);
+
+    expect(h.machine.view().phase).toBe("onboarding");
+    expect(h.machine.onboarding?.profile).toEqual(NEW_USER);
+    expect(durableProfile).toEqual({
+      ...NEW_USER,
+      color: "accent-5",
+      setupVariant: "second-user",
+      onboarded: true,
+    });
+
+    h.machine.completeOnboarding();
+    await flush();
   });
 
   it("completeOnboarding is idempotent, and inert on a machine that is not holding", async () => {

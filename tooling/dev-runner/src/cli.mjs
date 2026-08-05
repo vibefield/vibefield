@@ -47,6 +47,7 @@ let shutdownPromise = null;
 const criticalChanges = createChangeBuffer();
 const transientChildren = new Set();
 const crashTimes = [];
+const forceOnboarding = process.argv.includes("--force-onboarding");
 
 process.on("SIGINT", () => void shutdown(0, "SIGINT"));
 process.on("SIGTERM", () => void shutdown(0, "SIGTERM"));
@@ -87,8 +88,11 @@ async function main() {
       restartCoordinator?.request(name);
     },
   });
-  renderer = await startRendererServer(paths);
+  renderer = await startRendererServer(paths, { forceOnboarding });
   log.info(`renderer HMR listening at ${renderer.url}`);
+  if (forceOnboarding) {
+    log.info("onboarding preview enabled; each desktop launch will open a fresh setup wizard");
+  }
   await builds.ready;
 
   electron = createElectronStack({

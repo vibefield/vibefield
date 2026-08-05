@@ -34,6 +34,9 @@ interface BridgeUserRecord {
 }
 
 declare global {
+  /** Replaced by Vite. True only for the explicit `dev:onboarding` run mode. */
+  const __VIBEFIELD_FORCE_ONBOARDING__: boolean;
+
   interface Window {
     vibefield: {
       readonly platform: ShellPlatform;
