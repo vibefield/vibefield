@@ -680,10 +680,12 @@ export async function runSmokeGodview(opts: {
       agents: number;
       agentBacked: number;
       mockLabel: string;
+      swarmPhysics: string;
     };
     verdict["monitorView"] = monitor.viewId;
     verdict["monitorAgents"] = monitor.agents;
     verdict["monitorMockLabel"] = monitor.mockLabel;
+    verdict["swarmPhysics"] = monitor.swarmPhysics;
     if (monitor.viewId !== "swarm") {
       throw new Error(`the monitor opened on "${monitor.viewId}", not the default swarm`);
     }
@@ -693,6 +695,16 @@ export async function runSmokeGodview(opts: {
     if (!monitor.mockLabel.includes("mock")) {
       throw new Error(
         `the monitor is showing ${monitor.agents} invented agents without saying so (label: ${JSON.stringify(monitor.mockLabel)})`,
+      );
+    }
+    // GT-3c: the substrate, pinned. The swarm's physics has an honest fallback
+    // for a renderer that cannot start a worker (a fixture under happy-dom is
+    // one), and a fallback that shipped would look EXACTLY like the slice
+    // working while undoing it. This row is the only thing standing between
+    // those two states, so it asserts rather than reports.
+    if (monitor.swarmPhysics !== "worker") {
+      throw new Error(
+        `the swarm is simulating "${monitor.swarmPhysics}", not in its worker — GT-D16's whole point is that this runs off the main thread`,
       );
     }
 
@@ -1190,21 +1202,63 @@ export async function runSmokeGodview(opts: {
     // The steady-state frame cost, sampled from the page itself while the
     // overlay is open with the swarm running and a pane focused. One second of
     // rAF intervals; the median is the honest summary of a sample this short.
+    //
+    // GT-3c crosses the cadence with LoAF, which is `frame-stats.ts`'s own pairing
+    // (its module note: neither source alone is a diagnosis, their disagreement
+    // is). Cadence says whether frames are late; `blockingMs` says how much of
+    // the lateness the main thread owes. A slice that moves work OFF the main
+    // thread is supposed to leave the first number alone and shrink the second —
+    // and LoAF reporting zero in both directions is itself a finding, not a
+    // failure, because a swarm this small may never build a 50ms frame to be
+    // seen. Still report-only: it asserts nothing.
     verdict["frameMs"] = await win.webContents
       .executeJavaScript(
         `new Promise((resolve) => {
           const intervals = [];
+          const loaf = [];
+          let observer = null;
+          try {
+            observer = new PerformanceObserver((list) => {
+              for (const entry of list.getEntries()) {
+                loaf.push({
+                  duration: entry.duration,
+                  blocking: entry.blockingDuration ?? 0,
+                  script: entry.scriptDuration ?? 0,
+                });
+              }
+            });
+            observer.observe({ type: "long-animation-frame", buffered: false });
+          } catch {
+            // An engine without LoAF reports null rather than a silent zero —
+            // "unobservable" and "nothing blocked" are different answers.
+            observer = null;
+          }
           let last = performance.now();
           const tick = (now) => {
             intervals.push(now - last);
             last = now;
             if (now - start < 1000) requestAnimationFrame(tick);
             else {
+              observer?.disconnect();
               const sorted = intervals.slice(1).sort((a, b) => a - b);
+              const round = (value) => Math.round(value * 10) / 10;
               resolve(sorted.length === 0 ? null : {
                 frames: sorted.length,
-                p50: Math.round(sorted[Math.floor(sorted.length * 0.5)] * 10) / 10,
-                p95: Math.round(sorted[Math.floor(sorted.length * 0.95)] * 10) / 10,
+                p50: round(sorted[Math.floor(sorted.length * 0.5)]),
+                p95: round(sorted[Math.floor(sorted.length * 0.95)]),
+                loafFrames: observer === null ? null : loaf.length,
+                loafBlockingMs:
+                  observer === null
+                    ? null
+                    : round(loaf.reduce((total, entry) => total + entry.blocking, 0)),
+                loafScriptMs:
+                  observer === null
+                    ? null
+                    : round(loaf.reduce((total, entry) => total + entry.script, 0)),
+                loafWorstMs:
+                  observer === null
+                    ? null
+                    : round(loaf.reduce((worst, entry) => Math.max(worst, entry.duration), 0)),
               });
             }
           };

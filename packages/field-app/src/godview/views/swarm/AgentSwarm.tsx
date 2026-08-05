@@ -1,4 +1,3 @@
-import Matter from "matter-js";
 import {
   type CSSProperties,
   type ReactElement,
@@ -17,6 +16,18 @@ import {
   radiusForStatus,
   type SwarmParameters,
 } from "./swarm-parameters";
+import {
+  FRAME_COUNT_INDEX,
+  FRAME_GENERATION_INDEX,
+  FRAME_HEADER_FLOATS,
+  FRAME_STRIDE,
+  PHYSICS_HZ_FLOOR,
+  type SwarmAgentSpec,
+  type SwarmObstacleRect,
+  type SwarmPhysicsParameters,
+} from "./swarm-physics";
+import { createSwarmPhysicsDriver, type SwarmPhysicsDriver } from "./swarm-physics-driver";
+import type { SwarmPhysicsEvent } from "./swarm-physics-protocol";
 
 // The swarm — the reference app's matter.js agent field, ported.
 //
@@ -26,10 +37,23 @@ import {
 // separation is the whole reason a bubble can be both "this session, always this
 // color" and "right now, waiting" without the two fighting.
 //
-// PF6: the engine, the rAF loop and the ResizeObserver are all born in the mount
+// GT-3c: THE SIMULATION IS NO LONGER HERE. matter, the accumulator, the springs
+// and the spawn search live in `swarm-physics.ts`, hosted in a worker
+// (`swarm-physics-driver.ts` picks the home). What is left in this file is
+// everything that genuinely needs a document: measuring chrome, mapping pointers
+// into world coordinates, the spawn animation, and the damage-gated writes.
+//
+// The render loop is unchanged in SHAPE and in feel. It still interpolates
+// between two solved states and still writes only what moved; the difference is
+// where the two states come from. They used to be "before and after this frame's
+// step" and are now "the last two frames the physics sent", which is the same
+// pair of samples a step apart — so the blend, and the one-step latency it costs
+// a dragged bubble, are exactly what they were before.
+//
+// PF6: the driver, the rAF loop and the ResizeObserver are all born in the mount
 // effect and destroyed in its cleanup. The stage unmounts when the overlay
-// closes, so a closed Godview runs no physics — there is no paused engine to
-// forget about, because there is no engine.
+// closes, so a closed Godview runs no physics — and now not even a thread to run
+// it in, because disposing the driver terminates the worker.
 
 interface IgnitionParticleStyle extends CSSProperties {
   "--ignition-angle": string;
@@ -55,21 +79,17 @@ const IGNITION_PARTICLES: readonly IgnitionParticleStyle[] = Array.from(
   }),
 );
 
-interface PhysicsBody {
-  body: Matter.Body;
-  currentRadius: number;
-  targetRadius: number;
-  pointerId?: number;
-  pointerStartX: number;
-  pointerStartY: number;
-  dragConstraint?: Matter.Constraint;
-  dragged: boolean;
-  /** Where this body stood BEFORE the most recent solved step. Render reads it
-   * with `body.position` and an alpha to draw between the two (GT-D15.2): the
-   * engine may step at 30Hz while the screen paints at 120 and the motion still
-   * reads as continuous, because what is on screen is a blend and not a hold. */
+/** What the last two frames said about one bubble, and what was last written for
+ * it. The physics owns the positions; this is the render's own copy, because a
+ * transferred frame goes straight back to the sender. */
+interface BubbleState {
+  /** The newest solved position, and the one before it — the two ends of the
+   * blend the renderer draws between (GT-D15.2). */
+  x: number;
+  y: number;
   previousX: number;
   previousY: number;
+  radius: number;
   /** What was last WRITTEN to the DOM, so a frame that changed nothing writes
    * nothing (GT-D15.3). Nine bubbles × three properties × 120Hz is 3,240 style
    * writes a second to say the same thing when the swarm has settled. */
@@ -78,40 +98,18 @@ interface PhysicsBody {
   writtenRadius: number;
 }
 
-interface ChromeObstacle {
-  element: HTMLElement;
-  body: Matter.Body;
-  width: number;
-  height: number;
+/** A pointer that has taken hold of a bubble. `dragged` outlives the pointer on
+ * purpose: the click that follows a drag has to be told not to select. */
+interface BubbleDrag {
+  pointerId?: number;
+  startX: number;
+  startY: number;
+  dragged: boolean;
 }
 
-interface PhysicsWorld {
-  engine: Matter.Engine;
-  walls: [Matter.Body, Matter.Body, Matter.Body, Matter.Body];
-  obstacles: readonly ChromeObstacle[];
-}
-
-const PHYSICAL_GAP = 4;
-const CHROME_OBSTACLE_PADDING = 7;
-const DRAG_STIFFNESS = 0.2;
-const WALL_THICKNESS = 5000;
 const SPAWN_DURATION_MS = 720;
-const SPAWN_CLEARANCE = 12;
-const SPAWN_CANDIDATES = 40;
-const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const LONG_PRESS_DURATION_MS = 520;
 const LONG_PRESS_MOVE_TOLERANCE = 8;
-
-/** The most real time one frame may hand the accumulator. A tab that was hidden
- * or a machine that stalled comes back with a huge delta, and feeding it in
- * would make the swarm teleport — or, worse, spend the next frames catching up
- * through hundreds of steps. The backlog past this is DROPPED, not banked. */
-const MAX_FRAME_MS = 100;
-/** The most steps one frame may solve. The second half of the same guard: if a
- * frame is somehow still behind after this many steps, the remainder is
- * discarded rather than allowed to spiral (each catch-up step makes the next
- * frame later, which asks for more catch-up steps). */
-const MAX_STEPS_PER_FRAME = 5;
 /** Sub-pixel movement nobody can see. The damage gate's threshold, in CSS px. */
 const WRITE_EPSILON_PX = 0.05;
 
@@ -138,15 +136,29 @@ function swarmAppearance(state: SwarmVisualState): AgentVisualStatus {
   return state === "ignited" ? "working" : state;
 }
 
+/** The physics' half of the panel's parameters. The rest — fill opacity, the
+ * radii — describe how a bubble LOOKS, which the simulation has no use for. */
+function physicsParameters(swarm: SwarmParameters): SwarmPhysicsParameters {
+  return {
+    gravityPull: swarm.gravityPull,
+    restitution: swarm.restitution,
+    frictionAir: swarm.frictionAir,
+    physicsHz: swarm.physicsHz,
+  };
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 function animateSpawn(element: HTMLButtonElement): void {
   // M6: reduced motion gets the end state, not a spring. The guard also covers
   // the environment where `animate` does not exist at all (tests, and any
   // renderer where the WAAPI surface is stubbed).
-  if (
-    typeof element.animate !== "function" ||
-    (typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches)
-  ) {
+  if (typeof element.animate !== "function" || prefersReducedMotion()) {
     return;
   }
 
@@ -172,70 +184,6 @@ function animateSpawn(element: HTMLButtonElement): void {
   );
 }
 
-function findSpawnPosition(
-  width: number,
-  height: number,
-  radius: number,
-  existingBodies: Iterable<PhysicsBody>,
-): Matter.Vector {
-  const bodies = [...existingBodies];
-  const center = { x: width / 2, y: height / 2 };
-  if (bodies.length === 0) return center;
-
-  const collisionRadius = radius + PHYSICAL_GAP;
-  const horizontalReach = Math.max(
-    0,
-    Math.min(width * 0.28, width / 2 - collisionRadius - SPAWN_CLEARANCE),
-  );
-  const verticalReach = Math.max(
-    0,
-    Math.min(height * 0.28, height / 2 - collisionRadius - SPAWN_CLEARANCE),
-  );
-  const phase = Math.random() * Math.PI * 2;
-  let bestPosition = center;
-  let bestClearance = Number.NEGATIVE_INFINITY;
-
-  for (let index = 0; index < SPAWN_CANDIDATES; index += 1) {
-    const progress = index === 0 ? 0 : Math.sqrt(index / (SPAWN_CANDIDATES - 1));
-    const angle = phase + index * GOLDEN_ANGLE;
-    const candidate = {
-      x: center.x + Math.cos(angle) * horizontalReach * progress,
-      y: center.y + Math.sin(angle) * verticalReach * progress,
-    };
-    let clearance = Number.POSITIVE_INFINITY;
-    for (const wrapper of bodies) {
-      const distance = Math.hypot(
-        candidate.x - wrapper.body.position.x,
-        candidate.y - wrapper.body.position.y,
-      );
-      clearance = Math.min(
-        clearance,
-        distance - (collisionRadius + wrapper.currentRadius + PHYSICAL_GAP + SPAWN_CLEARANCE),
-      );
-    }
-    if (clearance > bestClearance) {
-      bestPosition = candidate;
-      bestClearance = clearance;
-    }
-    if (clearance >= 0) return candidate;
-  }
-
-  return bestPosition;
-}
-
-function clampSpawnPosition(
-  width: number,
-  height: number,
-  radius: number,
-  position: Matter.Vector,
-): Matter.Vector {
-  const margin = radius + PHYSICAL_GAP;
-  return {
-    x: Math.min(Math.max(position.x, margin), Math.max(margin, width - margin)),
-    y: Math.min(Math.max(position.y, margin), Math.max(margin, height - margin)),
-  };
-}
-
 interface PendingLongPress {
   pointerId: number;
   clientX: number;
@@ -253,12 +201,23 @@ export function AgentSwarm({
   const containerRef = useRef<HTMLElement>(null);
   const elementRefs = useRef(new Map<string, HTMLDivElement>());
   const bubbleRefs = useRef(new Map<string, HTMLButtonElement>());
-  const bodiesRef = useRef(new Map<string, PhysicsBody>());
+  const statesRef = useRef(new Map<string, BubbleState>());
+  const dragsRef = useRef(new Map<string, BubbleDrag>());
   const spawnedIdsRef = useRef(new Set<string>());
   const longPressRef = useRef<PendingLongPress | undefined>(undefined);
   const longPressTimerRef = useRef<number | undefined>(undefined);
-  const worldRef = useRef<PhysicsWorld | undefined>(undefined);
+  const driverRef = useRef<SwarmPhysicsDriver | undefined>(undefined);
   const parametersRef = useRef(swarm);
+  /** Index → id for the frames arriving now, and the generation it belongs to. */
+  const tableRef = useRef<{ generation: number; ids: readonly string[] }>({
+    generation: -1,
+    ids: [],
+  });
+  /** When the newest frame landed, in this thread's clock. The blend runs from
+   * here forward, so a frame arriving late slides rather than snaps. */
+  const frameAtRef = useRef<number | null>(null);
+  const agentsRef = useRef(agents);
+  agentsRef.current = agents;
   const [longPressPosition, setLongPressPosition] = useState<{ x: number; y: number }>();
 
   const cancelLongPress = (): void => {
@@ -277,171 +236,158 @@ export function AgentSwarm({
 
   useEffect(() => {
     parametersRef.current = swarm;
-    const world = worldRef.current;
-    if (!world) return;
-    for (const wrapper of bodiesRef.current.values()) {
-      wrapper.body.restitution = swarm.restitution;
-      wrapper.body.frictionAir = swarm.frictionAir;
-    }
-    for (const wall of world.walls) wall.restitution = swarm.restitution;
-    for (const obstacle of world.obstacles) obstacle.body.restitution = swarm.restitution;
+    driverRef.current?.post({ type: "updateParameters", parameters: physicsParameters(swarm) });
   }, [swarm]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    let width = container.clientWidth;
-    let height = container.clientHeight;
-    const engine = Matter.Engine.create();
-    engine.gravity.x = 0;
-    engine.gravity.y = 0;
-    const wallOptions = { isStatic: true, restitution: parametersRef.current.restitution };
-    const walls: [Matter.Body, Matter.Body, Matter.Body, Matter.Body] = [
-      Matter.Bodies.rectangle(
-        width / 2,
-        height + WALL_THICKNESS / 2,
-        10000,
-        WALL_THICKNESS,
-        wallOptions,
-      ),
-      Matter.Bodies.rectangle(width / 2, -WALL_THICKNESS / 2, 10000, WALL_THICKNESS, wallOptions),
-      Matter.Bodies.rectangle(-WALL_THICKNESS / 2, height / 2, WALL_THICKNESS, 10000, wallOptions),
-      Matter.Bodies.rectangle(
-        width + WALL_THICKNESS / 2,
-        height / 2,
-        WALL_THICKNESS,
-        10000,
-        wallOptions,
-      ),
-    ];
+
     // Shell chrome is solid: bubbles settle around the mock label rather than
-    // drifting under it. Which elements those are is the stage's business.
-    const obstacles: ChromeObstacle[] = monitorChromeElements(container).map((element) => {
-      const rect = element.getBoundingClientRect();
-      const obstacleWidth = Math.max(1, rect.width + CHROME_OBSTACLE_PADDING * 2);
-      const obstacleHeight = Math.max(1, rect.height + CHROME_OBSTACLE_PADDING * 2);
-      return {
-        element,
-        body: Matter.Bodies.rectangle(0, 0, obstacleWidth, obstacleHeight, wallOptions),
-        width: obstacleWidth,
-        height: obstacleHeight,
-      };
+    // drifting under it. Which elements those are is the stage's business, and
+    // OBSERVING them stays here — a worker has no getBoundingClientRect. What
+    // crosses the wire is rectangles.
+    const chrome = monitorChromeElements(container);
+    const readObstacles = (): SwarmObstacleRect[] => {
+      if (chrome.length === 0) return [];
+      const containerRect = container.getBoundingClientRect();
+      return chrome.map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          x: rect.left - containerRect.left,
+          y: rect.top - containerRect.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      });
+    };
+
+    const applyTable = (event: Extract<SwarmPhysicsEvent, { type: "idTable" }>): void => {
+      tableRef.current = { generation: event.generation, ids: event.ids };
+      const living = new Set(event.ids);
+      for (const id of [...statesRef.current.keys()]) {
+        if (living.has(id)) continue;
+        statesRef.current.delete(id);
+        dragsRef.current.delete(id);
+        spawnedIdsRef.current.delete(id);
+      }
+    };
+
+    const driver = createSwarmPhysicsDriver({
+      onEvent: (event) => {
+        if (event.type === "idTable") applyTable(event);
+      },
+      onFrame: (frame) => {
+        // Read everything BEFORE handing the buffer back: returning it detaches
+        // this view of it, and a detached array reads as empty rather than as an
+        // error.
+        if (frame[FRAME_GENERATION_INDEX] === tableRef.current.generation) {
+          const { ids } = tableRef.current;
+          const count = frame[FRAME_COUNT_INDEX] ?? 0;
+          for (let index = 0; index < count; index += 1) {
+            const id = ids[index];
+            if (id === undefined) break;
+            const offset = FRAME_HEADER_FLOATS + index * FRAME_STRIDE;
+            const x = frame[offset] ?? 0;
+            const y = frame[offset + 1] ?? 0;
+            const radius = frame[offset + 2] ?? 0;
+            const state = statesRef.current.get(id);
+            if (state) {
+              state.previousX = state.x;
+              state.previousY = state.y;
+              state.x = x;
+              state.y = y;
+              state.radius = radius;
+            } else {
+              statesRef.current.set(id, {
+                x,
+                y,
+                // A new body has no history, so its first blend must be a no-op:
+                // from where it is, to where it is. Seeding these with the spawn
+                // position is what stops a bubble's first frame from being a
+                // streak out of (0, 0).
+                previousX: x,
+                previousY: y,
+                radius,
+                // Deliberately NaN rather than the spawn position: the damage
+                // gate's first comparison must be guaranteed to fail so the
+                // opening write happens, and every comparison against NaN is
+                // false.
+                writtenX: Number.NaN,
+                writtenY: Number.NaN,
+                writtenRadius: Number.NaN,
+              });
+            }
+          }
+          frameAtRef.current = performance.now();
+        }
+        driver.post({ type: "releaseFrame", buffer: frame }, [frame.buffer]);
+      },
     });
-    Matter.Composite.add(engine.world, [...walls, ...obstacles.map((obstacle) => obstacle.body)]);
-    worldRef.current = { engine, walls, obstacles };
+    driverRef.current = driver;
+
+    driver.post({
+      type: "init",
+      agents: agentSpecs(agentsRef.current, parametersRef.current),
+      parameters: physicsParameters(parametersRef.current),
+      bounds: { width: container.clientWidth, height: container.clientHeight },
+      obstacles: readObstacles(),
+      reducedMotion: prefersReducedMotion(),
+    });
 
     const updateBounds = (): void => {
-      width = container.clientWidth;
-      height = container.clientHeight;
-      Matter.Body.setPosition(walls[0], { x: width / 2, y: height + WALL_THICKNESS / 2 });
-      Matter.Body.setPosition(walls[1], { x: width / 2, y: -WALL_THICKNESS / 2 });
-      Matter.Body.setPosition(walls[2], { x: -WALL_THICKNESS / 2, y: height / 2 });
-      Matter.Body.setPosition(walls[3], { x: width + WALL_THICKNESS / 2, y: height / 2 });
-      if (obstacles.length === 0) return;
-      const containerRect = container.getBoundingClientRect();
-      for (const obstacle of obstacles) {
-        const rect = obstacle.element.getBoundingClientRect();
-        const nextWidth = Math.max(1, rect.width + CHROME_OBSTACLE_PADDING * 2);
-        const nextHeight = Math.max(1, rect.height + CHROME_OBSTACLE_PADDING * 2);
-        Matter.Body.scale(obstacle.body, nextWidth / obstacle.width, nextHeight / obstacle.height);
-        obstacle.width = nextWidth;
-        obstacle.height = nextHeight;
-        Matter.Body.setPosition(obstacle.body, {
-          x: rect.left - containerRect.left + rect.width / 2,
-          y: rect.top - containerRect.top + rect.height / 2,
-        });
-      }
+      driver.post({
+        type: "updateBounds",
+        bounds: { width: container.clientWidth, height: container.clientHeight },
+      });
+      if (chrome.length > 0) driver.post({ type: "updateObstacles", obstacles: readObstacles() });
     };
 
     const resizeObserver =
       typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(updateBounds);
     resizeObserver?.observe(container);
-    for (const obstacle of obstacles) resizeObserver?.observe(obstacle.element);
-    updateBounds();
+    for (const element of chrome) resizeObserver?.observe(element);
 
-    // THE LOOP (GT-D15.2/3). Three jobs, deliberately separated: advance the
-    // simulation at a FIXED rate, draw at the display's rate by interpolating
-    // between the last two solved states, and write to the DOM only what
-    // actually moved.
-    //
-    // The old loop did all three at once — one `Engine.update` per rAF with the
-    // frame's own delta — which tied the cost of the physics to the refresh rate
-    // of the monitor it happened to be on. A 120Hz display paid four times what
-    // a 30Hz one did for a swarm that looks identical, and every frame rewrote
-    // nine bubbles' width, height and transform whether or not anything had
-    // moved. What changed is the schedule and the writes; the forces, the
-    // scaling rule and the geometry are untouched, which is why the swarm still
-    // drifts and settles exactly as it did.
+    // THE LOOP (GT-D15.2/3), now with one job fewer. It draws at the display's
+    // rate by interpolating between the last two states the physics published,
+    // and writes to the DOM only what actually moved. It no longer SOLVES
+    // anything — that happens on the other thread, at its own fixed rate, and
+    // this loop's cost is the same whether the engine is stepping at 15Hz or
+    // 120.
     let frame = 0;
-    let previousTime = performance.now();
-    let accumulator = 0;
     const render = (time: number): void => {
-      const currentParameters = parametersRef.current;
-      const stepMs = 1000 / currentParameters.physicsHz;
-      // Real elapsed time, clamped. The clamp is a guard against stalls, not a
-      // smoothing pass: within a normal frame the full delta goes in.
-      accumulator += Math.min(MAX_FRAME_MS, Math.max(0, time - previousTime));
-      previousTime = time;
+      const stepMs = 1000 / Math.max(PHYSICS_HZ_FLOOR, parametersRef.current.physicsHz);
+      const arrivedAt = frameAtRef.current;
+      // Age of the newest frame, as a fraction of a step. It runs 0 → 1 across
+      // the interval before the next one is due, which is the same ramp the
+      // accumulator used to provide — and it holds at 1 rather than
+      // extrapolating if the next frame is late.
+      const alpha = arrivedAt === null ? 1 : Math.min(1, Math.max(0, (time - arrivedAt) / stepMs));
 
-      let steps = 0;
-      while (accumulator >= stepMs && steps < MAX_STEPS_PER_FRAME) {
-        for (const wrapper of bodiesRef.current.values()) {
-          const { body } = wrapper;
-          // Snapshot BEFORE solving: this is the "from" end of the blend the
-          // renderer draws with, and it has to be the state this step starts
-          // in rather than the one two steps ago.
-          wrapper.previousX = body.position.x;
-          wrapper.previousY = body.position.y;
-          if (!wrapper.dragConstraint) {
-            Matter.Body.applyForce(body, body.position, {
-              x: (width / 2 - body.position.x) * currentParameters.gravityPull,
-              y: (height / 2 - body.position.y) * currentParameters.gravityPull,
-            });
-          }
-          if (Math.abs(wrapper.targetRadius - wrapper.currentRadius) > 0.5) {
-            const scale =
-              (wrapper.targetRadius + PHYSICAL_GAP) / (wrapper.currentRadius + PHYSICAL_GAP);
-            Matter.Body.scale(body, scale, scale);
-            wrapper.currentRadius = wrapper.targetRadius;
-          }
-        }
-        // Forces are per-step by Matter's own contract — it clears them at the
-        // end of every update — so applying them inside this loop rather than
-        // once per frame is what keeps the drift the same strength at any Hz.
-        Matter.Engine.update(engine, stepMs);
-        accumulator -= stepMs;
-        steps += 1;
-      }
-      // Behind after the step cap: drop the debt. Banking it guarantees the
-      // next frame is late too.
-      if (steps === MAX_STEPS_PER_FRAME && accumulator > stepMs) accumulator = 0;
-
-      const alpha = Math.min(1, accumulator / stepMs);
-      for (const [id, wrapper] of bodiesRef.current) {
+      for (const [id, state] of statesRef.current) {
         const element = elementRefs.current.get(id);
         const bubble = bubbleRefs.current.get(id);
         if (!element || !bubble) continue;
-        const radius = wrapper.currentRadius;
-        const { body } = wrapper;
-        const x = wrapper.previousX + (body.position.x - wrapper.previousX) * alpha;
-        const y = wrapper.previousY + (body.position.y - wrapper.previousY) * alpha;
+        const radius = state.radius;
+        const x = state.previousX + (state.x - state.previousX) * alpha;
+        const y = state.previousY + (state.y - state.previousY) * alpha;
 
         const first = !spawnedIdsRef.current.has(id);
         // Radius changes are rare (a status change) and cost a layout, so they
         // are gated on their own — the 0.5px rule the scaling already uses.
-        if (first || Math.abs(radius - wrapper.writtenRadius) > 0.5) {
+        if (first || Math.abs(radius - state.writtenRadius) > 0.5) {
           element.style.width = `${radius * 2}px`;
           element.style.height = `${radius * 2}px`;
-          wrapper.writtenRadius = radius;
+          state.writtenRadius = radius;
         }
         if (
           first ||
-          Math.abs(x - wrapper.writtenX) > WRITE_EPSILON_PX ||
-          Math.abs(y - wrapper.writtenY) > WRITE_EPSILON_PX
+          Math.abs(x - state.writtenX) > WRITE_EPSILON_PX ||
+          Math.abs(y - state.writtenY) > WRITE_EPSILON_PX
         ) {
           element.style.transform = `translate3d(${x - radius}px, ${y - radius}px, 0)`;
-          wrapper.writtenX = x;
-          wrapper.writtenY = y;
+          state.writtenX = x;
+          state.writtenY = y;
         }
         if (first) {
           spawnedIdsRef.current.add(id);
@@ -456,82 +402,35 @@ export function AgentSwarm({
     return () => {
       cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
-      bodiesRef.current.clear();
-      Matter.Engine.clear(engine);
-      Matter.Composite.clear(engine.world, false, true);
-      worldRef.current = undefined;
+      statesRef.current.clear();
+      dragsRef.current.clear();
+      // Both halves, in order: the host tears its engine down and stops its
+      // timer, then the thread itself goes. Either alone would leave something
+      // running past the close PF6 says must run nothing.
+      driver.post({ type: "dispose" });
+      driver.dispose();
+      driverRef.current = undefined;
+      frameAtRef.current = null;
+      tableRef.current = { generation: -1, ids: [] };
     };
   }, []);
 
   useEffect(() => {
-    const world = worldRef.current;
-    const container = containerRef.current;
-    if (!world || !container) return;
-    const width = Math.max(container.clientWidth, 320);
-    const height = Math.max(container.clientHeight, 180);
-    const ids = new Set(agents.map((agent) => agent.id));
-    for (const [id, wrapper] of bodiesRef.current) {
-      if (ids.has(id)) continue;
-      if (wrapper.dragConstraint)
-        Matter.Composite.remove(world.engine.world, wrapper.dragConstraint);
-      Matter.Composite.remove(world.engine.world, wrapper.body);
-      bodiesRef.current.delete(id);
-      spawnedIdsRef.current.delete(id);
-    }
-    for (const agent of agents) {
-      const targetRadius = radiusForStatus(swarm, swarmAppearance(swarmVisualState(agent)));
-      const existing = bodiesRef.current.get(agent.id);
-      if (existing) {
-        existing.targetRadius = targetRadius;
-        continue;
-      }
-      const spawnPosition = agent.spawnHint
-        ? clampSpawnPosition(width, height, targetRadius, agent.spawnHint)
-        : findSpawnPosition(width, height, targetRadius, bodiesRef.current.values());
-      const body = Matter.Bodies.circle(
-        spawnPosition.x,
-        spawnPosition.y,
-        targetRadius + PHYSICAL_GAP,
-        {
-          restitution: swarm.restitution,
-          frictionAir: swarm.frictionAir,
-          friction: 0.1,
-        },
-      );
-      bodiesRef.current.set(agent.id, {
-        body,
-        currentRadius: targetRadius,
-        targetRadius,
-        pointerStartX: 0,
-        pointerStartY: 0,
-        dragged: false,
-        // A new body has no history, so its first blend must be a no-op: from
-        // where it is, to where it is. Seeding these with the spawn position is
-        // what stops a bubble's first frame from being a streak out of (0, 0).
-        previousX: spawnPosition.x,
-        previousY: spawnPosition.y,
-        // Deliberately NaN rather than the spawn position: the damage gate's
-        // first comparison must be guaranteed to fail so the opening write
-        // happens, and every comparison against NaN is false.
-        writtenX: Number.NaN,
-        writtenY: Number.NaN,
-        writtenRadius: Number.NaN,
-      });
-      Matter.Composite.add(world.engine.world, body);
-    }
+    driverRef.current?.post({ type: "updateAgents", agents: agentSpecs(agents, swarm) });
   }, [agents, swarm]);
 
-  const moveBody = (event: ReactPointerEvent<HTMLButtonElement>, id: string): void => {
-    const wrapper = bodiesRef.current.get(id);
+  const pointInContainer = (event: ReactPointerEvent): { x: number; y: number } | undefined => {
     const bounds = containerRef.current?.getBoundingClientRect();
-    if (!wrapper || !bounds || wrapper.pointerId !== event.pointerId || !wrapper.dragConstraint)
-      return;
-    const x = event.clientX - bounds.left;
-    const y = event.clientY - bounds.top;
-    if (Math.hypot(x - wrapper.pointerStartX, y - wrapper.pointerStartY) >= 5)
-      wrapper.dragged = true;
-    wrapper.dragConstraint.pointA.x = x;
-    wrapper.dragConstraint.pointA.y = y;
+    if (!bounds) return undefined;
+    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+  };
+
+  const moveBody = (event: ReactPointerEvent<HTMLButtonElement>, id: string): void => {
+    const drag = dragsRef.current.get(id);
+    const point = pointInContainer(event);
+    if (!drag || !point || drag.pointerId !== event.pointerId) return;
+    if (Math.hypot(point.x - drag.startX, point.y - drag.startY) >= 5) drag.dragged = true;
+    driverRef.current?.post({ type: "dragMove", id, point });
   };
 
   const statusStyle = {
@@ -650,68 +549,45 @@ export function AgentSwarm({
                   : agent.detail
               }
               onPointerDown={(event) => {
-                const wrapper = bodiesRef.current.get(agent.id);
-                const world = worldRef.current;
-                const bounds = containerRef.current?.getBoundingClientRect();
-                if (!wrapper || !world || !bounds) return;
-                const x = event.clientX - bounds.left;
-                const y = event.clientY - bounds.top;
-                if (wrapper.dragConstraint) {
-                  Matter.Composite.remove(world.engine.world, wrapper.dragConstraint);
-                }
-                wrapper.dragConstraint = Matter.Constraint.create({
-                  pointA: { x, y },
-                  bodyB: wrapper.body,
-                  pointB: { x: x - wrapper.body.position.x, y: y - wrapper.body.position.y },
-                  stiffness: DRAG_STIFFNESS,
-                  render: { visible: false },
+                const point = pointInContainer(event);
+                if (!point) return;
+                dragsRef.current.set(agent.id, {
+                  pointerId: event.pointerId,
+                  startX: point.x,
+                  startY: point.y,
+                  dragged: false,
                 });
-                Matter.Composite.add(world.engine.world, wrapper.dragConstraint);
+                driverRef.current?.post({ type: "dragStart", id: agent.id, point });
                 event.currentTarget.setPointerCapture(event.pointerId);
-                wrapper.pointerId = event.pointerId;
-                wrapper.pointerStartX = x;
-                wrapper.pointerStartY = y;
-                wrapper.dragged = false;
                 event.preventDefault();
               }}
               onPointerMove={(event) => moveBody(event, agent.id)}
               onPointerUp={(event) => {
-                const wrapper = bodiesRef.current.get(agent.id);
-                const world = worldRef.current;
-                if (!wrapper) return;
+                const drag = dragsRef.current.get(agent.id);
+                if (!drag) return;
                 moveBody(event, agent.id);
-                if (world && wrapper.dragConstraint) {
-                  Matter.Composite.remove(world.engine.world, wrapper.dragConstraint);
-                }
-                delete wrapper.dragConstraint;
+                driverRef.current?.post({ type: "dragEnd", id: agent.id });
                 if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                   event.currentTarget.releasePointerCapture(event.pointerId);
                 }
-                delete wrapper.pointerId;
+                // The pointer is gone but `dragged` is not: the click that
+                // follows still has to know this was a drag.
+                delete drag.pointerId;
               }}
               onPointerCancel={() => {
-                const wrapper = bodiesRef.current.get(agent.id);
-                const world = worldRef.current;
-                if (!wrapper) return;
-                if (world && wrapper.dragConstraint) {
-                  Matter.Composite.remove(world.engine.world, wrapper.dragConstraint);
-                }
-                delete wrapper.dragConstraint;
-                delete wrapper.pointerId;
+                const drag = dragsRef.current.get(agent.id);
+                if (!drag) return;
+                driverRef.current?.post({ type: "dragEnd", id: agent.id });
+                delete drag.pointerId;
               }}
               onClick={() => {
-                const wrapper = bodiesRef.current.get(agent.id);
-                if (wrapper?.dragged) {
-                  wrapper.dragged = false;
+                const drag = dragsRef.current.get(agent.id);
+                if (drag?.dragged) {
+                  drag.dragged = false;
                   return;
                 }
                 actions.select(agent);
-                if (wrapper) {
-                  Matter.Body.applyForce(wrapper.body, wrapper.body.position, {
-                    x: (Math.random() - 0.5) * 0.003,
-                    y: (Math.random() - 0.5) * 0.003,
-                  });
-                }
+                driverRef.current?.post({ type: "nudge", id: agent.id });
               }}
             >
               {contextWindow ? (
@@ -770,4 +646,20 @@ export function AgentSwarm({
       })}
     </section>
   );
+}
+
+/** The agents as the physics needs them: an id, the size to grow toward, and
+ * where a deliberate creation gesture happened. */
+function agentSpecs(
+  agents: readonly MonitorAgent[],
+  swarm: SwarmParameters,
+): readonly SwarmAgentSpec[] {
+  return agents.map((agent) => {
+    const spec: SwarmAgentSpec = {
+      id: agent.id,
+      radius: radiusForStatus(swarm, swarmAppearance(swarmVisualState(agent))),
+    };
+    if (agent.spawnHint) spec.spawnHint = agent.spawnHint;
+    return spec;
+  });
 }

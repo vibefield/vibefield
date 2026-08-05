@@ -72,6 +72,17 @@ export interface GodviewMonitorFacts {
    * these agents are invented. Absent from this line would mean absent from the
    * screen — which is the failure it exists to catch. */
   mockLabel: string;
+  /**
+   * Where the swarm's physics is actually running (GT-3c, GT-D16): `worker` is
+   * the slice's whole point, `inline` is the honest fallback for a renderer that
+   * could not start one, `none` is any view that has no physics at all.
+   *
+   * It is on the marker because a fallback is INVISIBLE otherwise — a swarm
+   * simulated on the main thread looks exactly like a swarm simulated off it,
+   * and the difference is the entire slice. The smoke asserts `worker` on the
+   * swarm view, which turns a silent regression into a failed row.
+   */
+  swarmPhysics: string;
 }
 
 export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {

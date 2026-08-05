@@ -1,4 +1,5 @@
 import type { MonitorParameterGroup } from "../../monitor/parameters";
+import { PHYSICS_HZ_FLOOR } from "./swarm-physics";
 
 export interface SwarmParameters {
   gravityPull: number;
@@ -50,16 +51,14 @@ export const SWARM_PARAMETER_GROUPS: readonly MonitorParameterGroup[] = [
         defaultValue: 0.2,
       },
       {
-        // The floor is a STABILITY limit, not a taste one. Matter 0.19 scales
-        // air friction by the step against a 60Hz base
-        // (`1 - frictionAir * (deltaTime / _baseDelta)`, Body.js:744), which
-        // turns NEGATIVE — friction that accelerates — once the step passes
-        // `_baseDelta / frictionAir`. At this group's maximum air friction of
-        // 0.2 that is 83ms, or about 12Hz, so 15 is the lowest rate that stays
-        // stable across the rest of the panel's own range.
+        // The floor is a STABILITY limit, not a taste one, and it is stated
+        // once — beside the physics that depends on it (`swarm-physics.ts`),
+        // which clamps to the same constant. GT-3c put the engine behind a
+        // message, and a floor only the slider enforced would be a floor the
+        // next caller walks straight past.
         key: "physicsHz",
         label: "Physics rate (Hz)",
-        min: 15,
+        min: PHYSICS_HZ_FLOOR,
         max: 120,
         step: 5,
         defaultValue: 30,

@@ -14,6 +14,14 @@
  *
  * The real matter engine runs here (GT-3m finding 1: it needs no stub under
  * happy-dom, being pure physics), so what is asserted is the real schedule.
+ *
+ * GT-3c moved that engine into a worker, and this fixture keeps asserting the
+ * same three things about it. The physics runs INLINE here — the same host, the
+ * same accumulator, pumped from the same driven rAF — because happy-dom has no
+ * `Worker` to put it in and because a schedule is a schedule wherever it runs.
+ * Whether the worker is the one actually chosen in a renderer is a different
+ * claim, and it belongs to the smoke's monitor marker rather than to a fixture
+ * that could only ever answer it by pretending.
  */
 
 import Matter from "matter-js";
@@ -24,8 +32,11 @@ import { readMonitorPalette } from "../src/godview/monitor/monitor-palette";
 import type { MonitorAgent } from "../src/godview/monitor/types";
 import { AgentSwarm } from "../src/godview/views/swarm/AgentSwarm";
 import { DEFAULT_SWARM_PARAMETERS } from "../src/godview/views/swarm/swarm-parameters";
+import { useInlineSwarmPhysics } from "./swarm-physics-inline";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+useInlineSwarmPhysics();
 
 let root: Root | null = null;
 let container: HTMLElement | null = null;

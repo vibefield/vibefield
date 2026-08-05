@@ -9,6 +9,7 @@ import type { MonitorParameters } from "./monitor/parameters";
 import { MONITOR_VIEWS } from "./monitor/registry";
 import type { AgentMonitorView } from "./monitor/types";
 import { useMonitorAgents } from "./monitor/useMonitorAgents";
+import { currentSwarmPhysicsMode } from "./views/swarm/swarm-physics-driver";
 
 export const MOCK_LABEL = "preview — mock agents";
 const ACKNOWLEDGEMENT_MS = 2_600;
@@ -64,11 +65,15 @@ export function GodviewMonitor({
   }, [acknowledgement, clearAcknowledgement]);
 
   useEffect(() => {
+    // Read rather than passed down: the swarm chooses its physics home in its
+    // own mount effect, and React runs a child's effects BEFORE its parent's —
+    // so by the time this line is written the choice has already been made.
     emitGodviewMonitorMarker({
       viewId: view.id,
       agents: agents.length,
       agentBacked: agents.filter((agent) => agent.agent !== undefined).length,
       mockLabel: MOCK_LABEL,
+      swarmPhysics: currentSwarmPhysicsMode(),
     });
   }, [agents, view.id]);
 

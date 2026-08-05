@@ -23,8 +23,14 @@ import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor, MOCK_LABEL } from "../src/godview/GodviewMonitor";
 import { monitorParameterDefaults } from "../src/godview/monitor/parameters";
 import { DEFAULT_MONITOR_VIEW_ID, monitorViewFor } from "../src/godview/monitor/registry";
+import { useInlineSwarmPhysics } from "./swarm-physics-inline";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// GT-3c: happy-dom has no `Worker`, so the swarm is told to simulate in-thread.
+// It is the same engine either way, which is what keeps the disposal assertion
+// below meaningful — `Matter.Engine.clear` is still a real call on a real world.
+useInlineSwarmPhysics();
 
 /** DESIGN.md §2.6 and §2.5, stamped onto the document — because the palette is
  * supposed to READ them, and a test with no tokens would prove only that the
