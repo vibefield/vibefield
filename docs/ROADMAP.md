@@ -47,7 +47,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
-| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + **3v glass** + **3m mocked monitor** landed (spec v0.3, GT-D10…D13) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach; AR replaces the monitor's one mock module |
+| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v glass + 3m mocked monitor + 3f shaders + **3p perf (cold 443ms → warm 36ms)** landed (spec v0.3, GT-D10…D15) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach; AR replaces the monitor's one mock module |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
@@ -76,7 +76,12 @@ first time; the floor's config document provably untouched by a viewer's choice)
 own `6646f1b` (chopsticks-UI match, per-mode themes) landed between slices and everything
 stacked cleanly. Next slice **GT-4**: `with_terminal_mesh` behind config +
 `terminal.v1.hosts` + mirror-write v1 — the desktop deck's ⌘⇧O remote panes are the test
-row, and NF-remote rides it.
+row, and NF-remote rides it. GT-3p made the deck fast the honest way: James's own groundwork
+(the ICE frame gate, the rAF×LoAF frame counter, the ⌘⎋ one-door) plus the warm transport —
+bridge, worker, and WebGPU device ready at app-idle, sessions still born only on ⌘G — took a
+cold open from ~443ms to a ~36ms warm one, with the phase breakdown riding the smoke verdict
+and the surface lab wearing a perf readout. The one-runtime law (exactly one ports-wait
+armed, ever) closed the slice's own hardest bug.
 
 **AH.** The serving seam and global catalog are landed. `9f80f0c` replaces C6's
 `{name,target}` writer behind its one-window adapter, persists v2 source-local intent, assigns
@@ -178,6 +183,24 @@ remain gates, so this work is not recorded in LANDED yet.
   `CANVAS_READY` wait (canvas/plugin-registry mount — the overlay is closed there). Real
   fix named: the reload rows should wait on something stronger than a 60s console deadline
   (GT-3v residual, measured at GT-3f, 2026-08-04).
+- **Profile the cold-open legs** — the ~443ms cold total is stable but its attribution moves
+  with load (ticket-mint 301ms dominant in one run; the connect leg 241ms in another); no
+  single culprit claimed. The warm path sidesteps it entirely, so this is curiosity-priority
+  (GT-3p, 2026-08-05).
+- **G12 ghosttea petition candidate, unfiled** — a host-observable FIRST-FRAME signal
+  (`renderer-status` reports a backend, not a presented frame; GT-3p's `frame` phase is a
+  double-rAF proxy that read 36s under load 59 on a healthy open) + a real `prepare()`
+  (the device warm currently rides `startPerformanceMeasurement()` → `ensureRenderer()`
+  as a side door) (GT-3p, 2026-08-05).
+- **The shadow σ-proposal, unmeasured** — the stood-down successor's counter to GT-3p's
+  stopped item: CSS `drop-shadow()`'s third length is 2σ while `blur()` takes σ, so the
+  original A/B may have compared at double the radius; recipe = halve the blur + pre-multiply
+  shadow alpha by the live fill-opacity var so it tracks the lab knob. Patch preserved in the
+  session scratchpad; landing requires re-running the measured A/B and beating the 46–80/255
+  channel diff to ~0 (GT-D15.4 gate) (GT-3p close-out, 2026-08-05).
+- **`native_logging::fieldd_link_death` flakes under load** — "field-native did not bind
+  mgmt" at load 51, passes alone; unrelated to GT-3p (zero non-TS changes in that commit);
+  NF-owned (2026-08-05).
 
 ## Eyeballs owed (James's standing visual passes)
 
@@ -202,6 +225,10 @@ remain gates, so this work is not recorded in LANDED yet.
 - **The shader pass (GT-3f)**: whether CRT, VHS and Sparks actually look right over the
   glass · the four chips + No effect, animate only where it means something · licenses
   visible · the withheld-upstream list rendering with its reason (GT-3f).
+- **The perf pass (GT-3p)**: zero visual delta across glass/swarm/glow/breathe · the warm
+  ⌘G (should feel instant) · the DRAGGED bubble at the default `physicsHz: 30` — interpolation
+  adds up to one physics step (~33ms) atop the spring; `physicsHz: 120` in the lab restores
+  the old cadence for an A/B — your feel decides the default (GT-3p, unresolved by design).
 
 ## Upstream / sibling pins (the EL8 watch)
 

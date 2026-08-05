@@ -701,3 +701,39 @@ attempt 3 at load ~14; the named real fix (wait on something stronger than a 60s
 deadline) is a standing debt. Verify exit 0 (field-app 199). Shaders are WebGPU-only —
 stated in the copy; a backend-aware live UNAVAILABLE is a named residual. Full record:
 `specs/godview-terminal.md` (GT-3f findings) + `petitions/G11-…md` §Resolution.
+
+## Godview performance groundwork — James's hands (recorded at GT-3p close-out)
+
+**LANDED (2026-08-04, James):** `a8fbc0d` — the ICE canvas STOPS under the open godview
+(`useFrameFreeze`, ice 0.3.0's frame gate replacing the stage hold: no step, no systems, no
+rAF; thaw resumes on clamped dt) · `846ec2c` — the renderer counts its own frames
+(`perf/frame-stats.ts`: rAF cadence crossed with LoAF, overlay + test; the instrumentation
+substrate GT-3p then consumed) · `855cd65` — one door: ⌘⎋ takes the godview toggle, Escape
+goes back to the terminal. No ledger entries were written at landing; recorded here.
+
+## GT-3p — the deck gets fast the honest way
+
+**GT-3p LANDED (2026-08-05, `2e4c1e5` — builder + orchestrator re-verification).** GT-D14
+(the transport warms at app-idle; sessions stay born on ⌘G) + GT-D15 (the no-regression perf
+laws), measured: **cold open 443–524ms → warm open 36–45ms** across loads 8.7–59.4, replicated
+by the orchestrator first-attempt at load 32 (443.9 → 36ms; `keystrokeEchoMs 2`; steady
+`frameMs p50 8.3 / p95 8.8`). The slice's hardest find was its own bug, THE ONE-RUNTIME LAW:
+main posts the MessagePorts once per attach, so two waiting runtimes split one control channel
+and the deck sits dead at `starting` — closed both ways (await the in-flight warm;
+`takeTransportForDeck()` owns the singleton), a fixture on each half. Swarm physics on a
+fixed-timestep accumulator with a lab-tunable `physicsHz` (floor 15Hz — a matter-0.19
+STABILITY limit: past `_baseDelta/frictionAir` the scaled air friction goes negative) and
+interpolated render; damage-gated DOM writes; mock-tick memo; the lab perf readout consumes
+James's frame-stats substrate and surfaces the live renderer backend (GT-3f residual paid).
+The prescribed shadow-animation rebuild was STOPPED with numbers (46–80/255 peak channel
+difference, geometric residue) — the two keyframes stay as measured exceptions pinned by a
+source-scan audit test; the glow never violated the law (static blur, opacity/transform
+keyframes — the brief's diagnosis corrected). Phase attribution varies with load (ticket-mint
+vs connect leg dominant in different runs) — "profile the cold legs" stays open. G12 petition
+material: upstream first-frame signal + a real `prepare()` (the device warm rides a
+performance-measurement side door today). Landing drama, recorded honestly: the builder's
+mid-run "failed" notification was transient — it reconciled with James's three same-day
+commits and landed; a mistakenly-dispatched successor was stood down, its one unmeasured
+counter-proposal (a σ-halving correction to the shadow A/B) preserved as a patch for a
+measured retry. Verify + smoke exit 0, both hands. Full record: `specs/godview-terminal.md`
+(GT-3p row + findings).
