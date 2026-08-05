@@ -53,7 +53,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
 | GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v glass + 3m mocked monitor + 3f shaders + 3p perf (cold 443ms → warm 36ms) + **3c physics-in-worker** landed (spec v0.3, GT-D10…D16) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach; James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module |
-| UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · **UA-6 sync intent `a4bed08`+`1a2a846`** — six slices in one day, two by worktree agents; §8 errata recorded (peer-declined mapping falsified); bonus: a pre-existing doc-registry write-back race found and fixed; owed to the next `pnpm dev`: live dev-root migration · tray user label · Account page + sync-intent chips eyeball | `specs/users-and-accounts.md` | UA-3w Setup Assistant → **UA-4 self/guest door (gates ANY shared-tailnet login; S1 live probe + two-account witness)** → UA-5 second user |
+| UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** — seven slices across two days; §8 errata + the C3 serve-reconcile-skip debt recorded; bonus finds: doc-registry write-back race fixed (UA-6), no-upsert serve semantics traced (UA-4); owed to the next `pnpm dev`: live dev-root migration · tray user label · Account page + sync-intent chips eyeball | `specs/users-and-accounts.md` | UA-3w Setup Assistant (Opus agent in flight, worktree) → UA-5 second user; **UA-4 exit stays open on the physical pair: S1 live probe + two-account witness — gates ANY shared-tailnet login** |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
@@ -128,8 +128,15 @@ fixed. **UA-1 landed the same day (`ca1ce49`)**: the tree now lives at `users/<f
 behind the §3.3 lock — eight real processes raced a mint and exactly one ULID survived;
 the migration's move list derives from LAYOUT itself; field-native changed zero lines. The
 one owed witness: the first `pnpm dev` stops the running pair and migrates the dev root
-live. UA-4 still gates any shared-tailnet login and carries the two named physical
-witnesses (second-account guest refusal; the S1 live probe).
+live. The ladder then ran on: UA-2 threaded identity, UA-3 gave the link a face, UA-6
+taught a doc to stay home, and **UA-4 landed the door (`105e6bd`)** — stored-login
+comparison, tailnet-guest behind a lint-pinned guestOk choke, and the serve-allow belt
+proven enforced sidecar-side by a dispatched trace, then rebuilt remove-then-add around
+the trace's no-upsert find (the serve reconcile-skip is recorded C3 debt: stale gate,
+adopted state; latent only while mesh is env-gated off). UA-4's exit stays open on the
+two physical witnesses (second-account guest refusal; the S1 live probe) — those still
+gate advertising any shared-tailnet login. UA-3w's Setup Assistant is in flight on an
+agent worktree.
 
 ## Next up — the options on the table (James's call)
 
@@ -137,9 +144,10 @@ witnesses (second-account guest refusal; the S1 live probe).
   plugin through WP8, then run the both-theme/native-picker plus desktop-B preview/refresh,
   Truffle symlink/allow, and cross-origin physical witnesses. AH-5 adds the phone list; the
   AH-1 physical two-client proof can run alongside this work.
-- **UA-3** — the link lifecycle: `link.json`, the Account settings page (profile,
-  link/unlink, sync posture, residency), unlink retirement, S1 login capture. The first
-  UA slice with a face.
+- **UA-3w integration → UA-5** — land the agent-built Setup Assistant (wizard panes,
+  boot phase, migration variant), then the second user: `users:create/switch` IPC,
+  resident pairs, switch-by-reload, the tray switcher. UA-4's physical pair (S1 live
+  probe + the two-account guest refusal) can run any evening with a second device.
 - **AR** — the agent tracks; the reason everything else exists.
 - **GT-4 → GT-5** — the remote floor, then the phone attaches.
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).

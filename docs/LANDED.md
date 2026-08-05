@@ -915,3 +915,33 @@ the dated correction; cross-device decline visibility is a named record-kind fol
 snapshot contract, the Account page validated correctly, and only its test fake lagged —
 one line, caught by the gate on the first integrated run. Eyeball additions: the doc-tile
 "local" chip + mesh-row toggle in both themes, and the posture cards now live.
+
+## UA-4 — the door knows its own
+
+**UA-4 CODE LANDED (2026-08-05, `105e6bd`).** The self/guest door: the tailnet hello
+branch compares the WhoIs-verified peer login against link.json's stored login
+(UA-D5/D13) — match ⇒ self (TAILNET_SCOPES unchanged; the principal gains `self:true`
+and the transport `tailscaleId`), mismatch ⇒ `tailnet-guest` with an EMPTY grant behind
+a choke that refuses every method without `guestOk` BEFORE every dispatch path
+(shell-provider built-ins, system.unsubscribe, and the dynamic router included — the
+scope check alone passes scope:null methods). v1 guestOk = `system.hello` only, pinned
+by a registry lint. The comparison, not the clientKind, decides: peer-fieldd is not
+exempt. No stored login = the pre-capture status quo (`self` stays ABSENT, never
+false; activation is capture-gated per UA-D13). **The belt is real:** a dispatched
+trace proved the Go sidecar enforces `allow` pre-header-injection, fails closed on
+identityless peers, and covers the WebSocket hijack — and its two finds shaped the
+build: the login is glob-ESCAPED (a literal in a `path.Match` slot), and re-gating a
+live serve is REMOVE-THEN-ADD (the sidecar has no upsert — `PROXY_EXISTS` — and the
+serve reconcile skips live ids). **Recorded C3 debt, deliberately not fixed here:**
+mesh-client's reconcile-skip adopts a changed spec into reported state while the stale
+gate keeps running — and a fieldd restart under leave-running native rotates the
+`pathSecret` into the same skip; latent only while mesh is env-gated off; its own
+slice. LinkService warns `fieldd.link.login_changed` when the trust root moves under a
+live link; the migrated-link capture turned out already-built in UA-3 (probe-on-Running
+writes link.json for a linked-but-recordless root). Six wire-level door tests over raw
+ws with real sidecar headers; T1's tailnet-door assertion TIGHTENED to pin the
+now-populated `tailscaleId`; typecheck exhaustiveness caught both principal-map sites
+(audit `actorFor`, `ShellProviderCaller`) — fixed, not cast. **The exit stays open on
+the two physical witnesses (James's hands): the S1 live probe (`cargo test --ignored`
+with `TRUFFLE_TEST_AUTHKEY`) and the two-account guest refusal on a real tailnet —
+that witness gates advertising ANY shared-tailnet login, full stop.**
