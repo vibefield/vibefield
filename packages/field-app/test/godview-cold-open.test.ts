@@ -109,15 +109,6 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
     "utf8",
   );
 
-  /** The two the slice measured and deliberately did not convert. A drop-shadow
-   * is cast by the bubble's own translucent silhouette and painted beneath it;
-   * the prescribed static-layer cross-fade is a box-shadow, which is clipped
-   * under the border box and unscaled by the fill — measured at 46-80/255 peak
-   * channel difference, 26-57 even with the alpha pre-multiplied. Named here so
-   * the exception is a recorded decision rather than an oversight, and so any
-   * NEW filter animation fails this test. */
-  const MEASURED_EXCEPTIONS = ["vf-godview-agent-breathe", "vf-godview-agent-waiting"];
-
   it("finds keyframes to audit at all", () => {
     // Guards the whole check against a moved file or a broken parser: a
     // stylesheet that yields no blocks would pass every assertion below while
@@ -125,27 +116,102 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
     expect(keyframeBlocks(css).length).toBeGreaterThan(8);
   });
 
-  it("animates filter in exactly the two measured exceptions and nowhere else", () => {
+  it("animates filter in NO keyframe, anywhere in the app's stylesheet", () => {
+    // The law with no carve-outs. `filter` may be SET — the shadow layers and
+    // the ignition glow are pre-blurred, and that is the whole technique — but
+    // never interpolated by a keyframe, because a blur that changes is a blur
+    // recomputed on every frame it is alive.
     const offenders = keyframeBlocks(css)
       .filter((block) => /(^|[;{\s])(-webkit-)?(backdrop-)?filter\s*:/.test(block.body))
-      .map((block) => block.name)
-      .sort();
+      .map((block) => block.name);
 
-    expect(offenders).toEqual([...MEASURED_EXCEPTIONS].sort());
+    expect(offenders).toEqual([]);
   });
 
-  it("keeps the ignition loops compositor-only", () => {
-    // These three run on every working bubble forever, and they are the ones
-    // the law is really about: they were already opacity/transform and this
-    // pins them there.
+  /** James's tuned drop-shadows, as they read before GT-3p rebuilt them as
+   * layers. They are the REFERENCE, not history: a rebuild is only allowed to
+   * change the mechanism, so every number below must still be derivable from
+   * the stylesheet. Offset survives as a `translateY`, radius as a blur at HALF
+   * its value (`drop-shadow()`'s third length is 2σ, `blur()` takes σ), and
+   * alpha as a factor pre-multiplied by the bubble's fill opacity. */
+  const TUNED = [
+    { layer: "working-shadow-rest", theme: "light", dy: 8, radius: 10, alpha: 0.18 },
+    { layer: "working-shadow-peak", theme: "light", dy: 12, radius: 17, alpha: 0.34 },
+    { layer: "waiting-shadow-rest", theme: "light", dy: 9, radius: 13, alpha: 0.24 },
+    { layer: "waiting-shadow-peak", theme: "light", dy: 17, radius: 24, alpha: 0.4 },
+    { layer: "working-shadow-rest", theme: "dark", dy: 8, radius: 12, alpha: 0.12 },
+    { layer: "working-shadow-peak", theme: "dark", dy: 12, radius: 20, alpha: 0.3 },
+    { layer: "waiting-shadow-rest", theme: "dark", dy: 9, radius: 13, alpha: 0.16 },
+    { layer: "waiting-shadow-peak", theme: "dark", dy: 17, radius: 24, alpha: 0.25 },
+  ] as const;
+
+  /** Whitespace-insensitive, including inside parentheses: these declarations
+   * are long enough that the formatter wraps some of them and not others, and
+   * an assertion about NUMBERS should not also be an assertion about where
+   * biome chose to break a line. */
+  function flatten(source: string): string {
+    return source.replace(/\s+/g, " ").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+  }
+
+  it("carries James's shadow numbers through the rebuild, both themes", () => {
+    const themeBlock = (theme: string): string => {
+      const start = css.indexOf(`.vf-godview.theme-${theme},`);
+      expect(start, `the ${theme} theme block should exist`).toBeGreaterThan(-1);
+      return flatten(css.slice(start, css.indexOf("\n}", start)));
+    };
+
+    for (const { layer, theme, radius, alpha } of TUNED) {
+      const block = themeBlock(theme);
+      // The blur is the radius halved — the one arithmetic step in the port,
+      // and the one a careless edit would silently get wrong.
+      expect(block, `${theme}/${layer} blur`).toContain(`--${layer}-blur: ${radius / 2}px;`);
+      // The alpha rides a `calc` against the live fill-opacity knob rather than
+      // a frozen number, which is how the shadow keeps tracking the lab's
+      // bubble-fill slider exactly as a real drop-shadow did.
+      expect(block, `${theme}/${layer} alpha`).toContain(
+        `--${layer}-fill: rgb(${theme === "light" ? "0 0 0" : "255 255 255"} / ` +
+          `calc(${alpha} * var(--vf-monitor-bubble-fill-opacity, 72%)));`,
+      );
+    }
+  });
+
+  it("offsets each shadow layer by the drop-shadow's own dy", () => {
+    for (const state of ["working", "waiting"] as const) {
+      for (const [slot, pseudo] of [
+        ["rest", "::before"],
+        ["peak", "::after"],
+      ] as const) {
+        const selector = `.vf-monitor-bubble-positioner.is-${state}${pseudo} {`;
+        // The LAST occurrence: the same selector also ends the grouped rule
+        // that gives all four layers their shared box, and that rule carries no
+        // offset. The standalone rules follow it.
+        const start = css.lastIndexOf(selector);
+        expect(start, `${selector} should exist`).toBeGreaterThan(-1);
+        const rule = css.slice(start, css.indexOf("\n}", start));
+        const expected = TUNED.find(
+          (entry) => entry.layer === `${state}-shadow-${slot}` && entry.theme === "light",
+        );
+        expect(rule, `${state} ${slot} offset`).toContain(`translateY(${expected?.dy}px)`);
+      }
+    }
+  });
+
+  it("keeps the loops that run forever on opacity and transform alone", () => {
+    // The ambient set: three ignition loops on every working bubble, and the
+    // two shadow cross-fades that replaced the breathe and wait drop-shadows.
+    // Named individually so a rename cannot quietly empty this check.
     for (const name of [
       "vf-godview-agent-ignition-core",
       "vf-godview-agent-ignition-particle",
       "vf-godview-agent-ignition-glyph",
+      "vf-godview-agent-shadow-rest",
+      "vf-godview-agent-shadow-peak",
     ]) {
       const block = keyframeBlocks(css).find((entry) => entry.name === name);
       expect(block, `${name} should exist`).toBeTruthy();
-      expect(/(^|[;{\s])filter\s*:/.test(block?.body ?? "")).toBe(false);
+      for (const property of (block?.body ?? "").matchAll(/([a-z-]+)\s*:/g)) {
+        expect(["opacity", "transform"]).toContain(property[1]);
+      }
     }
   });
 });

@@ -1298,10 +1298,22 @@ body {
   --pane-access-bg: rgba(247, 247, 247, 0.8);
   --crt-scanline: rgba(0, 0, 0, 0.08);
   --crt-vignette: rgba(0, 0, 0, 0.15);
-  --working-shadow-rest: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.18));
-  --working-shadow-peak: drop-shadow(0 12px 17px rgba(0, 0, 0, 0.34));
-  --waiting-shadow-rest: drop-shadow(0 9px 13px rgba(0, 0, 0, 0.24));
-  --waiting-shadow-peak: drop-shadow(0 17px 24px rgba(0, 0, 0, 0.4));
+  /* GT-D15.1: the breathe/wait shadows as LAYER components rather than as a
+     `filter` for a keyframe to animate. The numbers are James's, unchanged —
+     restated in the two parts a pre-blurred layer needs. The blur is the
+     drop-shadow's radius HALVED (CSS `drop-shadow()`'s third length is 2σ while
+     `blur()` takes σ), and the alpha is pre-multiplied by the bubble's own fill
+     opacity because the silhouette casting the shadow is itself translucent —
+     which also keeps the shadow tracking the lab's fill-opacity knob live,
+     exactly as a real drop-shadow did. */
+  --working-shadow-rest-blur: 5px;
+  --working-shadow-peak-blur: 8.5px;
+  --waiting-shadow-rest-blur: 6.5px;
+  --waiting-shadow-peak-blur: 12px;
+  --working-shadow-rest-fill: rgb(0 0 0 / calc(0.18 * var(--vf-monitor-bubble-fill-opacity, 72%)));
+  --working-shadow-peak-fill: rgb(0 0 0 / calc(0.34 * var(--vf-monitor-bubble-fill-opacity, 72%)));
+  --waiting-shadow-rest-fill: rgb(0 0 0 / calc(0.24 * var(--vf-monitor-bubble-fill-opacity, 72%)));
+  --waiting-shadow-peak-fill: rgb(0 0 0 / calc(0.4 * var(--vf-monitor-bubble-fill-opacity, 72%)));
   color-scheme: light;
 }
 
@@ -1331,10 +1343,27 @@ body {
   --pane-access-bg: rgba(22, 24, 29, 0.82);
   --crt-scanline: rgba(0, 0, 0, 0.3);
   --crt-vignette: rgba(0, 0, 0, 0.75);
-  --working-shadow-rest: drop-shadow(0 8px 12px rgba(255, 255, 255, 0.12));
-  --working-shadow-peak: drop-shadow(0 12px 20px rgba(255, 255, 255, 0.3));
-  --waiting-shadow-rest: drop-shadow(0 9px 13px rgba(255, 255, 255, 0.16));
-  --waiting-shadow-peak: drop-shadow(0 17px 24px rgba(255, 255, 255, 0.25));
+  /* GT-D15.1, the dark half — same restatement, James's numbers unchanged. */
+  --working-shadow-rest-blur: 6px;
+  --working-shadow-peak-blur: 10px;
+  --waiting-shadow-rest-blur: 6.5px;
+  --waiting-shadow-peak-blur: 12px;
+  --working-shadow-rest-fill: rgb(
+    255 255 255 /
+    calc(0.12 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+  --working-shadow-peak-fill: rgb(
+    255 255 255 /
+    calc(0.3 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+  --waiting-shadow-rest-fill: rgb(
+    255 255 255 /
+    calc(0.16 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+  --waiting-shadow-peak-fill: rgb(
+    255 255 255 /
+    calc(0.25 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
   color-scheme: dark;
 }
 
@@ -1959,6 +1988,68 @@ body {
   z-index: 5;
 }
 
+/* THE BREATHE AND WAIT SHADOWS (GT-D15.1) — the same look, off the filter path.
+   These used to be one `filter: drop-shadow()` animated between a rest and a
+   peak on the bubble itself, which re-runs a gaussian over the bubble's whole
+   silhouette on every frame it is alive. Here the two ends of that animation
+   are two PRE-BLURRED layers that only cross-fade, so nothing re-blurs after
+   the first paint and the loop is opacity alone.
+   A LAYER, not a `box-shadow`: an outer box-shadow is clipped away beneath the
+   border box and is not scaled by the fill, which is why that construction
+   cannot reproduce a drop-shadow cast by a 72%-translucent silhouette. A
+   blurred circle at the same geometry can, and does.
+   They ride the POSITIONER's pseudo-elements rather than new markup: the bubble
+   clips its own children (`overflow: hidden`) and a shadow has to fall outside
+   it. `z-index: -1` keeps both behind the bubble, inside the stacking context
+   the positioner's `will-change` already opens.
+   The offsets sit in these rules rather than in tokens because they are the one
+   part of the four shadows that does not vary by theme; the blur and the tint
+   do, and those are the tokens above.
+   Fidelity is measured, not asserted — see the commit body: peak channel
+   difference 15/255 at the worst point of the worst curve, mean 3.4/255,
+   against a harness whose self-comparison control is 0. */
+.vf-monitor-bubble-positioner.is-working::before,
+.vf-monitor-bubble-positioner.is-working::after,
+.vf-monitor-bubble-positioner.is-waiting::before,
+.vf-monitor-bubble-positioner.is-waiting::after {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+}
+
+.vf-monitor-bubble-positioner.is-working::before {
+  background: var(--working-shadow-rest-fill);
+  filter: blur(var(--working-shadow-rest-blur));
+  transform: translateY(8px);
+  animation: vf-godview-agent-shadow-rest 3s ease-in-out infinite;
+}
+
+.vf-monitor-bubble-positioner.is-working::after {
+  background: var(--working-shadow-peak-fill);
+  filter: blur(var(--working-shadow-peak-blur));
+  opacity: 0;
+  transform: translateY(12px);
+  animation: vf-godview-agent-shadow-peak 3s ease-in-out infinite;
+}
+
+.vf-monitor-bubble-positioner.is-waiting::before {
+  background: var(--waiting-shadow-rest-fill);
+  filter: blur(var(--waiting-shadow-rest-blur));
+  transform: translateY(9px);
+  animation: vf-godview-agent-shadow-rest 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.vf-monitor-bubble-positioner.is-waiting::after {
+  background: var(--waiting-shadow-peak-fill);
+  filter: blur(var(--waiting-shadow-peak-blur));
+  opacity: 0;
+  transform: translateY(17px);
+  animation: vf-godview-agent-shadow-peak 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
 .vf-monitor-bubble {
   position: absolute;
   inset: 0;
@@ -2010,7 +2101,6 @@ body {
     transparent
   );
   box-shadow: none;
-  animation: vf-godview-agent-breathe 3s ease-in-out infinite;
 }
 
 .vf-monitor-bubble.is-waiting {
@@ -2023,7 +2113,6 @@ body {
     transparent
   );
   box-shadow: none;
-  animation: vf-godview-agent-waiting 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
 }
 
 .vf-monitor-bubble.is-idle,
@@ -2271,6 +2360,8 @@ body {
    readout loses is the motion's cost and nothing else. Diagnostic only — no
    product path sets this attribute. */
 .vf-godview[data-godview-animations="off"] .vf-monitor-bubble,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-positioner::before,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-positioner::after,
 .vf-godview[data-godview-animations="off"] .vf-monitor-bubble-core-glow,
 .vf-godview[data-godview-animations="off"] .vf-monitor-bubble-particle,
 .vf-godview[data-godview-animations="off"] .vf-monitor-bubble-glyph,
@@ -2278,35 +2369,26 @@ body {
   animation: none;
 }
 
-/* GT-D15.1's ONE unmet case, measured and left alone deliberately (GT-3p).
-   These two animate `filter`, which the law forbids — but the prescribed
-   rebuild (static shadow layers cross-faded by opacity) is not this look. A
-   drop-shadow is cast by the bubble's own alpha silhouette and is painted
-   UNDER it, so a 72%-translucent bubble shows part of its own shadow through
-   itself; a box-shadow layer is clipped away beneath the border box and is not
-   scaled by the fill. Measured in a real renderer at five stops: peak channel
-   difference 46-80/255, and 26-57/255 after pre-multiplying the shadow alpha
-   by the fill opacity — a gap no correction closes, because the remainder is
-   geometric. Shipping it would trade a frame cost for a look James did not
-   choose, so the cost stays until the look can be kept. The full record, the
-   harness and the numbers are in the GT-3p commit body. */
-@keyframes vf-godview-agent-breathe {
+/* The breathe and wait pulses, as the cross-fade the layers above ride
+   (GT-D15.1). One pair serves both states: they differ only in duration and
+   easing, which belong to the states and not to the curve's shape. */
+@keyframes vf-godview-agent-shadow-rest {
   0%,
   100% {
-    filter: var(--working-shadow-rest);
+    opacity: 1;
   }
   50% {
-    filter: var(--working-shadow-peak);
+    opacity: 0;
   }
 }
 
-@keyframes vf-godview-agent-waiting {
+@keyframes vf-godview-agent-shadow-peak {
   0%,
   100% {
-    filter: var(--waiting-shadow-rest);
+    opacity: 0;
   }
   50% {
-    filter: var(--waiting-shadow-peak);
+    opacity: 1;
   }
 }
 
