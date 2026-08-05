@@ -855,3 +855,33 @@ UA-1's owed live migration. Fourteen tests pin the exits. Finding for the walls'
 roll: **R7 caught this slice's own test** hardcoding port 9410 in a shape fixture — the
 walls don't exempt tests, and that is exactly why they work. Verify exit 0. Next: UA-3
 (link + Account page) or UA-6 (sync intent) — both open.
+
+## UA-3 — the link lifecycle: self-whois captured, unlink retires, the user gets a face
+
+**UA-3 LANDED (2026-08-05, three commits: `15832c0` core · `30aece8` UI · `96e9e9d` the
+adapter line).** The first split-hands UA slice: the critical path (native surfaces, the
+LinkService trust machinery, the profile IPC) built in the main checkout while an Opus
+agent built the Account page against a specified contract in its own worktree — and the
+integration surfaced exactly two findings, both real: field-app never touches
+`window.vibefield` (wall R1 — the bridge lands on `FieldHost`, one adapter line), and the
+page needed a READ door (resolved as one-door-two-verbs: an empty `usersUpdate` reads
+without lock or write). **Core:** `native.mesh.self` (the S1 self-whois as a real mgmt
+surface — absent-never-synthesized; the left-hand side of UA-4's comparison) ·
+`native.mesh.retire` (pre-node-gate like lane control; `Shared.retired` kills the
+login-completes-after-unlink resurrection race; archive rename with sidecar-death retries)
+· fieldd's LinkService (capture honoring the §7.2 timing law; corrupt link.json pauses
+capture and is never guessed over; unlink = audited native retire + record clear, local
+bytes untouched per UA-D8) · `user.link.get/subscribe/unlink` on the trusted-desktop
+posture · the `users:update` IPC end to end (sender-gated, lock-mutating, tray-refreshing)
+· the `#[ignore]`d live S1 probe joins the tailnet test suite. **UI:** the Account page —
+nav group above Preferences; Profile with the eight accent slots by NAME; the link block
+rendering every honest degraded shape (env-gated mesh named as such; auth-pending with the
+waiting face; linked with account/tailnet/time; two-step unlink carrying the relink cost);
+posture cards; residency toggle; 8 tests + a11y-real radios. **The closed surfaces bit
+twice, correctly:** the IPC-pin tripwire caught the thirteenth… twelfth channel, and the
+UI agent's report caught the read-door gap before it shipped. Deliberately open: posture
+writes refuse until UA-6's key lands (the page says so honestly); MeshSection's
+authenticate-anchor dedup; the amber-vs-token error-text judgment call (flagged for
+James's eyeball); mesh enablement stays env-gated — deriving it from link presence is a
+named later chapter. Verify green on the integrated tree. UA-3w (the wizard) is the next
+rung; UA-6 integrates when its worktree agent reports.
