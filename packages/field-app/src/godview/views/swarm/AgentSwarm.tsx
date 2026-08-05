@@ -64,6 +64,18 @@ interface PhysicsBody {
   pointerStartY: number;
   dragConstraint?: Matter.Constraint;
   dragged: boolean;
+  /** Where this body stood BEFORE the most recent solved step. Render reads it
+   * with `body.position` and an alpha to draw between the two (GT-D15.2): the
+   * engine may step at 30Hz while the screen paints at 120 and the motion still
+   * reads as continuous, because what is on screen is a blend and not a hold. */
+  previousX: number;
+  previousY: number;
+  /** What was last WRITTEN to the DOM, so a frame that changed nothing writes
+   * nothing (GT-D15.3). Nine bubbles × three properties × 120Hz is 3,240 style
+   * writes a second to say the same thing when the swarm has settled. */
+  writtenX: number;
+  writtenY: number;
+  writtenRadius: number;
 }
 
 interface ChromeObstacle {
@@ -89,6 +101,19 @@ const SPAWN_CANDIDATES = 40;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const LONG_PRESS_DURATION_MS = 520;
 const LONG_PRESS_MOVE_TOLERANCE = 8;
+
+/** The most real time one frame may hand the accumulator. A tab that was hidden
+ * or a machine that stalled comes back with a huge delta, and feeding it in
+ * would make the swarm teleport — or, worse, spend the next frames catching up
+ * through hundreds of steps. The backlog past this is DROPPED, not banked. */
+const MAX_FRAME_MS = 100;
+/** The most steps one frame may solve. The second half of the same guard: if a
+ * frame is somehow still behind after this many steps, the remainder is
+ * discarded rather than allowed to spiral (each catch-up step makes the next
+ * frame later, which asks for more catch-up steps). */
+const MAX_STEPS_PER_FRAME = 5;
+/** Sub-pixel movement nobody can see. The damage gate's threshold, in CSS px. */
+const WRITE_EPSILON_PX = 0.05;
 
 type SwarmVisualState = AgentVisualStatus | "ignited";
 
@@ -334,39 +359,91 @@ export function AgentSwarm({
     for (const obstacle of obstacles) resizeObserver?.observe(obstacle.element);
     updateBounds();
 
+    // THE LOOP (GT-D15.2/3). Three jobs, deliberately separated: advance the
+    // simulation at a FIXED rate, draw at the display's rate by interpolating
+    // between the last two solved states, and write to the DOM only what
+    // actually moved.
+    //
+    // The old loop did all three at once — one `Engine.update` per rAF with the
+    // frame's own delta — which tied the cost of the physics to the refresh rate
+    // of the monitor it happened to be on. A 120Hz display paid four times what
+    // a 30Hz one did for a swarm that looks identical, and every frame rewrote
+    // nine bubbles' width, height and transform whether or not anything had
+    // moved. What changed is the schedule and the writes; the forces, the
+    // scaling rule and the geometry are untouched, which is why the swarm still
+    // drifts and settles exactly as it did.
     let frame = 0;
     let previousTime = performance.now();
+    let accumulator = 0;
     const render = (time: number): void => {
-      const delta = Math.min(1000 / 30, Math.max(1000 / 120, time - previousTime));
-      previousTime = time;
       const currentParameters = parametersRef.current;
-      for (const wrapper of bodiesRef.current.values()) {
-        const { body } = wrapper;
-        if (!wrapper.dragConstraint) {
-          Matter.Body.applyForce(body, body.position, {
-            x: (width / 2 - body.position.x) * currentParameters.gravityPull,
-            y: (height / 2 - body.position.y) * currentParameters.gravityPull,
-          });
+      const stepMs = 1000 / currentParameters.physicsHz;
+      // Real elapsed time, clamped. The clamp is a guard against stalls, not a
+      // smoothing pass: within a normal frame the full delta goes in.
+      accumulator += Math.min(MAX_FRAME_MS, Math.max(0, time - previousTime));
+      previousTime = time;
+
+      let steps = 0;
+      while (accumulator >= stepMs && steps < MAX_STEPS_PER_FRAME) {
+        for (const wrapper of bodiesRef.current.values()) {
+          const { body } = wrapper;
+          // Snapshot BEFORE solving: this is the "from" end of the blend the
+          // renderer draws with, and it has to be the state this step starts
+          // in rather than the one two steps ago.
+          wrapper.previousX = body.position.x;
+          wrapper.previousY = body.position.y;
+          if (!wrapper.dragConstraint) {
+            Matter.Body.applyForce(body, body.position, {
+              x: (width / 2 - body.position.x) * currentParameters.gravityPull,
+              y: (height / 2 - body.position.y) * currentParameters.gravityPull,
+            });
+          }
+          if (Math.abs(wrapper.targetRadius - wrapper.currentRadius) > 0.5) {
+            const scale =
+              (wrapper.targetRadius + PHYSICAL_GAP) / (wrapper.currentRadius + PHYSICAL_GAP);
+            Matter.Body.scale(body, scale, scale);
+            wrapper.currentRadius = wrapper.targetRadius;
+          }
         }
-        if (Math.abs(wrapper.targetRadius - wrapper.currentRadius) > 0.5) {
-          const scale =
-            (wrapper.targetRadius + PHYSICAL_GAP) / (wrapper.currentRadius + PHYSICAL_GAP);
-          Matter.Body.scale(body, scale, scale);
-          wrapper.currentRadius = wrapper.targetRadius;
-        }
+        // Forces are per-step by Matter's own contract — it clears them at the
+        // end of every update — so applying them inside this loop rather than
+        // once per frame is what keeps the drift the same strength at any Hz.
+        Matter.Engine.update(engine, stepMs);
+        accumulator -= stepMs;
+        steps += 1;
       }
+      // Behind after the step cap: drop the debt. Banking it guarantees the
+      // next frame is late too.
+      if (steps === MAX_STEPS_PER_FRAME && accumulator > stepMs) accumulator = 0;
 
-      Matter.Engine.update(engine, delta);
-
+      const alpha = Math.min(1, accumulator / stepMs);
       for (const [id, wrapper] of bodiesRef.current) {
         const element = elementRefs.current.get(id);
         const bubble = bubbleRefs.current.get(id);
         if (!element || !bubble) continue;
         const radius = wrapper.currentRadius;
-        element.style.width = `${radius * 2}px`;
-        element.style.height = `${radius * 2}px`;
-        element.style.transform = `translate3d(${wrapper.body.position.x - radius}px, ${wrapper.body.position.y - radius}px, 0)`;
-        if (!spawnedIdsRef.current.has(id)) {
+        const { body } = wrapper;
+        const x = wrapper.previousX + (body.position.x - wrapper.previousX) * alpha;
+        const y = wrapper.previousY + (body.position.y - wrapper.previousY) * alpha;
+
+        const first = !spawnedIdsRef.current.has(id);
+        // Radius changes are rare (a status change) and cost a layout, so they
+        // are gated on their own — the 0.5px rule the scaling already uses.
+        if (first || Math.abs(radius - wrapper.writtenRadius) > 0.5) {
+          element.style.width = `${radius * 2}px`;
+          element.style.height = `${radius * 2}px`;
+          wrapper.writtenRadius = radius;
+        }
+        if (
+          first ||
+          Math.abs(x - wrapper.writtenX) > WRITE_EPSILON_PX ||
+          Math.abs(y - wrapper.writtenY) > WRITE_EPSILON_PX
+        ) {
+          element.style.transform = `translate3d(${x - radius}px, ${y - radius}px, 0)`;
+          wrapper.writtenX = x;
+          wrapper.writtenY = y;
+        }
+        if (first) {
           spawnedIdsRef.current.add(id);
           animateSpawn(bubble);
           element.style.visibility = "";
@@ -428,6 +505,17 @@ export function AgentSwarm({
         pointerStartX: 0,
         pointerStartY: 0,
         dragged: false,
+        // A new body has no history, so its first blend must be a no-op: from
+        // where it is, to where it is. Seeding these with the spawn position is
+        // what stops a bubble's first frame from being a streak out of (0, 0).
+        previousX: spawnPosition.x,
+        previousY: spawnPosition.y,
+        // Deliberately NaN rather than the spawn position: the damage gate's
+        // first comparison must be guaranteed to fail so the opening write
+        // happens, and every comparison against NaN is false.
+        writtenX: Number.NaN,
+        writtenY: Number.NaN,
+        writtenRadius: Number.NaN,
       });
       Matter.Composite.add(world.engine.world, body);
     }

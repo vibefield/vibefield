@@ -21,6 +21,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewDeckFacts } from "../src/development-console";
+import {
+  pendingWarmTransport,
+  prewarmGodviewTransport,
+  resetWarmTransportForTest,
+} from "../src/godview/warm-transport";
 import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
@@ -39,6 +44,12 @@ vi.mock("@vibecook/ghosttea-react", () => ({
     const runtime = { id: runtimes.length, disposed: false };
     runtimes.push(runtime);
     return {
+      // GT-3p: the real runtime is an EventTarget and the deck listens on it
+      // for `renderer-status` (the device-ready mark, and the backend the lab
+      // reports). The stub answers the surface without ever firing — a fixture
+      // that announced a backend would be asserting about its own stub.
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
       rendererBackend: "test",
       dispose: () => {
         runtime.disposed = true;
@@ -198,6 +209,9 @@ beforeEach(() => {
   publishStatus = null;
   localStorage.clear();
   resetDeckAppearanceForTest();
+  // GT-3p: the warm transport is a module singleton, so a case that started a
+  // prewarm would otherwise hand the next case a runtime it never asked for.
+  resetWarmTransportForTest();
   installHost();
   vi.spyOn(console, "log").mockImplementation((line: unknown) => {
     if (typeof line === "string" && line.startsWith("GODVIEW_DECK ")) {
@@ -568,5 +582,54 @@ describe("paneMeta, the durable half of restore (GT-D8 as amended)", () => {
     });
     expect(paneMeta({ cwd: null, title: null })).toEqual({});
     expect(paneMeta({ cwd: "/repo", title: "" })).toEqual({ cwd: "/repo" });
+  });
+});
+
+describe("the one-runtime law (GT-3p, GT-D14)", () => {
+  // The bug this exists for, found in the smoke and not in review: main posts
+  // the two MessagePorts EXACTLY ONCE per attach, and
+  // `waitForGhostteaRendererPorts` resolves from a `window` message listener —
+  // so two runtimes waiting at the same moment both resolve, with the SAME two
+  // ports, and then both drain one control channel. The deck that loses sits at
+  // `rendererBackend: "starting"` with no panes, forever. It is not a slow
+  // deck; it is a dead one.
+  //
+  // The rule that prevents it: while a prewarm is in flight, the deck waits for
+  // THAT runtime instead of building its own.
+  it("builds no runtime of its own while a prewarm is still in flight", async () => {
+    // A warm that never settles, so "in flight" is the whole of this case.
+    let releaseTicket: (value: unknown) => void = () => undefined;
+    const slowFieldd = {
+      request: (method: string) => {
+        if (method === "terminal.connectTicket") {
+          return new Promise((resolve) => {
+            releaseTicket = resolve;
+          });
+        }
+        return Promise.resolve({ terminals: [] });
+      },
+    };
+    prewarmGodviewTransport(slowFieldd as never);
+    await settle();
+    // The prewarm owns a runtime and its ports wait.
+    expect(runtimes.length).toBe(1);
+
+    await mountDeck();
+
+    // ...and the deck has NOT built a second one. Before this law it did, and
+    // the two of them raced for one port delivery.
+    expect(runtimes.length).toBe(1);
+    expect(workspaceMounts.length).toBe(0);
+
+    // Let the warm finish: the deck inherits that runtime rather than minting.
+    releaseTicket({ ticket: { token: "t", controlSocket: "c", frameSocket: "f" } });
+    await settle();
+    expect(runtimes.length).toBe(1);
+  });
+
+  it("builds exactly one when no prewarm is pending", async () => {
+    expect(pendingWarmTransport()).toBeNull();
+    await mountDeck();
+    expect(runtimes.length).toBe(1);
   });
 });

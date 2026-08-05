@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { assembleMonitorAgents } from "./agents";
 import { MOCK_TICK_MS, mockFieldAt } from "./mock-agent-field";
 import type { MonitorPalette } from "./monitor-palette";
@@ -56,15 +56,38 @@ export function useMonitorAgents({ palette }: UseMonitorAgentsOptions): MonitorA
 
   const snapshot = useMemo(() => mockFieldAt(tick), [tick]);
 
+  /** GT-3p: the tick's own damage gate.
+   *
+   * `mockFieldAt` is pure, so a tick that changed nothing anybody renders still
+   * produces a NEW object every 1.5s — and a new object re-runs the projection
+   * and re-renders every view beneath it. Most ticks move one agent's context
+   * percentage by a fraction and nothing else; the swarm cannot show that, and
+   * the stage chrome has nothing to do with it at all.
+   *
+   * The comparison is over the projection's INPUTS as JSON. That is honest
+   * about what it can catch — it is a structural equality, not a semantic one —
+   * and it is cheap at this size (nine records, twice a second). Holding the
+   * previous snapshot in a ref and returning it unchanged means the `useMemo`
+   * below sees the same reference and does not recompute, which is the entire
+   * saving: React's own bailout does the rest. */
+  const stableSnapshot = useRef(snapshot);
+  const stableKey = useRef("");
+  const key = JSON.stringify(snapshot);
+  if (key !== stableKey.current) {
+    stableKey.current = key;
+    stableSnapshot.current = snapshot;
+  }
+
+  const settled = stableSnapshot.current;
   const agents = useMemo(
     () =>
       assembleMonitorAgents({
-        agents: snapshot.agents,
-        terminals: snapshot.terminals,
+        agents: settled.agents,
+        terminals: settled.terminals,
         accents: palette.accents,
         ...(selectedId !== undefined ? { activeSessionId: selectedId } : {}),
       }),
-    [palette.accents, selectedId, snapshot],
+    [palette.accents, selectedId, settled],
   );
 
   // MOCK ACTIONS (GT-D13): they acknowledge VISIBLY and mount NOTHING. No

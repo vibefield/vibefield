@@ -77,3 +77,29 @@ export interface GodviewMonitorFacts {
 export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {
   console.log(`GODVIEW_MONITOR ${JSON.stringify(facts)}`);
 }
+
+/** What the first ⌘G cost, station by station (GT-3p, GT-D15.4).
+ *
+ * Published once per app life, when the first open reaches a presented frame.
+ * The breakdown is the point: a total says the open got faster, and only the
+ * phases say whether the cost was removed or merely moved somewhere the total
+ * cannot see — which GT-D15.4 requires this slice to be able to prove.
+ *
+ * `warm` names the stations the prewarm had already passed, so the same line
+ * reads honestly with the prewarm on and off. */
+export interface GodviewColdOpenFacts {
+  totalMs: number;
+  phases: Record<string, number>;
+  warm: readonly string[];
+  /** Whether a warm transport was actually inherited by this open — which is
+   * not the same as "prewarm was enabled": an open that arrives mid-warm takes
+   * the cold path on purpose (`claimWarmTransport` never blocks). */
+  prewarmed: boolean;
+  /** The renderer the deck ended up on, live rather than assumed (GT-3f's
+   * residual: the Settings shader section could not know this). */
+  rendererBackend: string;
+}
+
+export function emitGodviewColdOpenMarker(facts: GodviewColdOpenFacts): void {
+  console.log(`GODVIEW_COLD_OPEN ${JSON.stringify(facts)}`);
+}

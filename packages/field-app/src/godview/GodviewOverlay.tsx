@@ -1,6 +1,8 @@
 import type { TerminalBridgeStatus } from "@vibefield/contracts";
+import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type CSSProperties, type ReactElement, useCallback, useEffect, useState } from "react";
 import { getHost } from "../host";
+import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
 import { GodviewDeck } from "./GodviewDeck";
 import { GodviewMonitor } from "./GodviewMonitor";
@@ -11,6 +13,7 @@ import {
   GodviewTuningPanel,
   godviewTuningStyle,
 } from "./GodviewTuningPanel";
+import { useLabSwitches } from "./lab-switches";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
 import {
   SCANLINE_DENSITY_KEY,
@@ -18,8 +21,44 @@ import {
   VIGNETTE_OPACITY_KEY,
 } from "./monitor/stage-parameters";
 import { useGodviewOpen } from "./overlay-state";
+import {
+  discardWarmTransport,
+  prewarmGodviewTransport,
+  rewarmGodviewTransport,
+} from "./warm-transport";
 
 const THEME_STORAGE_KEY = "vf-godview-color-theme-v1";
+/** The prewarm's off switch (GT-3p). A DIAGNOSTIC, not a product setting: the
+ * smoke sets it to measure a genuinely cold open, and the only supported value
+ * is the one that disables. Nothing in the UI writes it. */
+const PREWARM_STORAGE_KEY = "vf-godview-prewarm-v1";
+
+function prewarmEnabled(): boolean {
+  try {
+    return localStorage.getItem(PREWARM_STORAGE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+/** Run `task` when the browser is next idle, or after `timeoutMs` if it never
+ * is. Idle rather than a timer because GT-D14's whole condition is "do not delay
+ * app startup" — this work is worth doing early and worth doing LAST. */
+function whenIdle(task: () => void, timeoutMs: number): () => void {
+  const idle = (
+    globalThis as {
+      requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    }
+  ).requestIdleCallback;
+  if (typeof idle === "function") {
+    const handle = idle(task, { timeout: timeoutMs });
+    return () =>
+      (globalThis as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback?.(handle);
+  }
+  const timer = window.setTimeout(task, timeoutMs);
+  return () => window.clearTimeout(timer);
+}
 
 function initialGodviewTheme(): GodviewTheme {
   try {
@@ -45,6 +84,12 @@ export function GodviewOverlay(): ReactElement | null {
   const [tuningOpen, setTuningOpen] = useState(false);
   const appearance = useDeckAppearance();
   const monitor = useMonitorTuning();
+  const fieldd = useFielddClient();
+  const labSwitches = useLabSwitches();
+  /** GT-3f's residual, closed: the lab can say which renderer is actually
+   * drawing, because the deck tells it. Null until a deck has existed — the
+   * backend is not a fact before a render worker is. */
+  const [rendererBackend, setRendererBackend] = useState<string | null>(null);
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -56,9 +101,32 @@ export function GodviewOverlay(): ReactElement | null {
   }, []);
 
   useEffect(() => {
-    if (open) setEverOpened(true);
-    else setTuningOpen(false);
+    if (open) {
+      // Time zero for the cold-open trace, taken before any React work the open
+      // causes — this effect runs on the commit that first saw `open`.
+      godviewColdOpen.mark("open");
+      setEverOpened(true);
+    } else setTuningOpen(false);
   }, [open]);
+
+  // THE PREWARM (GT-D14). At idle after this overlay has mounted — which is
+  // after the canvas has committed, since the overlay is mounted beneath it —
+  // and never on the startup path. What warms is transport only: a ticket, a
+  // bridge, a socket, a worker, a GPU device. No session, no shell, no PTY.
+  //
+  // Cancelled the moment the overlay has ever been open: from then on the deck
+  // owns the transport, and a prewarm waking up behind it would build a second
+  // runtime waiting for the same one-shot ports (see the one-runtime law).
+  // `takeTransportForDeck` closes that race authoritatively; this only keeps the
+  // pointless work from being scheduled in the first place.
+  useEffect(() => {
+    if (!prewarmEnabled() || everOpened) return;
+    // The trace goes with it: the prewarm's stations are stamped BEFORE the
+    // open, which is what lets the cold-open report name them as `warm` rather
+    // than merely omitting them. An absent phase and a phase that was already
+    // done look the same in a breakdown otherwise.
+    return whenIdle(() => prewarmGodviewTransport(fieldd, godviewColdOpen), 2_000);
+  }, [fieldd, everOpened]);
 
   useEffect(() => {
     try {
@@ -71,8 +139,22 @@ export function GodviewOverlay(): ReactElement | null {
   useEffect(() => {
     const terminal = getHost().terminal;
     if (terminal === undefined) return;
-    return terminal.onStatus(setBridge);
-  }, []);
+    return terminal.onStatus((status) => {
+      setBridge(status);
+      // GT-D14's custody clause: a warm transport whose bridge died before
+      // anyone used it is dead weight holding a disposed worker. Discarding it
+      // spends the attempt — `rewarmGodviewTransport` allows exactly one more,
+      // and nothing here loops. A CLAIMED transport is untouched: it belongs to
+      // the deck, whose own recovery ladder (GT-1) owns it from then on.
+      if (status.state === "bridge-down") discardWarmTransport("the bridge died before first use");
+      // The one lazy re-warm. `rewarmGodviewTransport` is a no-op unless the
+      // singleton is SPENT and has never re-warmed, so a bridge that flaps — or
+      // a deck's own recovery republishing bridge-up — cannot turn this into a
+      // ladder. Nothing schedules a retry; the next bridge-up is the trigger, or
+      // there is no second attempt at all.
+      if (status.state === "bridge-up") rewarmGodviewTransport(fieldd);
+    });
+  }, [fieldd]);
 
   // BARE Escape IS DELIBERATELY UNBOUND HERE (James, 2026-08-04).
   //
@@ -109,13 +191,17 @@ export function GodviewOverlay(): ReactElement | null {
       aria-hidden={!open}
       data-godview-open={open ? "true" : "false"}
       data-godview-tuning-open={tuningOpen ? "true" : "false"}
+      // GT-3p, lab only: one attribute silences every ambient loop on the
+      // stage, so the frame readout can be watched with and without them. It
+      // changes no layout and no color — what leaves is the motion alone.
+      data-godview-animations={labSwitches.animations ? "on" : "off"}
       className={`vf-godview theme-${theme}`}
       style={screenStyle}
     >
       <div className="vf-godview-scanlines" aria-hidden="true" />
       <div className="vf-godview-vignette" aria-hidden="true" />
 
-      {open && (
+      {open && labSwitches.monitor && (
         <GodviewMonitor
           view={monitor.view}
           parameters={monitor.parameters}
@@ -134,6 +220,7 @@ export function GodviewOverlay(): ReactElement | null {
         value={tuning}
         appearance={appearance}
         monitorSections={monitorTuningSections(monitor)}
+        rendererBackend={rendererBackend}
         onClose={() => setTuningOpen(false)}
         onThemeChange={changeTheme}
         onChange={changeTuning}
@@ -146,7 +233,7 @@ export function GodviewOverlay(): ReactElement | null {
         aria-label="Terminal panes"
       >
         {terminalAvailable ? (
-          <GodviewDeck active={open} theme={theme} />
+          <GodviewDeck active={open} theme={theme} onRendererBackend={setRendererBackend} />
         ) : (
           <p className="vf-godview-unavailable">
             THIS HOST HAS NO TERMINAL BRIDGE — THE DECK IS UNAVAILABLE HERE.

@@ -58,6 +58,10 @@ describe("swarm parameters", () => {
       gravityPull: 0.0002,
       restitution: 0,
       frictionAir: 0.2,
+      // GT-D15.2: the physics rate is a parameter now, and 30Hz is the default
+      // the measurement chose — the render loop interpolates between solved
+      // states, so this is a cost knob rather than a smoothness one.
+      physicsHz: 30,
       bubbleFillOpacity: 0.72,
       radiusIdle: 40,
       radiusWorking: 50,

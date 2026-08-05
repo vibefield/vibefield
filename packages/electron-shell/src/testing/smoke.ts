@@ -635,6 +635,11 @@ export async function runSmokeGodview(opts: {
     // the open would be racing a line that has already been printed.
     const monitorLine = waitForConsole(win, "GODVIEW_MONITOR ", 90_000);
     monitorLine.catch(() => undefined);
+    // GT-3p: the cold open's phase breakdown, armed for the same reason. The
+    // renderer publishes it once, when the first open reaches a presented
+    // frame, so a wait armed after the toggle could miss it outright.
+    const coldOpenLine = waitForConsole(win, "GODVIEW_COLD_OPEN ", 90_000);
+    coldOpenLine.catch(() => undefined);
 
     // 1. ⌘⎋'s own action. The overlay opens, the deck redeems a ticket for the
     //    CONNECTION — no session — and the workspace then creates its own first
@@ -1165,6 +1170,94 @@ export async function runSmokeGodview(opts: {
       "still listed every session after the bridge died",
       15_000,
     );
+
+    // ── GT-3p, REPORT-ONLY ────────────────────────────────────────────────
+    // Everything below records numbers and asserts nothing. A performance row
+    // that could fail this smoke would be a budget nobody has agreed to yet
+    // (the `keystrokeEchoMs` precedent, GT-3), and these numbers move with
+    // machine load — the same load that already makes the reload rows flaky.
+    //
+    // THE COLD OPEN, and it is genuinely cold even though the prewarm is on:
+    // row 1 presses ⌘⎋ the moment the canvas reports, and `claimWarmTransport`
+    // deliberately never blocks an open on a warm still in flight (GT-D14) — so
+    // the first open of this harness takes the cold path by construction, and
+    // `prewarmed: false` in this object is the proof rather than a disappointment.
+    // It is the BEFORE number, measured on the same run as the after.
+    verdict["coldOpen"] = await coldOpenLine
+      .then((raw) => JSON.parse(raw) as Record<string, unknown>)
+      .catch((error) => ({ unmeasured: error instanceof Error ? error.message : String(error) }));
+
+    // The steady-state frame cost, sampled from the page itself while the
+    // overlay is open with the swarm running and a pane focused. One second of
+    // rAF intervals; the median is the honest summary of a sample this short.
+    verdict["frameMs"] = await win.webContents
+      .executeJavaScript(
+        `new Promise((resolve) => {
+          const intervals = [];
+          let last = performance.now();
+          const tick = (now) => {
+            intervals.push(now - last);
+            last = now;
+            if (now - start < 1000) requestAnimationFrame(tick);
+            else {
+              const sorted = intervals.slice(1).sort((a, b) => a - b);
+              resolve(sorted.length === 0 ? null : {
+                frames: sorted.length,
+                p50: Math.round(sorted[Math.floor(sorted.length * 0.5)] * 10) / 10,
+                p95: Math.round(sorted[Math.floor(sorted.length * 0.95)] * 10) / 10,
+              });
+            }
+          };
+          const start = performance.now();
+          requestAnimationFrame(tick);
+        })`,
+      )
+      .catch((error) => ({ unmeasured: error instanceof Error ? error.message : String(error) }));
+
+    // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
+    //
+    // A renderer reload resets the page's module state, so the next open is a
+    // first open again; the difference from the row above is that this one WAITS
+    // for the idle prewarm to land before pressing the key, which is the case a
+    // real user is in (the app has been sitting there since login). The wait is
+    // a plain sleep because the warm state lives in a module the page does not
+    // publish — and the resulting line's own `prewarmed` field says whether the
+    // transport was actually inherited, so a wait that was too short reports as
+    // an honest `prewarmed: false` rather than a mislabelled number.
+    //
+    // The consent face is expected here: an earlier row killed a pane, so the
+    // saved layout names a session the floor no longer has, and GT-3's gate asks
+    // before the workspace may mount. Answering it is part of the path being
+    // measured — this is the returning-user road to a pane, prompt and all.
+    try {
+      const warmLine = waitForConsole(win, "GODVIEW_COLD_OPEN ", 60_000);
+      warmLine.catch(() => undefined);
+      opts.toggleGodview();
+      await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
+      const reloaded = waitForConsole(win, "CANVAS_READY ", 60_000);
+      reloaded.catch(() => undefined);
+      deck.reset();
+      await loadRenderer(win, "smoke-godview", opts.viteUrl);
+      await reloaded;
+      win.focus();
+      win.webContents.focus();
+      // Long enough for the idle callback (2s ceiling) plus a ticket, a bridge
+      // fork and a device request on a loaded machine.
+      await sleep(5_000);
+      opts.toggleGodview();
+      const asked = await deck.until(
+        (facts) => facts.active && (facts.panes >= 1 || facts.consent !== undefined),
+        "the warm open to reach a pane or the restore question",
+        60_000,
+      );
+      if (asked.consent !== undefined) await clickDeckButton(win, "restore");
+      await deck.until((facts) => facts.panes >= 1, "the warm open's first pane", 60_000);
+      verdict["coldOpenWarm"] = JSON.parse(await warmLine) as Record<string, unknown>;
+    } catch (error) {
+      verdict["coldOpenWarm"] = {
+        unmeasured: error instanceof Error ? error.message : String(error),
+      };
+    }
 
     verdict["ok"] = true;
   } catch (error) {

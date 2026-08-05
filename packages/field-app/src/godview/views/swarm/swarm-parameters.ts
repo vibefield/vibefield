@@ -4,6 +4,11 @@ export interface SwarmParameters {
   gravityPull: number;
   restitution: number;
   frictionAir: number;
+  /** GT-D15.2: how often the engine steps, in Hz — DECOUPLED from paint. The
+   * render loop interpolates between the last two solved states, so this is a
+   * cost knob and not a smoothness knob: the swarm looks the same at 30 as at
+   * 120 and does a quarter of the solving. */
+  physicsHz: number;
   bubbleFillOpacity: number;
   radiusIdle: number;
   radiusWorking: number;
@@ -16,6 +21,7 @@ export const DEFAULT_SWARM_PARAMETERS: Readonly<SwarmParameters> = {
   gravityPull: 0.0002,
   restitution: 0,
   frictionAir: 0.2,
+  physicsHz: 30,
   bubbleFillOpacity: 0.72,
   radiusIdle: 40,
   radiusWorking: 50,
@@ -42,6 +48,21 @@ export const SWARM_PARAMETER_GROUPS: readonly MonitorParameterGroup[] = [
         max: 0.2,
         step: 0.01,
         defaultValue: 0.2,
+      },
+      {
+        // The floor is a STABILITY limit, not a taste one. Matter 0.19 scales
+        // air friction by the step against a 60Hz base
+        // (`1 - frictionAir * (deltaTime / _baseDelta)`, Body.js:744), which
+        // turns NEGATIVE — friction that accelerates — once the step passes
+        // `_baseDelta / frictionAir`. At this group's maximum air friction of
+        // 0.2 that is 83ms, or about 12Hz, so 15 is the lowest rate that stays
+        // stable across the rest of the panel's own range.
+        key: "physicsHz",
+        label: "Physics rate (Hz)",
+        min: 15,
+        max: 120,
+        step: 5,
+        defaultValue: 30,
       },
     ],
   },

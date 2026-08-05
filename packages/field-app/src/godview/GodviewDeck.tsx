@@ -13,9 +13,10 @@ import {
 import { TerminalConnectTicketResult, TerminalListResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { emitGodviewDeckMarker } from "../development-console";
+import { emitGodviewColdOpenMarker, emitGodviewDeckMarker } from "../development-console";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
+import { afterNextFrame, godviewColdOpen } from "./cold-open";
 import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
 import {
   paneCwd,
@@ -28,6 +29,7 @@ import { godviewTerminalEffects, godviewTerminalTheme } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { KillActivePane } from "./KillActivePane";
 import { describePane } from "./pane-faces";
+import { pendingWarmTransport, takeTransportForDeck } from "./warm-transport";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -118,14 +120,30 @@ export interface GodviewDeckProps {
   /** The reference app's local light/dark mode. It changes terminal colors but
    * never the renderer-owned alpha in the appearance store. */
   theme?: GodviewTheme;
+  /** GT-3f's residual: the lab could not say which renderer was drawing,
+   * because only the deck's runtime knows. Reported when the worker announces
+   * it, so the readout shows a measured backend and never a guessed one. */
+  onRendererBackend?: (backend: string) => void;
 }
 
 export function GodviewDeck({
   active,
   theme: godviewTheme = "light",
+  onRendererBackend,
 }: GodviewDeckProps): ReactElement | null {
   const fieldd = useFielddClient();
-  const [runtime, setRuntime] = useState(makeRuntime);
+  /** THE deck's runtime, and `null` until the transport has been ACQUIRED.
+   *
+   * Null-at-first is the whole shape of GT-D14's correctness (see the
+   * one-runtime law in `warm-transport.ts`): the ports arrive once, so this
+   * deck may not build a runtime while the prewarm still has one waiting for
+   * them. Which runtime it ends up with — inherited or its own — is decided in
+   * the acquisition effect below, never synchronously here, because "is a warm
+   * still in flight" is a question with an asynchronous answer. */
+  const [runtime, setRuntime] = useState<GhostteaTerminalRuntime | null>(null);
+  /** Whether this deck INHERITED its transport. Reported, and it also tells the
+   * connect effect that the ticket and the shell are already answered. */
+  const [warm, setWarm] = useState(false);
   /** Bumped by a recovery. A runtime holds its ports for life, so a rebuilt
    * bridge needs a NEW runtime — and the workspace reads its runtime from
    * context at mount, so the deck has to remount onto it. */
@@ -162,11 +180,13 @@ export function GodviewDeck({
    * coming (a bridge that never built, a ladder that spent itself). */
   const retry = useCallback(() => {
     setError(null);
-    // The failed runtime's one-shot ports wait is SPENT — retry must mint a
-    // fresh runtime, not merely re-ask on the dead one.
+    // The failed runtime's one-shot ports wait is SPENT, so it is retired here
+    // and the acquisition effect — which the generation bump re-runs — builds
+    // the fresh one. Minting it in this updater would put a second ports wait
+    // in the page for as long as the old runtime is still around.
     setRuntime((previous) => {
-      retiredRuntimes.current.add(previous);
-      return makeRuntime();
+      if (previous !== null) retiredRuntimes.current.add(previous);
+      return null;
     });
     setGeneration((current) => current + 1);
   }, []);
@@ -256,14 +276,55 @@ export function GodviewDeck({
         if (terminal === undefined) {
           throw new Error("this host has no terminal bridge");
         }
+        // ── ACQUISITION (GT-D14) ─────────────────────────────────────────
+        // Only the first generation may inherit; a recovery is by definition a
+        // dead bridge, and the warm one died with it. Later generations still
+        // take ownership below, which is what keeps a prewarm from waking up
+        // behind a live deck.
+        {
+          // The one-runtime law, both halves. A warm still IN FLIGHT already
+          // has a ports wait armed and main posts the ports once, so building
+          // a second runtime here would hand both runtimes the same two
+          // MessagePorts and leave whichever the workspace holds permanently
+          // at "starting" — a dead deck, not a slow one. Waiting for it is
+          // therefore correctness, not politeness; the warm's own failure
+          // paths always settle the promise.
+          const pending = pendingWarmTransport();
+          if (pending !== null) await pending;
+          if (cancelled) return;
+          // ...and taking ownership closes the other half: a prewarm that was
+          // only SCHEDULED cannot start behind this deck afterwards.
+          const taken = takeTransportForDeck();
+          const inherited = generation === 0 ? taken : null;
+          if (taken !== null && inherited === null) taken.runtime.dispose();
+          if (inherited !== null) {
+            // Everything below is already done: ticket redeemed, bridge
+            // forked, ports posted, shell answered.
+            setRuntime(inherited.runtime);
+            setShell(inherited.shell);
+            setWarm(true);
+            setError(null);
+            return;
+          }
+        }
+        // Nothing to inherit. This deck owns the only ports wait from here, so
+        // it may build its runtime — and must, before the connect it causes.
+        const own = makeRuntime();
+        if (cancelled) {
+          own.dispose();
+          return;
+        }
+        setRuntime(own);
         // Parsed, not cast: a mint without a ticket must fail loudly.
         const minted = TerminalConnectTicketResult.parse(
           await fieldd.request("terminal.connectTicket", {}),
         );
         if (cancelled) return;
+        godviewColdOpen.mark("ticket");
         // Main answers the connect with the shell identity it alone can read.
         const attached = await terminal.connect(minted.ticket);
         if (cancelled) return;
+        godviewColdOpen.mark("connected");
         setShell({ defaultShell: attached.defaultShell, home: attached.home });
         setError(null);
       } catch (cause) {
@@ -354,6 +415,58 @@ export function GodviewDeck({
     };
   }, [fieldd]);
 
+  // THE COLD-OPEN TRACE (GT-3p). Four stations are stamped from here; the other
+  // three belong to owners that ran before this component existed (the prewarm)
+  // or to the browser (the presented frame).
+  //
+  // `consent` is stamped only when the gate OPENS, never when it starts asking:
+  // the interval while a person reads a question is their time, not the deck's,
+  // and folding it into a cold-open number would make the number a measure of
+  // how fast James reads.
+  useEffect(() => {
+    if (consent === "go") godviewColdOpen.mark("consent");
+  }, [consent]);
+
+  // The render backend announcing itself IS device-ready: the worker posts
+  // `renderer-status` from `createRenderer`, after the adapter, the device and
+  // the pipelines exist. On a warm open the prewarm already stamped this and the
+  // mark is idempotent, so the listener costs nothing and stays honest if the
+  // prewarm was off, failed, or fell back to Canvas2D.
+  useEffect(() => {
+    if (runtime === null) return;
+    const onStatus = (): void => {
+      godviewColdOpen.mark("device");
+      onRendererBackend?.(runtime.rendererBackend);
+    };
+    runtime.addEventListener("renderer-status", onStatus);
+    // A runtime inherited from the prewarm already announced its backend before
+    // this deck existed, so the event is not coming a second time — the current
+    // value is read directly instead of waiting for news that already happened.
+    if (runtime.rendererBackend !== "starting") onRendererBackend?.(runtime.rendererBackend);
+    return () => runtime.removeEventListener("renderer-status", onStatus);
+  }, [runtime, onRendererBackend]);
+
+  // The last two stations, and the one publication. A pane in the deck's own
+  // report is `mounted`; the frame after it is what a user would call open.
+  const coldOpenPublished = useRef(false);
+  useEffect(() => {
+    if (coldOpenPublished.current || runtime === null) return;
+    if ((workspace?.panes.length ?? 0) === 0) return;
+    godviewColdOpen.mark("mounted");
+    coldOpenPublished.current = true;
+    void afterNextFrame().then(() => {
+      godviewColdOpen.mark("frame");
+      const report = godviewColdOpen.report();
+      emitGodviewColdOpenMarker({
+        totalMs: report.totalMs,
+        phases: report.phases as Record<string, number>,
+        warm: report.warm,
+        prewarmed: warm,
+        rendererBackend: runtime.rendererBackend,
+      });
+    });
+  }, [workspace, runtime, warm]);
+
   // Recovery (GT-1's ladder, from the renderer's side). `bridge-down` is the
   // honest moment of death; `bridge-up` is the only one this page can act on,
   // and acting means a new runtime with a fresh ports wait for the deck to
@@ -376,14 +489,16 @@ export function GodviewDeck({
         return;
       }
       if (status.state !== "bridge-up" && status.state !== "ticket-expired") return;
-      // Act = a fresh runtime (the old one's one-shot ports wait is spent) and
-      // a new generation (re-redeem + re-connect). The old runtime is disposed
-      // by the effect below, never inside the updater — updaters must stay
-      // pure, React may run them more than once.
+      // Act = retire this runtime (its one-shot ports wait is spent) and bump
+      // the generation, which re-runs the acquisition effect and builds the
+      // replacement there. The old runtime is disposed by the effect below,
+      // never inside this updater — updaters must stay pure, React may run
+      // them more than once — and the new one is built in exactly one place so
+      // there is never a moment with two ports waits armed.
       setError(null);
       setRuntime((previous) => {
-        retiredRuntimes.current.add(previous);
-        return makeRuntime();
+        if (previous !== null) retiredRuntimes.current.add(previous);
+        return null;
       });
       setGeneration((previous) => previous + 1);
     });
@@ -446,7 +561,7 @@ export function GodviewDeck({
   // pane the one session on the floor whose retention came from the renderer.
   const rehydratePane = useCallback(
     async (context: { meta: unknown; sessionId: string; paneId: string }) => {
-      if (shell === null) return null;
+      if (shell === null || runtime === null) return null;
       // `paneCwd` and not `meta.cwd`: what the floor calls a cwd is the OSC 7
       // URL the shell announced, and a spawn given `file://host/Users/x` cannot
       // chdir into it. Home is the honest fallback for a pane whose shell never
@@ -494,7 +609,10 @@ export function GodviewDeck({
       panes: panes.length,
       sessions: workspace?.sessions.length ?? 0,
       sessionIds: panes.map((pane) => pane.session.id),
-      rendererBackend: runtime.rendererBackend,
+      // "starting" while the transport is still being acquired — the same word
+      // the render worker uses before it has a backend, and the honest one: no
+      // renderer exists yet either way.
+      rendererBackend: runtime?.rendererBackend ?? "starting",
       // Read off the theme the workspace was actually handed, not off the
       // appearance the store holds: what the renderer received is the fact
       // worth publishing, and the two could only differ because of a bug.
@@ -571,7 +689,7 @@ export function GodviewDeck({
   // way back) and the workspace itself, and everything between them is one
   // round trip inside the overlay's own reveal. A label that appears and
   // vanishes inside 200ms reads as a stutter, not as honesty.
-  if (platform === null || shell === null || consent === null) return null;
+  if (platform === null || shell === null || consent === null || runtime === null) return null;
 
   // The consent face (GT-3). Same family as the fault face above — a centred
   // statement on the dark stage with actions under it — because they are the

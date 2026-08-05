@@ -3,6 +3,7 @@ import { CARD_BG } from "@vibefield/shell-ui";
 import { type CSSProperties, type ReactElement, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { type DeckAppearance, deckThemeNameForMode, setDeckAppearance } from "./deck-appearance";
+import { GodviewPerfReadout } from "./GodviewPerfReadout";
 import type { MonitorTuningSection } from "./monitor/monitor-tuning";
 import type { MonitorParameterDefinition } from "./monitor/parameters";
 
@@ -157,6 +158,7 @@ export function GodviewTuningPanel({
   value,
   appearance,
   monitorSections,
+  rendererBackend,
   onClose,
   onThemeChange,
   onChange,
@@ -168,6 +170,7 @@ export function GodviewTuningPanel({
   value: GodviewTuning;
   appearance: DeckAppearance;
   monitorSections: readonly MonitorTuningSection[];
+  rendererBackend: string | null;
   onClose: () => void;
   onThemeChange: (theme: GodviewTheme) => void;
   onChange: (patch: Partial<GodviewTuning>) => void;
@@ -307,6 +310,8 @@ export function GodviewTuningPanel({
           onChange={section.onChange}
         />
       ))}
+
+      <GodviewPerfReadout rendererBackend={rendererBackend} />
 
       <button
         className="vf-godview-tweak-reset"

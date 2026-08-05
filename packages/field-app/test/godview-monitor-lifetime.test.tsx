@@ -22,6 +22,15 @@ import { setHost } from "../src/host";
 
 vi.mock("../src/godview/GodviewDeck", () => ({ GodviewDeck: () => null }));
 
+/** GT-3p: the overlay itself now reaches fieldd — it schedules the transport
+ * prewarm (GT-D14) at idle, above the `everOpened` gate, because warming after
+ * the first open would warm nothing. A client that answers nothing is right for
+ * this fixture: the subject is the STAGE's lifetime, and the prewarm's own
+ * behaviour is asserted in godview-prewarm.test.ts. */
+vi.mock("@vibefield/fieldd-client/react", () => ({
+  useFielddClient: () => ({ request: () => new Promise(() => undefined) }),
+}));
+
 const { GodviewOverlay } = await import("../src/godview/GodviewOverlay");
 const { resetGodviewOpenForTest } = await import("../src/godview/overlay-state");
 

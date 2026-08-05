@@ -1749,6 +1749,57 @@ body {
   accent-color: var(--text-main);
 }
 
+/* GT-3p, the perf readout. Numbers in the panel's own instrument voice — the
+   same monospace ledger the rest of the lab reads in, tabular so a changing
+   figure does not shift the column beside it. */
+.vf-godview-perf-frames,
+.vf-godview-perf-phases {
+  margin: 0;
+  padding: 2px 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-godview-perf-frames > div,
+.vf-godview-perf-phases > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vf-godview-perf-frames dt,
+.vf-godview-perf-phases dt {
+  letter-spacing: 0.04em;
+}
+
+.vf-godview-perf-frames dd,
+.vf-godview-perf-phases dd {
+  margin: 0;
+  color: var(--text-main);
+}
+
+.vf-godview-perf-phases {
+  border-top: 1px solid var(--panel-border);
+  margin-top: 5px;
+  padding-top: 5px;
+}
+
+.vf-godview-perf-total {
+  margin: 2px 0 0;
+  color: var(--text-main);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-godview-perf-note {
+  margin: 4px 0 0;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
 .vf-godview-tweak-reset {
   width: calc(100% - 22px);
   height: 26px;
@@ -2215,6 +2266,30 @@ body {
   }
 }
 
+/* GT-3p, the lab's animations switch. Every ambient loop on the stage stops
+   where it stands; layout, size and color are untouched, so what the frame
+   readout loses is the motion's cost and nothing else. Diagnostic only — no
+   product path sets this attribute. */
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-core-glow,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-particle,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-glyph,
+.vf-godview[data-godview-animations="off"] .vf-monitor-long-press {
+  animation: none;
+}
+
+/* GT-D15.1's ONE unmet case, measured and left alone deliberately (GT-3p).
+   These two animate `filter`, which the law forbids — but the prescribed
+   rebuild (static shadow layers cross-faded by opacity) is not this look. A
+   drop-shadow is cast by the bubble's own alpha silhouette and is painted
+   UNDER it, so a 72%-translucent bubble shows part of its own shadow through
+   itself; a box-shadow layer is clipped away beneath the border box and is not
+   scaled by the fill. Measured in a real renderer at five stops: peak channel
+   difference 46-80/255, and 26-57/255 after pre-multiplying the shadow alpha
+   by the fill opacity — a gap no correction closes, because the remainder is
+   geometric. Shipping it would trade a frame cost for a look James did not
+   choose, so the cost stays until the look can be kept. The full record, the
+   harness and the numbers are in the GT-3p commit body. */
 @keyframes vf-godview-agent-breathe {
   0%,
   100% {

@@ -49,6 +49,9 @@ function mountPanel(
         // here on purpose: these tests are about the STAGE knobs, and the
         // monitor's own wiring is asserted in godview-monitor.test.tsx.
         monitorSections={[]}
+        // GT-3p: no deck has been opened in these cases, which is the state the
+        // readout renders as "no deck opened yet" rather than guessing one.
+        rendererBackend={null}
         onClose={onClose}
         onThemeChange={vi.fn()}
         onChange={onChange}
