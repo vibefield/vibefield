@@ -15,6 +15,7 @@ import {
   type ShellClientProviderMethod,
   type ShellWebContentsCaptureArtifactPreviewParams,
   type ShellWebContentsCaptureArtifactPreviewResult,
+  TAILNET_GUEST_SCOPES,
   TAILNET_SCOPES,
 } from "@vibefield/contracts";
 import { type WebSocket, WebSocketServer } from "ws";
@@ -82,6 +83,10 @@ export interface ProductApiOptions {
    * hello ack; a client hello carrying a DIFFERENT expectation is refused
    * INCOMPATIBLE. Unset for embedded/unit daemons (ack reports null). */
   userId?: string;
+  /** UA-4 — the login recorded in link.json at link time (UA-D13), null while
+   * unlinked or pre-capture. Read fresh at every hello, so a capture landing
+   * mid-uptime activates the comparison law without a restart. */
+  getLinkedLogin?: () => string | null;
 }
 
 export type DeviceForwarder = (
@@ -488,36 +493,63 @@ export class ProductApi extends EventEmitter {
           signal: state.abortController.signal,
         };
       } else if (state.tailnetLogin !== null) {
-        // the sidecar-proxied door: identity is the WhoIs-verified login; the
-        // grant is the D32 tailnet preset (design-04 — tokens.mint/native.*/
-        // push.manage/plugins.manage never federate). The peer-fieldd device
-        // identity is TRANSPORT-DERIVED where the sidecar allows (T1 §1): a
-        // v3+ sidecar injects the WhoIs node id, and the registry correlation
-        // maps it to the roster deviceId — the caller's claim cannot move it
-        // (a contradicting claim loses silently; same grant either way, so
-        // nothing escalates). The C5 hello claim survives ONLY as the
-        // mixed-fleet fallback — an absent node header means an older sidecar
-        // proxied the hop, not an anonymous caller — and is deleted when the
-        // fleet is v3. clientKind still decides the KIND: the node id proves
-        // which device dialed, never what software did.
-        const claimRaw = parsed.data.deviceId;
-        const claim = typeof claimRaw === "string" && claimRaw.length > 0 ? claimRaw : undefined;
-        const derived =
-          state.tailnetNodeId !== null
-            ? this.opts.correlateNodeId?.(state.tailnetNodeId)
-            : undefined;
-        const deviceId = derived ?? claim;
-        const peer = parsed.data.clientKind === "peer-fieldd" && deviceId !== undefined;
-        state.authed = true;
-        state.scopes = [...TAILNET_SCOPES];
-        state.ctx = {
-          principal: peer
-            ? { kind: "peer-fieldd", deviceId: deviceId as string }
-            : { kind: "tailnet", login: state.tailnetLogin },
-          transport: "ws-tailnet",
-          receivedAt: Date.now(),
-          signal: state.abortController.signal,
-        };
+        // UA-4 — the stored-login comparison law (spec §7.3, UA-D5/UA-D13):
+        // the peer's WhoIs-verified login against the login recorded in
+        // link.json at link time — no live self-lookup per request. No stored
+        // login (unlinked, or pre-capture on a shy/tagged node) = today's
+        // status-quo grant: activation is gated on capture, and shared-tailnet
+        // login stays unadvertised until the two-account witness passes. The
+        // comparison, not the clientKind, decides — a peer-fieldd hello from
+        // a colleague's login is a guest like any other.
+        const storedLogin = this.opts.getLinkedLogin?.() ?? null;
+        if (storedLogin !== null && state.tailnetLogin !== storedLogin) {
+          state.authed = true;
+          state.scopes = [...TAILNET_GUEST_SCOPES];
+          state.ctx = {
+            principal: { kind: "tailnet-guest", login: state.tailnetLogin },
+            transport: "ws-tailnet",
+            receivedAt: Date.now(),
+            signal: state.abortController.signal,
+          };
+        } else {
+          // the sidecar-proxied door: identity is the WhoIs-verified login; the
+          // grant is the D32 tailnet preset (design-04 — tokens.mint/native.*/
+          // push.manage/plugins.manage never federate). The peer-fieldd device
+          // identity is TRANSPORT-DERIVED where the sidecar allows (T1 §1): a
+          // v3+ sidecar injects the WhoIs node id, and the registry correlation
+          // maps it to the roster deviceId — the caller's claim cannot move it
+          // (a contradicting claim loses silently; same grant either way, so
+          // nothing escalates). The C5 hello claim survives ONLY as the
+          // mixed-fleet fallback — an absent node header means an older sidecar
+          // proxied the hop, not an anonymous caller — and is deleted when the
+          // fleet is v3. clientKind still decides the KIND: the node id proves
+          // which device dialed, never what software did.
+          const claimRaw = parsed.data.deviceId;
+          const claim = typeof claimRaw === "string" && claimRaw.length > 0 ? claimRaw : undefined;
+          const derived =
+            state.tailnetNodeId !== null
+              ? this.opts.correlateNodeId?.(state.tailnetNodeId)
+              : undefined;
+          const deviceId = derived ?? claim;
+          const peer = parsed.data.clientKind === "peer-fieldd" && deviceId !== undefined;
+          state.authed = true;
+          state.scopes = [...TAILNET_SCOPES];
+          state.ctx = {
+            principal: peer
+              ? { kind: "peer-fieldd", deviceId: deviceId as string }
+              : {
+                  // matched ⇒ self:true; pre-capture ⇒ absent (never false)
+                  kind: "tailnet",
+                  login: state.tailnetLogin,
+                  ...(storedLogin !== null ? { self: true } : {}),
+                  // T1 §1 — the declared slot, filled from the transport fact
+                  ...(state.tailnetNodeId !== null ? { tailscaleId: state.tailnetNodeId } : {}),
+                },
+            transport: "ws-tailnet",
+            receivedAt: Date.now(),
+            signal: state.abortController.signal,
+          };
+        }
       } else {
         reply(this.err(id, "UNAUTHORIZED", "invalid token", false));
         ws.close(1008, "unauthorized");
@@ -540,6 +572,21 @@ export class ProductApi extends EventEmitter {
     if (!state.authed || !state.ctx) {
       reply(this.err(id, "UNAUTHORIZED", "hello required first", false));
       return;
+    }
+
+    // UA-4 — the guest choke (spec §7.3, UA-D14): a tailnet-guest principal
+    // passes ONLY methods that declare guestOk. Sits BEFORE every dispatch
+    // path — the shell-provider built-ins, system.unsubscribe, the dynamic
+    // router, and the registry choke — because the scope check alone would
+    // pass scope:null methods (system.health tells its internals to no one).
+    if (state.ctx.principal.kind === "tailnet-guest") {
+      const def = METHODS.find((m) => m.method === method && m.surface === "product");
+      if (def?.guestOk !== true) {
+        reply(
+          this.err(id, "FORBIDDEN_SCOPE", "guest access: method not available", false, { method }),
+        );
+        return;
+      }
     }
 
     // AH-3 — these two lifecycle calls bind to this exact transport. They are

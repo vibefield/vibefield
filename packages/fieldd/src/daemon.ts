@@ -88,7 +88,7 @@ import { FederatedSubscriptionManager } from "./federated-subs";
 import { InstallSetReconciler } from "./install-reconciler";
 import { LinkService } from "./link-service";
 import { McpService } from "./mcp-service";
-import { MeshClient } from "./mesh-client";
+import { MeshClient, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
@@ -642,6 +642,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       tailnetPathSecret: servePathSecret,
       correlateNodeId: (nodeId) => devicesRef?.deviceIdByNodeId(nodeId),
       ...(config.userId !== undefined ? { userId: config.userId } : {}),
+      // UA-4 — the door's comparison value (UA-D13): read fresh per hello, so
+      // a capture landing mid-uptime activates the law without a restart
+      getLinkedLogin: () => links.status().link?.login ?? null,
     });
     diagnosticsService.register(api);
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));
@@ -1912,19 +1915,59 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // bootstrap's tail runs); its serves are declared later via start(), once
     // the control port is bound. The bridge reads controlPort lazily, and the
     // product serve's secret never enters the service.
+    // UA-4 — the serve-allow belt (UA-D13): the product serve carries
+    // allow:[login] so the sidecar's verified-login glob refuses guests before
+    // the upgrade ever reaches fieldd (the door's comparison stays the
+    // suspenders). Login is read live at declare time; a capture or unlink
+    // mid-uptime re-issues the LAST declared set with the product spec
+    // rebuilt — setServes replaces the whole desired set, so the remembered
+    // artifact specs ride along intact (mesh-client C3). Artifact serves keep
+    // their own per-artifact allow semantics — those are the deliberate guest
+    // surfaces (spec §7.3).
+    const serveLog = logger.child({ component: "mesh.serves" });
+    const linkedLogin = (): string | null => links.status().link?.login ?? null;
+    const productServeSpec = (): ServeSpec => {
+      const login = linkedLogin();
+      return {
+        name: "product",
+        target: { kind: "port", port: controlPort },
+        tls: false,
+        pathSecret: servePathSecret,
+        // the sidecar matches with Go path.Match, lowercased both sides — a
+        // login is a LITERAL here, so its glob metacharacters are escaped
+        ...(login !== null ? { allow: [login.replace(/[\\*?[]/g, (c) => `\\${c}`)] } : {}),
+      };
+    };
+    let lastArtifactServeSpecs: ServeSpec[] | null = null;
+    let lastServeAllowLogin: string | null = null;
+    links.on("changed", () => {
+      const login = linkedLogin();
+      if (lastArtifactServeSpecs === null || login === lastServeAllowLogin) return;
+      lastServeAllowLogin = login;
+      const specs = [productServeSpec(), ...lastArtifactServeSpecs];
+      void (async () => {
+        // the sidecar has no upsert (same-id add = PROXY_EXISTS) and the
+        // reconcile SKIPS live serveIds — re-gating a live serve is
+        // remove-then-add, or the old gate keeps running while the reported
+        // state adopts the new spec (the mesh-client skip is recorded C3
+        // debt; the brief serve blink here is once per link transition)
+        await mesh.removeServe("product").catch(() => {});
+        await mesh.setServes(specs);
+      })().catch((error: unknown) => {
+        // mesh down/degraded: the next declare re-runs the reconcile; the
+        // door's comparison still refuses guests meanwhile
+        serveLog.debug("fieldd.serve.allow_refresh_deferred", "product allow refresh deferred", {
+          error: String(error),
+        });
+      });
+    });
     const artifacts = new ArtifactService({
       dataDir: config.dataDir,
       bridge: {
         declare: async (specs) => {
-          await mesh.setServes([
-            {
-              name: "product",
-              target: { kind: "port", port: controlPort },
-              tls: false,
-              pathSecret: servePathSecret,
-            },
-            ...specs,
-          ]);
+          lastArtifactServeSpecs = specs;
+          lastServeAllowLogin = linkedLogin();
+          await mesh.setServes([productServeSpec(), ...specs]);
         },
         remove: async (serveId) => await mesh.removeServe(serveId),
         states: () => mesh.serves(),

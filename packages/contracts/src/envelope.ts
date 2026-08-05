@@ -152,8 +152,15 @@ export type Principal =
   | { kind: "shell-main"; tokenId: string; scopes: string[] }
   // deviceName/tailscaleId optional (C3): the sidecar proxy injects only
   // login/name/pic — absent transport facts stay absent, never empty-string
-  // (node-id header injection is an upstream truffle petition).
-  | { kind: "tailnet"; login: string; deviceName?: string; tailscaleId?: string }
+  // (node-id header injection is an upstream truffle petition). `self` is the
+  // UA-4 door verdict (spec §7.3): true = the peer's login matched this
+  // user's stored link at hello; ABSENT = pre-capture era (no stored login to
+  // compare against) — never false, a mismatch mints tailnet-guest instead.
+  | { kind: "tailnet"; login: string; deviceName?: string; tailscaleId?: string; self?: boolean }
+  // UA-4 (spec §7.3, UA-D5): a WhoIs-verified tailnet peer whose login does
+  // NOT match the stored link — empty scope grant, only guestOk methods
+  // answer. The polite door: an honest "no access", never a socket slam.
+  | { kind: "tailnet-guest"; login: string }
   | { kind: "mcp-agent"; sessionId: string; scopes: string[] }
   | { kind: "peer-fieldd"; deviceId: string }
   | { kind: "plugin"; id: string; scopes: string[] }; // design-03 D20

@@ -26,6 +26,20 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
     const names = METHODS.map((m) => m.method);
     expect(new Set(names).size).toBe(names.length);
   });
+
+  it("guestOk methods are idempotent, non-mutating, and exactly the v1 set (UA-4 / UA-D14)", () => {
+    const guestOk = METHODS.filter((m) => m.guestOk === true);
+    // spec §7.3 v1 law: system.hello only. Widening is a deliberate edit
+    // against this pin, never drift.
+    expect(guestOk.map((m) => m.method)).toEqual(["system.hello"]);
+    for (const m of guestOk) {
+      expect(m.idempotent, `${m.method}: guestOk ⇒ idempotent`).toBe(true);
+      expect(
+        m.scope === null || /\.(read|observe)$/.test(m.scope),
+        `${m.method}: guestOk ⇒ non-mutating scope (got ${m.scope})`,
+      ).toBe(true);
+    }
+  });
 });
 
 describe("port registry", () => {

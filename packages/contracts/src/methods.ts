@@ -27,6 +27,11 @@ export interface MethodDef {
   idempotent: boolean;
   locality: Locality;
   subscription?: boolean;
+  /** UA-4 (spec §7.3, UA-D14): a tailnet-guest principal may call ONLY
+   * methods that set this — the scope check alone would pass scope:null
+   * methods. The registry's first runtime-read column (`locality`'s sibling);
+   * linted: guestOk ⇒ idempotent and a non-mutating scope. Default false. */
+  guestOk?: boolean;
 }
 
 export function defineMethod(def: MethodDef): MethodDef {
@@ -47,6 +52,10 @@ export const METHODS: MethodDef[] = [
     scope: null,
     idempotent: true,
     locality: "local",
+    // UA-4 v1: the ONLY guest-admitted method — a guest gets a polite hello
+    // (grantedScopes: []) and typed refusals everywhere else. Widening this
+    // set is a deliberate act against the registry lint, never drift.
+    guestOk: true,
   }),
   defineMethod({
     surface: "product",

@@ -176,6 +176,12 @@ export const TAILNET_SCOPES: readonly Scope[] = [
   "mcp.consume",
 ] as const;
 
+/** UA-4 (spec §7.3, UA-D5): the guest preset — a WhoIs-verified tailnet peer
+ * whose login does not match this user's stored link. Deliberately empty:
+ * guests get a polite hello and typed refusals, not capabilities. Any future
+ * guest surface grows from the `guestOk` method column, never from scopes. */
+export const TAILNET_GUEST_SCOPES: readonly Scope[] = [] as const;
+
 /** Socket file names under the daemon run dirs; paths are stable across restarts (external-mode law). */
 export const SOCKETS = {
   FIELDD: "fieldd.sock",

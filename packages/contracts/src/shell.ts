@@ -353,7 +353,17 @@ export type ShellProviderRegisterResult = z.infer<typeof ShellProviderRegisterRe
 
 export const ShellProviderCaller = z
   .object({
-    kind: z.enum(["local-token", "shell-main", "tailnet", "mcp-agent", "peer-fieldd", "plugin"]),
+    // tailnet-guest is total-type honesty, not a reachable path: the UA-4
+    // guest choke refuses every method before a handler could dial a provider
+    kind: z.enum([
+      "local-token",
+      "shell-main",
+      "tailnet",
+      "tailnet-guest",
+      "mcp-agent",
+      "peer-fieldd",
+      "plugin",
+    ]),
     pluginId: PluginId.optional(),
     clientKind: ClientKind.optional(),
   })

@@ -109,6 +109,44 @@ describe("UA-3 — LinkService", () => {
     expect(svc.status().link).toBeNull();
   });
 
+  it("a login change under a live link rewrites the record, keeps linkedAt, and warns (UA-4)", async () => {
+    const root = mkRoot();
+    let login = "james@github";
+    const warns: string[] = [];
+    const spyLogger = {
+      child: () => spyLogger,
+      trace() {},
+      debug() {},
+      info() {},
+      warn(event: string) {
+        warns.push(event);
+      },
+      error() {},
+      fatal() {},
+      isLevelEnabled: () => true,
+    };
+    const svc = new LinkService({
+      dataDir: root,
+      native: { request: () => Promise.resolve({ deviceId: "01DEVICE", login }) },
+      now: () => 1_754_000_000_000,
+      logger: spyLogger as unknown as import("@vibefield/logging").Logger,
+    });
+    await probe(svc);
+    const first = JSON.parse(readFileSync(linkPath(root), "utf8"));
+    expect(first.login).toBe("james@github");
+    expect(warns).toEqual([]);
+
+    // the trust root moves under the node (account switch without unlink):
+    // the stored value follows — the door's verdicts re-scope from here —
+    // and the event is loud, not silent
+    login = "other@github";
+    await probe(svc);
+    const second = JSON.parse(readFileSync(linkPath(root), "utf8"));
+    expect(second.login).toBe("other@github");
+    expect(second.linkedAt).toBe(first.linkedAt);
+    expect(warns).toEqual(["fieldd.link.login_changed"]);
+  });
+
   it("unlink retires natively, clears the record, and reports the archive", async () => {
     const root = mkRoot();
     const { svc, calls } = build(root, (method) =>

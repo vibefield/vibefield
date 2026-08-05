@@ -122,6 +122,11 @@ export class LinkService extends EventEmitter {
       if (login !== undefined && login.length > 0 && !this.linkFileCorrupt) {
         const at = new Date(this.now()).toISOString();
         if (this.link === null || this.link.login !== login) {
+          // UA-4: a non-null stored login CHANGING means the trust root moved
+          // under a live node (an account switch without unlink). The door
+          // follows the stored value, so say it loudly — self/guest verdicts
+          // re-scope from this moment. Unlink→relink is the deliberate path.
+          const moved = this.link !== null && this.link.login !== null && this.link.login !== login;
           const next: TailscaleLink = {
             login,
             ...(tailnetOf(self.dnsName) !== undefined ? { tailnet: tailnetOf(self.dnsName) } : {}),
@@ -130,9 +135,17 @@ export class LinkService extends EventEmitter {
           };
           this.persistLink(next);
           this.link = next;
-          this.logger.info("fieldd.link.captured", "The tailnet login was captured", {
-            loginPresent: true,
-          });
+          if (moved) {
+            this.logger.warn(
+              "fieldd.link.login_changed",
+              "The node's login changed under a live link — self/guest trust now follows the new login",
+              { loginPresent: true },
+            );
+          } else {
+            this.logger.info("fieldd.link.captured", "The tailnet login was captured", {
+              loginPresent: true,
+            });
+          }
         } else {
           // verified, unchanged — memory-only freshness; no disk churn
           this.link = { ...this.link, lastVerifiedAt: at };
