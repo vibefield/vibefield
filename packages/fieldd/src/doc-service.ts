@@ -8,6 +8,7 @@ import {
   DocRegistryEntry,
   type DocSyncRecord,
   LANE_MAX_FRAME_BYTES,
+  LAYOUT,
   type LanePutMeta,
   STORES,
 } from "@vibefield/contracts";
@@ -148,8 +149,8 @@ export class DocumentService {
     this.ticketTtlMs = opts.ticketTtlMs ?? 30_000;
     this.logger = opts.logger ?? createNoopLogger();
     this.onCommit = opts.onCommit;
-    this.docsDir = join(this.dataDir, "docs");
-    this.registryDir = join(this.dataDir, "registries");
+    this.docsDir = join(this.dataDir, ...LAYOUT.DOCS_DIR);
+    this.registryDir = join(this.dataDir, ...LAYOUT.REGISTRIES_DIR);
     this.registryFile = `${STORES.DOCS}.json`;
     this.registryPath = join(this.registryDir, this.registryFile);
     try {

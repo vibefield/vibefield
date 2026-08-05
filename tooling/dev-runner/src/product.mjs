@@ -1,12 +1,19 @@
 import { readFile, unlink } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
+import { repoRoot } from "./paths.mjs";
 import { isPidAlive, waitForPidExit } from "./processes.mjs";
+
+// UA-D10 — run-file paths come from the contracts LAYOUT registry. The dev
+// runner is plain .mjs with no build step, so it reads the COMMITTED generated
+// artifact rather than importing the TS source (gen freshness is verify-gated).
+const LAYOUT = createRequire(import.meta.url)(
+  join(repoRoot, "packages", "contracts", "gen", "layout.json"),
+);
 
 export async function readDevProduct(dataRoot) {
   try {
-    const value = JSON.parse(
-      await readFile(join(dataRoot, "fieldd", "run", "product.json"), "utf8"),
-    );
+    const value = JSON.parse(await readFile(join(dataRoot, ...LAYOUT.PRODUCT_JSON), "utf8"));
     if (
       !Number.isInteger(value.pid) ||
       value.pid <= 0 ||
@@ -60,9 +67,8 @@ export async function clearDeadDevProductFiles(dataRoot, expectedProduct, pidAli
   const live = [current.pid, current.nativePid].filter((pid) => pid !== null && pidAlive(pid));
   if (live.length > 0) return false;
 
-  const runDir = join(dataRoot, "fieldd", "run");
-  await unlinkIfPresent(join(runDir, "shell.token"));
-  await unlinkIfPresent(join(runDir, "product.json"));
+  await unlinkIfPresent(join(dataRoot, ...LAYOUT.SHELL_TOKEN));
+  await unlinkIfPresent(join(dataRoot, ...LAYOUT.PRODUCT_JSON));
   return true;
 }
 

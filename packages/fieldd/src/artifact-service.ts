@@ -38,6 +38,7 @@ import {
   type ArtifactUpdateParams,
   ArtifactView,
   type DeviceInfo,
+  LAYOUT,
   LegacyArtifactPublishParams,
   LocalArtifactIntent,
   MESH_CONTROL_LIMITS,
@@ -295,11 +296,11 @@ export class ArtifactService {
     this.#capturePreview = opts.capturePreview;
     this.#capturePreviewAvailable =
       opts.capturePreviewAvailable ?? (() => opts.capturePreview !== undefined);
-    this.#registryDir = join(opts.dataDir, "registries");
+    this.#registryDir = join(opts.dataDir, ...LAYOUT.REGISTRIES_DIR);
     this.#intentPath = join(this.#registryDir, ARTIFACT_INTENT_FILE);
     this.#legacyPath = join(this.#registryDir, `${STORES.ARTIFACTS}.json`);
     this.#catalogCachePath = join(this.#registryDir, CATALOG_CACHE_FILE);
-    this.#previewRoot = join(opts.dataDir, "artifacts", "previews");
+    this.#previewRoot = join(opts.dataDir, ...LAYOUT.ARTIFACT_PREVIEWS_DIR);
     this.#load();
     this.#loadCatalogCache();
   }

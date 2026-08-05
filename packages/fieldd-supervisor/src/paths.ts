@@ -1,22 +1,24 @@
 import { join } from "node:path";
-import { SOCKETS } from "@vibefield/contracts";
+import { LAYOUT } from "@vibefield/contracts";
 import { SupervisorError } from "./types";
 
-/** Run-file layout under the data root (design-02 §3.6; registry names only). */
+/** Run-file layout under the data root (design-02 §3.6) — LAYOUT segments only
+ * (UA-D10): this file used to be an independent copy of the tree and is now a
+ * consumer like everyone else. */
 export function runDir(dataRoot: string): string {
-  return join(dataRoot, "fieldd", "run");
+  return join(dataRoot, ...LAYOUT.FIELDD_RUN_DIR);
 }
 
 export function productPath(dataRoot: string): string {
-  return join(runDir(dataRoot), "product.json");
+  return join(dataRoot, ...LAYOUT.PRODUCT_JSON);
 }
 
 export function tokenPath(dataRoot: string): string {
-  return join(runDir(dataRoot), "shell.token");
+  return join(dataRoot, ...LAYOUT.SHELL_TOKEN);
 }
 
 export function nativeSocketPath(dataRoot: string): string {
-  return join(dataRoot, "native", "run", SOCKETS.MGMT);
+  return join(dataRoot, ...LAYOUT.MGMT_SOCKET);
 }
 
 // sun_path is 104 bytes on macOS (108 on Linux); a longer socket path makes

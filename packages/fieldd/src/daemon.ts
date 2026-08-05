@@ -21,6 +21,7 @@ import {
   KvGetParams,
   KvListParams,
   KvSetParams,
+  LAYOUT,
   LegacyArtifactPublishParams,
   LOG_STREAMS,
   METHODS,
@@ -270,8 +271,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   let detachHealthSources: (() => void) | null = null;
 
   const native = new NativeLink({
-    socketPath: join(config.dataDir, "native", "run", "mgmt.sock"),
-    pairingFile: join(config.dataDir, "native", "pairing"),
+    socketPath: join(config.dataDir, ...LAYOUT.MGMT_SOCKET),
+    pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
     bootId,
     logger: logger.child({ component: "native_link" }),
   });
@@ -302,8 +303,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       onCommit: (commit) => docSync?.onCommit(commit),
     });
     const laneLink = new MeshLaneLink({
-      socketPath: join(config.dataDir, "native", "run", "meshdata.sock"),
-      pairingFile: join(config.dataDir, "native", "pairing"),
+      socketPath: join(config.dataDir, ...LAYOUT.MESHDATA_SOCKET),
+      pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
       bootId,
       logger: logger.child({ component: "mesh.lane" }),
     });
@@ -311,7 +312,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // so the first snapshot is warm. No module code loads here (§19.1).
     // P7 — the installed root is fieldd-OWNED: absent on first boot is the
     // normal empty state, so create it rather than report it as a problem
-    const installedRoot = join(config.dataDir, "plugins", "installed");
+    const installedRoot = join(config.dataDir, ...LAYOUT.PLUGINS_INSTALLED_DIR);
     mkdirSync(installedRoot, { recursive: true });
     const plugins = new PluginRegistryService({
       dataDir: config.dataDir,
@@ -2119,7 +2120,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     void reconciler.reconcile();
 
     // -- run files (shell bootstrap contract) --
-    const runDir = join(config.dataDir, "fieldd", "run");
+    const runDir = join(config.dataDir, ...LAYOUT.FIELDD_RUN_DIR);
     mkdirSync(runDir, { recursive: true });
     const shellTokenId = tokens.reserveTokenId();
     const shellGrant = await audit.requiredSystem(
@@ -2143,8 +2144,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         tokens.revoke(grant.tokenId);
       },
     );
-    const tokenPath = join(runDir, "shell.token");
-    const productPath = join(runDir, "product.json");
+    const tokenPath = join(config.dataDir, ...LAYOUT.SHELL_TOKEN);
+    const productPath = join(config.dataDir, ...LAYOUT.PRODUCT_JSON);
     writeFileSync(tokenPath, shellGrant.token, { mode: 0o600 });
     chmodSync(tokenPath, 0o600); // umask-proof
     writeFileSync(

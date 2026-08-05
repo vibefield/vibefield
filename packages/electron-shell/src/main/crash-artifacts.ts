@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { constants, type Dirent } from "node:fs";
 import { chmod, lstat, mkdir, open, readdir, rename, unlink } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
+import { LAYOUT } from "@vibefield/contracts";
 import {
   type CrashArtifactV1 as CrashArtifact,
   type CrashArtifactListV1 as CrashArtifactList,
@@ -259,7 +260,7 @@ export class CrashArtifactManager {
       now?: () => number;
     },
   ) {
-    const stateRoot = join(options.dataRoot, "crash");
+    const stateRoot = join(options.dataRoot, ...LAYOUT.CRASH_DIR);
     this.markerPath = join(stateRoot, "active-run.json");
     this.statePath = join(stateRoot, "manifest-state.json");
     this.now = options.now ?? Date.now;

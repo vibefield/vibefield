@@ -38,9 +38,9 @@ use tokio::sync::mpsc::{self, UnboundedSender};
 // numbers; a divergence is a silent desync of two byte streams, which is the
 // worst failure this file can have.
 
-/// = @vibefield/contracts registries SOCKETS.MESHDATA. One name, two languages;
-/// the registry is the source and this mirrors it (never hardcode — repo law).
-pub const SOCKET_NAME: &str = "meshdata.sock";
+/// = @vibefield/contracts registries SOCKETS.MESHDATA, by GENERATION — the
+/// hand-typed mirror this used to be died at UA-0 (drift class R4).
+pub const SOCKET_NAME: &str = crate::registries::sockets::MESHDATA;
 
 pub const FRAME_HELLO: u8 = 1;
 pub const FRAME_HELLO_OK: u8 = 2;

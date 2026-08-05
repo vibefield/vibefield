@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { PORTS } from "@vibefield/contracts";
+import { LAYOUT, PORTS } from "@vibefield/contracts";
 import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
 import { bootstrap } from "./daemon";
 
@@ -23,9 +23,14 @@ function nativeAlive(socketPath: string): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
+  // Default data root mirrors field-native's config.rs default_data_dir()
+  // exactly — two planes, one answer per platform (the macOS-only hardcode
+  // this used to be disagreed with the Rust default off-macOS; UA-0).
   const dataDir =
     process.env["FIELDD_DATA_DIR"] ??
-    join(homedir(), "Library", "Application Support", "VibeField");
+    (process.platform === "darwin"
+      ? join(homedir(), "Library", "Application Support", "VibeField")
+      : join(homedir(), ".local", "share", "VibeField"));
   const portEnv = process.env["FIELDD_CONTROL_PORT"];
   // the data lane binds the registered port by default (the daemon's own default
   // is ephemeral, for test isolation) — FIELDD_DATA_PORT overrides, 0 = ephemeral.
@@ -51,7 +56,7 @@ async function main(): Promise<void> {
   });
 
   let nativePid: number | undefined;
-  const socketPath = join(dataDir, "native", "run", "mgmt.sock");
+  const socketPath = join(dataDir, ...LAYOUT.MGMT_SOCKET);
   if (nativeBin && !(await nativeAlive(socketPath))) {
     // The native plane outlives this fieldd (OS plane; launchd owns it later).
     // field-native unlinks a stale socket itself before binding.

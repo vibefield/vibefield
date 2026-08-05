@@ -1,0 +1,23 @@
+{
+  "FIELDD_RUN_DIR": ["fieldd", "run"],
+  "PRODUCT_JSON": ["fieldd", "run", "product.json"],
+  "SHELL_TOKEN": ["fieldd", "run", "shell.token"],
+  "DEVICE_ID": ["fieldd", "device-id"],
+  "SETTINGS_DOC": ["fieldd", "settings", "doc.loro"],
+  "REGISTRIES_DIR": ["registries"],
+  "DOCS_DIR": ["docs"],
+  "ARTIFACT_PREVIEWS_DIR": ["artifacts", "previews"],
+  "AUDIT_DIR": ["audit"],
+  "PLUGINS_INSTALLED_DIR": ["plugins", "installed"],
+  "NATIVE_DIR": ["native"],
+  "NATIVE_RUN_DIR": ["native", "run"],
+  "PAIRING_FILE": ["native", "pairing"],
+  "MESH_STATE_DIR": ["native", "mesh"],
+  "TERMINAL_CONFIG_FILE": ["native", "config.ghostty"],
+  "MGMT_SOCKET": ["native", "run", "mgmt.sock"],
+  "MESHDATA_SOCKET": ["native", "run", "meshdata.sock"],
+  "TERMINAL_CONTROL_SOCKET": ["native", "run", "terminal-control.sock"],
+  "TERMINAL_FRAME_SOCKET": ["native", "run", "terminal-frame.sock"],
+  "CRASH_DIR": ["crash"],
+  "EXPORTS_STAGING_DIR": ["exports", ".staging"]
+}

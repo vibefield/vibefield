@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import { chmod, lstat, mkdir, open, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { LAYOUT } from "@vibefield/contracts";
 import {
   AuditRecordV1 as AuditRecordSchemaV1,
   type AuditRecordV1,
@@ -254,7 +255,7 @@ export class AuditLedgerWriter {
   private closed = false;
 
   constructor(private readonly options: AuditLedgerWriterOptions) {
-    this.root = join(options.dataDir, "audit");
+    this.root = join(options.dataDir, ...LAYOUT.AUDIT_DIR);
     this.now = options.now ?? Date.now;
     this.bootId = safeBootId(options.bootId);
   }

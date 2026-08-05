@@ -7,6 +7,7 @@ import {
   DEVICE_LIMITS,
   type DeviceInfo,
   DeviceSlice,
+  LAYOUT,
   PeerInfo,
   type ProductEndpoint,
   STORES,
@@ -373,7 +374,7 @@ export class DeviceService extends EventEmitter {
   }
 
   private loadLocalId(): string {
-    const path = join(this.opts.dataDir, "fieldd", "device-id");
+    const path = join(this.opts.dataDir, ...LAYOUT.DEVICE_ID);
     try {
       const existing = readFileSync(path, "utf8").trim();
       if (existing.length > 0) return existing;

@@ -201,6 +201,39 @@ export const FILES = {
   TERMINAL_CONFIG: "config.ghostty",
 } as const;
 
+/** UA-D10 — the on-disk layout under a data root, as REGISTRY DATA: relative
+ * path segments, one authority, consumers join and never respell (the seven
+ * hand-copied derivations the UA census found are the R4 drift class again).
+ * Socket/file basenames compose from their own registries above. Generated
+ * into Rust by `pnpm gen` and pinned on both sides by
+ * `fixtures/layout.vector.json`; non-TS consumers (dev-runner .mjs) read the
+ * committed `gen/layout.json`. The tree these segments describe is the CURRENT
+ * flat-v1 layout — UA-1 re-roots the same segments under `users/<fuid>/` by
+ * changing the ROOT, never the segments. */
+export const LAYOUT = {
+  FIELDD_RUN_DIR: ["fieldd", "run"],
+  PRODUCT_JSON: ["fieldd", "run", "product.json"],
+  SHELL_TOKEN: ["fieldd", "run", "shell.token"],
+  DEVICE_ID: ["fieldd", "device-id"],
+  SETTINGS_DOC: ["fieldd", "settings", "doc.loro"],
+  REGISTRIES_DIR: ["registries"],
+  DOCS_DIR: ["docs"],
+  ARTIFACT_PREVIEWS_DIR: ["artifacts", "previews"],
+  AUDIT_DIR: ["audit"],
+  PLUGINS_INSTALLED_DIR: ["plugins", "installed"],
+  NATIVE_DIR: ["native"],
+  NATIVE_RUN_DIR: ["native", "run"],
+  PAIRING_FILE: ["native", "pairing"],
+  MESH_STATE_DIR: ["native", "mesh"],
+  TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
+  MGMT_SOCKET: ["native", "run", SOCKETS.MGMT],
+  MESHDATA_SOCKET: ["native", "run", SOCKETS.MESHDATA],
+  TERMINAL_CONTROL_SOCKET: ["native", "run", SOCKETS.TERMINAL_CONTROL],
+  TERMINAL_FRAME_SOCKET: ["native", "run", SOCKETS.TERMINAL_FRAME],
+  CRASH_DIR: ["crash"],
+  EXPORTS_STAGING_DIR: ["exports", ".staging"],
+} as const;
+
 /** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): these channels, nothing
  * else. Payload schemas live in shell.ts; call sites import these names — a raw
  * `vibefield:` literal outside contracts is a boundary violation (wall R6). */

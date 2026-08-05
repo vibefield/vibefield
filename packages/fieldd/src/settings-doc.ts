@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { InstallSetEntry, SETTINGS_DOC_SECTIONS } from "@vibefield/contracts";
+import { InstallSetEntry, LAYOUT, SETTINGS_DOC_SECTIONS } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { LoroDoc, UndoManager } from "loro-crdt";
 
@@ -46,7 +46,7 @@ export class SettingsDocService extends EventEmitter {
   constructor(private readonly cfg: SettingsDocConfig) {
     super();
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.settings.doc" });
-    this.docPath = join(cfg.dataDir, "fieldd", "settings", "doc.loro");
+    this.docPath = join(cfg.dataDir, ...LAYOUT.SETTINGS_DOC);
     this.legacyUserPath = join(cfg.dataDir, "fieldd", "plugins", "settings-user.json");
     this.undoMgr = new UndoManager(this.doc, {
       // law 2 — install-set/grant mutations and the one-time migration are

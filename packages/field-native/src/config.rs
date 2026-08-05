@@ -67,42 +67,48 @@ impl NativeConfig {
     }
 
     pub fn native_dir(&self) -> PathBuf {
-        self.data_dir.join("native")
+        self.join_layout(crate::registries::layout::NATIVE_DIR)
     }
     /// 0700 — sockets live here; stable paths across fieldd restarts (external-mode law).
     pub fn run_dir(&self) -> PathBuf {
-        self.native_dir().join("run")
+        self.join_layout(crate::registries::layout::NATIVE_RUN_DIR)
     }
     /// 0600 — the D8 pairing secret, created by field-native on first boot.
     pub fn pairing_file(&self) -> PathBuf {
-        self.native_dir().join("pairing")
+        self.join_layout(crate::registries::layout::PAIRING_FILE)
     }
 
     /// The app-owned Ghostty config overlay the terminal unit loads after the
     /// user's own Ghostty files (GT-3). It sits in the native dir, not the run
     /// dir: a user's configuration outlives a boot, and the run dir holds only
-    /// what a boot creates. The NAME comes from the generated registries — one
-    /// name, and this is the only place it is joined to a directory, because
-    /// this plane owns the file and every reader asks the service where it is.
+    /// what a boot creates. The segments come from the generated LAYOUT — one
+    /// spelling, and this plane owns the file, so every reader asks the service
+    /// where it is rather than deriving the path a second time.
     pub fn terminal_config_file(&self) -> PathBuf {
-        self.native_dir()
-            .join(crate::registries::files::TERMINAL_CONFIG)
+        self.join_layout(crate::registries::layout::TERMINAL_CONFIG_FILE)
     }
     pub fn mgmt_socket(&self) -> PathBuf {
-        self.run_dir().join("mgmt.sock")
+        self.join_layout(crate::registries::layout::MGMT_SOCKET)
     }
 
     /// The MeshData bridge's byte plane (D5). A SECOND socket beside mgmt on
     /// purpose: control and bytes must not share a queue, and this one carries
     /// product data while mgmt carries decisions.
     pub fn meshdata_socket(&self) -> PathBuf {
-        self.run_dir()
-            .join(crate::services::mesh_bridge::SOCKET_NAME)
+        self.join_layout(crate::registries::layout::MESHDATA_SOCKET)
     }
     /// truffle node state (device identity + tsnet keys) — mesh identity lives
     /// in the longer-lived plane and survives fieldd restarts (design-02 §2.4).
     pub fn mesh_state_dir(&self) -> PathBuf {
-        self.native_dir().join("mesh")
+        self.join_layout(crate::registries::layout::MESH_STATE_DIR)
+    }
+
+    /// UA-D10: every path under the data root derives from the generated
+    /// LAYOUT segments — this is the only join site in the native plane.
+    fn join_layout(&self, segments: &[&str]) -> PathBuf {
+        segments
+            .iter()
+            .fold(self.data_dir.clone(), |path, segment| path.join(segment))
     }
 }
 
