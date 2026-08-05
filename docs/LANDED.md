@@ -777,3 +777,31 @@ motionless (logged loudly, not respawned — respawn would replay a world mid-ge
 drag feel unchanged by construction, not measurement (physicsHz A/B stays James's judge).
 Verify + smoke exit 0 both hands (orchestrator: first attempt at load 69.8). Full record:
 `specs/godview-terminal.md` (GT-D16 + GT-3c findings).
+
+## UA-0 — the layout registry: one tree, one spelling, two languages
+
+**UA-0 LANDED (2026-08-05, `fcd0af9`).** The UA track's first slice, landed hours after its
+spec: `thinking-users-and-accounts` (James's OS-user framing) → `specs/users-and-accounts`
+v0.2 → four-spike verification (S1 self-whois YES on pinned truffle 0.7.12 — UA-4 unblocked,
+T3 demoted to optional; V2 N-resident-sidecars CLEAN with two recorded hazards; V3 ~85 MB
+footprint per resident pair — resident-by-default folded into UA-D3; V4 vendor relocation
+Claude-first with C-series asks recorded; V5 the users.json lock law, after exposing that
+UA-D12's ephemeral ports delete the accidental fixed-port mutex UA-D10 was silently leaning
+on) → ratification + fold-backs into design-00/01/02/03/04, artifact-hub, and logging — all
+the same day. The slice itself: LAYOUT joins `registries.ts` as UA-D10's one authority (21
+segment arrays composing SOCKETS/FILES basenames); `pnpm gen` emits `pub mod layout` plus a
+committed `gen/layout.json` for plain-mjs consumers; `layout.vector.json` pins both
+languages (contracts test + `tests/layout_vector.rs`). All seven census drift sites now
+consume LAYOUT — supervisor `paths.ts` (sun_path guard intact), `bin.ts` (whose macOS-only
+default-dir hardcode is fixed to mirror `config.rs` per platform), `daemon.ts` ×4,
+dev-runner `product.mjs` (createRequire on the committed gen artifact — tooling has no build
+step), support-bundle, preview-capture — plus the owner sites (doc/device/settings/artifact
+services, the audit writer, crash, exports staging). Rust's `config.rs` derives every
+data-root path through one `join_layout` over generated segments, and `mesh_bridge`'s
+hand-typed `SOCKET_NAME` mirror now references the generated constant (the drift class it
+apologized for is dead). Zero behavior change by construction; the boundary test scans
+twelve consumers for eighteen join-shaped respellings. Finding worth keeping: `gen:check`
+is `pnpm gen && git diff --exit-code`, so the freshness gate reds on UNCOMMITTED generated
+output — stage gen artifacts before reading the verdict; and a `| tail` pipeline masks the
+real exit code, so capture `$?` explicitly. Verify exit 0. UA-1 (user-shaped storage +
+migration) is next; the segments are the migration's manifest.
