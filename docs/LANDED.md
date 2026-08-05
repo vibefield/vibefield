@@ -945,3 +945,31 @@ now-populated `tailscaleId`; typecheck exhaustiveness caught both principal-map 
 the two physical witnesses (James's hands): the S1 live probe (`cargo test --ignored`
 with `TRUFFLE_TEST_AUTHKEY`) and the two-account guest refusal on a real tailnet —
 that witness gates advertising ANY shared-tailnet login, full stop.**
+
+## UA-3w — the field greets you
+
+**UA-3w LANDED (2026-08-05, `1e27c7b` worktree-agent slice, cherry-picked onto main on a
+green verbatim gate — no integration fix needed; the disjoint-file split held).** The
+Setup Assistant: an `onboarding` boot phase held between `connecting-fieldd` and
+`opening-document` — deliberately AFTER the workspace chunk resolves, so pane 3's "waking
+the daemon / loading the field: done" claims are TRUE (W4 kept honest by construction,
+`stagesDone` recorded as the machine passes each stage, never hardcoded). Five panes +
+the migration variant render on the splash's own floor (a shared `BootGround` — the
+wizard and the splash stand on literally the same canvas ground). W6 without a state
+store, made concrete: color absent ⇒ Welcome; color + no link ⇒ Connect; link ⇒ the
+posture question — with a bounded 1.2s beat for the link snapshot so a silent daemon
+can't park anyone on a blank pane. The gate enters ONLY on a cleanly-read
+`onboarded: false`; every failure mode (absent bridge, rejected read, bad shape) skips
+and logs — the wizard machinery can refuse itself, never the boot. Supervisor side:
+`mintOnboarded` rides mint AND migrate so the two can't disagree (smoke-like modes mint
+true — smokes untouched); flat-v1 migration stamps `setupVariant: "migrated"`, and main
+backfills the stamp for roots migrated before the field existed. Account extraction:
+`src/account/` (link face, posture cards, AccentPicker) now feeds both skins — and
+`account-section.test.tsx` passed UNMODIFIED, imports included. **Two honest findings,
+folded into spec §6 at source:** there is no link-*initiation* verb on the daemon (the
+pane's action IS the node's authUrl anchor, honest wait before it), and
+"posture already answered" is NOT derivable (UA-6's effective snapshot always carries a
+value) — a resumed linked wizard lands ON the posture question, preselected, never
+fake-skipping to Ready. Tests: 14 wizard + 9 machine + 5 users + 6 backfill cases new;
+306/28/406 green across the three packages. Eyeball owed: the fresh-root run-through and
+the one-time migration-variant wizard on the next `pnpm dev`, both themes, keyboard-only.

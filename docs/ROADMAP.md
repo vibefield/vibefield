@@ -53,7 +53,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
 | GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v glass + 3m mocked monitor + 3f shaders + 3p perf (cold 443ms → warm 36ms) + **3c physics-in-worker** landed (spec v0.3, GT-D10…D16) | `specs/godview-terminal.md` | **GT-4** remote floor (⌘⇧O desktop remote panes = its test row; carries NF-remote) → GT-5 iOS attach; James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module |
-| UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** — seven slices across two days; §8 errata + the C3 serve-reconcile-skip debt recorded; bonus finds: doc-registry write-back race fixed (UA-6), no-upsert serve semantics traced (UA-4); owed to the next `pnpm dev`: live dev-root migration · tray user label · Account page + sync-intent chips eyeball | `specs/users-and-accounts.md` | UA-3w Setup Assistant (Opus agent in flight, worktree) → UA-5 second user; **UA-4 exit stays open on the physical pair: S1 live probe + two-account witness — gates ANY shared-tailnet login** |
+| UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** — eight slices across two days; §8 errata + the C3 serve-reconcile-skip debt recorded; bonus finds: doc-registry write-back race fixed (UA-6), no-upsert serve semantics traced (UA-4), no-link-start-verb + posture-resume honesty folded at §6 (UA-3w); owed to the next `pnpm dev`: live dev-root migration + the one-time migration-variant wizard · tray user label · Account page + sync-intent chips eyeball | `specs/users-and-accounts.md` | UA-5 second user (the last rung); **UA-4 exit stays open on the physical pair: S1 live probe + two-account witness — gates ANY shared-tailnet login** |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
@@ -135,8 +135,12 @@ proven enforced sidecar-side by a dispatched trace, then rebuilt remove-then-add
 the trace's no-upsert find (the serve reconcile-skip is recorded C3 debt: stale gate,
 adopted state; latent only while mesh is env-gated off). UA-4's exit stays open on the
 two physical witnesses (second-account guest refusal; the S1 live probe) — those still
-gate advertising any shared-tailnet login. UA-3w's Setup Assistant is in flight on an
-agent worktree.
+gate advertising any shared-tailnet login. **UA-3w landed the same afternoon
+(`1e27c7b`)**: a worktree agent built the whole Setup Assistant — five panes on the
+splash's own ground, W6 resume from durable facts alone, mint/migrate symmetry on the
+onboarded flag — and its two honest findings (no link-start verb exists; posture-resume
+is not derivable) are folded into spec §6 as dated as-built notes. The next `pnpm dev`
+greets James with the one-time migration-variant wizard. One rung remains: UA-5.
 
 ## Next up — the options on the table (James's call)
 
@@ -144,10 +148,10 @@ agent worktree.
   plugin through WP8, then run the both-theme/native-picker plus desktop-B preview/refresh,
   Truffle symlink/allow, and cross-origin physical witnesses. AH-5 adds the phone list; the
   AH-1 physical two-client proof can run alongside this work.
-- **UA-3w integration → UA-5** — land the agent-built Setup Assistant (wizard panes,
-  boot phase, migration variant), then the second user: `users:create/switch` IPC,
-  resident pairs, switch-by-reload, the tray switcher. UA-4's physical pair (S1 live
-  probe + the two-account guest refusal) can run any evening with a second device.
+- **UA-5 — the second user** — the track's last rung: `users:create/switch` IPC,
+  per-user session bundles, resident pairs, switch-by-reload, the tray switcher, the
+  UA-D10 never-writes audit. UA-4's physical pair (S1 live probe + the two-account
+  guest refusal) can run any evening with a second device.
 - **AR** — the agent tracks; the reason everything else exists.
 - **GT-4 → GT-5** — the remote floor, then the phone attaches.
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).
