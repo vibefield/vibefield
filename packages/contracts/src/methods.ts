@@ -405,6 +405,16 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "sync",
   }),
+  // UA-D7 — may this doc leave this device? `local` locality is the honest
+  // class and not a shortcut: the answer is this device's own, held in this
+  // device's registry, and it does not replicate (the C6-4 doc-existence debt).
+  defineMethod({
+    surface: "product",
+    method: "doc.setSyncIntent",
+    scope: "doc.write",
+    idempotent: true,
+    locality: "local",
+  }),
   // C6-4 — per-doc sync standing (DocSyncStatus[]), snapshot-then-delta. Always
   // registered: with the mesh off the snapshot is an empty list, which the
   // renderer reads as "sync does not apply" — an honest quiet, not an error.

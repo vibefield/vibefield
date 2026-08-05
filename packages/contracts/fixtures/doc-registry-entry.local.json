@@ -1,0 +1,9 @@
+{
+  "docId": "2a1b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d",
+  "name": "journal",
+  "updatedAt": 1754352000000,
+  "baseEpoch": 0,
+  "engineSchema": 2,
+  "sizeBytes": 4096,
+  "syncIntent": "local"
+}

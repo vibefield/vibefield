@@ -17,6 +17,7 @@ import {
   DocOpenParams,
   type DocOpenResult,
   DocRenameParams,
+  DocSetSyncIntentParams,
   KvDeleteParams,
   KvGetParams,
   KvListParams,
@@ -25,6 +26,7 @@ import {
   LegacyArtifactPublishParams,
   LOG_STREAMS,
   METHODS,
+  type MeshSyncPosture,
   type NativeHealth,
   PluginsDisableParams,
   PluginsEnableParams,
@@ -69,7 +71,11 @@ import {
   PluginLogRouter,
   pluginLogProvenance,
 } from "@vibefield/logging";
-import { effectiveAppPreferences } from "./app-preferences";
+import {
+  DEFAULT_APP_PREFERENCES,
+  effectiveAppPreferences,
+  resolveSyncIntent,
+} from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { DeviceService } from "./device-service";
@@ -312,6 +318,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // optional the whole way down — with the mesh off (the default) `docSync`
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
+    // UA-D7 — the user's posture, CACHED because the three sync gates ask
+    // synchronously (a commit hook cannot await a settings-document read) and
+    // because the settings doc is constructed further down. It starts at the
+    // product default, so the window before the first read behaves exactly as
+    // fieldd always has; `refreshSyncPosture` below primes it and keeps it
+    // current on every settings change.
+    let syncPosture: MeshSyncPosture = DEFAULT_APP_PREFERENCES.syncPosture;
     const docs = new DocumentService({
       dataDir: config.dataDir,
       logger: logger.child({ component: "docs.service" }),
@@ -370,6 +383,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             .map((p) => ({ id: p.id, online: p.online !== false }))
         );
       },
+      // UA-D7 — the one place per-doc intent and user posture are folded
+      // together; the service itself never learns that a posture exists.
+      resolveIntent: (docId) => resolveSyncIntent(docs.syncIntentOf(docId), syncPosture),
       logger: logger.child({ component: "doc.sync" }),
     });
     try {
@@ -427,6 +443,24 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       dataDir: config.dataDir,
       logger: logger.child({ component: "plugin.settings.doc" }),
     });
+    // UA-D7 — keep the cached posture honest. A read failure LEAVES the last
+    // known value rather than reverting to the default: silently starting to
+    // sync docs a user asked to keep home is the one outcome this must not have.
+    const refreshSyncPosture = async (): Promise<void> => {
+      try {
+        syncPosture = effectiveAppPreferences(await settingsDoc.appValues()).syncPosture;
+      } catch (error) {
+        logger.warn(
+          "fieldd.doc_sync.posture_unreadable",
+          "The mesh sync posture could not be read; the last known value stands",
+          { error: String(error) },
+        );
+      }
+    };
+    settingsDoc.on("changed", (event: { section: string }) => {
+      if (event.section === "app") void refreshSyncPosture();
+    });
+    await refreshSyncPosture();
     // P5 — settings + KV storage (§16.2/§16.3); user scope rides the doc
     const settings = new PluginSettingsService({
       dataDir: config.dataDir,
@@ -856,6 +890,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       // label-only edit — docCount is unchanged, so no emitHealth here
       return docs.rename(parsed.data.docId, parsed.data.name);
+    });
+    // UA-D7 — "may this doc leave the device?". The registry write is the whole
+    // mutation: the three sync gates read the resolver on every decision, so
+    // the next commit, the next lane, and the next status fold all see the new
+    // answer without anything being told about it.
+    api.register("doc.setSyncIntent", async (ctx, params) => {
+      requireLocalDocumentCaller(ctx);
+      const parsed = DocSetSyncIntentParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { docId: uuid, intent: sync|local }",
+          false,
+        );
+      // posture, not content — docCount and updatedAt both stand
+      return docs.setSyncIntent(parsed.data.docId, parsed.data.intent);
     });
     // C6-4 — per-doc sync standing. Registered even with sync unavailable
     // (mesh off, the default): the empty list is the honest snapshot then, and
@@ -1577,7 +1627,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell, value: boolean }",
+          "expected { key: desktop.showTray|desktop.backgroundShell (boolean) | mesh.syncPosture (automatic|opt-in) }",
           false,
         );
       }

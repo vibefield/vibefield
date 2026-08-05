@@ -59,6 +59,16 @@ function fakeManager(overrides?: Partial<DocManagerState>) {
     }),
     createDoc: vi.fn(async () => {}),
     switchTo: vi.fn(async () => {}),
+    setSyncIntent: vi.fn(async (docId: string, intent: "sync" | "local") => {
+      // The real manager patches from the entry the daemon returns; the fake
+      // does the same so the chip is read back from the REGISTRY row, which is
+      // the property under test (never from the sync stream).
+      state = {
+        ...state,
+        docs: state.docs.map((d) => (d.docId === docId ? { ...d, syncIntent: intent } : d)),
+      };
+      for (const fn of listeners) fn();
+    }),
   };
   return manager;
 }
@@ -243,5 +253,82 @@ describe("FilePill sync dot (C6-4)", () => {
     expect(container?.querySelector("[data-sync-dot]")).toBeNull();
     // … and B's tile caption carries the honest word.
     expect(container?.textContent).toContain("peer offline");
+  });
+
+  it("UA-D7: a tile offers 'keep local', and a gated one wears the chip", () => {
+    const manager = fakeManager({
+      docs: [
+        {
+          docId: DOC_A,
+          name: "Field",
+          updatedAt: Date.now(),
+          baseEpoch: 0,
+          engineSchema: 2,
+          sizeBytes: 10,
+        },
+        {
+          docId: DOC_B,
+          name: "Studio",
+          updatedAt: Date.now(),
+          baseEpoch: 0,
+          engineSchema: 2,
+          sizeBytes: 10,
+          syncIntent: "local",
+        },
+      ],
+    });
+    mount(manager, true);
+    const chips = [...(container?.querySelectorAll("[data-sync-intent]") ?? [])];
+    expect(chips.map((c) => c.getAttribute("data-sync-intent"))).toEqual(["sync", "local"]);
+    expect(chips[0]?.textContent).toBe("keep local");
+    // The gated doc says what it IS, not what you could do to it.
+    expect(chips[1]?.textContent).toBe("local");
+    expect((chips[1] as HTMLElement).title).toContain("stays on this device");
+  });
+
+  it("UA-D7: the chip toggles both ways through the manager", () => {
+    const manager = fakeManager();
+    mount(manager, true);
+    const chip = container?.querySelector("[data-sync-intent]") as HTMLButtonElement;
+    act(() => chip.click());
+    expect(manager.setSyncIntent).toHaveBeenCalledWith(DOC_A, "local");
+
+    const gated = container?.querySelector("[data-sync-intent='local']") as HTMLButtonElement;
+    expect(gated.textContent).toBe("local");
+    act(() => gated.click());
+    expect(manager.setSyncIntent).toHaveBeenLastCalledWith(DOC_A, "sync");
+  });
+
+  it("UA-D7: the chip reads the registry, never the sync stream", () => {
+    // The no-`solo`-on-the-wire law: a gated doc has NO sync status to read, so
+    // a chip inferred from the stream would be a chip that never appears.
+    act(() => setDocSyncStatuses([]));
+    const manager = fakeManager({
+      docs: [
+        {
+          docId: DOC_A,
+          name: "Field",
+          updatedAt: Date.now(),
+          baseEpoch: 0,
+          engineSchema: 2,
+          sizeBytes: 10,
+          syncIntent: "local",
+        },
+      ],
+    });
+    mount(manager, true);
+    const chip = container?.querySelector("[data-sync-intent]") as HTMLElement;
+    expect(chip.getAttribute("data-sync-intent")).toBe("local");
+    expect(chip.textContent).toBe("local");
+  });
+
+  it("UA-D7: an untouched doc's tile is unchanged — no chip text, no caption", () => {
+    act(() => setDocSyncStatuses([]));
+    mount(fakeManager(), true);
+    const chip = container?.querySelector("[data-sync-intent]") as HTMLElement;
+    expect(chip.getAttribute("data-sync-intent")).toBe("sync");
+    // Present for the action, invisible until hover or keyboard focus.
+    expect(chip.className).toContain("opacity-0");
+    expect(chip.className).toContain("group-hover:opacity-100");
   });
 });

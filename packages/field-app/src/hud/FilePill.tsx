@@ -157,6 +157,22 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
     }
   };
 
+  /** UA-D7 — one click, both directions. The manager patches the registry
+   * entry it gets back, so the chip flips from the same fact the gates read. */
+  const toggleSyncIntent = (d: DocRegistryEntry): void => {
+    void manager
+      .setSyncIntent(d.docId, d.syncIntent === "local" ? "sync" : "local")
+      .catch((error: unknown) =>
+        getRendererLogger()
+          .child({ component: "docs.file_pill", docId: d.docId })
+          .error(
+            "renderer.docs.sync_intent_failed",
+            "Setting a document's sync intent failed",
+            error,
+          ),
+      );
+  };
+
   const docName = state.doc?.name ?? "…";
 
   return (
@@ -306,43 +322,75 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
                 {state.docs.map((d: DocRegistryEntry) => {
                   const current = d.docId === state.doc?.docId;
                   const thumbnailUrl = state.thumbnailUrls[d.docId];
+                  // UA-D7: the REGISTRY's answer, not the sync stream's — a
+                  // gated doc has no sync status at all to read (§8).
+                  const local = d.syncIntent === "local";
                   return (
-                    <button
+                    // The tile is two controls now, so the scaling element is
+                    // the wrapper: the chip rides the hover with the face
+                    // instead of hanging off a corner that moved without it.
+                    <div
                       key={d.docId}
-                      type="button"
-                      onClick={() => {
-                        onOpenChange(false);
-                        if (!current) void manager.switchTo(d.docId);
-                      }}
-                      className="group flex flex-col gap-1.5 text-left transition-transform duration-200 hover:scale-[1.03] active:scale-95"
-                      title={current ? `${d.name} — current` : `Open ${d.name}`}
+                      className="group relative transition-transform duration-200 hover:scale-[1.03] active:scale-95"
                     >
-                      <div className="vf-doc-face relative aspect-[16/10] w-full overflow-hidden rounded-[10px] border border-black/5 dark:border-white/10">
-                        {thumbnailUrl !== undefined && <DocThumbnailImage src={thumbnailUrl} />}
-                        {current && (
-                          <div
-                            className="absolute inset-0 rounded-[10px]"
-                            style={{ boxShadow: "inset 0 0 0 1.5px var(--vf-select)" }}
-                            aria-hidden
-                          />
-                        )}
-                      </div>
-                      <div className="min-w-0 px-0.5">
-                        <div className="truncate text-[12px] font-medium text-black/80 dark:text-white/80">
-                          {d.name}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenChange(false);
+                          if (!current) void manager.switchTo(d.docId);
+                        }}
+                        className="flex w-full flex-col gap-1.5 text-left"
+                        title={current ? `${d.name} — current` : `Open ${d.name}`}
+                      >
+                        <div className="vf-doc-face relative aspect-[16/10] w-full overflow-hidden rounded-[10px] border border-black/5 dark:border-white/10">
+                          {thumbnailUrl !== undefined && <DocThumbnailImage src={thumbnailUrl} />}
+                          {current && (
+                            <div
+                              className="absolute inset-0 rounded-[10px]"
+                              style={{ boxShadow: "inset 0 0 0 1.5px var(--vf-select)" }}
+                              aria-hidden
+                            />
+                          )}
                         </div>
-                        <div className="truncate text-[10px] text-black/40 tabular-nums dark:text-white/40">
-                          {fmtRelative(d.updatedAt)}
-                          {/* C6-4: the honest sync word, only when there is one */}
-                          {(() => {
-                            const caption = syncCaption(
-                              syncStatuses.find((s) => s.docId === d.docId),
-                            );
-                            return caption !== null ? ` · ${caption}` : null;
-                          })()}
+                        <div className="min-w-0 px-0.5">
+                          <div className="truncate text-[12px] font-medium text-black/80 dark:text-white/80">
+                            {d.name}
+                          </div>
+                          <div className="truncate text-[10px] text-black/40 tabular-nums dark:text-white/40">
+                            {fmtRelative(d.updatedAt)}
+                            {/* C6-4: the honest sync word, only when there is one */}
+                            {(() => {
+                              const caption = syncCaption(
+                                syncStatuses.find((s) => s.docId === d.docId),
+                              );
+                              return caption !== null ? ` · ${caption}` : null;
+                            })()}
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                      {/* UA-D7 — the per-doc door. Muted, never hued: staying
+                          home is a FACT about a doc, not a status (§2.5), so
+                          it gets the text ramp and no system color. A gated
+                          doc wears its chip always; an ordinary one offers the
+                          action on hover and on keyboard focus. */}
+                      <button
+                        type="button"
+                        data-sync-intent={local ? "local" : "sync"}
+                        onClick={() => toggleSyncIntent(d)}
+                        title={
+                          local
+                            ? `${d.name} stays on this device — sync it across your devices`
+                            : `Keep ${d.name} on this device`
+                        }
+                        className={`absolute top-1.5 right-1.5 rounded-full bg-black/10 px-1.5 py-0.5 text-[9px] leading-[1.4] font-medium backdrop-blur-sm transition-opacity duration-200 ease-out focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--vf-select)] dark:bg-white/15 ${
+                          local
+                            ? "text-black/55 opacity-100 dark:text-white/60"
+                            : "text-black/45 opacity-0 group-hover:opacity-100 dark:text-white/50"
+                        }`}
+                      >
+                        {local ? "local" : "keep local"}
+                      </button>
+                    </div>
                   );
                 })}
               </div>

@@ -30,7 +30,11 @@ function client(preferences: { showTray: boolean; backgroundShell: boolean }): F
       }
       return {
         subId: "app-preferences",
-        snapshot: preferences,
+        // The daemon publishes the EFFECTIVE snapshot — every key with its
+        // default already folded in — so the fake must too, or the section
+        // reads a partial snapshot no daemon would ever send. `syncPosture`
+        // joined that snapshot with UA-6; this section does not render it.
+        snapshot: { ...preferences, syncPosture: "automatic" },
         unsubscribe: () => undefined,
       };
     }),

@@ -141,18 +141,28 @@ export type DesktopShellState = z.infer<typeof DesktopShellState>;
 export const APP_PREFERENCE_KEYS = {
   SHOW_TRAY: "desktop.showTray",
   BACKGROUND_SHELL: "desktop.backgroundShell",
+  MESH_SYNC_POSTURE: "mesh.syncPosture",
 } as const;
 
 export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.SHOW_TRAY,
   APP_PREFERENCE_KEYS.BACKGROUND_SHELL,
+  APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
+
+/** UA-D7 — what a doc that has said nothing means by its silence. `automatic`
+ * is today's behavior and stays the default; `opt-in` makes every doc local
+ * until its owner says otherwise. User-scope: it rides the settings doc and
+ * converges across the user's devices (D29′), unlike per-doc intent. */
+export const MeshSyncPosture = z.enum(["automatic", "opt-in"]);
+export type MeshSyncPosture = z.infer<typeof MeshSyncPosture>;
 
 export const AppPreferences = z
   .object({
     showTray: z.boolean(),
     backgroundShell: z.boolean(),
+    syncPosture: MeshSyncPosture,
   })
   .passthrough();
 export type AppPreferences = z.infer<typeof AppPreferences>;
@@ -160,7 +170,9 @@ export type AppPreferences = z.infer<typeof AppPreferences>;
 export const AppPreferenceSetParams = z
   .object({
     key: AppPreferenceKey,
-    value: z.boolean(),
+    // Not every preference is a switch any more (UA-6): the posture is a word.
+    // A union rather than `z.any()` — the setter still refuses what no key can hold.
+    value: z.union([z.boolean(), MeshSyncPosture]),
   })
   .passthrough();
 export type AppPreferenceSetParams = z.infer<typeof AppPreferenceSetParams>;

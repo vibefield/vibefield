@@ -272,14 +272,16 @@ describe("tray shell commands and app preferences", () => {
   });
 
   it("requires a complete effective preference snapshot", () => {
-    expect(AppPreferences.parse({ showTray: true, backgroundShell: false })).toEqual({
-      showTray: true,
-      backgroundShell: false,
-    });
+    expect(
+      AppPreferences.parse({ showTray: true, backgroundShell: false, syncPosture: "opt-in" }),
+    ).toEqual({ showTray: true, backgroundShell: false, syncPosture: "opt-in" });
     expect(AppPreferences.safeParse({ showTray: true }).success).toBe(false);
+    // UA-6: the posture is part of the EFFECTIVE snapshot, so a caller can
+    // never be handed one that leaves it to guess (the daemon folds the default).
+    expect(AppPreferences.safeParse({ showTray: true, backgroundShell: true }).success).toBe(false);
   });
 
-  it("accepts only the two boolean preference mutations", () => {
+  it("accepts the boolean preference mutations, and the posture's own word", () => {
     expect(
       AppPreferenceSetParams.parse({
         key: APP_PREFERENCE_KEYS.SHOW_TRAY,
@@ -293,6 +295,20 @@ describe("tray shell commands and app preferences", () => {
       AppPreferenceSetParams.safeParse({
         key: APP_PREFERENCE_KEYS.BACKGROUND_SHELL,
         value: "yes",
+      }).success,
+    ).toBe(false);
+    // UA-D7 — not every preference is a switch. The value union widened by
+    // exactly the posture's vocabulary and nothing else.
+    expect(
+      AppPreferenceSetParams.parse({
+        key: APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
+        value: "opt-in",
+      }),
+    ).toMatchObject({ key: "mesh.syncPosture", value: "opt-in" });
+    expect(
+      AppPreferenceSetParams.safeParse({
+        key: APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
+        value: "paranoid",
       }).success,
     ).toBe(false);
   });

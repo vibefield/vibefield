@@ -50,7 +50,11 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       subId: string;
       snapshot: { showTray: boolean; backgroundShell: boolean };
     };
-    expect(sub.snapshot).toEqual({ showTray: true, backgroundShell: true });
+    expect(sub.snapshot).toEqual({
+      showTray: true,
+      backgroundShell: true,
+      syncPosture: "automatic",
+    });
 
     await shell.call("storage.appPreferences.set", {
       key: "desktop.showTray",
@@ -67,6 +71,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     expect(await shell.call("storage.appPreferences.get", {})).toEqual({
       showTray: false,
       backgroundShell: true,
+      syncPosture: "automatic",
     });
 
     const rendererGrant = daemon.tokens.mint(["settings.manage"], "test-window");
@@ -74,6 +79,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     expect(await renderer.call("storage.appPreferences.get", {})).toEqual({
       showTray: false,
       backgroundShell: true,
+      syncPosture: "automatic",
     });
   });
 

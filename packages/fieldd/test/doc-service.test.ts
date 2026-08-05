@@ -573,3 +573,105 @@ describe("doc.rename (product WS)", () => {
     expect(listed.docs.find((d) => d.docId === made.docId)?.name).toBe("Persisted");
   });
 });
+
+describe("doc.setSyncIntent (UA-D7)", () => {
+  it("records the intent on the entry and hands it back through doc.list", async () => {
+    const { daemon } = await setup();
+    const rpc = await productRpc(daemon);
+    const made = (await rpc.call("doc.create", { name: "Journal" })) as DocRegistryEntry;
+    // Absent, not "sync": silence is what defers to the posture, and a doc that
+    // was never asked must stay distinguishable from one that answered.
+    expect(made.syncIntent).toBeUndefined();
+
+    const gated = (await rpc.call("doc.setSyncIntent", {
+      docId: made.docId,
+      intent: "local",
+    })) as DocRegistryEntry;
+    expect(DocRegistryEntry.safeParse(gated).success).toBe(true);
+    expect(gated.syncIntent).toBe("local");
+    // A posture edit, exactly like rename: the explorer sorts on updatedAt and
+    // must not reorder because someone chose where a doc lives.
+    expect(gated.updatedAt).toBe(made.updatedAt);
+
+    const listed = (await rpc.call("doc.list", {})) as { docs: DocRegistryEntry[] };
+    expect(listed.docs.find((d) => d.docId === made.docId)?.syncIntent).toBe("local");
+  });
+
+  it("refuses an unknown doc, and a word that is not an intent", async () => {
+    const { daemon } = await setup();
+    const rpc = await productRpc(daemon);
+    const made = (await rpc.call("doc.create", { name: "Journal" })) as DocRegistryEntry;
+    const ghost = await rpc.callErr("doc.setSyncIntent", {
+      docId: randomUUID(),
+      intent: "local",
+    });
+    expect(ghost.data?.kind).toBe("NOT_FOUND");
+    const nonsense = await rpc.callErr("doc.setSyncIntent", {
+      docId: made.docId,
+      intent: "maybe",
+    });
+    expect(nonsense.data?.kind).toBe("PRECONDITION_FAILED");
+  });
+
+  it("a token without doc.write is FORBIDDEN_SCOPE", async () => {
+    const { daemon } = await setup();
+    const owner = await productRpc(daemon);
+    const made = (await owner.call("doc.create", { name: "Journal" })) as DocRegistryEntry;
+
+    const reader = await productRpc(daemon, daemon.tokens.mint(["doc.read"], "reader").token);
+    const denied = await reader.callErr("doc.setSyncIntent", {
+      docId: made.docId,
+      intent: "local",
+    });
+    expect(denied.data?.kind).toBe("FORBIDDEN_SCOPE");
+  });
+
+  it("RESTART: the intent survives stop + re-bootstrap on the same dataDir", async () => {
+    // The gates consult this on every decision, so the registry FILE is the
+    // answer that matters: a doc told to stay home must not rejoin the mesh
+    // because the daemon was restarted underneath it.
+    const { dataDir, daemon } = await setup();
+    const rpc = await productRpc(daemon);
+    const made = (await rpc.call("doc.create", { name: "Journal" })) as DocRegistryEntry;
+    await rpc.call("doc.setSyncIntent", { docId: made.docId, intent: "local" });
+
+    await daemon.stop();
+
+    const daemon2 = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon2.stop());
+    const rpc2 = await productRpc(daemon2);
+    const listed = (await rpc2.call("doc.list", {})) as { docs: DocRegistryEntry[] };
+    expect(listed.docs.find((d) => d.docId === made.docId)?.syncIntent).toBe("local");
+  });
+
+  it("is not undone by a save that was already in flight", async () => {
+    // Found landing UA-6. A commit captured the registry entry, did its I/O,
+    // then spread the CAPTURED copy back on completion — so choosing "keep this
+    // local" mid-save was silently reverted and the doc went on syncing. Rename
+    // had the same hole; nothing had ever raced it.
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-doc-intent-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    const docs = new DocumentService({ dataDir });
+    const entry = await docs.create("Journal");
+    const bytes = new Uint8Array([0x49, 0x43, 0x45, 0x31, 7, 7, 7]);
+
+    const saving = docs.writeDoc(entry.docId, bytes, {
+      revisionId: randomUUID(),
+      kind: "checkpoint",
+      engineSchema: 11,
+      savedAt: 1,
+      byteLength: bytes.byteLength,
+    });
+    // Inside the write's I/O window on purpose — past the point where it reads
+    // the entry, before the point where it writes one back. Setting the intent
+    // before that capture proves nothing; this is the ordering that bit.
+    await sleep(2);
+    await docs.setSyncIntent(entry.docId, "local");
+    await saving;
+
+    expect(docs.syncIntentOf(entry.docId)).toBe("local");
+    // …and durably, not merely in memory: a restart reads the file.
+    const reloaded = new DocumentService({ dataDir });
+    expect(reloaded.syncIntentOf(entry.docId)).toBe("local");
+  });
+});

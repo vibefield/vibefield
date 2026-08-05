@@ -1,8 +1,9 @@
 import type { DeviceInfo, DocSyncDocState } from "@vibefield/contracts";
 import type { FielddHealth } from "@vibefield/fieldd";
-import { useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
+import { useFielddClient, useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
 import type { ReactElement } from "react";
 import { useDocSyncStatuses } from "../doc-sync-store";
+import { getRendererLogger } from "../logging";
 import { labelCls, SettingsSection } from "./settings-ui";
 
 // Mesh diagnostics — a Settings SECTION, sibling to SystemSection (C3; the
@@ -65,6 +66,7 @@ function fmtClock(ms: number): string {
 }
 
 export function MeshSection(): ReactElement {
+  const client = useFielddClient();
   const conn = useFielddStatus();
   const sub = useSubscription<FielddHealth>("system.health.subscribe");
   const h = sub.data;
@@ -77,6 +79,22 @@ export function MeshSection(): ReactElement {
   const syncStatuses = useDocSyncStatuses() ?? [];
   const deviceName = (peer: string): string =>
     roster.find((d) => d.deviceId === peer)?.name ?? peer;
+  // UA-D7 — the registry write IS the whole effect: the row disappears on the
+  // next status delta because fieldd stops publishing a gated doc, so there is
+  // no local optimism to keep in step with the daemon.
+  const keepLocal = (docId: string): void => {
+    void client
+      .request("doc.setSyncIntent", { docId, intent: "local" })
+      .catch((error: unknown) =>
+        getRendererLogger()
+          .child({ component: "settings.mesh", docId })
+          .error(
+            "renderer.docs.sync_intent_failed",
+            "Setting a document's sync intent failed",
+            error,
+          ),
+      );
+  };
 
   // The mesh node's own unit (design-02 §2.4): prefer the gateway, tolerate any
   // mesh-named unit as the surface grows (mesh-bridge, …).
@@ -216,6 +234,24 @@ export function MeshSection(): ReactElement {
                       {s.name ?? <span className={labelCls}>a peer's doc · not held here</span>}
                     </span>
                     <span className="flex flex-none items-center gap-1.5">
+                      {/* UA-D7 — the way out of the mesh, on the row that says
+                          the doc is in it. Only for a doc THIS device holds: a
+                          null name is a peer's doc we have no registry entry
+                          for, and there is no intent to set on what we lack.
+                          A doc that takes this leaves these rows entirely —
+                          fieldd stops publishing a status for it, because a
+                          gated doc can never reach one (EL5). */}
+                      {s.name !== null && (
+                        <button
+                          type="button"
+                          data-keep-local={s.docId}
+                          onClick={() => keepLocal(s.docId)}
+                          title="Stop syncing this document — it stays on this device"
+                          className={`rounded px-1 underline decoration-dotted underline-offset-2 transition-opacity duration-200 ease-out hover:text-black dark:hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--vf-select)] ${labelCls}`}
+                        >
+                          keep local
+                        </button>
+                      )}
                       {s.pendingRecords > 0 && (
                         <span className={`tabular-nums ${labelCls}`}>
                           waiting on {s.pendingRecords}

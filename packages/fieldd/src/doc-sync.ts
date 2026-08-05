@@ -1,6 +1,7 @@
 import {
   DOC_SYNC_RECORD,
   type DocSyncDocState,
+  type DocSyncIntent,
   type DocSyncStatus,
   decodeDocSyncDigest,
   decodeDocSyncRecord,
@@ -97,6 +98,13 @@ export interface DocSyncOptions {
    * of this comment asserted the opposite and the liveness fold was inert for
    * it). `SyncLiveness` rows must arrive in this same keyspace. */
   peers: () => Promise<SyncPeer[]>;
+  /** UA-D7 — this doc's settled answer to "may you leave the device?", per-doc
+   * intent already folded with the user's posture (the daemon owns that fold;
+   * see `resolveSyncIntent`). SYNCHRONOUS on purpose: it is consulted from
+   * `onCommit` and from `statuses()`, neither of which may await, and the
+   * answer is registry-and-preference state fieldd already holds in memory.
+   * Absent means the pre-UA-6 world — everything syncs. */
+  resolveIntent?: (docId: string) => DocSyncIntent;
   logger?: Logger;
   /** injectable clock — the state tests drive it directly */
   now?: () => number;
@@ -122,7 +130,7 @@ interface DocSyncFacts {
   expectCheckpoint: boolean;
   peers: Map<string, PeerSyncFacts>;
   /** We declined a peer's record and the difference is standing (unknown-doc /
-   * unknown-kind). Cleared by the next applied record. */
+   * unknown-kind / local-only). Cleared by the next applied record. */
   declined: boolean;
   /** A compaction boundary parts us from a peer (S4). Cleared by re-bootstrap
    * — concretely, the next applied record. */
@@ -137,6 +145,7 @@ export class DocSyncService {
   readonly #control: LaneControl;
   readonly #bytes: LaneBytes;
   readonly #peers: () => Promise<SyncPeer[]>;
+  readonly #resolveIntent: (docId: string) => DocSyncIntent;
   readonly #logger: Logger;
   readonly #now: () => number;
 
@@ -164,6 +173,7 @@ export class DocSyncService {
     this.#control = opts.control;
     this.#bytes = opts.bytes;
     this.#peers = opts.peers;
+    this.#resolveIntent = opts.resolveIntent ?? (() => "sync");
     this.#now = opts.now ?? Date.now;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "doc.sync" });
   }
@@ -187,14 +197,42 @@ export class DocSyncService {
    * turn a committed revision into a failed one. */
   onCommit(commit: DocCommit): void {
     if (commit.origin === "peer") return; // never echo a peer's own record back
+    // UA-D7 gate (c) — the fan-out. #ensureLane below would refuse every peer
+    // anyway; returning here means a local doc's saves never even queue work,
+    // so it never flickers through `syncing` on its way to being ignored.
+    if (this.#isLocal(commit.docId)) return;
     this.#enqueue(commit.docId, () => this.#broadcast(commit));
   }
 
-  /** The published fold — one status per doc sync has facts for. */
+  /** UA-D7 — is this doc staying home? One reader, so the three gates cannot
+   * drift apart, and a resolver that throws is never allowed to take a commit
+   * or a status fold down with it: an unanswerable question means the standing
+   * behavior, which is sync. */
+  #isLocal(docId: string): boolean {
+    try {
+      return this.#resolveIntent(docId) === "local";
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.doc_sync.intent_unreadable",
+        "A doc's sync intent could not be read; treating it as syncing",
+        { docId, error: String(error) },
+      );
+      return false;
+    }
+  }
+
+  /** The published fold — one status per doc sync has facts for.
+   *
+   * A local-intent doc is OMITTED, not reported quiet. It cannot reach any of
+   * these states — the gates see to that — so publishing one would leave a
+   * gated doc reading `pending` forever, which is the exact dishonesty EL5
+   * forbids. The pill says "local" from the registry instead; that is the
+   * honest sentence, and it does not come from the sync stream. */
   statuses(): DocSyncStatus[] {
     const names = new Map(this.#docs.list().map((entry) => [entry.docId, entry.name]));
     const out: DocSyncStatus[] = [];
     for (const [docId, facts] of this.#facts) {
+      if (this.#isLocal(docId)) continue;
       out.push({
         docId,
         // null is the honest unknown-doc face: a peer syncs a doc this device
@@ -293,6 +331,26 @@ export class DocSyncService {
     const p = this.#peerFor(facts, peer);
     p.reachable = true;
     p.lastExchangeAt = this.#now();
+  }
+
+  /** UA-D7 — record the refusal in the same fact base every other decline uses.
+   * `local-only` joins `unknown-doc` and `unknown-kind` in the standing-decline
+   * vocabulary, so it needs no new state: the existing derivation reads
+   * `declined` as `peer-declined`, with the reason carried verbatim.
+   *
+   * Nothing is published WHILE the doc is local — `statuses()` omits it — and
+   * that is the point of recording it anyway. Flip the doc back to syncing and
+   * the standing decline is what shows, saying "a peer's records were refused
+   * while this stayed home; the two devices may differ" until an applied record
+   * clears it. Fieldd cannot tell the peer (a lane is one-directional and gate
+   * (a) forbids opening the return lane), so this is the honest half it CAN
+   * say — see the deviation recorded with the slice. */
+  #declineLocalOnly(docId: string, peer: string): void {
+    const facts = this.#factsFor(docId);
+    this.#peerFor(facts, peer);
+    facts.declined = true;
+    facts.reason = "local-only";
+    this.#touch(facts);
   }
 
   #touch(facts: DocSyncFacts): void {
@@ -403,6 +461,19 @@ export class DocSyncService {
       );
       return;
     }
+    // UA-D7 gate (b) — the inbound door, beside the doc-less refusal because it
+    // is the same shape of "no": the lane is left UNCLAIMED, so no handler
+    // registers, no return lane opens, and whatever the peer already sent ages
+    // out of MeshLaneLink's bounded orphan buffer rather than landing.
+    if (this.#isLocal(docId)) {
+      this.#declineLocalOnly(docId, lane.peer);
+      this.#logger.info(
+        "fieldd.doc_sync.lane_refused_local",
+        "A peer opened a lane for a document that is staying on this device",
+        { laneId: lane.laneId, docId, peer: lane.peer },
+      );
+      return;
+    }
     this.#inbound.set(lane.laneId, docId);
     // Registering the handler REPLAYS anything that arrived before the
     // announcement — the ordering hazard MeshLaneLink's orphan buffer exists
@@ -444,6 +515,19 @@ export class DocSyncService {
   }
 
   async #receive(docId: string, record: Uint8Array, peer: string): Promise<void> {
+    // UA-D7 gate (b), the residual half: intent can flip while a lane is
+    // already claimed and its handler already registered. Refusing here — ahead
+    // of the decode, so a HAVE gets the same answer as a record — is what makes
+    // "keep this local" take effect on the doc rather than on the next lane.
+    if (this.#isLocal(docId)) {
+      this.#declineLocalOnly(docId, peer);
+      this.#logger.info(
+        "fieldd.doc_sync.record_refused_local",
+        "A peer's record was refused: the document is staying on this device",
+        { docId, peer },
+      );
+      return;
+    }
     let decoded: ReturnType<typeof decodeDocSyncRecord>;
     try {
       decoded = decodeDocSyncRecord(record);
@@ -517,7 +601,7 @@ export class DocSyncService {
       if (outcome.reason === "epoch-mismatch") {
         facts.epochStale = true;
       } else {
-        facts.declined = true; // unknown-doc | unknown-kind
+        facts.declined = true; // unknown-doc | unknown-kind (local-only lands via #declineLocalOnly)
       }
       facts.reason = outcome.reason;
       this.#touch(facts);
@@ -670,6 +754,11 @@ export class DocSyncService {
     docId: string,
     peer: string,
   ): Promise<{ laneId: number; created: boolean } | null> {
+    // UA-D7 gate (a) — the outbound choke point. Every path that would put a
+    // byte on the wire for this doc (commit fan-out, HAVE answers, the return
+    // lane a claim opens, the peer-returns re-greet) comes through here, so one
+    // refusal starves all of them and no caller has to remember the rule.
+    if (this.#isLocal(docId)) return null;
     const existing = this.#outbound.get(docId)?.get(peer);
     if (existing !== undefined) return { laneId: existing, created: false };
     const laneId = await this.#openLane(docId, peer);

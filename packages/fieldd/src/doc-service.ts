@@ -6,6 +6,7 @@ import {
   DOC_SYNC_RECORD,
   DocMeta,
   DocRegistryEntry,
+  type DocSyncIntent,
   type DocSyncRecord,
   LANE_MAX_FRAME_BYTES,
   LAYOUT,
@@ -213,6 +214,35 @@ export class DocumentService {
     return renamed;
   }
 
+  /** UA-D7 — says whether this doc may leave the device. A posture edit, so it
+   * follows rename's shape exactly: updatedAt stays put (nothing about the
+   * content changed, and the explorer must not reorder), and a failed persist
+   * rolls the in-memory entry back rather than leaving the two disagreeing.
+   *
+   * DURABLE BEFORE ANY GATE MOVES: the registry file is the answer a restart
+   * reads, and a doc that was told to stay home must not start syncing again
+   * because the write failed quietly. */
+  async setSyncIntent(docId: string, intent: DocSyncIntent): Promise<DocRegistryEntry> {
+    const entry = this.registry.get(docId);
+    if (!entry) throw new RpcCallError("NOT_FOUND", `no such doc: ${docId}`, false);
+    const next: DocRegistryEntry = { ...entry, syncIntent: intent };
+    this.registry.set(docId, next);
+    try {
+      await this.persistRegistry();
+    } catch (err) {
+      this.registry.set(docId, entry);
+      throw this.storageError("setSyncIntent", err);
+    }
+    return next;
+  }
+
+  /** The doc's OWN answer, or undefined when it has never given one — the
+   * caller folds in the user's posture (fieldd's `resolveSyncIntent`), because
+   * the posture is a settings-document fact this service knows nothing about. */
+  syncIntentOf(docId: string): DocSyncIntent | undefined {
+    return this.registry.get(docId)?.syncIntent;
+  }
+
   // ---- lane admission ----
 
   /** Mints a one-shot lane ticket, or refuses if a writer already holds the doc. */
@@ -384,8 +414,7 @@ export class DocumentService {
       throw this.storageError("write", err);
     }
 
-    this.registry.set(docId, {
-      ...entry,
+    this.commitRegistryColumns(docId, entry, {
       updatedAt: meta.committedAt,
       engineSchema: putMeta.engineSchema,
       sizeBytes: bytes.byteLength,
@@ -455,8 +484,7 @@ export class DocumentService {
       if (last?.revisionId !== putMeta.revisionId || last.byteLength !== bytes.byteLength) {
         throw new RpcCallError("PRECONDITION_FAILED", "revision id was reused", false);
       }
-      this.registry.set(docId, {
-        ...entry,
+      this.commitRegistryColumns(docId, entry, {
         updatedAt: current.committedAt,
         engineSchema: current.engineSchema,
         sizeBytes: storedSize(current),
@@ -509,8 +537,7 @@ export class DocumentService {
       throw this.storageError("append", err);
     }
 
-    this.registry.set(docId, {
-      ...entry,
+    this.commitRegistryColumns(docId, entry, {
       updatedAt: committedAt,
       engineSchema: putMeta.engineSchema,
       sizeBytes: storedSize(next),
@@ -802,6 +829,24 @@ export class DocumentService {
     for (const [ticket, rec] of this.tickets) {
       if (t >= rec.expiresAt) this.tickets.delete(ticket);
     }
+  }
+
+  /** Write back the columns this commit owns, over the registry entry AS IT IS
+   * NOW — not over the copy captured before the write's I/O.
+   *
+   * Found landing UA-6: a write is async, and a registry edit can land inside
+   * that window. `doc.setSyncIntent` during a save spread the pre-save entry
+   * back over itself on completion, so a doc told to stay home quietly went on
+   * syncing. Rename had the same hole and had simply never been raced. The
+   * content-derived columns are still this write's to state (`reconcileRegistry`
+   * says current.json is authoritative for exactly these); everything else on
+   * the entry belongs to whoever touched it last. */
+  private commitRegistryColumns(
+    docId: string,
+    captured: DocRegistryEntry,
+    columns: { updatedAt: number; engineSchema: number | null; sizeBytes: number },
+  ): void {
+    this.registry.set(docId, { ...(this.registry.get(docId) ?? captured), ...columns });
   }
 
   private async persistRegistry(): Promise<void> {
