@@ -135,6 +135,7 @@ describe("widgetlab panels", () => {
         (button) => button.getAttribute("aria-label") === `${name} settings`,
       );
     expect(category("General")?.getAttribute("aria-current")).toBe("page");
+    expect(category("Account")).toBeDefined();
     expect(category("Appearance")).toBeDefined();
     expect(category("Canvas")).toBeDefined();
     expect(category("Plugins")).toBeDefined();

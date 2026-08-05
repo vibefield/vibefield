@@ -77,12 +77,40 @@ export interface FieldGodviewHost {
   onState(handler: (state: GodviewState) => void): () => void;
 }
 
+/** The profile record `usersUpdate` answers with — the whole user, so a caller
+ * never has to guess what its write did to the rest of it. A structural subset
+ * of the `UserRecord` contract (`contracts/src/users.ts`): the extra
+ * `createdAt` a real record carries satisfies this shape, which is what lets
+ * the adapter hand the parsed contract type straight through. */
+export interface FieldUserProfile {
+  userId: string;
+  fuid: number;
+  name: string;
+  color?: string;
+  resident: boolean;
+  onboarded: boolean;
+}
+
 export interface FieldHost {
   readonly logger: RendererLogger;
   readonly diagnostics?: FieldDiagnosticsHost;
   readonly platform?: ShellPlatform;
   readonly terminal?: FieldTerminalHost;
   readonly godview?: FieldGodviewHost;
+  /** The profile write seam (UA-3). `users.json` is SUPERVISOR-owned, not
+   * fieldd's (UA-D10), so the one door to it is main — which is why this is a
+   * host capability and not a product method. Every field is optional because
+   * a caller changes one thing at a time; an EMPTY params object is the read,
+   * and must not write.
+   *
+   * Optional like `diagnostics`/`terminal`/`godview`: a browser harness has no
+   * supervisor to ask, and the Account surface renders its controls disabled
+   * and says so rather than pretending it can write. */
+  readonly usersUpdate?: (params: {
+    name?: string;
+    color?: string;
+    resident?: boolean;
+  }) => Promise<FieldUserProfile>;
   getConnection(): Promise<{ port: number; token: string }>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

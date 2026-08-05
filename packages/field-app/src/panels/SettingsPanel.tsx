@@ -14,6 +14,7 @@ import {
 import type { DesktopShellState, SettingsUndoResult, ShellPlatform } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { lazy, type ReactElement, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { AccountSection } from "./AccountSection";
 import { DesktopSection } from "./DesktopSection";
 import { MeshSection } from "./MeshSection";
 import { PluginsSection } from "./PluginsSection";
@@ -58,6 +59,7 @@ interface SettingsPanelProps {
 }
 
 type SettingsPage =
+  | "account"
   | "general"
   | "appearance"
   | "canvas"
@@ -71,10 +73,16 @@ interface PageMeta {
   id: SettingsPage;
   label: string;
   description: string;
-  icon: "sliders" | "sun" | "canvas" | "plugin" | "mesh" | "terminal" | "pulse" | "code";
+  icon: "person" | "sliders" | "sun" | "canvas" | "plugin" | "mesh" | "terminal" | "pulse" | "code";
 }
 
 const PAGES: readonly PageMeta[] = [
+  {
+    id: "account",
+    label: "Account",
+    description: "Who this field belongs to, and the devices it reaches.",
+    icon: "person",
+  },
   {
     id: "general",
     label: "General",
@@ -126,6 +134,7 @@ const PAGES: readonly PageMeta[] = [
 ] as const;
 
 const NAV_GROUPS: ReadonlyArray<{ label: string; pages: readonly SettingsPage[] }> = [
+  { label: "Account", pages: ["account"] },
   { label: "Preferences", pages: ["general", "appearance", "canvas"] },
   { label: "Workspace", pages: ["plugins", "mesh", "terminal"] },
   { label: "Support", pages: ["diagnostics", "advanced"] },
@@ -135,6 +144,14 @@ const PAGE_BY_ID = new Map(PAGES.map((page) => [page.id, page]));
 const widgetQuery = defineQuery([PrefabId]);
 
 function PageIcon({ name }: { name: PageMeta["icon"] }): ReactElement {
+  if (name === "person") {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <circle cx="10" cy="6.8" r="3.3" />
+        <path d="M3.8 16.8a6.2 6.2 0 0 1 12.4 0" />
+      </svg>
+    );
+  }
   if (name === "sliders") {
     return (
       <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -557,7 +574,9 @@ export function SettingsPanel({
   };
 
   let pageContent: ReactElement;
-  if (activePage === "general") {
+  if (activePage === "account") {
+    pageContent = <AccountSection onSettingsChanged={markSettingsChanged} />;
+  } else if (activePage === "general") {
     pageContent = (
       <div className="space-y-4">
         <DesktopSection
