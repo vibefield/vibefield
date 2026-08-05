@@ -246,6 +246,112 @@ describe("Setup Assistant", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("opens a second user at the name pane and ends without a greeting", async () => {
+    const updates: unknown[] = [];
+    // The variant rides the record's passthrough, so the answer to a write
+    // carries it back — exactly as a real supervisor's whole-record answer does.
+    const usersUpdate = vi.fn(async (params: Record<string, unknown>) => {
+      updates.push(params);
+      return { ...FRESH, setupVariant: "second-user", ...params } as FieldUserProfile;
+    });
+    host(usersUpdate);
+    const onComplete = vi.fn();
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding({ setupVariant: "second-user" }),
+      onComplete,
+    });
+
+    // §6.2 — panes 2 → 4. There is no Welcome: the field is already set up and
+    // only this person is new.
+    expect(text()).not.toContain("A field of your own");
+    expect(text()).not.toContain("Your field now lives in a user");
+    expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
+    // Nothing to go back to, so nothing offers to.
+    expect(
+      Array.from(container?.querySelectorAll("button") ?? []).some(
+        (candidate) => candidate.textContent?.trim() === "Back",
+      ),
+    ).toBe(false);
+
+    await click("Continue"); // pane 2 → 3
+    expect(text()).toContain("Your field is already running");
+    await tick(SETTING_UP_BEAT_MS);
+    expect(text()).toContain("Connect your devices"); // pane 4
+
+    await click("Skip");
+    // No Ready beat: the write goes out immediately, and the greeting a first
+    // run gets is never shown to the second user.
+    await tick(0);
+    expect(text()).not.toContain("Welcome to your field");
+    expect(updates).toEqual([{ name: "james", color: "accent-1" }, { onboarded: true }]);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("resumes a second user from users.json the same way as any other (W6)", async () => {
+    const updates: unknown[] = [];
+    host(
+      vi.fn(async (params: Record<string, unknown>) => {
+        updates.push(params);
+        return {
+          ...FRESH,
+          color: "accent-2",
+          setupVariant: "second-user",
+          ...params,
+        } as FieldUserProfile;
+      }),
+    );
+    const onComplete = vi.fn();
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding({ color: "accent-2", setupVariant: "second-user" }),
+      onComplete,
+    });
+
+    // A color on the record means pane 2 completed — the derivation does not
+    // care which variant asked it.
+    expect(text()).toContain("Connect your devices");
+    expect(container?.querySelector('input[aria-label="Your name"]')).toBeNull();
+
+    await click("Skip");
+    await tick(0);
+    expect(updates).toEqual([{ onboarded: true }]);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("never claims a second user is set up on a flag write it could not land", async () => {
+    let failFlag = true;
+    host(
+      vi.fn(async (params: Record<string, unknown>) => {
+        if (params.onboarded === true && failFlag) throw new Error("users.json is locked");
+        return {
+          ...FRESH,
+          color: "accent-2",
+          setupVariant: "second-user",
+          ...params,
+        } as FieldUserProfile;
+      }),
+    );
+    const onComplete = vi.fn();
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding({ color: "accent-2", setupVariant: "second-user" }),
+      onComplete,
+    });
+
+    await click("Skip");
+    await tick(0);
+    // The variant drops the greeting, never the honesty that goes with it.
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(text()).toContain("Setup could not be recorded");
+    expect(text()).toContain("setup asks again next time");
+
+    failFlag = false;
+    await click("Try again");
+    await tick(1);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
   it("resumes at the first unanswered pane after a quit — from users.json, not memory", async () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     await mount({

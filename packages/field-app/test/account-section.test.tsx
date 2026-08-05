@@ -46,14 +46,26 @@ const PROFILE = {
 };
 
 /** The supervisor half. `usersUpdate: null` is a host WITHOUT the bridge — a
- * browser harness, or a shell built before the seam landed. */
-function host(usersUpdate: NonNullable<FieldHost["usersUpdate"]> | null): void {
+ * browser harness, or a shell built before the seam landed. `users` is UA-5's
+ * half of the same door: each member absent independently, because a shell
+ * that predates the switcher has the profile write and nothing else. */
+function host(
+  usersUpdate: NonNullable<FieldHost["usersUpdate"]> | null,
+  users: {
+    list?: NonNullable<FieldHost["usersList"]>;
+    create?: NonNullable<FieldHost["usersCreate"]>;
+    switch?: NonNullable<FieldHost["usersSwitch"]>;
+  } = {},
+): void {
   setHost({
     logger: noopLogger,
     getConnection: async () => ({ port: 1, token: "test" }),
     onPrepareClose: () => () => undefined,
     completeClose: () => undefined,
     ...(usersUpdate === null ? {} : { usersUpdate }),
+    ...(users.list === undefined ? {} : { usersList: users.list }),
+    ...(users.create === undefined ? {} : { usersCreate: users.create }),
+    ...(users.switch === undefined ? {} : { usersSwitch: users.switch }),
   });
 }
 
@@ -252,5 +264,160 @@ describe("AccountSection", () => {
     expect(text()).toContain("users.json is locked");
     const name = container?.querySelector<HTMLInputElement>('input[aria-label="Your name"]');
     expect(name?.disabled).toBe(true);
+  });
+});
+
+// UA-5 §6.3 — the switcher. What matters here is that ONE click hands the
+// window over and the page never pretends to know more than it does: the
+// reload is the only feedback there is, an absent door is a sentence rather
+// than an empty list, and a refused roster does not take the page with it.
+
+const OTHER = {
+  userId: "01K0000000000000000000000B",
+  fuid: 2,
+  name: "Work",
+  color: "accent-5",
+  resident: true,
+  onboarded: true,
+};
+
+const ROSTER = { attachedUserId: PROFILE.userId, users: [PROFILE, OTHER] };
+
+const row = (name: string): HTMLButtonElement | null =>
+  container?.querySelector<HTMLButtonElement>(`button[aria-label="Switch to ${name}"]`) ?? null;
+
+const newUser = (): HTMLButtonElement | undefined =>
+  Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
+    (button) => button.textContent?.trim() === "New user…",
+  );
+
+const withLink = (): FielddClient =>
+  client({ link: { link: null, meshEnabled: false, nodeState: null, authUrl: null } });
+
+describe("AccountSection users switcher", () => {
+  it("lists the machine's users and marks the attached one as current", async () => {
+    const usersList = vi.fn(async () => ROSTER);
+    host(
+      vi.fn(async () => PROFILE),
+      {
+        list: usersList,
+        create: vi.fn(async () => OTHER),
+        switch: vi.fn(async () => OTHER),
+      },
+    );
+    await mount(withLink());
+
+    expect(usersList).toHaveBeenCalledTimes(1);
+    expect(text()).toContain("Users");
+    expect(text()).toContain("Work");
+
+    // The attached user is not a control — switching to who you already are is
+    // a no-op, so it wears the marker instead of a button.
+    expect(row("James")).toBeNull();
+    expect(container?.querySelector('[aria-current="true"]')?.textContent).toContain("James");
+    expect(text()).toContain("current");
+    // ...and everyone else is one click away, named by what the click does.
+    expect(row("Work")).not.toBeNull();
+    expect(row("Work")?.disabled).toBe(false);
+  });
+
+  it("switches on one click and leaves the pressed control disabled for the reload", async () => {
+    const usersSwitch = vi.fn(async () => OTHER);
+    host(
+      vi.fn(async () => PROFILE),
+      {
+        list: vi.fn(async () => ROSTER),
+        create: vi.fn(async () => OTHER),
+        switch: usersSwitch,
+      },
+    );
+    await mount(withLink());
+
+    await act(async () => row("Work")?.click());
+
+    expect(usersSwitch).toHaveBeenCalledWith({ userId: OTHER.userId });
+    // The window is on its way out: nothing re-enables, and no second act can
+    // race the first one's attach.
+    expect(row("Work")?.disabled).toBe(true);
+    expect(newUser()?.disabled).toBe(true);
+    expect(text()).not.toContain("Switching…");
+  });
+
+  it("mints a new user without asking for a name — the wizard does that", async () => {
+    const usersCreate = vi.fn(async () => OTHER);
+    host(
+      vi.fn(async () => PROFILE),
+      {
+        list: vi.fn(async () => ROSTER),
+        create: usersCreate,
+      },
+    );
+    await mount(withLink());
+
+    await act(async () => newUser()?.click());
+
+    expect(usersCreate).toHaveBeenCalledWith({});
+    expect(newUser()?.disabled).toBe(true);
+    expect(text()).toContain("setup asks the new user for a name");
+  });
+
+  it("says a refused switch out loud and gives the control back", async () => {
+    host(
+      vi.fn(async () => PROFILE),
+      {
+        list: vi.fn(async () => ROSTER),
+        switch: vi.fn(async () => Promise.reject(new Error("users.json is locked"))),
+      },
+    );
+    await mount(withLink());
+
+    await act(async () => row("Work")?.click());
+
+    // A rejection means no reload is coming, so the row must be pressable again.
+    expect(text()).toContain("users.json is locked");
+    expect(row("Work")?.disabled).toBe(false);
+  });
+
+  it("renders the block disabled with the honest line when the bridge is absent", async () => {
+    host(null);
+    await mount(withLink());
+
+    expect(text()).toContain("Users");
+    expect(text()).toContain("cannot be listed or switched from here");
+    expect(newUser()?.disabled).toBe(true);
+    expect(container?.querySelector("[aria-current]")).toBeNull();
+    // The rest of the page is untouched — one absent door is not a dead page.
+    expect(text()).toContain("Sync posture");
+  });
+
+  it("never leaves a row disabled without saying why", async () => {
+    // A host holding one verb of the door and not the others. Contrived, but
+    // the alternative render is a list of controls that answer nothing.
+    host(
+      vi.fn(async () => PROFILE),
+      { list: vi.fn(async () => ROSTER) },
+    );
+    await mount(withLink());
+
+    expect(row("Work")?.disabled).toBe(true);
+    expect(text()).toContain("not switch to them");
+  });
+
+  it("keeps the page intact when the roster read is refused", async () => {
+    host(
+      vi.fn(async () => PROFILE),
+      {
+        list: vi.fn(async () => Promise.reject(new Error("users.json is locked"))),
+        create: vi.fn(async () => OTHER),
+      },
+    );
+    await mount(withLink());
+
+    expect(text()).toContain("Users unavailable");
+    expect(text()).toContain("users.json is locked");
+    // Minting does not depend on the read that failed.
+    expect(newUser()?.disabled).toBe(false);
+    expect(text()).toContain("Sync posture");
+    expect(text()).toContain("Connect your devices");
   });
 });

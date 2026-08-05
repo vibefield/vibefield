@@ -51,7 +51,18 @@ const READY_BEAT_MS = 700;
  * the derivation proceeds with "no link known" once this elapses. */
 const ENTRY_SETTLE_MS = 1_200;
 
-type Pane = "welcome" | "welcome-back" | "field" | "setting-up" | "connect" | "posture" | "ready";
+type Pane =
+  | "welcome"
+  | "welcome-back"
+  | "field"
+  | "setting-up"
+  | "connect"
+  | "posture"
+  | "ready"
+  /** The second-user variant's end (§6.2) — the same durable write Ready makes,
+   * without the pause or the greeting. Not a sixth question: a terminal state
+   * that only has a face if the write is refused. */
+  | "finishing";
 
 export function OnboardingWizard({
   client,
@@ -81,6 +92,15 @@ function WizardBody({
   const [profile, setProfile] = useState<FieldUserProfile>(onboarding.profile);
   // A field a version-skewed writer set, never a schema field (host.ts).
   const migrated = profile.setupVariant === "migrated";
+  // UA-5 §6.2 — the second user this machine ever had. The field is already
+  // set up; only this PERSON is new, so the variant drops the two beats that
+  // exist to introduce the product: the Welcome pane and the Ready pause. What
+  // is left is panes 2 → 4 — name, the honest stages, the mesh — and then the
+  // same completion write, immediately.
+  const secondUser = profile.setupVariant === "second-user";
+  /** Where every path ends. The two variants differ only in whether that end
+   * has a face to read. */
+  const endPane: Pane = secondUser ? "finishing" : "ready";
 
   const link = useSubscription<UserLinkStatus>("user.link.subscribe");
   const face = linkFace(link.status, link.status === "live" ? (link.data ?? null) : null);
@@ -88,9 +108,16 @@ function WizardBody({
 
   // W6 — the entry pane is DERIVED. A record with no color never finished pane
   // 2, so the wizard starts at the top; a record with one did, so it resumes at
-  // the first thing still unanswered.
+  // the first thing still unanswered. "The top" is variant-specific: a second
+  // user starts AT pane 2, because the field it is joining needs no welcome.
   const [pane, setPane] = useState<Pane | null>(() =>
-    profile.color === undefined ? (migrated ? "welcome-back" : "welcome") : null,
+    profile.color === undefined
+      ? migrated
+        ? "welcome-back"
+        : secondUser
+          ? "field"
+          : "welcome"
+      : null,
   );
   const [history, setHistory] = useState<Pane[]>([]);
   const [settled, setSettled] = useState(false);
@@ -106,8 +133,10 @@ function WizardBody({
     if (link.status === "loading" && !settled) return; // one honest beat, bounded
     // Migration's only remaining pane after the name is Ready — its link, if
     // there is one, is acknowledged rather than re-asked (spec §6, migration).
-    setPane(migrated ? "ready" : linked ? "posture" : "connect");
-  }, [pane, link.status, settled, migrated, linked]);
+    // The second-user variant resumes exactly like a fresh one: a record with a
+    // color enters at Connect, and its END is the only thing that differs.
+    setPane(migrated ? endPane : linked ? "posture" : "connect");
+  }, [pane, link.status, settled, migrated, linked, endPane]);
 
   // Plain forward/back over panes. This is the ONLY position state in the
   // wizard and it lives for exactly as long as the window does — where you
@@ -144,7 +173,9 @@ function WizardBody({
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (pane !== "ready") return;
+    // ONE completion path for both variants (§6.2): the second-user end differs
+    // only in having no beat to wait out, never in what it records.
+    if (pane !== "ready" && pane !== "finishing") return;
     let cancelled = false;
     const timer = setTimeout(
       () => {
@@ -165,7 +196,7 @@ function WizardBody({
             });
           });
       },
-      attempt === 0 ? READY_BEAT_MS : 0,
+      pane === "finishing" || attempt > 0 ? 0 : READY_BEAT_MS,
     );
     return () => {
       cancelled = true;
@@ -232,7 +263,7 @@ function WizardBody({
           back={backAction}
           onDone={(updated) => {
             setProfile(updated);
-            go(migrated ? "ready" : "setting-up");
+            go(migrated ? endPane : "setting-up");
           }}
         />,
       );
@@ -268,13 +299,13 @@ function WizardBody({
         <ConnectPane
           face={face}
           back={backAction}
-          onContinue={() => go(linked ? "posture" : "ready")}
-          onSkip={() => go("ready")}
+          onContinue={() => go(linked ? "posture" : endPane)}
+          onSkip={() => go(endPane)}
         />,
       );
 
     case "posture":
-      return shell(<PosturePane back={backAction} onDone={() => go("ready")} />);
+      return shell(<PosturePane back={backAction} onDone={() => go(endPane)} />);
 
     case "ready":
       return shell(
@@ -309,6 +340,43 @@ function WizardBody({
             </div>
           )}
         </WizardPane>,
+      );
+
+    case "finishing":
+      // §6.2 — a successful write is gone before anyone could read a greeting,
+      // so this state's only real face is the refusal. The passing case still
+      // renders a fact rather than a blank window (§8), because a slow
+      // supervisor must not look like a hang.
+      return shell(
+        flag.kind === "failed" ? (
+          <WizardPane
+            eyebrow="Setup"
+            title="That did not save."
+            actions={
+              <>
+                <button type="submit" className={primaryCls}>
+                  Try again
+                </button>
+                <button type="button" className={quietCls} onClick={onComplete}>
+                  Continue anyway
+                </button>
+              </>
+            }
+            onSubmit={() => setAttempt((n) => n + 1)}
+          >
+            <div className="flex flex-col gap-1">
+              <WizardError reason={`Setup could not be recorded. ${flag.reason}`} />
+              <span className={factCls}>
+                Continuing without it means setup asks again next time.
+              </span>
+            </div>
+          </WizardPane>
+        ) : (
+          <div className="vf-wizard-pane w-[min(92vw,30rem)]">
+            <span className={eyebrowCls}>Setup</span>
+            <p className={`mt-2 ${factCls}`}>Finishing up…</p>
+          </div>
+        ),
       );
   }
 }

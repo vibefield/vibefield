@@ -97,6 +97,15 @@ export interface FieldUserProfile {
   setupVariant?: string;
 }
 
+/** UA-5 — the machine's roster as `usersList` answers it. `attachedUserId` is
+ * main's LIVE attachment, not `users.json`'s `lastAttached` (which is only a
+ * hint for the next boot), so the switcher's "current" marker is never a guess.
+ * Null when the host cannot name one. */
+export interface FieldUserRoster {
+  attachedUserId: string | null;
+  users: FieldUserProfile[];
+}
+
 export interface FieldHost {
   readonly logger: RendererLogger;
   readonly diagnostics?: FieldDiagnosticsHost;
@@ -120,6 +129,24 @@ export interface FieldHost {
      * and only after everything it promised to record actually landed. */
     onboarded?: boolean;
   }) => Promise<FieldUserProfile>;
+  /** UA-5 — who else is on this machine. Optional for the same reason
+   * `usersUpdate` is: absent means an older shell or a browser harness, and the
+   * switcher says so rather than drawing an empty roster. */
+  readonly usersList?: () => Promise<FieldUserRoster>;
+  /** UA-5 — mint user N, then attach to it. No name is asked for here: the
+   * reloaded window runs the Setup Assistant's second-user variant, which is
+   * where identity is actually decided (§6.2).
+   *
+   * THE RELOAD RACE, shared with `usersSwitch`: attaching re-targets this
+   * window and reloads it (UA-D15), tearing down the context this promise would
+   * resolve into. It may resolve or it may never settle — a caller must treat
+   * both as normal. Fire and forget: disable the control that was pressed and
+   * gate nothing else on the answer, because the reload IS the feedback. There
+   * is no success state to render; only a REJECTION is worth a face. */
+  readonly usersCreate?: (params: { name?: string; color?: string }) => Promise<FieldUserProfile>;
+  /** UA-5 — attach to an existing user (UA-D15). Switching to the user already
+   * attached is main's no-op. Same reload race as `usersCreate`. */
+  readonly usersSwitch?: (params: { userId: string }) => Promise<FieldUserProfile>;
   getConnection(): Promise<{ port: number; token: string }>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

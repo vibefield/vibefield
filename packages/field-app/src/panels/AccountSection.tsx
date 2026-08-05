@@ -3,6 +3,7 @@ import { type ReactElement, useEffect, useState } from "react";
 import { AccentChip, AccentPicker } from "../account/AccentPicker";
 import { linkFace, readableTime, type UserLinkStatus } from "../account/link";
 import { POSTURE_CHOICES, useSyncPosture } from "../account/posture";
+import { UserSwitcher } from "../account/UserSwitcher";
 import { type FieldUserProfile, getHost } from "../host";
 import {
   buttonCls,
@@ -170,6 +171,10 @@ export function AccountSection({
           <div className="pt-2 text-[12px] text-amber-600 dark:text-amber-400">{writeError}</div>
         )}
       </SettingsSection>
+
+      {/* Who you are, then who else is here — the switcher reads the same
+          supervisor door the Profile block above it writes (UA-5 §6.3). */}
+      <UserSwitcher />
 
       <LinkBlock />
 
