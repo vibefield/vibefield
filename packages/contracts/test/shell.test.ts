@@ -160,7 +160,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the eleven channel keys, in order", () => {
+  it("exposes exactly the twelve channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -173,6 +173,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "terminalStatus",
       "godviewState",
       "godviewSet",
+      "usersUpdate", // UA-3 — the Account page's profile write (main owns users.json)
     ]);
   });
 
@@ -189,6 +190,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       terminalStatus: "vibefield:terminal:status",
       godviewState: "vibefield:godview:state",
       godviewSet: "vibefield:godview:set",
+      usersUpdate: "vibefield:users:update",
     });
   });
 });

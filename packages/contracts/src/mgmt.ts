@@ -131,6 +131,36 @@ export const PeerInfo = z
   .passthrough();
 export type PeerInfo = z.infer<typeof PeerInfo>;
 
+/** UA-3 — `native.mesh.self`: the node's OWN identity, including the S1
+ * self-whois login (best-effort — absent means the sidecar could not answer
+ * for self, or a tagged node has no user; never synthesized, EL7). This is
+ * the left-hand side of UA-4's self/guest comparison, captured once at link
+ * time into link.json, never looked up per request. */
+export const MeshSelfIdentity = z
+  .object({
+    deviceId: z.string(),
+    deviceName: z.string().optional(),
+    dnsName: z.string().optional(),
+    tailscaleId: z.string().optional(),
+    ip: z.string().optional(),
+    login: z.string().optional(),
+  })
+  .passthrough();
+export type MeshSelfIdentity = z.infer<typeof MeshSelfIdentity>;
+
+/** UA-3 — `native.mesh.retire`: unlink's native half. Stops the node (the
+ * sidecar dies with it), archives the state dir to `mesh.retired-<ts>`
+ * beside itself, and reports where. `retired: false` = nothing to retire
+ * (no state on disk) — an honest no-op, not an error. Answered BEFORE the
+ * node gate: retiring a half-authed or disabled mesh must still work. */
+export const MeshRetireResult = z
+  .object({
+    retired: z.boolean(),
+    archivedTo: z.string().nullable(),
+  })
+  .passthrough();
+export type MeshRetireResult = z.infer<typeof MeshRetireResult>;
+
 /** SyncedStore view: device-owned slices, merged at the reader. `store.set` writes OWN slice only. */
 export const StoreSnapshot = z
   .object({

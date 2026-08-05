@@ -1,5 +1,5 @@
 {
-  "$ref": "#/definitions/UnavailableDetails",
+  "$ref": "#/definitions/MeshRetireResult",
   "definitions": {
     "SemverString": {
       "type": "string",
@@ -83,7 +83,28 @@
       ]
     },
     "UnavailableDetails": {
-      "$ref": "#/definitions/UnavailableDetails"
+      "type": "object",
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "device": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "state"
+      ],
+      "additionalProperties": true
     },
     "ErrorData": {
       "type": "object",
@@ -449,23 +470,7 @@
       "additionalProperties": true
     },
     "MeshRetireResult": {
-      "type": "object",
-      "properties": {
-        "retired": {
-          "type": "boolean"
-        },
-        "archivedTo": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "retired",
-        "archivedTo"
-      ],
-      "additionalProperties": true
+      "$ref": "#/definitions/MeshRetireResult"
     },
     "StoreSnapshot": {
       "type": "object",

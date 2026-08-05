@@ -1,5 +1,5 @@
 {
-  "$ref": "#/definitions/UnavailableDetails",
+  "$ref": "#/definitions/MeshSelfIdentity",
   "definitions": {
     "SemverString": {
       "type": "string",
@@ -83,7 +83,28 @@
       ]
     },
     "UnavailableDetails": {
-      "$ref": "#/definitions/UnavailableDetails"
+      "type": "object",
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "device": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "state"
+      ],
+      "additionalProperties": true
     },
     "ErrorData": {
       "type": "object",
@@ -422,31 +443,7 @@
       "additionalProperties": true
     },
     "MeshSelfIdentity": {
-      "type": "object",
-      "properties": {
-        "deviceId": {
-          "type": "string"
-        },
-        "deviceName": {
-          "type": "string"
-        },
-        "dnsName": {
-          "type": "string"
-        },
-        "tailscaleId": {
-          "type": "string"
-        },
-        "ip": {
-          "type": "string"
-        },
-        "login": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "deviceId"
-      ],
-      "additionalProperties": true
+      "$ref": "#/definitions/MeshSelfIdentity"
     },
     "MeshRetireResult": {
       "type": "object",

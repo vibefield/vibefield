@@ -80,6 +80,7 @@ import { DocSyncService, type LaneInfo } from "./doc-sync";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { InstallSetReconciler } from "./install-reconciler";
+import { LinkService } from "./link-service";
 import { McpService } from "./mcp-service";
 import { MeshClient } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
@@ -297,6 +298,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics = diagnosticsService;
     await diagnosticsService.start();
     const mesh = new MeshClient(native);
+    // UA-3 — the link lifecycle (spec §7.1/§7.2): capture the S1 self-whois
+    // login once the node is Running; the stored login is UA-4's trust
+    // comparison value. link.json lives under this user's root.
+    const links = new LinkService({
+      dataDir: config.dataDir,
+      native,
+      logger: logger.child({ component: "link" }),
+    });
+    links.start();
     // C6-3g: sync is constructed after docs but has to be reachable from its
     // commit hook, so the hook reads a binding that is filled in below. It is
     // optional the whole way down — with the mesh off (the default) `docSync`
@@ -1530,6 +1540,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       }
     };
+    // UA-3 — the user's tailscale link (spec §7.1): trusted-desktop posture,
+    // identical to the app-preference rows below. Unlink is identity
+    // retirement — audited attempt-before-effect, and there is no rollback:
+    // a retired node key cannot be un-retired, only relinked fresh.
+    api.register("user.link.get", (ctx) => {
+      requireAppPreferencesCaller(ctx);
+      return links.status();
+    });
+    api.registerSubscription("user.link.subscribe", (ctx, _params, emit) => {
+      requireAppPreferencesCaller(ctx);
+      const fn = (status: unknown) => emit(status);
+      links.on("changed", fn);
+      return { snapshot: links.status(), dispose: () => links.off("changed", fn) };
+    });
+    api.register("user.link.unlink", async (ctx) => {
+      requireAppPreferencesCaller(ctx);
+      return audit.requiredSystem(
+        {
+          action: "user.link.unlink",
+          target: { kind: "mesh", id: "tailnet-link" },
+        },
+        () => links.unlink(),
+        (result) => ({ attrs: { retired: result.retired } }),
+      );
+    });
     const appPreferencesSnapshot = async () =>
       effectiveAppPreferences(await settingsDoc.appValues());
     api.register("storage.appPreferences.get", async (ctx, _params) => {
@@ -1906,6 +1941,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           processes.stopAll(),
         ]);
         detachHealthSources?.();
+        links.stop();
         docSync?.stop();
         laneLink.close();
         docs.dispose();

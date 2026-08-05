@@ -3662,6 +3662,109 @@ impl ::std::convert::TryFrom<::std::string::String> for MeshLaneProtocol {
         value.parse()
     }
 }
+#[doc = "`MeshRetireResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"archivedTo\","]
+#[doc = "    \"retired\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"archivedTo\": {"]
+#[doc = "      \"type\": ["]
+#[doc = "        \"string\","]
+#[doc = "        \"null\""]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"retired\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshRetireResult {
+    #[serde(rename = "archivedTo")]
+    pub archived_to: ::std::option::Option<::std::string::String>,
+    pub retired: bool,
+}
+impl MeshRetireResult {
+    pub fn builder() -> builder::MeshRetireResult {
+        Default::default()
+    }
+}
+#[doc = "`MeshSelfIdentity`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"deviceId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"deviceId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"deviceName\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"dnsName\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"ip\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"login\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"tailscaleId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshSelfIdentity {
+    #[serde(rename = "deviceId")]
+    pub device_id: ::std::string::String,
+    #[serde(
+        rename = "deviceName",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub device_name: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "dnsName",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub dns_name: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub ip: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub login: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "tailscaleId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub tailscale_id: ::std::option::Option<::std::string::String>,
+}
+impl MeshSelfIdentity {
+    pub fn builder() -> builder::MeshSelfIdentity {
+        Default::default()
+    }
+}
 #[doc = "`NativeHealth`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -8440,6 +8543,188 @@ pub mod builder {
                 peer: Ok(value.peer),
                 protocol: Ok(value.protocol),
                 whois: Ok(value.whois),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshRetireResult {
+        archived_to: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        retired: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshRetireResult {
+        fn default() -> Self {
+            Self {
+                archived_to: Err("no value supplied for archived_to".to_string()),
+                retired: Err("no value supplied for retired".to_string()),
+            }
+        }
+    }
+    impl MeshRetireResult {
+        pub fn archived_to<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.archived_to = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for archived_to: {e}"));
+            self
+        }
+        pub fn retired<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.retired = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for retired: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshRetireResult> for super::MeshRetireResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshRetireResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                archived_to: value.archived_to?,
+                retired: value.retired?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshRetireResult> for MeshRetireResult {
+        fn from(value: super::MeshRetireResult) -> Self {
+            Self {
+                archived_to: Ok(value.archived_to),
+                retired: Ok(value.retired),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshSelfIdentity {
+        device_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        device_name: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        dns_name: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        ip: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        login: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        tailscale_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for MeshSelfIdentity {
+        fn default() -> Self {
+            Self {
+                device_id: Err("no value supplied for device_id".to_string()),
+                device_name: Ok(Default::default()),
+                dns_name: Ok(Default::default()),
+                ip: Ok(Default::default()),
+                login: Ok(Default::default()),
+                tailscale_id: Ok(Default::default()),
+            }
+        }
+    }
+    impl MeshSelfIdentity {
+        pub fn device_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_id: {e}"));
+            self
+        }
+        pub fn device_name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_name: {e}"));
+            self
+        }
+        pub fn dns_name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dns_name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dns_name: {e}"));
+            self
+        }
+        pub fn ip<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.ip = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for ip: {e}"));
+            self
+        }
+        pub fn login<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.login = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for login: {e}"));
+            self
+        }
+        pub fn tailscale_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.tailscale_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for tailscale_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshSelfIdentity> for super::MeshSelfIdentity {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshSelfIdentity,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                device_id: value.device_id?,
+                device_name: value.device_name?,
+                dns_name: value.dns_name?,
+                ip: value.ip?,
+                login: value.login?,
+                tailscale_id: value.tailscale_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshSelfIdentity> for MeshSelfIdentity {
+        fn from(value: super::MeshSelfIdentity) -> Self {
+            Self {
+                device_id: Ok(value.device_id),
+                device_name: Ok(value.device_name),
+                dns_name: Ok(value.dns_name),
+                ip: Ok(value.ip),
+                login: Ok(value.login),
+                tailscale_id: Ok(value.tailscale_id),
             }
         }
     }

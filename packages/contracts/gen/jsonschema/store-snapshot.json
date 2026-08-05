@@ -442,6 +442,52 @@
       ],
       "additionalProperties": true
     },
+    "MeshSelfIdentity": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string"
+        },
+        "deviceName": {
+          "type": "string"
+        },
+        "dnsName": {
+          "type": "string"
+        },
+        "tailscaleId": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        },
+        "login": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deviceId"
+      ],
+      "additionalProperties": true
+    },
+    "MeshRetireResult": {
+      "type": "object",
+      "properties": {
+        "retired": {
+          "type": "boolean"
+        },
+        "archivedTo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "retired",
+        "archivedTo"
+      ],
+      "additionalProperties": true
+    },
     "StoreSnapshot": {
       "$ref": "#/definitions/StoreSnapshot"
     },

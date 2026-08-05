@@ -3,6 +3,8 @@ import {
   GodviewState as GodviewStateSchema,
   IPC_CHANNELS,
   TerminalBackendAttachResult,
+  type UserRecord,
+  UsersUpdateParams,
 } from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
@@ -54,6 +56,39 @@ export function registerWindowBootstrap(
       );
       throw error;
     }
+  });
+}
+
+/** UA-3 — the Account page's profile door. Main owns users.json (UA-D10:
+ * fieldd never writes it); the sender gate is bootstrap's and the payload is
+ * schema-validated before it may touch anything. One door, two verbs: an
+ * update with no recognized fields is an honest READ of the current record —
+ * no lock, no write — which is how the page loads the profile it edits. */
+export function registerUsersUpdate(
+  registry: WindowRegistry,
+  handlers: {
+    apply: (params: UsersUpdateParams) => Promise<UserRecord>;
+    read: () => Promise<UserRecord>;
+  },
+  logger?: Logger,
+): void {
+  ipcMain.handle(IPC_CHANNELS.usersUpdate, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) {
+      throw new Error("users update refused: unregistered sender");
+    }
+    const params = UsersUpdateParams.parse(raw);
+    const empty =
+      params.name === undefined &&
+      params.color === undefined &&
+      params.resident === undefined &&
+      params.onboarded === undefined;
+    if (empty) return handlers.read();
+    const record = await handlers.apply(params);
+    logger?.info("desktop.users.updated", "The attached user's profile was updated", {
+      webContentsId: event.sender.id,
+      fields: Object.keys(params).join(","),
+    });
+    return record;
   });
 }
 

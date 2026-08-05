@@ -252,6 +252,20 @@ export const METHODS: MethodDef[] = [
   }),
   defineMethod({
     surface: "mgmt",
+    method: "native.mesh.self",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.retire",
+    scope: null,
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
     method: "native.mesh.peers.list",
     scope: null,
     idempotent: true,
@@ -595,6 +609,32 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
     subscription: true,
+  }),
+  // UA-3 — the user's tailscale link (spec §7.1): link truth + honest mesh
+  // reachability for the Account surface; unlink retires the node identity.
+  // settings.manage = the trusted desktop surface, same posture as the
+  // app-preference rows below; never federates.
+  defineMethod({
+    surface: "product",
+    method: "user.link.get",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "user.link.subscribe",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "user.link.unlink",
+    scope: "settings.manage",
+    idempotent: false,
+    locality: "local",
   }),
   // D29′ app-section preferences. Unlike plugin settings these are an exact,
   // trusted desktop surface; plugins, tailnet callers, and agents never receive

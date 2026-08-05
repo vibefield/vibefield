@@ -54,6 +54,10 @@
     "native",
     "mesh"
   ],
+  "LINK_FILE": [
+    "fieldd",
+    "link.json"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

@@ -47,6 +47,13 @@ struct Shared {
     /// facade state (C2): open stores + declared serves (config JSON kept for list)
     stores: tokio::sync::Mutex<HashMap<String, Arc<JsonStore>>>,
     serves: tokio::sync::Mutex<HashMap<String, Value>>,
+    /// truffle state root (identity + keys) — lives on Shared so the mgmt
+    /// facade can retire it even when no node ever came up (UA-3 unlink).
+    state_dir: PathBuf,
+    /// UA-3 — set by retire(); the bring-up task checks it before installing
+    /// a node, so a login completing AFTER an unlink cannot resurrect the
+    /// identity the user just archived.
+    retired: std::sync::atomic::AtomicBool,
 }
 
 /// Cloneable door to the mesh for the mgmt server (design-02: fieldd consumes
@@ -107,6 +114,28 @@ impl MeshHandle {
     pub async fn serve_config(&self, name: &str) -> Option<Value> {
         self.shared.serves.lock().await.get(name).cloned()
     }
+
+    /// UA-3 unlink, native half: drop the node (the sidecar dies with it),
+    /// clear the facade's node-bound state, mark the unit retired so a
+    /// mid-flight bring-up cannot resurrect the identity, and hand back the
+    /// state dir to archive — Some only when there is state on disk. The
+    /// caller (the mgmt handler) owns the rename; this owns the lifecycle.
+    pub async fn retire(&self) -> Option<PathBuf> {
+        self.shared
+            .retired
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let old = self.shared.node.send_replace(None);
+        self.shared.stores.lock().await.clear();
+        self.shared.serves.lock().await.clear();
+        drop(old); // node drop kills the sidecar (kill_on_drop)
+        self.shared.set(
+            UnitState::Disabled,
+            Some("retired — relink to mint a new tailnet identity".into()),
+            None,
+        );
+        let dir = self.shared.state_dir.clone();
+        dir.exists().then_some(dir)
+    }
 }
 
 impl Shared {
@@ -125,7 +154,6 @@ pub struct MeshUnit {
     enabled: bool,
     sidecar: Option<PathBuf>,
     searched: Vec<String>,
-    state_dir: PathBuf,
     shared: Arc<Shared>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
@@ -138,7 +166,6 @@ impl MeshUnit {
             enabled: config.mesh_enabled,
             sidecar,
             searched,
-            state_dir: config.mesh_state_dir(),
             shared: Arc::new(Shared {
                 health: Mutex::new(UnitHealth {
                     unit: "mesh-gateway".into(),
@@ -150,6 +177,8 @@ impl MeshUnit {
                 ping,
                 stores: tokio::sync::Mutex::new(HashMap::new()),
                 serves: tokio::sync::Mutex::new(HashMap::new()),
+                state_dir: config.mesh_state_dir(),
+                retired: std::sync::atomic::AtomicBool::new(false),
             }),
             task: Mutex::new(None),
         }
@@ -194,7 +223,7 @@ impl NativeService for MeshUnit {
             );
             return Ok(()); // degraded, not fatal — the daemon keeps serving
         };
-        std::fs::create_dir_all(&self.state_dir)?;
+        std::fs::create_dir_all(&self.shared.state_dir)?;
         self.shared.set(
             UnitState::Starting,
             Some("bringing up tailnet node".into()),
@@ -202,7 +231,7 @@ impl NativeService for MeshUnit {
         );
 
         let shared = self.shared.clone();
-        let state_dir = self.state_dir.to_string_lossy().into_owned();
+        let state_dir = self.shared.state_dir.to_string_lossy().into_owned();
         let handle = tokio::spawn(async move {
             let auth_shared = shared.clone();
             let built = async {
@@ -230,6 +259,17 @@ impl NativeService for MeshUnit {
             .await;
             match built {
                 Ok(node) => {
+                    if shared.retired.load(std::sync::atomic::Ordering::SeqCst) {
+                        // UA-3: retired mid-bring-up — never resurrect an
+                        // identity the user just archived; dropping the node
+                        // kills the sidecar and the retired face stands.
+                        tracing::info!(
+                            event = "field_native.mesh.bring_up_discarded",
+                            component = "mesh",
+                            "Mesh bring-up completed after retire; node discarded"
+                        );
+                        return;
+                    }
                     let node = Arc::new(node);
                     let info = node.local_info();
                     let name = info
@@ -315,4 +355,48 @@ fn resolve_sidecar(override_path: Option<PathBuf>, searched: &mut Vec<String>) -
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    // UA-3 — the retire lifecycle at the handle seam: state-dir custody and
+    // the resurrection guard. The archive RENAME belongs to the mgmt handler
+    // and the live sidecar path to the #[ignore]d probes.
+
+    #[tokio::test]
+    async fn retire_hands_back_nothing_when_no_state_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::config::NativeConfig::for_data_dir(dir.path().to_path_buf());
+        let (ping, _rx) = mpsc::unbounded_channel();
+        let unit = MeshUnit::new(&config, ping);
+        let handle = unit.handle();
+        assert!(handle.retire().await.is_none());
+        let health = unit.shared.health.lock().unwrap().clone();
+        assert!(matches!(health.state, UnitState::Disabled));
+        assert!(health.detail.unwrap_or_default().contains("retired"));
+    }
+
+    #[tokio::test]
+    async fn retire_hands_back_an_existing_state_dir_and_blocks_resurrection() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::config::NativeConfig::for_data_dir(dir.path().to_path_buf());
+        std::fs::create_dir_all(config.mesh_state_dir()).unwrap();
+        let (ping, _rx) = mpsc::unbounded_channel();
+        let unit = MeshUnit::new(&config, ping);
+        let handle = unit.handle();
+        let handed = handle
+            .retire()
+            .await
+            .expect("existing state dir handed back");
+        assert_eq!(handed, config.mesh_state_dir());
+        // the retired flag stands — a bring-up finishing AFTER an unlink must
+        // never install a node over the archived identity
+        assert!(unit
+            .shared
+            .retired
+            .load(std::sync::atomic::Ordering::SeqCst));
+    }
 }

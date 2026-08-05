@@ -12,6 +12,9 @@ import {
   TerminalBackendAttachResult,
   type TerminalBridgeStatus,
   TerminalTicket,
+  type UserRecord,
+  UserRecord as UserRecordSchema,
+  UsersUpdateParams,
   WindowConnection,
 } from "@vibefield/contracts";
 import { contextBridge, ipcRenderer } from "electron";
@@ -146,6 +149,13 @@ contextBridge.exposeInMainWorld("vibefield", {
   submitRendererLogs: (serializedBatch: string): boolean => logging.submit(serializedBatch),
   getConnection: async (): Promise<{ port: number; token: string }> =>
     WindowConnection.parse(await ipcRenderer.invoke(IPC_CHANNELS.windowBootstrap)),
+  /** UA-3 — the Account page's profile write (name/color/resident/onboarded).
+   * Validated both directions; main owns users.json and refuses empty or
+   * unregistered-sender updates. */
+  usersUpdate: async (params: UsersUpdateParams): Promise<UserRecord> =>
+    UserRecordSchema.parse(
+      await ipcRenderer.invoke(IPC_CHANNELS.usersUpdate, UsersUpdateParams.parse(params)),
+    ),
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {
       const request = CloseRequest.safeParse(raw);

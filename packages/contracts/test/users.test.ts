@@ -3,8 +3,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { Hello, HelloAck } from "../src/envelope";
+import { MeshRetireResult, MeshSelfIdentity } from "../src/mgmt";
 import { ProductInfo } from "../src/shell";
-import { LayoutStamp, UserRecord, UsersFile } from "../src/users";
+import {
+  LayoutStamp,
+  TailscaleLink,
+  UserLinkStatus,
+  UserRecord,
+  UsersFile,
+  UsersUpdateParams,
+} from "../src/users";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -46,6 +54,57 @@ describe("UsersFile (golden vector)", () => {
           .previous,
       ).toBe(previous);
     }
+  });
+});
+
+// UA-3 — the link lifecycle shapes.
+describe("link lifecycle (UA-3)", () => {
+  it("TailscaleLink tolerates the pre-capture null login", () => {
+    const link = TailscaleLink.parse({ login: null, linkedAt: "2026-08-05T00:00:00.000Z" });
+    expect(link.login).toBeNull();
+    expect(
+      TailscaleLink.parse({
+        login: "james@github",
+        tailnet: "tail1234.ts.net",
+        linkedAt: "2026-08-05T00:00:00.000Z",
+      }).tailnet,
+    ).toBe("tail1234.ts.net");
+  });
+
+  it("UserLinkStatus carries every honest degraded shape", () => {
+    const off = UserLinkStatus.parse({
+      link: null,
+      meshEnabled: false,
+      nodeState: "disabled",
+      authUrl: null,
+    });
+    expect(off.meshEnabled).toBe(false);
+    const pending = UserLinkStatus.parse({
+      link: null,
+      meshEnabled: true,
+      nodeState: "starting",
+      authUrl: "https://login.example/x",
+    });
+    expect(pending.authUrl).toContain("https://");
+  });
+
+  it("MeshSelfIdentity never requires what the node cannot know", () => {
+    expect(MeshSelfIdentity.parse({ deviceId: "01D" }).login).toBeUndefined();
+    expect(MeshSelfIdentity.parse({ deviceId: "01D", ip: "100.64.0.1", login: "a@b" }).login).toBe(
+      "a@b",
+    );
+  });
+
+  it("MeshRetireResult reports both the archive and the honest no-op", () => {
+    expect(MeshRetireResult.parse({ retired: false, archivedTo: null }).retired).toBe(false);
+    expect(
+      MeshRetireResult.parse({ retired: true, archivedTo: "/x/mesh.retired-1" }).archivedTo,
+    ).toContain("retired");
+  });
+
+  it("UsersUpdateParams tolerates unknown fields and refuses invalid ones", () => {
+    expect(UsersUpdateParams.parse({ name: "james", future: 1 }).name).toBe("james");
+    expect(() => UsersUpdateParams.parse({ name: "" })).toThrow();
   });
 });
 

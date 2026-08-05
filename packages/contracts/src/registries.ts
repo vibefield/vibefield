@@ -225,6 +225,7 @@ export const LAYOUT = {
   NATIVE_RUN_DIR: ["native", "run"],
   PAIRING_FILE: ["native", "pairing"],
   MESH_STATE_DIR: ["native", "mesh"],
+  LINK_FILE: ["fieldd", "link.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   MGMT_SOCKET: ["native", "run", SOCKETS.MGMT],
   MESHDATA_SOCKET: ["native", "run", SOCKETS.MESHDATA],
@@ -271,4 +272,8 @@ export const IPC_CHANNELS = {
   /** renderer → main invoke: GodviewSetRequest — the toolbar button asking for
    * the same transition ⇧⇧ asks for; answers with the resulting GodviewState */
   godviewSet: "vibefield:godview:set",
+  /** renderer → main invoke: UsersUpdateParams → UserRecord — the Account
+   * page's profile write. Main owns users.json (UA-D10); fieldd never writes
+   * it, which is what keeps the boundary lint honest. */
+  usersUpdate: "vibefield:users:update",
 } as const;

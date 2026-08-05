@@ -16,7 +16,7 @@ import {
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
-import { ensureUsersRoot } from "@vibefield/users";
+import { ensureUsersRoot, mutateUsersFile, readUsersFile } from "@vibefield/users";
 import {
   app,
   BrowserWindow,
@@ -39,7 +39,12 @@ import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import { GodviewRegistry, installGodviewDoubleShift } from "./godview";
-import { registerGodviewToggle, registerTerminalBackend, registerWindowBootstrap } from "./ipc";
+import {
+  registerGodviewToggle,
+  registerTerminalBackend,
+  registerUsersUpdate,
+  registerWindowBootstrap,
+} from "./ipc";
 import { installLifecycle } from "./lifecycle";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
@@ -151,9 +156,9 @@ async function main(
   diagnostics: ElectronLocalDiagnostics,
   crashes: CrashArtifactManager,
   support: SupportBundleService,
-  /** UA-2 — the attached user (users.json): identity for the supervisor gate,
-   * name for the tray. */
-  user: { userId: string; name: string },
+  /** UA-2/UA-3 — the attached user (users.json): identity for the supervisor
+   * gate, name for the tray, canonical root for the profile-write IPC. */
+  user: { userId: string; name: string; rootReal: string },
 ): Promise<void> {
   const logger = shellLogging.logger;
   let crashEvidenceAvailable = true;
@@ -529,6 +534,41 @@ async function main(
     registry,
     (options) => fielddHandles!.ensure(options),
     logger.child({ component: "ipc.bootstrap" }),
+  );
+
+  // UA-3 — the Account page's profile write: main owns users.json (UA-D10),
+  // mutates under the §3.3 lock, and refreshes the tray label in step.
+  registerUsersUpdate(
+    registry,
+    {
+      read: async () => {
+        const file = readUsersFile(user.rootReal);
+        const record = file?.users.find((u) => u.userId === user.userId);
+        if (record === undefined) {
+          throw new Error("the attached user vanished from users.json");
+        }
+        return record;
+      },
+      apply: async (params) => {
+        const updated = await mutateUsersFile(user.rootReal, {}, (file) => {
+          const record = file.users.find((u) => u.userId === user.userId);
+          if (record === undefined) {
+            throw new Error("the attached user vanished from users.json");
+          }
+          if (params.name !== undefined) record.name = params.name;
+          if (params.color !== undefined) record.color = params.color;
+          if (params.resident !== undefined) record.resident = params.resident;
+          if (params.onboarded !== undefined) record.onboarded = params.onboarded;
+        });
+        const record = updated.users.find((u) => u.userId === user.userId);
+        if (record === undefined) {
+          throw new Error("the attached user vanished from users.json");
+        }
+        if (params.name !== undefined) trayController?.update({ userName: record.name });
+        return record;
+      },
+    },
+    logger.child({ component: "ipc.users" }),
   );
 
   // GT-D3: external mode, never the supervisor — field-native embeds the floor
@@ -963,6 +1003,7 @@ if (!hasInstanceLock) {
       await main(userRoot, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles, {
         userId: ensured.user.userId,
         name: ensured.user.name,
+        rootReal: ensured.rootReal,
       });
     } catch (error) {
       flow.fatal(error);

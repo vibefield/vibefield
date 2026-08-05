@@ -47,6 +47,47 @@ export const UsersFile = z
   .passthrough();
 export type UsersFile = z.infer<typeof UsersFile>;
 
+/** UA-3 — the recorded tailscale link (`users/<fuid>/fieldd/link.json`,
+ * fieldd-owned, private). `login` is THE trust comparison value for UA-4's
+ * self/guest door; null until captured (self-whois needs a Running node, and
+ * tagged nodes may never yield one — a typed pre-capture state, not an error). */
+export const TailscaleLink = z
+  .object({
+    login: z.string().nullable(),
+    /** display only — the MagicDNS suffix, never a trust input */
+    tailnet: z.string().optional(),
+    linkedAt: z.string(),
+    lastVerifiedAt: z.string().optional(),
+  })
+  .passthrough();
+export type TailscaleLink = z.infer<typeof TailscaleLink>;
+
+/** The Account surface's fold: link truth + live mesh reachability, honest
+ * about every degraded shape (mesh off, auth pending, capture pending). */
+export const UserLinkStatus = z
+  .object({
+    link: TailscaleLink.nullable(),
+    meshEnabled: z.boolean(),
+    nodeState: z.string().nullable(),
+    authUrl: z.string().nullable(),
+  })
+  .passthrough();
+export type UserLinkStatus = z.infer<typeof UserLinkStatus>;
+
+/** UA-3 — the Account page's profile write over the closed IPC surface. All
+ * fields optional (the handler refuses an empty update); `onboarded` exists
+ * for UA-3w's wizard completion flip. Tolerant read per the corpus law —
+ * unknown fields are ignored by the applier, never a refusal. */
+export const UsersUpdateParams = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    color: z.string().min(1).max(64).optional(),
+    resident: z.boolean().optional(),
+    onboarded: z.boolean().optional(),
+  })
+  .passthrough();
+export type UsersUpdateParams = z.infer<typeof UsersUpdateParams>;
+
 /** `layout.json` — the migration's commit marker, written LAST (spec §4). */
 export const LayoutStamp = z
   .object({

@@ -72,6 +72,7 @@ pub mod layout {
     pub const NATIVE_RUN_DIR: &[&str] = &["native", "run"];
     pub const PAIRING_FILE: &[&str] = &["native", "pairing"];
     pub const MESH_STATE_DIR: &[&str] = &["native", "mesh"];
+    pub const LINK_FILE: &[&str] = &["fieldd", "link.json"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
     pub const MESHDATA_SOCKET: &[&str] = &["native", "run", "meshdata.sock"];
@@ -99,6 +100,7 @@ pub mod layout {
         ("NATIVE_RUN_DIR", NATIVE_RUN_DIR),
         ("PAIRING_FILE", PAIRING_FILE),
         ("MESH_STATE_DIR", MESH_STATE_DIR),
+        ("LINK_FILE", LINK_FILE),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),
         ("MESHDATA_SOCKET", MESHDATA_SOCKET),

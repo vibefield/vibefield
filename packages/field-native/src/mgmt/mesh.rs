@@ -68,11 +68,19 @@ pub async fn handle(
         handle_lane(state, tx, method, params, id).await;
         return;
     }
+    if method == "native.mesh.retire" {
+        // UA-3 unlink — answered BEFORE the node gate, like lane control:
+        // retiring a half-authed or disabled mesh must still archive its
+        // state; the one moment retire matters most is when no node is up.
+        send(tx, retire_identity(state, id).await);
+        return;
+    }
     let Some(node) = state.mesh.node() else {
         send(tx, unavailable(state, id));
         return;
     };
     let resp = match method {
+        "native.mesh.self" => ok(id, self_identity(&node).await),
         "native.mesh.peers.list" => ok(id, json!({ "peers": list_peers(&node).await })),
         "native.mesh.peers.subscribe" => {
             let sub_id = state.sub_id();
@@ -418,6 +426,71 @@ fn spawn_lane_forwarder(
             }
         }
     });
+}
+
+/// UA-3 — the node's OWN identity incl. the S1 self-whois login: the sidecar
+/// answers WhoIs for the local address (self resolves at every lookup step —
+/// tailscale#19894 guarantees the self user-profile in the netmap). Absent
+/// fields are ABSENT, never synthesized (EL7); a tagged node yields no login
+/// and the caller treats that as a typed pre-capture state.
+async fn self_identity(node: &Arc<MeshNode>) -> Value {
+    let info = node.local_info();
+    let mut out = json!({ "deviceId": info.device_id });
+    if !info.device_name.is_empty() {
+        out["deviceName"] = json!(info.device_name);
+    }
+    if let Some(dns) = info.dns_name.clone().filter(|d| !d.is_empty()) {
+        out["dnsName"] = json!(dns);
+    }
+    if !info.tailscale_id.is_empty() {
+        out["tailscaleId"] = json!(info.tailscale_id);
+    }
+    if let Some(ip) = info.ip {
+        out["ip"] = json!(ip.to_string());
+        if let Ok(Some(identity)) = node.whois(&ip.to_string()).await {
+            if let Some(login) = identity.login_name.filter(|l| !l.is_empty()) {
+                out["login"] = json!(login);
+            }
+        }
+    }
+    out
+}
+
+/// UA-3 unlink, mgmt half: lifecycle through the handle (drop node, kill
+/// sidecar, mark retired), then archive the state dir beside itself. The
+/// sidecar's death is asynchronous (kill_on_drop), so the rename retries a
+/// few beats before reporting an honest INTERNAL.
+async fn retire_identity(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
+    let Some(dir) = state.mesh.retire().await else {
+        return ok(id, json!({ "retired": false, "archivedTo": Value::Null }));
+    };
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let target = dir.with_file_name(format!("mesh.retired-{secs}"));
+    let mut result = std::fs::rename(&dir, &target);
+    for _ in 0..4 {
+        if result.is_ok() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        result = std::fs::rename(&dir, &target);
+    }
+    match result {
+        Ok(()) => ok(
+            id,
+            json!({ "retired": true, "archivedTo": target.display().to_string() }),
+        ),
+        Err(e) => err(
+            id,
+            "INTERNAL",
+            -32000,
+            &format!("retire could not archive the mesh state dir: {e}"),
+            false,
+            None,
+        ),
+    }
 }
 
 /// UNAVAILABLE carrying the mesh unit's live state (+authUrl) — the C1 shape.

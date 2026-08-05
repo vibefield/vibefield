@@ -13,6 +13,7 @@
   "NATIVE_RUN_DIR": ["native", "run"],
   "PAIRING_FILE": ["native", "pairing"],
   "MESH_STATE_DIR": ["native", "mesh"],
+  "LINK_FILE": ["fieldd", "link.json"],
   "TERMINAL_CONFIG_FILE": ["native", "config.ghostty"],
   "MGMT_SOCKET": ["native", "run", "mgmt.sock"],
   "MESHDATA_SOCKET": ["native", "run", "meshdata.sock"],
