@@ -37,7 +37,7 @@ import { installDevSignalQuit } from "./dev-signals";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
-import { GodviewRegistry } from "./godview";
+import { GodviewRegistry, installGodviewChord } from "./godview";
 import { registerGodviewToggle, registerTerminalBackend, registerWindowBootstrap } from "./ipc";
 import { installLifecycle } from "./lifecycle";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
@@ -665,6 +665,10 @@ async function main(
             },
           });
           installDiagnostics(window);
+          // ⌘⎋'s live binding on darwin — the View item's accelerator is only
+          // the label there (see installGodviewChord). Installed per window and
+          // dies with its webContents, so it cannot outlive what it toggles.
+          installGodviewChord(window.webContents, toggleGodview);
           installNavigationPolicy(window, MODE);
           installDurableClose(
             window,

@@ -2,10 +2,11 @@
 // function, Electron is a thin adapter in app-menu.ts).
 //
 // The shell had no application menu until GT-2 — Electron's built-in default
-// was serving. Godview's toggle has to be an APP-LEVEL accelerator (GT-D2 /
-// design-04 §8.3): a menu accelerator is consumed before any renderer sees a
-// keystroke, so ⌘⎋ reaches the overlay even while a terminal pane holds
-// keyboard focus, which a renderer-level listener could never promise. Owning
+// was serving. Godview's toggle has to be answered ABOVE the page (GT-D2 /
+// design-04 §8.3) so it reaches the overlay even while a terminal pane holds
+// keyboard focus, which a renderer-level listener could never promise. A menu
+// key equivalent was how that was done until 2026-08-04; on darwin it no longer
+// is — see GODVIEW_ACCELERATOR below and `installGodviewChord`. Owning
 // the menu means owning the whole thing — replacing Electron's default with one
 // that omits Copy or Quit would be a regression the accelerator paid for — so
 // every standard section below is present by ROLE, which is how Electron keeps
@@ -45,6 +46,13 @@ export interface AppMenuState {
 /** GT-D2, James 2026-08-01; moved off ⌘G 2026-08-04. Electron resolves
  * `CommandOrControl` per platform, so one string is the whole cross-platform
  * statement.
+ *
+ * ON DARWIN THIS IS A LABEL, NOT A BINDING. Electron accepts the string and the
+ * View menu draws ⌘⎋ beside Godview, but macOS does not deliver ⌘⎋ to a menu
+ * key equivalent — the item never fired. `installGodviewChord` (main/godview.ts)
+ * is what actually answers the chord, above the page, where GT-D2 needs it. The
+ * accelerator stays here because the menu is where a user LOOKS to learn the
+ * gesture, and it remains the live binding wherever the platform honours it.
  *
  * It was ⌘G until the collision got paid for twice. ⌘G is find-next in every
  * macOS text surface and in ghostty, and an application accelerator always wins
