@@ -12,8 +12,14 @@ export interface TraySnapshot {
   readonly evidence: TrayEvidenceState;
   readonly update: TrayUpdateState;
   /** UA-2 — the attached user's display name; absent hides the row (older
-   * callers, tests). Static per boot until UA-3's Account section can rename. */
+   * callers, tests). UA-3's Account section renames it live. */
   readonly userName?: string;
+  /** UA-5 — the roster behind the Switch User submenu; absent hides it. */
+  readonly users?: ReadonlyArray<{
+    readonly userId: string;
+    readonly name: string;
+    readonly attached: boolean;
+  }>;
   readonly backgroundShell: boolean;
   readonly showTray: boolean;
   readonly windowOpen: boolean;
@@ -30,6 +36,10 @@ export interface TrayActions {
   restartToUpdate?: () => void;
   setBackgroundShell(enabled: boolean): void;
   setTrayVisible(enabled: boolean): void;
+  /** UA-5 — attach another user (UA-D15: re-target + window reload). */
+  switchUser?: (userId: string) => void;
+  /** UA-5 — mint-and-attach; the reloaded window runs the §6.2 wizard. */
+  newUser?: () => void;
   quit(): void;
 }
 
@@ -40,6 +50,10 @@ export interface TrayMenuItem {
   readonly enabled?: boolean;
   readonly checked?: boolean;
   readonly click?: () => void;
+  /** UA-5 — one level deep is all the tray needs (the Switch User submenu);
+   * the native mapping recurses regardless. Submenu ITEMS honor `enabled`
+   * even on macOS — only top-level tray items don't (the availability rule). */
+  readonly submenu?: readonly TrayMenuItem[];
 }
 
 function serviceStatus(snapshot: TraySnapshot): string {
@@ -133,6 +147,42 @@ export function buildTrayMenu(
             label: `User: ${snapshot.userName}`,
             ...availability(platform, false),
           },
+        ]
+      : []),
+    ...(snapshot.users !== undefined &&
+    snapshot.users.length > 0 &&
+    actions.switchUser !== undefined
+      ? [
+          {
+            id: "switch-user",
+            label: "Switch User",
+            ...availability(platform, actionable),
+            submenu: [
+              ...snapshot.users.map(
+                (u): TrayMenuItem => ({
+                  id: `switch-user-${u.userId}`,
+                  type: "checkbox",
+                  label: u.name,
+                  checked: u.attached,
+                  enabled: actionable && !u.attached,
+                  ...(actionable && !u.attached
+                    ? { click: () => actions.switchUser?.(u.userId) }
+                    : {}),
+                }),
+              ),
+              ...(actions.newUser !== undefined
+                ? ([
+                    { type: "separator" },
+                    {
+                      id: "new-user",
+                      label: "New User…",
+                      enabled: actionable,
+                      ...(actionable ? { click: actions.newUser } : {}),
+                    },
+                  ] satisfies TrayMenuItem[])
+                : []),
+            ],
+          } satisfies TrayMenuItem,
         ]
       : []),
     {

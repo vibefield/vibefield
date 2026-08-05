@@ -37,7 +37,6 @@ import {
   type PluginsOpenRendererSessionResult,
   PluginsReloadParams,
   PluginsUninstallParams,
-  PORTS,
   ProcessStatParams,
   type ProcessSubEvent,
   type ProductInfo,
@@ -117,7 +116,7 @@ import { TokenService } from "./token-service";
 
 export interface FielddConfig {
   dataDir: string;
-  controlPort?: number; // default PORTS.FIELDD_WS_CONTROL; 0 = ephemeral (tests)
+  controlPort?: number; // default 0 = ephemeral (UA-D12; product.json records the actual)
   // default 0 = ephemeral; bin.ts supplies PORTS.FIELDD_WS_DATA for the real
   // launch. Kept ephemeral-by-default so parallel test daemons never collide on
   // a fixed port — the bound port always travels in doc.open's laneUrl anyway.
@@ -636,7 +635,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // fallback), never a TDZ crash (the C6-6 supersession lesson).
     let devicesRef: DeviceService | null = null;
     const api = new ProductApi({
-      port: config.controlPort ?? PORTS.FIELDD_WS_CONTROL,
+      // UA-D12 — ephemeral default; the fixed registry number is legacy
+      // documentation, and product.json is the only discovery
+      port: config.controlPort ?? 0,
       tokens,
       ...(config.allowedOrigins ? { allowedOrigins: config.allowedOrigins } : {}),
       tailnetPathSecret: servePathSecret,

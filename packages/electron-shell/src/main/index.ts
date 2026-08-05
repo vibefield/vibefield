@@ -12,11 +12,20 @@ import {
   IPC_CHANNELS,
   type ShellCommand,
   ShellCommandRequest,
+  type UserRecord,
+  type UsersCreateParams,
 } from "@vibefield/contracts";
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
-import { ensureUsersRoot, mutateUsersFile, readUsersFile } from "@vibefield/users";
+import {
+  createUser,
+  ensureUsersRoot,
+  mutateUsersFile,
+  readUsersFile,
+  setLastAttached,
+  userRootFor,
+} from "@vibefield/users";
 import {
   app,
   BrowserWindow,
@@ -42,6 +51,7 @@ import { GodviewRegistry, installGodviewDoubleShift } from "./godview";
 import {
   registerGodviewToggle,
   registerTerminalBackend,
+  registerUsersRoster,
   registerUsersUpdate,
   registerWindowBootstrap,
 } from "./ipc";
@@ -374,15 +384,6 @@ async function main(
       error,
     );
   }
-  supervisor = buildSupervisor({
-    mode: MODE,
-    root,
-    resources,
-    viteUrl: VITE_URL,
-    logRoot,
-    logger,
-    userId: user.userId,
-  });
   const pluginProvenance = new RendererPluginProvenanceCatalog();
   let observedLink: TrayLinkState = "starting";
   const observedSnapshots: {
@@ -430,95 +431,156 @@ async function main(
     evidenceMonitor?.updateRemote(raw);
   };
 
-  fielddHandles = new FielddHandleCoordinator(
-    (options) => supervisor!.ensure(options),
-    (error) => {
-      publishLink("failed");
-      pluginProvenance.invalidate();
-      healthObservationUnavailable = true;
-      evidenceMonitor?.markRemoteUnavailable();
-      logger.error("desktop.fieldd.ensure_failed", "A fieldd adoption/spawn attempt failed", error);
-    },
-    (error) => {
-      logger.error(
-        "desktop.fieldd.observer_bind_failed",
-        "A main-process fieldd observer could not bind",
-        error,
-      );
-    },
-  );
-  const fielddObservers = new RecoveringFielddObservers(fielddHandles, {
-    onStatus: (status) => {
-      if (status !== "ready") pluginProvenance.invalidate();
-      publishLink(status);
-      logger.info("desktop.fieldd.link_state_changed", "fieldd link state changed", {
-        status,
-      });
-    },
-    observePlugins: (client) => pluginProvenance.observe(client),
-    onPreferences: applyPreferences,
-    onHealth: applyEvidenceHealth,
-    onError: (kind, error) => {
-      if (kind === "health") {
+  // ---- UA-5 — the per-user pair bundles and the attachment wiring ----
+  // A PairBundle is the DURABLE half: supervisor + coordinator, one per user,
+  // cached so a resident user's pair survives switch-away headless (UA-D3/
+  // UA-D15). The attachment wiring — observers, shell provider, preview
+  // capture — belongs to the ATTACHED user alone and is rebuilt every switch;
+  // background pairs run headless with no shell.* provider (the AH-3
+  // provider-absence honesty is the renderer-side face of that).
+  interface PairBundle {
+    supervisor: FielddSupervisor;
+    handles: FielddHandleCoordinator;
+  }
+  const pairBundles = new Map<string, PairBundle>();
+  const ensurePairBundle = (userId: string, userRoot: string): PairBundle => {
+    const existing = pairBundles.get(userId);
+    if (existing !== undefined) return existing;
+    const sup = buildSupervisor({
+      mode: MODE,
+      root: userRoot,
+      resources,
+      viteUrl: VITE_URL,
+      logRoot,
+      logger,
+      userId,
+    });
+    const handles = new FielddHandleCoordinator(
+      (options) => sup.ensure(options),
+      (error) => {
+        publishLink("failed");
+        pluginProvenance.invalidate();
         healthObservationUnavailable = true;
         evidenceMonitor?.markRemoteUnavailable();
-      }
-      const [event, message] =
-        kind === "plugins"
-          ? [
-              "desktop.plugins.log_provenance_unavailable",
-              "Plugin log provenance could not follow the fieldd registry",
-            ]
-          : kind === "preferences"
+        logger.error(
+          "desktop.fieldd.ensure_failed",
+          "A fieldd adoption/spawn attempt failed",
+          error,
+        );
+      },
+      (error) => {
+        logger.error(
+          "desktop.fieldd.observer_bind_failed",
+          "A main-process fieldd observer could not bind",
+          error,
+        );
+      },
+    );
+    const bundle = { supervisor: sup, handles };
+    pairBundles.set(userId, bundle);
+    return bundle;
+  };
+  const wireAttachment = (bundle: PairBundle, userRoot: string): { dispose(): void } => {
+    const observers = new RecoveringFielddObservers(bundle.handles, {
+      onStatus: (status) => {
+        if (status !== "ready") pluginProvenance.invalidate();
+        publishLink(status);
+        logger.info("desktop.fieldd.link_state_changed", "fieldd link state changed", {
+          status,
+        });
+      },
+      observePlugins: (client) => pluginProvenance.observe(client),
+      onPreferences: applyPreferences,
+      onHealth: applyEvidenceHealth,
+      onError: (kind, error) => {
+        if (kind === "health") {
+          healthObservationUnavailable = true;
+          evidenceMonitor?.markRemoteUnavailable();
+        }
+        const [event, message] =
+          kind === "plugins"
             ? [
-                "desktop.tray.preferences_unavailable",
-                "Desktop behavior preferences could not be observed",
+                "desktop.plugins.log_provenance_unavailable",
+                "Plugin log provenance could not follow the fieldd registry",
               ]
-            : [
-                "desktop.tray.evidence_health_unavailable",
-                "The tray could not observe diagnostic evidence health",
-              ];
-      logger.error(event, message, error);
-    },
+            : kind === "preferences"
+              ? [
+                  "desktop.tray.preferences_unavailable",
+                  "Desktop behavior preferences could not be observed",
+                ]
+              : [
+                  "desktop.tray.evidence_health_unavailable",
+                  "The tray could not observe diagnostic evidence health",
+                ];
+        logger.error(event, message, error);
+      },
+    });
+    const artifactPreviewCapture = new ArtifactPreviewCapture({
+      dataDir: userRoot,
+      native: {
+        createSession: (partition) => session.fromPartition(partition, { cache: false }),
+        createWindow: ({ width, height, partition, webPreferences }) =>
+          new BrowserWindow({
+            show: false,
+            frame: false,
+            focusable: false,
+            resizable: false,
+            skipTaskbar: true,
+            width,
+            height,
+            useContentSize: true,
+            paintWhenInitiallyHidden: true,
+            webPreferences: {
+              partition,
+              ...webPreferences,
+              experimentalFeatures: false,
+              spellcheck: false,
+              backgroundThrottling: false,
+            },
+          }),
+        decodeImage: (bytes) => nativeImage.createFromBuffer(bytes),
+      },
+    });
+    const shellProvider = new RecoveringShellProvider(
+      bundle.handles,
+      {
+        parentWindow: () => BrowserWindow.getFocusedWindow() ?? registry.primary(),
+        showOpenDialog: (parent, options) => dialog.showOpenDialog(parent, options),
+        openExternal: (url) => shell.openExternal(url),
+        captureArtifactPreview: (params, signal) => artifactPreviewCapture.capture(params, signal),
+      },
+      logger.child({ component: "shell.provider" }),
+    );
+    return {
+      dispose: () => {
+        observers.dispose();
+        shellProvider.dispose();
+      },
+    };
+  };
+
+  /** The live attachment — usersUpdate and the roster read it at CALL time,
+   * never a captured boot value (the switch reassigns it). rootReal is the
+   * VibeField root and never moves. */
+  let attached = user;
+  const bootBundle = ensurePairBundle(user.userId, root);
+  supervisor = bootBundle.supervisor;
+  fielddHandles = bootBundle.handles;
+  let attachmentWiring = wireAttachment(bootBundle, root);
+  let attachmentDisposer = (): void => attachmentWiring.dispose();
+  shellDisposers.add(attachmentDisposer);
+  // Quit path: background bundles are not reachable through the module-lets
+  // disposeShellState/lifecycle own — the attached bundle is skipped here
+  // because those paths already dispose it (and the supervisor via
+  // getSupervisor).
+  shellDisposers.add(() => {
+    for (const bundle of pairBundles.values()) {
+      if (bundle.handles === fielddHandles) continue;
+      bundle.handles.dispose();
+      void bundle.supervisor.dispose().catch(() => undefined);
+    }
+    pairBundles.clear();
   });
-  shellDisposers.add(() => fielddObservers.dispose());
-  const artifactPreviewCapture = new ArtifactPreviewCapture({
-    dataDir: root,
-    native: {
-      createSession: (partition) => session.fromPartition(partition, { cache: false }),
-      createWindow: ({ width, height, partition, webPreferences }) =>
-        new BrowserWindow({
-          show: false,
-          frame: false,
-          focusable: false,
-          resizable: false,
-          skipTaskbar: true,
-          width,
-          height,
-          useContentSize: true,
-          paintWhenInitiallyHidden: true,
-          webPreferences: {
-            partition,
-            ...webPreferences,
-            experimentalFeatures: false,
-            spellcheck: false,
-            backgroundThrottling: false,
-          },
-        }),
-      decodeImage: (bytes) => nativeImage.createFromBuffer(bytes),
-    },
-  });
-  const shellProvider = new RecoveringShellProvider(
-    fielddHandles,
-    {
-      parentWindow: () => BrowserWindow.getFocusedWindow() ?? registry.primary(),
-      showOpenDialog: (parent, options) => dialog.showOpenDialog(parent, options),
-      openExternal: (url) => shell.openExternal(url),
-      captureArtifactPreview: (params, signal) => artifactPreviewCapture.capture(params, signal),
-    },
-    logger.child({ component: "shell.provider" }),
-  );
-  shellDisposers.add(() => shellProvider.dispose());
 
   // ensure() starts NOW; the window never waits for it (ESR-8 / design-03
   // §4.3 v0.3 — the splash is the honest face while the daemon comes up).
@@ -539,20 +601,22 @@ async function main(
 
   // UA-3 — the Account page's profile write: main owns users.json (UA-D10),
   // mutates under the §3.3 lock, and refreshes the tray label in step.
+  // UA-5: the handlers read `attached` at CALL time — a switch re-targets
+  // them without re-registration.
   registerUsersUpdate(
     registry,
     {
       read: async () => {
-        const file = readUsersFile(user.rootReal);
-        const record = file?.users.find((u) => u.userId === user.userId);
+        const file = readUsersFile(attached.rootReal);
+        const record = file?.users.find((u) => u.userId === attached.userId);
         if (record === undefined) {
           throw new Error("the attached user vanished from users.json");
         }
         return record;
       },
       apply: async (params) => {
-        const updated = await mutateUsersFile(user.rootReal, {}, (file) => {
-          const record = file.users.find((u) => u.userId === user.userId);
+        const updated = await mutateUsersFile(attached.rootReal, {}, (file) => {
+          const record = file.users.find((u) => u.userId === attached.userId);
           if (record === undefined) {
             throw new Error("the attached user vanished from users.json");
           }
@@ -561,13 +625,112 @@ async function main(
           if (params.resident !== undefined) record.resident = params.resident;
           if (params.onboarded !== undefined) record.onboarded = params.onboarded;
         });
-        const record = updated.users.find((u) => u.userId === user.userId);
+        const record = updated.users.find((u) => u.userId === attached.userId);
         if (record === undefined) {
           throw new Error("the attached user vanished from users.json");
         }
-        if (params.name !== undefined) trayController?.update({ userName: record.name });
+        if (params.name !== undefined) {
+          trayController?.update({ userName: record.name, users: rosterFor() });
+        }
         return record;
       },
+    },
+    logger.child({ component: "ipc.users" }),
+  );
+
+  // ---- UA-5 — attach/switch (UA-D15) and the roster surface ----
+  const rosterFor = (): { userId: string; name: string; attached: boolean }[] => {
+    const file = readUsersFile(attached.rootReal);
+    return (file?.users ?? []).map((u) => ({
+      userId: u.userId,
+      name: u.name,
+      attached: u.userId === attached.userId,
+    }));
+  };
+  /** Attach = build-before-break: the target pair must answer ensure() before
+   * anything detaches; a failed spawn/adopt leaves the current user whole
+   * (the bundle stays cached for a retry). On success the module-lets swap —
+   * every late-bound reader (windowBootstrap, ensureFieldd, tray prefs,
+   * support context) follows — the attachment wiring rebuilds, the previous
+   * pair stays headless when resident and stops (owned children only) when
+   * not, and the window reloads: the renderer bootstrap generation re-mints
+   * against the new pair for free. */
+  let switching = false;
+  const attachUser = async (targetUserId: string): Promise<UserRecord> => {
+    const file = readUsersFile(attached.rootReal);
+    if (file === null) throw new Error("users.json is unreadable");
+    const target = file.users.find((u) => u.userId === targetUserId);
+    if (target === undefined) throw new Error(`no such user: ${targetUserId}`);
+    if (target.userId === attached.userId) return target;
+    if (switching) throw new Error("a user switch is already in flight");
+    switching = true;
+    try {
+      const previousId = attached.userId;
+      const previousRecord = file.users.find((u) => u.userId === previousId);
+      const targetRoot = userRootFor(attached.rootReal, target);
+      const bundle = ensurePairBundle(target.userId, targetRoot);
+      await bundle.handles.ensure();
+      shellDisposers.delete(attachmentDisposer);
+      attachmentWiring.dispose();
+      supervisor = bundle.supervisor;
+      fielddHandles = bundle.handles;
+      attached = { userId: target.userId, name: target.name, rootReal: attached.rootReal };
+      attachmentWiring = wireAttachment(bundle, targetRoot);
+      attachmentDisposer = (): void => attachmentWiring.dispose();
+      shellDisposers.add(attachmentDisposer);
+      if (previousRecord !== undefined && previousRecord.resident === false) {
+        const previous = pairBundles.get(previousId);
+        pairBundles.delete(previousId);
+        if (previous !== undefined) {
+          previous.handles.dispose();
+          // dispose stops OWNED children under a stop-owned policy; an
+          // adopted external pair is not ours to kill — it stays, honestly
+          void previous.supervisor.dispose().catch(() => undefined);
+        }
+      }
+      void setLastAttached(attached.rootReal, target.userId, {}, (error) => {
+        logger.warn(
+          "desktop.users.last_attached_skipped",
+          "The lastAttached hint could not be written (best-effort, never blocking)",
+          { error: String(error) },
+        );
+      });
+      trayController?.update({ userName: target.name, users: rosterFor() });
+      logger.info("desktop.users.attached", "The shell re-targeted to another user", {
+        userId: target.userId,
+        fuid: target.fuid,
+      });
+      registry.primary()?.webContents.reload();
+      return target;
+    } finally {
+      switching = false;
+    }
+  };
+  const createAndAttach = async (params: UsersCreateParams): Promise<UserRecord> => {
+    const { user: minted } = await createUser(
+      attached.rootReal,
+      {},
+      {
+        ...(params.name !== undefined ? { name: params.name } : {}),
+        ...(params.color !== undefined ? { color: params.color } : {}),
+        // the reloaded window runs the wizard's §6.2 second-user variant —
+        // identity is decided THERE, the mint only needs to exist
+        extras: { setupVariant: "second-user" },
+      },
+    );
+    trayController?.update({ users: rosterFor() });
+    return attachUser(minted.userId);
+  };
+  registerUsersRoster(
+    registry,
+    {
+      list: async () => {
+        const file = readUsersFile(attached.rootReal);
+        if (file === null) throw new Error("users.json is unreadable");
+        return { attachedUserId: attached.userId, users: file.users };
+      },
+      create: (params) => createAndAttach(params),
+      switchTo: (params) => attachUser(params.userId),
     },
     logger.child({ component: "ipc.users" }),
   );
@@ -773,7 +936,8 @@ async function main(
       link: observedLink,
       evidence: evidenceMonitor.current(),
       update: { kind: "idle" },
-      userName: user.name,
+      userName: attached.name,
+      users: rosterFor(),
       backgroundShell: true,
       // Preference truth belongs to fieldd's D29′ settings document. Starting
       // absent avoids flashing a status item a returning user explicitly hid;
@@ -791,6 +955,12 @@ async function main(
       setBackgroundShell: (enabled) =>
         setAppPreference(APP_PREFERENCE_KEYS.BACKGROUND_SHELL, enabled),
       setTrayVisible: (enabled) => setAppPreference(APP_PREFERENCE_KEYS.SHOW_TRAY, enabled),
+      switchUser: async (userId: string) => {
+        await attachUser(userId);
+      },
+      newUser: async () => {
+        await createAndAttach({});
+      },
       quit: () => app.quit(),
     },
     onError: (stage, error) => {

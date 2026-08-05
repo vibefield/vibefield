@@ -76,6 +76,9 @@ export interface TrayControllerActions {
   restartToUpdate?: () => Promise<void>;
   setBackgroundShell(enabled: boolean): Promise<void>;
   setTrayVisible(enabled: boolean): Promise<void>;
+  /** UA-5 — optional like the update pair: absent hides the submenu. */
+  switchUser?: (userId: string) => Promise<void>;
+  newUser?: () => Promise<void>;
   quit(): void;
 }
 
@@ -404,6 +407,17 @@ export class TrayController {
         ? {
             restartToUpdate: () =>
               this.runAction("restartToUpdate", this.options.actions.restartToUpdate!),
+          }
+        : {}),
+      ...(this.options.actions.switchUser !== undefined
+        ? {
+            switchUser: (userId: string) =>
+              this.runAction("switchUser", () => this.options.actions.switchUser!(userId)),
+          }
+        : {}),
+      ...(this.options.actions.newUser !== undefined
+        ? {
+            newUser: () => this.runAction("newUser", this.options.actions.newUser!),
           }
         : {}),
       setBackgroundShell: (enabled) =>

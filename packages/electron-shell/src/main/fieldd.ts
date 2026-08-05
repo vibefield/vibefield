@@ -57,15 +57,13 @@ export function buildSupervisor(opts: {
   }
   const expectedBuildId = opts.mode === "dev" ? process.env["VIBEFIELD_DEV_BUILD_ID"] : undefined;
   const policy = shutdownPolicy(opts.mode);
-  // Port isolation is DERIVED from the lifetime policy rather than listed
-  // again: a run that stops what it spawned must not be able to reach the
-  // ambient pair in the first place, and a leave-running mode wants the
-  // registry ports precisely so its successor can adopt. The list this
-  // replaced named smoke and smoke-canvas literally, so the next stop-owned
-  // mode added got the production ports by omission and died on EADDRINUSE
-  // against whatever daemon the machine already had (GT-0). Deriving it means
-  // a new mode cannot be forgotten here.
-  const isolatePorts = policy === "stop-owned";
+  // UA-D12/UA-5 — ephemeral ports EVERYWHERE, no mode split. The old
+  // rationale ("a leave-running mode wants the registry ports so its
+  // successor can adopt") died with UA-2: adoption dials the port RECORDED
+  // in product.json, never a well-known number. Fixed ports were also the
+  // accidental machine-wide mutex (V5) that made a second user's pair
+  // impossible — every pair now binds at 0 and run files are the only
+  // discovery, which is exactly what lets N resident pairs share a machine.
   const logger = opts.logger.child({ component: "daemon.supervisor" });
   const pluginRoots = opts.resources.pluginRoots;
   return createFielddSupervisor({
@@ -100,7 +98,8 @@ export function buildSupervisor(opts: {
     // landed; smoke-canvas could not see it because CANVAS_READY fires at
     // canvas mount, before the first fieldd round trip (GT-1 finding).
     allowedOrigins: [APP_ORIGIN, ...(opts.mode === "dev" ? [new URL(opts.viteUrl).origin] : [])],
-    ...(isolatePorts ? { controlPort: 0, dataPort: 0 } : {}),
+    controlPort: 0,
+    dataPort: 0,
     ...(expectedBuildId ? { expectedBuildId } : {}),
     ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
     shutdownPolicy: policy,

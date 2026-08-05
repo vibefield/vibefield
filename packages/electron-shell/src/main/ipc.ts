@@ -4,6 +4,9 @@ import {
   IPC_CHANNELS,
   TerminalBackendAttachResult,
   type UserRecord,
+  UsersCreateParams,
+  type UsersListSnapshot,
+  UsersSwitchParams,
   UsersUpdateParams,
 } from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
@@ -87,6 +90,47 @@ export function registerUsersUpdate(
     logger?.info("desktop.users.updated", "The attached user's profile was updated", {
       webContentsId: event.sender.id,
       fields: Object.keys(params).join(","),
+    });
+    return record;
+  });
+}
+
+/** UA-5 — the roster surface: list / create / switch, one sender gate. The
+ * handlers are injected because main owns the attachment machinery (pair
+ * bundles, window reload); this file owns only the wire. The create/switch
+ * answers deliberately RACE the reload main performs on success — the calling
+ * context may be torn down before the resolution lands, and that is fine:
+ * the reload is the outcome, not the response. */
+export function registerUsersRoster(
+  registry: WindowRegistry,
+  handlers: {
+    list: () => Promise<UsersListSnapshot>;
+    create: (params: UsersCreateParams) => Promise<UserRecord>;
+    switchTo: (params: UsersSwitchParams) => Promise<UserRecord>;
+  },
+  logger?: Logger,
+): void {
+  ipcMain.handle(IPC_CHANNELS.usersList, async (event) => {
+    if (!registry.owns(event.sender)) throw new Error("users list refused: unregistered sender");
+    return handlers.list();
+  });
+  ipcMain.handle(IPC_CHANNELS.usersCreate, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) throw new Error("users create refused: unregistered sender");
+    const params = UsersCreateParams.parse(raw);
+    const record = await handlers.create(params);
+    logger?.info("desktop.users.created", "A new user was minted and attached", {
+      webContentsId: event.sender.id,
+      fuid: record.fuid,
+    });
+    return record;
+  });
+  ipcMain.handle(IPC_CHANNELS.usersSwitch, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) throw new Error("users switch refused: unregistered sender");
+    const params = UsersSwitchParams.parse(raw);
+    const record = await handlers.switchTo(params);
+    logger?.info("desktop.users.switched", "The shell attached a different user", {
+      webContentsId: event.sender.id,
+      fuid: record.fuid,
     });
     return record;
   });

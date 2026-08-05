@@ -16,9 +16,12 @@ export const DESKTOP_TRAY_GUID = "c524c40e-05b6-4d89-bbb9-82ba4e97ea91" as const
 
 /** One place for every port VibeField binds or reserves. */
 export const PORTS = {
-  /** fieldd product API — renderer control plane (loopback WS, JSON-RPC text). D27 */
+  /** fieldd product API — renderer control plane (loopback WS, JSON-RPC text). D27.
+   * UA-D12: LEGACY DEFAULT, documentation only — every pair binds ephemeral
+   * (port 0) since UA-5 and product.json is the only discovery. */
   FIELDD_WS_CONTROL: 9410,
-  /** fieldd product API — renderer data lanes (loopback WS, binary, D5 framing). D27 */
+  /** fieldd product API — renderer data lanes (loopback WS, binary, D5 framing). D27.
+   * UA-D12: LEGACY DEFAULT, documentation only — see FIELDD_WS_CONTROL. */
   FIELDD_WS_DATA: 9411,
   /** reserved by truffle's own WS bus — never bind. */
   TRUFFLE_WS_RESERVED: 9417,

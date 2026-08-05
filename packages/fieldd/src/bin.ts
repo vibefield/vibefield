@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { LAYOUT, PORTS } from "@vibefield/contracts";
+import { LAYOUT } from "@vibefield/contracts";
 import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
 import { ensureUsersRoot } from "@vibefield/users";
 import { bootstrap } from "./daemon";
@@ -106,8 +106,10 @@ async function main(): Promise<void> {
   const daemon = await bootstrap({
     dataDir,
     logRoot,
-    ...(portEnv !== undefined ? { controlPort: Number(portEnv) } : {}),
-    dataPort: dataPortEnv !== undefined ? Number(dataPortEnv) : PORTS.FIELDD_WS_DATA,
+    // UA-D12 — ephemeral by default; env pins a port only when a harness
+    // explicitly asks. product.json records the ACTUAL bound ports either way.
+    controlPort: portEnv !== undefined ? Number(portEnv) : 0,
+    dataPort: dataPortEnv !== undefined ? Number(dataPortEnv) : 0,
     allowedOrigins,
     pluginRoots,
     serviceHarnessPath,

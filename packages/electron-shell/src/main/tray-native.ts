@@ -33,20 +33,22 @@ export function loadTrayImage(
   return assertImage(nativeImage.createFromPath(path), path);
 }
 
+function templateItem(item: TrayMenuItem): Electron.MenuItemConstructorOptions {
+  if (item.type === "separator") return { type: "separator" as const };
+  return {
+    ...(item.id !== undefined ? { id: item.id } : {}),
+    ...(item.type !== undefined ? { type: item.type } : {}),
+    ...(item.label !== undefined ? { label: item.label } : {}),
+    ...(item.enabled !== undefined ? { enabled: item.enabled } : {}),
+    ...(item.checked !== undefined ? { checked: item.checked } : {}),
+    ...(item.click !== undefined ? { click: item.click } : {}),
+    // UA-5 — the Switch User submenu; recursion keeps the mapping total
+    ...(item.submenu !== undefined ? { submenu: item.submenu.map(templateItem) } : {}),
+  };
+}
+
 function electronMenu(items: readonly TrayMenuItem[]) {
-  return Menu.buildFromTemplate(
-    items.map((item) => {
-      if (item.type === "separator") return { type: "separator" as const };
-      return {
-        ...(item.id !== undefined ? { id: item.id } : {}),
-        ...(item.type !== undefined ? { type: item.type } : {}),
-        ...(item.label !== undefined ? { label: item.label } : {}),
-        ...(item.enabled !== undefined ? { enabled: item.enabled } : {}),
-        ...(item.checked !== undefined ? { checked: item.checked } : {}),
-        ...(item.click !== undefined ? { click: item.click } : {}),
-      };
-    }),
-  );
+  return Menu.buildFromTemplate(items.map(templateItem));
 }
 
 function isFiniteRectangle(rect: TrayRectangle): boolean {
