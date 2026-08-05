@@ -17,17 +17,22 @@ members = ["packages/field-native"]
 # workspace as a unit, so truffle-core rode along as a no-op release. This repo
 # consumes no npm/sidecar truffle package and the crate reads no CARGO_PKG_VERSION,
 # so this pin cannot reach AH-1b in either position.
-# The consequence for GT-4: THIS pin, not ghosttea-truffle, is the blocker. No
+# The consequence for GT-4: THIS pin, not ghosttea-truffle, was the blocker. No
 # published ghosttea-truffle (0.2.0…0.9.1) requires truffle-core newer than
-# =0.7.11, so while we sit at =0.7.12 the dep cannot be added at all — two exact
-# pins in one compatibility range, `cargo generate-lockfile` exits 101. Note the
-# law is already broken the other way: the SwiftPM plane rides truffle 0.7.11
-# (apps/ios/**/Package.resolved revision 8d6271ef = truffle-core 0.7.11's vcs
-# sha), which apps/ios/VibeFieldKit/Package.swift still describes as both planes
-# in lockstep. Stepping back to =0.7.11 restores that law, unblocks GT-4, and is
-# provably zero-delta — but it is a deliberate pin event (it also moves the
-# scripts/preflight.mjs assert), so GT-4a records it here rather than taking it.
-truffle-core = "=0.7.12"
+# =0.7.11, so at =0.7.12 the dep could not be added at all — two exact pins in
+# one compatibility range, `cargo generate-lockfile` exits 101.
+# STEP-BACK TAKEN (GT-4, 2026-08-05): the crate returns to =0.7.11 — provably
+# zero-delta (source-identical crates), restores the SwiftPM lockstep (the iOS
+# plane rides truffle 0.7.11, revision 8d6271ef = 0.7.11's vcs sha; Package.swift's
+# both-planes claim is TRUE again), and unblocks ghosttea-truffle. One correction
+# to GT-4a's erratum: this repo DOES consume truffle's npm sidecars —
+# @vibecook/truffle-sidecar-*@0.7.12 in apps/desktop — and THAT artifact carries
+# T2's actual payload (the Go sidecar), so AH-1b's consumption was real and the
+# sidecars STAY at 0.7.12; only the crate pin was the no-op. The Go binary shares
+# no Rust types, so the crate/sidecar version split is cosmetic; the Arc<Node>
+# type-compatibility law this comment opens with binds the CARGO graph, which is
+# now uniformly =0.7.11.
+truffle-core = "=0.7.11"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,
