@@ -885,3 +885,33 @@ authenticate-anchor dedup; the amber-vs-token error-text judgment call (flagged 
 James's eyeball); mesh enablement stays env-gated — deriving it from link presence is a
 named later chapter. Verify green on the integrated tree. UA-3w (the wizard) is the next
 rung; UA-6 integrates when its worktree agent reports.
+
+## UA-6 — sync intent: a doc that stays home says so
+
+**UA-6 LANDED (2026-08-05, `a4bed08` worktree slice + `1a2a846` integration).** The second
+worktree-agent slice of the day, integrated on a green verbatim gate the agent's own
+machine could not complete (its run died at ENOSPC after seven green legs — the disk was at
+~150Mi free; removing both agent worktrees post-integration bought back 4GB, and the 39G
+main `target/` remains James's call). **What landed:** three gates in `DocSyncService` off
+one injected `resolveIntent` — `#ensureLane` as the single outbound choke (commit fan-out,
+HAVE answers, return lanes and re-greets all starve together), `#claim` declining
+local-intent docs beside the doc-less refusal (repeated in `#receive` for intent flipping
+under a claimed lane), and `onCommit` early-returning; `statuses()` omits gated docs (a
+state row for a doc that can't reach any state would be the EL5 lie). Contracts:
+`DocSyncIntent`, optional `DocRegistryEntry.syncIntent`, `doc.setSyncIntent` (doc.write,
+local), the `mesh.syncPosture` app-preference key (default automatic) — which lit up the
+Account page's posture cards the moment it landed — and `AppPreferenceSetParams.value`
+widened to boolean|posture ("a key whose only settable values are booleans is a contract
+that lies"). UI: the FilePill tile toggle + mesh-row "keep local", chips derived from the
+REGISTRY, never the sync stream. **The side-find that outranks the slice:** a pre-existing
+DocumentService registry write-back race — a commit captured the entry, did its I/O, and
+wrote the CAPTURED copy back, silently reverting any concurrent column change;
+`doc.rename` had the identical latent hole. Fixed with `commitRegistryColumns` and a test
+that fails without it. **Errata, recorded at source:** spec §8's claim that the peer folds
+`local-only` as `peer-declined` was FALSE (one-directional lanes; close reasons never
+cross the wire; gate (a) forbids the return lane a decline would need) — the spec carries
+the dated correction; cross-device decline visibility is a named record-kind follow-up.
+**The two-agent interaction point fired exactly as predicted:** UA-6 hardened the
+snapshot contract, the Account page validated correctly, and only its test fake lagged —
+one line, caught by the gate on the first integrated run. Eyeball additions: the doc-tile
+"local" chip + mesh-row toggle in both themes, and the posture cards now live.
