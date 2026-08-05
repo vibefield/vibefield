@@ -192,12 +192,16 @@ remain gates, so this work is not recorded in LANDED yet.
   double-rAF proxy that read 36s under load 59 on a healthy open) + a real `prepare()`
   (the device warm currently rides `startPerformanceMeasurement()` → `ensureRenderer()`
   as a side door) (GT-3p, 2026-08-05).
-- **The shadow σ-proposal, unmeasured** — the stood-down successor's counter to GT-3p's
-  stopped item: CSS `drop-shadow()`'s third length is 2σ while `blur()` takes σ, so the
-  original A/B may have compared at double the radius; recipe = halve the blur + pre-multiply
-  shadow alpha by the live fill-opacity var so it tracks the lab knob. Patch preserved in the
-  session scratchpad; landing requires re-running the measured A/B and beating the 46–80/255
-  channel diff to ~0 (GT-D15.4 gate) (GT-3p close-out, 2026-08-05).
+- **RESOLVED then superseded — the shadow σ-proposal landed measured** (`4019e9b`): the
+  original A/B had tested the wrong construction (box-shadow); the pre-blurred-layer rebuild
+  measured worst-peak 15/255 / mean ≤3.4 with a self-comparison control, audit test now
+  carve-out-free, orchestrator re-verified. Final authority = James's eyeball (revert is two
+  files) (2026-08-05).
+- **Reduced motion never applied to the monitor's status animations** — the
+  `prefers-reduced-motion` block's selector (0,1,0) always lost to the state rules (0,2,0);
+  media queries add no specificity. Verified in Chromium; behavior deliberately preserved at
+  `4019e9b` because the fix is a VISIBLE motion change — DESIGN.md §M6 moves first
+  (2026-08-05).
 - **`native_logging::fieldd_link_death` flakes under load** — "field-native did not bind
   mgmt" at load 51, passes alone; unrelated to GT-3p (zero non-TS changes in that commit);
   NF-owned (2026-08-05).
@@ -229,6 +233,9 @@ remain gates, so this work is not recorded in LANDED yet.
   ⌘G (should feel instant) · the DRAGGED bubble at the default `physicsHz: 30` — interpolation
   adds up to one physics step (~33ms) atop the spring; `physicsHz: 120` in the lab restores
   the old cadence for an A/B — your feel decides the default (GT-3p, unresolved by design).
+- **The shadow-parity check (`4019e9b`)**: the breathe/waiting pulses, both themes, at rest
+  and at peak — measured worst case is 15/255 on one channel inside a blurred penumbra; if
+  your eye catches it, the revert is exactly two files (2026-08-05).
 
 ## Upstream / sibling pins (the EL8 watch)
 

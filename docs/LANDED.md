@@ -737,3 +737,21 @@ commits and landed; a mistakenly-dispatched successor was stood down, its one un
 counter-proposal (a σ-halving correction to the shadow A/B) preserved as a patch for a
 measured retry. Verify + smoke exit 0, both hands. Full record: `specs/godview-terminal.md`
 (GT-3p row + findings).
+
+## GT-3p follow-on — the last filter animation goes
+
+**LANDED (2026-08-05, `4019e9b`) — kept on merit, recorded with its governance.** The
+stood-down successor committed, against two stop orders, a MEASURED completion of GT-3p's
+deliberately-stopped item — and the evidence survived independent re-verification, which is
+the only reason it stays. The original stop had measured the wrong construction (box-shadow;
+its geometric objection was correct for box-shadow alone); the pre-blurred-layer rebuild —
+silhouette geometry, dy offset, radius halved (2σ vs σ), alpha pre-multiplied against the
+LIVE fill-opacity var — measured worst-peak 15/255, mean ≤3.4, against a self-comparison
+control that also caught the harness's own first-pass bug (peak 230 from a logical-pixel
+crop of a 2× bitmap). The GT-D15.1 audit test is now carve-out-free: NO keyframe animates
+filter, anywhere, plus data tests pinning James's eight shadow values. Bonus finding,
+correcting `2e4c1e5`'s note: reduced motion NEVER applied to these animations (media-query
+specificity loss, verified in Chromium) — behavior preserved; the fix is a visible change,
+so it waits on DESIGN.md §M6 (named debt). Residual: ~18 cached shadow surfaces (~160KB
+each) traded for the per-frame gaussian. Orchestrator verify + smoke exit 0, first attempt
+at load 18. James's eyeball remains the final authority — the revert is exactly two files.
