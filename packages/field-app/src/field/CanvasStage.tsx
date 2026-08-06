@@ -201,7 +201,7 @@ export function CanvasStage({
             orthographic
             frameloop="never"
             gl={{ alpha: true, antialias: false }}
-            style={{ pointerEvents: "none", position: "absolute", inset: 0 }}
+            className="field-gl-canvas"
           >
             <EnvLoader onTex={setEnvTex} />
             <GLViews

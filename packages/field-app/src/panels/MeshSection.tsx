@@ -1,6 +1,7 @@
 import type { DeviceInfo, DocSyncDocState } from "@vibefield/contracts";
 import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddClient, useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
+import { StatusDot } from "@vibefield/shell-ui";
 import type { ReactElement } from "react";
 import { useDocSyncStatuses } from "../doc-sync-store";
 import { getRendererLogger } from "../logging";
@@ -16,24 +17,19 @@ import { labelCls, SettingsSection } from "./settings-ui";
 /** DESIGN.md §2.5 hue mapping, spanning unit states (mesh-gateway) and the fused
  * serve states (active/pending/error). Muted = disabled/stopped, no hue. */
 function Dot({ state }: { state: string }): ReactElement {
-  const color =
+  const tone =
     state === "up" || state === "ready" || state === "active" || state === "running"
-      ? "var(--vf-green)"
+      ? "healthy"
       : state === "degraded" ||
           state === "crashed" ||
           state === "failed" ||
           state === "closed" ||
           state === "error"
-        ? "var(--vf-red)"
+        ? "error"
         : state === "disabled" || state === "stopped" || state === "offline"
-          ? "rgba(128, 128, 128, 0.45)"
-          : "var(--vf-orange)"; // starting / pending / connecting / reconnecting / auth-required
-  return (
-    <span
-      className="inline-block h-1.5 w-1.5 flex-none rounded-full"
-      style={{ background: color }}
-    />
-  );
+          ? "muted"
+          : "attention"; // starting / pending / connecting / reconnecting / auth-required
+  return <StatusDot tone={tone} />;
 }
 
 /** C6-4 — the sync fold in the Dot's vocabulary. In step and actively syncing
@@ -123,8 +119,7 @@ export function MeshSection(): ReactElement {
                 href={meshUnit.authUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="underline"
-                style={{ color: "var(--vf-cyan)" }}
+                className="vf-ui-tone-info underline"
               >
                 authenticate
               </a>

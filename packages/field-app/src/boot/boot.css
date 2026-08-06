@@ -1,0 +1,12 @@
+/* First-paint canvas ground shared by splash and onboarding. */
+.vf-splash {
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(circle, var(--vf-canvas-dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-splash {
+    transition-duration: 120ms;
+  }
+}

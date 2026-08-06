@@ -3,6 +3,7 @@ import { type ReactElement, useEffect, useRef, useState, useSyncExternalStore } 
 import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
 import { getRendererLogger } from "../logging";
+import "./FilePill.css";
 
 /**
  * The file pill (thinking-b4 §3, DESIGN.md §8): top-center chrome — new doc,
@@ -15,11 +16,6 @@ import { getRendererLogger } from "../logging";
  * as an honest placeholder face until real thumbnails exist; the current doc
  * wears the 1.5px inside --vf-select ring — it IS the selection.
  */
-
-const MORPH_MS = 560;
-const EASE = "cubic-bezier(0.32, 0.72, 0, 1)"; // native-sheet ease, fast response + soft landing
-const CLOSED_RADIUS = 20;
-const OPEN_RADIUS = 32;
 
 function fmtRelative(ms: number, now = Date.now()): string {
   const s = Math.max(0, Math.floor((now - ms) / 1000));
@@ -179,7 +175,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
     <>
       {/* Dimming backdrop — click closes (Escape is the keyboard close); same tier as the tray's. */}
       <div
-        className={`absolute inset-0 z-40 bg-black/10 transition-opacity duration-500 dark:bg-black/40 ${
+        className={`vf-ui-backdrop absolute inset-0 z-40 transition-opacity duration-500 ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={() => onOpenChange(false)}
@@ -190,26 +186,16 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
       <div
         data-file-pill=""
         data-file-pill-open={open ? "true" : "false"}
-        className={`no-drag absolute left-1/2 z-50 isolate -translate-x-1/2 transform-gpu overflow-hidden border border-black/5 bg-white/[0.88] backdrop-blur-2xl transition-[top,width,height,border-radius,background-color,box-shadow] dark:border-white/10 dark:bg-[#1C1C1E]/[0.88] ${
-          open
-            ? "top-3 h-[min(46vh,420px)] w-[min(56%,34rem)] shadow-[0_24px_64px_rgba(0,0,0,0.12),0_2px_10px_rgba(0,0,0,0.04)] dark:shadow-[0_24px_64px_rgba(0,0,0,0.48),0_2px_10px_rgba(0,0,0,0.24)]"
-            : "top-4 h-10 w-[280px] shadow-[0_8px_30px_rgba(0,0,0,0.08),0_1px_4px_rgba(0,0,0,0.04)] hover:bg-white/[0.94] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4),0_1px_4px_rgba(0,0,0,0.2)] dark:hover:bg-[#1C1C1E]/[0.94]"
+        className={`vf-file-pill no-drag absolute left-1/2 z-50 isolate -translate-x-1/2 transform-gpu overflow-hidden ${
+          open ? "top-3 h-[min(46vh,420px)] w-[min(56%,34rem)]" : "top-4 h-10 w-[280px]"
         }`}
-        style={{
-          borderRadius: `${open ? OPEN_RADIUS : CLOSED_RADIUS}px`,
-          transitionDuration: `${MORPH_MS}ms`,
-          transitionTimingFunction: EASE,
-          willChange: "width, height, top, border-radius",
-          backfaceVisibility: "hidden",
-        }}
       >
         <div className="flex h-full w-full flex-col">
           {/* The persistent header row — the closed pill IS this row. */}
           <div
-            className={`flex w-full shrink-0 items-center gap-1 transition-[height,padding] ${
+            className={`vf-file-pill__header flex w-full shrink-0 items-center gap-1 ${
               open ? "h-12 px-4" : "h-10 px-1"
             }`}
-            style={{ transitionDuration: `${MORPH_MS}ms`, transitionTimingFunction: EASE }}
           >
             <button
               type="button"
@@ -285,10 +271,9 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
             <button
               type="button"
               onClick={() => onOpenChange(!open)}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-black/60 transition-[transform,color,background-color] hover:bg-black/5 hover:text-black active:scale-95 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white ${
+              className={`vf-file-pill__toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-black/60 hover:bg-black/5 hover:text-black active:scale-95 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white ${
                 open ? "rotate-180" : "rotate-0"
               }`}
-              style={{ transitionDuration: `${MORPH_MS}ms`, transitionTimingFunction: EASE }}
               title={open ? "Close (Esc)" : "Browse fields"}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -305,7 +290,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
 
           {/* The explorer grid — tray choreography: delayed rise-in behind the morph. */}
           <div
-            className={`min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-6 no-scrollbar mask-fade-bottom transition-[opacity,transform] duration-500 ease-out ${
+            className={`vf-no-scrollbar vf-mask-fade-bottom min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-6 transition-[opacity,transform] duration-500 ease-out ${
               open
                 ? "translate-y-0 opacity-100 delay-[180ms]"
                 : "pointer-events-none translate-y-6 opacity-0"
@@ -344,13 +329,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
                       >
                         <div className="vf-doc-face relative aspect-[16/10] w-full overflow-hidden rounded-[10px] border border-black/5 dark:border-white/10">
                           {thumbnailUrl !== undefined && <DocThumbnailImage src={thumbnailUrl} />}
-                          {current && (
-                            <div
-                              className="absolute inset-0 rounded-[10px]"
-                              style={{ boxShadow: "inset 0 0 0 1.5px var(--vf-select)" }}
-                              aria-hidden
-                            />
-                          )}
+                          {current && <div className="vf-doc-face__selection" aria-hidden />}
                         </div>
                         <div className="min-w-0 px-0.5">
                           <div className="truncate text-[12px] font-medium text-black/80 dark:text-white/80">
@@ -398,19 +377,6 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
           </div>
         </div>
       </div>
-
-      {/* Component-scoped utilities (tray precedent): the doc tile's ground-motif
-          face — canvas-bg + the §2.1 CSS-fallback dots, dark-aware. */}
-      <style>{`
-        .vf-doc-face {
-          background-color: var(--vf-canvas-bg);
-          background-image: radial-gradient(circle, rgba(0, 0, 0, 0.16) 1px, transparent 1px);
-          background-size: 10px 10px;
-        }
-        .dark .vf-doc-face {
-          background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-        }
-      `}</style>
     </>
   );
 }

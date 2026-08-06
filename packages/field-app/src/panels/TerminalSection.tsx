@@ -22,9 +22,6 @@ import { buttonCls, labelCls, SettingsSection } from "./settings-ui";
 // with rather than assuming the editor's text is now the file (the settings
 // undo affordance's no-optimistic-echo rule, DESIGN.md §8).
 
-/** The stack DESIGN.md §3 reserves for data, paths, and ids. */
-const MONO = 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace';
-
 /** What the panel is currently able to say. `unavailable` is a floor state, not
  * a failure of this surface — a daemon that cannot be asked has an honest face
  * (DESIGN.md §8: a state is rendered, never blank space). */
@@ -43,10 +40,10 @@ type Verdict =
 
 /** DESIGN.md §2.5: red is failure, orange is needs-attention, and anything the
  * loader merely noticed takes the muted ramp with no hue at all. */
-function diagnosticColor(severity: string): string | undefined {
-  if (severity === "error") return "var(--vf-red)";
-  if (severity === "warning") return "var(--vf-orange)";
-  return undefined;
+function diagnosticToneClass(severity: string): string {
+  if (severity === "error") return "vf-ui-tone-danger";
+  if (severity === "warning") return "vf-ui-tone-attention";
+  return "";
 }
 
 const message = (error: unknown): string =>
@@ -131,9 +128,7 @@ export function TerminalSection(): ReactElement {
         <div className="py-2 text-[13px] text-black/70 dark:text-white/70">
           The terminal configuration is unavailable.
         </div>
-        <div className={`pb-3 ${labelCls}`} style={{ fontFamily: MONO }}>
-          {load.reason}
-        </div>
+        <div className={`vf-ui-mono pb-3 ${labelCls}`}>{load.reason}</div>
         <button type="button" className={buttonCls} onClick={() => void read()}>
           Try again
         </button>
@@ -148,7 +143,7 @@ export function TerminalSection(): ReactElement {
       title="Terminal configuration"
       description="Ghostty-syntax settings that every terminal on this device loads. Your existing Ghostty config files are imported first; this file refines them."
     >
-      <div className={`pb-2 ${labelCls}`} style={{ fontFamily: MONO }}>
+      <div className={`vf-ui-mono pb-2 ${labelCls}`}>
         {load.kind === "loading"
           ? "reading…"
           : `${load.path}${load.exists ? "" : " · not created yet"}`}
@@ -159,8 +154,7 @@ export function TerminalSection(): ReactElement {
         disabled={load.kind === "loading" || busy}
         value={text}
         onChange={(event) => setText(event.target.value)}
-        className="h-64 w-full resize-y rounded-[12px] border border-black/10 bg-white p-3 text-[12px] leading-5 text-black/80 outline-none transition-[border-color,box-shadow] focus:border-black/25 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)] disabled:opacity-45 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/85 dark:focus:border-white/25 dark:focus:shadow-[0_0_0_3px_rgba(255,255,255,0.07)]"
-        style={{ fontFamily: MONO }}
+        className="vf-settings-code-field vf-ui-mono"
       />
       <div className="flex items-center justify-between gap-4 pt-3">
         <div aria-live="polite" className="min-w-0 flex-1">
@@ -196,17 +190,13 @@ function VerdictLine({ verdict }: { verdict: Verdict }): ReactElement | null {
   if (verdict.kind === "none" || verdict.kind === "saving") return null;
   if (verdict.kind === "conflict") {
     return (
-      <span className="text-[12px]" style={{ color: "var(--vf-orange)" }}>
+      <span className="vf-ui-tone-attention text-[12px]">
         The file changed since it was read. Reopen this page to see it before saving again.
       </span>
     );
   }
   if (verdict.kind === "failed") {
-    return (
-      <span className="text-[12px]" style={{ color: "var(--vf-red)" }}>
-        {verdict.reason}
-      </span>
-    );
+    return <span className="vf-ui-tone-danger text-[12px]">{verdict.reason}</span>;
   }
   // Saved. What the loader made of it is the news, not the fact that bytes were
   // written — and "nothing changed" is worth saying, because a comment-only
@@ -221,8 +211,7 @@ function VerdictLine({ verdict }: { verdict: Verdict }): ReactElement | null {
       {verdict.diagnostics.map((diagnostic) => (
         <span
           key={`${diagnostic.code}:${diagnostic.source ?? ""}:${diagnostic.line ?? ""}:${diagnostic.message}`}
-          className="text-[12px]"
-          style={{ color: diagnosticColor(diagnostic.severity) }}
+          className={`text-[12px] ${diagnosticToneClass(diagnostic.severity)}`}
         >
           {/* WHICH FILE, whenever the loader named one. A reload reports on
               every config it read, and the user's own imported Ghostty files
@@ -231,13 +220,13 @@ function VerdictLine({ verdict }: { verdict: Verdict }): ReactElement | null {
               as this editor's fault; with it, it is a fact about a neighbour
               (DESIGN.md §9: states carry provenance). */}
           {diagnostic.source !== undefined && diagnostic.source !== "" && (
-            <span style={{ fontFamily: MONO }}>
+            <span className="vf-ui-mono">
               {diagnostic.source.split("/").pop()}
               {" · "}
             </span>
           )}
           {diagnostic.line !== undefined && (
-            <span className="tabular-nums" style={{ fontFamily: MONO }}>
+            <span className="vf-ui-mono tabular-nums">
               line {diagnostic.line}
               {" · "}
             </span>

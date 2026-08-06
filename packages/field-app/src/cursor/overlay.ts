@@ -30,26 +30,7 @@ import {
   type World,
 } from "@vibecook/ice";
 import { Cur, HALO_RADIUS_PX } from "./components";
-
-// Ring styling = the OS-cursor trick (white stroke + dark OUTER rim) so it
-// reads on dark cards and light canvas alike — no theme variant.
-// Field-verified 2026-07-18: a theme-gray ring vanished over the dark clock
-// card in light mode. OUTER rim only (James, same day: "can you not show the
-// inner circle?") — an inset rim drew a second concentric circle on light
-// backgrounds where the white stroke blends away; one rim keeps the ring a
-// single clean circle. The rim rides box-shadow, so it scales with the morph.
-const CSS = `
-.wl-no-cursor,.wl-no-cursor *{cursor:none !important;}
-.wl-halo-layer{position:absolute;inset:0;pointer-events:none;z-index:30;}
-.wl-halo{position:absolute;top:0;left:0;width:${2 * HALO_RADIUS_PX}px;height:${2 * HALO_RADIUS_PX}px;border-radius:50%;
-  border:2px solid rgba(255,255,255,0.92);background-color:transparent;
-  box-shadow:0 0 0 1.25px rgba(0,0,0,0.32);
-  transition:opacity 140ms ease,border-color 140ms ease,background-color 140ms ease,box-shadow 140ms ease;
-  will-change:transform;}
-.wl-halo.is-dot{border-color:transparent;background-color:#4A90D9;box-shadow:none;}
-.wl-halo.is-pressed{border-width:3px;}
-.wl-halo-layer.is-away .wl-halo{opacity:0;}
-`;
+import "./overlay.css";
 
 const curQ = defineQuery([Cur]);
 
@@ -60,12 +41,9 @@ export interface HaloOverlay {
 
 export function createHaloOverlay(container: HTMLElement): HaloOverlay {
   const doc = container.ownerDocument;
-  const style = doc.createElement("style");
-  style.textContent = CSS;
-  doc.head.appendChild(style);
-
   const layer = doc.createElement("div");
   layer.className = "wl-halo-layer is-away"; // hidden until the pointer proves itself present
+  layer.style.setProperty("--vf-halo-diameter", `${2 * HALO_RADIUS_PX}px`);
   container.appendChild(layer);
   container.classList.add("wl-no-cursor"); // the halo IS the cursor inside the canvas
 
@@ -126,7 +104,6 @@ export function createHaloOverlay(container: HTMLElement): HaloOverlay {
       for (const node of nodes.values()) node.remove();
       nodes.clear();
       layer.remove();
-      style.remove();
     },
   };
 }

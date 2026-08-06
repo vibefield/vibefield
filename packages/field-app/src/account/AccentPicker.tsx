@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import "./AccentPicker.css";
 
 // The accent choice, shared by the Account page and the Setup Assistant
 // (UA-3/UA-3w). Both show the same eight swatches and the same live chip, so
@@ -57,13 +58,9 @@ export function AccentPicker({
             />
             <span
               aria-hidden="true"
-              className="block h-7 w-7 rounded-full"
+              className={`block h-7 w-7 rounded-full${selected ? " vf-accent-swatch-selected" : ""}`}
               style={{
                 background: `var(--vf-${slot})`,
-                // §7: the sole-selection ring, 1.5px in --vf-select.
-                ...(selected
-                  ? { outline: "1.5px solid var(--vf-select)", outlineOffset: "2px" }
-                  : {}),
               }}
             />
           </label>

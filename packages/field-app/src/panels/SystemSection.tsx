@@ -1,5 +1,6 @@
 import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
+import { StatusDot } from "@vibefield/shell-ui";
 import { type ReactElement, useSyncExternalStore } from "react";
 import { getBoardStatus, subscribeBoardStatus } from "../board-status";
 import { labelCls, SettingsSection } from "./settings-ui";
@@ -11,20 +12,15 @@ import { labelCls, SettingsSection } from "./settings-ui";
 // vocabulary, status hues from DESIGN.md §2.5 (muted = no hue).
 
 function Dot({ state }: { state: string }): ReactElement {
-  const color =
+  const tone =
     state === "up" || state === "ready"
-      ? "var(--vf-green)"
+      ? "healthy"
       : state === "degraded" || state === "crashed" || state === "failed" || state === "closed"
-        ? "var(--vf-red)"
+        ? "error"
         : state === "disabled"
-          ? "rgba(128, 128, 128, 0.45)"
-          : "var(--vf-orange)"; // starting / auth-required / connecting / reconnecting
-  return (
-    <span
-      className="inline-block h-1.5 w-1.5 flex-none rounded-full"
-      style={{ background: color }}
-    />
-  );
+          ? "muted"
+          : "attention"; // starting / auth-required / connecting / reconnecting
+  return <StatusDot tone={tone} />;
 }
 
 /** DESIGN.md §2.5 hue mapping for the board-persistence states. */
@@ -96,8 +92,7 @@ export function SystemSection(): ReactElement {
                       href={u.authUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="underline"
-                      style={{ color: "var(--vf-cyan)" }}
+                      className="vf-ui-tone-info underline"
                     >
                       authenticate
                     </a>

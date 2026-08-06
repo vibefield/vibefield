@@ -29,13 +29,15 @@ import {
   PrefabId,
   widgets,
 } from "@vibecook/ice";
+import { UiIconButton } from "@vibefield/shell-ui";
 import { useCallback, useRef, useSyncExternalStore } from "react";
+import "./NavigationBreadcrumbs.css";
 
 interface NavigationBreadcrumbsProps {
   engine: CanvasEngine;
 }
 
-interface Crumb {
+export interface NavigationCrumb {
   /** Depth index in the navigation stack. 0 = root. */
   depth: number;
   /** container entity for this frame, or null for the root frame. */
@@ -68,7 +70,7 @@ function titleOf(engine: CanvasEngine, container: Entity): string {
  * Reads the current nav stack from the engine and builds a Crumb[] array.
  * Kept cheap — called once per poll tick.
  */
-function readCrumbs(engine: CanvasEngine): Crumb[] {
+function readCrumbs(engine: CanvasEngine): NavigationCrumb[] {
   const entries: { depth: number; container: Entity | undefined }[] = [];
   engine.world.query(navEntryQ).each((b) => {
     for (const r of b) {
@@ -83,7 +85,7 @@ function readCrumbs(engine: CanvasEngine): Crumb[] {
     }
   });
   entries.sort((a, b) => a.depth - b.depth);
-  const crumbs: Crumb[] = [{ depth: 0, containerId: null, label: "Root" }];
+  const crumbs: NavigationCrumb[] = [{ depth: 0, containerId: null, label: "Root" }];
   for (const { depth, container } of entries) {
     crumbs.push({
       depth,
@@ -98,7 +100,7 @@ function readCrumbs(engine: CanvasEngine): Crumb[] {
  * Compare two crumb arrays structurally. Used to suppress setState when the
  * nav stack didn't meaningfully change tick-to-tick.
  */
-function crumbsEqual(a: Crumb[], b: Crumb[]): boolean {
+function crumbsEqual(a: NavigationCrumb[], b: NavigationCrumb[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     const ca = a[i];
@@ -112,7 +114,7 @@ function crumbsEqual(a: Crumb[], b: Crumb[]): boolean {
 export function NavigationBreadcrumbs({ engine }: NavigationBreadcrumbsProps) {
   // The cached array identity moves ONLY when the crumbs structurally change,
   // so useSyncExternalStore's Object.is gate suppresses idle re-renders.
-  const crumbsRef = useRef<Crumb[] | null>(null);
+  const crumbsRef = useRef<NavigationCrumb[] | null>(null);
   if (crumbsRef.current === null) crumbsRef.current = readCrumbs(engine);
   const subscribe = useCallback(
     (onChange: () => void) => {
@@ -166,6 +168,20 @@ export function NavigationBreadcrumbs({ engine }: NavigationBreadcrumbsProps) {
     engine.ops.exitTo(targetDepth);
   };
 
+  return <NavigationBreadcrumbsView crumbs={crumbs} onBack={goBack} onJump={jumpToDepth} />;
+}
+
+/** Production breadcrumb composition with controller-free inputs for the catalog. */
+export function NavigationBreadcrumbsView({
+  crumbs,
+  onBack,
+  onJump,
+}: {
+  crumbs: readonly NavigationCrumb[];
+  onBack: () => void;
+  onJump: (depth: number) => void;
+}) {
+  const canGoBack = crumbs.length > 1;
   return (
     // left-24 clears the macOS traffic lights (hidden-inset titlebar); no-drag: inside the drag strip
     <div
@@ -173,11 +189,9 @@ export function NavigationBreadcrumbs({ engine }: NavigationBreadcrumbsProps) {
       className="hud-flight no-drag absolute top-[9px] left-24 z-50 flex items-center gap-2"
     >
       {/* Back button */}
-      <button
-        type="button"
-        onClick={goBack}
+      <UiIconButton
+        onClick={onBack}
         disabled={!canGoBack}
-        className="flex h-10 w-10 items-center justify-center rounded-full shadow-lg transition-colors bg-white text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200 dark:disabled:hover:bg-neutral-800 dark:disabled:hover:text-neutral-400"
         title={canGoBack ? "Back (Esc)" : "Already at root"}
       >
         <svg
@@ -194,13 +208,10 @@ export function NavigationBreadcrumbs({ engine }: NavigationBreadcrumbsProps) {
           <title>Back</title>
           <path d="m15 18-6-6 6-6" />
         </svg>
-      </button>
+      </UiIconButton>
 
       {/* Breadcrumb pill */}
-      <nav
-        aria-label="Navigation breadcrumbs"
-        className="flex items-center gap-1 rounded-full bg-white px-3 py-2 shadow-lg text-[12px] font-medium dark:bg-neutral-800"
-      >
+      <nav aria-label="Navigation breadcrumbs" className="vf-navigation-breadcrumbs__trail">
         {crumbs.map((crumb, i) => {
           const isCurrent = i === crumbs.length - 1;
           const isClickable = !isCurrent;
@@ -220,7 +231,7 @@ export function NavigationBreadcrumbs({ engine }: NavigationBreadcrumbsProps) {
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="mx-0.5 text-neutral-300 dark:text-neutral-600"
+                  className="vf-navigation-breadcrumbs__separator"
                   aria-hidden="true"
                 >
                   <title>Separator</title>
@@ -230,17 +241,14 @@ export function NavigationBreadcrumbs({ engine }: NavigationBreadcrumbsProps) {
               {isClickable ? (
                 <button
                   type="button"
-                  onClick={() => jumpToDepth(crumb.depth)}
-                  className="max-w-[160px] truncate rounded px-1.5 py-0.5 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+                  onClick={() => onJump(crumb.depth)}
+                  className="vf-navigation-breadcrumbs__link"
                   title={`Jump to ${crumb.label}`}
                 >
                   {crumb.label}
                 </button>
               ) : (
-                <span
-                  className="max-w-[160px] truncate rounded px-1.5 py-0.5 text-neutral-800 dark:text-neutral-100"
-                  aria-current="page"
-                >
+                <span className="vf-navigation-breadcrumbs__current" aria-current="page">
                   {crumb.label}
                 </span>
               )}

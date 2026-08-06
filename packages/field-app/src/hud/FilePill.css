@@ -1,0 +1,62 @@
+/* Document thumbnails deliberately reuse the field's ground motif. */
+.vf-doc-face {
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(circle, var(--vf-canvas-dot) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+
+.vf-file-pill {
+  border: 1px solid var(--vf-hairline);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  box-shadow: var(--vf-shadow-island);
+  backdrop-filter: blur(40px);
+  backface-visibility: hidden;
+  transition:
+    top 560ms cubic-bezier(0.32, 0.72, 0, 1),
+    width 560ms cubic-bezier(0.32, 0.72, 0, 1),
+    height 560ms cubic-bezier(0.32, 0.72, 0, 1),
+    border-radius 560ms cubic-bezier(0.32, 0.72, 0, 1),
+    background-color 160ms ease,
+    box-shadow 560ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: width, height, top, border-radius;
+}
+
+.vf-file-pill:hover {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+}
+
+.vf-file-pill[data-file-pill-open="true"] {
+  border-radius: var(--vf-radius-island);
+  background: var(--vf-chrome-surface);
+  box-shadow: var(--vf-shadow-top-sheet);
+}
+
+.vf-file-pill__header,
+.vf-file-pill__toggle {
+  transition-duration: 560ms;
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.vf-file-pill__header {
+  transition-property: height, padding;
+}
+
+.vf-file-pill__toggle {
+  transition-property: transform, color, background-color;
+}
+
+.vf-doc-face__selection {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1.5px var(--vf-select);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-file-pill,
+  .vf-file-pill__header,
+  .vf-file-pill__toggle {
+    transition-duration: 90ms;
+  }
+}

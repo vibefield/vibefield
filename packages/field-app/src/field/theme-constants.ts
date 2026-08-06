@@ -1,3 +1,5 @@
+import { uiIconButtonClass } from "@vibefield/shell-ui";
+
 // v1 theme constants + hex plumbing (widgetlab App.tsx verbatim), extracted
 // from FieldView by 3b: BootRoot feeds the live token writes, CanvasStage
 // derives the grid configuration, and the development tweak panel edits values.
@@ -17,10 +19,6 @@ export function hexToRgb255(hex: string): string {
 }
 
 export const roundButtonCls = (active: boolean) =>
-  `z-50 flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--vf-select)] ${
-    active
-      ? "bg-neutral-800 text-white dark:bg-white dark:text-neutral-800"
-      : "bg-white text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
-  }`;
+  `${uiIconButtonClass} h-10 w-10${active ? " is-active" : ""}`;
 
 export const fabCls = (active: boolean) => `absolute ${roundButtonCls(active)}`;

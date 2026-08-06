@@ -356,8 +356,7 @@ function LinkBlock(): ReactElement {
               href={face.authUrl}
               target="_blank"
               rel="noreferrer"
-              className="underline"
-              style={{ color: "var(--vf-cyan)" }}
+              className="vf-ui-tone-info underline"
             >
               authenticate
             </a>

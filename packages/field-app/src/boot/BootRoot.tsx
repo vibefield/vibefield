@@ -9,6 +9,7 @@ import { VisualTweakPanel } from "../dev-tweaks/VisualTweakPanel";
 import { defaultVisualTweakValues, visualTweakCssVariables } from "../field/visual-tuning";
 import type { BootMachine, BootView } from "./machine";
 import { OnboardingWizard } from "./onboarding/OnboardingWizard";
+import "./boot.css";
 
 // BootRoot (ESR §5.4.2): the splash is the app's first face (DESIGN.md §8 —
 // the canvas ground waking, the veil's thin bar, real stage labels); the
@@ -114,22 +115,6 @@ function BootGround({
       aria-hidden={ariaHidden}
     >
       {children}
-
-      {/* Component-scoped utilities (tray/pill precedent): the splash face is
-          the canvas ground itself at rest — §2.1 dots at 1:1 field scale. */}
-      <style>{`
-        .vf-splash {
-          background-color: var(--vf-canvas-bg);
-          background-image: radial-gradient(circle, rgba(0, 0, 0, 0.16) 1px, transparent 1px);
-          background-size: 24px 24px;
-        }
-        .dark .vf-splash {
-          background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .vf-splash { transition-duration: 120ms; }
-        }
-      `}</style>
     </div>
   );
 }

@@ -1,0 +1,72 @@
+.vf-comment-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--vf-radius-card);
+  color: var(--vf-comment-color);
+  background: color-mix(in srgb, var(--vf-comment-color) 12%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--vf-comment-color) 40%, transparent);
+  font-family: var(--vf-font-sans);
+  transform: scale(1);
+  transform-origin: center;
+  transition:
+    transform 180ms var(--vf-ease-lift),
+    box-shadow 220ms ease;
+}
+
+.vf-comment-card[data-selected="true"] {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--vf-comment-color) 90%, transparent);
+}
+
+.vf-comment-card[data-lifted="true"] {
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--vf-comment-color) 40%, transparent),
+    var(--vf-shadow-card-lifted);
+  transform: scale(var(--vf-comment-lift-scale));
+}
+
+.vf-comment-card[data-selected="true"][data-lifted="true"] {
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--vf-comment-color) 90%, transparent),
+    var(--vf-shadow-card-lifted);
+}
+
+.vf-comment-card__header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: 44px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: var(--vf-radius-card) var(--vf-radius-card) 0 0;
+  background: color-mix(in srgb, var(--vf-comment-color) 20%, transparent);
+}
+
+.vf-comment-card__title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--vf-comment-color);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.vf-comment-card__input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  user-select: text;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-comment-card {
+    transition-duration: 90ms;
+  }
+}

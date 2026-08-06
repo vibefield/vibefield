@@ -6,6 +6,7 @@ import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
 import { GodviewDeck } from "./GodviewDeck";
 import { GodviewMonitor } from "./GodviewMonitor";
+import { GodviewStage, GodviewUnavailableDeck } from "./GodviewStage";
 import {
   defaultGodviewTuning,
   type GodviewTheme,
@@ -196,54 +197,48 @@ export function GodviewOverlay(): ReactElement | null {
   } as CSSProperties;
 
   return (
-    <div
-      aria-hidden={!open}
-      data-godview-open={open ? "true" : "false"}
-      data-godview-tuning-open={tuningOpen ? "true" : "false"}
+    <GodviewStage
+      open={open}
+      theme={theme}
+      tuningOpen={tuningOpen}
       // GT-3p, lab only: one attribute silences every ambient loop on the
       // stage, so the frame readout can be watched with and without them. It
       // changes no layout and no color — what leaves is the motion alone.
-      data-godview-animations={labSwitches.animations ? "on" : "off"}
-      className={`vf-godview theme-${theme}`}
+      animations={labSwitches.animations}
       style={screenStyle}
-    >
-      <div className="vf-godview-scanlines" aria-hidden="true" />
-      <div className="vf-godview-vignette" aria-hidden="true" />
-
-      {open && labSwitches.monitor && (
-        <GodviewMonitor
-          view={monitor.view}
-          parameters={monitor.parameters}
+      monitor={
+        open && labSwitches.monitor ? (
+          <GodviewMonitor
+            view={monitor.view}
+            parameters={monitor.parameters}
+            theme={theme}
+            notice={notice}
+            tuningOpen={tuningOpen}
+            door={remoteDoor}
+            panes={panes}
+            onSelectView={monitor.selectView}
+            onToggleTuning={() => setTuningOpen((current) => !current)}
+            onThemeChange={changeTheme}
+          />
+        ) : undefined
+      }
+      tuningPanel={
+        <GodviewTuningPanel
+          open={open && tuningOpen}
           theme={theme}
-          notice={notice}
-          tuningOpen={tuningOpen}
-          door={remoteDoor}
-          panes={panes}
-          onSelectView={monitor.selectView}
-          onToggleTuning={() => setTuningOpen((current) => !current)}
+          value={tuning}
+          appearance={appearance}
+          monitorSections={monitorTuningSections(monitor)}
+          rendererBackend={rendererBackend}
+          onClose={() => setTuningOpen(false)}
           onThemeChange={changeTheme}
+          onChange={changeTuning}
+          onReset={resetTuning}
+          onResetMonitor={monitor.resetParameters}
         />
-      )}
-
-      <GodviewTuningPanel
-        open={open && tuningOpen}
-        theme={theme}
-        value={tuning}
-        appearance={appearance}
-        monitorSections={monitorTuningSections(monitor)}
-        rendererBackend={rendererBackend}
-        onClose={() => setTuningOpen(false)}
-        onThemeChange={changeTheme}
-        onChange={changeTuning}
-        onReset={resetTuning}
-        onResetMonitor={monitor.resetParameters}
-      />
-
-      <section
-        className="vf-godview-terminal-deck relative min-h-0 flex-1"
-        aria-label="Terminal panes"
-      >
-        {terminalAvailable ? (
+      }
+      deck={
+        terminalAvailable ? (
           <GodviewDeck
             active={open}
             theme={theme}
@@ -252,11 +247,9 @@ export function GodviewOverlay(): ReactElement | null {
             onPanes={setPanes}
           />
         ) : (
-          <p className="vf-godview-unavailable">
-            THIS HOST HAS NO TERMINAL BRIDGE — THE DECK IS UNAVAILABLE HERE.
-          </p>
-        )}
-      </section>
-    </div>
+          <GodviewUnavailableDeck />
+        )
+      }
+    />
   );
 }

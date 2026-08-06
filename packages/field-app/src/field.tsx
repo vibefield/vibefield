@@ -135,11 +135,7 @@ export function FieldView({
   );
 
   return (
-    <div
-      className="field-wrap"
-      data-doc-transition={hudMotion}
-      style={{ background: "var(--vf-canvas-bg)" }}
-    >
+    <div className="field-wrap" data-doc-transition={hudMotion}>
       {/* The recede (reference design): the canvas eases to 0.98 while the
           sheet is up. Only the wrapper transforms — the tray handoff
           ratio-corrects, so the transient scale never skews engine picks.
@@ -147,17 +143,9 @@ export function FieldView({
           (engine + InfiniteCanvas + GL Canvas + ground) — see the session. */}
       <div
         key={generation}
-        style={{
-          position: "absolute",
-          inset: 0,
-          transform: sheetOpen
-            ? "scale(0.98)"
-            : docState.phase === "loading"
-              ? "scale(0.992)"
-              : "scale(1)",
-          opacity: docState.phase === "loading" ? 0.72 : 1,
-          transition: "transform 600ms var(--vf-ease-island), opacity 420ms var(--vf-ease-island)",
-        }}
+        className="field-scene"
+        data-sheet-open={sheetOpen ? "true" : "false"}
+        data-doc-loading={docState.phase === "loading" ? "true" : "false"}
       >
         <CanvasStage
           ce={ce}

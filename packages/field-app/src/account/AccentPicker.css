@@ -1,0 +1,4 @@
+.vf-accent-swatch-selected {
+  outline: 1.5px solid var(--vf-select);
+  outline-offset: 2px;
+}

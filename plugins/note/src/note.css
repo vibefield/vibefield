@@ -1,0 +1,33 @@
+.vf-note-card {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  flex-direction: column;
+  color: var(--vf-note-ink);
+  font: 13.5px / 1.45 var(--vf-font-sans);
+}
+
+.vf-note-card__editor {
+  flex: 1;
+  margin: 12px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+}
+
+.vf-note-card__body {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+.vf-note-card__empty {
+  opacity: 0.45;
+}

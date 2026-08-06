@@ -38,18 +38,20 @@ import {
 } from "@vibefield/plugin-sdk/canvas";
 import { CARD_RADIUS, CardShell, previewBackground } from "@vibefield/plugin-sdk/ui";
 import {
+  type CSSProperties,
   type ReactElement,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   useEffect,
   useState,
 } from "react";
+import "./folder.css";
 
 const TYPE = "vibefield.field-tools.folder";
 
 export const FOLDER_SIZE = { w: 329, h: 345 };
 /** The folder card's own surface (the design-006 mock's --panel; manifest `preview` mirrors it). */
-export const FOLDER_BG = "#1D1D2B";
+export const FOLDER_BG = "var(--vf-folder-surface)";
 
 /** Mock constants (design-006 artifact): portal inset + bottom bar height. */
 const FOLDER_PAD = 10;
@@ -165,7 +167,7 @@ function FolderView({ entity, world }: { entity: Entity; world: World }): ReactE
   }, [world, entity]);
 
   const title = props?.title ?? "Folder";
-  const accent = props?.accent ?? "#7B96FF";
+  const accent = props?.accent ?? "var(--vf-accent-1)";
   const enterFolder = (): void => ops.enterContainer(entity);
   const onDoubleClick = (event: ReactMouseEvent): void => {
     event.stopPropagation();
@@ -186,120 +188,66 @@ function FolderView({ entity, world }: { entity: Entity; world: World }): ReactE
     <CardShell world={world} entity={entity} background={FOLDER_BG}>
       {/* biome-ignore lint/a11y/useSemanticElements: drag-surface; see comment above */}
       <div
+        className="vf-folder-card"
         role="button"
         tabIndex={0}
         onDoubleClick={onDoubleClick}
         onKeyDown={onKeyDown}
-        style={{
-          position: "relative",
-          height: "100%",
-          width: "100%",
-          color: "#EAEAF4",
-          fontFamily: "-apple-system, system-ui, sans-serif",
-          // The mock's 1px hairline (--line) — inset so the shell's clip keeps it.
-          boxShadow: "inset 0 0 0 1px rgba(160, 165, 210, 0.14)",
-          borderRadius: "inherit",
-        }}
+        style={
+          {
+            "--vf-folder-accent": accent,
+            "--vf-folder-bar-height": `${FOLDER_BAR}px`,
+          } as CSSProperties
+        }
         title={`Double-click to open ${title}`}
       >
         {/* Preview portal: dot-grid backdrop + live minis of the children. */}
         <div
+          className="vf-folder-card__portal"
           style={{
-            position: "absolute",
             left: PORTAL.x,
             top: PORTAL.y,
             width: PORTAL.w,
             height: PORTAL.h,
-            overflow: "hidden",
-            borderRadius: 7,
-            background:
-              "radial-gradient(rgba(150,158,210,0.12) 1px, transparent 1px) 0 0 / 14px 14px, #14141F",
           }}
         >
           {placed.map((c, i) => (
             <div
               // biome-ignore lint/suspicious/noArrayIndexKey: positional snapshot, order-stable per poll
               key={i}
+              className="vf-folder-card__mini"
               style={{
-                position: "absolute",
                 left: c.left,
                 top: c.top,
                 width: c.width,
                 height: c.height,
                 borderRadius: c.radius,
                 background: c.bg,
-                // Faint hairline + lift so dark gradients read on the dark grid.
-                boxShadow:
-                  "inset 0 0 0 1px rgba(235, 240, 255, 0.10), 0 2px 6px rgba(0, 0, 0, 0.40)",
               }}
             />
           ))}
           {placed.length === 0 && (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 11,
-                color: "#8B8BA6",
-              }}
-            >
-              Empty — drop cards in
-            </div>
+            <div className="vf-folder-card__empty">Empty — drop cards in</div>
           )}
         </div>
 
         {/* Bottom bar: accent folder icon · name · count pill (mock .bar). */}
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: FOLDER_BAR,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "0 12px",
-            boxSizing: "border-box",
-          }}
-        >
+        <div className="vf-folder-card__bar">
           <svg
             width="14"
             height="12"
             viewBox="0 0 14 12"
             fill="none"
             aria-hidden="true"
-            style={{ flex: "none" }}
+            className="vf-folder-card__icon"
           >
             <path
               d="M1 3.2C1 2.1 1.9 1.2 3 1.2h2.4l1.4 1.6H11c1.1 0 2 .9 2 2v4C13 9.9 12.1 10.8 11 10.8H3c-1.1 0-2-.9-2-2V3.2Z"
-              fill={accent}
+              fill="var(--vf-folder-accent)"
             />
           </svg>
-          <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.01em" }}>{title}</span>
-          <span
-            style={{
-              marginLeft: "auto",
-              minWidth: 24,
-              height: 17,
-              padding: "0 6px",
-              borderRadius: 99,
-              background: `${accent}29`,
-              color: accent,
-              fontSize: 10.5,
-              fontWeight: 700,
-              fontVariantNumeric: "tabular-nums",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxSizing: "border-box",
-            }}
-          >
-            {placed.length}
-          </span>
+          <span className="vf-folder-card__title">{title}</span>
+          <span className="vf-folder-card__count">{placed.length}</span>
         </div>
       </div>
     </CardShell>

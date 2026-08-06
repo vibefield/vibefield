@@ -1,6 +1,7 @@
 import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
 import { CardShell } from "@vibefield/plugin-sdk/ui";
 import { type ReactElement, useRef, useState } from "react";
+import "./note.css";
 
 // The note card (B2's proof widget; Track D1: first CardShell conversion —
 // DESIGN.md §10). Chrome (radius 22, ambient shadow + hairline, lift physics,
@@ -25,7 +26,7 @@ function NoteView({ entity, world }: WidgetComponentProps): ReactElement {
   const props = useWidgetProps<NoteProps>(world, entity, TYPE);
   const ops = useOps();
   const text = props?.text ?? "";
-  const color = props?.color ?? "#f6e7a9";
+  const color = props?.color ?? "var(--vf-note-surface)";
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -42,17 +43,7 @@ function NoteView({ entity, world }: WidgetComponentProps): ReactElement {
 
   return (
     <CardShell world={world} entity={entity} background={color}>
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          boxSizing: "border-box",
-          display: "flex",
-          flexDirection: "column",
-          color: "#3a3524",
-          font: '13.5px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        }}
-      >
+      <div className="vf-note-card">
         {editing ? (
           <textarea
             value={draft}
@@ -69,17 +60,7 @@ function NoteView({ entity, world }: WidgetComponentProps): ReactElement {
             onWheel={(e) => e.stopPropagation()}
             autoFocus
             spellCheck={false}
-            style={{
-              flex: 1,
-              margin: 12,
-              padding: 0,
-              border: "none",
-              outline: "none",
-              resize: "none",
-              background: "transparent",
-              color: "inherit",
-              font: "inherit",
-            }}
+            className="vf-note-card__editor"
           />
         ) : (
           <div
@@ -89,15 +70,13 @@ function NoteView({ entity, world }: WidgetComponentProps): ReactElement {
               setEditing(true);
             }}
             onWheel={(e) => e.stopPropagation()}
-            style={{
-              flex: 1,
-              padding: 12,
-              overflowY: "auto",
-              whiteSpace: "pre-wrap",
-              cursor: "text",
-            }}
+            className="vf-note-card__body"
           >
-            {text.length > 0 ? text : <span style={{ opacity: 0.45 }}>Double-click to edit</span>}
+            {text.length > 0 ? (
+              text
+            ) : (
+              <span className="vf-note-card__empty">Double-click to edit</span>
+            )}
           </div>
         )}
       </div>

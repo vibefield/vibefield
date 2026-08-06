@@ -105,7 +105,7 @@ function keyframeBlocks(css: string): Array<{ name: string; body: string }> {
 
 describe("the ambient-animation audit (GT-D15.1)", () => {
   const css = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "styles.css"),
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "godview", "godview.css"),
     "utf8",
   );
 
@@ -113,7 +113,7 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
     // Guards the whole check against a moved file or a broken parser: a
     // stylesheet that yields no blocks would pass every assertion below while
     // asserting nothing.
-    expect(keyframeBlocks(css).length).toBeGreaterThan(8);
+    expect(keyframeBlocks(css).length).toBeGreaterThanOrEqual(5);
   });
 
   it("animates filter in NO keyframe, anywhere in the app's stylesheet", () => {

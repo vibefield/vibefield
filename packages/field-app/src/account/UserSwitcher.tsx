@@ -204,8 +204,7 @@ function UserRow({
     return (
       <div
         aria-current="true"
-        className="flex items-center gap-2.5 rounded-[12px] px-3 py-2.5"
-        style={{ outline: "1.5px solid var(--vf-select)", outlineOffset: "-1.5px" }}
+        className="vf-ui-selection-ring flex items-center gap-2.5 rounded-[12px] px-3 py-2.5"
       >
         {face}
       </div>

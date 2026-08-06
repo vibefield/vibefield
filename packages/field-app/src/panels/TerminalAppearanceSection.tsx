@@ -46,8 +46,6 @@ import { fieldCls, labelCls, SettingsRow, SettingsSection, SettingsSwitch } from
 // prop can fix. It stays, permanently.
 
 /** The stack DESIGN.md §3 reserves for data, paths, and ids. */
-const MONO = 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace';
-
 /** DESIGN.md §8 chips: full-round, fill at rest, ACTIVE is inverted solid with
  * `shadow-md`; §7 adds `active:scale-95` and a keyboard focus ring that is never
  * optional. The resting fill is the panel's own `black/5 · white/10` ramp rather
@@ -151,9 +149,7 @@ export function TerminalAppearanceSection(): ReactElement {
             value={percent}
             onChange={(event) => update({ opacity: Number(event.currentTarget.value) / 100 })}
           />
-          <span className={`w-10 text-right tabular-nums ${labelCls}`} style={{ fontFamily: MONO }}>
-            {percent}%
-          </span>
+          <span className={`vf-ui-mono w-10 text-right tabular-nums ${labelCls}`}>{percent}%</span>
         </span>
       </SettingsRow>
 
@@ -232,9 +228,9 @@ export function TerminalAppearanceSection(): ReactElement {
           terms travel with the themes, and a pinned revision is a fact about
           what is installed). */}
       <p className={`pt-3 ${labelCls}`}>
-        <span style={{ fontFamily: MONO }}>{themeOptions.length}</span> themes from{" "}
+        <span className="vf-ui-mono">{themeOptions.length}</span> themes from{" "}
         {GHOSTTY_THEME_CATALOG_SOURCE} · revision{" "}
-        <span style={{ fontFamily: MONO }}>{GHOSTTY_THEME_CATALOG_REVISION}</span>
+        <span className="vf-ui-mono">{GHOSTTY_THEME_CATALOG_REVISION}</span>
       </p>
 
       {/* Attribution for every port on the disk, not merely the selected one:
@@ -245,7 +241,7 @@ export function TerminalAppearanceSection(): ReactElement {
         {GHOSTTEA_SHADER_OPTIONS.map((shader, index) => (
           <span key={shader.id}>
             {index > 0 ? " · " : ""}
-            {shader.name} <span style={{ fontFamily: MONO }}>{shader.license}</span>
+            {shader.name} <span className="vf-ui-mono">{shader.license}</span>
           </span>
         ))}
       </p>
@@ -255,8 +251,8 @@ export function TerminalAppearanceSection(): ReactElement {
           this deck to upstream's shader gallery learns why the rest are missing
           instead of assuming this app dropped them. */}
       <p className={`pt-1 ${labelCls}`}>
-        <span style={{ fontFamily: MONO }}>{UNAVAILABLE_UPSTREAM_SHADERS.length}</span> more
-        upstream shaders are named but not bundled — their redistribution terms are unclear:{" "}
+        <span className="vf-ui-mono">{UNAVAILABLE_UPSTREAM_SHADERS.length}</span> more upstream
+        shaders are named but not bundled — their redistribution terms are unclear:{" "}
         {UNAVAILABLE_UPSTREAM_SHADERS.join(", ")}
       </p>
     </SettingsSection>

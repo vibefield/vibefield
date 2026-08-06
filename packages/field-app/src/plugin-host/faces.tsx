@@ -1,8 +1,7 @@
-import { CARD_RADIUS } from "@vibefield/shell-ui";
+import { UnavailableState } from "@vibefield/shell-ui";
 import {
   Component,
   type ComponentType,
-  type CSSProperties,
   type ReactElement,
   type ReactNode,
   useSyncExternalStore,
@@ -21,33 +20,8 @@ import { getPluginRegistrySnapshot, subscribePluginRegistry } from "./plugin-reg
 // cannot host the DOM placeholder; the DESIGN.md GL placeholder is a recorded
 // follow-up in thinking-p3).
 
-const faceShell: CSSProperties = {
-  width: "100%",
-  height: "100%",
-  borderRadius: CARD_RADIUS,
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 4,
-  padding: 12,
-  boxSizing: "border-box",
-  background: "var(--vf-surface, rgba(128, 128, 128, 0.08))",
-  border: "1px dashed rgba(128, 128, 128, 0.35)",
-  color: "var(--vf-text-secondary, rgba(128, 128, 128, 0.8))",
-  textAlign: "center",
-  fontSize: 12,
-  lineHeight: 1.35,
-  userSelect: "none",
-};
-
 function FaceCard({ title, note }: { title: string; note: string }): ReactElement {
-  return (
-    <div style={faceShell}>
-      <div style={{ fontWeight: 600, opacity: 0.9 }}>{title}</div>
-      <div style={{ opacity: 0.7 }}>{note}</div>
-    </div>
-  );
+  return <UnavailableState title={title} description={note} />;
 }
 
 /** §12.4 row 2 — the preserving placeholder: entity, props, and z-order stay;

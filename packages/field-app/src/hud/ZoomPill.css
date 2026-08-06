@@ -1,0 +1,40 @@
+.vf-zoom-pill {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  color: var(--vf-text-tertiary);
+  background: var(--vf-chrome-solid);
+  box-shadow: var(--vf-shadow-island);
+}
+
+.vf-zoom-pill button {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.vf-zoom-pill button:nth-child(2) {
+  width: 56px;
+  color: var(--vf-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-zoom-pill button:hover {
+  color: var(--vf-text-primary);
+  background: var(--vf-fill);
+}
