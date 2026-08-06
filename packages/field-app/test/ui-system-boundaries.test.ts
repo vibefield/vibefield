@@ -16,6 +16,8 @@ describe("UI system ownership boundaries", () => {
     expect(appManifest).toContain('@import "./styles/utilities.css";');
     expect(appManifest).toContain('@import "./panels/settings.css";');
     expect(appManifest).toContain('@import "./godview/godview.css";');
+    expect(appManifest).toContain('@import "./godview/views/swarm/swarm.css";');
+    expect(appManifest).toContain('@import "./godview/views/swarm/agent-bubble.css";');
 
     const catalogManifest = source("design-system/design-system.css");
     expect(catalogManifest).toContain('@import "./styles/catalog-shell.css";');
@@ -38,7 +40,8 @@ describe("UI system ownership boundaries", () => {
   it("mounts production views instead of the retired catalog replicas", () => {
     const page = source("design-system/DesignSystemPage.tsx");
     const onboarding = source("design-system/OnboardingPreview.tsx");
-    const catalog = `${page}\n${onboarding}`;
+    const agentBubbles = source("design-system/AgentBubblePreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${agentBubbles}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -60,6 +63,8 @@ describe("UI system ownership boundaries", () => {
       "OnboardingWelcomeBackPaneView",
       "OnboardingWelcomePaneView",
       "WizardShellView",
+      "AgentBubblePreview",
+      "AgentBubbleView",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -84,6 +89,8 @@ describe("UI system ownership boundaries", () => {
       "hud/LoadingVeil.tsx",
       "hud/WidgetTray.tsx",
       "boot/onboarding/wizard-ui.tsx",
+      "godview/views/swarm/AgentBubble.tsx",
+      "godview/views/swarm/AgentSwarm.tsx",
       "plugin-host/faces.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
@@ -104,8 +111,20 @@ describe("UI system ownership boundaries", () => {
       "hud/WidgetTray.css",
       "hud/ZoomPill.css",
       "panels/settings.css",
+      "godview/views/swarm/agent-bubble.css",
+      "godview/views/swarm/swarm.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }
+  });
+
+  it("keeps swarm field and circle styling beside their production views", () => {
+    const godview = source("godview/godview.css");
+    expect(godview).not.toMatch(/^\.vf-monitor-bubble/m);
+    expect(godview).not.toMatch(/^\.vf-monitor-swarm(?:\s|\{)/m);
+    expect(source("godview/views/swarm/agent-bubble.css")).toContain(
+      ".vf-monitor-bubble.is-waiting",
+    );
+    expect(source("godview/views/swarm/swarm.css")).toContain(".vf-monitor-swarm-grid");
   });
 });

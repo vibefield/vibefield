@@ -7,10 +7,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { AgentIcon } from "../../monitor/AgentIcon";
-import type { AgentVisualStatus } from "../../monitor/agent-status";
 import { monitorChromeElements } from "../../monitor/chrome";
 import type { AgentMonitorProps, MonitorAgent } from "../../monitor/types";
+import { AgentBubbleView, agentBubblePresentation, animateAgentBubbleSpawn } from "./AgentBubble";
 import {
   normalizeSwarmParameters,
   radiusForStatus,
@@ -55,30 +54,6 @@ import type { SwarmPhysicsEvent } from "./swarm-physics-protocol";
 // closes, so a closed Godview runs no physics — and now not even a thread to run
 // it in, because disposing the driver terminates the worker.
 
-interface IgnitionParticleStyle extends CSSProperties {
-  "--ignition-angle": string;
-  "--ignition-delay": string;
-  "--ignition-distance": string;
-  "--ignition-duration": string;
-  "--ignition-size": string;
-}
-
-function particleNoise(index: number, channel: number): number {
-  const value = Math.sin((index + 1) * 12.9898 + (channel + 1) * 78.233) * 43758.5453;
-  return value - Math.floor(value);
-}
-
-const IGNITION_PARTICLES: readonly IgnitionParticleStyle[] = Array.from(
-  { length: 24 },
-  (_, index) => ({
-    "--ignition-angle": `${(particleNoise(index, 0) * 360).toFixed(2)}deg`,
-    "--ignition-delay": `${(-particleNoise(index, 1) * 2.2).toFixed(2)}s`,
-    "--ignition-distance": `${(24 + particleNoise(index, 2) * 34).toFixed(2)}px`,
-    "--ignition-duration": `${(1.05 + particleNoise(index, 3) * 1.35).toFixed(2)}s`,
-    "--ignition-size": `${(2 + particleNoise(index, 4) * 1.5).toFixed(2)}px`,
-  }),
-);
-
 /** What the last two frames said about one bubble, and what was last written for
  * it. The physics owns the positions; this is the render's own copy, because a
  * transferred frame goes straight back to the sender. */
@@ -107,34 +82,10 @@ interface BubbleDrag {
   dragged: boolean;
 }
 
-const SPAWN_DURATION_MS = 720;
 const LONG_PRESS_DURATION_MS = 520;
 const LONG_PRESS_MOVE_TOLERANCE = 8;
 /** Sub-pixel movement nobody can see. The damage gate's threshold, in CSS px. */
 const WRITE_EPSILON_PX = 0.05;
-
-type SwarmVisualState = AgentVisualStatus | "ignited";
-
-/**
- * The swarm's own reading of status, and the reason a live agent is never drawn
- * at the idle size: the smallest body is reserved for a terminal nobody has
- * claimed, so an agent merely sitting ready still reads as present.
- */
-function swarmVisualState(agent: MonitorAgent): SwarmVisualState {
-  if (!agent.agent) return agent.status;
-  switch (agent.status) {
-    case "idle":
-      return "working";
-    case "working":
-      return "ignited";
-    case "waiting":
-      return "waiting";
-  }
-}
-
-function swarmAppearance(state: SwarmVisualState): AgentVisualStatus {
-  return state === "ignited" ? "working" : state;
-}
 
 /** The physics' half of the panel's parameters. The rest — fill opacity, the
  * radii — describe how a bubble LOOKS, which the simulation has no use for. */
@@ -151,36 +102,6 @@ function prefersReducedMotion(): boolean {
   return (
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
-
-function animateSpawn(element: HTMLButtonElement): void {
-  // M6: reduced motion gets the end state, not a spring. The guard also covers
-  // the environment where `animate` does not exist at all (tests, and any
-  // renderer where the WAAPI surface is stubbed).
-  if (typeof element.animate !== "function" || prefersReducedMotion()) {
-    return;
-  }
-
-  const animation = element.animate(
-    [
-      { transform: "scale(0)", opacity: 0, offset: 0, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
-      {
-        transform: "scale(1.2)",
-        opacity: 1,
-        offset: 0.52,
-        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-      },
-      { transform: "scale(0.96)", opacity: 1, offset: 0.72, easing: "ease-out" },
-      { transform: "scale(1.035)", opacity: 1, offset: 0.88, easing: "ease-in-out" },
-      { transform: "scale(1)", opacity: 1, offset: 1 },
-    ],
-    { duration: SPAWN_DURATION_MS, fill: "both" },
-  );
-
-  void animation.finished.then(
-    () => animation.cancel(),
-    () => undefined,
   );
 }
 
@@ -391,7 +312,7 @@ export function AgentSwarm({
         }
         if (first) {
           spawnedIdsRef.current.add(id);
-          animateSpawn(bubble);
+          animateAgentBubbleSpawn(bubble, prefersReducedMotion());
           element.style.visibility = "";
         }
       }
@@ -502,23 +423,11 @@ export function AgentSwarm({
         </div>
       ) : null}
       {agents.map((agent) => {
-        const facet = agent.agent;
-        const visualState = swarmVisualState(agent);
-        const appearance = swarmAppearance(visualState);
-        const ignited = visualState === "ignited";
-        const linkedColor = agent.attachment?.primary;
-        const style = { "--agent-color": linkedColor ?? agent.color } as CSSProperties;
-        const contextWindow = facet?.contextWindow;
-        const contextPercent = contextWindow ? Math.floor(contextWindow.usedPercent) : undefined;
-        const contextLabel =
-          contextPercent === undefined
-            ? "CTX:--%"
-            : `CTX:${contextPercent.toString().padStart(2, "0")}%`;
         return (
-          <div
+          <AgentBubbleView
             key={agent.id}
-            className={`vf-monitor-bubble-positioner is-${appearance}`}
-            ref={(element) => {
+            agent={agent}
+            positionerRef={(element) => {
               if (element) {
                 elementRefs.current.set(agent.id, element);
                 if (!spawnedIdsRef.current.has(agent.id)) element.style.visibility = "hidden";
@@ -526,141 +435,52 @@ export function AgentSwarm({
                 elementRefs.current.delete(agent.id);
               }
             }}
-          >
-            <button
-              ref={(element) => {
-                if (element) bubbleRefs.current.set(agent.id, element);
-                else bubbleRefs.current.delete(agent.id);
-              }}
-              type="button"
-              className={`vf-monitor-bubble is-${appearance}${ignited ? " is-ignited" : ""}${
-                // "Unassigned" means a terminal of OURS that no agent claimed.
-                // A peer's session is claimed — by the peer — so it takes the
-                // remote mark instead and never the unclaimed one.
-                facet || agent.remote ? "" : " is-unassigned"
-              }${linkedColor ? " is-linked" : ""}${agent.active ? " is-active" : ""}${
-                agent.remote ? " is-remote" : ""
-              }`}
-              style={style}
-              aria-current={agent.active ? "true" : undefined}
-              aria-label={
-                agent.remote
-                  ? `on ${agent.remote.deviceName}, ${agent.project}, remote session, ${agent.status}${
-                      agent.remote.readWrite ? "" : ", view only"
-                    }`
-                  : facet
-                    ? `${agent.project}, ${facet.model ?? facet.provider}, ${agent.status}: ${agent.detail}, ${contextLabel}`
-                    : `${agent.project}, unassigned terminal, ${agent.status}`
+            buttonRef={(element) => {
+              if (element) bubbleRefs.current.set(agent.id, element);
+              else bubbleRefs.current.delete(agent.id);
+            }}
+            onPointerDown={(event) => {
+              const point = pointInContainer(event);
+              if (!point) return;
+              dragsRef.current.set(agent.id, {
+                pointerId: event.pointerId,
+                startX: point.x,
+                startY: point.y,
+                dragged: false,
+              });
+              driverRef.current?.post({ type: "dragStart", id: agent.id, point });
+              event.currentTarget.setPointerCapture(event.pointerId);
+              event.preventDefault();
+            }}
+            onPointerMove={(event) => moveBody(event, agent.id)}
+            onPointerUp={(event) => {
+              const drag = dragsRef.current.get(agent.id);
+              if (!drag) return;
+              moveBody(event, agent.id);
+              driverRef.current?.post({ type: "dragEnd", id: agent.id });
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
               }
-              title={
-                facet
-                  ? `${agent.project} · ${facet.model ?? facet.provider} · ${agent.detail}`
-                  : agent.detail
+              // The pointer is gone but `dragged` is not: the click that
+              // follows still has to know this was a drag.
+              delete drag.pointerId;
+            }}
+            onPointerCancel={() => {
+              const drag = dragsRef.current.get(agent.id);
+              if (!drag) return;
+              driverRef.current?.post({ type: "dragEnd", id: agent.id });
+              delete drag.pointerId;
+            }}
+            onClick={() => {
+              const drag = dragsRef.current.get(agent.id);
+              if (drag?.dragged) {
+                drag.dragged = false;
+                return;
               }
-              onPointerDown={(event) => {
-                const point = pointInContainer(event);
-                if (!point) return;
-                dragsRef.current.set(agent.id, {
-                  pointerId: event.pointerId,
-                  startX: point.x,
-                  startY: point.y,
-                  dragged: false,
-                });
-                driverRef.current?.post({ type: "dragStart", id: agent.id, point });
-                event.currentTarget.setPointerCapture(event.pointerId);
-                event.preventDefault();
-              }}
-              onPointerMove={(event) => moveBody(event, agent.id)}
-              onPointerUp={(event) => {
-                const drag = dragsRef.current.get(agent.id);
-                if (!drag) return;
-                moveBody(event, agent.id);
-                driverRef.current?.post({ type: "dragEnd", id: agent.id });
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                  event.currentTarget.releasePointerCapture(event.pointerId);
-                }
-                // The pointer is gone but `dragged` is not: the click that
-                // follows still has to know this was a drag.
-                delete drag.pointerId;
-              }}
-              onPointerCancel={() => {
-                const drag = dragsRef.current.get(agent.id);
-                if (!drag) return;
-                driverRef.current?.post({ type: "dragEnd", id: agent.id });
-                delete drag.pointerId;
-              }}
-              onClick={() => {
-                const drag = dragsRef.current.get(agent.id);
-                if (drag?.dragged) {
-                  drag.dragged = false;
-                  return;
-                }
-                actions.select(agent);
-                driverRef.current?.post({ type: "nudge", id: agent.id });
-              }}
-            >
-              {contextWindow ? (
-                <span
-                  className="vf-monitor-bubble-context-fill"
-                  style={{ height: `${contextWindow.usedPercent}%` }}
-                  aria-hidden="true"
-                />
-              ) : null}
-              {ignited ? (
-                <span className="vf-monitor-bubble-ignition" aria-hidden="true">
-                  <i className="vf-monitor-bubble-core-glow" />
-                  <span className="vf-monitor-bubble-particles">
-                    {IGNITION_PARTICLES.map((particleStyle, index) => (
-                      <i
-                        className="vf-monitor-bubble-particle"
-                        // The particle set is a fixed, index-addressed constant —
-                        // it never reorders, so the index IS the identity.
-                        key={index}
-                        style={particleStyle}
-                      />
-                    ))}
-                  </span>
-                </span>
-              ) : null}
-              {agent.attachment?.mirrors.length ? (
-                <span className="vf-monitor-bubble-mirrors" aria-hidden="true">
-                  {agent.attachment.mirrors.map((color, index) => (
-                    <i
-                      key={`${color}-${index}`}
-                      style={{ inset: `${4 + index * 3}px`, borderColor: color }}
-                    />
-                  ))}
-                </span>
-              ) : null}
-              {facet ? (
-                <span className="vf-monitor-bubble-glyph" aria-hidden="true">
-                  <AgentIcon agent={facet.kind} />
-                </span>
-              ) : null}
-              <span className="vf-monitor-bubble-copy">
-                {facet?.branch ? (
-                  <span className="vf-monitor-bubble-branch">{facet.branch}</span>
-                ) : null}
-                {/* THE HOST CHIP (GT-D17), in the branch's slot: both answer
-                    "where does this live", and a peer's name is the stronger
-                    version of that question. It is the reason a remote bubble
-                    can never be mistaken for one of the invented ones. */}
-                {agent.remote ? (
-                  <span className="vf-monitor-bubble-host">{agent.remote.deviceName}</span>
-                ) : null}
-                <strong>{agent.project}</strong>
-                {facet ? (
-                  <span className="vf-monitor-bubble-provider">
-                    {facet.model ?? facet.provider}
-                  </span>
-                ) : null}
-                {agent.remote && !agent.remote.readWrite ? (
-                  <span className="vf-monitor-bubble-provider">view only</span>
-                ) : null}
-              </span>
-              {facet ? <span className="vf-monitor-bubble-context">{contextLabel}</span> : null}
-            </button>
-          </div>
+              actions.select(agent);
+              driverRef.current?.post({ type: "nudge", id: agent.id });
+            }}
+          />
         );
       })}
     </section>
@@ -676,7 +496,7 @@ function agentSpecs(
   return agents.map((agent) => {
     const spec: SwarmAgentSpec = {
       id: agent.id,
-      radius: radiusForStatus(swarm, swarmAppearance(swarmVisualState(agent))),
+      radius: radiusForStatus(swarm, agentBubblePresentation(agent).appearance),
     };
     if (agent.spawnHint) spec.spawnHint = agent.spawnHint;
     return spec;

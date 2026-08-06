@@ -12,6 +12,8 @@
 @import "./styles/utilities.css";
 @import "./panels/settings.css";
 @import "./godview/godview.css";
+@import "./godview/views/swarm/swarm.css";
+@import "./godview/views/swarm/agent-bubble.css";
 @custom-variant dark (&:where(.dark, .dark *));
 /* Three hops from packages/field-app/src → repo root. These were written as
    four hops from the file's pre-3a home (apps/desktop/renderer/src) and rode

@@ -28,7 +28,8 @@ components. Plugin content styles remain inside their plugin packages.
 The catalog currently mounts these shipping views directly:
 
 - Artifact Hub and all empty/loading/populated/unavailable states
-- Godview stage, monitor registry, tuning panel, and unavailable terminal deck
+- Godview stage, monitor registry, tuning panel, unavailable terminal deck, and the complete
+  swarm-circle state matrix
 - FilePill, navigation breadcrumbs, ZoomPill, WidgetTray frame/tool switcher
 - command palette, settings dialog, side-panel frame, and loading veil
 - shared controls/states and every onboarding pane, alternate entry, and completion failure
@@ -38,6 +39,13 @@ fixture product client and FilePill receives a fixture document manager; their D
 state, accessibility, and CSS are production code. Engine-rendered widget content is represented
 by deterministic card fixtures, while its stable visual identities come from shared content
 tokens and the plugin-owned stylesheets.
+
+Godview's swarm follows the same boundary at a smaller scale. `AgentSwarm.tsx` owns physics,
+placement, drag gestures, and field-level creation; `AgentBubble.tsx` owns the exact circle state
+projection, DOM, accessibility, identity layers, and arrival motion. Field composition lives in
+`swarm.css`, while circle styling lives in `agent-bubble.css`. The catalog mounts that production
+circle without starting the physics engine and inventories every valid source/status combination,
+access and pane modifier, provider glyph, and context boundary.
 
 ## Rules for new UI
 

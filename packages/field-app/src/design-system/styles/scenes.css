@@ -817,6 +817,254 @@
   position: absolute;
 }
 
+.vf-ds-agent-bubble-catalog.vf-godview {
+  position: relative;
+  z-index: auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  background: var(--monitor-bg);
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition: none;
+  inset: auto;
+}
+
+.vf-ds-agent-bubble-toolbar {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  gap: 18px 28px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+}
+
+.vf-ds-agent-bubble-toolbar > div:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.vf-ds-agent-bubble-toolbar-eyebrow {
+  color: var(--text-faint);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.vf-ds-agent-bubble-toolbar strong {
+  color: var(--text-main);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.vf-ds-agent-bubble-toolbar small {
+  max-width: 68ch;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.vf-ds-agent-bubble-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.vf-ds-agent-bubble-actions button {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.vf-ds-agent-bubble-actions button:hover,
+.vf-ds-agent-bubble-actions button[aria-pressed="true"] {
+  border-color: var(--control-hover-border);
+  color: var(--text-main);
+  background: var(--control-hover-bg);
+}
+
+.vf-ds-agent-bubble-actions button:focus-visible {
+  outline: 1px solid var(--text-main);
+  outline-offset: 2px;
+}
+
+.vf-ds-agent-bubble-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.vf-ds-agent-bubble-ranges {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.vf-ds-agent-bubble-range {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.vf-ds-agent-bubble-range > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-ds-agent-bubble-range input {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--text-main);
+}
+
+.vf-ds-agent-bubble-range output {
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-ds-agent-bubble-group {
+  padding: 38px 24px 48px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.vf-ds-agent-bubble-group:last-child {
+  border-bottom: 0;
+}
+
+.vf-ds-agent-bubble-group > header {
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 20px;
+}
+
+.vf-ds-agent-bubble-group > header > span {
+  color: var(--text-faint);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.vf-ds-agent-bubble-group h3 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.vf-ds-agent-bubble-group > header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.vf-ds-agent-bubble-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+
+.vf-ds-agent-bubble-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+}
+
+.vf-ds-agent-bubble-stage {
+  position: relative;
+  height: 360px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--panel-border);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-color: var(--monitor-bg);
+  background-size: 24px 24px;
+  isolation: isolate;
+}
+
+.vf-ds-agent-bubble-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.vf-ds-agent-bubble-card-copy > strong {
+  color: var(--text-main);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.vf-ds-agent-bubble-card-copy dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin: 0;
+}
+
+.vf-ds-agent-bubble-card-copy dl > div {
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+.vf-ds-agent-bubble-card-copy dt {
+  color: var(--text-faint);
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vf-ds-agent-bubble-card-copy dd {
+  overflow: hidden;
+  margin: 3px 0 0;
+  color: var(--text-main);
+  font-size: 8px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-ds-agent-bubble-card-copy p {
+  min-height: 3.1em;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 8px;
+  line-height: 1.55;
+}
+
 .vf-ds-inventory-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -977,6 +1225,19 @@
   .vf-ds-field-stage .vf-navigation-breadcrumbs__trail {
     display: none;
   }
+
+  .vf-ds-agent-bubble-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .vf-ds-agent-bubble-actions {
+    justify-content: flex-start;
+  }
+
+  .vf-ds-agent-bubble-ranges {
+    grid-column: 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 700px) {
@@ -1032,6 +1293,19 @@
   .vf-ds-hero-facts > div:nth-child(3),
   .vf-ds-hero-facts > div:nth-child(4) {
     border-bottom: 0;
+  }
+
+  .vf-ds-agent-bubble-toolbar,
+  .vf-ds-agent-bubble-group {
+    padding-inline: 16px;
+  }
+
+  .vf-ds-agent-bubble-ranges {
+    grid-template-columns: 1fr;
+  }
+
+  .vf-ds-agent-bubble-stage {
+    height: 320px;
   }
 
   .vf-ds-section {

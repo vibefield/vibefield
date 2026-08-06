@@ -104,10 +104,13 @@ function keyframeBlocks(css: string): Array<{ name: string; body: string }> {
 }
 
 describe("the ambient-animation audit (GT-D15.1)", () => {
-  const css = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "godview", "godview.css"),
-    "utf8",
-  );
+  const godviewRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "godview");
+  const bubbleCss = readFileSync(join(godviewRoot, "views", "swarm", "agent-bubble.css"), "utf8");
+  const css = [
+    readFileSync(join(godviewRoot, "godview.css"), "utf8"),
+    readFileSync(join(godviewRoot, "views", "swarm", "swarm.css"), "utf8"),
+    bubbleCss,
+  ].join("\n");
 
   it("finds keyframes to audit at all", () => {
     // Guards the whole check against a moved file or a broken parser: a
@@ -155,21 +158,23 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
 
   it("carries James's shadow numbers through the rebuild, both themes", () => {
     const themeBlock = (theme: string): string => {
-      const start = css.indexOf(`.vf-godview.theme-${theme},`);
+      const start = bubbleCss.indexOf(`.vf-godview.theme-${theme} {`);
       expect(start, `the ${theme} theme block should exist`).toBeGreaterThan(-1);
-      return flatten(css.slice(start, css.indexOf("\n}", start)));
+      return flatten(bubbleCss.slice(start, bubbleCss.indexOf("\n}", start)));
     };
 
     for (const { layer, theme, radius, alpha } of TUNED) {
       const block = themeBlock(theme);
       // The blur is the radius halved — the one arithmetic step in the port,
       // and the one a careless edit would silently get wrong.
-      expect(block, `${theme}/${layer} blur`).toContain(`--${layer}-blur: ${radius / 2}px;`);
+      expect(block, `${theme}/${layer} blur`).toContain(
+        `--vf-monitor-bubble-${layer}-blur: ${radius / 2}px;`,
+      );
       // The alpha rides a `calc` against the live fill-opacity knob rather than
       // a frozen number, which is how the shadow keeps tracking the lab's
       // bubble-fill slider exactly as a real drop-shadow did.
       expect(block, `${theme}/${layer} alpha`).toContain(
-        `--${layer}-fill: rgb(${theme === "light" ? "0 0 0" : "255 255 255"} / ` +
+        `--vf-monitor-bubble-${layer}-fill: rgb(${theme === "light" ? "0 0 0" : "255 255 255"} / ` +
           `calc(${alpha} * var(--vf-monitor-bubble-fill-opacity, 72%)));`,
       );
     }
@@ -185,9 +190,9 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
         // The LAST occurrence: the same selector also ends the grouped rule
         // that gives all four layers their shared box, and that rule carries no
         // offset. The standalone rules follow it.
-        const start = css.lastIndexOf(selector);
+        const start = bubbleCss.lastIndexOf(selector);
         expect(start, `${selector} should exist`).toBeGreaterThan(-1);
-        const rule = css.slice(start, css.indexOf("\n}", start));
+        const rule = bubbleCss.slice(start, bubbleCss.indexOf("\n}", start));
         const expected = TUNED.find(
           (entry) => entry.layer === `${state}-shadow-${slot}` && entry.theme === "light",
         );

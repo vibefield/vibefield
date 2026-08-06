@@ -29,6 +29,7 @@ import {
   SettingsSwitch,
 } from "../panels/settings-ui";
 import { ThemeToggleButton } from "../ThemeToggleButton";
+import { AgentBubblePreview } from "./AgentBubblePreview";
 import { CommandPalettePreview } from "./CommandPalettePreview";
 import { FilePillPreview } from "./FilePillPreview";
 import { GodviewPreview } from "./GodviewPreview";
@@ -181,8 +182,9 @@ const INVENTORY = [
       "Source counts",
       "View selector",
       "Theme switch",
-      "Agent body",
-      "Agent status",
+      "Agent circle anatomy",
+      "Agent circle state matrix",
+      "Agent status mapping",
       "Terminal deck",
       "Pane badge",
       "Kill confirmation",
@@ -982,10 +984,17 @@ function GodviewSection(): ReactElement {
       index="09"
       eyebrow="Control room"
       title="A deliberate change of register"
-      description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck."
+      description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck. The complete circle inventory below makes its state grammar explicit instead of leaving it buried in the physics view."
     >
       <Specimen title="Godview stage" source="godview/GodviewStage.tsx" bleed>
         <GodviewPreview />
+      </Specimen>
+      <Specimen
+        title="Agent circle anatomy and complete state inventory"
+        source="godview/views/swarm/AgentBubble.tsx"
+        bleed
+      >
+        <AgentBubblePreview />
       </Specimen>
     </Section>
   );

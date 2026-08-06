@@ -56,6 +56,7 @@ describe("design system page", () => {
     expect(container?.textContent).toContain("The field, in one frame.");
     expect(container?.textContent).toContain("Field chrome playground");
     expect(container?.textContent).toContain("Godview stage");
+    expect(container?.textContent).toContain("Agent circle anatomy and complete state inventory");
     expect(container?.textContent).toContain("The interface, accounted for");
   });
 
@@ -83,6 +84,24 @@ describe("design system page", () => {
     );
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
+    expect(container?.querySelectorAll("[data-agent-bubble-preview]")).toHaveLength(19);
+    expect(
+      container
+        ?.querySelector('[data-agent-bubble-preview="agent-ready"] [data-agent-bubble-status]')
+        ?.getAttribute("data-agent-bubble-visual"),
+    ).toBe("working");
+    expect(
+      container
+        ?.querySelector('[data-agent-bubble-preview="agent-working"] [data-agent-bubble-status]')
+        ?.getAttribute("data-agent-bubble-visual"),
+    ).toBe("ignited");
+    expect(
+      container
+        ?.querySelector(
+          '[data-agent-bubble-preview="remote-not-shared"] [data-agent-bubble-status]',
+        )
+        ?.getAttribute("data-agent-bubble-source"),
+    ).toBe("remote");
     expect(container?.querySelector(".vf-artifact-panel")).not.toBeNull();
     expect(container?.querySelector(".vf-command-palette")).not.toBeNull();
     expect(container?.querySelector(".vf-loading-veil")).not.toBeNull();
@@ -141,5 +160,25 @@ describe("design system page", () => {
 
     await choose("posture", "unavailable");
     expect(frame("posture").textContent).toContain("This daemon is not reporting preferences");
+  });
+
+  it("keeps the agent-circle state matrix live and inspectable", async () => {
+    const catalog = container?.querySelector<HTMLElement>("[data-agent-bubble-catalog]");
+    if (!catalog) throw new Error("Agent bubble catalog not found");
+
+    expect(catalog.getAttribute("data-agent-bubble-theme")).toBe("light");
+    await act(async () => button("DARK THEME").click());
+    expect(catalog.getAttribute("data-agent-bubble-theme")).toBe("dark");
+
+    await act(async () => button("PAUSE MOTION").click());
+    expect(catalog.getAttribute("data-godview-animations")).toBe("off");
+    expect(button("REPLAY ARRIVALS").disabled).toBe(true);
+
+    const terminal = catalog.querySelector<HTMLButtonElement>(
+      '[data-agent-bubble-preview="terminal-idle"] .vf-monitor-bubble',
+    );
+    await act(async () => terminal?.click());
+    expect(terminal?.getAttribute("aria-current")).toBe("true");
+    expect(terminal?.classList.contains("is-active")).toBe(true);
   });
 });
