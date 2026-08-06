@@ -57,18 +57,6 @@ import Testing
   }
 }
 
-@Suite struct InputRejectionNoticeTests {
-  /// §4.3's visible half: every refusal reason has one honest line.
-  @Test func everyReasonHasALine() {
-    #expect(
-      TerminalAttachment.notice(for: .notLive) == "keystroke dropped — the session is not live")
-    #expect(
-      TerminalAttachment.notice(for: .readOnly)
-        == "view-only — the host has not granted write access")
-    #expect(TerminalAttachment.notice(for: .writeFailed) == "keystroke did not land — reconnecting")
-    #expect(TerminalAttachment.notice(for: .noControl) == "take control before resizing")
-    #expect(
-      TerminalAttachment.notice(for: .attachmentEnded)
-        == "the connection dropped before the host answered")
-  }
-}
+// Input-rejection copy is deliberately NOT pinned here anymore: the cue
+// vocabulary and its timing live in upstream's GhostteaAttachmentBannerPresenter
+// (tested upstream), and re-deriving it locally was a second answer.

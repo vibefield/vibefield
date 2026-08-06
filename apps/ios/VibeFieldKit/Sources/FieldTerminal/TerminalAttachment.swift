@@ -702,6 +702,11 @@ public final class TerminalAttachment {
     }
     eventsTask?.cancel()
     eventsTask = nil
+    bannerRefreshTask?.cancel()
+    bannerRefreshTask = nil
+    bannerPresenter = nil
+    banner = nil
+    inputCue = nil
     let current = lifecycle
     lifecycle = nil
     replicaSink = nil
@@ -752,19 +757,6 @@ public final class TerminalAttachment {
       .ended("the host shut down")
     case .ended(.closedLocally):
       .ended("closed from this device")
-    }
-  }
-
-  /// §4.3's visible half, one line per reason.
-  nonisolated static func notice(
-    for reason: GhostteaAttachmentInputRejection.Reason
-  ) -> String {
-    switch reason {
-    case .notLive: "keystroke dropped — the session is not live"
-    case .readOnly: "view-only — the host has not granted write access"
-    case .writeFailed: "keystroke did not land — reconnecting"
-    case .noControl: "take control before resizing"
-    case .attachmentEnded: "the connection dropped before the host answered"
     }
   }
 

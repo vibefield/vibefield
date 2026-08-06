@@ -69,11 +69,17 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer sh -c '
   xcrun simctl launch booted com.jamesyong.vibefield.ios'
 ```
 
-Debug builds accept `-vf-auto-connect` as a launch argument (the GhostteaApp
-opt-in-automation pattern): it opens the mesh sheet and drives CONNECT, so a
-headless simulator run exercises the real runtime path — TailscaleKit start →
-control dial → the honest sign-in state — without touch injection. Not
-compiled into Release.
+Debug builds accept launch arguments (the GhostteaApp opt-in-automation
+pattern — none of them compile into Release), so a headless simulator run can
+reach states no `simctl` touch can:
+
+| Argument | What it drives |
+|---|---|
+| `-vf-auto-connect` | opens the mesh sheet and drives CONNECT — TailscaleKit start → control dial → the honest sign-in state |
+| `-vf-demo-remote` | stands a FAKE peer up so remote-bubble rendering can be eyeballed without a desktop serving. A fixture for looking at our own pixels, never a claim that a mesh answered; the real source replaces it the moment the mesh is up |
+| `-vf-auto-open-card` | opens a session card, preferring an attachable remote one |
+| `-vf-auto-attach` | carries the run through ATTACH — on a phone whose mesh is up against a serving desktop this is the whole IOS-3 path with no finger on the glass; without a mesh it proves the honest-failure path instead |
+| `-vf-open-settings` | opens the terminal appearance sheet |
 
 Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity

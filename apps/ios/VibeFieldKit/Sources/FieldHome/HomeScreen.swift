@@ -3,6 +3,7 @@ import FieldDesign
 import FieldMesh
 import FieldTerminal
 import SwiftUI
+import UIKit
 
 /// The VibeField home: the whole screen is the field. Bubbles are the
 /// sessions — the mock fleet's agents and, since IOS-3, every terminal a peer
@@ -20,6 +21,7 @@ public struct HomeScreen: View {
   @State private var remoteField = RemoteSessionField(source: nil)
   @State private var selection: SessionSelection?
   @State private var meshSheetOpen = false
+  @State private var settingsSheetOpen = false
   @State private var discoveryLive = false
   @State private var attachment: TerminalAttachment?
   /// Two different failures, deliberately not one field: a renderer that
@@ -28,6 +30,10 @@ public struct HomeScreen: View {
   /// something it had never been handed.
   @State private var renderFailure: String?
   @State private var attachRefusal: String?
+  /// Which host the open attachment lives on, so discovery can tell it when
+  /// that host comes back (finding 3 of the terminal leg).
+  @State private var attachedDeviceID: String?
+  @State private var copiedNote: String?
   @State private var appearance = TerminalAppearanceStore.load()
   /// The host's mirror-write secret, when this phone has been told it. Absent
   /// is the honest default: a viewer, not a typist (GT-4a's asymmetry from the
@@ -60,6 +66,15 @@ public struct HomeScreen: View {
         .padding(.leading, 14)
         .padding(.top, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+        // The second chrome corner, mirroring the mesh chip: both are physics
+        // obstacles, so the swarm flows around the whole top edge rather than
+        // hiding under one side of it.
+        FieldChip(label: "TERMINAL") { settingsSheetOpen = true }
+          .swarmObstacle()
+          .padding(.trailing, 14)
+          .padding(.top, 6)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
       }
 
       ScanlinesOverlay()
@@ -88,6 +103,9 @@ public struct HomeScreen: View {
           demoRemoteActive = true
           remoteField = RemoteSessionField(source: DemoRemoteSource())
           remoteField.start()
+        }
+        if ProcessInfo.processInfo.arguments.contains("-vf-open-settings") {
+          settingsSheetOpen = true
         }
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
           Task {
@@ -127,7 +145,33 @@ public struct HomeScreen: View {
       syncDiscovery(for: state)
     }
     .onChange(of: scenePhase) { _, phase in
-      phase == .active ? syncDiscovery(for: mesh.state) : remoteField.stop()
+      switch phase {
+      case .active:
+        syncDiscovery(for: mesh.state)
+        // Routes internally: suspended-by-app becomes a real resume, a live
+        // session only re-snapshots. Calling upstream's resume on a session
+        // that never left would force a spurious reconnect.
+        attachment?.resumeFromForeground()
+      case .background:
+        remoteField.stop()
+        // The orderly counterpart — without it `resumeFromForeground` has
+        // nothing to resume from (upstream §8.2).
+        attachment?.suspendForBackground()
+      default:
+        // `.inactive` is transient on iOS (a notification shade, the app
+        // switcher's first frame); tearing anything down here would flap.
+        break
+      }
+    }
+    // A `suspended(host absent)` attachment NEVER ends on its own — upstream's
+    // engine stops dialing and waits to be told, and its own comment says
+    // "nothing else in the app tells it". Discovery is the only thing here
+    // that learns a peer came back, so it is what tells the attachment.
+    .onChange(of: remoteField.snapshot.rows) { _, rows in
+      guard let attachedDeviceID,
+        rows.contains(where: { $0.host.deviceID == attachedDeviceID })
+      else { return }
+      attachment?.noteHostReachable()
     }
     .sheet(item: $selection, onDismiss: { endAttachment() }) { selected in
       let bubble = bubbles.first(where: { $0.id == selected.id })
@@ -152,6 +196,12 @@ public struct HomeScreen: View {
             onSoftwareInput: { attachment.handleSoftwareInput($0) },
             onMouseInput: { attachment.handleMouse($0) },
             onScrollRows: { attachment.handleScroll(rows: $0) },
+            onClipboardWrite: { text in
+              // The pasteboard is the card's business, not the attachment's —
+              // the same split the reference keeps.
+              UIPasteboard.general.string = text
+              noteCopied(bytes: text.utf8.count)
+            },
             onRenderFailure: { renderFailure = $0 }
           )
         }
@@ -159,6 +209,23 @@ public struct HomeScreen: View {
       // Attaching earns the room: a terminal at the 0.55 detent is a
       // letterbox, and the keyboard would take what is left.
       .presentationDetents(attachment == nil ? [.fraction(0.55), .large] : [.large])
+      .presentationDragIndicator(.visible)
+      .presentationCornerRadius(40)
+      .fieldGlassSheet()
+    }
+    .sheet(isPresented: $settingsSheetOpen) {
+      TerminalSettingsSheet(appearance: appearance) { next in
+        appearance = next
+        TerminalAppearanceStore.save(next)
+        // Live where it can be: the attachment splits the work itself —
+        // colors/opacity/shaders reconfigure on the running sink, and only a
+        // font-size move rebuilds the text runtime (the session stays
+        // attached either way).
+        if let attachment {
+          Task { await attachment.apply(appearance: next) }
+        }
+      }
+      .presentationDetents([.large])
       .presentationDragIndicator(.visible)
       .presentationCornerRadius(40)
       .fieldGlassSheet()
@@ -219,6 +286,9 @@ public struct HomeScreen: View {
   /// session says why it cannot type, and nothing here invents a reason the
   /// terminal did not give.
   private var attachmentNote: String? {
+    // A copy is the most recent thing the user did, and it is transient —
+    // it says so and then gets out of the way.
+    if let copiedNote { return copiedNote }
     if let attachRefusal { return attachRefusal }
     if let renderFailure { return "the renderer refused this frame — \(renderFailure)" }
     guard let attachment else { return nil }
@@ -252,6 +322,7 @@ public struct HomeScreen: View {
         appearance: appearance,
         accessToken: mirrorWriteCapability)
       self.attachment = attachment
+      attachedDeviceID = remote.deviceID
       // A starting grid the surface immediately corrects through onGridSize —
       // the host needs SOME viewport to open with, and 80×24 is the one every
       // terminal has agreed on since the VT100.
@@ -263,9 +334,22 @@ public struct HomeScreen: View {
   private func endAttachment() {
     guard let attachment else { return }
     self.attachment = nil
+    attachedDeviceID = nil
     renderFailure = nil
     attachRefusal = nil
+    copiedNote = nil
     Task { await attachment.detach() }
+  }
+
+  /// The pasteboard confirmation, in the reference's own vocabulary — and it
+  /// expires, because a stale "copied" line would sit on top of a real status
+  /// the terminal wanted to say.
+  private func noteCopied(bytes: Int) {
+    copiedNote = "copied \(bytes) bytes"
+    Task {
+      try? await Task.sleep(for: .seconds(2))
+      copiedNote = nil
+    }
   }
 
   private struct SessionSelection: Identifiable {
