@@ -2,6 +2,15 @@ import FieldAgents
 import FieldDesign
 import SwiftUI
 
+/// One act a status line can offer. Deliberately NOT nested in the card: the
+/// card is generic over its terminal slot, so a nested type would be a
+/// different type per slot and the host could not name one.
+struct CardAction: Identifiable {
+  let id: String
+  let label: String
+  let run: () -> Void
+}
+
 /// The card that rises when a bubble is tapped: the session's identity and
 /// live status above the surface where its terminal renders.
 ///
@@ -27,6 +36,16 @@ struct SessionCardView<Terminal: View>: View {
   /// reason it failed. The card renders them and never derives them — the
   /// terminal owns its truth, and this view stays ignorant of how one works.
   let statusNote: String?
+  /// The second line a banner carries ("Waiting for it to return."), absent
+  /// for the one-line states.
+  let statusDetail: String?
+  /// What the banner offers, already translated out of Ghosttea's vocabulary
+  /// by the host — the card presents acts, it does not know their machinery.
+  let statusActions: [CardAction]
+  /// Upstream's `coolsTerminal`: the retained frame is still worth reading and
+  /// still copyable, but it is plainly not live. Dimming says that without a
+  /// word, which is the honest way to say it while the words are busy.
+  let cooled: Bool
   let onAttach: () -> Void
   @ViewBuilder let terminal: () -> Terminal
 
@@ -136,11 +155,43 @@ struct SessionCardView<Terminal: View>: View {
         VStack(spacing: 0) {
           terminal()
             .clipShape(RoundedRectangle(cornerRadius: 14))
-          if let statusNote {
-            Text(statusNote)
-              .font(FieldType.mono(9))
-              .foregroundStyle(FieldPalette.textMuted)
-              .padding(.top, 8)
+            .opacity(cooled ? 0.55 : 1)
+            .animation(FieldMotion.ease(0.24), value: cooled)
+          if statusNote != nil || !statusActions.isEmpty {
+            VStack(spacing: 6) {
+              if let statusNote {
+                Text(statusNote)
+                  .font(FieldType.mono(10, .medium))
+                  .foregroundStyle(FieldPalette.textMain)
+                  .multilineTextAlignment(.center)
+              }
+              if let statusDetail {
+                Text(statusDetail)
+                  .font(FieldType.mono(9))
+                  .foregroundStyle(FieldPalette.textMuted)
+                  .multilineTextAlignment(.center)
+              }
+              if !statusActions.isEmpty {
+                HStack(spacing: 8) {
+                  ForEach(statusActions) { action in
+                    Button(action: action.run) {
+                      Text(action.label)
+                        .font(FieldType.mono(9, .heavy))
+                        .tracking(FieldType.tracking(0.1, of: 9))
+                        .foregroundStyle(FieldPalette.textMain)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .overlay(
+                          RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                  }
+                }
+                .padding(.top, 2)
+              }
+            }
+            .padding(.top, 10)
           }
         }
         .padding(.horizontal, 14)
@@ -243,7 +294,10 @@ struct SessionCardView<Terminal: View>: View {
 
 extension SessionCardView where Terminal == EmptyView {
   init(bubble: FieldBubble?, statusNote: String? = nil, onAttach: @escaping () -> Void) {
-    self.init(bubble: bubble, isAttached: false, statusNote: statusNote, onAttach: onAttach) {
+    self.init(
+      bubble: bubble, isAttached: false, statusNote: statusNote, statusDetail: nil,
+      statusActions: [], cooled: false, onAttach: onAttach
+    ) {
       EmptyView()
     }
   }

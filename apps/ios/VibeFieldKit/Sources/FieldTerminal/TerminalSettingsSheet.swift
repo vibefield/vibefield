@@ -221,8 +221,10 @@ public struct TerminalSettingsSheet: View {
       }
       .padding(.top, 10)
 
+      // The rows keep upstream's order; the numerals carry the user's, which is
+      // the one that composes.
       if draft.shaderEffects.count > 1 {
-        Text("they compose in the order shown")
+        Text("they compose in the numbered order")
           .font(FieldType.mono(9))
           .foregroundStyle(FieldPalette.textMuted)
           .padding(.top, 8)

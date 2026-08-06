@@ -51,7 +51,10 @@ public struct HomeScreen: View {
     feed.agents.compactMap(fieldBubble(from:)) + remoteField.snapshot.rows.map(fieldBubble(from:))
   }
 
-  public var body: some View {
+  /// The stage, kept out of `body` on purpose: with every sheet and lifecycle
+  /// hook attached, one expression grew past what the type-checker will solve
+  /// in reasonable time. Splitting it is the fix SwiftUI asks for.
+  private var stage: some View {
     ZStack {
       SwarmFieldView(
         bubbles: bubbles,
@@ -59,22 +62,7 @@ public struct HomeScreen: View {
         onSelect: { bubble in selection = SessionSelection(id: bubble.id) },
         onCreate: { _ in feed.spawn() }
       ) {
-        MeshChip(state: mesh.state, peerCount: mesh.peers.count) {
-          meshSheetOpen = true
-        }
-        .swarmObstacle()
-        .padding(.leading, 14)
-        .padding(.top, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-        // The second chrome corner, mirroring the mesh chip: both are physics
-        // obstacles, so the swarm flows around the whole top edge rather than
-        // hiding under one side of it.
-        FieldChip(label: "TERMINAL") { settingsSheetOpen = true }
-          .swarmObstacle()
-          .padding(.trailing, 14)
-          .padding(.top, 6)
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        chrome
       }
 
       ScanlinesOverlay()
@@ -82,7 +70,31 @@ public struct HomeScreen: View {
       VignetteOverlay()
         .ignoresSafeArea()
     }
-    .background(FieldPalette.panelBackground.ignoresSafeArea())
+  }
+
+  @ViewBuilder
+  private var chrome: some View {
+    MeshChip(state: mesh.state, peerCount: mesh.peers.count) {
+      meshSheetOpen = true
+    }
+    .swarmObstacle()
+    .padding(.leading, 14)
+    .padding(.top, 6)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+    // The second chrome corner, mirroring the mesh chip: both are physics
+    // obstacles, so the swarm flows around the whole top edge rather than
+    // hiding under one side of it.
+    FieldChip(label: "TERMINAL") { settingsSheetOpen = true }
+      .swarmObstacle()
+      .padding(.trailing, 14)
+      .padding(.top, 6)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+  }
+
+  public var body: some View {
+    stage
+      .background(FieldPalette.panelBackground.ignoresSafeArea())
     .onAppear {
       feed.start()
       #if DEBUG
@@ -174,61 +186,20 @@ public struct HomeScreen: View {
       attachment?.noteHostReachable()
     }
     .sheet(item: $selection, onDismiss: { endAttachment() }) { selected in
-      let bubble = bubbles.first(where: { $0.id == selected.id })
-      SessionCardView(
-        bubble: bubble,
-        isAttached: attachment != nil,
-        statusNote: attachmentNote,
-        onAttach: { if let bubble { beginAttachment(to: bubble) } }
-      ) {
-        if let attachment {
-          TerminalSurface(
-            frame: attachment.frame,
-            visible: true,
-            configuration: attachment.presentation,
-            accessibilityTitle: bubble?.project ?? "Remote terminal",
-            accessibilityConnectionState: attachmentNote ?? "attached",
-            onGridSize: { size in
-              attachment.setViewport(cols: size.columns, rows: size.rows)
-            },
-            onNeedsFullRefresh: { attachment.requestFullRefresh() },
-            onHardwareInput: { attachment.handleHardwareKey($0) },
-            onSoftwareInput: { attachment.handleSoftwareInput($0) },
-            onMouseInput: { attachment.handleMouse($0) },
-            onScrollRows: { attachment.handleScroll(rows: $0) },
-            onClipboardWrite: { text in
-              // The pasteboard is the card's business, not the attachment's —
-              // the same split the reference keeps.
-              UIPasteboard.general.string = text
-              noteCopied(bytes: text.utf8.count)
-            },
-            onRenderFailure: { renderFailure = $0 }
-          )
-        }
-      }
-      // Attaching earns the room: a terminal at the 0.55 detent is a
-      // letterbox, and the keyboard would take what is left.
-      .presentationDetents(attachment == nil ? [.fraction(0.55), .large] : [.large])
-      .presentationDragIndicator(.visible)
-      .presentationCornerRadius(40)
-      .fieldGlassSheet()
+      sessionCard(selected)
+        // Attaching earns the room: a terminal at the 0.55 detent is a
+        // letterbox, and the keyboard would take what is left.
+        .presentationDetents(attachment == nil ? [.fraction(0.55), .large] : [.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(40)
+        .fieldGlassSheet()
     }
     .sheet(isPresented: $settingsSheetOpen) {
-      TerminalSettingsSheet(appearance: appearance) { next in
-        appearance = next
-        TerminalAppearanceStore.save(next)
-        // Live where it can be: the attachment splits the work itself —
-        // colors/opacity/shaders reconfigure on the running sink, and only a
-        // font-size move rebuilds the text runtime (the session stays
-        // attached either way).
-        if let attachment {
-          Task { await attachment.apply(appearance: next) }
-        }
-      }
-      .presentationDetents([.large])
-      .presentationDragIndicator(.visible)
-      .presentationCornerRadius(40)
-      .fieldGlassSheet()
+      settingsSheet
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(40)
+        .fieldGlassSheet()
     }
     .sheet(isPresented: $meshSheetOpen) {
       MeshSheet(model: mesh)
@@ -279,6 +250,63 @@ public struct HomeScreen: View {
     }
   }
 
+  // MARK: - Sheets
+
+  private func sessionCard(_ selected: SessionSelection) -> some View {
+    let bubble = bubbles.first(where: { $0.id == selected.id })
+    return SessionCardView(
+      bubble: bubble,
+      isAttached: attachment != nil,
+      statusNote: attachmentNote,
+      statusDetail: attachmentDetail,
+      statusActions: attachmentActions,
+      cooled: attachment?.banner?.coolsTerminal ?? false,
+      onAttach: { if let bubble { beginAttachment(to: bubble) } }
+    ) {
+      liveTerminal(title: bubble?.project)
+    }
+  }
+
+  @ViewBuilder
+  private func liveTerminal(title: String?) -> some View {
+    if let attachment {
+      TerminalSurface(
+        frame: attachment.frame,
+        visible: true,
+        configuration: attachment.presentation,
+        accessibilityTitle: title ?? "Remote terminal",
+        accessibilityConnectionState: attachmentNote ?? "attached",
+        onGridSize: { size in attachment.setViewport(cols: size.columns, rows: size.rows) },
+        onNeedsFullRefresh: { attachment.requestFullRefresh() },
+        onHardwareInput: { attachment.handleHardwareKey($0) },
+        onSoftwareInput: { attachment.handleSoftwareInput($0) },
+        onMouseInput: { attachment.handleMouse($0) },
+        onScrollRows: { attachment.handleScroll(rows: $0) },
+        onClipboardWrite: { text in
+          // The pasteboard is the card's business, not the attachment's —
+          // the same split the reference keeps.
+          UIPasteboard.general.string = text
+          noteCopied(bytes: text.utf8.count)
+        },
+        onRenderFailure: { renderFailure = $0 }
+      )
+    }
+  }
+
+  private var settingsSheet: some View {
+    TerminalSettingsSheet(appearance: appearance) { next in
+      appearance = next
+      TerminalAppearanceStore.save(next)
+      // Live where it can be: the attachment splits the work itself —
+      // colors/opacity/shaders reconfigure on the running sink, and only a
+      // font-size move rebuilds the text runtime (the session stays attached
+      // either way).
+      if let attachment {
+        Task { await attachment.apply(appearance: next) }
+      }
+    }
+  }
+
   // MARK: - Attachment
 
   /// The attachment's own state, in words the card can render. Ordered so the
@@ -292,17 +320,56 @@ public struct HomeScreen: View {
     if let attachRefusal { return attachRefusal }
     if let renderFailure { return "the renderer refused this frame — \(renderFailure)" }
     guard let attachment else { return nil }
+    // Upstream's banner outranks our phase words wherever it exists: it names
+    // the device ("studio is offline") where the phase can only name the
+    // condition, and it carries upstream's own timing for when to say it. The
+    // phase reasons stay as the tier beneath — the machine-readable one that
+    // covers the states a banner deliberately stays quiet for.
+    if let banner = attachment.banner { return banner.title }
     switch attachment.phase {
     case .idle: return nil
     case .connecting: return "connecting over the mesh…"
     case .live:
-      if attachment.acceptsInput { return attachment.notice }
+      if attachment.acceptsInput { return attachment.inputCue?.text }
       return attachment.readWrite
-        ? (attachment.notice ?? "taking control…")
+        ? (attachment.inputCue?.text ?? "taking control…")
         : "view only — this host is not sharing writes"
     case .suspended(let why): return "suspended — \(why)"
     case .ended(let why): return "ended — \(why)"
     case .failed(let why): return "failed — \(why)"
+    }
+  }
+
+  /// The banner's second line, and only ever that: our own phase words are
+  /// single-line by construction, so a detail here always belongs to a banner.
+  private var attachmentDetail: String? {
+    guard copiedNote == nil, attachRefusal == nil, renderFailure == nil else { return nil }
+    return attachment?.banner?.detail
+  }
+
+  /// Ghosttea's action vocabulary translated into acts this card can offer.
+  /// `browseSessions` becomes "back to the field": upstream means "go choose
+  /// another session", and on this phone the chooser IS the field.
+  private var attachmentActions: [CardAction] {
+    guard let attachment, let banner = attachment.banner else { return [] }
+    return banner.actions.map { action in
+      let label: String =
+        switch action {
+        case .retryNow: "RETRY"
+        case .resume: "RESUME"
+        case .browseSessions: "BACK TO THE FIELD"
+        case .close: "CLOSE"
+        }
+      return .init(id: String(describing: action), label: label) {
+        switch action {
+        case .browseSessions, .close:
+          // Navigation is the card's act, not the attachment's — dismissing
+          // the sheet is what detaches (onDismiss), so both paths agree.
+          selection = nil
+        default:
+          attachment.perform(action)
+        }
+      }
     }
   }
 
@@ -326,8 +393,11 @@ public struct HomeScreen: View {
       // A starting grid the surface immediately corrects through onGridSize —
       // the host needs SOME viewport to open with, and 80×24 is the one every
       // terminal has agreed on since the VT100.
+      // The device NAME rides along so the banner can say "studio is offline"
+      // rather than naming a ULID at the user.
       attachment.attach(
-        deviceID: remote.deviceID, sessionID: remote.sessionID, cols: 80, rows: 24)
+        deviceID: remote.deviceID, sessionID: remote.sessionID, cols: 80, rows: 24,
+        deviceName: remote.deviceName)
     }
   }
 
