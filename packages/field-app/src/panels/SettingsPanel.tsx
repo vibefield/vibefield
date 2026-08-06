@@ -3,7 +3,6 @@ import {
   type CanvasEngine,
   defineQuery,
   type Entity,
-  type GridConfig,
   guardedTransaction,
   Opacity,
   PrefabId,
@@ -30,7 +29,6 @@ import {
 } from "./settings-ui";
 import { TerminalAppearanceSection } from "./TerminalAppearanceSection";
 import { TerminalSection } from "./TerminalSection";
-import type { OverlapGlowConfig, OverlapGlowThemeColors, ThemeColors } from "./types";
 
 const LazyDiagnosticsSection = lazy(() =>
   import("./DiagnosticsSection").then((module) => ({
@@ -40,14 +38,6 @@ const LazyDiagnosticsSection = lazy(() =>
 
 interface SettingsPanelProps {
   engine: CanvasEngine;
-  gridConfig: GridConfig;
-  onGridChange: (config: GridConfig) => void;
-  themeColors: ThemeColors;
-  onThemeColorsChange: (colors: ThemeColors) => void;
-  overlapGlow: OverlapGlowConfig;
-  onOverlapGlowChange: (config: OverlapGlowConfig) => void;
-  overlapGlowThemeColors: OverlapGlowThemeColors;
-  onOverlapGlowThemeColorsChange: (colors: OverlapGlowThemeColors) => void;
   stressWidgetType?: string;
   platform?: ShellPlatform;
   desktopState?: DesktopShellState | null;
@@ -92,13 +82,13 @@ const PAGES: readonly PageMeta[] = [
   {
     id: "appearance",
     label: "Appearance",
-    description: "Theme, canvas palette, and interaction feedback.",
+    description: "The color mode used by app chrome and cards.",
     icon: "sun",
   },
   {
     id: "canvas",
     label: "Canvas",
-    description: "Navigation, snapping, cards, and the world grid.",
+    description: "Navigation, snapping, and live card behavior.",
     icon: "canvas",
   },
   {
@@ -290,31 +280,6 @@ function SliderControl({
   );
 }
 
-function ColorControl({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}): ReactElement {
-  return (
-    <label className="flex items-center gap-2">
-      <input
-        type="color"
-        aria-label={label}
-        className="h-8 w-8 cursor-pointer rounded-full border-0 bg-transparent p-0"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <span className="w-[76px] text-right text-[11px] tabular-nums text-black/45 dark:text-white/45">
-        {value.toUpperCase()}
-      </span>
-    </label>
-  );
-}
-
 function HistoryIcon({ direction }: { direction: "undo" | "redo" }): ReactElement {
   return (
     <svg
@@ -335,14 +300,6 @@ function historyReason(direction: "undo" | "redo", reason: SettingsUndoResult["r
 
 export function SettingsPanel({
   engine,
-  gridConfig,
-  onGridChange,
-  themeColors,
-  onThemeColorsChange,
-  overlapGlow,
-  onOverlapGlowChange,
-  overlapGlowThemeColors,
-  onOverlapGlowThemeColorsChange,
   stressWidgetType,
   platform = "other",
   desktopState = null,
@@ -517,48 +474,6 @@ export function SettingsPanel({
     );
   };
 
-  function setGrid<K extends keyof GridConfig>(key: K, value: GridConfig[K]): void {
-    onGridChange({ ...gridConfig, [key]: value });
-  }
-
-  function setGridTuple<K extends keyof GridConfig>(key: K, index: number, value: number): void {
-    const tuple = [...(gridConfig[key] as number[])];
-    tuple[index] = value;
-    onGridChange({ ...gridConfig, [key]: tuple as never });
-  }
-
-  function setGlow<K extends keyof OverlapGlowConfig>(key: K, value: OverlapGlowConfig[K]): void {
-    onOverlapGlowChange({ ...overlapGlow, [key]: value });
-  }
-
-  function setGlowTuple<K extends keyof OverlapGlowConfig>(
-    key: K,
-    index: number,
-    value: number,
-  ): void {
-    const tuple = [...(overlapGlow[key] as number[])];
-    tuple[index] = value;
-    onOverlapGlowChange({ ...overlapGlow, [key]: tuple });
-  }
-
-  const resetOverlapGlow = (): void => {
-    onOverlapGlowChange({
-      glowColor: [0.5, 0.5, 0.5],
-      glowAlpha: [0.25, 0.45],
-      glowSize: [60, 80],
-      rimColor: [0.5, 0.5, 0.5],
-      rimWidth: 1,
-      rimAlpha: [0.3, 0.5],
-      rimRadius: 40,
-    });
-    onOverlapGlowThemeColorsChange({
-      glowLight: "#808080",
-      glowDark: "#FFFFFF",
-      rimLight: "#808080",
-      rimDark: "#FFFFFF",
-    });
-  };
-
   const spawnStressWidgets = (count: number): void => {
     if (stressWidgetType === undefined || engine.docs.current() === undefined) return;
     const columns = Math.ceil(Math.sqrt(count));
@@ -599,155 +514,38 @@ export function SettingsPanel({
       </div>
     );
   } else if (activePage === "appearance") {
-    const paletteRows = [
-      ["Canvas background · Light", "bgLight"],
-      ["Canvas background · Dark", "bgDark"],
-      ["Grid dots · Light", "dotLight"],
-      ["Grid dots · Dark", "dotDark"],
-    ] as const;
-    const glowColorRows = [
-      ["Glow · Light", "glowLight"],
-      ["Glow · Dark", "glowDark"],
-      ["Rim · Light", "rimLight"],
-      ["Rim · Dark", "rimDark"],
-    ] as const;
     pageContent = (
-      <div className="space-y-4">
-        <SettingsSection
-          title="Theme"
-          description="Set the color mode used by app chrome and cards."
+      <SettingsSection title="Theme" description="Set the color mode used by app chrome and cards.">
+        <SettingsRow
+          title="Appearance"
+          description="Choose the mode used across app chrome, cards, and the canvas."
+          divider={false}
         >
-          <SettingsRow
-            title="Appearance"
-            description="The canvas palette below follows the selected light or dark mode."
-            divider={false}
-          >
-            <div className="flex rounded-full bg-black/5 p-1 dark:bg-white/10">
-              {([false, true] as const).map((nextDark) => {
-                const selected = dark === nextDark;
-                return (
-                  <button
-                    key={nextDark ? "dark" : "light"}
-                    type="button"
-                    aria-pressed={selected}
-                    disabled={onToggleTheme === undefined}
-                    className={`h-8 rounded-full px-4 text-[12px] font-medium transition-[background-color,color,box-shadow] ${
-                      selected
-                        ? "bg-white text-black shadow-sm dark:bg-white dark:text-black"
-                        : "text-black/45 hover:text-black/75 dark:text-white/45 dark:hover:text-white/75"
-                    }`}
-                    onClick={() => {
-                      if (!selected) onToggleTheme?.();
-                    }}
-                  >
-                    {nextDark ? "Dark" : "Light"}
-                  </button>
-                );
-              })}
-            </div>
-          </SettingsRow>
-        </SettingsSection>
-
-        <SettingsSection
-          title="Canvas palette"
-          description="Fine-tune the field background and grid dots for each color mode."
-        >
-          {paletteRows.map(([title, key]) => (
-            <SettingsRow key={key} title={title}>
-              <ColorControl
-                label={title}
-                value={themeColors[key]}
-                onChange={(value) => onThemeColorsChange({ ...themeColors, [key]: value })}
-              />
-            </SettingsRow>
-          ))}
-        </SettingsSection>
-
-        <SettingsSection
-          title="Overlap feedback"
-          description="Tune the glow and rim used to distinguish a dragged card from its overlap target."
-        >
-          {glowColorRows.map(([title, key]) => (
-            <SettingsRow key={key} title={title}>
-              <ColorControl
-                label={title}
-                value={overlapGlowThemeColors[key]}
-                onChange={(value) =>
-                  onOverlapGlowThemeColorsChange({ ...overlapGlowThemeColors, [key]: value })
-                }
-              />
-            </SettingsRow>
-          ))}
-          {(
-            [
-              ["Glow opacity", "glowAlpha", 0, 1, 0.02],
-              ["Glow size", "glowSize", 0, 200, 2],
-              ["Rim opacity", "rimAlpha", 0, 1, 0.02],
-            ] as const
-          ).map(([title, key, min, max, step]) => (
-            <SettingsRow
-              key={key}
-              title={title}
-              description="Candidate is the card being moved; target is the card beneath it."
-            >
-              <div className="flex items-end gap-3">
-                <NumberField
-                  label="Candidate"
-                  value={overlapGlow[key][0]}
-                  min={min}
-                  max={max}
-                  step={step}
-                  width="w-20"
-                  onChange={(value) => setGlowTuple(key, 0, value)}
-                />
-                <NumberField
-                  label="Target"
-                  value={overlapGlow[key][1]}
-                  min={min}
-                  max={max}
-                  step={step}
-                  width="w-20"
-                  onChange={(value) => setGlowTuple(key, 1, value)}
-                />
-              </div>
-            </SettingsRow>
-          ))}
-          <SettingsRow
-            title="Rim shape"
-            description="Width controls the edge line; radius controls its falloff."
-          >
-            <div className="flex items-end gap-3">
-              <NumberField
-                label="Width"
-                value={overlapGlow.rimWidth}
-                min={0}
-                max={6}
-                step={0.1}
-                width="w-20"
-                onChange={(value) => setGlow("rimWidth", value)}
-              />
-              <NumberField
-                label="Radius"
-                value={overlapGlow.rimRadius}
-                min={50}
-                max={2000}
-                step={20}
-                width="w-24"
-                onChange={(value) => setGlow("rimRadius", value)}
-              />
-            </div>
-          </SettingsRow>
-          <SettingsRow
-            title="Restore interaction feedback"
-            description="Return every overlap glow and rim value to the reviewed defaults."
-            divider={false}
-          >
-            <button type="button" className={buttonCls} onClick={resetOverlapGlow}>
-              Reset to defaults
-            </button>
-          </SettingsRow>
-        </SettingsSection>
-      </div>
+          <div className="flex rounded-full bg-black/5 p-1 dark:bg-white/10">
+            {([false, true] as const).map((nextDark) => {
+              const selected = dark === nextDark;
+              return (
+                <button
+                  key={nextDark ? "dark" : "light"}
+                  type="button"
+                  aria-pressed={selected}
+                  disabled={onToggleTheme === undefined}
+                  className={`h-8 rounded-full px-4 text-[12px] font-medium transition-[background-color,color,box-shadow] ${
+                    selected
+                      ? "bg-white text-black shadow-sm dark:bg-white dark:text-black"
+                      : "text-black/45 hover:text-black/75 dark:text-white/45 dark:hover:text-white/75"
+                  }`}
+                  onClick={() => {
+                    if (!selected) onToggleTheme?.();
+                  }}
+                >
+                  {nextDark ? "Dark" : "Light"}
+                </button>
+              );
+            })}
+          </div>
+        </SettingsRow>
+      </SettingsSection>
     );
   } else if (activePage === "canvas") {
     pageContent = (
@@ -843,121 +641,6 @@ export function SettingsPanel({
               display={cardOpacity.toFixed(2)}
               onChange={applyCardOpacity}
             />
-          </SettingsRow>
-        </SettingsSection>
-
-        <SettingsSection
-          title="World grid"
-          description="Control grid density, dot appearance, and the zoom fade curve."
-        >
-          <SettingsRow
-            title="Grid spacing"
-            description="Fine, medium, and coarse intervals in world pixels."
-          >
-            <div className="flex items-center gap-3">
-              {(["Fine", "Medium", "Coarse"] as const).map((label, index) => (
-                <NumberField
-                  key={label}
-                  label={label}
-                  value={gridConfig.spacings[index] ?? 0}
-                  step={1}
-                  width="w-20"
-                  onChange={(value) => setGridTuple("spacings", index, value)}
-                />
-              ))}
-            </div>
-          </SettingsRow>
-          <SettingsRow
-            title="Dot size"
-            description="The constant on-screen radius of every grid dot."
-          >
-            <SliderControl
-              label="Grid dot size"
-              value={gridConfig.dotRadius[0]}
-              min={0}
-              max={3}
-              step={0.05}
-              display={gridConfig.dotRadius[0].toFixed(2)}
-              onChange={(value) => onGridChange({ ...gridConfig, dotRadius: [value, value] })}
-            />
-          </SettingsRow>
-          <SettingsRow
-            title="Dot opacity"
-            description="Base visibility before zoom-level weighting."
-          >
-            <SliderControl
-              label="Grid dot opacity"
-              value={gridConfig.dotAlpha}
-              min={0}
-              max={1}
-              step={0.01}
-              display={gridConfig.dotAlpha.toFixed(2)}
-              onChange={(value) => setGrid("dotAlpha", value)}
-            />
-          </SettingsRow>
-          <SettingsRow
-            title="Fade in"
-            description="CSS-pixel range over which grid dots become visible."
-          >
-            <div className="flex items-center gap-3">
-              <NumberField
-                label="Start"
-                value={gridConfig.fadeIn[0]}
-                step={1}
-                width="w-20"
-                onChange={(value) => setGridTuple("fadeIn", 0, value)}
-              />
-              <NumberField
-                label="End"
-                value={gridConfig.fadeIn[1]}
-                step={1}
-                width="w-20"
-                onChange={(value) => setGridTuple("fadeIn", 1, value)}
-              />
-            </div>
-          </SettingsRow>
-          <SettingsRow
-            title="Fade out"
-            description="CSS-pixel range over which grid dots disappear."
-          >
-            <div className="flex items-center gap-3">
-              <NumberField
-                label="Start"
-                value={gridConfig.fadeOut[0]}
-                step={10}
-                width="w-20"
-                onChange={(value) => setGridTuple("fadeOut", 0, value)}
-              />
-              <NumberField
-                label="End"
-                value={gridConfig.fadeOut[1]}
-                step={10}
-                width="w-20"
-                onChange={(value) => setGridTuple("fadeOut", 1, value)}
-              />
-            </div>
-          </SettingsRow>
-          <SettingsRow
-            title="Level weight"
-            description="Base weight and per-level step used to blend grid scales."
-            divider={false}
-          >
-            <div className="flex items-center gap-3">
-              <NumberField
-                label="Base"
-                value={gridConfig.levelWeight[0]}
-                step={0.1}
-                width="w-20"
-                onChange={(value) => setGridTuple("levelWeight", 0, value)}
-              />
-              <NumberField
-                label="Step"
-                value={gridConfig.levelWeight[1]}
-                step={0.1}
-                width="w-20"
-                onChange={(value) => setGridTuple("levelWeight", 1, value)}
-              />
-            </div>
           </SettingsRow>
         </SettingsSection>
       </div>

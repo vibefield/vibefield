@@ -18,6 +18,7 @@ import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { hexToRgb01 } from "./field/theme-constants";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
+import type { VisualTweakValues } from "./field/visual-tuning";
 import { getRendererLogger } from "./logging";
 import { setPluginClientBackend } from "./plugin-host/plugin-client";
 import { usePluginRegistryFeed } from "./plugin-host/plugin-registry-store";
@@ -36,7 +37,13 @@ import { useTheme } from "./theme";
 // The window IS the field (2026-07-21): no app bar — the theme toggle floats
 // top-right, diagnostics live inside Settings.
 
-export function FieldView({ manager }: { manager: DocManager }): ReactElement {
+export function FieldView({
+  manager,
+  visualTweaks,
+}: {
+  manager: DocManager;
+  visualTweaks: VisualTweakValues;
+}): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
   // Shared seams between units: the stage publishes its GL/halo teardown for
   // the session's engine disposal (the GL disposal order invariant); chrome
@@ -119,10 +126,12 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
 
   const effectiveGrid = useMemo<Partial<GridConfig>>(
     () => ({
-      ...chrome.gridConfig,
-      dotColor: hexToRgb01(dark ? chrome.themeColors.dotDark : chrome.themeColors.dotLight),
+      ...visualTweaks.worldGrid,
+      dotColor: hexToRgb01(
+        dark ? visualTweaks.canvasPalette.dotDark : visualTweaks.canvasPalette.dotLight,
+      ),
     }),
-    [chrome.gridConfig, dark, chrome.themeColors],
+    [visualTweaks.worldGrid, visualTweaks.canvasPalette, dark],
   );
 
   return (

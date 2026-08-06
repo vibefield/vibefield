@@ -1,10 +1,4 @@
-import {
-  type CanvasEngine,
-  DEFAULT_GRID_CONFIG,
-  type GridConfig,
-  selectedEntities,
-  type WidgetType,
-} from "@vibecook/ice";
+import { type CanvasEngine, selectedEntities, type WidgetType } from "@vibecook/ice";
 import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
 import type { DesktopShellState } from "@vibefield/contracts";
@@ -31,22 +25,11 @@ import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfac
 import { SidePanelStage, SidePanelToggle } from "../hud/SidePanelStage";
 import { WidgetTray } from "../hud/WidgetTray";
 import { ZoomPill } from "../hud/ZoomPill";
-import {
-  type OverlapGlowConfig,
-  type OverlapGlowThemeColors,
-  SettingsPanel,
-  type ThemeColors,
-} from "../panels";
+import { SettingsPanel } from "../panels";
 import * as commandRegistry from "../plugin-host/command-registry";
+import { ThemeToggleButton } from "../ThemeToggleButton";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
-import {
-  DEFAULT_OVERLAP_GLOW,
-  DEFAULT_OVERLAP_GLOW_THEME_COLORS,
-  DEFAULT_THEME_COLORS,
-  fabCls,
-  hexToRgb255,
-  roundButtonCls,
-} from "./theme-constants";
+import { fabCls } from "./theme-constants";
 
 // ChromeLayer (§5.4.3): HUD, file pill, the tray (DESIGN.md's bottom toolbar),
 // settings, and overlays — WITHOUT owning document or engine lifetime. All the
@@ -61,17 +44,8 @@ import {
 // multi-window lands (recorded delta).
 const FIELD_WINDOW_ID = "field";
 
-/** The chrome-owned settings state, bundled so FieldView can thread it to the
- * canvas (grid dot color, ECS profiling) without a dozen loose props. */
+/** Chrome-only state shared with FieldView's sheet/recede choreography. */
 export interface ChromeState {
-  gridConfig: GridConfig;
-  setGridConfig: Dispatch<SetStateAction<GridConfig>>;
-  themeColors: ThemeColors;
-  setThemeColors: Dispatch<SetStateAction<ThemeColors>>;
-  overlapGlow: OverlapGlowConfig;
-  setOverlapGlow: Dispatch<SetStateAction<OverlapGlowConfig>>;
-  overlapGlowThemeColors: OverlapGlowThemeColors;
-  setOverlapGlowThemeColors: Dispatch<SetStateAction<OverlapGlowThemeColors>>;
   showSettings: boolean;
   setShowSettings: Dispatch<SetStateAction<boolean>>;
   showEcs: boolean;
@@ -79,23 +53,9 @@ export interface ChromeState {
 }
 
 export function useChromeState(): ChromeState {
-  const [gridConfig, setGridConfig] = useState<GridConfig>({ ...DEFAULT_GRID_CONFIG });
-  const [themeColors, setThemeColors] = useState<ThemeColors>(DEFAULT_THEME_COLORS);
-  const [overlapGlow, setOverlapGlow] = useState<OverlapGlowConfig>(DEFAULT_OVERLAP_GLOW);
-  const [overlapGlowThemeColors, setOverlapGlowThemeColors] = useState<OverlapGlowThemeColors>(
-    DEFAULT_OVERLAP_GLOW_THEME_COLORS,
-  );
   const [showSettings, setShowSettings] = useState(false);
   const [showEcs, setShowEcs] = useState(false);
   return {
-    gridConfig,
-    setGridConfig,
-    themeColors,
-    setThemeColors,
-    overlapGlow,
-    setOverlapGlow,
-    overlapGlowThemeColors,
-    setOverlapGlowThemeColors,
     showSettings,
     setShowSettings,
     showEcs,
@@ -132,14 +92,7 @@ export function ChromeLayer({
   chrome: ChromeState;
   devtoolsRef: MutableRefObject<DevtoolsHandle | null>;
 }): ReactElement {
-  const {
-    themeColors,
-    overlapGlow,
-    overlapGlowThemeColors,
-    showSettings,
-    setShowSettings,
-    showEcs,
-  } = chrome;
+  const { showSettings, setShowSettings, showEcs } = chrome;
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
@@ -270,24 +223,6 @@ export function ChromeLayer({
     if (docsOpen || showSettings) ce.ops.cancelActiveGestures();
   }, [docsOpen, showSettings, ce]);
 
-  // Theme → live tokens: the settings panel makes DESIGN.md's static defaults
-  // dynamic. We write the TOKEN source (--vf-canvas-bg — the widgetlab-compat
-  // --canvas-bg alias follows), and CardShell's glow knobs; the rim colors
-  // stay tokens.css's .dark-aware defaults. --ic-selection-radius is static in
-  // tokens.css (22px, the union-box corner).
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--vf-canvas-bg", dark ? themeColors.bgDark : themeColors.bgLight);
-    root.style.setProperty(
-      "--ic-glow-color",
-      hexToRgb255(dark ? overlapGlowThemeColors.glowDark : overlapGlowThemeColors.glowLight),
-    );
-    root.style.setProperty("--ic-glow-size-c", `${overlapGlow.glowSize[0]}px`);
-    root.style.setProperty("--ic-glow-size-t", `${overlapGlow.glowSize[1]}px`);
-    root.style.setProperty("--ic-glow-alpha-c", String(overlapGlow.glowAlpha[0]));
-    root.style.setProperty("--ic-glow-alpha-t", String(overlapGlow.glowAlpha[1]));
-  }, [dark, themeColors, overlapGlow, overlapGlowThemeColors]);
-
   // Keyboard shortcuts. <InfiniteCanvas> already installs the engine default
   // keymap (⌘Z undo, ⇧⌘Z redo, ⌫ delete, Esc cancel, v/h/c tools — all
   // skipping editable targets). This handler adds ONLY the two pieces the
@@ -413,41 +348,7 @@ export function ChromeLayer({
         className="hud-flight no-drag absolute top-4 right-4 z-50 flex items-center gap-2"
       >
         <ZoomPill ce={ce} />
-        <button
-          type="button"
-          onClick={onToggleTheme}
-          className={roundButtonCls(false)}
-          title={dark ? "Switch to light mode" : "Switch to dark mode"}
-          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          {dark ? (
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            >
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" />
-            </svg>
-          ) : (
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
-            </svg>
-          )}
-        </button>
+        <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />
         {sidePanelSurface !== null && (
           <SidePanelToggle
             entry={sidePanelSurface}
@@ -538,14 +439,6 @@ export function ChromeLayer({
       {showSettings && (
         <SettingsPanel
           engine={ce}
-          gridConfig={chrome.gridConfig}
-          onGridChange={chrome.setGridConfig}
-          themeColors={themeColors}
-          onThemeColorsChange={chrome.setThemeColors}
-          overlapGlow={overlapGlow}
-          onOverlapGlowChange={chrome.setOverlapGlow}
-          overlapGlowThemeColors={overlapGlowThemeColors}
-          onOverlapGlowThemeColorsChange={chrome.setOverlapGlowThemeColors}
           stressWidgetType="vibefield.widgetlab.clock"
           platform={getHost().platform ?? "other"}
           desktopState={desktopState}

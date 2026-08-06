@@ -13,7 +13,7 @@
  * (vitest.config + the docblock pragma above); the JSX transform for the `.tsx`
  * panels comes from vitest.config's `esbuild.jsx: "automatic"`.
  */
-import { type CanvasEngine, createCanvasEngine, DEFAULT_GRID_CONFIG } from "@vibecook/ice";
+import { type CanvasEngine, createCanvasEngine } from "@vibecook/ice";
 import { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement, type ReactElement } from "react";
@@ -21,12 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type FieldHost, setHost } from "../src/host";
 import { NavigationBreadcrumbs } from "../src/hud/NavigationBreadcrumbs";
-import {
-  type OverlapGlowConfig,
-  type OverlapGlowThemeColors,
-  SettingsPanel,
-  type ThemeColors,
-} from "../src/panels";
+import { SettingsPanel } from "../src/panels";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,28 +42,6 @@ setHost({
   onPrepareClose: () => () => undefined,
   completeClose: () => undefined,
 });
-
-const THEME: ThemeColors = {
-  dotLight: "#c0c0c0",
-  dotDark: "#333333",
-  bgLight: "#fafafa",
-  bgDark: "#171717",
-};
-const GLOW: OverlapGlowConfig = {
-  glowColor: [0.5, 0.5, 0.5],
-  glowAlpha: [0.25, 0.45],
-  glowSize: [60, 80],
-  rimColor: [0.5, 0.5, 0.5],
-  rimWidth: 1.5,
-  rimAlpha: [0.55, 0.85],
-  rimRadius: 600,
-};
-const GLOW_THEME: OverlapGlowThemeColors = {
-  glowLight: "#808080",
-  glowDark: "#ffffff",
-  rimLight: "#808080",
-  rimDark: "#ffffff",
-};
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -100,7 +73,6 @@ function mount(node: ReactElement): void {
 describe("widgetlab panels", () => {
   it("SettingsPanel presents categorized pages and preserves the canvas tools", async () => {
     const engine = makeEngine();
-    let grid = DEFAULT_GRID_CONFIG;
     // SystemSection (diagnostics live inside Settings) reads the fieldd hooks —
     // a provider with a never-connected client renders the honest idle state.
     const client = new FielddClient({ url: "ws://127.0.0.1:1", token: "test" });
@@ -110,16 +82,6 @@ describe("widgetlab panels", () => {
         { client },
         createElement(SettingsPanel, {
           engine,
-          gridConfig: grid,
-          onGridChange: (g) => {
-            grid = g;
-          },
-          themeColors: THEME,
-          onThemeColorsChange: () => {},
-          overlapGlow: GLOW,
-          onOverlapGlowChange: () => {},
-          overlapGlowThemeColors: GLOW_THEME,
-          onOverlapGlowThemeColorsChange: () => {},
           onClose: () => {},
         }),
       ),
@@ -143,9 +105,15 @@ describe("widgetlab panels", () => {
     expect(category("Diagnostics")).toBeDefined();
     expect(category("Advanced")).toBeDefined();
 
+    act(() => category("Appearance")?.click());
+    expect(container?.textContent).toContain("Theme");
+    expect(container?.textContent).not.toContain("Canvas palette");
+    expect(container?.textContent).not.toContain("Overlap feedback");
+
     act(() => category("Canvas")?.click());
-    expect(container?.textContent).toContain("World grid");
+    expect(container?.textContent).not.toContain("World grid");
     expect(container?.textContent).toContain("Zoom range");
+    expect(container?.textContent).toContain("Card behavior");
     const numberInputs = container?.querySelectorAll('input[type="number"]');
     expect(numberInputs?.length ?? 0).toBeGreaterThan(0);
 
@@ -198,14 +166,6 @@ describe("widgetlab panels", () => {
         { client },
         createElement(SettingsPanel, {
           engine,
-          gridConfig: DEFAULT_GRID_CONFIG,
-          onGridChange: () => {},
-          themeColors: THEME,
-          onThemeColorsChange: () => {},
-          overlapGlow: GLOW,
-          onOverlapGlowChange: () => {},
-          overlapGlowThemeColors: GLOW_THEME,
-          onOverlapGlowThemeColorsChange: () => {},
           onClose: () => {},
         }),
       ),

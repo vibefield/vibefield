@@ -77,6 +77,21 @@ function workspaceWrapper(): HTMLElement | null {
 }
 
 describe("BootRoot reveal (the top-edge click contract)", () => {
+  it("mounts the dev tweak toggle on the synchronous first face", () => {
+    const { machine } = fakeMachine();
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => root?.render(createElement(BootRoot, { machine })));
+
+    const toggle = document.querySelector<HTMLButtonElement>("[data-dev-tweak-toggle]");
+    expect(toggle).not.toBeNull();
+    expect(host.querySelector(".vf-splash")).not.toBeNull();
+    act(() => toggle?.click());
+    expect(document.body.textContent).toContain("World grid");
+    expect(host.querySelector(".vf-splash")).not.toBeNull();
+  });
+
   it("carries the settle transform only until settled, then goes inert", () => {
     vi.useFakeTimers();
     const { machine, set } = fakeMachine();

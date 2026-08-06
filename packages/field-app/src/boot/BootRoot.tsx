@@ -5,6 +5,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { VisualTweakPanel } from "../dev-tweaks/VisualTweakPanel";
+import { defaultVisualTweakValues, visualTweakCssVariables } from "../field/visual-tuning";
 import type { BootMachine, BootView } from "./machine";
 import { OnboardingWizard } from "./onboarding/OnboardingWizard";
 
@@ -27,7 +29,27 @@ export function BootRoot({ machine }: { machine: BootMachine }): ReactElement {
   const view = useSyncExternalStore(machine.subscribe, machine.view);
   const ready = machine.ready;
   const revealed = view.phase === "interactive";
+  const [visualTweaks, setVisualTweaks] = useState(defaultVisualTweakValues);
   const [settled, setSettled] = useState(false);
+
+  // Boot owns renderer tuning so the dev surface exists on the synchronous
+  // first paint, including splash and onboarding. Theme lives in both the
+  // wizard and workspace today, so observe their shared <html> stamp and keep
+  // the active light/dark token projection current across that handoff.
+  useEffect(() => {
+    const root = document.documentElement;
+    const apply = (): void => {
+      const dark = root.classList.contains("dark");
+      for (const [property, value] of Object.entries(visualTweakCssVariables(visualTweaks, dark))) {
+        root.style.setProperty(property, value);
+      }
+    };
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(root, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    return () => observer.disconnect();
+  }, [visualTweaks]);
+
   useEffect(() => {
     if (!revealed) return;
     const t = setTimeout(() => setSettled(true), 600); // outlive the 560ms settle
@@ -35,6 +57,7 @@ export function BootRoot({ machine }: { machine: BootMachine }): ReactElement {
   }, [revealed]);
   return (
     <>
+      {import.meta.env.DEV && <VisualTweakPanel value={visualTweaks} onChange={setVisualTweaks} />}
       {ready !== null && (
         <div
           className="absolute inset-0 motion-reduce:transition-none"
@@ -54,7 +77,7 @@ export function BootRoot({ machine }: { machine: BootMachine }): ReactElement {
           }
         >
           <ready.mod.FielddProvider client={ready.client}>
-            <ready.mod.FieldView manager={ready.manager} />
+            <ready.mod.FieldView manager={ready.manager} visualTweaks={visualTweaks} />
           </ready.mod.FielddProvider>
         </div>
       )}
