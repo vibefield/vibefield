@@ -173,6 +173,46 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
 
 ## Open debts (dated, sourced)
 
+- **GT CODE REVIEW (2026-08-06) — 7 HIGH defects open, none fixed.** Six read-only reviewers
+  across four planes; every HIGH re-verified by the orchestrator against the code. Full
+  record with file:line and failure scenarios in `specs/godview-terminal.md` §9. In fix
+  order: **(1) the bridge-SIGKILL recovery smoke row is VACUOUS** — it derives its predicates
+  from the pre-kill marker and `until()` short-circuits on the marker it already holds, so
+  the row cited as recovery proof by eight slices returns instantly; delete the ladder and
+  the smoke still exits 0 (the harness owns the fix it doesn't use — `MarkerWatch.reset()`).
+  **(2) a dead floor still mints working-looking tickets**, audited as successful grants,
+  because `terminalEndpoints` is set once at hello and never cleared — it poisons
+  `system.health` too. **(3) restore can delete a layout whose sessions are alive**:
+  `terminal.list` cannot distinguish unarmed from empty, and the deck's honest branch fires
+  only on a FAILED list, so the fix must be fieldd's. **(4) a restored REMOTE pane spawns a
+  LOCAL shell at the peer's path** (`paneCwd` discards the URL host) while the consent face
+  promises "its folder". **(5) a peer's session is painted as a local terminal in the rain
+  view.** **(6) a superseded recovery ladder blocks the next one**, hanging the deck at
+  `bridge-down` forever. **(7) with the mesh flag on, another device's sessions enter our
+  observed inventory carrying the remote's pid**, with no device field to tell them apart.
+  Plus: three more vacuous/weak smoke rows (the shader-leak check cannot detect its leak; the
+  glass two-homes proof has no negative control; ⌘W arbitration is untested because the menu
+  is not installed in smoke mode), a monitor that re-renders every 2s on a stock machine, a
+  worker that reports "worker" after failing to load, and `connectedClient()` leaking a
+  connection under concurrent calls (2026-08-06).
+- **The corpus claimed two safeguards that were never built** — both now dated-corrected at
+  source. GT-3's finding said `paneCwd` catches a foreign host; the CODE said only that it is
+  where one *"would be"* caught (a TODO), and the spec upgraded that into a fact. GT-3m's
+  residual said ⌘1/2/3 were not ported; they are, capture-phase. Standing lesson, and the
+  second instance in one day: when recording a finding, a hedge in the code stays a hedge in
+  the corpus (2026-08-06).
+- **GT-D11's second half is unmet** — no user-visible string states the daemon-lifetime
+  ceiling or that closing a pane detaches rather than kills. The product never over-promises,
+  so "never promises more" holds; "UX says so honestly" does not (GT review, 2026-08-06).
+- **`terminal.connectTicket` is reachable from another device** — `terminal.attach` federates
+  via `TAILNET_SCOPES` and `locality:"local"` is declared but never enforced, so a
+  WhoIs-verified peer can mint this device's floor ticket. Bounded (the token authenticates
+  only on local unix sockets) but it is a daemon credential crossing a device boundary for no
+  reason, and it falsifies GT-D6's "only spine code receives it" (GT review, 2026-08-06).
+- **Our mirror-write secret leaves the device** — upstream reuses the one configured string as
+  the VIEWER's outbound token, so attaching to a peer hands it the string that grants write on
+  our own sessions. Inherent to mirror-write v1, not a coding bug: it is the concrete argument
+  for the per-device-token upgrade (GT review, verified at the pinned source, 2026-08-06).
 - **F-C6-21 audit-integration flake** — struck 3× under full-suite load, green in isolation;
   "the track's oldest debt" (C6-6, 2026-07-28). The mcp EPIPE flake is separate and PAID
   (`37cce3b`).
