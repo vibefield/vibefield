@@ -15,6 +15,7 @@ import {
   voiceCls,
   WizardError,
   WizardPane,
+  WizardShell,
   WizardStyles,
 } from "./wizard-ui";
 
@@ -204,14 +205,12 @@ function WizardBody({
     };
   }, [pane, attempt, usersUpdate, onComplete]);
 
-  const shell = (content: ReactElement): ReactElement => (
-    <div className="flex h-full w-full items-center justify-center p-10">{content}</div>
-  );
+  const shell = (content: ReactElement): ReactElement => <WizardShell>{content}</WizardShell>;
 
   if (pane === null) {
     // Deriving. A fact, not a spinner (§8: a state is rendered, never blank).
     return shell(
-      <div className="vf-wizard-pane w-[min(92vw,30rem)]">
+      <div className="vf-wizard-pane w-full max-w-[30rem]">
         <span className={eyebrowCls}>Setup</span>
         <p className={`mt-2 ${factCls}`}>Reading what this field already knows…</p>
       </div>,
@@ -229,11 +228,12 @@ function WizardBody({
       return shell(
         <WizardPane
           eyebrow="VibeField"
-          title="A field of your own."
-          voice="Terminals, agents and notes on one canvas — running on this machine, for as long as you leave it running."
+          title="Welcome."
+          voice="Manage all your agents and compose your agentic workflow in one place."
+          centered
           actions={
             <button type="submit" className={primaryCls}>
-              Continue
+              Get started
             </button>
           }
           onSubmit={() => go("field")}
@@ -372,7 +372,7 @@ function WizardBody({
             </div>
           </WizardPane>
         ) : (
-          <div className="vf-wizard-pane w-[min(92vw,30rem)]">
+          <div className="vf-wizard-pane w-full max-w-[30rem]">
             <span className={eyebrowCls}>Setup</span>
             <p className={`mt-2 ${factCls}`}>Finishing up…</p>
           </div>

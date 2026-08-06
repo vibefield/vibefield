@@ -58,6 +58,9 @@ let container: HTMLDivElement | null = null;
 
 beforeEach(() => {
   vi.useFakeTimers();
+  document.documentElement.classList.remove("dark");
+  document.documentElement.removeAttribute("data-theme");
+  window.localStorage.clear();
 });
 afterEach(() => {
   if (root !== null) act(() => root?.unmount());
@@ -169,8 +172,11 @@ describe("Setup Assistant", () => {
     await mount({ fieldd: client({ link: NO_LINK }), onboarding: onboarding(), onComplete });
 
     // 1 — Welcome. One decision, and it is not a question (W1).
-    expect(text()).toContain("A field of your own");
-    await click("Continue");
+    expect(text()).toContain("Welcome.");
+    expect(text()).toContain(
+      "Manage all your agents and compose your agentic workflow in one place.",
+    );
+    await click("Get started");
 
     // 2 — the mandatory core: a name, PRE-FILLED (W2).
     const name = container?.querySelector<HTMLInputElement>('input[aria-label="Your name"]');
@@ -264,7 +270,9 @@ describe("Setup Assistant", () => {
 
     // §6.2 — panes 2 → 4. There is no Welcome: the field is already set up and
     // only this person is new.
-    expect(text()).not.toContain("A field of your own");
+    expect(text()).not.toContain(
+      "Manage all your agents and compose your agentic workflow in one place.",
+    );
     expect(text()).not.toContain("Your field now lives in a user");
     expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
     // Nothing to go back to, so nothing offers to.
@@ -363,7 +371,9 @@ describe("Setup Assistant", () => {
     // A color on the record means pane 2 completed, and no link means pane 4
     // is the first thing still unanswered.
     expect(text()).toContain("Connect your devices");
-    expect(text()).not.toContain("A field of your own");
+    expect(text()).not.toContain(
+      "Manage all your agents and compose your agentic workflow in one place.",
+    );
     expect(container?.querySelector('input[aria-label="Your name"]')).toBeNull();
   });
 
@@ -424,7 +434,7 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    await click("Continue");
+    await click("Get started");
     await click("Continue"); // the write, which fails
 
     expect(text()).toContain("That did not save");
@@ -448,7 +458,7 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    await click("Continue");
+    await click("Get started");
     const name = container?.querySelector<HTMLInputElement>('input[aria-label="Your name"]');
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(
@@ -524,7 +534,7 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    await click("Continue");
+    await click("Get started");
     const name = container?.querySelector<HTMLInputElement>('input[aria-label="Your name"]');
     expect(document.activeElement).toBe(name);
 
@@ -552,7 +562,51 @@ describe("Setup Assistant", () => {
     expect(styles).toContain("prefers-reduced-motion: reduce");
     expect(styles).toContain("vf-wizard-fade");
     // Every animated control carries the escape hatch too (M6).
-    expect(button("Continue").className).toContain("motion-reduce:transition-none");
+    expect(button("Get started").className).toContain("motion-reduce:transition-none");
+  });
+
+  it("puts every wizard pane on the shared rounded glass surface", async () => {
+    host(vi.fn(async () => FRESH));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+
+    const shell = container?.querySelector(".vf-wizard-shell");
+    expect(shell).not.toBeNull();
+    expect(container?.querySelector("form.vf-wizard-pane")).not.toBeNull();
+    const styles = Array.from(container?.querySelectorAll("style") ?? [])
+      .map((tag) => tag.textContent ?? "")
+      .join("\n");
+    expect(styles).toContain("border-radius: 32px");
+    expect(styles).toContain("width: min(calc(100vw - 2rem), 44rem)");
+    expect(styles).toContain("height: min(calc(100vh - 2rem), 32rem)");
+    expect(styles).toContain("background: rgba(255, 255, 255, 0.55)");
+    expect(styles).toContain("backdrop-filter: blur(32px) saturate(1.12)");
+
+    await click("Get started");
+    expect(container?.querySelector(".vf-wizard-shell")).toBe(shell);
+    expect(container?.querySelector("form.vf-wizard-pane")).not.toBeNull();
+  });
+
+  it("keeps the app's round light/dark control in the shell", async () => {
+    host(vi.fn(async () => FRESH));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+
+    const toggle = container?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Switch to dark mode"]',
+    );
+    expect(toggle?.className).toContain("h-10 w-10");
+    expect(toggle?.className).toContain("absolute top-5 right-5");
+    await act(async () => toggle?.click());
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(container?.querySelector('button[aria-label="Switch to light mode"]')).not.toBeNull();
   });
 
   it("keeps going when there is no supervisor bridge at all rather than trapping the boot", async () => {
@@ -560,7 +614,7 @@ describe("Setup Assistant", () => {
     const onComplete = vi.fn();
     await mount({ fieldd: client({ link: NO_LINK }), onboarding: onboarding(), onComplete });
 
-    await click("Continue");
+    await click("Get started");
     await click("Continue"); // nothing to write to — the pane still advances
     await tick(SETTING_UP_BEAT_MS);
     await click("Skip");
@@ -615,6 +669,8 @@ describe("BootRoot during onboarding", () => {
     expect(ground?.className).toContain("absolute inset-0");
     // ...without the splash's own face: no bar, no stage line.
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
-    expect(text()).toContain("A field of your own");
+    expect(text()).toContain(
+      "Manage all your agents and compose your agentic workflow in one place.",
+    );
   });
 });
