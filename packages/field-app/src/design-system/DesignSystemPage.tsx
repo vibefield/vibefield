@@ -255,7 +255,6 @@ export function DesignSystemPage(): ReactElement {
               <span />
               renderer styles
             </div>
-            <ThemeToggleButton dark={dark} onToggle={() => setDark((value) => !value)} />
           </div>
           <div className="vf-ds-hero-facts">
             <HeroFact value="3" label="surface families" />
@@ -407,6 +406,12 @@ export function DesignSystemPage(): ReactElement {
           </div>
         </Section>
       </main>
+
+      <ThemeToggleButton
+        dark={dark}
+        onToggle={() => setDark((value) => !value)}
+        className="vf-ds-theme-toggle"
+      />
     </div>
   );
 }

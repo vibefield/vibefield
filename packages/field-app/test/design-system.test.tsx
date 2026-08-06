@@ -61,7 +61,9 @@ describe("design system page", () => {
   });
 
   it("exposes theme and representative component-state controls", async () => {
-    await act(async () => button("Switch to dark mode").click());
+    const themeToggle = container?.querySelector<HTMLButtonElement>(".vf-ds-theme-toggle");
+    expect(themeToggle?.getAttribute("aria-label")).toBe("Switch to dark mode");
+    await act(async () => themeToggle?.click());
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(window.localStorage.getItem("vf-dark")).toBe("true");

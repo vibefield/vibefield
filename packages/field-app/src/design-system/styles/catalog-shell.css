@@ -64,6 +64,13 @@ a {
     var(--vf-ds-page);
 }
 
+.vf-ds-theme-toggle {
+  position: fixed;
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 200;
+}
+
 .vf-ds-sidebar {
   position: fixed;
   inset: 0 auto 0 0;
