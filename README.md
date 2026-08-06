@@ -37,6 +37,7 @@ reopens the `../p008/truffle` `[patch.crates-io]` + `siblings.lock.json` dance; 
 pnpm install
 pnpm preflight      # tool versions + import-boundary walls
 pnpm dev            # desktop app dev loop
+pnpm dev:design     # browser-based UI inventory, no daemon required
 pnpm verify         # full gate: typecheck · biome · rustfmt/clippy · TS+Rust tests · gen freshness
 ```
 
@@ -72,6 +73,11 @@ long-running stack:
 The development watcher is deliberately repository-bounded: it does not monitor
 `../p008/truffle` or its manifests. After changing dependencies or package manifests, run
 `pnpm install` and restart `pnpm dev`; installs are never performed implicitly by the watcher.
+
+`pnpm dev:design` opens the renderer's single-page interface index on port 5174. It imports the
+shipping token sheet and production view compositions, and presents runtime-bound chrome through
+deterministic fixture adapters for light/dark and state review without starting Electron or either
+daemon. Ownership and contribution rules live in [`docs/UI_SYSTEM.md`](docs/UI_SYSTEM.md).
 
 Design docs live in `draft/` — local-only, tracked on the `dev-local` branch
 (`pnpm commit-draft` snapshots them; the branch is never pushed).
