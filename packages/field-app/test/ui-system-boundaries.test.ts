@@ -37,6 +37,8 @@ describe("UI system ownership boundaries", () => {
 
   it("mounts production views instead of the retired catalog replicas", () => {
     const page = source("design-system/DesignSystemPage.tsx");
+    const onboarding = source("design-system/OnboardingPreview.tsx");
+    const catalog = `${page}\n${onboarding}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -48,9 +50,18 @@ describe("UI system ownership boundaries", () => {
       "WidgetTrayFrame",
       "WidgetTrayToolSwitcherView",
       "ZoomPillView",
-      "WizardPane",
+      "OnboardingConnectPaneView",
+      "OnboardingDerivingPaneView",
+      "OnboardingFieldPaneView",
+      "OnboardingFinishingPaneView",
+      "OnboardingPosturePaneView",
+      "OnboardingReadyPaneView",
+      "OnboardingSettingUpPaneView",
+      "OnboardingWelcomeBackPaneView",
+      "OnboardingWelcomePaneView",
+      "WizardShellView",
     ]) {
-      expect(page).toContain(productionView);
+      expect(catalog).toContain(productionView);
     }
 
     for (const retiredReplica of [
@@ -72,6 +83,7 @@ describe("UI system ownership boundaries", () => {
       "hud/FilePill.tsx",
       "hud/LoadingVeil.tsx",
       "hud/WidgetTray.tsx",
+      "boot/onboarding/wizard-ui.tsx",
       "plugin-host/faces.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
@@ -82,6 +94,7 @@ describe("UI system ownership boundaries", () => {
     for (const stylesheet of [
       "account/AccentPicker.css",
       "boot/boot.css",
+      "boot/onboarding/wizard-ui.css",
       "cursor/overlay.css",
       "hud/CommandPalette.css",
       "hud/FilePill.css",

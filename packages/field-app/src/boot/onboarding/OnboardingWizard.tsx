@@ -1,23 +1,24 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
-import { AccentChip, AccentPicker, type AccentSlot } from "../../account/AccentPicker";
-import { hasLink, linkFace, readableTime, type UserLinkStatus } from "../../account/link";
-import { POSTURE_CHOICES, useSyncPosture } from "../../account/posture";
+import type { AccentSlot } from "../../account/AccentPicker";
+import { hasLink, linkFace, type UserLinkStatus } from "../../account/link";
+import { useSyncPosture } from "../../account/posture";
 import { type FieldUserProfile, getHost } from "../../host";
 import type { BootOnboarding } from "../machine";
 import {
-  eyebrowCls,
-  factCls,
-  primaryCls,
-  quietCls,
-  SkipAction,
-  voiceCls,
-  WizardError,
-  WizardPane,
-  WizardShell,
-  WizardStyles,
-} from "./wizard-ui";
+  type OnboardingCompletionFlag,
+  OnboardingConnectPaneView,
+  OnboardingDerivingPaneView,
+  OnboardingFieldPaneView,
+  OnboardingFinishingPaneView,
+  OnboardingPosturePaneView,
+  OnboardingReadyPaneView,
+  OnboardingSettingUpPaneView,
+  OnboardingWelcomeBackPaneView,
+  OnboardingWelcomePaneView,
+} from "./onboarding-views";
+import { WizardShell } from "./wizard-ui";
 
 // The Setup Assistant (UA-3w; spec §6). Held open by the boot machine between
 // a warm daemon and an open document, and closed by the only thing that may
@@ -77,7 +78,6 @@ export function OnboardingWizard({
   return (
     <FielddProvider client={client}>
       <WizardBody onboarding={onboarding} onComplete={onComplete} />
-      <WizardStyles />
     </FielddProvider>
   );
 }
@@ -168,9 +168,7 @@ function WizardBody({
   // The last act. The flag is written FIRST and the hold released only on
   // success — a wizard that says it finished when nothing was recorded would
   // reopen next launch with no explanation.
-  const [flag, setFlag] = useState<
-    { kind: "idle" } | { kind: "writing" } | { kind: "failed"; reason: string }
-  >({ kind: "idle" });
+  const [flag, setFlag] = useState<OnboardingCompletionFlag>({ kind: "idle" });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -209,58 +207,24 @@ function WizardBody({
 
   if (pane === null) {
     // Deriving. A fact, not a spinner (§8: a state is rendered, never blank).
-    return shell(
-      <div className="vf-wizard-pane w-full max-w-[30rem]">
-        <span className={eyebrowCls}>Setup</span>
-        <p className={`mt-2 ${factCls}`}>Reading what this field already knows…</p>
-      </div>,
-    );
+    return shell(<OnboardingDerivingPaneView />);
   }
 
-  const backAction = canGoBack ? (
-    <button type="button" className={quietCls} onClick={back}>
-      Back
-    </button>
-  ) : null;
+  const onBack = canGoBack ? back : undefined;
 
   switch (pane) {
     case "welcome":
-      return shell(
-        <WizardPane
-          eyebrow="VibeField"
-          title="Welcome."
-          voice="Manage all your agents and compose your agentic workflow in one place."
-          centered
-          actions={
-            <button type="submit" className={primaryCls}>
-              Get started
-            </button>
-          }
-          onSubmit={() => go("field")}
-        />,
-      );
+      return shell(<OnboardingWelcomePaneView onContinue={() => go("field")} />);
 
     case "welcome-back":
-      return shell(
-        <WizardPane
-          eyebrow="VibeField"
-          title="Your field now lives in a user."
-          voice="Everything you had is exactly where you left it — it just moved under a user, so this machine can hold more than one. Two questions and you are back."
-          actions={
-            <button type="submit" className={primaryCls}>
-              Continue
-            </button>
-          }
-          onSubmit={() => go("field")}
-        />,
-      );
+      return shell(<OnboardingWelcomeBackPaneView onContinue={() => go("field")} />);
 
     case "field":
       return shell(
         <FieldPane
           profile={profile}
           usersUpdate={usersUpdate}
-          back={backAction}
+          onBack={onBack}
           onDone={(updated) => {
             setProfile(updated);
             go(migrated ? endPane : "setting-up");
@@ -270,76 +234,33 @@ function WizardBody({
 
     case "setting-up":
       return shell(
-        <WizardPane
-          eyebrow="Setting up"
-          title="Your field is already running."
-          voice="Nothing to wait for — this all happened while you were reading."
-          actions={
-            <button type="submit" className={primaryCls}>
-              Continue
-            </button>
-          }
-          onSubmit={() => go("connect")}
-        >
-          <ul className="flex flex-col gap-1.5">
-            {onboarding.stagesDone.map((stage) => (
-              <li key={stage} className={`flex items-center gap-2 ${factCls}`}>
-                <span aria-hidden="true" style={{ color: "var(--vf-green)" }}>
-                  ✓
-                </span>
-                {stage}
-              </li>
-            ))}
-          </ul>
-        </WizardPane>,
+        <OnboardingSettingUpPaneView
+          stagesDone={onboarding.stagesDone}
+          onContinue={() => go("connect")}
+        />,
       );
 
     case "connect":
       return shell(
-        <ConnectPane
+        <OnboardingConnectPaneView
           face={face}
-          back={backAction}
+          onBack={onBack}
           onContinue={() => go(linked ? "posture" : endPane)}
           onSkip={() => go(endPane)}
         />,
       );
 
     case "posture":
-      return shell(<PosturePane back={backAction} onDone={() => go(endPane)} />);
+      return shell(<PosturePane onBack={onBack} onDone={() => go(endPane)} />);
 
     case "ready":
       return shell(
-        <WizardPane
-          eyebrow="Ready"
-          title={`Welcome to your field, ${profile.name}.`}
-          voice="Everything from here is the real thing."
-          actions={
-            flag.kind === "failed" ? (
-              <>
-                <button type="submit" className={primaryCls}>
-                  Try again
-                </button>
-                <button type="button" className={quietCls} onClick={onComplete}>
-                  Continue anyway
-                </button>
-              </>
-            ) : null
-          }
-          // Only a FAILED write is retryable. While one is in flight this pane
-          // has no action at all, so a stray Enter cannot start a second.
-          onSubmit={() => {
-            if (flag.kind === "failed") setAttempt((n) => n + 1);
-          }}
-        >
-          {flag.kind === "failed" && (
-            <div className="flex flex-col gap-1">
-              <WizardError reason={`Setup could not be recorded. ${flag.reason}`} />
-              <span className={factCls}>
-                Continuing without it means setup asks again next time.
-              </span>
-            </div>
-          )}
-        </WizardPane>,
+        <OnboardingReadyPaneView
+          profileName={profile.name}
+          flag={flag}
+          onRetry={() => setAttempt((n) => n + 1)}
+          onContinueAnyway={onComplete}
+        />,
       );
 
     case "finishing":
@@ -348,35 +269,11 @@ function WizardBody({
       // renders a fact rather than a blank window (§8), because a slow
       // supervisor must not look like a hang.
       return shell(
-        flag.kind === "failed" ? (
-          <WizardPane
-            eyebrow="Setup"
-            title="That did not save."
-            actions={
-              <>
-                <button type="submit" className={primaryCls}>
-                  Try again
-                </button>
-                <button type="button" className={quietCls} onClick={onComplete}>
-                  Continue anyway
-                </button>
-              </>
-            }
-            onSubmit={() => setAttempt((n) => n + 1)}
-          >
-            <div className="flex flex-col gap-1">
-              <WizardError reason={`Setup could not be recorded. ${flag.reason}`} />
-              <span className={factCls}>
-                Continuing without it means setup asks again next time.
-              </span>
-            </div>
-          </WizardPane>
-        ) : (
-          <div className="vf-wizard-pane w-full max-w-[30rem]">
-            <span className={eyebrowCls}>Setup</span>
-            <p className={`mt-2 ${factCls}`}>Finishing up…</p>
-          </div>
-        ),
+        <OnboardingFinishingPaneView
+          flag={flag}
+          onRetry={() => setAttempt((n) => n + 1)}
+          onContinueAnyway={onComplete}
+        />,
       );
   }
 }
@@ -386,12 +283,12 @@ function WizardBody({
 function FieldPane({
   profile,
   usersUpdate,
-  back,
+  onBack,
   onDone,
 }: {
   profile: FieldUserProfile;
   usersUpdate: ReturnType<typeof getHost>["usersUpdate"];
-  back: ReactElement | null;
+  onBack: (() => void) | undefined;
   onDone: (updated: FieldUserProfile) => void;
 }): ReactElement {
   const [name, setName] = useState(profile.name);
@@ -421,231 +318,28 @@ function FieldPane({
   };
 
   return (
-    <WizardPane
-      eyebrow="Your field"
-      title="What should this field call you?"
-      voice="A name and a color for this machine's user. Both are yours to change later."
+    <OnboardingFieldPaneView
+      name={name}
+      accent={accent}
+      writing={writing}
+      error={error}
+      onNameChange={setName}
+      onAccentChange={setAccent}
       onSubmit={commit}
-      actions={
-        <>
-          <button type="submit" className={primaryCls} disabled={writing}>
-            {writing ? "Saving…" : "Continue"}
-          </button>
-          {back}
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1.5">
-          <span className={eyebrowCls}>Name</span>
-          <input
-            type="text"
-            aria-label="Your name"
-            value={name}
-            disabled={writing}
-            // This pane exists to collect one field, so the keyboard starts in
-            // it — the wizard is operable without ever reaching for a pointer.
-            autoFocus
-            onChange={(event) => setName(event.target.value)}
-            className="h-11 rounded-[12px] border border-black/10 bg-white px-3.5 text-[15px] text-black/85 outline-none transition-[border-color,box-shadow] placeholder:text-black/30 focus:border-black/25 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)] motion-reduce:transition-none disabled:opacity-45 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:shadow-[0_0_0_3px_rgba(255,255,255,0.07)]"
-          />
-        </label>
-        <div className="flex flex-col gap-2">
-          <span className={eyebrowCls}>Color</span>
-          <AccentPicker
-            value={accent}
-            disabled={writing}
-            name="vf-wizard-accent"
-            className="flex flex-wrap gap-2"
-            onSelect={(slot) => setAccent(slot)}
-          />
-          <AccentChip accent={accent} label={name} className="self-start" />
-        </div>
-        {error !== null && <WizardError reason={`That did not save. ${error}`} />}
-      </div>
-    </WizardPane>
-  );
-}
-
-/** Pane 4 — the mesh, in plain words, with the honest state of this device's
- * node. There is no "start linking" verb in the daemon today (only get /
- * subscribe / unlink), so the action here IS the node's own sign-in address the
- * moment it offers one — never a button that pretends to do something. */
-function ConnectPane({
-  face,
-  back,
-  onContinue,
-  onSkip,
-}: {
-  face: ReturnType<typeof linkFace>;
-  back: ReactElement | null;
-  onContinue: () => void;
-  onSkip: () => void;
-}): ReactElement {
-  let body: ReactElement;
-  let primary: ReactElement | null = null;
-
-  switch (face.kind) {
-    case "loading":
-      body = <p className={factCls}>Asking this device about its node…</p>;
-      break;
-    case "unavailable":
-      body = (
-        <p className={factCls}>
-          This daemon does not report link status, so there is nothing to connect from here.
-          Everything local keeps working.
-        </p>
-      );
-      break;
-    case "mesh-off":
-      body = (
-        <div className="flex flex-col gap-1.5">
-          <p className={factCls}>
-            Mesh networking is off on this device. It is enabled by environment today (
-            <span className="font-mono">FIELD_NATIVE_MESH</span>), so there is nothing to link yet.
-          </p>
-          {face.link !== null && (
-            <p className={factCls}>
-              A link is already on file for {face.link.login ?? "this device"} — it takes effect
-              when the mesh is enabled.
-            </p>
-          )}
-        </div>
-      );
-      break;
-    case "authenticating":
-      primary = (
-        <a
-          href={face.authUrl}
-          target="_blank"
-          rel="noreferrer"
-          className={primaryCls}
-          // A link that looks like the pane's action should answer to the
-          // keyboard like one.
-        >
-          Link Tailscale account
-        </a>
-      );
-      body = (
-        <p className={factCls}>
-          Finish signing in in your browser. This pane names the account as soon as the node comes
-          up — you can also carry on and let it land in the background.
-        </p>
-      );
-      break;
-    case "linked":
-      body = (
-        <div className="flex flex-col gap-1.5">
-          <p className={voiceCls}>
-            Linked as <span className="font-medium">{face.link.login ?? "this device"}</span>
-            {face.link.tailnet !== undefined && (
-              <>
-                {" on "}
-                <span className="font-mono text-[13px]">{face.link.tailnet}</span>
-              </>
-            )}
-            .
-          </p>
-          <p className={factCls}>
-            <span className="tabular-nums">{readableTime(face.link.linkedAt)}</span>
-            {face.nodeState !== null && ` · node ${face.nodeState}`}
-          </p>
-        </div>
-      );
-      break;
-    default:
-      body = (
-        <p className={factCls}>
-          This device's node has not offered a sign-in address yet
-          {face.nodeState !== null && ` (node ${face.nodeState})`}. When it does, it appears here.
-        </p>
-      );
-  }
-
-  return (
-    <WizardPane
-      eyebrow="Your devices"
-      title="Connect your devices."
-      voice="Your devices, your tailnet — nobody else's. Everything here works locally without it; linking is what lets your other machines see the same field."
-      onSubmit={onContinue}
-      actions={
-        <>
-          {primary}
-          <button type="submit" className={primary === null ? primaryCls : quietCls}>
-            Continue
-          </button>
-          <SkipAction label="Skip" onSkip={onSkip} />
-          {back}
-        </>
-      }
-    >
-      {body}
-    </WizardPane>
+      onBack={onBack}
+    />
   );
 }
 
 /** The posture question — the same two cards, the same words, the same key as
  * Settings → Account (they share `POSTURE_CHOICES` and `useSyncPosture`). */
 function PosturePane({
-  back,
+  onBack,
   onDone,
 }: {
-  back: ReactElement | null;
+  onBack: (() => void) | undefined;
   onDone: () => void;
 }): ReactElement {
   const posture = useSyncPosture();
-  const locked = posture.unavailable || posture.pending;
-
-  return (
-    <WizardPane
-      eyebrow="Your devices"
-      title="What should new projects do?"
-      voice="This is only the default for new documents. Any single one can go the other way afterwards."
-      onSubmit={onDone}
-      actions={
-        <>
-          <button type="submit" className={primaryCls}>
-            Continue
-          </button>
-          <SkipAction label="Skip" onSkip={onDone} />
-          {back}
-        </>
-      }
-    >
-      <div role="radiogroup" aria-label="Sync posture" className="grid gap-2 sm:grid-cols-2">
-        {POSTURE_CHOICES.map((card) => {
-          const selected = posture.posture === card.value;
-          return (
-            <label
-              key={card.value}
-              className={`rounded-[14px] border p-3 text-left transition-[background-color,border-color,transform] focus-within:ring-2 focus-within:ring-[var(--vf-select)] motion-reduce:transition-none ${
-                selected
-                  ? "border-black/25 bg-black/[0.04] dark:border-white/30 dark:bg-white/[0.08]"
-                  : "border-black/10 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/[0.04]"
-              } ${locked ? "cursor-not-allowed opacity-45" : "cursor-pointer active:scale-[0.99]"}`}
-            >
-              <input
-                type="radio"
-                name="vf-wizard-posture"
-                className="sr-only"
-                checked={selected}
-                disabled={locked}
-                onChange={() => void posture.set(card.value)}
-              />
-              <div className="text-[13px] font-medium leading-5 text-black/80 dark:text-white/80">
-                {card.title}
-              </div>
-              <div className={`mt-0.5 ${factCls}`}>{card.description}</div>
-            </label>
-          );
-        })}
-      </div>
-      {posture.unavailable && posture.status !== "loading" && (
-        <p className={factCls}>
-          This daemon is not reporting preferences, so the answer cannot be saved from here yet.
-        </p>
-      )}
-      {posture.writeError !== null && <WizardError reason={posture.writeError} />}
-    </WizardPane>
-  );
+  return <OnboardingPosturePaneView posture={posture} onDone={onDone} onBack={onBack} />;
 }

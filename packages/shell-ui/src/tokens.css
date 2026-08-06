@@ -37,6 +37,7 @@
   --vf-chrome-surface-soft: rgb(255 255 255 / 58%);
   --vf-chrome-surface-hover: rgb(255 255 255 / 78%);
   --vf-field-surface: rgb(255 255 255 / 60%);
+  --vf-wizard-surface: rgb(255 255 255 / 55%);
   --vf-backdrop-dim: rgb(0 0 0 / 10%);
 
   /* §2.5 State & system color */
@@ -133,6 +134,7 @@
   --vf-shadow-top-sheet: 0 20px 40px rgb(0 0 0 / 8%);
   --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 8%);
   --vf-shadow-dialog: 0 42px 100px rgb(0 0 0 / 18%), 0 12px 36px rgb(0 0 0 / 10%);
+  --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 8%);
 
   /* §6 Motion */
   --vf-ease-island: cubic-bezier(0.25, 1, 0.3, 1);
@@ -179,12 +181,14 @@
   --vf-chrome-surface-soft: rgb(255 255 255 / 5%);
   --vf-chrome-surface-hover: rgb(255 255 255 / 8%);
   --vf-field-surface: rgb(255 255 255 / 6%);
+  --vf-wizard-surface: rgb(28 28 30 / 55%);
   --vf-backdrop-dim: rgb(0 0 0 / 40%);
   --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 40%);
   --vf-shadow-sheet: 0 -20px 40px rgb(0 0 0 / 40%);
   --vf-shadow-top-sheet: 0 20px 40px rgb(0 0 0 / 40%);
   --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 40%);
   --vf-shadow-dialog: 0 48px 120px rgb(0 0 0 / 48%), 0 14px 40px rgb(0 0 0 / 30%);
+  --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 40%);
 
   /* §7 Interactive states — glow/rim go white on dark */
   --ic-glow-color: 255, 255, 255;

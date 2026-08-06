@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -20,6 +22,7 @@ import { type FieldHost, type FieldUserProfile, setHost } from "../src/host";
 const SETTING_UP_BEAT_MS = 900;
 const READY_BEAT_MS = 700;
 const ENTRY_SETTLE_MS = 1_200;
+const WIZARD_CSS = readFileSync(join(process.cwd(), "src/boot/onboarding/wizard-ui.css"), "utf8");
 
 const noopLogger: FieldHost["logger"] = {
   child: () => noopLogger,
@@ -556,11 +559,8 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    const styles = Array.from(container?.querySelectorAll("style") ?? [])
-      .map((tag) => tag.textContent ?? "")
-      .join("\n");
-    expect(styles).toContain("prefers-reduced-motion: reduce");
-    expect(styles).toContain("vf-wizard-fade");
+    expect(WIZARD_CSS).toContain("prefers-reduced-motion: reduce");
+    expect(WIZARD_CSS).toContain("vf-wizard-fade");
     // Every animated control carries the escape hatch too (M6).
     expect(button("Get started").className).toContain("motion-reduce:transition-none");
   });
@@ -576,14 +576,11 @@ describe("Setup Assistant", () => {
     const shell = container?.querySelector(".vf-wizard-shell");
     expect(shell).not.toBeNull();
     expect(container?.querySelector("form.vf-wizard-pane")).not.toBeNull();
-    const styles = Array.from(container?.querySelectorAll("style") ?? [])
-      .map((tag) => tag.textContent ?? "")
-      .join("\n");
-    expect(styles).toContain("border-radius: 32px");
-    expect(styles).toContain("width: min(calc(100vw - 2rem), 44rem)");
-    expect(styles).toContain("height: min(calc(100vh - 2rem), 32rem)");
-    expect(styles).toContain("background: rgba(255, 255, 255, 0.55)");
-    expect(styles).toContain("backdrop-filter: blur(32px) saturate(1.12)");
+    expect(WIZARD_CSS).toContain("border-radius: var(--vf-radius-island)");
+    expect(WIZARD_CSS).toContain("width: min(calc(100vw - 2rem), 44rem)");
+    expect(WIZARD_CSS).toContain("height: min(calc(100vh - 2rem), 32rem)");
+    expect(WIZARD_CSS).toContain("background: var(--vf-wizard-surface)");
+    expect(WIZARD_CSS).toContain("backdrop-filter: blur(32px) saturate(1.12)");
 
     await click("Get started");
     expect(container?.querySelector(".vf-wizard-shell")).toBe(shell);

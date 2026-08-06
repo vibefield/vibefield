@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 import { ThemeToggleButton } from "../../ThemeToggleButton";
 import { useTheme } from "../../theme";
+import "./wizard-ui.css";
 
 // The Setup Assistant's chrome (UA-3w; DESIGN.md §3/§7/§8/§9). Deliberately
 // its own small vocabulary rather than the settings one: a full-window pane's
@@ -30,11 +31,28 @@ export const factCls = "text-[12px] leading-5 text-black/45 dark:text-white/45";
 export function WizardShell({ children }: { children: ReactNode }): ReactElement {
   const { dark, toggle } = useTheme();
   return (
+    <WizardShellView dark={dark} onToggleTheme={toggle}>
+      {children}
+    </WizardShellView>
+  );
+}
+
+/** Controller-free shell for production-backed catalogs and tests. */
+export function WizardShellView({
+  children,
+  dark,
+  onToggleTheme,
+}: {
+  children: ReactNode;
+  dark: boolean;
+  onToggleTheme: () => void;
+}): ReactElement {
+  return (
     <div className="flex h-full w-full items-center justify-center p-4">
       <div className="vf-wizard-shell">
         <ThemeToggleButton
           dark={dark}
-          onToggle={toggle}
+          onToggle={onToggleTheme}
           className="no-drag absolute top-5 right-5"
         />
         <div className="vf-wizard-shell-content">{children}</div>
@@ -109,54 +127,5 @@ export function WizardError({ reason }: { reason: string }): ReactElement {
     <p className="text-[12px] leading-5 text-amber-600 dark:text-amber-400" role="alert">
       {reason}
     </p>
-  );
-}
-
-/** The wizard's own stylesheet, mounted once with it (the splash/tray
- * precedent). M6: the rise becomes a plain fade at half the duration. */
-export function WizardStyles(): ReactElement {
-  return (
-    <style>{`
-      .vf-wizard-shell {
-        position: relative;
-        overflow: hidden;
-        width: min(calc(100vw - 2rem), 44rem);
-        height: min(calc(100vh - 2rem), 32rem);
-        padding: clamp(2rem, 5vw, 4rem);
-        border: 1px solid rgba(0, 0, 0, 0.05);
-        border-radius: 32px;
-        background: rgba(255, 255, 255, 0.55);
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-        -webkit-backdrop-filter: blur(32px) saturate(1.12);
-        backdrop-filter: blur(32px) saturate(1.12);
-      }
-      .vf-wizard-shell-content {
-        display: flex;
-        width: 100%;
-        height: 100%;
-        align-items: center;
-        justify-content: center;
-        overflow-y: auto;
-      }
-      .vf-wizard-pane {
-        animation: vf-wizard-in 320ms cubic-bezier(0.25, 1, 0.3, 1) both;
-      }
-      .dark .vf-wizard-shell {
-        border-color: rgba(255, 255, 255, 0.1);
-        background: rgba(28, 28, 30, 0.55);
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-      }
-      @keyframes vf-wizard-in {
-        from { opacity: 0; transform: translateY(6px); }
-        to { opacity: 1; transform: none; }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .vf-wizard-pane { animation: vf-wizard-fade 160ms ease both; }
-        @keyframes vf-wizard-fade {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-      }
-    `}</style>
   );
 }

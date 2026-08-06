@@ -11,7 +11,7 @@ import {
 } from "@vibefield/shell-ui";
 import { type CSSProperties, type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { AccentChip, AccentPicker, type AccentSlot } from "../account/AccentPicker";
-import { primaryCls, quietCls, WizardPane, WizardStyles } from "../boot/onboarding/wizard-ui";
+import { primaryCls, quietCls } from "../boot/onboarding/wizard-ui";
 import { roundButtonCls } from "../field/theme-constants";
 import { LoadingVeilView } from "../hud/LoadingVeil";
 import { NavigationBreadcrumbsView } from "../hud/NavigationBreadcrumbs";
@@ -32,6 +32,7 @@ import { ThemeToggleButton } from "../ThemeToggleButton";
 import { CommandPalettePreview } from "./CommandPalettePreview";
 import { FilePillPreview } from "./FilePillPreview";
 import { GodviewPreview } from "./GodviewPreview";
+import { OnboardingPreview } from "./OnboardingPreview";
 
 type IconName =
   | "arrow-left"
@@ -364,7 +365,7 @@ export function DesignSystemPage(): ReactElement {
         <ChromeSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
         <CardsSection />
         <SurfacesSection />
-        <OnboardingSection />
+        <OnboardingSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
         <GodviewSection />
 
         <Section
@@ -948,51 +949,27 @@ function SurfacesSection(): ReactElement {
   );
 }
 
-function OnboardingSection(): ReactElement {
-  const [accent, setAccent] = useState<AccentSlot>("accent-6");
+function OnboardingSection({
+  dark,
+  onToggleTheme,
+}: {
+  dark: boolean;
+  onToggleTheme: () => void;
+}): ReactElement {
   return (
     <Section
       id="onboarding"
       index="08"
       eyebrow="Onboarding"
-      title="A first question, not a form wall"
-      description="The Setup Assistant uses the same tokens with a roomier action hierarchy: large light headlines, short truthful copy, and one decision per pane."
+      title="The complete Setup Assistant"
+      description="Every shipping pane, alternate entry, transitional face, and completion refusal is mounted from production code. Change a pane once and both onboarding and this catalog move together."
     >
-      <Specimen title="Setup Assistant" source="boot/onboarding/wizard-ui.tsx" bleed>
-        <div className="vf-ds-onboarding-ground">
-          <div className="vf-ds-onboarding-shell">
-            <WizardPane
-              eyebrow="Your field"
-              title="What should we call you?"
-              voice="This name stays with your user on this machine. You can change it later in Settings → Account."
-              actions={
-                <>
-                  <button type="button" className={primaryCls}>
-                    Continue
-                  </button>
-                  <button type="button" className={quietCls}>
-                    Back
-                  </button>
-                </>
-              }
-            >
-              <div className="vf-ds-onboarding-fields">
-                <input className={fieldCls} defaultValue="James" aria-label="Your name" />
-                <div>
-                  <span className={labelCls}>Choose your accent</span>
-                  <AccentPicker
-                    value={accent}
-                    name="vf-onboarding-accent"
-                    onSelect={setAccent}
-                    className="flex flex-wrap gap-2"
-                  />
-                </div>
-                <AccentChip accent={accent} label="James’s field" />
-              </div>
-            </WizardPane>
-          </div>
-        </div>
-        <WizardStyles />
+      <Specimen
+        title="Production flow and state inventory"
+        source="boot/onboarding/onboarding-views.tsx"
+        bleed
+      >
+        <OnboardingPreview dark={dark} onToggleTheme={onToggleTheme} />
       </Specimen>
     </Section>
   );

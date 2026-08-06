@@ -31,7 +31,7 @@ The catalog currently mounts these shipping views directly:
 - Godview stage, monitor registry, tuning panel, and unavailable terminal deck
 - FilePill, navigation breadcrumbs, ZoomPill, WidgetTray frame/tool switcher
 - command palette, settings dialog, side-panel frame, and loading veil
-- shared controls/states and the onboarding wizard pane
+- shared controls/states and every onboarding pane, alternate entry, and completion failure
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and FilePill receives a fixture document manager; their DOM, interaction

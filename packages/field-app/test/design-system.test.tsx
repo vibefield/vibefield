@@ -64,6 +64,11 @@ describe("design system page", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(window.localStorage.getItem("vf-dark")).toBe("true");
+    expect(
+      container?.querySelectorAll(
+        '[data-onboarding-preview] button[aria-label="Switch to light mode"]',
+      ),
+    ).toHaveLength(11);
 
     const filePill = container?.querySelector<HTMLElement>("[data-file-pill]");
     expect(filePill?.dataset.filePillOpen).toBe("false");
@@ -84,7 +89,23 @@ describe("design system page", () => {
     expect(container?.querySelector(".vf-navigation-breadcrumbs__trail")).not.toBeNull();
     expect(container?.querySelector(".vf-settings-dialog")).not.toBeNull();
     expect(container?.querySelector(".vf-widget-tray")).not.toBeNull();
-    expect(container?.querySelector(".vf-wizard-pane")).not.toBeNull();
+    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(11);
+    for (const state of [
+      "welcome",
+      "field",
+      "setting-up",
+      "connect",
+      "posture",
+      "ready",
+      "deriving",
+      "welcome-back",
+      "finishing",
+      "ready-failed",
+      "finishing-failed",
+    ]) {
+      expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
+    }
+    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(11);
     expect(container?.querySelector(".vf-zoom-pill")).not.toBeNull();
     expect(container?.textContent).toContain("No artifacts yet");
 
@@ -94,5 +115,31 @@ describe("design system page", () => {
       await Promise.resolve();
     });
     expect(container?.textContent).toContain("VibeField docs");
+  });
+
+  it("keeps every onboarding state lab interactive", async () => {
+    const frame = (state: string): HTMLElement => {
+      const match = container?.querySelector<HTMLElement>(`[data-onboarding-preview="${state}"]`);
+      if (match === null || match === undefined) {
+        throw new Error(`Onboarding preview not found: ${state}`);
+      }
+      return match;
+    };
+    const choose = async (state: string, label: string): Promise<void> => {
+      const match = Array.from(frame(state).querySelectorAll("button")).find(
+        (candidate) => candidate.textContent?.trim() === label,
+      );
+      if (match === undefined) throw new Error(`Onboarding state control not found: ${label}`);
+      await act(async () => match.click());
+    };
+
+    await choose("field", "error");
+    expect(frame("field").textContent).toContain("The profile service refused this write.");
+
+    await choose("connect", "linked");
+    expect(frame("connect").textContent).toContain("Linked as james@example.com");
+
+    await choose("posture", "unavailable");
+    expect(frame("posture").textContent).toContain("This daemon is not reporting preferences");
   });
 });
