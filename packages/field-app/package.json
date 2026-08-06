@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./design-system": "./src/design-system/mount.tsx",
     "./logging": "./src/logging.ts",
     "./spike": "./src/spike/spike-loro.ts"
   },

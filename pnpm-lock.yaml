@@ -247,6 +247,12 @@ importers:
       esbuild:
         specifier: 'catalog:'
         version: 0.28.1
+      react:
+        specifier: 'catalog:'
+        version: 19.2.7
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.7(react@19.2.7)
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3

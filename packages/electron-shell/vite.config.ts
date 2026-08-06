@@ -10,7 +10,7 @@ import { defineConfig } from "vite";
 // synchronously, zero fetch/import.meta.url — so the prod file:// renderer
 // needs no loopback server, no vite-plugin-wasm, no COOP/COEP. Exact-match
 // regex so explicit subpath imports never double-append.
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   // root = the tiny renderer-host adapter (ESR 3a); the product code lives
   // behind @vibefield/field-app's public entry. Output lands in THIS package's
   // dist so the shell is self-contained (main loads ../renderer from dist/main).
@@ -36,17 +36,32 @@ export default defineConfig({
     outDir: join(import.meta.dirname, "dist", "renderer"),
     emptyOutDir: true,
     rollupOptions: {
-      input: {
-        main: join(import.meta.dirname, "src", "renderer-host", "index.html"),
-        // test-only entry (ESR-12): built ONLY when the spike is requested —
-        // the production renderer output carries no spike code
-        ...(process.env["VITE_SPIKE"]
+      input:
+        mode === "design"
           ? {
-              "spike-loro": join(import.meta.dirname, "src", "renderer-host", "spike-loro.html"),
+              "design-system": join(
+                import.meta.dirname,
+                "src",
+                "renderer-host",
+                "design-system.html",
+              ),
             }
-          : {}),
-      },
+          : {
+              main: join(import.meta.dirname, "src", "renderer-host", "index.html"),
+              // test-only entry (ESR-12): built ONLY when the spike is requested —
+              // the production renderer output carries no spike code
+              ...(process.env["VITE_SPIKE"]
+                ? {
+                    "spike-loro": join(
+                      import.meta.dirname,
+                      "src",
+                      "renderer-host",
+                      "spike-loro.html",
+                    ),
+                  }
+                : {}),
+            },
     },
   },
-  server: { port: 5173, strictPort: true },
-});
+  server: { port: mode === "design" ? 5174 : 5173, strictPort: true },
+}));
