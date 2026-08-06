@@ -55,12 +55,13 @@ async fn mesh_disabled_by_default_and_daemon_stays_up() {
 #[tokio::test]
 async fn mesh_enabled_without_sidecar_degrades_honestly() {
     let dir = tempfile::tempdir().unwrap();
+    // Struct-update from the test constructor rather than a full literal: this
+    // test cares about two fields, and spelling every other one only means a
+    // new config field breaks tests that have no opinion about it.
     let config = NativeConfig {
-        data_dir: dir.path().to_path_buf(),
-        log_root: None,
-        log_filter: None,
         mesh_enabled: true,
         sidecar_override: Some("/nonexistent/sidecar-slim".into()),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
     };
     let daemon = bootstrap(config).await.unwrap();
     let h = health_json(&daemon);
@@ -85,11 +86,9 @@ async fn mesh_live_bring_up_reaches_auth_or_up() {
         .expect("set FIELD_NATIVE_SIDECAR_PATH for the live test");
     let dir = tempfile::tempdir().unwrap();
     let config = NativeConfig {
-        data_dir: dir.path().to_path_buf(),
-        log_root: None,
-        log_filter: None,
         mesh_enabled: true,
         sidecar_override: Some(sidecar.into()),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
     };
     let daemon = bootstrap(config).await.unwrap();
 

@@ -68,6 +68,15 @@ impl MeshHandle {
         self.shared.node.borrow().clone()
     }
 
+    /// The gateway's own health, for a consumer that must decide whether
+    /// waiting for a node is still worth doing (GT-4a's terminal mesh). A
+    /// `disabled`/`degraded` gateway will never produce one, and its `detail`
+    /// is the reason — so a borrower reports the gateway's words rather than
+    /// inventing its own account of a failure it did not see.
+    pub fn health(&self) -> UnitHealth {
+        self.shared.health.lock().unwrap().clone()
+    }
+
     /// Park until the node exists, then hand it over. Never resolves while the
     /// mesh is disabled or degraded — which is the honest answer, not a hang to
     /// paper over: there is no node to give, and a caller that needs one has

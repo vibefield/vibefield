@@ -14,11 +14,20 @@
 //!               fieldd decides whether to surface or bounce the pair).
 //!   degraded  — the unit could not even be configured (see `endpoints`)
 //!
-//! **No `with_terminal_mesh` here.** The floor has no mesh coupling: the
-//! `ghosttea` crate carries no truffle dependency, remote ops `bail!` honestly
-//! without an adapter, and TSP1 mirroring is NF-remote (spec §7). That is also
-//! why the unit declares no dependency on `mesh-gateway` — it is registered
-//! after it only to keep design-02's start order, not because it needs it.
+//! **`with_terminal_mesh` — the one named exception (GT-4a).** Until GT-4 the
+//! floor had no mesh coupling at all: remote ops `bail!` honestly without an
+//! adapter, and TSP1 mirroring was NF-remote (spec §7). That is still what the
+//! unit does by DEFAULT, and default here means absent — with
+//! `FIELD_NATIVE_TERMINAL_MESH` unset, nothing from `ghosttea-truffle` is
+//! constructed, no advertisement store is opened, and no listener exists. The
+//! exception is exactly one call, made from `serve` and gated by
+//! `terminal_mesh::MeshPlan`; the mechanism, the borrowed node, and the two
+//! flags' relationship live in `terminal_mesh.rs`.
+//!
+//! The unit STILL declares no dependency on `mesh-gateway`. It is registered
+//! after it to keep design-02's start order, and it now also borrows that
+//! unit's node when the flag asks — but it cannot require it: a gateway that is
+//! off or degraded costs the mesh, never the PTYs.
 //!
 //! ## The NF-2 upstream absences, retired at NF-7 (ghosttea 0.6.0 → 0.7.0)
 //!
@@ -53,7 +62,9 @@ use crate::config::NativeConfig;
 use crate::contracts::{ObservedTerminal, TerminalEndpoints, UnitHealth, UnitState};
 use crate::manager::NativeService;
 use crate::registries;
+use crate::services::mesh::MeshHandle;
 use crate::services::terminal_client::{ControlClient, SessionSummary};
+use crate::services::terminal_mesh::{self, Attachment, MeshPlan};
 use crate::state::DaemonState;
 use ghosttea::{
     ipc, ServiceHandle, TerminalService, TerminalServiceConfig, TerminalServiceListeners,
@@ -216,10 +227,18 @@ impl TerminalHandle {
 pub struct TerminalUnit {
     shared: Arc<Shared>,
     tasks: Mutex<Vec<TaskGuard>>,
+    /// GT-4a's named exception, resolved once at construction.
+    plan: MeshPlan,
+    /// The borrowed door to the gateway's node — `None` whenever the plan is
+    /// `Off`, which is the structural half of "off means absent": with the flag
+    /// unset this unit does not even hold a way to reach the mesh.
+    mesh: Option<MeshHandle>,
 }
 
 impl TerminalUnit {
-    pub fn new(config: &NativeConfig, ping: UnboundedSender<()>) -> Self {
+    pub fn new(config: &NativeConfig, ping: UnboundedSender<()>, mesh: MeshHandle) -> Self {
+        let plan = MeshPlan::resolve(config);
+        let mesh = (!plan.is_off()).then_some(mesh);
         let run_dir = config.run_dir();
         let config_file = config.terminal_config_file();
         let endpoints = endpoint_paths(&run_dir).map(|(control, frame)| Endpoints {
@@ -252,6 +271,8 @@ impl TerminalUnit {
                 drain: Mutex::new(None),
             }),
             tasks: Mutex::new(Vec::new()),
+            plan,
+            mesh,
         }
     }
 
@@ -291,7 +312,14 @@ impl NativeService for TerminalUnit {
             .set(UnitState::Starting, Some("binding terminal service".into()));
 
         let shared = self.shared.clone();
-        let task = tokio::spawn(serve(shared, endpoints, control, frames));
+        let task = tokio::spawn(serve(
+            shared,
+            endpoints,
+            control,
+            frames,
+            self.plan.clone(),
+            self.mesh.clone(),
+        ));
         self.tasks.lock().unwrap().push(TaskGuard(task));
         Ok(())
     }
@@ -360,7 +388,19 @@ async fn serve(
     endpoints: Endpoints,
     control: UnixListener,
     frames: UnixListener,
+    plan: MeshPlan,
+    mesh: Option<MeshHandle>,
 ) {
+    // GT-4a: started BEFORE font discovery so the node wait overlaps a cost the
+    // boot already pays, rather than adding its budget on top. A `None` here is
+    // the flag-off floor, and from this point the two paths are the same code.
+    let attaching = match (&plan, mesh) {
+        (MeshPlan::Requested { mirror_write }, Some(mesh)) => Some(tokio::spawn(
+            terminal_mesh::attach(mirror_write.clone(), mesh, terminal_mesh::ATTACH_BUDGET),
+        )),
+        _ => None,
+    };
+
     // field-native bundles no fonts, so the text engine comes from system
     // discovery (ghosttead's `GHOSTTEA_FONT_DIR` path is a packaging concern —
     // P2 may bundle a family and this becomes `TextEngine::from_fonts`). It is
@@ -421,10 +461,45 @@ async fn serve(
         }
     };
 
-    shared.set(
-        UnitState::Up,
-        Some(format!("serving; text engine {family}")),
-    );
+    // The mesh joins HERE or not at all: upstream takes the adapter before the
+    // service serves, so this is the last moment the floor can be handed one.
+    // A unit that is still waiting is still `starting`, which is what it is.
+    let (service, mesh_face) = match attaching {
+        None => (service, None),
+        Some(task) => {
+            shared.set(
+                UnitState::Starting,
+                Some("waiting for the tailnet node to publish the terminal mesh".into()),
+            );
+            match task.await {
+                Ok(Attachment::Attached(mesh)) => {
+                    let face = format!(
+                        "publishing {} ({})",
+                        registries::stores::TERMINAL_HOSTS,
+                        if plan.offers_mirror_write() {
+                            "mirror-write configured"
+                        } else {
+                            "view-only — no mirror-write configured"
+                        }
+                    );
+                    (service.with_terminal_mesh(*mesh), Some(face))
+                }
+                Ok(Attachment::Unavailable(reason)) => (service, Some(format!("off — {reason}"))),
+                // An aborted or panicked attach is the floor's problem to state,
+                // not to inherit: the PTYs are unaffected and say so.
+                Err(error) => (
+                    service,
+                    Some(format!("off — the attach task failed: {error}")),
+                ),
+            }
+        }
+    };
+
+    let detail = match &mesh_face {
+        None => format!("serving; text engine {family}"),
+        Some(face) => format!("serving; text engine {family}; terminal mesh {face}"),
+    };
+    shared.set(UnitState::Up, Some(detail));
     shared.serving.send_replace(true);
     tracing::info!(
         event = "field_native.terminal.serving",
@@ -433,6 +508,9 @@ async fn serve(
         frame_socket = %endpoints.frame,
         config_overlay = %endpoints.config.display(),
         text_engine = %family,
+        // The FACE, never the capability: whether a mirror-write string exists
+        // is operational news, and its value is a secret (EL7/NF-D8).
+        terminal_mesh = mesh_face.as_deref().unwrap_or("not requested"),
         "The terminal service is serving"
     );
 
