@@ -824,7 +824,32 @@ Security finding for the record: the installed sidecar at protocol v2 falls back
 hello-asserted identity, so a peer inside the tailnet can assert another device's id — it
 needs sidecar v3, does not weaken the mirror-write secret, and gates the per-device-token
 upgrade. Verify exit 0 both hands. Full record: `specs/godview-terminal.md` (GT-4 row +
-floor findings).
+floor findings). **[See the RETRACTION entry below — that security sentence is false.]**
+
+## Correction — GT-4a's security finding is retracted
+
+**CORRECTION (2026-08-06), load-bearing, so it gets its own entry per this ledger's law.**
+The sentence above — "the installed sidecar at protocol v2 falls back to hello-asserted
+identity… gates the per-device-token upgrade" — **is false**, and the entry above stands
+unedited only because entries here are never rewritten. James read the claim and asked the
+question that broke it: *why is the sidecar still v2?* It isn't.
+
+The evidence, gathered after the question: truffle's sidecar source is at
+`protocolVersion: 4`; the installed binary ships `whoisResult`; `truffle-core 0.7.12`'s
+`TailscaleProvider` implements `whois` (`provider.rs:888`); and the terminal mesh calls that
+same node (`ghosttea-truffle 0.9.2` `lib.rs:231`). The quoted diagnostic fires only on
+`NetworkError::Unsupported` — a provider with NO WhoIs, which upstream's own test names as
+"the in-process transports these tests run on" — and it appears **nowhere** in the probe log
+it was attributed to. Live, both directions: the UA track's S1 probe answers self-whois on a
+real tailnet, and since `authenticated_node_id` refuses a connection whose WhoIs is anonymous
+or unavailable, the kill-matrix probe's peers attaching at all proves their identities were
+**authenticated by tailnet WhoIs**, not asserted. Per-device tokens (GT-D6) are not gated on
+any upstream release.
+
+The process failure is the durable part: a subagent quoted an upstream diagnostic, and the
+orchestrator published it into this ledger and the roadmap without grepping the artifact it
+supposedly came from. Quoted evidence is a claim like any other and gets verified where it
+allegedly appeared — the same rule already applied to gate results, now applied to citations.
 
 ## UA-0 — the layout registry: one tree, one spelling, two languages
 

@@ -53,7 +53,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
-| NF — native floor | NF-0…7 + **NF-remote (§7) COMPLETE** — the floor serves TSP1, hosts published, writes gated; proved on a real tailnet at GT-4 | `specs/native-floor.md` | sidecar protocol v3 gates per-device tokens (see debts) |
+| NF — native floor | NF-0…7 + **NF-remote (§7) COMPLETE** — the floor serves TSP1, hosts published, writes gated; proved on a real tailnet at GT-4, with peers authenticated by tailnet WhoIs | `specs/native-floor.md` | per-device tokens (GT-D6) whenever the token work is wanted — NOT gated upstream (the v3 claim was retracted) |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
 | GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | **GT-5** iOS attach (IOS-track co-owned) — the last GT rung; James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module; smoke row 13b unskips when a peer can be staged in the harness |
 | UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
@@ -213,14 +213,17 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
   (deletes the sub-second persistence-flip window) + a login/default-args knob (panes are
   non-login interactive shells today; packaged-run PATH poverty is the risk) (GT-2e/GT-3,
   2026-08-02).
-- **SECURITY: device identity on the terminal mesh is assertable until the sidecar reaches
-  protocol v3** — at v2 (what ships today) `tailnet WhoIs` is unavailable and connections
-  fall back to hello-asserted identity, so a peer already inside the tailnet can assert
-  another device's id. Surfaced by GT-4's live probe via upstream's own diagnostic. It does
-  NOT weaken mirror-write (a secret string, not an identity claim), and it is the exact class
-  `lane_transport.rs` legislates against ("identity comes from the address, never the
-  header"). **Per-device tokens (the GT-D6 upgrade) land on a v3 sidecar, not before**
-  (GT-4, 2026-08-06).
+- ~~**SECURITY: device identity on the terminal mesh is assertable until the sidecar reaches
+  protocol v3**~~ — **RETRACTED the same day it was written (2026-08-06). The claim was
+  false.** The sidecar is not at v2: truffle's sidecar source is at `protocolVersion: 4`, the
+  installed binary ships `whoisResult`, `truffle-core 0.7.12`'s `TailscaleProvider` implements
+  `whois`, and the terminal mesh calls that same node. The diagnostic the GT-4 builder quoted
+  fires only for a provider with NO WhoIs — upstream's own test calls that "the in-process
+  transports these tests run on" — and it appears NOWHERE in the probe log it was attributed
+  to. Live proof both ways: the UA S1 probe answers self-whois on a real tailnet, and because
+  the mesh REFUSES a connection whose WhoIs is anonymous or unavailable, the kill-matrix
+  probe's peers attaching at all proves their identities were authenticated. Per-device
+  tokens are **not** gated on a sidecar release (GT-4 close-out, 2026-08-06).
 - **`ghosttea-truffle` writes unstructured `[terminal-mesh]` lines to STDERR** — latent
   violation of native_logging's absolute no-stderr law (which today only meets the
   flag-off floor); the `field_native.sidecar.stderr` capture is the fixing pattern
