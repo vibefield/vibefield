@@ -3,7 +3,10 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-05** (UA-0 `fcd0af9` — the
+> stays in the design docs + specs. Last rewritten: **2026-08-06** (GT-4 `3aa5ba1`/`39c1b1d`/
+> `0a2ac28` — the mesh in two halves: the monitor is the door, the floor joined the tailnet,
+> the kill matrix proved on three real nodes, NF-remote complete, and ghosttea 0.9.2 released
+> upstream to meet our truffle pin. Earlier: UA-0 `fcd0af9` — the
 > users track opens: layout registry landed hours after `specs/users-and-accounts.md` was
 > drafted from James's OS-user framing, spike-verified (S1/V2–V5 all resolved — self-whois
 > works on the pinned truffle, so the guest door needs no upstream), RATIFIED, and folded
@@ -50,9 +53,9 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
-| NF — native floor | NF-0…7 COMPLETE and hardened | `specs/native-floor.md` | NF-remote rides GT-4 |
+| NF — native floor | NF-0…7 + **NF-remote (§7) COMPLETE** — the floor serves TSP1, hosts published, writes gated; proved on a real tailnet at GT-4 | `specs/native-floor.md` | sidecar protocol v3 gates per-device tokens (see debts) |
 | IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
-| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v glass + 3m mocked monitor + 3f shaders + 3p perf (cold 443ms → warm 36ms) + **3c physics-in-worker** landed (spec v0.3, GT-D10…D17) | `specs/godview-terminal.md` | **GT-4** remote floor; the MONITOR is the door (GT-D17 — remote sessions appear as swarm bubbles/rain columns, click attaches the active pane; no ⌘⇧O palette) → GT-5 iOS attach; James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module |
+| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | **GT-5** iOS attach (IOS-track co-owned) — the last GT rung; James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module; smoke row 13b unskips when a peer can be staged in the harness |
 | UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
@@ -80,9 +83,12 @@ day — drafted morning, landed upstream in 0.9.1, consumed by evening: shaders 
 viewer-local (four ports as §8 chips; the withheld-upstream list renders honestly for the
 first time; the floor's config document provably untouched by a viewer's choice). James's
 own `6646f1b` (chopsticks-UI match, per-mode themes) landed between slices and everything
-stacked cleanly. Next slice **GT-4**: `with_terminal_mesh` behind config +
-`terminal.v1.hosts` + mirror-write v1 — the desktop deck's ⌘⇧O remote panes are the test
-row, and NF-remote rides it. GT-3p made the deck fast the honest way: James's own groundwork
+stacked cleanly. **GT-4 landed the mesh in two halves**: the monitor became the door (remote
+sessions are monitor citizens — bubbles, columns, rows — and clicking one attaches the active
+pane; no palette), and the floor joined the tailnet, borrowing the gateway's single truffle
+node rather than standing up a second. The kill matrix ran for real — three ephemeral nodes,
+one seeing the host's session and refused write, the other holding the capability and
+accepted, with no fieldd anywhere. NF-remote is complete with it. GT-3p made the deck fast the honest way: James's own groundwork
 (the ICE frame gate, the rAF×LoAF frame counter, the ⇧⇧ one-door) plus the warm transport —
 bridge, worker, and WebGPU device ready at app-idle, sessions still born only on ⌘G — took a
 cold open from ~443ms to a ~36ms warm one, with the phase breakdown riding the smoke verdict
@@ -207,6 +213,32 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
   (deletes the sub-second persistence-flip window) + a login/default-args knob (panes are
   non-login interactive shells today; packaged-run PATH poverty is the risk) (GT-2e/GT-3,
   2026-08-02).
+- **SECURITY: device identity on the terminal mesh is assertable until the sidecar reaches
+  protocol v3** — at v2 (what ships today) `tailnet WhoIs` is unavailable and connections
+  fall back to hello-asserted identity, so a peer already inside the tailnet can assert
+  another device's id. Surfaced by GT-4's live probe via upstream's own diagnostic. It does
+  NOT weaken mirror-write (a secret string, not an identity claim), and it is the exact class
+  `lane_transport.rs` legislates against ("identity comes from the address, never the
+  header"). **Per-device tokens (the GT-D6 upgrade) land on a v3 sidecar, not before**
+  (GT-4, 2026-08-06).
+- **`ghosttea-truffle` writes unstructured `[terminal-mesh]` lines to STDERR** — latent
+  violation of native_logging's absolute no-stderr law (which today only meets the
+  flag-off floor); the `field_native.sidecar.stderr` capture is the fixing pattern
+  (GT-4, 2026-08-06).
+- **`apps/ios/**` is stale against 0.9.2** — rides truffle 0.7.11 / ghosttea 0.9.1 while
+  0.9.2 advances upstream's Swift lock to the `truffle-v0.7.12` tag; the IOS track owns
+  its own EL8 bump, and GT-5's phone attach needs it (GT-4, 2026-08-06).
+- **Smoke row 13b (remote bubble → attach) is still skipped** — the floor is ready and the
+  check is honest (`remotePeer:"unavailable"`), but unskipping needs a PEER staged in the
+  smoke harness, i.e. a second floor. Harness work GT-4 did not take (2026-08-06).
+- **G13 + G14 ghosttea petition candidates, unfiled** — G13: let a host inject the remote
+  banner's browse handler (today, with the palette disabled, a mounted remote pane that ENDS
+  renders a "Browse sessions" button that does nothing) so the monitor can be the door
+  there too. G14: an injectable `MeshRuntime` seam, so the terminal mesh adapter need not
+  hold the truffle node at construction — today a node arriving after the 20s budget does
+  not attach until the pair bounces (GT-4, 2026-08-06).
+- **The attach path with the mesh gateway genuinely UP is unexercised** — that combination
+  has never booted outside the probe's hand-built services (GT-4, 2026-08-06).
 - **Shaders are WebGPU-only** — on the Canvas2D fallback the chips select something that
   will not draw; the section's copy says so, but a deck that KNEW its backend could show a
   live honest-UNAVAILABLE — the panel can't know it today, the deck mounts on first ⇧⇧
@@ -284,8 +316,12 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
 ## Upstream / sibling pins (the EL8 watch)
 
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
-ghosttea `=0.9.1` on all planes (GT-3f, 2026-08-04; preflight pins all five npm rows) ·
-chopsticks 0.1.4 · strata 0.10.0 (via ICE) · `@vibecook/ice` 0.2.0
-(registry pin). G7/G8/G9 consumed at NF-7; **G11 filed, landed upstream in 0.9.1, and
-consumed at GT-3f — same day**; G10 candidate still unfiled (GT-2e/3); C7 implemented
-upstream, consumption rides AR. Full petition status: `petitions/README.md`.
+ghosttea `=0.9.2` + **`ghosttea-truffle =0.9.2`** on all planes (GT-4, 2026-08-06; preflight
+pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata 0.10.0 (via ICE) ·
+`@vibecook/ice` 0.2.0 (registry pin). **The 0.9.2 release exists because of GT-4**: our
+`=0.7.12` and upstream's `=0.7.11` could not resolve together, and James moved ghosttea to
+meet us rather than the reverse — the exact-pin law producing a loud manifest error instead
+of a silent `Arc<Node>` split. G7/G8/G9 consumed at NF-7; G11 filed→landed→consumed at GT-3f
+in one day; G10 (spawn props), G12 (first-frame signal + `prepare()`), G13 (browse-handler
+injection), G14 (injectable mesh runtime) all named and unfiled; C7 implemented upstream,
+consumption rides AR. Full petition status: `petitions/README.md`.

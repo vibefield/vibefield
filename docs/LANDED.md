@@ -778,6 +778,54 @@ drag feel unchanged by construction, not measurement (physicsHz A/B stays James'
 Verify + smoke exit 0 both hands (orchestrator: first attempt at load 69.8). Full record:
 `specs/godview-terminal.md` (GT-D16 + GT-3c findings).
 
+## GT-4 — the mesh, in two halves
+
+**GT-4b LANDED (2026-08-05, `3aa5ba1`) — the monitor opens the door.** GT-D17's design: the
+⌘⇧O palette was upstream's UX, not ours, so remote sessions become MONITOR CITIZENS —
+a `RemoteSessionField` composed beside `MockAgentField` behind the one source seam, honest
+and empty with no peer serving; the "preview — mock agents" label narrows its claim to the
+mock field so a real remote row never sits under a label calling it invented; and `select`
+on a remote row attaches the ACTIVE pane through the workspace's own pane-session flow.
+`enableRemoteSessions` stays off. Its post-landing recon (no edits after the done report —
+the law held) found: at 0.9.x the library's write gate is named `readWrite`, so our
+"mirror-write" is the config that feeds it; and a LATENT upstream defect — with the palette
+disabled, a mounted remote pane that ENDS renders a "Browse sessions" button that does
+nothing (`browseDeviceSessions` early-returns on the flag), fixable by handing the library a
+browse handler that opens OUR monitor, which is GT-D17's own grain.
+
+**GT-4a2 LANDED (2026-08-06, `39c1b1d`) — the pins meet upstream.** GT-4a's honest
+no-landing verdict (`fd72e72`) proved the mesh dep was unaddable: every published
+`ghosttea-truffle` pinned `truffle-core =0.7.11` against our `=0.7.12`, and two exact pins in
+one range make the resolver refuse outright — the exact-pin law working as designed. The
+orchestrator's step-back to `=0.7.11` (`d3bccc8`) was the wrong call to make unasked; James
+resolved it from the other side instead, releasing **ghosttea 0.9.2** pinned to `=0.7.12`
+with a changelog that names the law's purpose in the same terms ("a loud resolver error
+rather than a silent type mismatch"). So `39c1b1d` reverts the step-back and bumps every
+plane to 0.9.2, preflight's pin table gaining a `ghosttea-truffle` row. Kept from the
+step-back's reasoning because it stays true: 0.7.11/0.7.12 are source-identical crates and
+T2's real payload rides the Go sidecar (`@vibecook/truffle-sidecar-*@0.7.12`, never moved).
+
+**GT-4a LANDED (2026-08-06, `0a2ac28`) — the floor joins the mesh.** The gateway keeps
+owning the single truffle node and the terminal unit BORROWS it (`MeshHandle::wait_for_node`
+hands out exactly the `Arc<Node>` upstream's constructor takes — that type equality is what
+the pin event bought). `FIELD_NATIVE_TERMINAL_MESH` is off by default and degrades honestly
+without the gateway: the floor SERVES, PTYs untouched, health quotes the gateway's own
+reason, never a panic. Hosts publication writes no wire shape of ours — upstream derives its
+store from the service name, and we hand it the name whose derived store IS
+`STORES.TERMINAL_HOSTS`, asserted both directions. Mirror-write v1 maps to upstream's
+`capability` (constant-time compare); `allow_tailnet_write` stays FALSE forever because
+setting it short-circuits every viewer to read-write. EL7 holds by construction, with a test
+binding the variable name to the stripped prefix class so a rename cannot smuggle the secret
+out. **The kill matrix ran over a REAL tailnet** — three ephemeral nodes, re-run by the
+orchestrator: beta saw alpha advertising one session, view granted and write REFUSED; gamma,
+holding the capability, view granted and write ACCEPTED — an A/B control inside one 9-second
+run, **with no fieldd anywhere**, which is §7's asymmetry proved from its positive side.
+Security finding for the record: the installed sidecar at protocol v2 falls back to
+hello-asserted identity, so a peer inside the tailnet can assert another device's id — it
+needs sidecar v3, does not weaken the mirror-write secret, and gates the per-device-token
+upgrade. Verify exit 0 both hands. Full record: `specs/godview-terminal.md` (GT-4 row +
+floor findings).
+
 ## UA-0 — the layout registry: one tree, one spelling, two languages
 
 **UA-0 LANDED (2026-08-05, `fcd0af9`).** The UA track's first slice, landed hours after its
