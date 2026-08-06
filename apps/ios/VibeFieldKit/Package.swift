@@ -24,11 +24,13 @@ let package = Package(
     // The Ghosttea Apple stack (terminal + Truffle mesh). Exact pin — EL8:
     // bumping it is a deliberate upgrade event, moved in lockstep with
     // field-native's truffle-core pin (both planes ride truffle 0.7.11).
-    // 0.9.0 brings terminal appearance/config parity to iOS (themes, WebGPU
-    // shader stack, clipboard write-out) on top of 0.7.0's reconnect layer —
-    // the surface the IOS-3 session card consumes. The desktop planes pin
-    // ghosttea 0.8.0 today; the reconnect fencing keeps mixed minors honest.
-    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.9.0")
+    // 0.9.2 is THE meeting point: GT-4a2 moved every desktop plane to it
+    // (cargo ghosttea + ghosttea-truffle "=0.9.2", truffle-core "=0.7.12"),
+    // and 0.9.2's Swift manifest pins the same truffle 0.7.12 — one wire, one
+    // Arc<Node> type, both planes. It carries 0.9.0's appearance parity and
+    // 0.7.0's reconnect layer, and it is the version whose TruffleTerminalMesh
+    // the desktop floor now publishes terminal hosts with (IOS-3's server).
+    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.9.2")
   ],
   targets: [
     // Design tokens and shared chrome — the godview monochrome language.
