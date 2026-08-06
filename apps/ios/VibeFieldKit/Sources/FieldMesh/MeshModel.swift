@@ -54,6 +54,23 @@ public final class MeshModel {
 
   public var isRunning: Bool { runtime != nil && state != .stopping }
 
+  /// The running node's peer directory, for the surfaces that ask the mesh
+  /// questions of their own (IOS-3's remote-session discovery).
+  ///
+  /// The runtime's own `directory` is non-optional, so the optionality here is
+  /// exactly "there is no runtime" — never "the node has no directory". It is
+  /// deliberately not observable: it is a door, not display state, and a view
+  /// that re-renders on `state` already learns when it opens.
+  ///
+  /// `async` because it must be: upstream's `directory` is a `let` on an ACTOR,
+  /// and a cross-module actor property is isolated even when it is immutable.
+  /// Caching it here would buy a synchronous getter at the price of a second
+  /// copy of the runtime's own state, which is a worse trade than an await in
+  /// the `.task` that composes the field.
+  public var directory: GhostteaTrufflePeerDirectory? {
+    get async { await runtime?.directory }
+  }
+
   /// The user's deliberate act of joining the tailnet.
   public func connect() {
     guard runtime == nil else { return }

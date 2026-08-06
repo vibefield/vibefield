@@ -18,6 +18,7 @@ let package = Package(
     .library(name: "SwarmPhysics", targets: ["SwarmPhysics"]),
     .library(name: "FieldAgents", targets: ["FieldAgents"]),
     .library(name: "FieldMesh", targets: ["FieldMesh"]),
+    .library(name: "FieldTerminal", targets: ["FieldTerminal"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
   ],
   dependencies: [
@@ -42,22 +43,42 @@ let package = Package(
     // color, and the scripted mock fleet that stands in for the daemon feed.
     .target(name: "FieldAgents", dependencies: ["SwarmPhysics"]),
     // The mesh leg: the in-process Truffle/Tailscale runtime, login flow,
-    // and peer roster — the phone joins the tailnet here (IOS-2).
+    // peer roster (IOS-2) — and since IOS-3, remote-session discovery, which
+    // maps upstream's session summaries into FieldAgents' own vocabulary so
+    // the projection that makes bubbles never learns a Ghosttea type.
     .target(
       name: "FieldMesh",
       dependencies: [
         "FieldDesign",
+        "FieldAgents",
         .product(name: "GhostteaTruffle", package: "ghosttea"),
+      ]
+    ),
+    // The terminal leg (IOS-3): everything that knows Ghosttea's renderer
+    // exists — appearance → presentation config, the attachment lifecycle,
+    // and the Metal surface. Kept apart from FieldHome so the card composes
+    // a terminal without the field learning how one works.
+    .target(
+      name: "FieldTerminal",
+      dependencies: [
+        "FieldDesign",
+        .product(name: "GhostteaTruffle", package: "ghosttea"),
+        .product(name: "GhostteaTerminal", package: "ghosttea"),
+        .product(name: "GhostteaCore", package: "ghosttea"),
+        .product(name: "GhostteaAppearance", package: "ghosttea"),
       ]
     ),
     // The home screen: swarm field rendering, bubble chrome, session card.
     .target(
       name: "FieldHome",
-      dependencies: ["FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh"],
+      dependencies: [
+        "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal",
+      ],
       resources: [.process("Resources")]
     ),
     .testTarget(name: "SwarmPhysicsTests", dependencies: ["SwarmPhysics"]),
     .testTarget(name: "FieldAgentsTests", dependencies: ["FieldAgents"]),
     .testTarget(name: "FieldMeshTests", dependencies: ["FieldMesh"]),
+    .testTarget(name: "FieldTerminalTests", dependencies: ["FieldTerminal"]),
   ]
 )

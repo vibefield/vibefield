@@ -22,7 +22,8 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldDesign` | godview monochrome tokens (palette light+dark, mono type ramp, motion constants, grid/scanlines/vignette) |
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested |
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
-| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.0), login sheet, peer roster, the mesh chip |
+| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.2), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
+| `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition |
 
 Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`) · iOS **18.1** floor (the pinned
@@ -32,8 +33,12 @@ TailscaleKit binary's floor — GhostteaApp's own) · simulator is arm64-only
 
 ## Build · test · run
 
-This machine's `xcode-select` points at CommandLineTools; every invocation
-passes `DEVELOPER_DIR` (the Ghosttea convention):
+This machine's `xcode-select` points at CommandLineTools, so every invocation
+passes `DEVELOPER_DIR` (the Ghosttea convention). Since IOS-3 the tree also
+links `GhostteaTerminal`, which ships a Metal build-tool plugin — SwiftPM asks
+for trust before running one, and on the command line that ask is
+`-skipPackagePluginValidation` (in Xcode it is a one-time prompt). Both flags
+belong on every command here:
 
 ```sh
 cd apps/ios
@@ -41,12 +46,18 @@ cd apps/ios
 # build (unsigned, simulator)
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   xcodebuild -project VibeField.xcodeproj -scheme VibeField \
-  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+  -destination 'generic/platform=iOS Simulator' \
+  -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO build
 
 # tests (the package's own scheme; the app scheme builds/launches only)
 cd VibeFieldKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   xcodebuild test -scheme VibeFieldKit-Package \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -skipPackagePluginValidation
+
+# one module at a time (each target has its own scheme — the fast inner loop)
+DEVELOPER_DIR=… xcodebuild -scheme FieldTerminal \
+  -destination 'generic/platform=iOS Simulator' -skipPackagePluginValidation build
 
 # run in a simulator
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer sh -c '

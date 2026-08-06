@@ -1,3 +1,4 @@
+import Foundation
 import SwarmPhysics
 
 /// The three statuses the field ranks by (desktop `AgentVisualStatus`).
@@ -68,6 +69,35 @@ public func agentDetail(_ state: AgentRuntimeState?, status: AgentVisualStatus) 
   if state.activeReasoning { return "thinking" }
   if state.activeTurn { return "responding" }
   return status.rawValue
+}
+
+/// Desktop `classifyTerminalStatus`: a peer reports terminal activity, not
+/// agent state, and `foreground-job` is the only kind that means work.
+///
+/// It can never return `.waiting`. That tier is agent-permission language —
+/// something is asking the user to allow something — and a terminal has no
+/// permissions to ask about, so a remote bubble is calm or ignited and never
+/// the loud tier. The desktop says this in its return type
+/// (`Exclude<AgentVisualStatus, "waiting">`); Swift can only say it here.
+public func classifyTerminalStatus(_ activityKind: String?) -> AgentVisualStatus {
+  activityKind == "foreground-job" ? .working : .idle
+}
+
+/// Desktop `folderName`: the final path component, for bubbles and badges.
+///
+/// Ported clause for clause, because each one is load-bearing: trailing
+/// separators are stripped BEFORE the split (so `/a/b/` is `b`, not the
+/// fallback), both separators are honored (a peer may be a Windows host), and
+/// an empty result falls through to the fallback rather than rendering a
+/// bubble with a blank headline. The trim is the whole string's, exactly as in
+/// JS — a component's own inner padding survives, which is what the original
+/// does and what its callers have always been fed.
+public func folderName(_ path: String?, fallback: String) -> String {
+  var normalized = path?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+  while let last = normalized.last, last == "/" || last == "\\" { normalized.removeLast() }
+  let component =
+    normalized.split(omittingEmptySubsequences: false) { $0 == "/" || $0 == "\\" }.last ?? ""
+  return component.isEmpty ? fallback : String(component)
 }
 
 /// Desktop `agentColor`, exactly: FNV-1a over UTF-16 code units in signed

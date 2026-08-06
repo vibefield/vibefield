@@ -2,15 +2,21 @@ import FieldAgents
 import FieldDesign
 import SwiftUI
 
-/// One agent, rendered as a living circle.
+/// One session — an agent's or a peer's terminal — rendered as a living
+/// circle.
 ///
 /// Status is contrast, exactly as on the desktop: idle wears quiet grey,
 /// working inverts against the theme and breathes, waiting is the biggest,
-/// highest-contrast object on screen with an urgent pulse. The agent's
-/// identity hue appears only as a whisper — the context fill and the
-/// ignition embers.
-struct AgentBubbleView: View {
-  let agent: AgentSnapshot
+/// highest-contrast object on screen with an urgent pulse. The identity hue
+/// appears only as a whisper — the context fill and the ignition embers.
+///
+/// The view reads a `FieldBubble` and never asks where it came from: an agent
+/// and a peer's shell differ only in which facet is present, which is the
+/// whole point of the union (IOS-3a). Facet-shaped chrome — the branch dot,
+/// the context readout — is drawn only when its facet has something true to
+/// say.
+struct FieldBubbleView: View {
+  let bubble: FieldBubble
   let visual: AgentBubbleVisual
   let diameter: CGFloat
 
@@ -25,11 +31,13 @@ struct AgentBubbleView: View {
   @State private var hasSpawned = false
 
   private var identityColor: Color {
-    FieldPalette.agentColor(hue: agentIdentityHue(agent.runtimeSessionID))
+    FieldPalette.agentColor(hue: agentIdentityHue(bubble.identityKey))
   }
 
   private var status: AgentVisualStatus { visual.status }
-  private var detail: String { agentDetail(agent.state, status: status) }
+  /// Already folded by the projection — the view never re-derives a truth the
+  /// pure function owns.
+  private var detail: String { bubble.detail }
 
   var body: some View {
     ZStack {
@@ -73,7 +81,7 @@ struct AgentBubbleView: View {
   private var contextFill: some View {
     // The context window rising inside the bubble, bottom-up (13% tint).
     GeometryReader { proxy in
-      if let percent = agent.state?.contextUsedPercent {
+      if let percent = bubble.agent?.contextUsedPercent {
         Rectangle()
           .fill(identityColor)
           .opacity(0.13)
@@ -87,7 +95,7 @@ struct AgentBubbleView: View {
   }
 
   private var glyph: some View {
-    AgentGlyph(provider: agent.provider)
+    BubbleGlyph(bubble: bubble)
       .frame(width: 58, height: 58)
       .foregroundStyle(tierText)
       .opacity(glyphOpacity)
@@ -98,7 +106,7 @@ struct AgentBubbleView: View {
 
   private var copyStack: some View {
     VStack(spacing: 0) {
-      if visual.appearance != .idle, let branch = agent.state?.branch {
+      if visual.appearance != .idle, let branch = bubble.agent?.branch {
         HStack(spacing: 4) {
           Circle()
             .fill(FieldPalette.branchGreen)
@@ -112,7 +120,7 @@ struct AgentBubbleView: View {
         .padding(.bottom, 4)
       }
 
-      Text(agent.project)
+      Text(bubble.project)
         .font(projectFont)
         .tracking(FieldType.tracking(-0.035, of: projectSize))
         .lineLimit(1)
@@ -130,18 +138,21 @@ struct AgentBubbleView: View {
     .allowsHitTesting(false)
   }
 
+  @ViewBuilder
   private var contextLabel: some View {
-    VStack {
-      Spacer()
-      Text(contextText)
-        .font(FieldType.mono(6, .heavy))
-        .tracking(FieldType.tracking(0.05, of: 6))
-        .monospacedDigit()
-        .foregroundStyle(tierText)
-        .opacity(0.62)
-        .padding(.bottom, 6)
+    if let contextText {
+      VStack {
+        Spacer()
+        Text(contextText)
+          .font(FieldType.mono(6, .heavy))
+          .tracking(FieldType.tracking(0.05, of: 6))
+          .monospacedDigit()
+          .foregroundStyle(tierText)
+          .opacity(0.62)
+          .padding(.bottom, 6)
+      }
+      .allowsHitTesting(false)
     }
-    .allowsHitTesting(false)
   }
 
   // MARK: - Interaction
@@ -217,18 +228,27 @@ struct AgentBubbleView: View {
 
   private var projectFont: Font { FieldType.mono(projectSize, .heavy) }
 
+  /// The eyebrow under the name. An agent says what is thinking; a peer's
+  /// session says which machine it lives on — the same reason the desktop puts
+  /// the host in the detail rather than leaving a path with no machine
+  /// attached to it.
   private var providerLine: String {
-    agent.state?.modelName ?? agent.provider.displayName
+    if let remote = bubble.remote { return remote.deviceName }
+    guard let agent = bubble.agent else { return "" }
+    return agent.modelName ?? agent.provider.displayName
   }
 
-  private var contextText: String {
-    guard let percent = agent.state?.contextUsedPercent else { return "CTX:--%" }
-    let whole = Int(percent.rounded(.down))
-    return String(format: "CTX:%02d%%", whole)
+  /// nil for a terminal: a shell has no context window, and "CTX:--%" would be
+  /// a readout of a number that does not exist.
+  private var contextText: String? {
+    guard bubble.agent != nil else { return nil }
+    guard let percent = bubble.agent?.contextUsedPercent else { return "CTX:--%" }
+    return String(format: "CTX:%02d%%", Int(percent.rounded(.down)))
   }
 
   private var accessibilityText: String {
-    "\(agent.project), \(providerLine), \(status.rawValue): \(detail), \(contextText)"
+    let tail = contextText.map { ", \($0)" } ?? ""
+    return "\(bubble.project), \(providerLine), \(status.rawValue): \(detail)\(tail)"
   }
 
   // MARK: - Pulse
