@@ -1,6 +1,7 @@
 import FieldAgents
 import FieldDesign
 import FieldMesh
+import FieldTerminal
 import SwiftUI
 
 /// The VibeField home: the whole screen is the field. Bubbles are the
@@ -20,6 +21,18 @@ public struct HomeScreen: View {
   @State private var selection: SessionSelection?
   @State private var meshSheetOpen = false
   @State private var discoveryLive = false
+  @State private var attachment: TerminalAttachment?
+  /// Two different failures, deliberately not one field: a renderer that
+  /// refused a frame and a mesh that was never up are different facts, and
+  /// folding them into one string made the card say the renderer refused
+  /// something it had never been handed.
+  @State private var renderFailure: String?
+  @State private var attachRefusal: String?
+  @State private var appearance = TerminalAppearanceStore.load()
+  /// The host's mirror-write secret, when this phone has been told it. Absent
+  /// is the honest default: a viewer, not a typist (GT-4a's asymmetry from the
+  /// client side). Its home is the Keychain and its UI is IOS-3d's settings.
+  @State private var mirrorWriteCapability: String?
   #if DEBUG
     @State private var demoRemoteActive = false
   #endif
@@ -87,6 +100,17 @@ public struct HomeScreen: View {
               ?? bubbles.first(where: { $0.status == .working })
               ?? bubbles.first
             if let wanted { selection = SessionSelection(id: wanted.id) }
+            // `-vf-auto-attach` carries the run one step further: on a phone
+            // whose mesh is up against a serving desktop, this is the whole
+            // IOS-3 path — discover, choose, attach — with no finger on the
+            // glass. Without a mesh it proves the honest-failure path instead,
+            // which is the other thing worth seeing.
+            if ProcessInfo.processInfo.arguments.contains("-vf-auto-attach"),
+              let wanted, wanted.remote?.attachable == true
+            {
+              try? await Task.sleep(for: .seconds(1))
+              beginAttachment(to: wanted)
+            }
           }
         }
       #endif
@@ -105,12 +129,36 @@ public struct HomeScreen: View {
     .onChange(of: scenePhase) { _, phase in
       phase == .active ? syncDiscovery(for: mesh.state) : remoteField.stop()
     }
-    .sheet(item: $selection) { selected in
+    .sheet(item: $selection, onDismiss: { endAttachment() }) { selected in
+      let bubble = bubbles.first(where: { $0.id == selected.id })
       SessionCardView(
-        bubble: bubbles.first(where: { $0.id == selected.id }),
-        onAttach: {}
-      )
-      .presentationDetents([.fraction(0.55), .large])
+        bubble: bubble,
+        isAttached: attachment != nil,
+        statusNote: attachmentNote,
+        onAttach: { if let bubble { beginAttachment(to: bubble) } }
+      ) {
+        if let attachment {
+          TerminalSurface(
+            frame: attachment.frame,
+            visible: true,
+            configuration: attachment.presentation,
+            accessibilityTitle: bubble?.project ?? "Remote terminal",
+            accessibilityConnectionState: attachmentNote ?? "attached",
+            onGridSize: { size in
+              attachment.setViewport(cols: size.columns, rows: size.rows)
+            },
+            onNeedsFullRefresh: { attachment.requestFullRefresh() },
+            onHardwareInput: { attachment.handleHardwareKey($0) },
+            onSoftwareInput: { attachment.handleSoftwareInput($0) },
+            onMouseInput: { attachment.handleMouse($0) },
+            onScrollRows: { attachment.handleScroll(rows: $0) },
+            onRenderFailure: { renderFailure = $0 }
+          )
+        }
+      }
+      // Attaching earns the room: a terminal at the 0.55 detent is a
+      // letterbox, and the keyboard would take what is left.
+      .presentationDetents(attachment == nil ? [.fraction(0.55), .large] : [.large])
       .presentationDragIndicator(.visible)
       .presentationCornerRadius(40)
       .fieldGlassSheet()
@@ -162,6 +210,62 @@ public struct HomeScreen: View {
       remoteField = RemoteSessionField(source: TruffleSessionSource(directory: directory))
       remoteField.start()
     }
+  }
+
+  // MARK: - Attachment
+
+  /// The attachment's own state, in words the card can render. Ordered so the
+  /// most load-bearing truth wins: a failure explains itself, a live view-only
+  /// session says why it cannot type, and nothing here invents a reason the
+  /// terminal did not give.
+  private var attachmentNote: String? {
+    if let attachRefusal { return attachRefusal }
+    if let renderFailure { return "the renderer refused this frame — \(renderFailure)" }
+    guard let attachment else { return nil }
+    switch attachment.phase {
+    case .idle: return nil
+    case .connecting: return "connecting over the mesh…"
+    case .live:
+      if attachment.acceptsInput { return attachment.notice }
+      return attachment.readWrite
+        ? (attachment.notice ?? "taking control…")
+        : "view only — this host is not sharing writes"
+    case .suspended(let why): return "suspended — \(why)"
+    case .ended(let why): return "ended — \(why)"
+    case .failed(let why): return "failed — \(why)"
+    }
+  }
+
+  private func beginAttachment(to bubble: FieldBubble) {
+    guard let remote = bubble.remote, remote.attachable else { return }
+    renderFailure = nil
+    attachRefusal = nil
+    Task {
+      guard let directory = await mesh.directory else {
+        // Honest rather than inert: the button did something, and the reason
+        // it went nowhere is the mesh, not the session and not the renderer.
+        attachRefusal = "the mesh is not up on this device — connect it first"
+        return
+      }
+      let attachment = TerminalAttachment(
+        directory: directory,
+        appearance: appearance,
+        accessToken: mirrorWriteCapability)
+      self.attachment = attachment
+      // A starting grid the surface immediately corrects through onGridSize —
+      // the host needs SOME viewport to open with, and 80×24 is the one every
+      // terminal has agreed on since the VT100.
+      attachment.attach(
+        deviceID: remote.deviceID, sessionID: remote.sessionID, cols: 80, rows: 24)
+    }
+  }
+
+  private func endAttachment() {
+    guard let attachment else { return }
+    self.attachment = nil
+    renderFailure = nil
+    attachRefusal = nil
+    Task { await attachment.detach() }
   }
 
   private struct SessionSelection: Identifiable {

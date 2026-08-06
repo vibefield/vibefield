@@ -78,6 +78,19 @@ private func row(
     #expect(fieldBubble(from: row(cwdLabel: "")).detail == "Mac Studio")
   }
 
+  /// One clause, every use. A Swift consumer writes `if let cwd` and would
+  /// bind `""` into an empty row, so the facet gets the normalized label too —
+  /// while the ROW keeps the peer's literal answer, because recording what a
+  /// peer said and deciding what to draw are different jobs.
+  @Test func anEmptyLabelIsNoLabelInTheFacetToo() {
+    let empty = row(cwdLabel: "")
+    #expect(fieldBubble(from: empty).remote?.cwdLabel == nil)
+    #expect(fieldBubble(from: row(cwdLabel: nil)).remote?.cwdLabel == nil)
+    #expect(fieldBubble(from: empty).project == "zsh")
+    // The record is untouched — normalization is the projection's job.
+    #expect(empty.session.cwdLabel == "")
+  }
+
   @Test func projectIsTheFolderWithTheTitleAsFallback() {
     #expect(fieldBubble(from: row()).project == "vibe-field")
     #expect(fieldBubble(from: row(title: "zsh", cwdLabel: nil)).project == "zsh")

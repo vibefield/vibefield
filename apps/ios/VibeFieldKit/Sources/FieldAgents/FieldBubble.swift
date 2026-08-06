@@ -121,12 +121,18 @@ public func fieldBubble(from row: RemoteSessionRow) -> FieldBubble {
   let host = row.host
   let session = row.session
   // The JS truthiness clause, kept: an EMPTY label is no label, and rendering
-  // `host · ` would hang a separator on nothing.
+  // `host · ` would hang a separator on nothing. It governs EVERY use of the
+  // field below, the facet included — the desktop can pass its raw value on
+  // because every JS consumer writes `if (cwdLabel)` and `""` is falsy there,
+  // but a Swift consumer writes `if let cwd` and would bind an empty string
+  // into an empty row. The peer's literal answer is not lost: the row keeps it
+  // untouched in `RemoteSessionInfo`, and normalizing belongs in the
+  // projection, never at the mesh seam that records what the peer said.
   let label = (session.cwdLabel?.isEmpty == false) ? session.cwdLabel : nil
   let untitled = session.title.isEmpty ? "remote" : session.title
   return FieldBubble(
     id: id,
-    project: folderName(session.cwdLabel, fallback: untitled),
+    project: folderName(label, fallback: untitled),
     // The host rides in the detail as well as in the facet, because the detail
     // is what the swarm reads out: "a path with no machine attached to it" is
     // exactly the confusion GT-3's finding warned of.
@@ -143,5 +149,5 @@ public func fieldBubble(from row: RemoteSessionRow) -> FieldBubble {
       sessionID: session.sessionID,
       attachable: session.attachable,
       readWrite: session.readWrite,
-      cwdLabel: session.cwdLabel))
+      cwdLabel: label))
 }

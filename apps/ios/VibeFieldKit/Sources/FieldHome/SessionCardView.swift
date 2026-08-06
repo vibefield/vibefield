@@ -23,6 +23,10 @@ struct SessionCardView<Terminal: View>: View {
   /// True once the host has an attachment for this session — the slot below
   /// is then the live surface rather than the invitation.
   let isAttached: Bool
+  /// The attachment's own words, when it has any: connecting, view-only, the
+  /// reason it failed. The card renders them and never derives them — the
+  /// terminal owns its truth, and this view stays ignorant of how one works.
+  let statusNote: String?
   let onAttach: () -> Void
   @ViewBuilder let terminal: () -> Terminal
 
@@ -129,10 +133,18 @@ struct SessionCardView<Terminal: View>: View {
         .padding(.vertical, 14)
 
       if isAttached {
-        terminal()
-          .clipShape(RoundedRectangle(cornerRadius: 14))
-          .padding(.horizontal, 14)
-          .padding(.vertical, 14)
+        VStack(spacing: 0) {
+          terminal()
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+          if let statusNote {
+            Text(statusNote)
+              .font(FieldType.mono(9))
+              .foregroundStyle(FieldPalette.textMuted)
+              .padding(.top, 8)
+          }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
       } else if let remote = bubble.remote {
         invitation(remote)
       } else {
@@ -163,9 +175,14 @@ struct SessionCardView<Terminal: View>: View {
         }
         .buttonStyle(.plain)
 
-        Text(remote.readWrite ? "you can type here" : "view only — the host is not sharing writes")
-          .font(FieldType.mono(9))
-          .foregroundStyle(FieldPalette.textMuted)
+        Text(
+          statusNote
+            ?? (remote.readWrite
+              ? "you can type here" : "view only — the host is not sharing writes")
+        )
+        .font(FieldType.mono(9))
+        .foregroundStyle(FieldPalette.textMuted)
+        .multilineTextAlignment(.center)
       } else {
         // The row survives and refuses honestly: a live session the peer is
         // deliberately not sharing is a fact, and hiding it would be the
@@ -225,7 +242,9 @@ struct SessionCardView<Terminal: View>: View {
 }
 
 extension SessionCardView where Terminal == EmptyView {
-  init(bubble: FieldBubble?, onAttach: @escaping () -> Void) {
-    self.init(bubble: bubble, isAttached: false, onAttach: onAttach) { EmptyView() }
+  init(bubble: FieldBubble?, statusNote: String? = nil, onAttach: @escaping () -> Void) {
+    self.init(bubble: bubble, isAttached: false, statusNote: statusNote, onAttach: onAttach) {
+      EmptyView()
+    }
   }
 }
