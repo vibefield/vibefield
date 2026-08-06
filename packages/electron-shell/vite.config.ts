@@ -3,6 +3,10 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+const rendererRoot = join(import.meta.dirname, "src", "renderer-host");
+const mainEntry = join(rendererRoot, "index.html");
+const designSystemEntry = join(rendererRoot, "design-system.html");
+
 // Renderer build only — main/preload live in @vibefield/electron-shell (build:shell).
 //
 // Loro wasm decision (B1 spike, mirrors ICE's widgetlab-desktop): alias bare
@@ -14,7 +18,7 @@ export default defineConfig(({ mode }) => ({
   // root = the tiny renderer-host adapter (ESR 3a); the product code lives
   // behind @vibefield/field-app's public entry. Output lands in THIS package's
   // dist so the shell is self-contained (main loads ../renderer from dist/main).
-  root: join(import.meta.dirname, "src", "renderer-host"),
+  root: rendererRoot,
   base: "./",
   // The dev runner overrides this one compile-time capability for
   // `dev:onboarding`. Packaged and smoke renderers always get the safe default.
@@ -32,22 +36,35 @@ export default defineConfig(({ mode }) => ({
       "@vibecook/strata-ecs",
     ],
   },
+  // Dev always optimizes the union of the product and UI Bench graphs. Both
+  // surfaces share this cache, so changing launch modes must never leave the
+  // product renderer consuming a design-only optimizer result. Fiber is
+  // explicit through its linked-workspace owner (Vite's nested-dependency
+  // syntax); prebundling it is what keeps its Zustand/CommonJS dependencies
+  // behind one Vite-compatible ESM boundary. The explicit include also gives
+  // Vite 8 a config-hash change so historical mode-dependent caches are
+  // invalidated once instead of requiring a manual cache deletion.
+  optimizeDeps: {
+    entries: ["index.html", "design-system.html"],
+    include: ["@vibefield/field-app > @react-three/fiber"],
+  },
   build: {
-    outDir: join(import.meta.dirname, "dist", "renderer"),
+    // A bench bundle is useful for isolated inspection, but it is development
+    // material and therefore lands under the ignored dev root. Production's
+    // renderer directory can never be replaced by a design build.
+    outDir:
+      mode === "design"
+        ? join(import.meta.dirname, "..", "..", ".vibefield", "ui-bench", "renderer")
+        : join(import.meta.dirname, "dist", "renderer"),
     emptyOutDir: true,
     rollupOptions: {
       input:
         mode === "design"
           ? {
-              "design-system": join(
-                import.meta.dirname,
-                "src",
-                "renderer-host",
-                "design-system.html",
-              ),
+              "design-system": designSystemEntry,
             }
           : {
-              main: join(import.meta.dirname, "src", "renderer-host", "index.html"),
+              main: mainEntry,
               // test-only entry (ESR-12): built ONLY when the spike is requested —
               // the production renderer output carries no spike code
               ...(process.env["VITE_SPIKE"]

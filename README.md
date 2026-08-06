@@ -37,7 +37,8 @@ reopens the `../p008/truffle` `[patch.crates-io]` + `siblings.lock.json` dance; 
 pnpm install
 pnpm preflight      # tool versions + import-boundary walls
 pnpm dev            # desktop app dev loop
-pnpm dev:design     # browser-based UI inventory, no daemon required
+pnpm dev:design     # Electron UI Bench, no daemon or product data required
+pnpm dev:design:web # optional browser-only UI Bench loop
 pnpm verify         # full gate: typecheck · biome · rustfmt/clippy · TS+Rust tests · gen freshness
 ```
 
@@ -74,10 +75,14 @@ The development watcher is deliberately repository-bounded: it does not monitor
 `../p008/truffle` or its manifests. After changing dependencies or package manifests, run
 `pnpm install` and restart `pnpm dev`; installs are never performed implicitly by the watcher.
 
-`pnpm dev:design` opens the renderer's single-page interface index on port 5174. It imports the
-shipping token sheet and production view compositions, and presents runtime-bound chrome through
-deterministic fixture adapters for light/dark and state review without starting Electron or either
-daemon. Ownership and contribution rules live in [`docs/UI_SYSTEM.md`](docs/UI_SYSTEM.md).
+`pnpm dev:design` starts the single-page interface index in a dedicated Electron UI Bench. It
+reuses the production BrowserWindow and security policy, but its empty preload and isolated
+`.vibefield/ui-bench/` user-data root give it no user, daemon, plugin, tray, or diagnostic
+capabilities. The renderer imports the shipping token sheet and production view compositions;
+runtime-bound chrome receives deterministic fixture adapters for light/dark and state review.
+It can run alongside `pnpm dev`. `pnpm dev:design:web` keeps the faster browser-only loop on port
+5174 when native window behavior is irrelevant. Ownership and contribution rules live in
+[`docs/UI_SYSTEM.md`](docs/UI_SYSTEM.md).
 
 Design docs live in `draft/` — local-only, tracked on the `dev-local` branch
 (`pnpm commit-draft` snapshots them; the branch is never pushed).

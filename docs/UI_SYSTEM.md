@@ -65,9 +65,18 @@ access and pane modifier, provider glyph, and context boundary.
 
 ## Working loop
 
-Run `pnpm dev:design` for the single-page catalog. The catalog requires neither Electron nor the
-two daemons. Use `pnpm --filter @vibefield/field-app test` for the DOM and ownership guards, and
-`pnpm --filter @vibefield/electron-shell build:design` for the browser bundle.
+Run `pnpm dev:design` for the canonical single-page catalog in its dedicated Electron UI Bench.
+The bench uses the production window/security factory while deliberately omitting the product
+preload, users, daemons, plugins, tray, and diagnostics. Its generated shell and Electron user
+data stay under `.vibefield/ui-bench/`, so it can run beside the full application without touching
+product state. Use `pnpm dev:design:web` when a browser-only HMR loop is sufficient.
+
+Use `pnpm --filter @vibefield/field-app test` for DOM and ownership guards, and
+`pnpm --filter @vibefield/electron-shell build:design` for an ignored standalone bench bundle.
+That design build also lands under `.vibefield/ui-bench/`; it never replaces the production
+renderer output. The normal renderer build has only `index.html` as an entry and runs a leakage
+check that fails if a bench document or marker reaches `dist/renderer`. Desktop packaging then
+applies its existing exact stage allowlist as a second boundary.
 
 The ownership test intentionally rejects old catalog-only replicas and production selector
 definitions in catalog CSS. That makes fidelity a maintained boundary rather than a one-time

@@ -8,13 +8,16 @@
     "./preload": "./dist/preload/index.cjs"
   },
   "scripts": {
-    "build": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --external:electron '--external:../testing/smoke.cjs' --outfile=dist/main/index.cjs && esbuild src/main/bridge-entry.ts --bundle --platform=node --format=esm --outfile=dist/main/bridge-entry.mjs && esbuild src/preload/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload/index.cjs && esbuild src/testing/smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/testing/smoke.cjs",
-    "build:renderer": "vite build",
+    "build": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --external:electron '--external:../testing/smoke.cjs' --outfile=dist/main/index.cjs && esbuild src/main/bridge-entry.ts --bundle --platform=node --format=esm --outfile=dist/main/bridge-entry.mjs && esbuild src/preload/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload/index.cjs && esbuild src/testing/smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/testing/smoke.cjs && node scripts/verify-production-main.mjs",
+    "build:renderer": "vite build && node scripts/verify-production-renderer.mjs",
     "build:design": "vite build --mode design",
-    "dev:design": "vite --mode design --open /design-system.html",
+    "dev:design": "node ../../tooling/dev-runner/src/design-bench.mjs",
+    "dev:design:web": "vite --mode design --open /design-system.html",
     "dev:renderer": "vite",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.renderer.json"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.renderer.json",
+    "verify:production-main": "node scripts/verify-production-main.mjs",
+    "verify:production-renderer": "node scripts/verify-production-renderer.mjs"
   },
   "dependencies": {
     "@vibecook/ghosttea-electron": "*",
