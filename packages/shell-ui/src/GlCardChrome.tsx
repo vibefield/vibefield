@@ -16,16 +16,7 @@
 import type { WidgetComponentProps } from "@vibecook/ice/react";
 import type { ComponentType, ReactElement } from "react";
 import { CardShell } from "./CardShell";
-
-export interface GradientStop {
-  /** 0..1 along the 135° diagonal (top-left → bottom-right). */
-  readonly offset: number;
-  readonly color: string;
-}
-
-/** The v1 card gradient, as CSS (the canvas-texture path drew the same 135° ramp). */
-export const gradientCss = (stops: readonly GradientStop[]): string =>
-  `linear-gradient(135deg, ${stops.map((s) => `${s.color} ${(s.offset * 100).toFixed(0)}%`).join(", ")})`;
+import { type GradientStop, gradientCss } from "./visuals";
 
 /** Build a widget `chrome` component: CardShell with this card's gradient. */
 export function makeGlCardChrome(

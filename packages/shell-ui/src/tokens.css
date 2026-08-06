@@ -1,6 +1,11 @@
 /* @vibefield/shell-ui tokens — transcribed from DESIGN.md; the doc moves first, then this file. */
 
 :root {
+  /* Core type stacks. Components consume these instead of repeating a subtly
+     different system or monospace stack at every call site. */
+  --vf-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vf-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
   /* §2.1 Ground (the canvas) */
   --vf-canvas-bg: #fafafa;
   --vf-canvas-dot: rgba(0, 0, 0, 0.16);
@@ -11,8 +16,28 @@
   /* §2.2 Surfaces */
   --vf-card: #1c1c1e;
   --vf-card-deep: #000000;
+  --vf-card-ink: #ffffff;
   --vf-fill: #f2f2f7;
   --vf-fill-hover: #e5e5ea;
+
+  /* Semantic chrome projection. These are aliases over the art-direction
+     palette, not a second palette: shared primitives and domain surfaces use
+     the names below so light/dark treatment cannot drift independently. */
+  --vf-foreground: #1c1c1e;
+  --vf-foreground-inverse: #ffffff;
+  --vf-text-primary: rgb(28 28 30 / 85%);
+  --vf-text-secondary: rgb(28 28 30 / 70%);
+  --vf-text-tertiary: rgb(28 28 30 / 45%);
+  --vf-text-faint: rgb(28 28 30 / 30%);
+  --vf-hairline: rgb(0 0 0 / 5%);
+  --vf-hairline-strong: rgb(0 0 0 / 10%);
+  --vf-chrome-solid: #ffffff;
+  --vf-chrome-surface: rgb(255 255 255 / 90%);
+  --vf-sheet-surface: rgb(255 255 255 / 96%);
+  --vf-chrome-surface-soft: rgb(255 255 255 / 58%);
+  --vf-chrome-surface-hover: rgb(255 255 255 / 78%);
+  --vf-field-surface: rgb(255 255 255 / 60%);
+  --vf-backdrop-dim: rgb(0 0 0 / 10%);
 
   /* §2.5 State & system color */
   --vf-green: #30d158;
@@ -21,6 +46,8 @@
   --vf-yellow: #ffd60a;
   --vf-cyan: #5ac8fa;
   --vf-select: #4a90d9;
+  --vf-state-on-attention: #111111;
+  --vf-state-on-solid: #ffffff;
 
   /* §2.6 Organizational accents — the curated set, assigned per object and used
      as TINT. They group and label; they never signal state (that is §2.5's job,
@@ -34,6 +61,14 @@
   --vf-accent-6: #8b5cf6;
   --vf-accent-7: #ef4444;
   --vf-accent-8: #3b82f6;
+
+  /* Domain content colors. These are stable card identities, not app state. */
+  --vf-note-surface: #f6e7a9;
+  --vf-note-ink: #3a3524;
+  --vf-folder-surface: #1d1d2b;
+  --vf-folder-portal: #14141f;
+  --vf-folder-ink: #eaeaf4;
+  --vf-folder-muted: #8b8ba6;
 
   /* §2.7 Godview instrument palette — exact values from the Chopsticks
      Godview reference. Both modes live here because Godview owns a local theme
@@ -86,6 +121,18 @@
   --vf-radius-card: 22px;
   --vf-radius-island: 32px;
   --vf-radius-sheet: 40px;
+  --vf-radius-control: 9px;
+
+  /* §5 canonical material recipes. Keeping the complete shadow in a token is
+     what lets a side panel in a plugin and a side panel in the shell remain the
+     same physical material. */
+  --vf-shadow-card: 0 20px 40px rgb(0 0 0 / 15%), 0 0 0 1px rgb(0 0 0 / 5%);
+  --vf-shadow-card-lifted: 0 30px 60px rgb(0 0 0 / 22%), 0 0 0 1px rgb(0 0 0 / 6%);
+  --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 8%);
+  --vf-shadow-sheet: 0 -20px 40px rgb(0 0 0 / 8%);
+  --vf-shadow-top-sheet: 0 20px 40px rgb(0 0 0 / 8%);
+  --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 8%);
+  --vf-shadow-dialog: 0 42px 100px rgb(0 0 0 / 18%), 0 12px 36px rgb(0 0 0 / 10%);
 
   /* §6 Motion */
   --vf-ease-island: cubic-bezier(0.25, 1, 0.3, 1);
@@ -117,6 +164,27 @@
   /* §2.2 Surfaces */
   --vf-fill: #2c2c2e;
   --vf-fill-hover: #2c2c2e;
+
+  --vf-foreground: #f5f5f7;
+  --vf-foreground-inverse: #1c1c1e;
+  --vf-text-primary: rgb(245 245 247 / 85%);
+  --vf-text-secondary: rgb(245 245 247 / 70%);
+  --vf-text-tertiary: rgb(245 245 247 / 45%);
+  --vf-text-faint: rgb(245 245 247 / 30%);
+  --vf-hairline: rgb(255 255 255 / 10%);
+  --vf-hairline-strong: rgb(255 255 255 / 15%);
+  --vf-chrome-solid: #1c1c1e;
+  --vf-chrome-surface: rgb(28 28 30 / 90%);
+  --vf-sheet-surface: rgb(28 28 30 / 96%);
+  --vf-chrome-surface-soft: rgb(255 255 255 / 5%);
+  --vf-chrome-surface-hover: rgb(255 255 255 / 8%);
+  --vf-field-surface: rgb(255 255 255 / 6%);
+  --vf-backdrop-dim: rgb(0 0 0 / 40%);
+  --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 40%);
+  --vf-shadow-sheet: 0 -20px 40px rgb(0 0 0 / 40%);
+  --vf-shadow-top-sheet: 0 20px 40px rgb(0 0 0 / 40%);
+  --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 40%);
+  --vf-shadow-dialog: 0 48px 120px rgb(0 0 0 / 48%), 0 14px 40px rgb(0 0 0 / 30%);
 
   /* §7 Interactive states — glow/rim go white on dark */
   --ic-glow-color: 255, 255, 255;
