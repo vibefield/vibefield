@@ -6,33 +6,31 @@ members = ["packages/field-native"]
 # EL8 — version lockstep: exactly one truffle-core revision across every crate in
 # this workspace (a borrowed Arc<Node> is type-incompatible across revisions), and
 # the pin is EXACT — upgrades are deliberate events, never `cargo update` drift.
-# Registry pin advanced 2026-08-02 to consume T2's rooted static serving release
-# for Artifact Hub AH-1b. The ../p008/truffle sibling [patch.crates-io] returns
-# only for an active petition window, together with siblings.lock.json (history).
-# ERRATUM (GT-4, 2026-08-05): the sentence above is FALSE as written — advancing
-# this pin consumed nothing. truffle-core 0.7.11 and 0.7.12 are source-IDENTICAL
-# published crates (55 files, 28,702 Rust LOC byte-for-byte; only `version =` and
-# .cargo_vcs_info.json differ). T2's rooted static serving shipped in truffle's Go
-# sidecar (packages/sidecar-slim/main.go, +543 lines); release-please bumps that
-# workspace as a unit, so truffle-core rode along as a no-op release. This repo
-# consumes no npm/sidecar truffle package and the crate reads no CARGO_PKG_VERSION,
-# so this pin cannot reach AH-1b in either position.
-# The consequence for GT-4: THIS pin, not ghosttea-truffle, was the blocker. No
-# published ghosttea-truffle (0.2.0…0.9.1) requires truffle-core newer than
-# =0.7.11, so at =0.7.12 the dep could not be added at all — two exact pins in
-# one compatibility range, `cargo generate-lockfile` exits 101.
-# STEP-BACK TAKEN (GT-4, 2026-08-05): the crate returns to =0.7.11 — provably
-# zero-delta (source-identical crates), restores the SwiftPM lockstep (the iOS
-# plane rides truffle 0.7.11, revision 8d6271ef = 0.7.11's vcs sha; Package.swift's
-# both-planes claim is TRUE again), and unblocks ghosttea-truffle. One correction
-# to GT-4a's erratum: this repo DOES consume truffle's npm sidecars —
-# @vibecook/truffle-sidecar-*@0.7.12 in apps/desktop — and THAT artifact carries
-# T2's actual payload (the Go sidecar), so AH-1b's consumption was real and the
-# sidecars STAY at 0.7.12; only the crate pin was the no-op. The Go binary shares
-# no Rust types, so the crate/sidecar version split is cosmetic; the Arc<Node>
-# type-compatibility law this comment opens with binds the CARGO graph, which is
-# now uniformly =0.7.11.
-truffle-core = "=0.7.11"
+# Registry pin advanced 2026-08-02 for Artifact Hub AH-1b. The ../p008/truffle
+# sibling [patch.crates-io] returns only for an active petition window, together
+# with siblings.lock.json (history).
+# What that advance did and did NOT buy (GT-4, 2026-08-05, read rather than
+# assumed): truffle-core 0.7.11 and 0.7.12 are source-IDENTICAL published crates
+# — 55 files, 28,702 Rust LOC byte-for-byte, only `version =` and
+# .cargo_vcs_info.json differ. T2's rooted static serving is real but it ships in
+# truffle's GO SIDECAR (packages/sidecar-slim/main.go, +543 lines), which this
+# repo consumes as @vibecook/truffle-sidecar-*@0.7.12 in apps/desktop — those
+# stay at 0.7.12 and AH-1b's consumption was never in doubt. release-please bumps
+# that workspace as a unit, so the CRATE rode along as a no-op. Two consequences
+# worth keeping: a Rust-only reading of a truffle bump can be empty and the
+# payload still real, and the crate/sidecar split costs nothing because the Go
+# binary shares no Rust types — the Arc<Node> law this comment opens with binds
+# the CARGO graph alone.
+# GT-4 (2026-08-05) — the pin conflict, and how it resolved. Adding
+# ghosttea-truffle was blocked: no published version through 0.9.1 accepted
+# truffle-core newer than =0.7.11, so against our =0.7.12 the resolver refused
+# outright (`cargo generate-lockfile`, exit 101) rather than half-resolving. That
+# refusal is the exact-pin law working as designed — a loud error at the manifest
+# instead of a silent Arc<Node> type split three slices later, which is upstream's
+# own stated reason for pinning truffle exactly. It resolved UPSTREAM: ghosttea
+# 0.9.2 moves its workspace to truffle-core =0.7.12, so both sides now name the
+# same revision and the dep joins below at that version.
+truffle-core = "=0.7.12"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,
@@ -44,12 +42,20 @@ truffle-core = "=0.7.11"
 # palette reaches sessions via set_appearance; the tunnel protocol's own minor
 # went 6 → 8 for tracked selection and semantic cell colors), but the CONTROL
 # protocol minor is unchanged at 13, so terminal_client.rs still announces 1.9 —
-# the feature floor it consumes, not the newest it has heard of. ghosttea-truffle
-# 0.9.1 still requires truffle-core =0.7.11 and is not in this workspace today;
-# which side has to move to change that is settled by the erratum above (ours),
-# not by an upstream release. `ghosttea` itself carries no Truffle dependency, so
-# the truffle-core pin remains the workspace's one Arc<Node> type wherever it sits. GT-3f (2026-08-04) bumped 0.9.0 → 0.9.1 for G11's `effects`
-# prop, which is an npm-side release: the crate tree's diff across the two tags
-# is version strings only — zero Rust source delta — so this pin moves solely to
-# keep the one-version law true across crates, npm, and SwiftPM.
-ghosttea = "=0.9.1"
+# the feature floor it consumes, not the newest it has heard of. GT-3f
+# (2026-08-04) bumped 0.9.0 → 0.9.1 for G11's `effects` prop, which is an
+# npm-side release: the crate tree's diff across the two tags is version strings
+# only — zero Rust source delta — so that pin moved solely to keep the
+# one-version law true across crates, npm, and SwiftPM. GT-4 (2026-08-05) bumps
+# 0.9.1 → 0.9.2, the release that moves upstream's own workspace to truffle-core
+# =0.7.12 so this workspace can consume the mesh half at all. CONTROL protocol
+# minor is UNCHANGED at 13, so terminal_client.rs still announces 1.9.
+ghosttea = "=0.9.2"
+# GT-4 (native-floor §7 / GT-D7): the mesh half of the terminal floor, added at
+# the same version as `ghosttea` — it depends on that crate by path upstream, so
+# a split would be two ghosttea revisions in one graph. It brings truffle-core
+# with it at =0.7.12, which is why the two pins above must agree exactly; a
+# mismatch is a resolver refusal, never a silent second Arc<Node> type. Consumed
+# ONLY behind FIELD_NATIVE_TERMINAL_MESH — with the flag off the crate is linked
+# but never constructed, and the floor is bit-for-bit its pre-GT-4 self.
+ghosttea-truffle = "=0.9.2"
