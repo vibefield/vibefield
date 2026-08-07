@@ -88,9 +88,25 @@ function matchesForbid(spec, forbid) {
 // A cross-package deep import: reaching past a new package's public entries. Bare
 // `@vibefield/field-app` (no subpath) is the public root and allowed; `/main`,
 // `/preload`, `/host` are the declared entries (spec §8.2), plus field-app's
-// browser-safe `/logging` seam and its exported `/spike` implementation,
-// consumed by the shell's test-only spike page.
-const NEW_PACKAGE_ENTRIES = new Set(["main", "preload", "host", "logging", "spike"]);
+// browser-safe `/logging` seam, its exported `/spike` implementation consumed by
+// the shell's test-only spike page, and `/design-system`, the UI Bench entry the
+// shell's renderer-host mounts.
+//
+// KNOWN DEBT (2026-08-07): this set is a SECOND source of truth for what each
+// package publishes — the first is the `exports` map in its own package.json,
+// which is what `declared public entries only` in the rule description actually
+// means. They drifted the moment a legitimately-declared entry was added, and
+// the wall failed a correct import on main. Deriving this from the workspace's
+// package.json `exports` keys would make the rule enforce the declaration rather
+// than a copy of it, exactly as registries-as-code does for ports and scopes.
+const NEW_PACKAGE_ENTRIES = new Set([
+  "main",
+  "preload",
+  "host",
+  "logging",
+  "spike",
+  "design-system",
+]);
 function isDeepPackageImport(spec) {
   const m = /^@vibefield\/(?:electron-shell|field-app|fieldd-supervisor)\/(.+)$/.exec(spec);
   if (m === null) return false;
