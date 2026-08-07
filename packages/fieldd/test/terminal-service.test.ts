@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type DeviceInfo,
+  METHODS,
   TerminalConfigDocument,
   TerminalConfigWriteResult,
   TerminalConnectTicketResult,
@@ -123,15 +124,30 @@ interface FakeConfigDocument {
  * `dieOnTerminate` destroys the socket mid-call — the NF-6 hole.
  * `noOverlay` refuses the document the way a service with no `with_config_path`
  * does, VERBATIM: the message is the only thing on the wire, and fieldd's
- * classification reads it. */
+ * classification reads it.
+ * `stall` (GT-5b) names command types the floor ACCEPTS and never answers —
+ * a wedged service on a healthy socket, which is the state `client.connected`
+ * cannot see.
+ * `createError` replies to create-session with a verbatim service refusal, so
+ * the classification of the floor's own prose can be exercised.
+ * `protocolMinor` reports an older floor on the hello (below 11 = no config
+ * documents; the pinned CLIENT refuses those before the wire). */
 async function startFakeFloor(
-  opts: { dieOnTerminate?: boolean; noOverlay?: boolean } = {},
+  opts: {
+    dieOnTerminate?: boolean;
+    noOverlay?: boolean;
+    stall?: readonly string[];
+    createError?: string;
+    protocolMinor?: number;
+  } = {},
 ): Promise<{
   endpoints: TerminalEndpoints;
   createdSessionId: string;
   document: FakeConfigDocument;
   /** what the effective config reports; a write bumps it iff the text changed */
   configRevision: () => string;
+  /** how many control connections this floor has accepted */
+  connections: () => number;
 }> {
   const dir = mkdtempSync(join("/tmp", "vf-fake-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
@@ -145,9 +161,12 @@ async function startFakeFloor(
     contents: "",
   };
   let configRevision = "config-0";
+  let connections = 0;
+  const stall = new Set(opts.stall ?? []);
   const server: Server = createServer((sock: Socket) => {
     let buf = Buffer.alloc(0);
     let authed = false;
+    connections += 1;
     live.add(sock);
     sock.on("close", () => live.delete(sock));
     sock.on("error", () => undefined);
@@ -167,15 +186,21 @@ async function startFakeFloor(
         const reply = (payload: Record<string, unknown>): void => {
           sock.write(packet(Buffer.from(JSON.stringify({ requestId: msg.requestId, ...payload }))));
         };
+        // A wedged service: the request is accepted, the socket stays up, and
+        // no answer ever comes. `hello` is never stallable — the client's
+        // connect budget would fire instead of its request budget, and the
+        // state under test is a CONNECTED floor that has stopped answering.
+        if (msg.type !== "hello" && stall.has(msg.type)) continue;
         if (msg.type === "hello") {
           reply({
             type: "hello",
             protocolMajor: 1,
-            protocolMinor: 12,
+            protocolMinor: opts.protocolMinor ?? 12,
             serverBuild: "vibefield-fake-floor",
           });
         } else if (msg.type === "create-session") {
-          reply({ type: "session-created", session: fakeSession(createdSessionId) });
+          if (opts.createError !== undefined) reply({ type: "error", message: opts.createError });
+          else reply({ type: "session-created", session: fakeSession(createdSessionId) });
         } else if (msg.type === "terminate" && opts.dieOnTerminate === true) {
           sock.destroy(); // the floor dies mid-call
         } else if (msg.type === "get-config") {
@@ -230,6 +255,7 @@ async function startFakeFloor(
     createdSessionId,
     document,
     configRevision: () => configRevision,
+    connections: () => connections,
   };
 }
 
@@ -287,6 +313,18 @@ interface AuditRecord {
   phase: "attempt" | "outcome";
   outcome?: string;
   target?: { kind: string; id: string };
+  attrs?: Record<string, unknown>;
+}
+
+/** Poll until `fn` answers something, or fail the test. */
+async function poll<T>(fn: () => Promise<T | undefined>, ms = 10_000): Promise<T> {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const value = await fn();
+    if (value !== undefined) return value;
+    if (Date.now() > deadline) throw new Error("poll timed out");
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 
 /** Every audited record the daemon wrote, in order. */
@@ -444,18 +482,55 @@ describe("TerminalService (NF-3, mock native)", () => {
     expect(records[1]?.outcome).toBe("succeeded");
   });
 
-  it("gates every terminal.* method on terminal.attach", async () => {
+  it("gates every terminal.* method on its declared scope", async () => {
+    // This test used to be NAMED for every method and exercise exactly one
+    // (`terminal.list`), so a new terminal door could ship ungated and stay
+    // green here — and `contracts/test/registry.test.ts` explicitly permits
+    // `scope: null`, so it passed there too. Both halves are closed now: the
+    // expected map must EXHAUST the registry (a new method with no entry fails
+    // before anything is called), and every declared method is actually
+    // refused for a principal that holds neither scope.
+    const EXPECTED_SCOPE: Record<string, string> = {
+      "terminal.list": "terminal.attach",
+      "terminal.get": "terminal.attach",
+      "terminal.openTicket": "terminal.attach",
+      "terminal.connectTicket": "terminal.attach",
+      "terminal.create": "terminal.attach",
+      "terminal.terminate": "terminal.attach",
+      "terminal.config.read": "settings.manage",
+      "terminal.config.write": "settings.manage",
+    };
+    const declared = METHODS.filter(
+      (m) => m.surface === "product" && m.method.startsWith("terminal."),
+    );
+    expect(
+      declared.map((m) => m.method).sort(),
+      "a new terminal.* method must state its scope here",
+    ).toEqual(Object.keys(EXPECTED_SCOPE).sort());
+    for (const def of declared) {
+      expect(def.scope, def.method).toBe(EXPECTED_SCOPE[def.method]);
+    }
+
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
     mock.helloTerminal = ENDPOINTS;
+    mock.observedState = observed([{ sessionId: "s1" }]);
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
+    // holds NEITHER terminal.attach nor settings.manage
     const narrow = daemon.tokens.mint(["doc.read"], "narrow");
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, narrow.token);
-    const err = await rpc.callErr("terminal.list", {});
-    expect(err.data?.kind).toBe("FORBIDDEN_SCOPE");
+    for (const def of declared) {
+      // the scope check runs before params parsing, so `{}` reaches it from
+      // every door (product-api.ts: find def → check scope → dispatch)
+      const err = await rpc.callErr(def.method, {});
+      expect(err.data?.kind, def.method).toBe("FORBIDDEN_SCOPE");
+      expect((err.data?.details as { required?: string } | undefined)?.required, def.method).toBe(
+        EXPECTED_SCOPE[def.method],
+      );
+    }
   });
 
   it("a failed observed subscribe neither fatals the boot nor stays dead (NF-6 re-arm)", async () => {
@@ -471,22 +546,36 @@ describe("TerminalService (NF-3, mock native)", () => {
     const grant = daemon.tokens.mint(["terminal.attach"], "rearm-test");
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, grant.token);
-    let list = (await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] };
-    expect(list.terminals).toEqual([]); // honest empty, not a dead daemon
+
+    // GT-5b: an UNARMED inventory refuses. It used to answer `[]` — a
+    // well-formed lie meaning "this floor holds no sessions", which is the
+    // answer the Godview's restore reads as "every saved pane is dead" and
+    // offers to start clean from. This is the two-plane case exactly: the
+    // daemon is alive, the subscribe was refused, and fieldd has observed
+    // NOTHING about a field-native that may be holding live sessions.
+    const unobserved = await rpc.callErr("terminal.list", {});
+    expect(unobserved.data?.kind).toBe("UNAVAILABLE");
+    expect((unobserved.data?.details as { state?: string } | undefined)?.state).toBe("unobserved");
+    const unobservedGet = await rpc.callErr("terminal.get", { sessionId: "anything" });
+    expect(unobservedGet.data?.kind, "get refuses on the same grounds").toBe("UNAVAILABLE");
 
     // the refusal clears and a reconnect fires the "connected" re-arm
     mock.rejectedSubscriptions.clear();
     mock.observedState = observed([{ sessionId: "reborn" }]);
     mock.killClients();
 
+    let list: { terminals: TerminalInfo[]; observation?: { bootId: string } } | undefined;
     let settled = false;
     for (let i = 0; i < 60 && !settled; i++) {
-      list = (await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] };
-      settled = list.terminals.length === 1;
+      list = (await rpc.call("terminal.list", {}).catch(() => undefined)) as typeof list;
+      settled = list?.terminals.length === 1;
       if (!settled) await new Promise((r) => setTimeout(r, 100));
     }
     expect(settled).toBe(true);
-    expect(list.terminals[0]?.sessionId).toBe("reborn");
+    expect(list?.terminals[0]?.sessionId).toBe("reborn");
+    // and the answer names the observation it came from, which is what lets a
+    // holder of an old list tell a changed floor from a different one
+    expect(list?.observation?.bootId).toBe("mock-boot");
   });
 
   it("terminal.create answers WITH a ticket, for a session the inventory has not seen (GT-1)", async () => {
@@ -706,6 +795,251 @@ describe("TerminalService (NF-3, mock native)", () => {
       const err = await rpc.callErr(method, params);
       expect(err.data?.kind, method).toBe("FORBIDDEN_SCOPE");
     }
+  });
+
+  it("stops minting once the floor that said hello is gone (GT-5b)", async () => {
+    // THE stale-credential hole. `terminalEndpoints` was assigned on the
+    // pairing hello and cleared nowhere, so a floor that died AFTER saying
+    // hello kept every ticket door open: sockets that no longer exist plus a
+    // dead boot's token, handed out and AUDITED AS A SUCCESSFUL GRANT. No test
+    // covered floor-died-after-hello anywhere — the kill matrix SIGKILLed the
+    // floor and re-checked only `create`.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.helloTerminal = ENDPOINTS;
+    mock.observedState = observed([{ sessionId: "s1" }]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "stale-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    // a live floor mints, as it should
+    const live = TerminalConnectTicketResult.parse(await rpc.call("terminal.connectTicket", {}));
+    expect(live.ticket.token).toBe(ENDPOINTS.authToken);
+
+    // the floor dies and does not come back (stop() closes the listener too,
+    // so the reconnect cannot re-learn endpoints — a SIGKILLed field-native)
+    await mock.stop();
+
+    const refused = await poll(async () => {
+      const err = await rpc.callErr("terminal.connectTicket", {});
+      return err.data?.kind === "UNAVAILABLE" ? err : undefined;
+    });
+    expect((refused.data?.details as { state?: string } | undefined)?.state).toBe("absent");
+    const openRefused = await rpc.callErr("terminal.openTicket", { sessionId: "s1" });
+    expect(openRefused.data?.kind, "the session-scoped door refuses too").toBe("UNAVAILABLE");
+
+    // the audit says a mint was ATTEMPTED and FAILED — not that a credential
+    // was granted, which is what the record used to claim for a dead floor
+    const mints = (await readAuditRecords(dataDir)).filter(
+      (r) => r.action === "terminal.ticket.mint",
+    );
+    expect(mints.filter((r) => r.phase === "outcome").map((r) => r.outcome)).toContain("failed");
+    expect(
+      mints.filter((r) => r.phase === "outcome" && r.outcome === "succeeded"),
+      "exactly the one mint made while the floor was alive",
+    ).toHaveLength(1);
+
+    // and the source the terminalHost capability is computed from is honest
+    // too (`daemon.ts` reads exactly this for D31). Asserted at the source
+    // rather than through `device.list`: the PUBLISHED slice is refreshed by
+    // DeviceService.sync, whose first act is a mesh round trip over the mgmt
+    // link — which is down, by construction, in precisely this scenario — so
+    // the roster keeps the last published capability until the link returns.
+    // That staleness is a separate, pre-existing gap and not this fix's.
+    expect(daemon.native.terminalEndpoints).toBeUndefined();
+  }, 30_000);
+
+  it("audits a born session before asking for its credential (GT-5b)", async () => {
+    // The mint used to run INSIDE the create's audited effect, so a mint that
+    // threw made the outer record say `session.create → failed` for a PTY that
+    // exists — and named no session, so the birth was unrecoverable from the
+    // log. Ordering is the fix: the birth is recorded with its id first.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.helloTerminal = floor.endpoints;
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "create-order-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+    const created = (await rpc.call("terminal.create", {})) as TerminalCreateResult;
+
+    const records = (await readAuditRecords(dataDir)).filter((r) =>
+      r.action.startsWith("terminal."),
+    );
+    expect(records.map((r) => `${r.action}:${r.phase}`)).toEqual([
+      "terminal.session.create:attempt",
+      "terminal.session.create:outcome",
+      "terminal.ticket.mint:attempt",
+      "terminal.ticket.mint:outcome",
+    ]);
+    // the create's OWN outcome names the session, before any credential is
+    // asked for — the record stands on its own if the mint never lands
+    expect(records[1]?.attrs?.["sessionId"]).toBe(created.sessionId);
+    expect(records[2]?.target).toEqual({ kind: "terminal", id: created.sessionId });
+  });
+
+  it("a wedged floor is UNAVAILABLE unresponsive, never INTERNAL (GT-5b)", async () => {
+    // `client.connected` is `authenticated && socket !== undefined`, and a
+    // request timeout leaves both untouched — so this used to answer INTERNAL,
+    // retryable, for a floor that had stopped answering. For create it is
+    // worse than a misnomer: the PTY may have been born and merely replied
+    // late, so retrying orphans the first one.
+    const floor = await startFakeFloor({ stall: ["create-session", "terminate"] });
+    const service = new TerminalService({
+      link: {
+        subscribe: async () => ({ snapshot: {} }),
+        terminalEndpoints: floor.endpoints,
+        on: () => undefined,
+      },
+      requestTimeoutMs: 300,
+    });
+    cleanup.push(() => service.dispose());
+
+    for (const [what, call] of [
+      ["create", () => service.create({})],
+      ["terminate", () => service.terminate("s1")],
+    ] as const) {
+      const error = await call().then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(error, what).toBeInstanceOf(RpcCallError);
+      expect((error as RpcCallError).kind, what).toBe("UNAVAILABLE");
+      expect((error as RpcCallError).details, what).toMatchObject({ state: "unresponsive" });
+    }
+  }, 20_000);
+
+  it("classifies the floor's spawn refusal and nothing else as the caller's (GT-5b)", async () => {
+    // The old test was an unanchored /spawn/i over free prose. The floor has a
+    // SECOND spawn-bearing refusal — `session spawn task stopped`, its blocking
+    // task falling over — and that is the floor failing, not the caller: it was
+    // being answered PRECONDITION_FAILED, non-retryable, telling the caller to
+    // fix input it had got right.
+    for (const [message, kind, retryable] of [
+      ["failed to spawn PTY command", "PRECONDITION_FAILED", false],
+      ["session spawn task stopped", "INTERNAL", true],
+    ] as const) {
+      const floor = await startFakeFloor({ createError: message });
+      const service = new TerminalService({
+        link: {
+          subscribe: async () => ({ snapshot: {} }),
+          terminalEndpoints: floor.endpoints,
+          on: () => undefined,
+        },
+      });
+      cleanup.push(() => service.dispose());
+      const error = (await service.create({}).then(
+        () => undefined,
+        (e: unknown) => e,
+      )) as RpcCallError | undefined;
+      expect(error?.kind, message).toBe(kind);
+      expect(error?.retryable, message).toBe(retryable);
+    }
+  });
+
+  it("a floor too old for config documents says unsupported, not INTERNAL (GT-5b)", async () => {
+    // Distinct from `no-overlay`: that is the SERVICE refusing a document it
+    // was never pointed at, and this is the pinned CLIENT refusing to ask a
+    // daemon below protocol 1.11 at all. The comment on the classifier already
+    // promised honesty for "an older field-native"; only the other shape was
+    // matched, so this one landed as a bug in us.
+    const floor = await startFakeFloor({ protocolMinor: 10 });
+    const service = new TerminalService({
+      link: {
+        subscribe: async () => ({ snapshot: {} }),
+        terminalEndpoints: floor.endpoints,
+        on: () => undefined,
+      },
+    });
+    cleanup.push(() => service.dispose());
+    const error = (await service.readConfig().then(
+      () => undefined,
+      (e: unknown) => e,
+    )) as RpcCallError | undefined;
+    expect(error?.kind).toBe("UNAVAILABLE");
+    expect(error?.details).toMatchObject({ state: "unsupported" });
+    expect(error?.retryable, "no amount of asking teaches an old daemon a new command").toBe(false);
+  });
+
+  it("builds one control client for concurrent callers (GT-5b)", async () => {
+    // No in-flight guard, two concurrent calls each built AND connected a
+    // client; the loser was never disposed, because its close handler checks
+    // `this.client === client`, and it stayed authenticated on the floor's
+    // control socket until the process exited. `ensureStarted` has exactly this
+    // guard; this path did not.
+    const floor = await startFakeFloor();
+    const service = new TerminalService({
+      link: {
+        subscribe: async () => ({ snapshot: {} }),
+        terminalEndpoints: floor.endpoints,
+        on: () => undefined,
+      },
+    });
+    cleanup.push(() => service.dispose());
+
+    await Promise.all([
+      service.readConfig(),
+      service.readConfig(),
+      service.readConfig(),
+      service.readConfig(),
+    ]);
+    expect(floor.connections()).toBe(1);
+  });
+
+  it("a write that cannot read first fails as a WRITE (GT-5b)", async () => {
+    // The pre-read is an implementation detail of the write. Reporting
+    // "config read failed" told an editor that its read had failed when
+    // nothing it did was a read.
+    const floor = await startFakeFloor({ stall: ["get-config"] });
+    const service = new TerminalService({
+      link: {
+        subscribe: async () => ({ snapshot: {} }),
+        terminalEndpoints: floor.endpoints,
+        on: () => undefined,
+      },
+      requestTimeoutMs: 300,
+    });
+    cleanup.push(() => service.dispose());
+    const error = (await service.writeConfig("x", "rev-empty").then(
+      () => undefined,
+      (e: unknown) => e,
+    )) as RpcCallError | undefined;
+    expect(error?.message, "the operation named is the one the caller asked for").not.toContain(
+      "config read",
+    );
+    // this particular stall is also a timeout, so it classifies as one
+    expect(error?.kind).toBe("UNAVAILABLE");
+    expect(error?.details).toMatchObject({ state: "unresponsive" });
+  }, 20_000);
+
+  it("audits config bytes as BYTES, not UTF-16 code units (GT-5b)", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.helloTerminal = floor.endpoints;
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["settings.manage"], "bytes-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+    const before = TerminalConfigDocument.parse(await rpc.call("terminal.config.read", {}));
+    // one 4-byte character: `.length` counts it as 2
+    const text = "# 🌱\n";
+    await rpc.call("terminal.config.write", { text, revision: before.revision });
+
+    const attempt = (await readAuditRecords(dataDir)).find(
+      (r) => r.action === "terminal.config.write" && r.phase === "attempt",
+    );
+    expect(attempt?.attrs?.["bytes"]).toBe(Buffer.byteLength(text, "utf8"));
+    expect(attempt?.attrs?.["bytes"]).not.toBe(text.length);
   });
 
   it("flips the terminalHost capability with the hello (D31 honesty)", async () => {

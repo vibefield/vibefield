@@ -90,10 +90,17 @@ export class NativeLink extends EventEmitter {
   superseded = false;
   closed = false;
   /** NF-D8: the terminal floor's endpoints + per-boot token, re-learned at
-   * every re-pair from the hello ack. Absent = the floor is unconfigured or the
-   * daemon predates NF-2 (tolerated — readers refuse honestly, never guess).
-   * The token lives here and in the tickets minted from it — never logs, env,
-   * or disk. */
+   * every re-pair from the hello ack. Absent = the floor is unconfigured, the
+   * daemon predates NF-2, or the link that vouched for it is DOWN (tolerated —
+   * readers refuse honestly, never guess). The token lives here and in the
+   * tickets minted from it — never logs, env, or disk.
+   *
+   * GT-5b: this is a LIVE credential, not a remembered fact, and it is worth
+   * exactly as long as the mgmt link that carried it. It used to be assigned in
+   * one place and cleared in none, so after a field-native SIGKILL every reader
+   * still saw a floor: `terminal.ticket()` handed out socket paths that no
+   * longer existed plus a dead boot's token, the audit recorded the grant as a
+   * success, and `system.health` reported the device as a terminal host. */
   terminalEndpoints: TerminalEndpoints | undefined;
   /** GT-2d: the floor's own build label, re-learned at every re-pair. This
    * plane outlives us and is adopted by design, so "which field-native answered"
@@ -175,6 +182,11 @@ export class NativeLink extends EventEmitter {
         this.connected = false;
       }
       sock.destroy();
+      // Detaching first makes this socket's own close event stale, so
+      // onSockClose returns early and never reaches the clear — do it here.
+      // A dial that failed AFTER hello (a refused replay) has already assigned
+      // fresh endpoints from that hello, and they must not outlive the link.
+      this.clearTerminalEndpoints();
       this.failPending();
       throw e;
     }
@@ -236,6 +248,26 @@ export class NativeLink extends EventEmitter {
     // that did not answer the question — the same honest blank a pre-GT-2d
     // daemon leaves, never a guess.
     this.nativeBuild = typeof record.nativeBuild === "string" ? record.nativeBuild : undefined;
+    this.emit("terminal-endpoints");
+  }
+
+  /** GT-5b: forget the floor's coordinates when the link that vouched for them
+   * stops being live. The mgmt socket closing is the ONLY signal fieldd gets
+   * that the floor may be gone — field-native mints a new token per boot, so a
+   * remembered one either belongs to a corpse or is about to be re-delivered
+   * by the next hello, and there is no third case worth guessing at.
+   *
+   * The cost is honest and deliberate: a transient link blip makes the ticket
+   * doors answer UNAVAILABLE for the length of one reconnect (500ms first
+   * backoff) rather than hand out a credential fieldd cannot currently vouch
+   * for. `nativeBuild` is left alone — it is a label, not a credential, and
+   * clearing it would make "this floor predates GT-2d" and "the link is down"
+   * the same blank.
+   *
+   * Silent when there was nothing to clear: no change, no event. */
+  private clearTerminalEndpoints(): void {
+    if (this.terminalEndpoints === undefined) return;
+    this.terminalEndpoints = undefined;
     this.emit("terminal-endpoints");
   }
 
@@ -366,6 +398,7 @@ export class NativeLink extends EventEmitter {
     if (sock !== this.sock) return; // stale socket — already replaced or detached
     this.sock = null;
     this.connected = false;
+    this.clearTerminalEndpoints();
     this.failPending();
     this.subRoutes.clear();
     this.prepareSubscriptionsForReconnect();
@@ -508,6 +541,10 @@ export class NativeLink extends EventEmitter {
     this.connectingSock?.destroy();
     this.connectingSock = null;
     this.prepareSubscriptionsForReconnect();
+    // Synchronously, not via the socket's close event: a caller that closes the
+    // link and then reads the endpoints must not see the floor still there for
+    // the length of one turn of the event loop.
+    this.clearTerminalEndpoints();
     this.sock?.destroy();
   }
 }

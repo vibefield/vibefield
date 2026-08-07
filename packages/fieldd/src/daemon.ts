@@ -52,8 +52,10 @@ import {
   type ShellOpenExternalResult,
   STORES,
   type TerminalConfigDocument,
+  TerminalConfigReadParams,
   TerminalConfigWriteParams,
   type TerminalConfigWriteResult,
+  TerminalConnectTicketParams,
   type TerminalConnectTicketResult,
   TerminalCreateParams,
   type TerminalCreateResult,
@@ -991,7 +993,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
       return parsed.data.sessionId;
     };
-    api.register("terminal.list", (): TerminalListResult => ({ terminals: terminals.list() }));
+    // GT-5b: `list` REFUSES (UNAVAILABLE `unobserved`) until the first observed
+    // snapshot applies rather than answering an empty floor it has not looked
+    // at, and carries the observation it IS answering from — see the service.
+    api.register("terminal.list", (): TerminalListResult => {
+      const rows = terminals.list();
+      const observation = terminals.observation();
+      return { terminals: rows, ...(observation !== undefined ? { observation } : {}) };
+    });
     api.register("terminal.get", (_ctx, params) => {
       const sessionId = requireSessionId(params);
       const info = terminals.get(sessionId);
@@ -1021,13 +1030,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // rather than a session id, because that is what was granted.
     api.register(
       "terminal.connectTicket",
-      async (ctx): Promise<TerminalConnectTicketResult> =>
-        await audit.required(
+      async (ctx, params): Promise<TerminalConnectTicketResult> => {
+        // The declared params shape, actually parsed (GT-5b): it accepts
+        // anything object-shaped today and is the seam a device selector (D35)
+        // would grow into, but a contract nothing reads is not a contract.
+        if (!TerminalConnectTicketParams.safeParse(params ?? {}).success)
+          throw new RpcCallError("PRECONDITION_FAILED", "expected an object or no params", false);
+        return await audit.required(
           ctx,
           { action: "terminal.ticket.mint", target: { kind: "terminal", id: "connection" } },
           () => ({ ticket: terminals.ticket() }),
           () => ({ outcome: "succeeded" }),
-        ),
+        );
+      },
     );
     // GT-1: create ALSO mints. openTicket gates on the observed inventory,
     // which is a mgmt round trip behind the spawn — so create-then-ticket
@@ -1040,7 +1055,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const parsed = TerminalCreateParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "malformed terminal.create params", false);
-      return await audit.required(
+      // GT-5b: the mint is SEQUENCED AFTER the create's own outcome, not nested
+      // inside its effect. Nested, a mint that threw (the floor died between
+      // the spawn and the mint; the audit ledger degraded) made the outer
+      // record say `session.create → failed` for a PTY that exists — a lie in
+      // the one log whose whole job is to be the record of what happened, and
+      // it named no session, so the birth was unrecoverable from the log.
+      //
+      // `audit.required`'s `rollbackOnOutcomeFailure` does NOT cover this, the
+      // review's suggested fix notwithstanding: it fires only when the OUTCOME
+      // APPEND fails on a successful effect (`audit-service.ts:360-372`), never
+      // when the effect itself throws. Ordering is the fix that fits.
+      //
+      // The session is NOT terminated when the mint fails. It exists, the log
+      // now names it, `terminal.list` shows it and `openTicket` can mint for it
+      // later — killing a live PTY because a credential grant hiccuped destroys
+      // the user's work to tidy our bookkeeping.
+      const created = await audit.required(
         ctx,
         {
           // the session id does not exist until the effect runs; the outcome
@@ -1055,21 +1086,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
           },
         },
-        async (): Promise<TerminalCreateResult> => {
-          const created = await terminals.create(parsed.data);
-          const ticket = await audit.required(
-            ctx,
-            { action: "terminal.ticket.mint", target: { kind: "terminal", id: created.sessionId } },
-            () => terminals.ticket(),
-            () => ({ outcome: "succeeded" }),
-          );
-          return { sessionId: created.sessionId, ticket };
-        },
-        (result) => ({
-          outcome: "succeeded",
-          attrs: { sessionId: result.sessionId, ticketMinted: true },
-        }),
+        async () => await terminals.create(parsed.data),
+        // no `ticketMinted` here any more: nothing has been minted yet, and an
+        // attr claiming otherwise was true only because the nesting made it so.
+        (result) => ({ outcome: "succeeded", attrs: { sessionId: result.sessionId } }),
       );
+      const ticket = await audit.required(
+        ctx,
+        { action: "terminal.ticket.mint", target: { kind: "terminal", id: created.sessionId } },
+        () => terminals.ticket(),
+        () => ({ outcome: "succeeded" }),
+      );
+      return { sessionId: created.sessionId, ticket } satisfies TerminalCreateResult;
     });
     api.register("terminal.terminate", async (ctx, params) => {
       const sessionId = requireSessionId(params);
@@ -1094,10 +1122,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // attrs record the shape of the edit (bytes, the revision it replaced) and
     // never its CONTENTS — a config file can hold a shell path or a font name,
     // and the audit log is not the place to copy a user's file into.
-    api.register(
-      "terminal.config.read",
-      async (): Promise<TerminalConfigDocument> => await terminals.readConfig(),
-    );
+    api.register("terminal.config.read", async (_ctx, params): Promise<TerminalConfigDocument> => {
+      // connectTicket's reasoning (GT-5b): the declared shape is parsed.
+      if (!TerminalConfigReadParams.safeParse(params ?? {}).success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected an object or no params", false);
+      return await terminals.readConfig();
+    });
     api.register("terminal.config.write", async (ctx, params) => {
       const parsed = TerminalConfigWriteParams.safeParse(params);
       if (!parsed.success)
@@ -1111,7 +1141,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         {
           action: "terminal.config.write",
           target: { kind: "terminal", id: "config" },
-          attrs: { bytes: parsed.data.text.length, replaces: parsed.data.revision },
+          // BYTES, measured (GT-5b). `.length` counts UTF-16 code units, so an
+          // attr named `bytes` under-reported every non-ASCII config — an emoji
+          // in a comment counted 2 for 4 — and the file is written as UTF-8.
+          attrs: {
+            bytes: Buffer.byteLength(parsed.data.text, "utf8"),
+            replaces: parsed.data.revision,
+          },
         },
         async (): Promise<TerminalConfigWriteResult> =>
           await terminals.writeConfig(parsed.data.text, parsed.data.revision),

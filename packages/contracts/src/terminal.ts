@@ -13,9 +13,45 @@ import { ObservedTerminal } from "./mgmt";
 export const TerminalInfo = ObservedTerminal;
 export type TerminalInfo = z.infer<typeof TerminalInfo>;
 
+/** Which floor observation an inventory came from (GT-5b). fieldd learns the
+ * inventory by subscribing to field-native's observed state, and that payload
+ * carries the native `bootId` and the last applied desired `generation` —
+ * which fieldd used to discard, keeping only the rows.
+ *
+ * They are here because a bare row list cannot answer "is this still true":
+ * a consumer holding an inventory across a floor replacement sees the same
+ * shape from a boot that no longer exists. The bootId names the boot the rows
+ * belong to; a `list` whose bootId moved is a different floor's inventory, not
+ * a changed one. Absent only alongside the `unobserved` refusal, which is the
+ * other half of the same honesty: fieldd never answers rows it has not seen. */
+export const TerminalObservation = z
+  .object({
+    /** the native boot these rows were observed from */
+    bootId: z.string(),
+    /** last applied desired generation (0 = none since that boot) */
+    generation: z.number().int(),
+  })
+  .passthrough();
+export type TerminalObservation = z.infer<typeof TerminalObservation>;
+
 /** terminal.list result (the DeviceListResult precedent — result envelopes are
- * contracts shapes, never ad-hoc literals; EL6). */
-export const TerminalListResult = z.object({ terminals: z.array(TerminalInfo) }).passthrough();
+ * contracts shapes, never ad-hoc literals; EL6).
+ *
+ * An EMPTY `terminals` means "this floor holds no sessions", and it is a claim
+ * fieldd may only make about a floor it has actually observed — before the
+ * first snapshot applies, `terminal.list` REFUSES with
+ * `UNAVAILABLE {service:"terminal", state:"unobserved"}` rather than answering
+ * `[]` (GT-5b). The empty answer used to be indistinguishable from an unarmed
+ * inventory, and a restore flow reading it concluded every saved pane was dead
+ * — for sessions that were alive on a field-native the restarted fieldd had
+ * simply not re-subscribed to yet. */
+export const TerminalListResult = z
+  .object({
+    terminals: z.array(TerminalInfo),
+    /** the observation these rows came from; absent on a pre-GT-5b daemon */
+    observation: TerminalObservation.optional(),
+  })
+  .passthrough();
 export type TerminalListResult = z.infer<typeof TerminalListResult>;
 
 /** Shared params for terminal.get / terminal.openTicket / terminal.terminate. */
@@ -40,7 +76,11 @@ export type TerminalTicket = z.infer<typeof TerminalTicket>;
  * is not a session, so there is nothing to name: the caller is asking for the
  * coordinates of THIS device's floor, which are the same for every holder of
  * the scope. Kept as an object rather than `void` so the method can grow a
- * device selector (D35) without a params-shape break. */
+ * device selector (D35) without a params-shape break — and PARSED by the
+ * handler since GT-5b, because a declared params shape that no handler
+ * consults is a shape the method does not actually have (the review found this
+ * one and the config read's declared and unreferenced). Parsed as
+ * `params ?? {}`: omitting params entirely is the normal call. */
 export const TerminalConnectTicketParams = z.object({}).passthrough();
 export type TerminalConnectTicketParams = z.infer<typeof TerminalConnectTicketParams>;
 
@@ -161,7 +201,8 @@ export type TerminalTerminateResult = z.infer<typeof TerminalTerminateResult>;
 // is and the only process that may write it while sessions are live.
 
 /** terminal.config.read params — empty, like connectTicket: there is one
- * app-owned overlay per device and the caller is asking for it. */
+ * app-owned overlay per device and the caller is asking for it. Parsed by the
+ * handler (GT-5b), on connectTicket's reasoning and with the same `?? {}`. */
 export const TerminalConfigReadParams = z.object({}).passthrough();
 export type TerminalConfigReadParams = z.infer<typeof TerminalConfigReadParams>;
 

@@ -173,6 +173,13 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
     );
 
+    // a ticket minted while the floor is ALIVE is the control: it proves the
+    // refusals below are the kill talking and not a door that never worked
+    const beforeKill = (await rpc.call("terminal.openTicket", {
+      sessionId: created.sessionId,
+    })) as TerminalTicket;
+    expect(beforeKill.token).toBeTruthy();
+
     // crash the floor: sessions die with it (the honest ceiling) and the seam
     // must refuse interactive ops rather than pretend
     native.child.kill("SIGKILL");
@@ -180,6 +187,27 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       const err = await rpc.callErr("terminal.create", { shell: "/bin/cat" });
       return err.data?.kind === "UNAVAILABLE" ? true : undefined;
     }, 10_000);
+
+    // GT-5b — the hole this row never checked. `create` was the only op
+    // re-tested after the kill, and the TICKET doors were the ones that had
+    // gone wrong: `terminalEndpoints` was captured on the pairing hello and
+    // cleared nowhere, so both of these kept answering with socket paths that
+    // no longer existed plus the dead boot's token, audited as successful
+    // grants. Floor-died-AFTER-hello had no coverage anywhere, and this is
+    // where it surfaces.
+    // Polled, not asserted once: `create` can reach UNAVAILABLE through the
+    // dead CONTROL socket a beat before the mgmt link's close clears the
+    // endpoints, and it is the cleared endpoints these two doors read.
+    for (const [method, params] of [
+      ["terminal.connectTicket", {}],
+      ["terminal.openTicket", { sessionId: created.sessionId }],
+    ] as const) {
+      const kind = await poll(async () => {
+        const err = await rpc.callErr(method, params);
+        return err.data?.kind === "UNAVAILABLE" ? err.data.kind : undefined;
+      }, 10_000).catch(() => "MINTED-FOR-A-CORPSE");
+      expect(kind, `${method} must not mint for a corpse`).toBe("UNAVAILABLE");
+    }
 
     // a replacement native on the SAME data dir: re-pair re-delivers fresh
     // endpoints (new token), the observed snapshot honestly EMPTIES (no
