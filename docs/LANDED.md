@@ -850,6 +850,62 @@ The process failure is the durable part: a subagent quoted an upstream diagnosti
 orchestrator published it into this ledger and the roadmap without grepping the artifact it
 supposedly came from. Quoted evidence is a claim like any other and gets verified where it
 allegedly appeared — the same rule already applied to gate results, now applied to citations.
+**[See the RECONCILIATION entry below — this retraction's conclusion holds, its reasoning did
+not, and neither it nor the claim it retracted ever named which binary they meant.]**
+
+## Reconciliation — the sidecar question, settled by naming the binary
+
+**CORRECTION (2026-08-07), the third and final pass on this.** Both the original claim ("the
+sidecar is v2, identity is hello-asserted") and its retraction ("it is v3, peers ARE
+authenticated") were true of DIFFERENT BINARIES, and neither said which. Verified by the
+orchestrator: the repo **vendors** a whois-capable sidecar (`truffle-sidecar-darwin-arm64@0.7.12`,
+Aug 2, three `whoisResult` hits) — so the retraction's practical conclusion **stands**, and
+per-device tokens are not gated on any upstream release. But `resolve_sidecar` never looks in
+`node_modules`, so dev and every tailnet probe load `~/.config/truffle/bin/sidecar-slim` —
+**Jul 16, zero `whoisResult`** — which is why the builder's v2 diagnostic was real for the
+binary it actually ran. The retraction's *reasoning* was invalid either way: "peers attaching
+proves WhoIs authenticated them" ignores `authenticated_node_id(Unsupported) → Ok(None)`,
+which falls through to hello-asserted identity; only `Anonymous`/`Unavailable` refuse, and the
+orchestrator had quoted that very line while making the argument it refutes. Settled
+empirically: re-running the probe with `FIELD_NATIVE_SIDECAR_PATH` at the vendored binary
+drops the diagnostic to zero and stays green. **The live consequence is a test-fidelity gap,
+not a security regression** — no identity conclusion drawn from any `#[ignore]`d probe
+describes the shipped path until the harness prefers the workspace's own binary. Durable
+lesson, the sibling of the one above: **a retraction is a claim too**, and this one was
+published without naming its subject.
+
+## GT-5 — the code review's findings, fixed
+
+**GT-5a…d LANDED (2026-08-07): `127df5c` (evidence) · `95cbd7e` (product) · `69e8a99`
+(renderer) · `17365fd` (native), four builders on disjoint planes; `pnpm verify` exit 0 and
+`pnpm smoke:godview` green on the combined result, both re-run by the orchestrator, plus the
+live five-node tailnet probe.** Every HIGH from the review is closed.
+
+The evidence slice's acceptance was not "the row passes" but **"prove the row can fail"** —
+and it was performed: with the recovery ladder commented out the smoke exited 2 at exactly the
+right place, the bridge-down wait passing (the death is real) and the recovery wait timing out
+carrying the deck's own words; restored byte-identical, exit 0. `recoveredBackend` now reports
+`"starting"` rather than echoing the pre-kill backend, which is the proof it reads the
+post-kill deck at all. It also fixed the superseded-ladder hang it exposed, and turned up two
+findings by making the harness honest: **⌘W never worked** (Electron resolves
+`explicit ?? roleDefault`, and `role:"close"` defaults to `CommandOrControl+W`, so omitting
+the accelerator releases nothing — invisible for five slices because the menu was installed
+after the smoke's early return), and **the persistence flip is not observable from the smoke**,
+measured with a 50ms sampler that caught the precondition zero times, so the trail is reported
+rather than asserted and the sampler carries its own anti-vacuity guard.
+
+Three corrections the builders made to the orchestrator's briefs, all right:
+`rollbackOnOutcomeFailure` does not cover a create whose nested mint throws (it fires only
+when the outcome APPEND fails on a successful effect), so the fix is ordering; a session whose
+mint failed is deliberately NOT terminated, because killing a live PTY to tidy our bookkeeping
+is the worse outcome; and writability is worded as the host property it is rather than
+suppressed pre-attach, because suppressing it would make a read-only host indistinguishable
+from a writable one — the same class of lie in the other direction — with the mark stated in
+BOTH directions, since silence is not neutral beside a mark. The renderer's peer-path fix went
+deeper than asked: `paneMeta` stamps `remoteDevice` at the attach that made the pane, where
+locality is certain, rather than reconstructing it from a hostname later. One item was
+verified NOT fixable and escalated instead of hacked (G13). Full record:
+`specs/godview-terminal.md` §9·A.
 
 ## UA-0 — the layout registry: one tree, one spelling, two languages
 

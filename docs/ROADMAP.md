@@ -173,7 +173,26 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
 
 ## Open debts (dated, sourced)
 
-- **GT CODE REVIEW (2026-08-06) — 7 HIGH defects open, none fixed.** Six read-only reviewers
+- **GT CODE REVIEW — ALL FIXED (2026-08-07, `127df5c` · `95cbd7e` · `69e8a99` · `17365fd`,
+  four builders on disjoint planes; `pnpm verify` exit 0 and `smoke:godview` green across the
+  combined result, both re-run by the orchestrator).** The evidence slice's acceptance was
+  *prove the row can fail*, and it did: with the recovery ladder commented out the smoke
+  exited 2 at exactly the right place, carrying the deck's own "the terminal bridge died —
+  rebuilding"; restored, exit 0. `recoveredBackend` now reports `"starting"` instead of
+  echoing the pre-kill backend. Remaining follow-ups from the same work: **⌘W never worked**
+  (Electron resolves `explicit ?? roleDefault` and `role:"close"` defaults to
+  `CommandOrControl+W`, so omitting the accelerator releases nothing — both smoke fields read
+  identical every run; fix belongs in `app-menu-model.ts`) · **G13 petition**: no
+  browse-handler seam exists at 0.9.2, verified against the workspace's own `.d.ts`, so the
+  dead "Browse sessions" button cannot be fixed from our side · **the tailnet probes run on a
+  STALE sidecar** (`resolve_sidecar` never looks in `node_modules`, so dev lands on a Jul-16
+  binary with no `whoisResult` while the repo vendors an Aug-2 one that has it) — a
+  test-fidelity gap, not a security regression: pointing `FIELD_NATIVE_SIDECAR_PATH` at the
+  vendored binary drops the WhoIs diagnostic to zero, proven by the orchestrator, and the
+  harness fix is a few lines in `tests/common/mod.rs` · **R5 keeps a second source of truth**
+  for package entry points, which is what made main red on a correct import (`1e4f9ac`);
+  deriving it from `package.json` exports is the real fix (2026-08-07).
+- ~~**GT CODE REVIEW (2026-08-06) — 7 HIGH defects open, none fixed.**~~ Six read-only reviewers
   across four planes; every HIGH re-verified by the orchestrator against the code. Full
   record with file:line and failure scenarios in `specs/godview-terminal.md` §9. In fix
   order: **(1) the bridge-SIGKILL recovery smoke row is VACUOUS** — it derives its predicates
