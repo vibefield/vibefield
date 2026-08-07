@@ -765,6 +765,27 @@ async function main(
     godviewStates?.ensure(window.webContents).set();
   };
 
+  // THE APPLICATION MENU, installed before the godview harness rather than
+  // after it (GT-5a).
+  //
+  // It used to be installed below both smoke branches, on the reasoning that a
+  // harness presents no UI — true of `smoke` and `smoke-canvas`, and false of
+  // `smoke-godview`, whose window is SHOWN and typed into. The cost was that the
+  // one function whose entire reason for existing is the ⌘W arbitration between
+  // window and pane was never in place while the smoke pressed ⌘W: `redrawMenu`
+  // stayed a no-op, so making the accelerator unconditional would have closed
+  // the window in production with every row still green.
+  //
+  // The rule is a window somebody can press a key in — production, dev, and the
+  // godview harness. `smoke` and `spike-loro` have already returned by here;
+  // `smoke-canvas`'s window is hidden, so it would be installing accelerators
+  // for nobody.
+  if (MODE !== "smoke-canvas") {
+    redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
+      toggleGodview,
+    });
+  }
+
   if (MODE === "smoke-godview") {
     await (await testing()).runSmokeGodview({
       handle: await fielddReady,
@@ -831,14 +852,6 @@ async function main(
     });
     return;
   }
-
-  // The application menu exists only where there is a menu bar to hold it —
-  // the harness modes present no UI and would only be installing accelerators
-  // for nobody. Assigning `redrawMenu` here is what makes the checkmark and the
-  // conditional ⌘W follow the overlay from this point on.
-  redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
-    toggleGodview,
-  });
 
   let latestDesktopState: DesktopShellState | null = null;
   const publishDesktopState = (raw: DesktopShellState): void => {
