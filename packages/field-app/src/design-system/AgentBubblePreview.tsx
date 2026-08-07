@@ -96,7 +96,7 @@ interface RemoteFixtureOptions {
   id: string;
   status: Exclude<AgentVisualStatus, "waiting">;
   color: string;
-  readWrite?: boolean;
+  hostWritable?: boolean;
   attachable?: boolean;
   active?: boolean;
   attachment?: PaneAttachment;
@@ -117,7 +117,7 @@ function remoteFixture(options: RemoteFixtureOptions): MonitorAgent {
       deviceName: "studio-mini",
       remoteSessionId: options.id,
       attachable: options.attachable ?? true,
-      readWrite: options.readWrite ?? true,
+      hostWritable: options.hostWritable ?? true,
       cwdLabel: "/Projects/mesh-console",
       ...(options.active ? { localSessionId: `replica-${options.id}` } : {}),
     },
@@ -235,13 +235,13 @@ function bubbleGroups(accents: readonly string[]): readonly BubbleGroup[] {
       specimens: [
         {
           id: "remote-view-only",
-          title: "Remote · view only",
-          note: "A persistent “view only” line records the peer's mirror-write policy.",
+          title: "Remote · read-only host",
+          note: "Every remote bubble states its HOST's write policy — the advertisement is one boolean per peer, and whether this viewer gets writes is decided at attach.",
           agent: remoteFixture({
             id: "remote-view-only",
             status: "working",
             color: accent(7),
-            readWrite: false,
+            hostWritable: false,
           }),
         },
         {

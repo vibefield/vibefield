@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactElement, useMemo } from "react";
 import { AgentIcon } from "../../monitor/AgentIcon";
 import type { AgentVisualStatus } from "../../monitor/agent-status";
+import { remoteWriteLabel, remoteWriteTitle } from "../../monitor/remote-write";
 import type { AgentMonitorProps, MonitorAgent } from "../../monitor/types";
 import { normalizeListParameters } from "./list-parameters";
 
@@ -82,7 +83,7 @@ export function AgentList({
                   // that this session is not on this computer.
                   aria-label={`${remote ? `on ${remote.deviceName}, ` : ""}${agent.project}, ${
                     facet ? (facet.model ?? facet.provider) : remote ? "remote session" : "terminal"
-                  }, ${agent.status}${remote && !remote.readWrite ? ", view only" : ""}: ${agent.detail}`}
+                  }, ${agent.status}${remote ? `, ${remoteWriteLabel(remote)}` : ""}: ${agent.detail}`}
                   onClick={() => actions.select(agent)}
                 >
                   <span className="vf-monitor-list-status" aria-hidden="true" />
@@ -105,9 +106,7 @@ export function AgentList({
                       // read as "another terminal of mine".
                       <span className="vf-monitor-list-host">
                         {remote.deviceName}
-                        {remote.readWrite ? null : (
-                          <em title="the peer refuses mirror-write">view only</em>
-                        )}
+                        <em title={remoteWriteTitle(remote)}>{remoteWriteLabel(remote)}</em>
                       </span>
                     ) : (
                       <span className="vf-monitor-list-terminal">terminal</span>

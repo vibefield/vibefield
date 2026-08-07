@@ -19,11 +19,13 @@
 
 import Matter from "matter-js";
 import { describe, expect, it, vi } from "vitest";
+import { SWARM_PARAMETER_GROUPS } from "../src/godview/views/swarm/swarm-parameters";
 import {
   FRAME_COUNT_INDEX,
   FRAME_GENERATION_INDEX,
   FRAME_HEADER_FLOATS,
   FRAME_STRIDE,
+  FRICTION_AIR_CEILING,
   frameFloatsFor,
   PHYSICS_HZ_FLOOR,
   type SwarmAgentSpec,
@@ -91,6 +93,25 @@ function positions(physics: SwarmPhysics): number[] {
   return [...buffer];
 }
 
+/** The lab's own air-friction control. Read rather than restated, so a raised
+ * ceiling reaches the stability arithmetic instead of sliding past it. */
+function frictionControl(): { min: number; max: number } {
+  const control = SWARM_PARAMETER_GROUPS.flatMap((group) => group.controls).find(
+    (candidate) => candidate.key === "frictionAir",
+  );
+  if (control === undefined) throw new Error("the swarm panel has no air-friction control");
+  return { min: control.min, max: control.max };
+}
+
+/** What matter is actually holding, which is the only thing the clamp is about
+ * — a parameter object that agreed with itself would prove nothing. */
+function bodyFriction(physics: SwarmPhysics): number {
+  const bodies = (physics as unknown as { bodies: Map<string, { body: Matter.Body }> }).bodies;
+  const first = [...bodies.values()][0];
+  if (first === undefined) throw new Error("no bodies");
+  return first.body.frictionAir;
+}
+
 describe("the fixed timestep, off the main thread (GT-D15.2)", () => {
   it("steps at physicsHz rather than once per pump", () => {
     const update = vi.spyOn(Matter.Engine, "update");
@@ -153,15 +174,47 @@ describe("the 15Hz floor is a stability law, not a preference (GT-D15.2)", () =>
     // The reason, restated as arithmetic rather than as a comment. Matter 0.19
     // scales air friction by the step against a 60Hz base, and the scaled term
     // goes negative — friction that ACCELERATES — once the step passes
-    // `_baseDelta / frictionAir`. At the panel's maximum friction of 0.2 that
-    // is 83ms; the floor's step is 66.7ms, which stays the right side of it.
+    // `_baseDelta / frictionAir`. At the panel's maximum friction that is 83ms;
+    // the floor's step is 66.7ms, which stays the right side of it.
+    //
+    // The worst case is DERIVED from the lab's own control (GT-5c). It was
+    // hardcoded as `0.2`, so raising the slider's ceiling left this suite green
+    // while friction went negative — the review's finding 14.
     const baseDelta = 1000 / 60;
-    const worstFriction = 0.2;
+    const worstFriction = frictionControl().max;
     const floorStepMs = 1000 / PHYSICS_HZ_FLOOR;
     expect(1 - worstFriction * (floorStepMs / baseDelta)).toBeGreaterThan(0);
     // One notch below the floor and the same sum is already negative.
     const belowStepMs = 1000 / (PHYSICS_HZ_FLOOR - 5);
     expect(1 - worstFriction * (belowStepMs / baseDelta)).toBeLessThan(0);
+  });
+
+  it("clamps air friction at construction and at every update, like the rate", () => {
+    // The other half of the same inequality, and it was enforced only by the
+    // view's normalizer — so any second caller of `setParameters` walked past
+    // it. A law one side enforces is a law the next caller breaks.
+    const physics = build({ frictionAir: 5 });
+    expect(bodyFriction(physics)).toBeLessThanOrEqual(FRICTION_AIR_CEILING);
+
+    physics.setParameters({ ...PARAMETERS, frictionAir: 99 });
+    expect(bodyFriction(physics)).toBe(FRICTION_AIR_CEILING);
+
+    physics.setParameters({ ...PARAMETERS, frictionAir: -1 });
+    expect(bodyFriction(physics)).toBe(0);
+
+    physics.setParameters({ ...PARAMETERS, frictionAir: Number.NaN });
+    expect(bodyFriction(physics)).toBe(FRICTION_AIR_CEILING);
+
+    // …and a value inside the range is left exactly alone.
+    physics.setParameters({ ...PARAMETERS, frictionAir: 0.05 });
+    expect(bodyFriction(physics)).toBeCloseTo(0.05, 6);
+    physics.dispose();
+  });
+
+  it("declares the same ceiling in the lab as the physics enforces", () => {
+    // The two are one number, stated once. If the slider's max ever drifts from
+    // the clamp, the derivation above stops describing what a user can reach.
+    expect(frictionControl().max).toBe(FRICTION_AIR_CEILING);
   });
 });
 

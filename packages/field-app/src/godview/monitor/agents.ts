@@ -152,8 +152,11 @@ export function monitorAgentFromRemote(
     status: classifyTerminalStatus(session.activity),
     project: folderName(session.cwdLabel, session.title || "remote"),
     // The host is in the detail as well as in the facet, because the detail is
-    // what the swarm puts in a tooltip and the rain reads out: a path with no
-    // machine attached to it is exactly the confusion GT-3's finding warned of.
+    // what the swarm puts in a tooltip and the list prints as its own column: a
+    // path with no machine attached to it is exactly the confusion GT-3's
+    // finding warned of. (The rain does NOT read this — it builds its column
+    // from `rainDataString`, which until GT-5c read `project` alone and drew a
+    // peer's session as a local terminal. Fixed there, not by widening this.)
     detail: session.cwdLabel ? `${host.deviceName} · ${session.cwdLabel}` : host.deviceName,
     // Accent by the QUALIFIED id, so the same session id on two peers is two
     // colors and one peer's session keeps its color across refreshes.
@@ -164,7 +167,10 @@ export function monitorAgentFromRemote(
       deviceName: host.deviceName,
       remoteSessionId: session.sessionId,
       attachable: session.attachable,
-      readWrite: session.readWrite,
+      // Renamed on the way in, deliberately: what the peer advertises is one
+      // boolean for the whole HOST, and carrying it under a per-viewer name is
+      // how the views came to draw it as one.
+      hostWritable: session.readWrite,
       cwdLabel: session.cwdLabel,
       ...(record.localSessionId !== undefined ? { localSessionId: record.localSessionId } : {}),
     },

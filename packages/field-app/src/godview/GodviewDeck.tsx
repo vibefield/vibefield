@@ -21,6 +21,8 @@ import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
 import {
   paneCwd,
   type RestoreQuestion,
+  readDeviceHost,
+  rememberDeviceHost,
   restoreQuestion,
   restoreSentence,
   savedPaneSessionIds,
@@ -72,6 +74,42 @@ const DECK_STORAGE_KEY = "vf-godview-deck-v1";
  * — and the first resize from the mounted surface corrects it either way. */
 const SPAWN_COLS = 100;
 const SPAWN_ROWS = 30;
+
+/**
+ * Which plane refused, and therefore what is actually true about the shells.
+ *
+ * `transport` is the deck's own path to the floor: no bridge on this host, a
+ * connect main could not make, a bridge that died. The sessions may or may not
+ * be reachable, and "could not reach its shell" is the honest sentence.
+ *
+ * `fieldd` is the CONTROL plane alone — the ticket mint. field-native holds the
+ * PTYs and outlives fieldd by design (the two-plane law), so a fieldd that will
+ * not answer says nothing about the shells: they are running, and the deck is
+ * merely not allowed through the door yet. Reporting that as a dead shell told
+ * a user the exact opposite of the property this product sells.
+ */
+type DeckFaultPlane = "transport" | "fieldd";
+
+interface DeckFault {
+  plane: DeckFaultPlane;
+  /** The failing plane's own words, carried whole. */
+  message: string;
+}
+
+/** The fault face's headline, per plane. */
+function deckFaultHeadline(plane: DeckFaultPlane): string {
+  return plane === "fieldd"
+    ? "the deck could not reach fieldd"
+    : "the deck could not reach its shell";
+}
+
+/** The line under it: what this means for the sessions, stated rather than
+ * implied. DESIGN.md §9 — an error says what happened and what to do next. */
+function deckFaultConsequence(plane: DeckFaultPlane): string {
+  return plane === "fieldd"
+    ? "your shells are still running — field-native outlives fieldd, and the deck rejoins them when the control plane answers"
+    : "the sessions are unreachable from here until the bridge is back";
+}
 
 /** Ports are transferred per ATTACH and the wait is one-shot, so a runtime is
  * born with its own fresh wait, armed before the connect that causes the
@@ -166,7 +204,14 @@ export function GodviewDeck({
    * bridge needs a NEW runtime — and the workspace reads its runtime from
    * context at mount, so the deck has to remount onto it. */
   const [generation, setGeneration] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  /** What the deck could not reach, and its words for it. The PLANE is carried
+   * beside the message because the two failures behind it are opposite facts
+   * about the product (GT-5c): a `fieldd` fault is the CONTROL plane refusing a
+   * ticket while the shells this deck wants are alive and outliving it — the
+   * two-plane property, working — and a `transport` fault is the bridge or the
+   * floor itself. Reporting both as "could not reach its shell" told a user the
+   * opposite of what had happened. */
+  const [error, setError] = useState<DeckFault | null>(null);
   /** Published by the sidebar probe. Read only to REPORT what the deck holds
    * (the marker below); the deck does not drive panes through it any more —
    * that was the adopt sweep GT-2e deleted. */
@@ -182,6 +227,12 @@ export function GodviewDeck({
    * ref because `decoratePane` must stay referentially stable, and the mount
    * that follows an attach re-renders the workspace anyway. */
   const paneColors = useRef(new Map<string, string>());
+  /** Local replica id → the PEER it came from. The deck is the only place that
+   * knows a pane is a peer's, and it knows it exactly once — at the attach that
+   * made it — so this is where locality is recorded rather than inferred later
+   * from a path (GT-5c, the 2026-08-06 erratum). It is read by `paneMeta`, so a
+   * ref for the same reason `paneColors` is one. */
+  const remoteDevices = useRef(new Map<string, string>());
   /** The shell every pane is born with, and where. Main's answer to the connect
    * (GT-D10) — `null` until it lands, which is what gates the workspace's first
    * mount below. */
@@ -303,6 +354,10 @@ export function GodviewDeck({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      // Which plane the next `await` is asking, so the catch below reports the
+      // one that actually refused. Only the ticket mint speaks to fieldd; the
+      // bridge lookup and the connect are the transport's own (GT-5c).
+      let plane: DeckFaultPlane = "transport";
       try {
         const terminal = getHost().terminal;
         if (terminal === undefined) {
@@ -348,11 +403,13 @@ export function GodviewDeck({
         }
         setRuntime(own);
         // Parsed, not cast: a mint without a ticket must fail loudly.
+        plane = "fieldd";
         const minted = TerminalConnectTicketResult.parse(
           await fieldd.request("terminal.connectTicket", {}),
         );
         if (cancelled) return;
         godviewColdOpen.mark("ticket");
+        plane = "transport";
         // Main answers the connect with the shell identity it alone can read.
         const attached = await terminal.connect(minted.ticket);
         if (cancelled) return;
@@ -362,13 +419,16 @@ export function GodviewDeck({
       } catch (cause) {
         if (cancelled) return;
         const message = cause instanceof Error ? cause.message : String(cause);
-        setError(message);
+        setError({ plane, message });
         getRendererLogger()
           .child({ component: "godview" })
           .error(
             "renderer.godview.deck_unavailable",
-            "The Godview deck could not reach a shell",
+            plane === "fieldd"
+              ? "The Godview deck could not mint its connect ticket; the floor's sessions are unaffected"
+              : "The Godview deck could not reach a shell",
             cause,
+            { plane },
           );
       }
     })();
@@ -517,7 +577,7 @@ export function GodviewDeck({
       if (status.state === lastBridgeState.current) return;
       lastBridgeState.current = status.state;
       if (status.state === "bridge-down") {
-        setError("the terminal bridge died — rebuilding");
+        setError({ plane: "transport", message: "the terminal bridge died — rebuilding" });
         return;
       }
       if (status.state !== "bridge-up" && status.state !== "ticket-expired") return;
@@ -559,23 +619,40 @@ export function GodviewDeck({
   //
   // Stable identity, and it matters: ghosttea's persist effect depends on this
   // prop, so a fresh arrow per render would rewrite localStorage every render.
-  const paneMeta = useCallback((session: { cwd?: string | null; title?: string | null }) => {
-    // Only DEFINED fields: an explicit `undefined` would serialize away anyway,
-    // and a null cwd persisted as `"cwd": null` is a value a reader has to
-    // learn to disbelieve.
-    //
-    // `cwd` is stored VERBATIM — the OSC 7 URL the floor reported, host and
-    // all — and decoded by whoever reads it (`paneCwd`). Normalizing on the way
-    // in would throw away the host, which is exactly the field a remote pane
-    // will need when GT-4 lights them up, and would make the persisted document
-    // a summary of what the floor said rather than a record of it.
-    return {
-      ...(typeof session.cwd === "string" && session.cwd !== "" ? { cwd: session.cwd } : {}),
-      ...(typeof session.title === "string" && session.title !== ""
-        ? { title: session.title }
-        : {}),
-    };
-  }, []);
+  const paneMeta = useCallback(
+    (session: { id?: string; cwd?: string | null; title?: string | null }) => {
+      // Only DEFINED fields: an explicit `undefined` would serialize away anyway,
+      // and a null cwd persisted as `"cwd": null` is a value a reader has to
+      // learn to disbelieve.
+      //
+      // `cwd` is stored VERBATIM — the OSC 7 URL the floor reported, host and
+      // all — and decoded by whoever reads it (`paneCwd`). Normalizing on the way
+      // in would throw away the host, which is exactly the field a remote pane
+      // needs now that GT-4 has lit them up, and would make the persisted
+      // document a summary of what the floor said rather than a record of it.
+      //
+      // `remoteDevice` is the third field, and it is the one that stops a
+      // restored peer's pane from spawning a LOCAL shell at that peer's path.
+      // Recorded HERE because here is the only moment the answer is certain:
+      // the deck attached this replica and knows whose it is. Reading it back
+      // off the URL's host would be archaeology, and archaeology is what the
+      // erratum is about.
+      const remoteDevice =
+        session.id === undefined ? undefined : remoteDevices.current.get(session.id);
+      // A pane the deck knows is LOCAL names this machine in its own cwd, which
+      // is the only place the renderer can learn its own hostname — no contract
+      // carries one. A replica's cwd must never reach this: it names the peer.
+      if (remoteDevice === undefined) rememberDeviceHost(session.cwd);
+      return {
+        ...(typeof session.cwd === "string" && session.cwd !== "" ? { cwd: session.cwd } : {}),
+        ...(typeof session.title === "string" && session.title !== ""
+          ? { title: session.title }
+          : {}),
+        ...(remoteDevice !== undefined ? { remoteDevice } : {}),
+      };
+    },
+    [],
+  );
 
   // A dead pane, answered with a live one (GT-D8). Armed only after consent.
   //
@@ -598,8 +675,10 @@ export function GodviewDeck({
       // URL the shell announced, and a spawn given `file://host/Users/x` cannot
       // chdir into it. Home is the honest fallback for a pane whose shell never
       // announced one at all — which is most of them, since the spawn directory
-      // is not reported and OSC 7 needs a shell integration.
-      const cwd = paneCwd(context.meta) ?? shell.home;
+      // is not reported and OSC 7 needs a shell integration — and now also for a
+      // pane that was a PEER'S: its folder is on another machine, and opening a
+      // local shell there is either the wrong directory or a dropped pane.
+      const cwd = paneCwd(context.meta, readDeviceHost()) ?? shell.home;
       try {
         return await runtime.createSession({
           executable: shell.defaultShell,
@@ -678,6 +757,11 @@ export function GodviewDeck({
             return { state: "no-pane" };
           }
           paneColors.current.set(session.id, request.color);
+          // The locality record (GT-5c). This is the one moment the deck knows
+          // for certain that this pane holds a PEER'S session, and `paneMeta`
+          // stamps it into the persisted document so a later restore does not
+          // have to guess from a path.
+          remoteDevices.current.set(session.id, request.deviceName);
           // THE MOUNT. `mountSession` puts a session in the ACTIVE pane and
           // activates it — the workspace's own door (GT-D10), the same one the
           // reference app's select flow drives. Note what it is not: `addSession`,
@@ -725,6 +809,9 @@ export function GodviewDeck({
     // back if the floor ever reused a session id.
     for (const sessionId of paneColors.current.keys()) {
       if (!sessionIds.includes(sessionId)) paneColors.current.delete(sessionId);
+    }
+    for (const sessionId of remoteDevices.current.keys()) {
+      if (!sessionIds.includes(sessionId)) remoteDevices.current.delete(sessionId);
     }
     onPanes?.({ sessionIds, ...(activeSessionId !== undefined ? { activeSessionId } : {}) });
   }, [workspace, onPanes]);
@@ -775,7 +862,7 @@ export function GodviewDeck({
         shaderEffect: terminalEffects?.shaderEffects?.[0] ?? null,
         animate: terminalEffects?.animate === true,
       },
-      ...(error !== null ? { error } : {}),
+      ...(error !== null ? { error: error.message, errorPlane: error.plane } : {}),
       ...(consent !== null && consent !== "go" ? { consent } : {}),
       ...(exited.length > 0 ? { exitedSessionIds: exited } : {}),
       ...(workspace?.activeSession !== undefined
@@ -815,8 +902,11 @@ export function GodviewDeck({
   if (error !== null) {
     return (
       <div className="vf-godview-deck-fault" role="alert">
-        <p className="vf-godview-deck-fault-message">the deck could not reach its shell</p>
-        <p className="vf-godview-deck-fault-detail">{error}</p>
+        <p className="vf-godview-deck-fault-message">{deckFaultHeadline(error.plane)}</p>
+        <p className="vf-godview-deck-fault-detail">
+          {error.message}
+          <small>{deckFaultConsequence(error.plane)}</small>
+        </p>
         <button type="button" className="vf-godview-deck-fault-retry" onClick={retry}>
           retry
         </button>
@@ -900,6 +990,25 @@ export function GodviewDeck({
         // clicking it attaches this pane (GT-D17). The prop gates that palette
         // and its hotkey only; the runtime calls the door above makes are
         // untouched by it.
+        //
+        // KNOWN DEFECT, upstream, verified NOT FIXABLE FROM HERE at 0.9.2
+        // (GT-5c; petition candidate G13). With this false, a mounted remote
+        // pane that reaches `ended` still renders the library's own
+        // `RemoteSessionBanner`, whose "Browse sessions on <device>" button
+        // calls `browseDeviceSessions` — which early-returns on this very flag.
+        // A control that does nothing, and reachable rather than latent now
+        // that GT-4's floor half has landed.
+        //
+        // The spec's recommended fix is to hand the library a browse handler
+        // that opens OUR monitor. There is no seam for one: `GhostteaWorkspace`
+        // destructures sixteen props and none is a browse handler
+        // (`workspace/Workspace.d.ts`), `browseDeviceSessions` is an internal
+        // `useCallback` wired straight to `SplitView`'s `onBrowseDevice`, and
+        // the banner is rendered by the library's own pane. The alternative —
+        // rendering our own banner from upstream's exported pure helpers —
+        // cannot suppress theirs either. So this is upstream's to open, and
+        // intercepting the click by matching another package's internal markup
+        // is not a decision a builder should take unilaterally.
         enableRemoteSessions={false}
         showTitlebar={false}
         active={active}

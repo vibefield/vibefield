@@ -9,7 +9,14 @@ import type { GodviewState, TerminalBridgeStatus } from "@vibefield/contracts";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { restoreQuestion, restoreSentence, savedPaneSessionIds } from "../src/godview/deck-restore";
+import {
+  paneCwd,
+  readDeviceHost,
+  rememberDeviceHost,
+  restoreQuestion,
+  restoreSentence,
+  savedPaneSessionIds,
+} from "../src/godview/deck-restore";
 import { GodviewToggle } from "../src/godview/GodviewToggle";
 import { KillActivePane } from "../src/godview/KillActivePane";
 import {
@@ -144,15 +151,98 @@ describe("restoreQuestion", () => {
 describe("restoreSentence", () => {
   it("reads as English at one and at many", () => {
     expect(restoreSentence({ saved: 2, alive: 1, dead: 1 })).toBe(
-      "1 pane is still running and rejoin · 1 pane ended — restoring opens a new shell in its folder",
+      "1 pane is still running and rejoin · 1 pane ended — restoring opens a new shell in its folder on this machine, at home where there is none",
     );
     expect(restoreSentence({ saved: 4, alive: 2, dead: 2 })).toBe(
-      "2 panes are still running and rejoin · 2 panes ended — restoring opens a new shell in their folders",
+      "2 panes are still running and rejoin · 2 panes ended — restoring opens a new shell in their folders on this machine, at home where there is none",
     );
   });
 
   it("says so plainly when nothing survived", () => {
     expect(restoreSentence({ saved: 2, alive: 0, dead: 2 })).toContain("none are still running");
+  });
+
+  it("does not promise a folder it may not have (GT-5c)", () => {
+    // The face used to promise "a new shell in its folder" unconditionally,
+    // while a pane that was a PEER'S — or whose shell never announced a cwd —
+    // lands at home. `paneCwd` now refuses both; the sentence says so.
+    const sentence = restoreSentence({ saved: 1, alive: 0, dead: 1 });
+    expect(sentence).toContain("on this machine");
+    expect(sentence).toContain("at home where there is none");
+  });
+});
+
+describe("paneCwd — a peer's path is never spawned locally (GT-5c, the 2026-08-06 erratum)", () => {
+  // The finding, restored as a test: `paneCwd` decoded the URL and returned
+  // `url.pathname`, DISCARDING the host, while its own comment said this was
+  // where a foreign one "would be caught" and the spec read that TODO as a
+  // safeguard that existed. Existing locally, the peer's path opened a shell on
+  // the wrong machine's directory; absent, `createSession` threw and the pane
+  // vanished without a word.
+
+  it("refuses a pane the deck recorded as a PEER'S, whatever its path says", () => {
+    // The authoritative branch: locality is stamped at persist time, when the
+    // deck knows it, rather than reconstructed from a hostname later.
+    expect(
+      paneCwd({ cwd: "file://studio-mini.local/Users/peer/src", remoteDevice: "studio-mini" }),
+    ).toBeNull();
+    // Even a bare path — a peer whose ghosttea reports one — is a peer's path.
+    expect(paneCwd({ cwd: "/Users/peer/src", remoteDevice: "studio-mini" })).toBeNull();
+  });
+
+  it("refuses a URL whose host is not this device's", () => {
+    expect(
+      paneCwd({ cwd: "file://studio-mini.local/Users/peer/src" }, "jamess-macbook"),
+    ).toBeNull();
+  });
+
+  it("accepts this device's own host, case- and trailing-dot-insensitively", () => {
+    expect(paneCwd({ cwd: "file://Jamess-MacBook.local/Users/x" }, "jamess-macbook.local")).toBe(
+      "/Users/x",
+    );
+    expect(paneCwd({ cwd: "file://jamess-macbook.local./Users/x" }, "jamess-macbook.local")).toBe(
+      "/Users/x",
+    );
+  });
+
+  it("reads a hostless URL and localhost as this machine (RFC 8089)", () => {
+    expect(paneCwd({ cwd: "file:///Users/x" }, "jamess-macbook")).toBe("/Users/x");
+    expect(paneCwd({ cwd: "file://localhost/Users/x" }, "jamess-macbook")).toBe("/Users/x");
+  });
+
+  it("still decodes percent-encoding, plain paths, and nothing else", () => {
+    expect(paneCwd({ cwd: "file:///Users/x/My%20Repo" }, "jamess-macbook")).toBe(
+      "/Users/x/My Repo",
+    );
+    expect(paneCwd({ cwd: "/repo/api" }, "jamess-macbook")).toBe("/repo/api");
+    expect(paneCwd({ cwd: "https://example.com/x" }, "jamess-macbook")).toBeNull();
+    expect(paneCwd({}, "jamess-macbook")).toBeNull();
+    expect(paneCwd(null, "jamess-macbook")).toBeNull();
+  });
+
+  it("falls back to the pre-GT-5c reading only when no local host has been learned", () => {
+    // Named residual, and narrow by construction: reachable only from a layout
+    // persisted before this slice, since every pane written since carries
+    // `remoteDevice` when it is a peer's.
+    expect(paneCwd({ cwd: "file://some-host/Users/x" })).toBe("/Users/x");
+  });
+});
+
+describe("the device host, learned rather than asked for (GT-5c)", () => {
+  it("remembers the host a LOCAL pane announced, and normalizes it", () => {
+    localStorage.clear();
+    rememberDeviceHost("file://Jamess-MacBook.local/Users/x");
+    expect(readDeviceHost()).toBe("jamess-macbook.local");
+    // …and that value is exactly what makes the comparison above run.
+    expect(paneCwd({ cwd: "file://studio-mini/Users/p" }, readDeviceHost())).toBeNull();
+  });
+
+  it("learns nothing from a cwd that names no host", () => {
+    localStorage.clear();
+    rememberDeviceHost("file:///Users/x");
+    rememberDeviceHost("/Users/x");
+    rememberDeviceHost(null);
+    expect(readDeviceHost()).toBeNull();
   });
 });
 

@@ -22,7 +22,12 @@ import type {
   SharedSessionSummary,
 } from "@vibecook/ghosttea-protocol";
 import { describe, expect, it } from "vitest";
-import { MOCK_LABEL, mockClaim, remoteClaim } from "../src/godview/GodviewMonitor";
+import {
+  MOCK_LABEL,
+  mockClaim,
+  remoteClaim,
+  remoteUnavailableClaim,
+} from "../src/godview/GodviewMonitor";
 import {
   assembleMonitorAgents,
   type MonitorRemoteRecord,
@@ -149,13 +154,18 @@ describe("a peer's session as a monitor row", () => {
     expect(agent.remote?.cwdLabel).toBe("/Users/peer/src/truffle");
   });
 
-  it("carries mirror-write refusal as a fact rather than dropping the row", () => {
+  it("carries the HOST's write policy as a fact rather than dropping the row", () => {
+    // Renamed with the field (GT-5c): what the peer advertises is one boolean
+    // for the whole host, and the per-viewer answer is not decided until the
+    // attach. The projection carries the advertisement under a name that says
+    // which of the two it is.
     const agent = monitorAgentFromRemote(
       { row: { ...record.row, session: shared("s1", { readWrite: false }) } },
       ACCENTS,
     );
-    expect(agent.remote?.readWrite).toBe(false);
+    expect(agent.remote?.hostWritable).toBe(false);
     expect(agent.status).toBe("idle");
+    expect(monitorAgentFromRemote(record, ACCENTS).remote?.hostWritable).toBe(true);
   });
 
   it("never claims an agent facet — a peer sends terminal facts, not semantics", () => {
@@ -288,6 +298,31 @@ describe("the field's honest states", () => {
     expect(remoteFieldFromHosts([host("mini", [shared("s1")])]).failures).toBe(0);
     expect(failed.failures).toBe(1);
   });
+
+  it("returns the SAME OBJECT once settled, so a stock machine stops re-rendering", () => {
+    // The review's finding 8, as an identity assertion. With the mesh flag off
+    // — the default — this poll fails every 2s forever, and a fresh object each
+    // time meant a new snapshot, a new agents array, a re-render of every view
+    // and an `updateAgents` posted to the swarm, bypassing GT-3p's damage gate
+    // for the life of the open overlay. Twice a minute, to say nothing new.
+    const settled = remoteFieldAfterFailure(EMPTY_REMOTE_FIELD, "this floor serves no mesh");
+    expect(settled.state).toBe("unavailable");
+    for (let poll = 0; poll < 30; poll += 1) {
+      expect(remoteFieldAfterFailure(settled, "this floor serves no mesh")).toBe(settled);
+    }
+    // The counter stops climbing with it: a number that only ever grew would be
+    // the one field keeping the object churning.
+    expect(remoteFieldAfterFailure(settled, "this floor serves no mesh").failures).toBe(
+      settled.failures,
+    );
+  });
+
+  it("still moves when the REASON changes — a new outage is news", () => {
+    const settled = remoteFieldAfterFailure(EMPTY_REMOTE_FIELD, "this floor serves no mesh");
+    const changed = remoteFieldAfterFailure(settled, "gateway is down");
+    expect(changed).not.toBe(settled);
+    expect(changed.reason).toBe("gateway is down");
+  });
 });
 
 describe("the labels, scoped per source (GT-D17)", () => {
@@ -312,5 +347,24 @@ describe("the labels, scoped per source (GT-D17)", () => {
   it("says one of a thing in the singular", () => {
     expect(remoteClaim(counts({ remote: 1, hosts: 1 }))).toBe("1 remote session · 1 peer");
     expect(remoteClaim(counts({ remote: 3, hosts: 2 }))).toBe("3 remote sessions · 2 peers");
+  });
+
+  it("SAYS UNAVAILABLE, with the floor's reason — the state that never reached the screen", () => {
+    // The review's 2d: `remoteClaim` is null whenever there are no rows, which
+    // includes "there are no rows because the mesh could not be asked" — so a
+    // mesh that was ON with its gateway down drew exactly what a healthy empty
+    // mesh draws, at the surface GT-D17 declared to BE the door.
+    const down = counts({ remoteState: "unavailable", remoteReason: "gateway is down" });
+    expect(remoteClaim(down)).toBeNull();
+    expect(remoteUnavailableClaim(down)).toBe("mesh unavailable · gateway is down");
+    // With no reason offered, the state alone is still said.
+    expect(remoteUnavailableClaim(counts({ remoteState: "unavailable" }))).toBe("mesh unavailable");
+  });
+
+  it("says nothing while nobody has been asked, and nothing while serving", () => {
+    // `no-door` is a deck that has not finished coming up, which is not a mesh
+    // that is down; `serving` with zero rows is an honest empty mesh.
+    expect(remoteUnavailableClaim(counts({ remoteState: "no-door" }))).toBeNull();
+    expect(remoteUnavailableClaim(counts())).toBeNull();
   });
 });

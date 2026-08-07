@@ -62,6 +62,14 @@ function stop(): void {
   timer = undefined;
 }
 
+// PROOF OF LIFE, first thing (GT-5c). Everything above this line has now been
+// imported and evaluated — matter included — so a `ready` on the wire means
+// this thread can actually simulate. The driver's watchdog is waiting for
+// exactly this; a load that fails never reaches this statement, and the swarm
+// falls back to the main thread instead of standing still under a marker that
+// says `worker`.
+scope.postMessage({ type: "ready" });
+
 scope.onmessage = (event) => {
   const command = event.data;
   host.handle(command);

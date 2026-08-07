@@ -77,11 +77,27 @@ export function remoteFieldFromHosts(
   };
 }
 
-/** A failed ask, per the tolerance rule. */
+/**
+ * A failed ask, per the tolerance rule.
+ *
+ * IDENTITY IS PART OF THE ANSWER (GT-D15.3, and the code review's finding 8). A
+ * floor serving no mesh REFUSES this call — the default on a stock machine,
+ * where the flag is off — so this runs every 2s forever. Minting a fresh object
+ * each time was a new snapshot, a new agents array, a re-render of every view
+ * and an `updateAgents` posted to the swarm, twice a minute for the life of the
+ * open overlay, all to say a thing that had not changed. An unchanged state
+ * with an unchanged reason therefore returns `current` ITSELF: React bails out
+ * on the same reference, and the damage gate above stays armed.
+ *
+ * The failure counter stops climbing with it, deliberately. Once the rows are
+ * withdrawn the count has nothing left to decide, and a number that only ever
+ * grew would be the one field keeping the object churning.
+ */
 export function remoteFieldAfterFailure(
   current: RemoteSessionFieldSnapshot,
   reason: string,
 ): RemoteSessionFieldSnapshot {
+  if (current.state === "unavailable" && current.reason === reason) return current;
   const failures = current.failures + 1;
   if (failures < REMOTE_FAILURE_TOLERANCE && current.state === "serving") {
     // Still believed: the rows stand, and the count remembers that they are one
@@ -121,8 +137,11 @@ export function useRemoteSessionField({
       } catch (cause) {
         const reason = cause instanceof Error ? cause.message : String(cause);
         // A floor with no mesh REFUSES this call, and that is the ordinary
-        // state until GT-4's native half lands. It is a state, not an incident:
-        // no log line per tick, and the stage renders it as UNAVAILABLE.
+        // state on a machine whose mesh flag is off. It is a state, not an
+        // incident: no log line per tick, and the stage says UNAVAILABLE with
+        // this reason in its own chip (`remoteUnavailableClaim`) — which it did
+        // NOT do until GT-5c, so a mesh that was ON with the gateway down drew
+        // exactly what a healthy empty mesh draws.
         if (alive) setSnapshot((current) => remoteFieldAfterFailure(current, reason));
       } finally {
         asking.current = false;

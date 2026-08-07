@@ -7,6 +7,7 @@ import type {
 } from "react";
 import { AgentIcon } from "../../monitor/AgentIcon";
 import type { AgentVisualStatus } from "../../monitor/agent-status";
+import { remoteWriteLabel, remoteWriteTitle } from "../../monitor/remote-write";
 import type { MonitorAgent } from "../../monitor/types";
 
 interface IgnitionParticleStyle extends CSSProperties {
@@ -118,9 +119,9 @@ export function agentBubblePresentation(agent: MonitorAgent): AgentBubblePresent
     .join(" ");
 
   const ariaLabel = agent.remote
-    ? `on ${agent.remote.deviceName}, ${agent.project}, remote session, ${agent.status}${
-        agent.remote.readWrite ? "" : ", view only"
-      }`
+    ? `on ${agent.remote.deviceName}, ${agent.project}, remote session, ${agent.status}, ${remoteWriteLabel(
+        agent.remote,
+      )}`
     : agent.agent
       ? `${agent.project}, ${agent.agent.model ?? agent.agent.provider}, ${agent.status}: ${
           agent.detail
@@ -245,8 +246,10 @@ export function AgentBubbleView({
           {facet ? (
             <span className="vf-monitor-bubble-provider">{facet.model ?? facet.provider}</span>
           ) : null}
-          {agent.remote && !agent.remote.readWrite ? (
-            <span className="vf-monitor-bubble-provider">view only</span>
+          {agent.remote ? (
+            <span className="vf-monitor-bubble-provider" title={remoteWriteTitle(agent.remote)}>
+              {remoteWriteLabel(agent.remote)}
+            </span>
           ) : null}
         </span>
         {facet ? (

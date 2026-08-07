@@ -42,6 +42,31 @@ export function remoteClaim(sources: MonitorSourceCounts): string | null {
   return `${sessions} · ${sources.hosts} peer${sources.hosts === 1 ? "" : "s"}`;
 }
 
+/**
+ * THE DEGRADED STATE, on the surface GT-D17 made responsible for it (GT-5c).
+ *
+ * `remoteClaim` above is null whenever there are no rows, which includes the
+ * case where there are no rows BECAUSE THE MESH COULD NOT BE ASKED — so a mesh
+ * that was on with its gateway down drew exactly what a healthy empty mesh
+ * draws, at the one surface a decision declared to BE the door. The
+ * honest-states law says a degraded plane surfaces as UNAVAILABLE with its
+ * reason, never as a blank, and this is that sentence.
+ *
+ * It is the ordinary state on a machine whose mesh flag is off, which is why it
+ * is worded and styled as a STATE and not a fault: quiet type, the floor's own
+ * words, and no color from §2.5's status scale. Nothing is wrong with a machine
+ * that is not on a mesh; what would be wrong is not saying so.
+ *
+ * `no-door` says nothing, deliberately: nobody has been asked yet, and a deck
+ * that has not finished coming up is not a mesh that is down.
+ */
+export function remoteUnavailableClaim(sources: MonitorSourceCounts): string | null {
+  if (sources.remoteState !== "unavailable") return null;
+  return sources.remoteReason === undefined || sources.remoteReason === ""
+    ? "mesh unavailable"
+    : `mesh unavailable · ${sources.remoteReason}`;
+}
+
 export interface GodviewMonitorProps {
   view: AgentMonitorView;
   parameters: MonitorParameters;
@@ -226,6 +251,14 @@ export function GodviewMonitor({
           <span className="vf-monitor-mock-chip">{mockClaim(sources)}</span>
           {remoteClaim(sources) !== null ? (
             <span className="vf-monitor-remote-chip">{remoteClaim(sources)}</span>
+          ) : null}
+          {remoteUnavailableClaim(sources) !== null ? (
+            <span
+              className="vf-monitor-remote-unavailable-chip"
+              title={sources.remoteReason ?? "the mesh could not be asked"}
+            >
+              {remoteUnavailableClaim(sources)}
+            </span>
           ) : null}
           <span className="vf-monitor-ack" aria-live="polite">
             {acknowledgement?.message ?? ""}

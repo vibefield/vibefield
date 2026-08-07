@@ -36,6 +36,24 @@ import Matter from "matter-js";
  */
 export const PHYSICS_HZ_FLOOR = 15;
 
+/**
+ * The other half of that same inequality (GT-5c).
+ *
+ * The floor above is only stable against a BOUNDED friction: `1 - frictionAir *
+ * (stepMs / _baseDelta) > 0` has two variables, and the 15Hz floor was chosen
+ * against a maximum air friction of 0.2. Until now that maximum was enforced
+ * only by the view's normalizer, against the lab slider's `max` — so a raised
+ * slider ceiling, or any second caller of `setParameters`, walked straight past
+ * it into negative friction, which is friction that ACCELERATES.
+ *
+ * Stated here, beside the floor it belongs to, and clamped at construction and
+ * at every update — exactly as the rate is, and for exactly the same reason: a
+ * law only one side enforces is a law the next caller breaks. The lab's control
+ * declares this same number as its `max`, and the test derives the worst case
+ * FROM that control rather than restating it.
+ */
+export const FRICTION_AIR_CEILING = 0.2;
+
 /** Space between a bubble's drawn edge and its collision edge. */
 const PHYSICAL_GAP = 4;
 /** How far a chrome obstacle's body overhangs the element it stands for. */
@@ -129,6 +147,20 @@ function clampHz(hz: number): number {
   return Number.isFinite(hz) ? Math.max(PHYSICS_HZ_FLOOR, hz) : PHYSICS_HZ_FLOOR;
 }
 
+function clampFriction(frictionAir: number): number {
+  if (!Number.isFinite(frictionAir)) return FRICTION_AIR_CEILING;
+  return Math.min(FRICTION_AIR_CEILING, Math.max(0, frictionAir));
+}
+
+/** The two stability clamps, applied wherever parameters enter. */
+function guardParameters(next: SwarmPhysicsParameters): SwarmPhysicsParameters {
+  return {
+    ...next,
+    physicsHz: clampHz(next.physicsHz),
+    frictionAir: clampFriction(next.frictionAir),
+  };
+}
+
 function clampSpawnPosition(
   width: number,
   height: number,
@@ -158,7 +190,7 @@ export class SwarmPhysics {
   private readonly random: () => number;
 
   constructor(init: SwarmPhysicsInit) {
-    this.parameters = { ...init.parameters, physicsHz: clampHz(init.parameters.physicsHz) };
+    this.parameters = guardParameters(init.parameters);
     this.width = init.bounds.width;
     this.height = init.bounds.height;
     this.random = init.random ?? Math.random;
@@ -206,7 +238,7 @@ export class SwarmPhysics {
   }
 
   setParameters(next: SwarmPhysicsParameters): void {
-    this.parameters = { ...next, physicsHz: clampHz(next.physicsHz) };
+    this.parameters = guardParameters(next);
     for (const wrapper of this.bodies.values()) {
       wrapper.body.restitution = this.parameters.restitution;
       wrapper.body.frictionAir = this.parameters.frictionAir;
@@ -423,17 +455,24 @@ export class SwarmPhysics {
     Matter.Engine.update(this.engine, stepMs);
   }
 
-  /** Write the current state into `target` in id-table order. */
+  /** Write the current state into `target` in id-table order.
+   *
+   * The offset advances UNCONDITIONALLY. `order` and `bodies` are written
+   * together and a missing body is unreachable today, but skipping a slot
+   * without skipping its offset would shift every remaining body one position
+   * up the id table — one agent's coordinates drawn on the next agent's bubble
+   * for the whole frame, which is a far worse answer than a stale slot. */
   writeFrame(target: Float32Array): void {
     target[FRAME_GENERATION_INDEX] = this.tableGeneration;
     target[FRAME_COUNT_INDEX] = this.order.length;
     let offset = FRAME_HEADER_FLOATS;
     for (const id of this.order) {
       const wrapper = this.bodies.get(id);
-      if (!wrapper) continue;
-      target[offset] = wrapper.body.position.x;
-      target[offset + 1] = wrapper.body.position.y;
-      target[offset + 2] = wrapper.currentRadius;
+      if (wrapper) {
+        target[offset] = wrapper.body.position.x;
+        target[offset + 1] = wrapper.body.position.y;
+        target[offset + 2] = wrapper.currentRadius;
+      }
       offset += FRAME_STRIDE;
     }
   }

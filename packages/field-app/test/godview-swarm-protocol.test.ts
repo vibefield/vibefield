@@ -21,9 +21,12 @@
  *   4. queryPoint round-trips by requestId
  *   5. the renderer socket holds an OffscreenCanvas and draws nothing with it
  *   6. dispose stops the world
+ *   7. the MAIN→WORKER half of that same discipline: the view's read-then-release
+ *      order, played through the detaching harness (GT-5c)
  */
 
 import { describe, expect, it } from "vitest";
+import { type BubbleState, readSwarmFrame } from "../src/godview/views/swarm/swarm-frame";
 import {
   FRAME_COUNT_INDEX,
   type SwarmPhysicsParameters,
@@ -174,6 +177,7 @@ describe("the id table", () => {
     const bus = harness();
     init(bus);
     const first = tables(bus).length;
+    const framesAfterInit = bus.received();
 
     bus.send({
       type: "updateAgents",
@@ -189,8 +193,12 @@ describe("the id table", () => {
     expect(republished.length).toBe(first + 1);
     expect(republished[republished.length - 1]?.ids).toEqual(["a"]);
     // A membership change publishes a frame immediately rather than making the
-    // new bubble wait out a step for its first position.
-    expect(bus.host.disposed).toBe(false);
+    // new bubble wait out a step for its first position — asserted as the FRAME
+    // COUNT growing. This line read `expect(bus.host.disposed).toBe(false)`
+    // until GT-5c: vacuous under a comment claiming otherwise, and deleting the
+    // behaviour left the suite green (the review's finding 15).
+    expect(bus.received(), "a membership change published no frame").toBe(framesAfterInit + 1);
+    expect(bus.lastFrame()?.[FRAME_COUNT_INDEX]).toBe(1);
     bus.host.dispose();
   });
 });
@@ -287,6 +295,83 @@ describe("commands that are not frames", () => {
     bus.tick(40);
     // It still simulates, and it still says nothing about rendering.
     expect(bus.received()).toBeGreaterThan(before);
+    bus.host.dispose();
+  });
+});
+
+describe("the MAIN→WORKER half of the transfer discipline (the review's finding 17)", () => {
+  // The direction that was never exercised with a real detach. The view reads a
+  // frame and then hands the buffer back WITH ITS ArrayBuffer IN THE TRANSFER
+  // LIST — which detaches this side's view of it. Read second and the array is
+  // length zero: not an error, just a swarm that has stopped moving. Under the
+  // inline driver `post` drops the transfer list, so both orders passed, and
+  // moving the release above the read loop — the exact mistake the view's own
+  // comment warns about — kept every test green.
+  //
+  // `readSwarmFrame` is the view's own read, extracted so this can play the
+  // view's sequence rather than a copy of it.
+
+  /** The main side's `post`, with the boundary's real semantics. */
+  function release(bus: Harness, frame: Float32Array): void {
+    bus.host.handle(
+      structuredClone({ type: "releaseFrame", buffer: frame } as SwarmPhysicsCommand, {
+        transfer: [frame.buffer],
+      }),
+    );
+  }
+
+  function deliveredFrame(bus: Harness): Float32Array {
+    const frame = bus.held.shift();
+    if (frame === undefined) throw new Error("the harness delivered no frame");
+    return frame;
+  }
+
+  it("reads a frame and THEN releases it, exactly as the view does", () => {
+    const bus = harness({ autoRelease: false });
+    init(bus);
+    const frame = deliveredFrame(bus);
+    const table = tables(bus)[0];
+    if (table === undefined) throw new Error("no id table");
+
+    const states = new Map<string, BubbleState>();
+    expect(readSwarmFrame(frame, table, states)).toBe(true);
+    release(bus, frame);
+
+    // The read happened against live memory…
+    expect([...states.keys()]).toEqual(["a", "b"]);
+    expect(Number.isFinite(states.get("a")?.x)).toBe(true);
+    // …and the release genuinely detached it, which is what makes the order
+    // load-bearing rather than a preference.
+    expect(frame.length).toBe(0);
+    bus.host.dispose();
+  });
+
+  it("would read NOTHING the other way round — the assertion that makes this non-vacuous", () => {
+    const bus = harness({ autoRelease: false });
+    init(bus);
+    const frame = deliveredFrame(bus);
+    const table = tables(bus)[0];
+    if (table === undefined) throw new Error("no id table");
+
+    const states = new Map<string, BubbleState>();
+    release(bus, frame);
+    // A detached array reports zero bodies rather than throwing, so the view
+    // simply stops updating: no error, no log line, no moving swarm.
+    expect(readSwarmFrame(frame, table, states)).toBe(false);
+    expect(states.size).toBe(0);
+    bus.host.dispose();
+  });
+
+  it("hands a released buffer back into the pool, so the ping-pong survives the detach", () => {
+    const bus = harness({ autoRelease: false });
+    init(bus);
+    const first = deliveredFrame(bus);
+    release(bus, first);
+    // Two out of two would have been dropped; one returned means the next pump
+    // has somewhere to write.
+    const before = bus.received();
+    bus.tick(40);
+    expect(bus.received()).toBe(before + 1);
     bus.host.dispose();
   });
 });

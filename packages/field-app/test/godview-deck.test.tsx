@@ -17,7 +17,7 @@
  * loop driven by event ORDER.
  */
 
-import { act } from "react";
+import { act, type ComponentType } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewDeckFacts } from "../src/development-console";
@@ -27,7 +27,7 @@ import {
   resetWarmTransportForTest,
 } from "../src/godview/warm-transport";
 import type { FieldHost } from "../src/host";
-import { setHost } from "../src/host";
+import { getHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
 
@@ -55,6 +55,13 @@ vi.mock("@vibecook/ghosttea-react", () => ({
         runtime.disposed = true;
       },
       createSession: (options: unknown) => Promise.resolve({ id: `s-${JSON.stringify(options)}` }),
+      // GT-D17's two verbs, as the door calls them. `openRemoteSession` answers
+      // with a REPLICA — a local session id standing for a peer's — which is
+      // the thing the deck has to remember the origin of (GT-5c).
+      listRemoteHosts: () => Promise.resolve([]),
+      openRemoteSession: (deviceId: string, remoteSessionId: string) =>
+        Promise.resolve({ id: `replica-${deviceId}-${remoteSessionId}`, readWrite: true }),
+      terminate: () => undefined,
     };
   },
   // The one-shot ports wait, as a promise that never settles: in production it
@@ -116,6 +123,8 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
 }));
 
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
+const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
+type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
 const { DEFAULT_DECK_APPEARANCE, resetDeckAppearanceForTest, setDeckAppearance } = await import(
   "../src/godview/deck-appearance"
 );
@@ -486,6 +495,50 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     await settle();
     expect(runtimes).toHaveLength(2);
   });
+
+  it("names FIELDD when only the control plane refused, and says the shells are alive", async () => {
+    // The two-plane law, reported as its opposite (GT-5c). field-native holds
+    // the PTYs and outlives fieldd by design, so a fieldd that will not mint a
+    // ticket says NOTHING about the sessions — and "the deck could not reach
+    // its shell" told a user the exact opposite of the property this product
+    // sells. Only the mint speaks to fieldd; everything else is transport.
+    vi.spyOn(fieldd, "request").mockImplementation((method: string) =>
+      method === "terminal.connectTicket"
+        ? Promise.reject(new Error("fieldd is not answering"))
+        : Promise.resolve({ terminals: [] }),
+    );
+    await mountDeck();
+
+    expect(container?.querySelector(".vf-godview-deck-fault-message")?.textContent).toBe(
+      "the deck could not reach fieldd",
+    );
+    expect(container?.textContent).toContain("fieldd is not answering");
+    expect(container?.textContent).toContain("your shells are still running");
+    expect(latest().errorPlane).toBe("fieldd");
+    vi.mocked(fieldd.request).mockRestore();
+  });
+
+  it("names the SHELL when the transport itself refused", async () => {
+    // The other side of the same split: a bridge that will not connect, where
+    // "could not reach its shell" is the honest sentence.
+    installHost();
+    const host = getHost();
+    setHost({
+      ...host,
+      terminal: {
+        connect: () => Promise.reject(new Error("no bridge on this host")),
+        onStatus: host.terminal?.onStatus ?? (() => () => undefined),
+      },
+    } as unknown as FieldHost);
+    await mountDeck();
+
+    expect(container?.querySelector(".vf-godview-deck-fault-message")?.textContent).toBe(
+      "the deck could not reach its shell",
+    );
+    expect(container?.textContent).toContain("no bridge on this host");
+    expect(container?.textContent).toContain("unreachable from here");
+    expect(latest().errorPlane).toBe("transport");
+  });
 });
 
 describe("the restore consent gate (GT-3)", () => {
@@ -582,6 +635,85 @@ describe("paneMeta, the durable half of restore (GT-D8 as amended)", () => {
     });
     expect(paneMeta({ cwd: null, title: null })).toEqual({});
     expect(paneMeta({ cwd: "/repo", title: "" })).toEqual({ cwd: "/repo" });
+  });
+
+  it("learns this device's host from a LOCAL pane, because no contract carries one", async () => {
+    // The renderer is never told its own hostname — main answers the connect
+    // with `defaultShell` and `home` and nothing else — so the comparison
+    // `paneCwd` makes needs a value learned from a pane the deck knows is ours.
+    await mountDeck();
+    const paneMeta = workspaceMounts[0]?.["paneMeta"] as (session: unknown) => unknown;
+    paneMeta({ id: "local-1", cwd: "file://Jamess-MacBook.local/Users/jamesyong/src" });
+    expect(readDeviceHost()).toBe("jamess-macbook.local");
+  });
+
+  it("STAMPS A REPLICA WITH ITS PEER, and that is what refuses the local spawn", async () => {
+    // The worst finding of the GT review (2a), closed at the one moment the
+    // answer is certain rather than reconstructed from a hostname later. The
+    // deck attached this replica; it knows whose it is.
+    let door: RemoteSessionDoor | null = null;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <GodviewDeck
+          active
+          theme="light"
+          onRemoteDoor={(next) => {
+            door = next;
+          }}
+        />,
+      );
+    });
+    await settle();
+
+    // The workspace publishes its context through the sidebar slot, which is
+    // the only seam an embedder gets — and the door reads `activeSession` from
+    // it, so the attach needs a pane to land in.
+    const Sidebar = workspaceMounts[0]?.["sidebar"] as ComponentType<{ workspace: unknown }>;
+    const probe = document.createElement("div");
+    document.body.appendChild(probe);
+    const probeRoot = createRoot(probe);
+    await act(async () => {
+      probeRoot.render(
+        <Sidebar
+          workspace={{
+            activePaneId: "pane-1",
+            activeSession: { id: "local-1", cols: 100, rows: 30 },
+            panes: [{ id: "pane-1", session: { id: "local-1" } }],
+            sessions: [],
+            mountSession: () => undefined,
+          }}
+        />,
+      );
+    });
+    await settle();
+
+    const outcome = await act(async () =>
+      door?.attach({
+        deviceId: "studio-mini",
+        deviceName: "studio-mini",
+        remoteSessionId: "s1",
+        color: "#ec4899",
+      }),
+    );
+    expect(outcome).toMatchObject({ state: "attached" });
+
+    const paneMeta = workspaceMounts[0]?.["paneMeta"] as (session: unknown) => unknown;
+    const meta = paneMeta({
+      id: "replica-studio-mini-s1",
+      cwd: "file://studio-mini.local/Users/peer/src",
+      title: "zsh",
+    });
+    expect(meta).toMatchObject({ remoteDevice: "studio-mini" });
+    // …and the restore that reads it opens no local shell in a peer's folder.
+    expect(paneCwd(meta, readDeviceHost())).toBeNull();
+    // A peer's cwd must never be mistaken for this device's own name, either.
+    expect(readDeviceHost()).not.toBe("studio-mini.local");
+
+    await act(async () => probeRoot.unmount());
+    probe.remove();
   });
 });
 

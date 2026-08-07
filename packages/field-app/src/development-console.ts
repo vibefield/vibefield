@@ -19,6 +19,12 @@ export interface GodviewDeckFacts {
   sessionIds: readonly string[];
   rendererBackend: string;
   error?: string;
+  /** GT-5c: WHICH plane refused. `fieldd` means the control plane alone — the
+   * ticket mint — while field-native and its PTYs are untouched and outliving
+   * it; `transport` means the bridge or the floor. The distinction is the
+   * two-plane law, and reporting a fieldd death as a dead shell said the
+   * opposite of what had happened. Present exactly when `error` is. */
+  errorPlane?: "transport" | "fieldd";
   /** GT-3: present ONLY while the restore consent face is up, carrying the
    * counts it is showing. Absent is the assertion the smoke needs as much as
    * present is — "no prompt appeared" is a claim about a face that is not

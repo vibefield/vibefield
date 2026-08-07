@@ -83,6 +83,19 @@ export type SwarmPhysicsCommand =
 
 export type SwarmPhysicsEvent =
   /**
+   * THE PROOF OF LIFE (GT-5c), posted from the worker's module scope before it
+   * has been asked anything.
+   *
+   * `new Worker(...)` resolves synchronously and tells you nothing: the module
+   * is fetched and evaluated afterwards, so a missing chunk in a packaged build
+   * or a CSP regression fails LATER, on the `error` listener. Without this
+   * event the driver had no way to distinguish a worker that was simulating
+   * from one that had never loaded, and the mode marker certified a motionless
+   * field as healthy. Arrival is the only thing this carries; its absence
+   * inside the deadline is what the driver acts on.
+   */
+  | { type: "ready" }
+  /**
    * The index→id table frames are addressed by, published whenever MEMBERSHIP
    * changes and never otherwise.
    *

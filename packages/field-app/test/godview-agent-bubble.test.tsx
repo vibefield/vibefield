@@ -56,7 +56,7 @@ function agent(status: "idle" | "working" | "waiting", kind: AgentKind = "codex"
   };
 }
 
-function remote(status: "idle" | "working", readWrite = true): MonitorAgent {
+function remote(status: "idle" | "working", hostWritable = true): MonitorAgent {
   return {
     id: `remote-${status}`,
     createdAtMs: 0,
@@ -70,7 +70,7 @@ function remote(status: "idle" | "working", readWrite = true): MonitorAgent {
       deviceName: "studio-mini",
       remoteSessionId: "peer-session",
       attachable: true,
-      readWrite,
+      hostWritable,
       cwdLabel: "/Projects/mesh-console",
     },
   };
@@ -162,9 +162,23 @@ describe("Godview agent-circle presentation", () => {
     const bubble = remoteHost.querySelector(".vf-monitor-bubble");
     expect(bubble?.classList.contains("is-remote")).toBe(true);
     expect(bubble?.classList.contains("is-unassigned")).toBe(false);
-    expect(bubble?.getAttribute("aria-label")).toContain("view only");
+    expect(bubble?.getAttribute("aria-label")).toContain("read-only host");
     expect(remoteHost.querySelector(".vf-monitor-bubble-host")?.textContent).toBe("studio-mini");
-    expect(remoteHost.textContent).toContain("view only");
+    expect(remoteHost.textContent).toContain("read-only host");
+  });
+
+  it("states the HOST's write policy in BOTH directions, never by silence", () => {
+    // The pre-attach claim is a claim about the peer, not about this viewer
+    // (GT-5c / the review's 2b): upstream advertises one boolean per host and
+    // the per-viewer answer is decided at attach. Marking only the refusing
+    // host taught the eye that an unmarked row was writable — which on a
+    // capability-configured peer is exactly the row that is not.
+    const writable = mount(remote("idle", true));
+    expect(writable.textContent).toContain("writable host");
+    expect(writable.textContent).not.toContain("read-only host");
+    expect(writable.querySelector(".vf-monitor-bubble")?.getAttribute("aria-label")).toContain(
+      "writable host",
+    );
   });
 
   it("forwards selection through the controller seam", () => {

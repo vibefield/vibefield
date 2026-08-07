@@ -82,9 +82,24 @@ export function reconcileRainColumns(input: ReconcileRainColumnsInput): Map<numb
  * What a column says when you read it top to bottom. Symbols are flattened to
  * spaces so every cell holds one grid-width glyph and the stream stays a
  * column rather than a ragged edge.
+ *
+ * THE HOST IS IN THE STREAM (GT-D17, GT-5c). A remote row carries no agent
+ * facet, so until this slice it fell into the same `<project> terminal` branch
+ * an unclaimed LOCAL terminal takes — byte-identical on the canvas, with the
+ * machine reachable only by hovering or by reading the offscreen list. Two
+ * same-named projects on two machines were indistinguishable, and clicking the
+ * wrong one detaches the active pane onto a peer's session. The peer's name
+ * comes FIRST for the same reason it does in the list row's accessible name:
+ * the machine is the fact that changes what the column means.
+ *
+ * The read-only mark is a HOST property (see `MonitorRemoteFacet.hostWritable`)
+ * and reads as one: nobody types into that peer's sessions. A host that DOES
+ * permit writes says nothing here, because whether this viewer gets them is not
+ * decided until the attach.
  */
 export function rainDataString(agent: MonitorAgent): string {
   const facet = agent.agent;
+  const remote = agent.remote;
   const parts = facet
     ? [
         agent.project,
@@ -94,7 +109,9 @@ export function rainDataString(agent: MonitorAgent): string {
           ? `CTX:${Math.round(facet.contextWindow.usedPercent).toString().padStart(2, "0")}%`
           : undefined,
       ]
-    : [agent.project, "terminal"];
+    : remote
+      ? [remote.deviceName, agent.project, remote.hostWritable ? undefined : "read only host"]
+      : [agent.project, "terminal"];
   return ` ${parts.filter(Boolean).join(" ")} `.replace(/[^a-zA-Z0-9\s%.]/g, " ");
 }
 

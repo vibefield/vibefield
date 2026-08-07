@@ -24,9 +24,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor, MOCK_LABEL } from "../src/godview/GodviewMonitor";
+import { useMonitorPalette } from "../src/godview/monitor/monitor-palette";
 import { monitorParameterDefaults } from "../src/godview/monitor/parameters";
 import { DEFAULT_MONITOR_VIEW_ID, monitorViewFor } from "../src/godview/monitor/registry";
 import type { RemoteAttachOutcome, RemoteSessionDoor } from "../src/godview/monitor/remote-door";
+import {
+  type MonitorAgentsResult,
+  useMonitorAgents,
+} from "../src/godview/monitor/useMonitorAgents";
 import { useInlineSwarmPhysics } from "./swarm-physics-inline";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -210,14 +215,33 @@ describe("remote sessions as monitor citizens", () => {
     expect(latest().remoteState).toBe("serving");
   });
 
-  it("says view-only on a row the peer refuses writes for", async () => {
-    const view = await mountMonitor(
+  it("words a row's write policy as the HOST property it is, in both directions", async () => {
+    // GT-5c / the review's 2b. What arrives is `allow_tailnet_write ||
+    // capability.is_some()` — one boolean for the whole peer — and WHO gets
+    // write is settled at attach. So a row may say what the host permits and
+    // nothing about this viewer, and it must say it when the answer is yes as
+    // well as when it is no: marking only refusal made silence mean "you can
+    // type", which is the claim this row cannot make.
+    const refusing = await mountMonitor(
       fakeDoor([host("mini", [shared("s1", { readWrite: false })])]),
       "list",
     );
-    const row = view.querySelector(".vf-monitor-list-row.is-remote");
-    expect(row?.querySelector(".vf-monitor-list-host em")?.textContent).toBe("view only");
-    expect(row?.getAttribute("aria-label")).toContain("view only");
+    const refusingRow = refusing.querySelector(".vf-monitor-list-row.is-remote");
+    expect(refusingRow?.querySelector(".vf-monitor-list-host em")?.textContent).toBe(
+      "read-only host",
+    );
+    expect(refusingRow?.getAttribute("aria-label")).toContain("read-only host");
+
+    const permitting = await mountMonitor(
+      fakeDoor([host("mini", [shared("s1", { readWrite: true })])]),
+      "list",
+    );
+    const permittingRow = permitting.querySelector(".vf-monitor-list-row.is-remote");
+    expect(permittingRow?.querySelector(".vf-monitor-list-host em")?.textContent).toBe(
+      "writable host",
+    );
+    // …and it does not upgrade a host property into a promise to the viewer.
+    expect(permittingRow?.textContent).not.toContain("you");
   });
 });
 
@@ -343,7 +367,7 @@ describe("the field without a floor", () => {
     expect(view.querySelector(".vf-monitor-mock-chip")?.textContent).toBe(MOCK_LABEL);
   });
 
-  it("with a REFUSING floor: no rows, no invented peers, and the reason kept", async () => {
+  it("with a REFUSING floor: no rows, no invented peers, and the reason ON THE SCREEN", async () => {
     const door: RemoteSessionDoor = {
       listHosts: vi.fn(async () => {
         throw new Error("terminal mesh is not configured");
@@ -355,6 +379,50 @@ describe("the field without a floor", () => {
     expect(latest().remoteState).toBe("unavailable");
     expect(latest().remoteReason).toContain("mesh is not configured");
     expect(view.querySelector(".vf-monitor-remote-chip")).toBeNull();
+    // GT-5c / the review's 2d: the marker carried this state from the day it
+    // was built and the SCREEN did not, so a mesh that was on with its gateway
+    // down showed exactly what a healthy empty mesh shows — at the surface
+    // GT-D17 declared to BE the door.
+    const chip = view.querySelector(".vf-monitor-remote-unavailable-chip");
+    expect(chip?.textContent).toBe("mesh unavailable · terminal mesh is not configured");
+    expect(chip?.getAttribute("title")).toContain("mesh is not configured");
+  });
+
+  it("says nothing about the mesh before anybody has been asked", async () => {
+    // `no-door` is a deck still coming up, not a mesh that is down.
+    const view = await mountMonitor(null);
+    expect(view.querySelector(".vf-monitor-remote-unavailable-chip")).toBeNull();
+  });
+
+  it("says a REMOTE row cannot be attached yet rather than doing nothing", async () => {
+    // The one path where clicking announced nothing (the review's finding 9):
+    // `select` on a remote row with a null door returned SILENTLY, while every
+    // other outcome — refusal, no pane, failure, success — is said out loud.
+    //
+    // It is reached the way a user reaches it: a row the mesh put on the stage,
+    // and then a deck that goes away underneath it. The row the user is looking
+    // at is the row they click.
+    let seam: MonitorAgentsResult | undefined;
+    function Probe({ door }: { door: RemoteSessionDoor | null }): null {
+      seam = useMonitorAgents({ palette: useMonitorPalette(), door });
+      return null;
+    }
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(<Probe door={fakeDoor([host("mini", [shared("s1")])])} />);
+    });
+    const row = seam?.agents.find((agent) => agent.remote !== undefined);
+    expect(row).toBeDefined();
+
+    // The deck dies; the row the user was already looking at is still the row.
+    await act(async () => root?.render(<Probe door={null} />));
+    await act(async () => {
+      if (row) seam?.actions.select(row);
+    });
+    expect(seam?.acknowledgement?.message).toContain("mini");
+    expect(seam?.acknowledgement?.message).toContain("no connection");
   });
 
   it("PF6: the mesh poll dies with the stage", async () => {

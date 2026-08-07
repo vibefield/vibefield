@@ -188,7 +188,16 @@ export function useMonitorAgents({
   const attachRemote = useCallback(
     async (agent: MonitorAgent): Promise<void> => {
       const remote = agent.remote;
-      if (remote === undefined || door === null) return;
+      if (remote === undefined) return;
+      if (door === null) {
+        // The one outcome that used to be silent, and the only path where
+        // clicking a row did nothing without saying so. A door is null when no
+        // deck exists yet — the overlay is still coming up, or this host has no
+        // terminal bridge at all — and a row the mesh put on the stage is worth
+        // an answer either way.
+        announce(`${remote.deviceName} cannot be attached yet — the deck has no connection`);
+        return;
+      }
       if (!remote.attachable) {
         announce(`${remote.deviceName} is not sharing ${agent.project} for attachment`);
         return;

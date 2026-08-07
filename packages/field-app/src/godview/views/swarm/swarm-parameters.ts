@@ -1,5 +1,5 @@
 import type { MonitorParameterGroup } from "../../monitor/parameters";
-import { PHYSICS_HZ_FLOOR } from "./swarm-physics";
+import { FRICTION_AIR_CEILING, PHYSICS_HZ_FLOOR } from "./swarm-physics";
 
 export interface SwarmParameters {
   gravityPull: number;
@@ -43,10 +43,15 @@ export const SWARM_PARAMETER_GROUPS: readonly MonitorParameterGroup[] = [
       },
       { key: "restitution", label: "Bounciness", min: 0, max: 1, step: 0.1, defaultValue: 0 },
       {
+        // The ceiling is a STABILITY limit like the rate's floor below, and it
+        // is stated once, beside the physics that depends on it. The two are
+        // one inequality: matter's air friction goes negative when the step
+        // passes `_baseDelta / frictionAir`, so raising this knob without
+        // raising the rate floor is what the clamp exists to refuse.
         key: "frictionAir",
         label: "Air friction",
         min: 0,
-        max: 0.2,
+        max: FRICTION_AIR_CEILING,
         step: 0.01,
         defaultValue: 0.2,
       },

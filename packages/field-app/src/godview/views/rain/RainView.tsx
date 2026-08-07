@@ -1,5 +1,6 @@
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MonitorPalette } from "../../monitor/monitor-palette";
+import { remoteWriteLabel, remoteWriteTitle } from "../../monitor/remote-write";
 import type { AgentMonitorProps, MonitorAgent } from "../../monitor/types";
 import { normalizeRainParameters, type RainParameters } from "./rain-parameters";
 import {
@@ -334,9 +335,9 @@ export function RainView({
             {hovered.remote ? (
               <>
                 <dt>HOST</dt>
-                <dd>
+                <dd title={remoteWriteTitle(hovered.remote)}>
                   {hovered.remote.deviceName}
-                  {hovered.remote.readWrite ? "" : " · view only"}
+                  {` · ${remoteWriteLabel(hovered.remote)}`}
                 </dd>
               </>
             ) : null}
@@ -377,7 +378,7 @@ export function RainView({
                   : agent.remote
                     ? "remote session"
                     : "terminal"
-              }, ${agent.status}${agent.remote && !agent.remote.readWrite ? ", view only" : ""}: ${agent.detail}`}
+              }, ${agent.status}${agent.remote ? `, ${remoteWriteLabel(agent.remote)}` : ""}: ${agent.detail}`}
             </button>
           </li>
         ))}

@@ -62,7 +62,12 @@ export function createSwarmPhysicsDriver(options: SwarmPhysicsDriverOptions): Sw
   const driver = (factory ?? chooseDriver)(options);
   activeMode = driver.mode;
   return {
-    mode: driver.mode,
+    // A GETTER, not a copy: the worker driver can demote itself to inline after
+    // this object is built (see the readiness watchdog), and a mode read at
+    // construction would keep saying `worker` about a thread that never loaded.
+    get mode() {
+      return driver.mode;
+    },
     post: (command, transfer) => driver.post(command, transfer),
     dispose: () => {
       driver.dispose();
@@ -86,35 +91,139 @@ function chooseDriver(options: SwarmPhysicsDriverOptions): SwarmPhysicsDriver {
   return createInlineSwarmPhysicsDriver(options);
 }
 
+/**
+ * How long a worker has to say `ready` before it is presumed not to be coming.
+ *
+ * Generous, because this only ever costs a slow machine a late demotion and
+ * never costs a healthy one anything: the timer is cleared by the first
+ * message. Fetching and evaluating one module chunk is milliseconds; four
+ * seconds is a deadline only a load that will NEVER finish can miss.
+ */
+const WORKER_READY_TIMEOUT_MS = 4_000;
+
+/** The commands that constitute a WORLD, keyed by what they replace.
+ *
+ * A demotion has to hand the inline host the same world the dead worker was
+ * given, and this is all of it: the last `init` plus the last of each `update`.
+ * Gestures (`dragStart`/`dragMove`/`nudge`) and queries are deliberately not
+ * replayed — a pointer that was down four seconds ago is not down now, and an
+ * answer to a query nobody is still waiting for would arrive against a stale
+ * requestId. `releaseFrame` is likewise dropped: those buffers belong to a
+ * thread that is being terminated.
+ */
+const REPLAYED_COMMANDS = new Set([
+  "init",
+  "updateAgents",
+  "updateParameters",
+  "updateBounds",
+  "updateObstacles",
+]);
+
 function createWorkerDriver(options: SwarmPhysicsDriverOptions): SwarmPhysicsDriver {
   const worker = new Worker(new URL("./swarm-physics.worker.ts", import.meta.url), {
     type: "module",
     name: "vibefield-swarm-physics",
   });
+  // THE READINESS WATCHDOG (GT-5c). `new Worker(...)` returns before the module
+  // is fetched, let alone evaluated, so a missing chunk in a packaged build or a
+  // CSP regression throws NOTHING here — it arrives at the `error` listener
+  // below, which used only to log. The result was a swarm frozen at its spawn
+  // positions under a marker certifying `worker`, and a smoke row built to catch
+  // exactly that reporting success. A worker that never says hello is demoted.
+  let fallback: SwarmPhysicsDriver | undefined;
+  let disposed = false;
+  const world = new Map<string, SwarmPhysicsCommand>();
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+
+  /** The worker has spoken, so it loaded. The watchdog stands down and the
+   * replay buffer is dropped — holding a whole agent list for the life of the
+   * stage would be a leak dressed as caution. */
+  const settle = (): void => {
+    if (deadline !== undefined) clearTimeout(deadline);
+    deadline = undefined;
+    world.clear();
+  };
+
+  const demote = (why: string): void => {
+    // `deadline` still armed IS the definition of "never proved it was live".
+    if (disposed || fallback !== undefined || deadline === undefined) return;
+    // The world, in the order it was built. `init` is first by construction —
+    // the view posts it before anything else can reach a driver — and the rest
+    // are the latest value of each, which is what the worker would be holding.
+    const pending = [...world.values()];
+    settle();
+    getRendererLogger().warn(
+      "renderer.godview.swarm_worker_unavailable",
+      "The swarm's physics worker never came up; simulating on the main thread instead",
+      { detail: why },
+    );
+    worker.terminate();
+    fallback = createInlineSwarmPhysicsDriver(options);
+    activeMode = "inline";
+    for (const command of pending) fallback.post(command);
+  };
+
   worker.addEventListener("message", (event: MessageEvent) => {
+    // ANY message proves the module evaluated, `ready` most cheaply and first.
+    settle();
     const data = event.data as unknown;
-    if (isSwarmFrame(data)) options.onFrame(data);
-    else options.onEvent(data as SwarmPhysicsEvent);
+    if (isSwarmFrame(data)) {
+      options.onFrame(data);
+      return;
+    }
+    const message = data as SwarmPhysicsEvent;
+    if (message.type === "ready") return;
+    options.onEvent(message);
   });
-  // A worker that dies takes the swarm's motion with it and there is no honest
-  // way to hide that, so it is said out loud. Rebuilding one here would mean
-  // replaying a whole world's state into it mid-gesture; the residual is
-  // recorded rather than half-paid.
+  // A worker that dies AFTER it was live takes the swarm's motion with it and
+  // there is no honest way to hide that, so it is said out loud. Rebuilding one
+  // here would mean replaying a whole world's state into it mid-gesture; the
+  // residual is recorded rather than half-paid. A worker that dies before it was
+  // ever live is a different thing and IS recoverable — nothing has happened
+  // yet — so it takes the demotion above.
   worker.addEventListener("error", (event: ErrorEvent) => {
+    const detail = event.message || "unknown worker error";
+    if (deadline !== undefined) {
+      demote(detail);
+      return;
+    }
     getRendererLogger().error(
       "renderer.godview.swarm_worker_failed",
       "The swarm's physics worker died; the field will not move until the stage is reopened",
       event.error,
-      { detail: event.message || "unknown worker error" },
+      { detail },
     );
   });
+
+  deadline = setTimeout(
+    () => demote("no ready event inside the deadline"),
+    WORKER_READY_TIMEOUT_MS,
+  );
+
   return {
-    mode: "worker",
+    get mode() {
+      return fallback?.mode ?? "worker";
+    },
     post: (command, transfer) => {
+      if (fallback !== undefined) {
+        fallback.post(command, transfer);
+        return;
+      }
+      // Kept only while the worker is unproven. Once it says `ready` this map is
+      // cleared and never written again.
+      if (deadline !== undefined && REPLAYED_COMMANDS.has(command.type)) {
+        world.set(command.type, command);
+      }
       if (transfer && transfer.length > 0) worker.postMessage(command, transfer);
       else worker.postMessage(command);
     },
-    dispose: () => worker.terminate(),
+    dispose: () => {
+      disposed = true;
+      settle();
+      world.clear();
+      if (fallback !== undefined) fallback.dispose();
+      else worker.terminate();
+    },
   };
 }
 

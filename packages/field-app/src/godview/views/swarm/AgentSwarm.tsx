@@ -10,16 +10,13 @@ import {
 import { monitorChromeElements } from "../../monitor/chrome";
 import type { AgentMonitorProps, MonitorAgent } from "../../monitor/types";
 import { AgentBubbleView, agentBubblePresentation, animateAgentBubbleSpawn } from "./AgentBubble";
+import { type BubbleState, readSwarmFrame } from "./swarm-frame";
 import {
   normalizeSwarmParameters,
   radiusForStatus,
   type SwarmParameters,
 } from "./swarm-parameters";
 import {
-  FRAME_COUNT_INDEX,
-  FRAME_GENERATION_INDEX,
-  FRAME_HEADER_FLOATS,
-  FRAME_STRIDE,
   PHYSICS_HZ_FLOOR,
   type SwarmAgentSpec,
   type SwarmObstacleRect,
@@ -53,25 +50,6 @@ import type { SwarmPhysicsEvent } from "./swarm-physics-protocol";
 // effect and destroyed in its cleanup. The stage unmounts when the overlay
 // closes, so a closed Godview runs no physics — and now not even a thread to run
 // it in, because disposing the driver terminates the worker.
-
-/** What the last two frames said about one bubble, and what was last written for
- * it. The physics owns the positions; this is the render's own copy, because a
- * transferred frame goes straight back to the sender. */
-interface BubbleState {
-  /** The newest solved position, and the one before it — the two ends of the
-   * blend the renderer draws between (GT-D15.2). */
-  x: number;
-  y: number;
-  previousX: number;
-  previousY: number;
-  radius: number;
-  /** What was last WRITTEN to the DOM, so a frame that changed nothing writes
-   * nothing (GT-D15.3). Nine bubbles × three properties × 120Hz is 3,240 style
-   * writes a second to say the same thing when the swarm has settled. */
-  writtenX: number;
-  writtenY: number;
-  writtenRadius: number;
-}
 
 /** A pointer that has taken hold of a bubble. `dragged` outlives the pointer on
  * purpose: the click that follows a drag has to be told not to select. */
@@ -199,47 +177,14 @@ export function AgentSwarm({
         if (event.type === "idTable") applyTable(event);
       },
       onFrame: (frame) => {
-        // Read everything BEFORE handing the buffer back: returning it detaches
-        // this view of it, and a detached array reads as empty rather than as an
-        // error.
-        if (frame[FRAME_GENERATION_INDEX] === tableRef.current.generation) {
-          const { ids } = tableRef.current;
-          const count = frame[FRAME_COUNT_INDEX] ?? 0;
-          for (let index = 0; index < count; index += 1) {
-            const id = ids[index];
-            if (id === undefined) break;
-            const offset = FRAME_HEADER_FLOATS + index * FRAME_STRIDE;
-            const x = frame[offset] ?? 0;
-            const y = frame[offset + 1] ?? 0;
-            const radius = frame[offset + 2] ?? 0;
-            const state = statesRef.current.get(id);
-            if (state) {
-              state.previousX = state.x;
-              state.previousY = state.y;
-              state.x = x;
-              state.y = y;
-              state.radius = radius;
-            } else {
-              statesRef.current.set(id, {
-                x,
-                y,
-                // A new body has no history, so its first blend must be a no-op:
-                // from where it is, to where it is. Seeding these with the spawn
-                // position is what stops a bubble's first frame from being a
-                // streak out of (0, 0).
-                previousX: x,
-                previousY: y,
-                radius,
-                // Deliberately NaN rather than the spawn position: the damage
-                // gate's first comparison must be guaranteed to fail so the
-                // opening write happens, and every comparison against NaN is
-                // false.
-                writtenX: Number.NaN,
-                writtenY: Number.NaN,
-                writtenRadius: Number.NaN,
-              });
-            }
-          }
+        // READ, THEN RELEASE, and never the other way round: handing the buffer
+        // back transfers it, which DETACHES this thread's view of it, and a
+        // detached array reads as empty rather than throwing — so the mistake
+        // costs a motionless swarm and no error at all. The read is its own
+        // module (`readSwarmFrame`) so that this ordering can be played through
+        // a genuinely detaching harness; the inline driver drops the transfer
+        // list, and under it both orders pass.
+        if (readSwarmFrame(frame, tableRef.current, statesRef.current)) {
           frameAtRef.current = performance.now();
         }
         driver.post({ type: "releaseFrame", buffer: frame }, [frame.buffer]);
@@ -453,9 +398,14 @@ export function AgentSwarm({
               event.preventDefault();
             }}
             onPointerMove={(event) => moveBody(event, agent.id)}
+            // Both ends check the POINTER ID, the way `moveBody` already does.
+            // Without it a second finger landing on a bubble mid-drag ended the
+            // first one's grab: `dragEnd` released the spring while the first
+            // pointer was still down and still capturing, leaving a bubble that
+            // no longer followed anything (GT-5c).
             onPointerUp={(event) => {
               const drag = dragsRef.current.get(agent.id);
-              if (!drag) return;
+              if (!drag || drag.pointerId !== event.pointerId) return;
               moveBody(event, agent.id);
               driverRef.current?.post({ type: "dragEnd", id: agent.id });
               if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -465,11 +415,15 @@ export function AgentSwarm({
               // follows still has to know this was a drag.
               delete drag.pointerId;
             }}
-            onPointerCancel={() => {
+            onPointerCancel={(event) => {
               const drag = dragsRef.current.get(agent.id);
-              if (!drag) return;
+              if (!drag || drag.pointerId !== event.pointerId) return;
               driverRef.current?.post({ type: "dragEnd", id: agent.id });
               delete drag.pointerId;
+              // A CANCEL is not followed by a click, so the flag that exists to
+              // suppress one has nothing to suppress — and left standing it
+              // swallowed the user's next genuine click on this bubble instead.
+              drag.dragged = false;
             }}
             onClick={() => {
               const drag = dragsRef.current.get(agent.id);

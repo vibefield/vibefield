@@ -47,9 +47,24 @@ export interface MonitorRemoteFacet {
   remoteSessionId: string;
   /** Whether the peer is sharing this session for attachment at all. */
   attachable: boolean;
-  /** Mirror-write (GT-D7): false ⇒ this viewer may look and not type. A fact
-   * about the peer's policy, never an error. */
-  readWrite: boolean;
+  /**
+   * Mirror-write (GT-D7) as the peer ADVERTISES it — a property of the HOST,
+   * not an answer about this viewer.
+   *
+   * Upstream computes one boolean per host, `allow_tailnet_write ||
+   * capability.is_some()`, meaning "write is possible here"; WHO gets it is
+   * decided at ATTACH by `access_for`, against the capability the viewer
+   * presents. So `false` is universal — nobody types into this peer's sessions
+   * — while `true` says only that someone can, which may not be us.
+   *
+   * Named `hostWritable` because it was named `readWrite` and read as a
+   * per-viewer fact: every row on a capability-configured peer drew as writable
+   * to a viewer who held no capability and would be read-only one click later
+   * (the GT code review's finding 2b). Nothing pre-attach may claim a power it
+   * cannot know; the post-attach announce carries the per-viewer truth, and the
+   * pane wears the library's own "View only" face.
+   */
+  hostWritable: boolean;
   /**
    * The peer's own label for its working directory — a LABEL, deliberately not
    * a `cwd`. The GT-3 finding is the whole reason this field is named
