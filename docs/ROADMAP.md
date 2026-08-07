@@ -3,7 +3,18 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-06** (GT-4 `3aa5ba1`/`39c1b1d`/
+> stays in the design docs + specs. Last rewritten: **2026-08-07** — a RECONCILIATION pass, not
+> a milestone. An onboarding read found this file had gone stale against its own tree: two
+> whole bodies of work (IOS-3 and the UI system) had landed with **zero** entries in `LANDED.md`
+> and zero mentions here or in `DECISIONS.md`, one debt below was already closed, and three
+> docs disagreed with the manifests about the EL8 pins. All four are fixed in this pass; the
+> ledger gained the two missing entries, and the pin claims are corrected at their sources
+> (`CLAUDE.md`, `README.md`). Nothing in the tree changed — `pnpm verify` was run verbatim at
+> `d36528a` and exits 0. Main is **22 commits ahead of `origin/main`** (last push `4f2b21d`);
+> `fcd4c36` (the canvas-ground workbench, an eleventh UI-track commit) landed while this pass
+> was being written and is folded into the ledger entry rather than left for the next sweep —
+> which is the habit whose absence caused this pass.
+> Previously rewritten 2026-08-06 (GT-4 `3aa5ba1`/`39c1b1d`/
 > `0a2ac28` — the mesh in two halves: the monitor is the door, the floor joined the tailnet,
 > the kill matrix proved on three real nodes, NF-remote complete, and ghosttea 0.9.2 released
 > upstream to meet our truffle pin. Earlier: UA-0 `fcd0af9` — the
@@ -35,6 +46,14 @@ NF kill matrix), docs sync across the mesh (C6), and the plugin/settings/logging
 rails are in. **The missing half is the agents themselves** — the AR track, running over the
 landed native floor, watched from the GT deck.
 
+AR's zero was re-verified against the tree on 2026-08-07, not taken from this file: there is no
+`agents.ts` in `packages/contracts/src`; `@vibecook/chopsticks-*` is pinned in
+`pnpm-workspace.yaml` but is a dependency of **no package**; and the only agent surface that
+exists is `MockAgentField` behind the Godview monitor's explicit MOCK label. Every dependency
+AR named is landed and waiting — the NF floor, the GT deck, C7 spawn-through upstream — and the
+seam it plugs into is one module wide. Everything else in this file is scaffolding built to
+receive it.
+
 The artifact serving foundation, global catalog, and desktop runtime are now real but are not
 yet the whole product: AH-1 owns durable Proxy/Folder serving; AH-2 owns the bounded validated
 global view; AH-3 adds the browser-plugin catalog/add flows, spine-owned right-side panel, and
@@ -54,8 +73,9 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 + **NF-remote (§7) COMPLETE** — the floor serves TSP1, hosts published, writes gated; proved on a real tailnet at GT-4, with peers authenticated by tailnet WhoIs | `specs/native-floor.md` | per-device tokens (GT-D6) whenever the token work is wanted — NOT gated upstream (the v3 claim was retracted) |
-| IOS — companion | IOS-0/2/2f + IOS-EL8 landed | `thinking-ios-app.md` · `research/ios-app-design.md` | daily-driver features gated on desktop tracks; attach = GT-5; artifact catalog/open = AH-5 |
-| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | **GT-5** iOS attach (IOS-track co-owned) — the last GT rung; James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module; smoke row 13b unskips when a peer can be staged in the harness |
+| IOS — companion | **IN FLIGHT** — IOS-0/2/2f + IOS-EL8, and **IOS-3a…3e + the 3r review landed** 2026-08-05/06 (peer terminals are bubbles; the card attaches; appearance + upstream's reconnect banner) | `thinking-ios-app.md` §10 · `research/ios-app-design.md` | **IOS-3c's capability/Keychain leg never landed — the phone attaches VIEW-ONLY.** That, plus the live-device run, is what remains of the attach story; artifact catalog/open = AH-5 |
+| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** + **GT-5a…d the code review's fixes** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | the deck's own ladder is done. James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module; smoke row 13b unskips when a peer can be staged in the harness |
+| UI — design system | **LANDED** 2026-08-05/06, James's hands — tokens → primitives → production compositions → a catalog that mounts shipping views → `pnpm dev:design` UI Bench, with ownership enforced by test | `DESIGN.md` (authority) · **`docs/UI_SYSTEM.md`** (where it lives in code) | the catalog's own acceptance is an eyeball (light/dark · keyboard focus · reduced motion · narrow); `codex/settings-review-fixes` is unmerged and undecided |
 | UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
@@ -93,7 +113,10 @@ accepted, with no fieldd anywhere. NF-remote is complete with it. GT-3p made the
 bridge, worker, and WebGPU device ready at app-idle, sessions still born only on ⌘G — took a
 cold open from ~443ms to a ~36ms warm one, with the phase breakdown riding the smoke verdict
 and the surface lab wearing a perf readout. The one-runtime law (exactly one ports-wait
-armed, ever) closed the slice's own hardest bug.
+armed, ever) closed the slice's own hardest bug. **GT-5a…d then closed the deck's own code
+review** — four builders on disjoint planes, every HIGH fixed, and an acceptance stated as
+*prove the row can fail* rather than *the row passes*; the demonstration was performed and is
+recorded in `LANDED.md` §GT-5. The deck's ladder is done; what it is still waiting for is AR.
 
 **AH.** The serving seam and global catalog are landed. `9f80f0c` replaces C6's
 `{name,target}` writer behind its one-window adapter, persists v2 source-local intent, assigns
@@ -155,6 +178,36 @@ that dev was ephemeral only by env inheritance). The two-pair audit runs on real
 four distinct ports, own-root sockets, concurrent health, users.json mtime untouched —
 UA-D10 held physically. The track is code-complete; what remains is physical.
 
+**IOS.** The phone joined the mesh as a peer's *audience*. IOS-3 landed in five slices over two
+evenings: every terminal a peer serves arrives as its own bubble beside the agents (James's
+correction — there is no session list in the card), the card's ATTACH builds a live Ghostty
+surface over Truffle, a settings sheet renders upstream's 602 themes and four licensed shader
+ports in our monochrome, and the reconnect face is upstream's own banner presenter rather than a
+second answer to "is this connection healthy". Then `d36528a` reviewed the four commits and
+found the concurrency work sound but **three HIGH defects in the seams**, all in `FieldHome` —
+the one module with no test target — including one where a single backgrounding disabled the
+entire reconnect leg for the life of the process. Fixed as pure functions with tests; 135 green.
+**The honest bound, and it is bigger than the slice titles suggest: `72929d8`'s subject claims
+IOS-3c, but the capability/Keychain leg never landed** — verified at three source sites, one of
+which says *"nothing assigns this yet"*. `claimControl` is plumbed; no capability is ever
+supplied; the phone attaches **view-only** and the card says so honestly. The old GT-5 acceptance
+row was *live view · type with mirror-write · reconnect banner* — the middle third is not
+reachable until that leg lands.
+
+**UI.** A track the roadmap never had a row for, built entirely by James: `DESIGN.md` said what
+the product should look like and nothing said where that direction lived in code.
+`docs/UI_SYSTEM.md` now names four layers — tokens → primitives → colocated product
+compositions → catalog harnesses that may stage a production component but never redefine its
+selectors — and `c188195` did the migration the rule implies at a net **585 lines deleted**
+across 52 files. The load-bearing claim is that **the catalog mounts shipping views, not
+replicas**, and it is a maintained boundary rather than a cleanup: `ui-system-boundaries.test.ts`
+rejects catalog-only replicas and production selectors in catalog CSS. `3ca1f8a` gave it
+`pnpm dev:design`, an isolated Electron UI Bench on the production window/security factory with
+no preload, daemons, users, tray, or diagnostics, plus two leakage gates keeping bench artifacts
+out of `dist/renderer`. The episode worth remembering: `11765bc`'s import was *correct* by R5's
+own description and the wall failed anyway, leaving `pnpm verify` red at preflight on main for
+about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
+
 ## Next up — the options on the table (James's call)
 
 - **AH-4 closeout** — review and land the preview runtime, stage/sign the bundled browser
@@ -165,14 +218,48 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
   device closes it: the S1 live probe, the two-account guest refusal (gates ANY
   shared-tailnet login), the switch kill-matrix row (live session survives
   switch-away-and-back), and the switcher/wizard eyeball in both themes.
-- **AR** — the agent tracks; the reason everything else exists.
-- **GT-4 → GT-5** — the remote floor, then the phone attaches.
+- **AR** — the agent tracks; the reason everything else exists, and the only thing between here
+  and the P0 exit. Its seam is one module wide and every dependency it named is landed.
+- **IOS-3c's capability leg** — the Keychain store, the write capability supplied at attach, and
+  the settings that manage it. Until it lands the phone can watch and cannot type, which is most
+  of what "the field in a pocket" was for.
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).
 - **LOG-39 packaged CI** — also carries NF's 24h-soak gate.
 - **ESR follow-on** bundle slice.
 
 ## Open debts (dated, sourced)
 
+- **THE LEDGER LOST TWO WHOLE TRACKS (2026-08-07) — the discipline's own worst failure to
+  date, now repaired.** IOS-3 (six commits) and the UI system (ten commits) both landed and
+  **neither had a single entry in `LANDED.md`, a mention in this file, or a row in
+  `DECISIONS.md`.** The discipline is five days old (2026-08-02) and it skipped two tracks
+  inside its first week.
+  The common factor is visible in hindsight: both ran *concurrently with* the tracks that were
+  getting the ceremony (UA, then GT-5), and the UI commits carry **empty bodies**, so nothing in
+  the git history would have prompted an entry either. Both entries now exist, but the UI one had
+  to be reconstructed from diffs rather than written from the author's own account, and it says
+  so. Named fix, not taken here: the milestone ritual has no step that asks *"what else landed in
+  this window?"* — it walks the track being closed, so a parallel track is invisible to it by
+  construction (2026-08-07).
+- **IOS-3c's capability/Keychain leg never landed — the phone attaches VIEW-ONLY**, and the
+  commit subject `IOS-3c/3d` (`72929d8`) says otherwise. Verified at three source sites
+  (`TerminalAppearance.swift:73` · `SessionCardView.swift:45` · `HomeScreen.swift:51-53`, the
+  last reading *"Nothing assigns this yet"*). `claimControl` is plumbed and the token rides the
+  lifecycle; no capability is ever supplied. The card's face is honest ("this device has no write
+  key for this host") — this is a missing feature, not a lie — but the attach story's middle
+  third does not exist yet, and IOS-3r's third HIGH was a direct consequence of the gap being
+  papered over by the listing's `readWrite` (2026-08-07).
+- **`GT-5` names two different things** — this file used it for *iOS attach, the last GT rung*,
+  while `LANDED.md` §GT-5 records it as *the code review's findings, fixed* (`127df5c`…`17365fd`).
+  The attach work shipped as IOS-3 instead. Both usages are now in the corpus and citing "GT-5"
+  alone is ambiguous; the collision belongs in `DECISIONS.md` §Collision warnings, where it has
+  been added (2026-08-07).
+- **The mock agent fleet now stands beside real facts** — with peer terminals arriving as real
+  bubbles, the mock agents are decoration next to data. The desktop's answer was to narrow the
+  label so a real row never sits under one calling it invented; the phone has the same problem.
+  `thinking-ios-app.md` §10.6 recommends a settings toggle defaulted on, with mock bubbles
+  carrying no claim the real ones don't — but it is explicitly James's taste call about his own
+  home screen, and it is unanswered (IOS-3, 2026-08-07).
 - **GT CODE REVIEW — ALL FIXED (2026-08-07, `127df5c` · `95cbd7e` · `69e8a99` · `17365fd`,
   four builders on disjoint planes; `pnpm verify` exit 0 and `smoke:godview` green across the
   combined result, both re-run by the orchestrator).** The evidence slice's acceptance was
@@ -191,7 +278,11 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
   vendored binary drops the WhoIs diagnostic to zero, proven by the orchestrator, and the
   harness fix is a few lines in `tests/common/mod.rs` · **R5 keeps a second source of truth**
   for package entry points, which is what made main red on a correct import (`1e4f9ac`);
-  deriving it from `package.json` exports is the real fix (2026-08-07).
+  deriving it from `package.json` exports is the real fix. **Correction to `1e4f9ac`'s own
+  body (2026-08-07):** it dates the breakage "since `3ca1f8a`", but `3ca1f8a` only *modified*
+  the offending file — `--diff-filter=A` puts both the import and its `exports` declaration at
+  `11765bc`, sixteen commits and eighteen hours earlier. Main was red at preflight for about
+  **22 hours**, not four, spanning four GT-5 builders and the whole IOS-3 ladder (2026-08-07).
 - ~~**GT CODE REVIEW (2026-08-06) — 7 HIGH defects open, none fixed.**~~ Six read-only reviewers
   across four planes; every HIGH re-verified by the orchestrator against the code. Full
   record with file:line and failure scenarios in `specs/godview-terminal.md` §9. In fix
@@ -287,9 +378,12 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
   violation of native_logging's absolute no-stderr law (which today only meets the
   flag-off floor); the `field_native.sidecar.stderr` capture is the fixing pattern
   (GT-4, 2026-08-06).
-- **`apps/ios/**` is stale against 0.9.2** — rides truffle 0.7.11 / ghosttea 0.9.1 while
-  0.9.2 advances upstream's Swift lock to the `truffle-v0.7.12` tag; the IOS track owns
-  its own EL8 bump, and GT-5's phone attach needs it (GT-4, 2026-08-06).
+- ~~**`apps/ios/**` is stale against 0.9.2**~~ — **CLOSED, and it was already closed when this
+  row was written.** IOS-EL8 (`4f2b21d`) landed the bump hours after GT-4 recorded the debt, and
+  the row was simply never retired. Verified 2026-08-07 in `apps/ios/VibeFieldKit/Package.resolved`:
+  ghosttea `0.9.2` (rev `b55b803`) and truffle `0.7.12` (rev `2cf5732`) — both planes name one
+  wire. Standing lesson for this file: a debt row is a claim with a shelf life, and a rewrite that
+  only *adds* is not a rewrite (GT-4 2026-08-06, retired 2026-08-07).
 - **Smoke row 13b (remote bubble → attach) is still skipped** — the floor is ready and the
   check is honest (`remotePeer:"unavailable"`), but unskipping needs a PEER staged in the
   smoke harness, i.e. a second floor. Harness work GT-4 did not take (2026-08-06).
@@ -371,6 +465,15 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
   ⌘G (should feel instant) · the DRAGGED bubble at the default `physicsHz: 30` — interpolation
   adds up to one physics step (~33ms) atop the spring; `physicsHz: 120` in the lab restores
   the old cadence for an A/B — your feel decides the default (GT-3p, unresolved by design).
+- **The UI catalog (`pnpm dev:design`)** — its own stated acceptance, never yet run as a pass:
+  light/dark, keyboard focus, reduced motion, and narrow layout across every cataloged view.
+  The bench exists precisely so this is one command and no daemons (UI track, 2026-08-07).
+- **IOS-3 on a real device** — the whole point of the slice and the only thing no fixture can
+  stand in for: a peer's terminal as a bubble, ATTACH, the live TUI over the tailnet, the
+  settings sheet's themes applying to a running attachment, and the reconnect banner on a daemon
+  bounce. Note what this run can NOT show until IOS-3c's capability leg lands: typing. Also
+  device-gated with it — the attached-but-unlisted card, which is tested as a decision but whose
+  pixels need an attachment held open while discovery drops the row (IOS-3, 2026-08-07).
 - **The shadow-parity check (`4019e9b`)**: the breathe/waiting pulses, both themes, at rest
   and at peak — measured worst case is 15/255 on one channel inside a blurred penumbra; if
   your eye catches it, the revert is exactly two files (2026-08-05).
@@ -380,7 +483,10 @@ UA-D10 held physically. The track is code-complete; what remains is physical.
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
 ghosttea `=0.9.2` + **`ghosttea-truffle =0.9.2`** on all planes (GT-4, 2026-08-06; preflight
 pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata 0.10.0 (via ICE) ·
-`@vibecook/ice` 0.2.0 (registry pin). **The 0.9.2 release exists because of GT-4**: our
+`@vibecook/ice` **0.3.0** (registry pin — corrected 2026-08-07; this line and `CLAUDE.md` both
+still said 0.2.0 while `pnpm-workspace.yaml` and the lockfile had moved) · **`apps/ios` is in
+lockstep too** (`Package.resolved`: ghosttea 0.9.2 / truffle 0.7.12), which is what retires the
+staleness debt above. **The 0.9.2 release exists because of GT-4**: our
 `=0.7.12` and upstream's `=0.7.11` could not resolve together, and James moved ghosttea to
 meet us rather than the reverse — the exact-pin law producing a loud manifest error instead
 of a silent `Arc<Node>` split. G7/G8/G9 consumed at NF-7; G11 filed→landed→consumed at GT-3f

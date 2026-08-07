@@ -5,7 +5,9 @@
 > decision lives and whether it still stands. Full-corpus sweep: 2026-08-02. Update the
 > relevant row when a decision is ratified, amended, superseded, or consumed. Siblings:
 > `ROADMAP.md` (now/next) · `LANDED.md` (history) · `draft/petitions/README.md` (upstream
-> petitions). AH status advanced 2026-08-03. Lives in main-tracked `docs/` (moved from
+> petitions). AH status advanced 2026-08-03; **IOS (D-i7…D-i9) and the UI system added
+> 2026-08-07** in the reconciliation pass that found both tracks missing from all three
+> main-tracked docs. Lives in main-tracked `docs/` (moved from
 > `draft/` 2026-08-02); owning-doc
 > citations (`native-floor §3`, `thinking-c6`, …) resolve under `draft/`, dev-local-only.
 
@@ -52,8 +54,23 @@ laws — users-and-accounts §6**.
   F1 skipped.
 - **C6-1…C6-6** (+3a…3i) and **F-C6-1…F-C6-22** — thinking-c6 §4/§7. Open: F-C6-1, F-C6-4,
   **F-C6-21 (the track's oldest debt)**; F-C6-22 mitigated-not-fixed (see its corrected row).
-- **IOS-0…IOS-4** + **D-i1…D-i6** — thinking-ios-app. D-i5 superseded 2026-07-29 (upstream
-  publish).
+- **IOS-0…IOS-4** + **D-i1…D-i9** — thinking-ios-app. D-i5 superseded 2026-07-29 (upstream
+  publish). **D-i7/D-i8/D-i9 added 2026-08-06 at the IOS-3 design (§10.6)** and all three are
+  now implemented: **D-i7** one `FieldBubble` model, two pure projections (agent · remote), the
+  desktop's GT-4b shape adopted rather than re-invented — remote status is the terminal
+  classifier and can never wear the `waiting` tier, which is agent-permission language ·
+  **D-i8** appearance is upstream *data* rendered in our design system, presentation config
+  built directly, the config-document machinery deliberately not adopted (escape hatch named) ·
+  **D-i9** the viewer owns appearance (`presentationAuthority: .device`) — a desktop's theme
+  never reaches through the mesh to restyle the phone. **IOS-3a…3e LANDED 2026-08-05/06**
+  (`f54cb06` · `15dfa4a` · `72929d8` · `feb6dc8`) with the **3r review** (`d36528a`) fixing six
+  findings, three of them HIGH and all three in the one module with no test target. **Status
+  correction, 2026-08-07:** `72929d8`'s subject claims IOS-3c, but that slice's
+  capability/Keychain leg **did not land** (verified at three source sites) — the phone attaches
+  view-only, so IOS-3c is PARTIAL, not complete. §10.4's font-size instruction was falsified
+  during the build and carries a dated correction at source; §10.3's unqualified "readWrite"
+  gained a clarification for the same reason. Open and unanswered: the mock-fleet-beside-real-
+  bubbles taste call (§10.6).
 - **AH-0…AH-5** (AH-1a/1b split) — artifact-hub §10. AH-0 design ratified 2026-08-02;
   AH-1a/1b implementation landed at `9f80f0c` (physical second-client proof open);
   AH-2 implementation landed at `9c17c46`; AH-3 desktop runtime landed at `8c07bf4`
@@ -79,6 +96,10 @@ treat G1′ as canonical.
 
 ## Collision warnings (read before citing an ID)
 
+- **`GT-5` names TWO different things (added 2026-08-07):** `ROADMAP.md` used it for *iOS
+  attach, the last GT rung*, while `LANDED.md` §GT-5 records `127df5c`/`95cbd7e`/`69e8a99`/
+  `17365fd` as *the code review's findings, fixed*. The attach work shipped as **IOS-3**
+  instead. Cite the slice ids, not "GT-5".
 - **`R` is THREE namespaces:** walls R1–R17 (`scripts/check-import-boundaries.mjs` — all 17
   enforce:true as of 2026-08-02) · predesign-01 standing rules R1–R12 · trust rungs R0–R3
   (plugin spec §20.5). Walls R11 ≠ predesign R11 — they conflict numerically.
@@ -96,5 +117,9 @@ treat G1′ as canonical.
 
 ## Docs that define zero numbered ids
 
-`foundations-and-architecture.md` (prose decisions; references petition ids only) and
-`agent-field-design.md` (§17 product principles are the prose origin of PP1–PP6).
+`foundations-and-architecture.md` (prose decisions; references petition ids only) ·
+`agent-field-design.md` (§17 product principles are the prose origin of PP1–PP6) ·
+**`docs/UI_SYSTEM.md`** (added 2026-08-06, main-tracked beside this trio — it states the
+four-layer ownership boundary between `DESIGN.md`'s direction and the code, and the
+catalog-mounts-shipping-views rule that `ui-system-boundaries.test.ts` enforces; binding as
+architecture, but it numbers nothing).

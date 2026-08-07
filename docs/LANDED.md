@@ -1151,3 +1151,152 @@ is not ours to kill; a partial bridge renders honest dead rows with an explanato
 wrote the FIRST test of `preload/index.ts` itself (reusing the package's own electron
 mock harness) and properly controlled a transient electron-binary flake before clearing
 itself of it.
+
+## The UI system — tokens, the catalog, and the bench
+
+**LANDED 2026-08-05 → 08-06, James's own hands, eleven commits: `250e383` tokens+primitives ·
+`c188195` compositions centralized · `11765bc` the catalog · `ba0c895` ownership documented
+and enforced · `3cd614c` + `bd720dc` the onboarding shell and its catalog entry ·
+`deb66ce` agent-bubble states modularized · `06c0eaa` theme-toggle reach · `3ca1f8a` the
+Electron UI Bench · `1e4f9ac` the R5 wall fix · `fcd4c36` the live canvas-ground workbench.
+`5b37b3e` (settings-panel redesign) is in main ahead of them.** Recorded retroactively 2026-08-07: **these commits carry subject lines
+and empty bodies**, so unlike every other entry in this ledger the account below is
+reconstructed from the diffs and `docs/UI_SYSTEM.md`, not from the author's own prose. Where
+it states intent it is inference, and it is marked as such.
+
+The track answers a question the corpus had left implicit: `DESIGN.md` says what the product
+should look like, and nothing said *where that direction lives in code* or what stops the
+catalog from drifting from the product. `docs/UI_SYSTEM.md` (new, main-tracked, and now the
+fourth main-tracked doc beside the roadmap trio) names four layers — tokens
+(`shell-ui/tokens.css`) → primitives (`shell-ui/primitives.tsx`, +191/+405 css) → product
+compositions colocated with their namespaced stylesheets → catalog harnesses
+(`field-app/src/design-system`) that may stage or clip a production component but **must not
+redefine its selectors**. `c188195` did the migration the rule implies: 52 files,
++3877/−4462 — a net **585 lines deleted**, the shape of consolidation rather than addition,
+reaching into the plugins (`note`, `field-tools`) as well as the app.
+
+**The catalog mounts shipping views, not replicas** — that is the load-bearing claim, and it
+is enforced by a test rather than a convention: `ui-system-boundaries.test.ts` rejects
+catalog-only replicas and production selector definitions living in catalog CSS. Runtime-free
+adapters replace only data or controllers (Artifact Hub takes a fixture product client,
+FilePill a fixture document manager), so the DOM, interaction state, accessibility, and CSS
+under review are production code. `deb66ce` split `AgentBubble` out of `AgentSwarm` for
+exactly this reason — physics and placement stay in the swarm, the circle's state projection
+and DOM become separately mountable — and the catalog then inventories every valid
+source/status combination, access and pane modifier, provider glyph, and context boundary
+without starting a physics engine.
+
+`3ca1f8a` gave it a home: `pnpm dev:design` boots an isolated Electron UI Bench on the
+production window/security factory with the product preload, users, daemons, plugins, tray,
+and diagnostics deliberately omitted, isolated under `.vibefield/ui-bench/` so it runs beside
+a live `pnpm dev`. Two leakage gates ship with it — the renderer build keeps `index.html` as
+its only entry and fails if a bench document or marker reaches `dist/renderer`
+(`verify-production-renderer.mjs`), with desktop packaging's exact stage allowlist as the
+second boundary. `pnpm dev:design:web` keeps the browser-only loop.
+
+**The episode worth keeping is the red main.** `11765bc` introduced
+`@vibefield/field-app/design-system` **and** declared it in field-app's `exports` map — a
+correct import by the R5 wall's own description ("declared public entries only"). The wall
+failed anyway, because R5 checks a hardcoded `NEW_PACKAGE_ENTRIES` set that never learned the
+entry. `pnpm verify` was therefore red at preflight on main, for everyone, on correct code,
+from 2026-08-05 22:41 until `1e4f9ac` on 08-06 20:38 — **about 22 hours**, spanning four
+in-flight GT-5 builders and the whole IOS-3 ladder. The IOS-3 commit bodies each recorded it,
+checked its provenance, and correctly disclaimed it as not theirs; that is the behavior the
+walls exist to make possible. **Correction to `1e4f9ac`'s own body, recorded here because
+commit messages are as immutable as this ledger:** it dates the breakage "since `3ca1f8a`",
+but `3ca1f8a` (08-06 16:24) only *modified* the offending file — verified by
+`--diff-filter=A`, both the import and its `exports` entry first appear at `11765bc`, sixteen
+commits and eighteen hours earlier. The window was longer than the fix commit claims. The
+real defect is recorded as known debt in the wall's own comment: the set is a second source of
+truth for what a package publishes, duplicating the `exports` map the rule's description
+points at, and they drifted the instant a legitimate entry was added.
+
+`fcd4c36` landed while this entry was being written, and is the pattern working: the
+`dev-tweaks` floating panel — a debug affordance that had been living in the product tree since
+`fba7c75` — was **deleted from the product and rebuilt as a catalog workbench**
+(`design-system/tweaks/` + `CanvasGroundWorkbench`), with the canvas ground it tunes extracted
+into `field/InfiniteCanvasGround.tsx` and `field/canvas-appearance.ts` so the bench mounts the
+real thing rather than a copy. `ui-system-boundaries.test.ts` moved with it. That is the
+four-layer rule deciding where a debug surface belongs, which is what the rule was for.
+*(This does not resolve the standing GT-3v "surface lab is not dev-gated" debt — that lab is
+the Godview monitor's tuning panel, `godview/monitor/monitor-tuning.ts`, a different surface;
+it is cataloged but its production-render question is unexamined.)*
+
+Not done, and named: `codex/settings-review-fixes` (one commit, 29 files, +1717/−455 —
+settings persistence and modal behavior) is unmerged and undecided. The catalog's own
+acceptance is an eyeball — light/dark, keyboard focus, reduced motion, narrow layout — and
+`UI_SYSTEM.md` says so.
+
+## IOS-3 — the peer's terminal becomes a bubble, and the bubble opens
+
+**LANDED 2026-08-05 → 08-06, five slices then a review: `f54cb06` (3a) · `15dfa4a` (3b) ·
+`72929d8` (3c/3d) · `feb6dc8` (3e) · `d36528a` (3r).** Recorded 2026-08-07 — the slices are
+documented in `thinking-ios-app.md` §10, but this ledger had no IOS-3 entry at all until now.
+Built by parallel agents on disjoint modules, integrated and reviewed by the orchestrator.
+
+**James's correction is the spine: there is no session list in the card.** Every terminal a
+peer serves arrives as its own bubble beside the agents, and the card carries the one act that
+matters. `f54cb06` ported the desktop's GT-4b union rather than re-inventing it — one
+`FieldBubble` projected by pure functions from either source, carrying at most one facet.
+Every ported clause is a finding: ids are device-qualified (`remote:<deviceID>:<id>`) because
+two peers can each have a session `1`; the accent hashes the *qualified* id so one session id
+on two peers is two colors; `detail` is "deviceName · cwd" because a path with no machine
+attached was GT-3's own confusion finding; and `classifyTerminalStatus` can never return
+`waiting`, because that tier is agent-permission language and a terminal has none. Discovery
+took the desktop's discipline (upstream's 2 s poll, failure tolerance 2, online hosts only,
+`attachable:false` KEPT and shown — a peer deliberately not sharing is a fact, not an absence)
+plus two refinements past it, both reasoned in source: one peer refusing its listing costs its
+own rows rather than everyone's, and each listing closes its connection on **every** path,
+where upstream's own dialer closes only on success and a throwing listing leaks.
+
+`15dfa4a` built `FieldTerminal` — appearance → presentation → attachment → surface — and
+honored the §10.1 laws where they are laws, testing the testable ones: the durable host
+reference, presentation sampled after the last suspension point, `presentationAuthority:
+.device`, `revision` excluded from device-presentation comparison, only `fontSize` rebuilding
+the runtime. `TerminalSurface` surfaces a render failure as state where the reference app
+calls `preconditionFailure` — we render a card, not an app. `72929d8` added the settings sheet
+(602 themes with live swatch strips, provenance stated whole, four shader ports with license
+badges and the honest line that 31 more exist upstream whose rights are unclear) and the three
+lifecycle gaps the terminal leg's report named. `feb6dc8` then **deleted our own vocabulary**:
+the card now speaks upstream's `GhostteaAttachmentBannerPresenter`, which names the *device*
+("studio is offline") where our phase words could only name the condition, and carries
+upstream's grace windows, reconnect flash, and retry clocks — the phase reasons demoted to the
+tier beneath, for the states a banner deliberately stays quiet for.
+
+**`d36528a` (3r) is the entry's real content.** A review of the four landed commits found the
+concurrency work correct under a deliberate attempt to break it — the attach-identity/generation
+double guard, the `await superseded?.value` chaining, the post-suspension config sampling, the
+throw-path connection close all held. **Every finding was instead a seam between modules that
+were each individually careful, and all three serious ones lived in `FieldHome` — the only
+module with no test target.** That is the finding under the findings. (1) `.background` stopped
+the discovery poll but left `discoveryLive` set, making the resume branch unreachable for the
+rest of the process — so `noteHostReachable()`, the only thing that can end a `suspended(host
+absent)` attachment, could never fire again, and one backgrounding disabled IOS-3e's entire
+reconnect leg. (2) The card rendered "SESSION ENDED" on any discovery lookup miss, so ~4 s of
+blips both lied and unmounted a surface still rendering frames — a listing is not a heartbeat,
+and while attached the connection is the authority. (3) "You can type here" read the
+*listing's* `readWrite`, a broadcast with no per-caller context: it says the session is shared
+for writing, never that *we* may write. The fixes land as pure functions (`FieldHomeModel` +
+`FieldHomeTests`), each doc comment carrying the defect it replaced. Tests 135 green (was 116).
+
+**Two corrections recorded at source rather than only here.** §10.4 had told the settings agent
+to label font size as re-attaching the terminal; that was false — at 0.9.2 upstream swaps the
+runtime on the live sink, so the session never leaves. It was caught by the agent who built the
+attachment leg, reading the tag source rather than trusting the orchestrator's paragraph, and
+it reached the sheet only because the correction landed 31 seconds after the line was written.
+§10.3's unqualified "readWrite" named two different facts, and that looseness is what finding
+(3) got wrong; it now carries a dated clarification.
+
+**Honest bound, and it revises what "IOS-3 is complete to its design" means.** `72929d8`'s
+subject claims 3c, but **IOS-3c's capability/Keychain leg did not land** — verified 2026-08-07
+at three source sites (`TerminalAppearance.swift:73`, `SessionCardView.swift:45`,
+`HomeScreen.swift:51-53`: *"nothing assigns this yet"*). `claimControl` is plumbed and the
+access token rides the lifecycle, but no capability is ever supplied, so **the phone attaches
+view-only** and the card correctly says "this device has no write key for this host". GT-5's
+acceptance row is *live view · type with mirror-write · reconnect banner*; the middle third is
+not reachable until the Keychain leg lands. Also still device-gated: the attached-but-unlisted
+card is tested as a decision and read in source, but its pixels need a live mesh — no fixture
+on this side can hold an attachment open while discovery drops the row.
+
+`pnpm verify` does not cover `apps/ios` by design (the gate must not require Xcode); the
+`xcodebuild` commands in `apps/ios/README.md` are that tree's gate and were run verbatim.

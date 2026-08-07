@@ -28,16 +28,22 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   (tokens, motion easings, card chrome, materials, voice). Mechanics defer to design-03;
   look and feel defer to DESIGN.md. UI reviews cite its sections; token/easing deviations
   change the doc first.
+- **`docs/UI_SYSTEM.md` governs where that direction lives in code** (main-tracked, added
+  2026-08-06): tokens → primitives → colocated product compositions → catalog harnesses.
+  Two rules bite immediately — add visual constants to `DESIGN.md` first and project them
+  into `tokens.css`, and **the catalog mounts the shipping view with a fixture adapter,
+  never a copy of its markup or CSS**. `packages/field-app/test/ui-system-boundaries.test.ts`
+  enforces both, so a replica fails the gate rather than a review.
 
 ## Machine setup
 
 The repo builds standalone since 2026-07-28. `truffle-core` is an **exact crates-io pin**
-(`=0.7.11` in the root Cargo.toml) — the `../p008/truffle` sibling `[patch.crates-io]` and its
+(`=0.7.12` in the root Cargo.toml) — the `../p008/truffle` sibling `[patch.crates-io]` and its
 `siblings.lock.json` SHA pin retired when the T1 petition window closed. To co-develop truffle
 again (a new petition window), re-add the `[patch]` and restore the sibling-pin machinery from
 git history; never leave a path patch unpinned.
 
-`@vibecook/ice` is an **exact registry pin** (`0.2.0`, declared once in the pnpm-workspace.yaml
+`@vibecook/ice` is an **exact registry pin** (`0.3.0`, declared once in the pnpm-workspace.yaml
 overrides — packages ask for `"*"`). It stopped being a `file:` sibling on 2026-07-25: npm ships
 its dist, so the B2 stale-dist class is gone and upgrading is a version edit, not a SHA chase.
 To co-develop ice against this repo, link it locally and never commit that:
@@ -45,6 +51,13 @@ To co-develop ice against this repo, link it locally and never commit that:
 ```sh
 pnpm link ../infinite-canvas-engine/packages/ice   # undo: pnpm unlink
 ```
+
+> **Errata (2026-08-07):** both version numbers above were stale — this file said truffle
+> `=0.7.11` and ice `0.2.0` while the manifests had moved to `=0.7.12` (AH-1b) and `0.3.0`.
+> `README.md` and `ROADMAP.md` repeated them. **The manifests are the authority, never this
+> paragraph:** `Cargo.toml` for the cargo pins, `pnpm-workspace.yaml` overrides for the npm
+> ones, `apps/ios/VibeFieldKit/Package.resolved` for the Swift side. Read the number there
+> before citing one; an EL8 pin stated from memory is how lockstep quietly breaks.
 
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
 (contracts codegen; preflight checks the version).
@@ -57,7 +70,11 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
   affected typechecks. Restarts are plane-aware: shell-only edits restart Electron and re-adopt
   the running daemons (dev is `leave-running`; the runner owns teardown); daemon-plane edits
   bounce the pair. Its isolated state is `.vibefield/dev/`; it never watches sibling trees.
-- `pnpm smoke` / `pnpm smoke:canvas` — headless desktop smoke checks
+- `pnpm dev:design` — the UI Bench: the single-page catalog in an isolated Electron window on
+  the production window/security factory, with no preload, daemons, users, plugins, tray, or
+  diagnostics. State lives in `.vibefield/ui-bench/`, so it runs beside `pnpm dev`. Use it for
+  any UI work; `pnpm dev:design:web` is the browser-only loop. Rules in `docs/UI_SYSTEM.md`.
+- `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` — headless desktop smoke checks
 - `pnpm build` / `pnpm typecheck` / `pnpm test` — Nx task graph with conservative local caching;
   use `pnpm exec nx graph` or `pnpm exec nx affected -t <target>` to inspect/select work
 - `pnpm verify` — THE gate; run before every commit: preflight → typecheck → biome →
