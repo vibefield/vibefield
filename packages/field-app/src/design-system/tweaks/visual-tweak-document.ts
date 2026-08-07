@@ -3,9 +3,9 @@ import type {
   OverlapFeedbackColors,
   OverlapFeedbackTuning,
   VisualTweakValues,
-  WorldGridTuning,
-} from "../field/visual-tuning";
-import { defaultVisualTweakValues } from "../field/visual-tuning";
+  WorldGridAppearance,
+} from "./visual-tweaks";
+import { defaultVisualTweakValues } from "./visual-tweaks";
 
 export const VISUAL_TWEAK_DOCUMENT_KIND = "vibefield.visual-tweaks";
 export const VISUAL_TWEAK_DOCUMENT_VERSION = 2;
@@ -112,7 +112,7 @@ export function deserializeVisualTweaks(serialized: string): VisualTweakValues {
   return { canvasPalette, worldGrid, overlapFeedback };
 }
 
-function parseWorldGrid(grid: Record<string, unknown>): WorldGridTuning {
+function parseWorldGrid(grid: Record<string, unknown>): WorldGridAppearance {
   return {
     spacings: triple(grid["spacings"], "worldGrid.spacings", 1, 100_000),
     dotAlpha: numberIn(grid["dotAlpha"], "worldGrid.dotAlpha", 0, 1),

@@ -5,8 +5,11 @@ import {
   VISUAL_TWEAK_DOCUMENT_KIND,
   VISUAL_TWEAK_DOCUMENT_VERSION,
   VisualTweakDocumentError,
-} from "../src/dev-tweaks/visual-tweak-document";
-import { defaultVisualTweakValues, visualTweakCssVariables } from "../src/field/visual-tuning";
+} from "../src/design-system/tweaks/visual-tweak-document";
+import {
+  defaultVisualTweakValues,
+  visualTweakCssVariables,
+} from "../src/design-system/tweaks/visual-tweaks";
 
 describe("visual tweak document", () => {
   it("round-trips every canvas, world-grid, and overlap property", () => {

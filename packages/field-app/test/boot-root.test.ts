@@ -77,7 +77,7 @@ function workspaceWrapper(): HTMLElement | null {
 }
 
 describe("BootRoot reveal (the top-edge click contract)", () => {
-  it("mounts the dev tweak toggle on the synchronous first face", () => {
+  it("keeps design-bench controls out of the synchronous product face", () => {
     const { machine } = fakeMachine();
     host = document.createElement("div");
     document.body.appendChild(host);
@@ -85,10 +85,8 @@ describe("BootRoot reveal (the top-edge click contract)", () => {
     act(() => root?.render(createElement(BootRoot, { machine })));
 
     const toggle = document.querySelector<HTMLButtonElement>("[data-dev-tweak-toggle]");
-    expect(toggle).not.toBeNull();
-    expect(host.querySelector(".vf-splash")).not.toBeNull();
-    act(() => toggle?.click());
-    expect(document.body.textContent).toContain("World grid");
+    expect(toggle).toBeNull();
+    expect(document.querySelector("[data-visual-tweak-controls]")).toBeNull();
     expect(host.querySelector(".vf-splash")).not.toBeNull();
   });
 

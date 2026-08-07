@@ -9,9 +9,17 @@ import {
   SegmentedControl as UiSegmentedControl,
   UnavailableState,
 } from "@vibefield/shell-ui";
-import { type CSSProperties, type ReactElement, type ReactNode, useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { AccentChip, AccentPicker, type AccentSlot } from "../account/AccentPicker";
 import { primaryCls, quietCls } from "../boot/onboarding/wizard-ui";
+import { defaultCanvasGridConfig } from "../field/canvas-appearance";
 import { roundButtonCls } from "../field/theme-constants";
 import { LoadingVeilView } from "../hud/LoadingVeil";
 import { NavigationBreadcrumbsView } from "../hud/NavigationBreadcrumbs";
@@ -30,9 +38,11 @@ import {
 } from "../panels/settings-ui";
 import { ThemeToggleButton } from "../ThemeToggleButton";
 import { AgentBubblePreview } from "./AgentBubblePreview";
+import { CanvasGroundWorkbench } from "./CanvasGroundWorkbench";
 import { CommandPalettePreview } from "./CommandPalettePreview";
 import { FilePillPreview } from "./FilePillPreview";
 import { GodviewPreview } from "./GodviewPreview";
+import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
 import { OnboardingPreview } from "./OnboardingPreview";
 
 type IconName =
@@ -51,14 +61,15 @@ type IconName =
 const NAV_ITEMS = [
   ["overview", "Overview", "01"],
   ["foundations", "Foundations", "02"],
-  ["controls", "Controls", "03"],
-  ["status", "Status & feedback", "04"],
-  ["chrome", "Field chrome", "05"],
-  ["cards", "Living cards", "06"],
-  ["surfaces", "Panels & overlays", "07"],
-  ["onboarding", "Onboarding", "08"],
-  ["godview", "Control room", "09"],
-  ["inventory", "Coverage index", "10"],
+  ["canvas-ground", "Canvas ground", "03"],
+  ["controls", "Controls", "04"],
+  ["status", "Status & feedback", "05"],
+  ["chrome", "Field chrome", "06"],
+  ["cards", "Living cards", "07"],
+  ["surfaces", "Panels & overlays", "08"],
+  ["onboarding", "Onboarding", "09"],
+  ["godview", "Control room", "10"],
+  ["inventory", "Coverage index", "11"],
 ] as const;
 
 const SURFACE_COLORS = [
@@ -87,7 +98,6 @@ const INVENTORY = [
   {
     group: "Foundations",
     items: [
-      "Canvas ground",
       "Chrome material",
       "Surface colors",
       "State colors",
@@ -97,6 +107,19 @@ const INVENTORY = [
       "Radii",
       "Ambient shadows",
       "Motion curves",
+    ],
+  },
+  {
+    group: "Canvas ground",
+    items: [
+      "Adaptive three-level dot grid",
+      "WebGPU / WebGL2 ground layer",
+      "Pan and zoom response",
+      "Light and dark canvas palette",
+      "Grid spacing and fades",
+      "Dot radius and opacity",
+      "Overlap feedback projection",
+      "Visual preset import / export",
     ],
   },
   {
@@ -171,7 +194,7 @@ const INVENTORY = [
       "Boot splash",
       "Setup Assistant",
       "Confirmation step",
-      "Developer tweak panel",
+      "Visual tweak workbench",
       "Frame stats overlay",
     ],
   },
@@ -361,6 +384,7 @@ export function DesignSystemPage(): ReactElement {
           </Specimen>
         </Section>
 
+        <CanvasGroundSection dark={dark} />
         <ControlsSection />
         <StatusSection />
         <ChromeSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
@@ -371,7 +395,7 @@ export function DesignSystemPage(): ReactElement {
 
         <Section
           id="inventory"
-          index="10"
+          index="11"
           eyebrow="Coverage index"
           title="The interface, accounted for"
           description="A compact audit list for the current renderer. It makes omissions visible while the rendered specimens keep the visual decisions comparable."
@@ -416,6 +440,25 @@ export function DesignSystemPage(): ReactElement {
   );
 }
 
+function CanvasGroundSection({ dark }: { dark: boolean }): ReactElement {
+  return (
+    <Section
+      id="canvas-ground"
+      index="03"
+      eyebrow="Canvas ground"
+      title="The actual field, under glass"
+      description="This is the production ICE ground—not a radial-gradient stand-in. Pan and zoom the adaptive three-level grid, then tune every former developer control in a specimen-scoped workbench."
+    >
+      <Specimen
+        title="Infinite canvas and visual tuning workbench"
+        source="field/InfiniteCanvasGround.tsx · design-system/tweaks/*"
+      >
+        <CanvasGroundWorkbench dark={dark} />
+      </Specimen>
+    </Section>
+  );
+}
+
 function ControlsSection(): ReactElement {
   const [enabled, setEnabled] = useState(true);
   const [segment, setSegment] = useState("Select");
@@ -425,7 +468,7 @@ function ControlsSection(): ReactElement {
   return (
     <Section
       id="controls"
-      index="03"
+      index="04"
       eyebrow="Controls"
       title="Actions with a consistent pulse"
       description="Round where an action is compact, softly inset where it belongs to settings, and solid only when hierarchy or selection earns it."
@@ -583,7 +626,7 @@ function StatusSection(): ReactElement {
   return (
     <Section
       id="status"
-      index="04"
+      index="05"
       eyebrow="Status & feedback"
       title="Color always answers why"
       description="Green means healthy work, orange asks for attention, red marks failure or destruction, and muted facts stay deliberately colorless."
@@ -669,6 +712,7 @@ function ChromeSection({
   const [trayTool, setTrayTool] = useState<"select" | "pan" | "connect">("select");
   const [trayCategory, setTrayCategory] = useState("All");
   const [zoom, setZoom] = useState(100);
+  const groundGrid = useMemo(() => defaultCanvasGridConfig(dark), [dark]);
 
   const openDocs = (): void => {
     setDocsOpen((open) => !open);
@@ -678,14 +722,20 @@ function ChromeSection({
   return (
     <Section
       id="chrome"
-      index="05"
+      index="06"
       eyebrow="Field chrome"
       title="Islands over the canvas"
       description="The window stays a field. Controls float at the edges, while one physical object morphs between a compact island and its expanded role."
     >
       <Specimen title="Field chrome playground" source="hud/*" bleed>
         <div className="vf-ds-field-stage" data-docs-open={docsOpen} data-tray-open={trayOpen}>
-          <div className="vf-ds-stage-grid" />
+          <InfiniteCanvasGroundPreview
+            grid={groundGrid}
+            background="var(--vf-canvas-bg)"
+            className="vf-ds-stage-ground"
+            interactive={false}
+            label="Production canvas ground behind the field chrome"
+          />
           <div className="vf-ds-stage-card card-a" />
           <div className="vf-ds-stage-card card-b" />
           <NavigationBreadcrumbsView
@@ -769,7 +819,7 @@ function CardsSection(): ReactElement {
   return (
     <Section
       id="cards"
-      index="06"
+      index="07"
       eyebrow="Living cards"
       title="Content has the color. Chrome has the physics."
       description="Committed widget surfaces survive both app themes. The shared rounded shell supplies ambient depth, lift, selection, and overlap feedback."
@@ -860,7 +910,7 @@ function SurfacesSection(): ReactElement {
   return (
     <Section
       id="surfaces"
-      index="07"
+      index="08"
       eyebrow="Panels & overlays"
       title="Large surfaces stay calm"
       description="Sheets use space, blur, and hairlines for hierarchy. They do not become a new visual language when the amount of information grows."
@@ -948,8 +998,8 @@ function SurfacesSection(): ReactElement {
             </div>
           </div>
         </Specimen>
-        <Specimen title="Developer surfaces" source="dev-tweaks · perf">
-          <DeveloperSpecimen />
+        <Specimen title="Performance diagnostics" source="@vibecook/ice/devtools">
+          <PerformanceDiagnosticsSpecimen />
         </Specimen>
       </div>
     </Section>
@@ -966,7 +1016,7 @@ function OnboardingSection({
   return (
     <Section
       id="onboarding"
-      index="08"
+      index="09"
       eyebrow="Onboarding"
       title="The complete Setup Assistant"
       description="Every shipping pane, alternate entry, transitional face, and completion refusal is mounted from production code. Change a pane once and both onboarding and this catalog move together."
@@ -986,7 +1036,7 @@ function GodviewSection(): ReactElement {
   return (
     <Section
       id="godview"
-      index="09"
+      index="10"
       eyebrow="Control room"
       title="A deliberate change of register"
       description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck. The complete circle inventory below makes its state grammar explicit instead of leaving it buried in the physics view."
@@ -1322,29 +1372,18 @@ function SidePanelSpecimen(): ReactElement {
   );
 }
 
-function DeveloperSpecimen(): ReactElement {
+function PerformanceDiagnosticsSpecimen(): ReactElement {
   return (
     <div className="vf-ds-dev-specimen">
-      <div className="vf-ds-tweak-mini">
-        <header>
-          <strong>Visual tuning</strong>
-          <span>−</span>
-        </header>
-        <label>
-          <span>Grid</span>
-          <input type="range" defaultValue="52" />
-        </label>
-        <label>
-          <span>Glow</span>
-          <input type="range" defaultValue="68" />
-        </label>
-        <button type="button">Reset</button>
-      </div>
       <div className="vf-ds-perf-mini">
         <span>FPS</span>
         <strong>60</strong>
         <small>16.7 ms</small>
       </div>
+      <p>
+        Runtime frame forensics stay with ICE diagnostics; visual editing now lives in the canvas
+        workbench.
+      </p>
     </div>
   );
 }

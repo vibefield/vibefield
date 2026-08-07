@@ -26,11 +26,9 @@
   opacity: 1;
 }
 
-.vf-ds-stage-grid {
+.vf-ds-stage-ground {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle, var(--vf-canvas-dot) 1px, transparent 1px);
-  background-size: 24px 24px;
 }
 
 .vf-ds-stage-card {
@@ -598,71 +596,27 @@
 }
 
 .vf-ds-dev-specimen {
-  position: relative;
+  display: flex;
   min-height: 156px;
+  align-items: center;
+  gap: 14px;
   border-radius: 14px;
   background: var(--vf-card);
+  padding: 14px;
   color: var(--vf-card-ink);
 }
 
-.vf-ds-tweak-mini {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 154px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(20, 20, 20, 0.9);
-  padding: 10px;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.36);
-  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
-}
-
-.vf-ds-tweak-mini header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.vf-ds-tweak-mini header strong {
-  font-size: 8px;
-  font-weight: 600;
-}
-
-.vf-ds-tweak-mini header span {
-  opacity: 0.5;
-}
-
-.vf-ds-tweak-mini label {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: center;
-  gap: 5px;
-  margin-top: 5px;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 7px;
-}
-
-.vf-ds-tweak-mini input {
-  width: 100%;
-}
-
-.vf-ds-tweak-mini button {
-  height: 20px;
-  margin-top: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 7px;
+.vf-ds-dev-specimen > p {
+  max-width: 22ch;
+  margin: 0;
+  color: rgb(255 255 255 / 48%);
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .vf-ds-perf-mini {
-  position: absolute;
-  bottom: 12px;
-  left: 12px;
   display: grid;
+  flex: none;
   width: 76px;
   grid-template-columns: 1fr auto;
   border: 1px solid rgba(255, 255, 255, 0.12);

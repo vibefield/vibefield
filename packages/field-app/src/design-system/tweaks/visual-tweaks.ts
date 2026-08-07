@@ -1,18 +1,14 @@
-import { hexToRgb255 } from "./theme-constants";
+import { type CanvasAppearance, defaultCanvasAppearance } from "../../field/canvas-appearance";
+import { hexToRgb255 } from "../../field/theme-constants";
+
+export type { CanvasPalette, WorldGridAppearance } from "../../field/canvas-appearance";
 
 /**
- * Live renderer tuning that belongs to the development surface, not Settings.
+ * Editable appearance data owned by the isolated design bench, not the app.
  *
  * Keeping the whole document in one value gives import/reset one atomic seam
  * and makes it impossible for the file format to omit a control accidentally.
  */
-export interface CanvasPalette {
-  bgLight: string;
-  bgDark: string;
-  dotLight: string;
-  dotDark: string;
-}
-
 export interface OverlapFeedbackColors {
   glowLight: string;
   glowDark: string;
@@ -32,39 +28,15 @@ export interface OverlapFeedbackTuning {
   rimRadius: number;
 }
 
-/** GridConfig without dotColor, which is derived from the canvas palette. */
-export interface WorldGridTuning {
-  spacings: [number, number, number];
-  dotAlpha: number;
-  fadeIn: [number, number];
-  fadeOut: [number, number];
-  dotRadius: [number, number];
-  levelWeight: [number, number];
-}
-
-export interface VisualTweakValues {
-  canvasPalette: CanvasPalette;
-  worldGrid: WorldGridTuning;
+export interface VisualTweakValues extends CanvasAppearance {
   overlapFeedback: OverlapFeedbackTuning;
 }
 
 /** A factory, rather than a shared mutable object, for React state and resets. */
 export function defaultVisualTweakValues(): VisualTweakValues {
+  const canvas = defaultCanvasAppearance();
   return {
-    canvasPalette: {
-      dotLight: "#BFC4CC",
-      dotDark: "#595E66",
-      bgLight: "#FAFAFA",
-      bgDark: "#171717",
-    },
-    worldGrid: {
-      spacings: [20, 100, 500],
-      dotAlpha: 1,
-      fadeIn: [8, 16],
-      fadeOut: [120, 200],
-      dotRadius: [0.75, 0.75],
-      levelWeight: [1, 0],
-    },
+    ...canvas,
     overlapFeedback: {
       colors: {
         glowLight: "#808080",
@@ -72,16 +44,18 @@ export function defaultVisualTweakValues(): VisualTweakValues {
         rimLight: "#808080",
         rimDark: "#FFFFFF",
       },
-      glowAlpha: [0.25, 0.45],
-      glowSize: [60, 80],
-      rimWidth: 1,
-      rimAlpha: [0.3, 0.5],
-      rimRadius: 40,
+      // Match shell-ui/tokens.css exactly. The retired in-app panel used a
+      // second set of defaults, so development and packaged builds disagreed.
+      glowAlpha: [0.25, 0.25],
+      glowSize: [60, 60],
+      rimWidth: 1.5,
+      rimAlpha: [0.55, 0.85],
+      rimRadius: 600,
     },
   };
 }
 
-/** Pure projection used by BootRoot and tests; one entry per live CSS seam. */
+/** Pure, scoped projection used by the design-bench workbench and tests. */
 export function visualTweakCssVariables(
   values: VisualTweakValues,
   dark: boolean,

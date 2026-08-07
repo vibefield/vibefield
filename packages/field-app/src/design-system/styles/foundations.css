@@ -359,8 +359,7 @@
   gap: 10px;
 }
 
-.vf-ds-range-row input,
-.vf-ds-tweak-mini input {
+.vf-ds-range-row input {
   accent-color: var(--vf-ds-ink);
 }
 

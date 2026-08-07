@@ -1,25 +1,20 @@
 import { type ChangeEvent, type ReactElement, useRef, useState } from "react";
-import { defaultVisualTweakValues, type VisualTweakValues } from "../field/visual-tuning";
-import { FloatingTweakPanel } from "./FloatingTweakPanel";
 import {
   deserializeVisualTweaks,
   serializeVisualTweaks,
   VISUAL_TWEAK_FILE_NAME,
 } from "./visual-tweak-document";
+import { defaultVisualTweakValues, type VisualTweakValues } from "./visual-tweaks";
 
-export interface VisualTweakPanelProps {
+export interface VisualTweakControlsProps {
   value: VisualTweakValues;
   onChange: (value: VisualTweakValues) => void;
 }
 
-export function VisualTweakPanel({ value, onChange }: VisualTweakPanelProps): ReactElement | null {
-  const [open, setOpen] = useState(false);
+/** The complete former in-app tweak surface, now owned by the UI Bench. */
+export function VisualTweakControls({ value, onChange }: VisualTweakControlsProps): ReactElement {
   const [status, setStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Belt-and-suspenders with BootRoot's compile-time gate: direct consumers
-  // cannot accidentally render this surface in a packaged renderer.
-  if (!import.meta.env.DEV) return null;
 
   const palette = value.canvasPalette;
   const grid = value.worldGrid;
@@ -71,8 +66,15 @@ export function VisualTweakPanel({ value, onChange }: VisualTweakPanelProps): Re
   };
 
   return (
-    <FloatingTweakPanel title="Visual tweaks" open={open} onOpenChange={setOpen}>
-      <div className="space-y-3 text-[11px]">
+    <div className="vf-ds-tweak-controls" data-visual-tweak-controls>
+      <header className="vf-ds-tweak-controls__header">
+        <div>
+          <span>Design bench</span>
+          <h3>Visual tweaks</h3>
+        </div>
+        <p>Changes are scoped to this specimen. Export a reviewed preset before editing source.</p>
+      </header>
+      <div className="vf-ds-tweak-controls__body">
         <TweakSection title="Canvas palette">
           <ColorField
             label="Background · light"
@@ -222,8 +224,8 @@ export function VisualTweakPanel({ value, onChange }: VisualTweakPanelProps): Re
             step={0.02}
             onChange={(index, next) => setPair("rimAlpha", index, next)}
           />
-          <div className="grid grid-cols-[1fr_4.5rem_4.5rem] items-end gap-1.5 pt-1">
-            <span className="pb-1 text-black/55 dark:text-white/55">Rim shape</span>
+          <div className="vf-ds-tweak-row vf-ds-tweak-row--pair">
+            <span>Rim shape</span>
             <NumberField
               label="Width"
               value={overlap.rimWidth}
@@ -243,24 +245,33 @@ export function VisualTweakPanel({ value, onChange }: VisualTweakPanelProps): Re
           </div>
         </TweakSection>
 
-        <div className="flex flex-wrap gap-1.5 border-t border-black/10 pt-3 dark:border-white/10">
-          <TweakButton onClick={() => onChange(defaultVisualTweakValues())}>Reset</TweakButton>
+        <div className="vf-ds-tweak-actions">
+          <TweakButton
+            onClick={() => {
+              onChange(defaultVisualTweakValues());
+              setStatus("Restored production defaults");
+            }}
+          >
+            Reset
+          </TweakButton>
           <TweakButton onClick={() => fileInputRef.current?.click()}>Import JSON…</TweakButton>
           <TweakButton onClick={exportFile}>Export JSON</TweakButton>
           <input
             ref={fileInputRef}
             type="file"
             accept="application/json,.json"
-            className="hidden"
+            className="vf-ds-tweak-file"
             aria-label="Import visual tweaks"
             onChange={(event) => void importFile(event)}
           />
         </div>
         {status !== null && (
-          <div className="break-words text-[10px] text-black/45 dark:text-white/45">{status}</div>
+          <div className="vf-ds-tweak-status" role="status">
+            {status}
+          </div>
         )}
       </div>
-    </FloatingTweakPanel>
+    </div>
   );
 }
 
@@ -272,11 +283,9 @@ function TweakSection({
   children: React.ReactNode;
 }): ReactElement {
   return (
-    <section className="rounded-xl border border-black/10 bg-white/35 p-2 dark:border-white/10 dark:bg-white/[0.035]">
-      <h2 className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.09em] text-black/40 dark:text-white/40">
-        {title}
-      </h2>
-      <div className="divide-y divide-black/[0.06] dark:divide-white/[0.07]">{children}</div>
+    <section className="vf-ds-tweak-group">
+      <h4>{title}</h4>
+      <div>{children}</div>
     </section>
   );
 }
@@ -291,17 +300,15 @@ function ColorField({
   onChange: (value: string) => void;
 }): ReactElement {
   return (
-    <label className="flex h-8 items-center justify-between gap-2">
-      <span className="text-black/55 dark:text-white/55">{label}</span>
-      <span className="flex items-center gap-1.5">
-        <span className="font-mono text-[9px] uppercase text-black/35 dark:text-white/35">
-          {value}
-        </span>
+    <label className="vf-ds-tweak-color">
+      <span>{label}</span>
+      <span>
+        <output>{value}</output>
         <input
           type="color"
           aria-label={label}
           value={value}
-          className="h-5 w-7 cursor-pointer rounded border-0 bg-transparent p-0"
+          className="vf-ds-tweak-color__input"
           onChange={(event) => onChange(event.target.value.toUpperCase())}
         />
       </span>
@@ -329,8 +336,8 @@ function PairField({
   onChange: (index: 0 | 1, value: number) => void;
 }): ReactElement {
   return (
-    <div className="grid grid-cols-[1fr_4.5rem_4.5rem] items-end gap-1.5 py-1.5">
-      <span className="pb-1 text-black/55 dark:text-white/55">{label}</span>
+    <div className="vf-ds-tweak-row vf-ds-tweak-row--pair">
+      <span>{label}</span>
       <NumberField
         label={firstLabel}
         value={value[0]}
@@ -369,8 +376,8 @@ function TripleField({
   onChange: (index: 0 | 1 | 2, value: number) => void;
 }): ReactElement {
   return (
-    <div className="grid grid-cols-[1fr_4rem_4rem_4rem] items-end gap-1.5 py-1.5">
-      <span className="pb-1 text-black/55 dark:text-white/55">{label}</span>
+    <div className="vf-ds-tweak-row vf-ds-tweak-row--triple">
+      <span>{label}</span>
       {labels.map((inputLabel, index) => (
         <NumberField
           key={inputLabel}
@@ -404,8 +411,8 @@ function SingleField({
   onChange: (value: number) => void;
 }): ReactElement {
   return (
-    <div className="grid grid-cols-[1fr_4.5rem] items-end gap-1.5 py-1.5">
-      <span className="pb-1 text-black/55 dark:text-white/55">{label}</span>
+    <div className="vf-ds-tweak-row vf-ds-tweak-row--single">
+      <span>{label}</span>
       <NumberField
         label={inputLabel}
         value={value}
@@ -434,10 +441,8 @@ function NumberField({
   onChange: (value: number) => void;
 }): ReactElement {
   return (
-    <label className="min-w-0">
-      <span className="block truncate text-[8px] uppercase tracking-wide text-black/30 dark:text-white/30">
-        {label}
-      </span>
+    <label className="vf-ds-tweak-number">
+      <span>{label}</span>
       <input
         type="number"
         aria-label={label}
@@ -445,7 +450,7 @@ function NumberField({
         min={min}
         max={max}
         step={step}
-        className="mt-0.5 h-6 w-full rounded-md border border-black/10 bg-white/65 px-1.5 font-mono text-[10px] outline-none focus:border-black/30 dark:border-white/10 dark:bg-black/25 dark:focus:border-white/30"
+        className="vf-ds-tweak-number__input"
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>
@@ -460,11 +465,7 @@ function TweakButton({
   onClick: () => void;
 }): ReactElement {
   return (
-    <button
-      type="button"
-      className="h-7 rounded-lg border border-black/10 bg-white/50 px-2 text-[10px] font-medium text-black/60 transition hover:bg-white hover:text-black dark:border-white/10 dark:bg-white/[0.06] dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white"
-      onClick={onClick}
-    >
+    <button type="button" className="vf-ds-tweak-button" onClick={onClick}>
       {children}
     </button>
   );

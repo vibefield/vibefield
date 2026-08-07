@@ -23,6 +23,7 @@ describe("UI system ownership boundaries", () => {
     expect(catalogManifest).toContain('@import "./styles/catalog-shell.css";');
     expect(catalogManifest).toContain('@import "./styles/foundations.css";');
     expect(catalogManifest).toContain('@import "./styles/scenes.css";');
+    expect(catalogManifest).toContain('@import "./styles/tweaks.css";');
   });
 
   it("does not let catalog CSS own production component selectors", () => {
@@ -30,6 +31,7 @@ describe("UI system ownership boundaries", () => {
       source("design-system/styles/catalog-shell.css"),
       source("design-system/styles/foundations.css"),
       source("design-system/styles/scenes.css"),
+      source("design-system/styles/tweaks.css"),
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
@@ -41,7 +43,9 @@ describe("UI system ownership boundaries", () => {
     const page = source("design-system/DesignSystemPage.tsx");
     const onboarding = source("design-system/OnboardingPreview.tsx");
     const agentBubbles = source("design-system/AgentBubblePreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${agentBubbles}`;
+    const groundWorkbench = source("design-system/CanvasGroundWorkbench.tsx");
+    const groundPreview = source("design-system/InfiniteCanvasGroundPreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${agentBubbles}\n${groundWorkbench}\n${groundPreview}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -65,6 +69,9 @@ describe("UI system ownership boundaries", () => {
       "WizardShellView",
       "AgentBubblePreview",
       "AgentBubbleView",
+      "CanvasGroundWorkbench",
+      "InfiniteCanvasGroundPreview",
+      "InfiniteCanvasGround",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -79,6 +86,18 @@ describe("UI system ownership boundaries", () => {
     ]) {
       expect(page).not.toContain(retiredReplica);
     }
+  });
+
+  it("keeps visual experimentation in the bench and the product appearance stable", () => {
+    const boot = source("boot/BootRoot.tsx");
+    const field = source("field.tsx");
+    const stage = source("field/CanvasStage.tsx");
+
+    expect(boot).not.toContain("VisualTweak");
+    expect(boot).not.toContain("dev-tweaks");
+    expect(field).not.toContain("VisualTweak");
+    expect(field).toContain("defaultCanvasGridConfig");
+    expect(stage).toContain("InfiniteCanvasGround");
   });
 
   it("keeps static component styling out of embedded style tags", () => {

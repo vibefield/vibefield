@@ -1,4 +1,3 @@
-import type { GridConfig } from "@vibecook/ice";
 import type { DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
@@ -15,10 +14,9 @@ import type { DocManager } from "./doc-manager";
 import { useDocSyncFeed } from "./doc-sync-store";
 import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
-import { hexToRgb01 } from "./field/theme-constants";
+import { defaultCanvasGridConfig } from "./field/canvas-appearance";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
-import type { VisualTweakValues } from "./field/visual-tuning";
 import { getRendererLogger } from "./logging";
 import { setPluginClientBackend } from "./plugin-host/plugin-client";
 import { usePluginRegistryFeed } from "./plugin-host/plugin-registry-store";
@@ -37,13 +35,7 @@ import { useTheme } from "./theme";
 // The window IS the field (2026-07-21): no app bar — the theme toggle floats
 // top-right, diagnostics live inside Settings.
 
-export function FieldView({
-  manager,
-  visualTweaks,
-}: {
-  manager: DocManager;
-  visualTweaks: VisualTweakValues;
-}): ReactElement {
+export function FieldView({ manager }: { manager: DocManager }): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
   // Shared seams between units: the stage publishes its GL/halo teardown for
   // the session's engine disposal (the GL disposal order invariant); chrome
@@ -124,15 +116,7 @@ export function FieldView({
 
   const hudMotion = docState.phase === "loading" ? "out" : hudReturning ? "in" : "idle";
 
-  const effectiveGrid = useMemo<Partial<GridConfig>>(
-    () => ({
-      ...visualTweaks.worldGrid,
-      dotColor: hexToRgb01(
-        dark ? visualTweaks.canvasPalette.dotDark : visualTweaks.canvasPalette.dotLight,
-      ),
-    }),
-    [visualTweaks.worldGrid, visualTweaks.canvasPalette, dark],
-  );
+  const effectiveGrid = useMemo(() => defaultCanvasGridConfig(dark), [dark]);
 
   return (
     <div className="field-wrap" data-doc-transition={hudMotion}>
