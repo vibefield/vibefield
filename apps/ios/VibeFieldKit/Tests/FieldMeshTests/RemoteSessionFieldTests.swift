@@ -288,4 +288,46 @@ private actor FakeSource: RemoteSessionSource {
 
     #expect(await source.asks == 1, "three starts, one immediate ask")
   }
+
+  /// A stopped field still HAS its door. The distinction is what lets a stage
+  /// coming back from the background resume the poll it parked instead of
+  /// rebuilding the field — which would empty the stage and re-spawn every
+  /// bubble for nothing.
+  @Test func aParkedFieldKeepsItsDoor() async throws {
+    let source = FakeSource([.success((rows: [], hosts: 0))])
+    let field = RemoteSessionField(source: source, pollInterval: .milliseconds(1_000))
+
+    #expect(field.hasDoor)
+    #expect(!field.isPolling)
+
+    // The first ask is given time to land: `start()` only schedules the poll,
+    // so stopping in the same turn would cancel it before it ever ran and the
+    // resume below would be measuring nothing.
+    field.start()
+    try await Task.sleep(for: .milliseconds(40))
+    #expect(field.isPolling)
+    let parked = await source.asks
+    #expect(parked == 1, "one immediate ask, and the interval is far away")
+
+    field.stop()
+    #expect(!field.isPolling, "the poll is parked")
+    #expect(field.hasDoor, "but the door it was asking through is still good")
+
+    // And it can be asked again through the same door — no rebuild needed.
+    field.start()
+    try await Task.sleep(for: .milliseconds(40))
+    field.stop()
+    #expect(await source.asks == parked + 1, "resumed through the one source")
+  }
+
+  @Test func aDoorlessFieldNeverPolls() async throws {
+    let field = RemoteSessionField(source: nil, pollInterval: .milliseconds(10))
+
+    #expect(!field.hasDoor)
+    field.start()
+    try await Task.sleep(for: .milliseconds(60))
+
+    #expect(!field.isPolling, "start on a door-less field is a no-op")
+    #expect(field.snapshot.state == .noDoor, "and nobody has been asked anything")
+  }
 }

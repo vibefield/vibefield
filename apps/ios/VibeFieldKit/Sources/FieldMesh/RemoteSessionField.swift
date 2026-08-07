@@ -248,6 +248,18 @@ public final class RemoteSessionField {
     self.pollInterval = pollInterval
   }
 
+  /// Whether this field can be asked at all — the question a stage asks when it
+  /// comes back from the background and needs to know whether its poll can just
+  /// be resumed or whether the whole door has to be rebuilt.
+  ///
+  /// Not observable, and deliberately not "is polling": a parked field still
+  /// has its door, and rebuilding one that does would empty the stage and
+  /// re-spawn every bubble for nothing.
+  public var hasDoor: Bool { source != nil }
+
+  /// Whether the poll is running right now.
+  public var isPolling: Bool { pollTask != nil }
+
   /// Begins polling. The poll belongs to the STAGE: nothing runs until a view
   /// asks for it, and `stop()` ends it — nothing here polls in the background.
   public func start() {

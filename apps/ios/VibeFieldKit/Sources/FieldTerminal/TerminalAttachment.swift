@@ -50,7 +50,20 @@ public final class TerminalAttachment {
   /// vocabulary, same expiry — never a second answer.
   public private(set) var notice: String?
   public private(set) var presentation: GhostteaTerminalPresentationConfig
+  /// What the terminal below is ACTUALLY wearing — not what was asked for. It
+  /// only moves when the renderer takes the change, so it and `presentation`
+  /// can never disagree about the same edit.
   public private(set) var appearance: TerminalAppearance
+  /// A look the renderer would not take, said out loud and left standing.
+  ///
+  /// Durable on purpose: the condition it describes is durable. The settings
+  /// sheet keeps showing the value the user chose (that is their preference,
+  /// and every future attach is seeded from it) while this terminal keeps
+  /// rendering the old one, and an expiring cue would let the disagreement
+  /// outlive its own explanation. Cleared by the next edit that lands, and by
+  /// teardown — a new attachment builds its runtime from the current
+  /// appearance, so it starts with nothing to disagree about.
+  public private(set) var appearanceFailure: String?
 
   @ObservationIgnored private let directory: GhostteaTrufflePeerDirectory
   /// The client half of the host's mirror-write secret, riding on the
@@ -403,17 +416,17 @@ public final class TerminalAttachment {
   /// the 0.9.x path); colors, opacity, and shaders reconfigure in place; a
   /// value-identical edit never touches the Metal or replica paths.
   public func apply(appearance next: TerminalAppearance) async {
-    appearance = next
     let target = presentationConfig(for: next)
     guard let sink = replicaSink else {
       // No live attachment: the next attach samples this after its own last
-      // suspension point, so publishing the value is the whole job.
-      presentation = target
+      // suspension point, so publishing the value is the whole job — and
+      // there is no renderer that could refuse it.
+      commitAppearance(next, presentation: target)
       return
     }
     guard !target.hasSameDevicePresentation(as: presentation) else {
       // Document identity may have moved; the renderer values did not.
-      presentation = target
+      commitAppearance(next, presentation: target)
       return
     }
     let needsRuntime = target.requiresNewRuntime(comparedTo: presentation)
@@ -433,19 +446,29 @@ public final class TerminalAttachment {
         let runtime = try await Self.makeRuntimeIfNeeded(needsRuntime, presentation: target)
         try Task.checkCancellation()
         guard attach == self.attachID, generation == self.presentationGeneration else { return }
-        _ = try await sink.reconfigureDevicePresentation(
+        let result = try await sink.reconfigureDevicePresentation(
           target, runtime: runtime, generation: generation
         ) { [weak self] result in
           await self?.publishDevicePresentation(
-            result, presentation: target, runtime: runtime, generation: generation,
-            attach: attach)
+            result, appearance: next, presentation: target, runtime: runtime,
+            generation: generation, attach: attach)
+        }
+        // Upstream runs the `publish` callback ONLY on its applied path —
+        // every `applied: false` returns before reaching it — so a refusal is
+        // visible here or nowhere. Staleness is checked first because a
+        // superseded edit has nothing to complain about: the newer one is the
+        // truth and will commit its own words.
+        guard attach == self.attachID, generation == self.presentationGeneration else { return }
+        if !result.applied {
+          self.appearanceFailure =
+            "the terminal kept its previous look — the renderer declined the change"
         }
       } catch is CancellationError {
         return
       } catch {
         guard attach == self.attachID, generation == self.presentationGeneration else { return }
-        self.bannerPresenter?.noteCue("Could not reload terminal appearance.", at: self.clock.nowMs)
-        self.republishBanner()
+        self.appearanceFailure =
+          "the terminal kept its previous look — \(Self.shortReason(error))"
       }
     }
     presentationTask = task
@@ -462,6 +485,7 @@ public final class TerminalAttachment {
   /// from being overwritten by a delayed settings continuation.
   private func publishDevicePresentation(
     _ result: GhostteaDevicePresentationResult,
+    appearance next: TerminalAppearance,
     presentation target: GhostteaTerminalPresentationConfig,
     runtime: GhostteaRuntime?,
     generation: UInt64,
@@ -469,10 +493,25 @@ public final class TerminalAttachment {
   ) {
     guard result.applied, attach == attachID, generation == presentationGeneration else { return }
     if let runtime { attachmentRuntime = runtime }
-    presentation = target
+    // The commit point, and the ONLY one on the live path: publishing the
+    // appearance up front left the model claiming a look the renderer had
+    // refused, which a later attach would then seed itself from — a failure
+    // that repaired its own evidence.
+    commitAppearance(next, presentation: target)
     if let rendered = result.update?.effects.last(where: { $0.kind == .frameReady })?.payload {
       frame = rendered
     }
+  }
+
+  /// What the terminal is wearing, and the fact that nothing is outstanding
+  /// about it — always together, because a stale failure beside a fresh
+  /// appearance is exactly the disagreement this field exists to report.
+  private func commitAppearance(
+    _ next: TerminalAppearance, presentation target: GhostteaTerminalPresentationConfig
+  ) {
+    appearance = next
+    presentation = target
+    appearanceFailure = nil
   }
 
   nonisolated private static func makeRuntimeIfNeeded(
@@ -724,6 +763,10 @@ public final class TerminalAttachment {
     lastControlClaim = nil
     typingClaimGeneration = nil
     notice = nil
+    // The next attachment builds its runtime from the current appearance, so
+    // it starts with nothing to disagree about — carrying the old complaint
+    // into it would be a stale claim about a renderer that never refused.
+    appearanceFailure = nil
   }
 
   // MARK: - Pure mappings (pinned by tests)

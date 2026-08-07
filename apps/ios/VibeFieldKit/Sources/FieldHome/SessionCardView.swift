@@ -25,13 +25,25 @@ struct CardAction: Identifiable {
 /// terminal without knowing how one works, which is what keeps the Ghosttea
 /// renderer on the far side of `FieldTerminal`.
 struct SessionCardView<Terminal: View>: View {
-  /// Live lookup: the card re-reads the field every update, so status and
-  /// context stay current while the sheet is open. A vanished bubble renders
-  /// the honest ended face.
+  /// The card's SUBJECT — the bubble it opened on, kept fresh by the host
+  /// while the field still carries it and deliberately NOT dropped when the
+  /// field stops carrying it. See `listed`.
   let bubble: FieldBubble?
+  /// Whether the field still lists this session. A listing is not a heartbeat:
+  /// two failed asks (~4 s) withdraw every remote row, and a terminal that is
+  /// still rendering has not ended because discovery blinked. So an attached
+  /// card that goes unlisted keeps its terminal and says only what is true —
+  /// that the mesh has stopped listing it — while the connection speaks for
+  /// itself. `FieldHomeModel.cardFace` owns the rule.
+  let listed: Bool
   /// True once the host has an attachment for this session — the slot below
   /// is then the live surface rather than the invitation.
   let isAttached: Bool
+  /// Whether this DEVICE holds a write key for the host. Distinct from the
+  /// session's own `readWrite`, which only says the session is shared for
+  /// writing — the two were being conflated into a promise this app cannot
+  /// keep until the Keychain leg lands.
+  let hasWriteKey: Bool
   /// The attachment's own words, when it has any: connecting, view-only, the
   /// reason it failed. The card renders them and never derives them — the
   /// terminal owns its truth, and this view stays ignorant of how one works.
@@ -49,9 +61,13 @@ struct SessionCardView<Terminal: View>: View {
   let onAttach: () -> Void
   @ViewBuilder let terminal: () -> Terminal
 
+  private var face: FieldHomeModel.CardFace {
+    FieldHomeModel.cardFace(hasSubject: bubble != nil, listed: listed, attached: isAttached)
+  }
+
   var body: some View {
     VStack(spacing: 0) {
-      if let bubble {
+      if let bubble, face == .session {
         header(bubble)
         Divider().overlay(FieldPalette.panelBorder)
         terminalSlot(bubble)
@@ -92,6 +108,15 @@ struct SessionCardView<Terminal: View>: View {
           .font(FieldType.mono(9))
           .foregroundStyle(FieldPalette.textMuted)
           .lineLimit(1)
+        if !listed {
+          // Exactly one fact, and only the one we hold: the LISTING is gone.
+          // Whether the session ended is the attachment's to say, and it does —
+          // saying it here too would be a second answer, and a guess.
+          Text("the mesh has stopped listing this session")
+            .font(FieldType.mono(8))
+            .foregroundStyle(FieldPalette.textFaint)
+            .lineLimit(1)
+        }
       }
 
       Spacer()
@@ -226,10 +251,16 @@ struct SessionCardView<Terminal: View>: View {
         }
         .buttonStyle(.plain)
 
+        // `remote.readWrite` says the SESSION is shared for writing — it rides
+        // in a host advertisement broadcast to the whole mesh and knows
+        // nothing about who is asking. Whether THIS device may type is a
+        // per-attach grant against a write key it does not have yet, so
+        // promising typing from the listing alone was a promise the next tap
+        // broke.
         Text(
           statusNote
-            ?? (remote.readWrite
-              ? "you can type here" : "view only — the host is not sharing writes")
+            ?? FieldHomeModel.writeInvitation(
+              sessionSharesWrites: remote.readWrite, hasWriteKey: hasWriteKey)
         )
         .font(FieldType.mono(9))
         .foregroundStyle(FieldPalette.textMuted)
@@ -293,9 +324,16 @@ struct SessionCardView<Terminal: View>: View {
 }
 
 extension SessionCardView where Terminal == EmptyView {
-  init(bubble: FieldBubble?, statusNote: String? = nil, onAttach: @escaping () -> Void) {
+  init(
+    bubble: FieldBubble?,
+    listed: Bool = true,
+    hasWriteKey: Bool = false,
+    statusNote: String? = nil,
+    onAttach: @escaping () -> Void
+  ) {
     self.init(
-      bubble: bubble, isAttached: false, statusNote: statusNote, statusDetail: nil,
+      bubble: bubble, listed: listed, isAttached: false, hasWriteKey: hasWriteKey,
+      statusNote: statusNote, statusDetail: nil,
       statusActions: [], cooled: false, onAttach: onAttach
     ) {
       EmptyView()

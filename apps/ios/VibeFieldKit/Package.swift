@@ -80,5 +80,11 @@ let package = Package(
     .testTarget(name: "FieldAgentsTests", dependencies: ["FieldAgents"]),
     .testTarget(name: "FieldMeshTests", dependencies: ["FieldMesh"]),
     .testTarget(name: "FieldTerminalTests", dependencies: ["FieldTerminal"]),
+    // The home screen's DECISIONS, which is all of it that is testable without
+    // a simulator — and, until this target existed, all of it that was
+    // untested: the integrator carried three state-machine bugs (the parked
+    // poll, the card's ended face, the double attach) that no other target
+    // could have caught.
+    .testTarget(name: "FieldHomeTests", dependencies: ["FieldHome"]),
   ]
 )
