@@ -30,7 +30,7 @@
 //! that, and it is a petition candidate, not a workaround we can write here.
 
 use crate::config::NativeConfig;
-use crate::contracts::UnitState;
+use crate::contracts::{UnitHealth, UnitState};
 use crate::registries;
 use crate::services::mesh::{MeshHandle, MeshNode};
 use ghosttea_truffle::{TruffleTerminalConfig, TruffleTerminalMesh};
@@ -41,9 +41,9 @@ use std::time::Duration;
 ///
 /// It covers the steady state — a device whose tailnet identity is already
 /// authenticated brings a node up in seconds — and deliberately not the first
-/// interactive login, which is unbounded by nature. The gateway reaching
-/// `disabled`/`degraded` short-circuits this, so the budget is only ever spent
-/// on a node that is genuinely still coming.
+/// interactive login, which is unbounded by nature. A gateway that has GIVEN UP
+/// short-circuits this (`gateway_gave_up`), so the budget is only ever spent on
+/// a node that is genuinely still coming.
 pub const ATTACH_BUDGET: Duration = Duration::from_secs(20);
 
 /// How often the gateway's health is re-read while waiting. The node itself
@@ -197,20 +197,40 @@ async fn wait_for_node(mesh: &MeshHandle, budget: Duration) -> Result<Arc<MeshNo
     }
 }
 
-/// Resolves only when the gateway reaches a state from which no node can come.
+/// Resolves only when the gateway reaches a state from which no node can come
+/// IN TIME — which is not the same as a state from which none can come at all.
+///
+/// The three terminal states are the obvious half. The fourth is a node parked
+/// on an interactive login: the gateway sits at `starting` with an `auth_url`
+/// (mesh.rs's auth handler), and a login that needs a human at a browser is
+/// unbounded by nature, so spending a 20s budget on it is spending it on a node
+/// that is NOT genuinely still coming — the floor would serve without PTY mesh
+/// twenty seconds late for no gain. Waiting on it is also the wrong shape: the
+/// mesh joins at construction, so the answer after a login is a pair bounce,
+/// not a longer wait.
+///
+/// The URL itself never leaves this function. It is the gateway's `detail` that
+/// travels, and that detail carries no URL by construction.
 async fn gateway_gave_up(mesh: &MeshHandle) -> String {
     loop {
         let health = mesh.health();
-        if matches!(
-            health.state,
-            UnitState::Disabled | UnitState::Degraded | UnitState::Crashed
-        ) {
+        if has_given_up(&health) {
             return health
                 .detail
                 .unwrap_or_else(|| format!("the mesh gateway is {}", health.state));
         }
         tokio::time::sleep(GATEWAY_POLL).await;
     }
+}
+
+/// The predicate above, named so it can be checked without a tailnet — the
+/// login case is unreachable in a test that has no sidecar to log in to, and an
+/// untested fourth branch is how the first three came to look exhaustive.
+fn has_given_up(health: &UnitHealth) -> bool {
+    matches!(
+        health.state,
+        UnitState::Disabled | UnitState::Degraded | UnitState::Crashed
+    ) || health.auth_url.is_some()
 }
 
 #[cfg(test)]
@@ -222,6 +242,33 @@ mod tests {
         let config = NativeConfig::for_data_dir(std::path::PathBuf::from("/tmp/vf-plan"));
         assert_eq!(MeshPlan::resolve(&config), MeshPlan::Off);
         assert!(MeshPlan::resolve(&config).is_off());
+    }
+
+    fn gateway(state: UnitState, auth_url: Option<&str>) -> UnitHealth {
+        UnitHealth {
+            unit: "mesh-gateway".into(),
+            state,
+            detail: Some("a reason in the gateway's own words".into()),
+            auth_url: auth_url.map(str::to_owned),
+        }
+    }
+
+    /// GT-5d: the attach budget is only ever spent on a node genuinely still
+    /// coming, and a node waiting for a human at a browser is not one.
+    #[test]
+    fn a_gateway_parked_on_a_login_has_given_up_as_far_as_the_budget_is_concerned() {
+        assert!(!has_given_up(&gateway(UnitState::Starting, None)));
+        assert!(!has_given_up(&gateway(UnitState::Up, None)));
+
+        assert!(has_given_up(&gateway(UnitState::Disabled, None)));
+        assert!(has_given_up(&gateway(UnitState::Degraded, None)));
+        assert!(has_given_up(&gateway(UnitState::Crashed, None)));
+        assert!(
+            has_given_up(&gateway(UnitState::Starting, Some("https://login.example"))),
+            "an interactive login is unbounded by nature: `starting` WITH an auth url is the \
+             one state that looks like progress and is not, and burning the full budget on it \
+             delays a floor that was never going to get a node in time"
+        );
     }
 
     #[test]

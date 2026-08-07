@@ -8,17 +8,17 @@
 //! above the mgmt seam.
 //!
 //! Protocol facts below are read from the pinned crate, not from a doc:
-//! `ghosttea-0.7.0/src/service.rs` (first verified at 0.6.0; framing and
-//! handshake unchanged at 0.7.0). Framing is a little-endian u32 length
-//! followed by the payload (service.rs:573-587, mirrored by `packet()` in
-//! `@vibecook/ghosttea-client`'s index.ts). The first packet a client sends is
-//! the bare auth token — not JSON — and the service answers with the packet
-//! `ok` before any command is read (service.rs:600-609). Commands are
-//! `{requestId, type: "<kebab-case-op>", ...camelCase}` (service.rs:136-282) and
+//! `ghosttea-0.9.2/src/service.rs` (first verified at 0.6.0; framing and
+//! handshake unchanged through every pin since). Framing is a little-endian u32
+//! length followed by the payload (service.rs:1412-1455, mirrored by `packet()`
+//! in `@vibecook/ghosttea-client`'s index.ts). The first packet a client sends
+//! is the bare auth token — not JSON — and the service answers with the packet
+//! `ok` before any command is read (service.rs:1467-1476). Commands are
+//! `{requestId, type: "<kebab-case-op>", ...camelCase}` (service.rs:374-548) and
 //! responses come back on the same stream tagged the same way
-//! (service.rs:292-352). `requestId: 0` marks a server-pushed event, and the
+//! (service.rs:564-702). `requestId: 0` marks a server-pushed event, and the
 //! service deliberately writes no response to a request that uses it
-//! (service.rs:639) — so this client's ids start at 1.
+//! (service.rs:1593-1620) — so this client's ids start at 1.
 
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
@@ -32,19 +32,25 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::sync::{mpsc, oneshot};
 
-/// Control protocol: ghosttea 0.7.0 serves 1.13 and the hello answers
-/// `min(client, server)` per connection. This client announces **1.9** — the
-/// feature floor it consumes, not the newest it has heard of. The minor is not
-/// cosmetic: the service gates events on it — `session-activity-changed` below
-/// 1.6, `events-lost` below 1.8, and `session-created` below 1.9
+/// Control protocol: ghosttea 0.9.2 serves 1.13. This client announces **1.9** —
+/// the feature floor it consumes, not the newest it has heard of. The minor is
+/// not cosmetic: the service gates events on it — `session-activity-changed`
+/// below 1.6, `events-lost` below 1.8, and `session-created` below 1.9
 /// (`SESSION_CREATED_PROTOCOL_MINOR`, service.rs:48). 1.9 is what turns
 /// creation from a polled fact into a pushed hint (NF-7); the 1.10-1.13
 /// reconnect-era answers stay off this connection until something here reads
 /// them.
+///
+/// Two different numbers, and confusing them is what made this a floor nobody
+/// checked. The service RECORDS `min(client, server)` per connection and gates
+/// its pushed events on that (service.rs:1583-1592), but the hello RESPONSE
+/// carries the server's own ceiling (service.rs:1864-1874) — so the answer is
+/// what the server can do, not what was negotiated. That is precisely what makes
+/// it checkable, and `hello` checks it.
 pub const PROTOCOL_MAJOR: u16 = 1;
 pub const PROTOCOL_MINOR: u16 = 9;
 
-/// = upstream `MAX_CONTROL_BYTES` (service.rs:27). Reading with the service's
+/// = upstream `MAX_CONTROL_BYTES` (service.rs:34). Reading with the service's
 /// own ceiling keeps a hostile or wedged peer from making us allocate.
 const MAX_CONTROL_BYTES: usize = 1024 * 1024;
 
@@ -53,14 +59,17 @@ const MAX_CONTROL_BYTES: usize = 1024 * 1024;
 /// honest degraded state.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The subset of ghosttea's `SessionSummary` (session.rs:284-304) this floor
+/// The subset of ghosttea's `SessionSummary` (session.rs:296-321) this floor
 /// reads. Deliberately a tolerant reader of our own rather than upstream's
 /// type: `SessionSummary` derives `Serialize` only, and a daemon that must
 /// survive a minor-version field addition parses what it needs and ignores the
 /// rest.
 ///
-/// The absences are load-bearing, not laziness — see `TERMINAL_INVENTORY_GAPS`
-/// in `terminal.rs`.
+/// The absences are load-bearing, not laziness: what is here is what the floor
+/// has a use for. `persistence` and `owner_id` are the GT-D11 discriminator,
+/// `persistence` doubles as the marker that tells a session this device governs
+/// from a replica of another's (`terminal.rs`'s `is_governed_here`), and the
+/// rest are the `ObservedTerminal` row.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionSummary {
@@ -86,7 +95,7 @@ pub struct SessionSummary {
     #[serde(default)]
     pub persistence: Option<String>,
     /// Who asked for this session, verbatim from the `ownerId` a create passed
-    /// (session.rs:295-318 — the summary echoes the option back). `None` is
+    /// (session.rs:1251 — the summary echoes the option back). `None` is
     /// the whole point: a UI door that states no owner produces an ownerless
     /// birth, and GT-D11 governs exactly those.
     #[serde(default)]
@@ -165,9 +174,17 @@ impl ControlClient {
         Ok((client, events_rx))
     }
 
-    /// Declare the protocol version. Sent for the same reason the TS client
-    /// sends it: the service records the minor per connection and gates newer
-    /// events on it (service.rs:634-638).
+    /// Declare the protocol version, and REFUSE a service that cannot serve it.
+    ///
+    /// Sent for the same reason the TS client sends it: the service records the
+    /// minor per connection and gates newer events on it. The minor check beside
+    /// the major one is GT-5d's: the whole GT-D11 custody claim rides on
+    /// `session-created`, which the service withholds below minor 9 — silently,
+    /// because withholding an event is not an error. A downgrade under that
+    /// floor would leave `govern_births` with nothing to govern, every workspace
+    /// pane back at `terminate-with-app`, and not one line in any log. EL8 makes
+    /// that unlikely; the exact pin is also precisely what would make it invisible
+    /// when it happened, so the connection states the floor it needs.
     async fn hello(&self) -> Result<()> {
         let response = self
             .call(json!({
@@ -182,6 +199,14 @@ impl ControlClient {
             response.get("type").and_then(Value::as_str) == Some("hello")
                 && major == Some(u64::from(PROTOCOL_MAJOR)),
             "terminal control protocol mismatch: {response}"
+        );
+        // The response carries the SERVER's ceiling, so this reads "can you do
+        // what we need", not "what did we agree on".
+        let minor = response.get("protocolMinor").and_then(Value::as_u64);
+        ensure!(
+            minor.is_some_and(|minor| minor >= u64::from(PROTOCOL_MINOR)),
+            "terminal control protocol {PROTOCOL_MAJOR}.{PROTOCOL_MINOR} is required and the \
+             service serves: {response}"
         );
         Ok(())
     }
@@ -211,8 +236,8 @@ impl ControlClient {
     }
 
     /// Terminate one session. `source` is on the wire as a kebab-case
-    /// `TerminationSource` (session.rs:39-46) and decides the exit
-    /// classification every observer sees (`classify_exit`, session.rs:69-83).
+    /// `TerminationSource` (session.rs:47-52) and decides the exit
+    /// classification every observer sees (`classify_exit`, session.rs:75-89).
     pub async fn terminate(&self, session_id: &str, source: &str) -> Result<()> {
         self.call(json!({"type": "terminate", "sessionId": session_id, "source": source}))
             .await
@@ -235,7 +260,7 @@ impl ControlClient {
     }
 
     /// One request, one correlated response. `type: "error"` is upstream's
-    /// failure shape (service.rs:349-351), so it becomes an `Err` here rather
+    /// failure shape (service.rs:2962-2964), so it becomes an `Err` here rather
     /// than a success carrying a message no caller would read.
     async fn call(&self, body: Value) -> Result<Value> {
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
@@ -297,7 +322,8 @@ async fn read_loop(
             Some(0) | None => {
                 // A dropped receiver DISCARDS the event; it never ends the
                 // connection. The service broadcasts every event to every
-                // control client (service.rs:470/624), so a client whose owner
+                // control client (one `broadcast::Sender`, one `recv` per
+                // connection — service.rs:1640-1646), so a client whose owner
                 // only wants request/response — the mgmt reconcile's prune —
                 // would otherwise have its demultiplexer killed by the first
                 // `session-exited` its own ladder caused, and every later
@@ -329,4 +355,93 @@ async fn write_packet<W: AsyncWrite + Unpin>(stream: &mut W, bytes: &[u8]) -> Re
     stream.write_all(bytes).await?;
     stream.flush().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::net::UnixListener;
+
+    /// A control service that accepts any token and answers `hello` with the
+    /// version it was told to claim. Exactly as much of the protocol as the
+    /// handshake reads and not a line more — the point is to be a SERVICE the
+    /// real client dials, not a stub of the client's own expectations.
+    fn fake_service(
+        socket: &Path,
+        protocol_major: u16,
+        protocol_minor: u16,
+    ) -> tokio::task::JoinHandle<()> {
+        let listener = UnixListener::bind(socket).expect("bind the fake control socket");
+        tokio::spawn(async move {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            // The bare token, then `ok` — never inspected, this is not the
+            // authentication under test.
+            if read_packet(&mut stream).await.is_err() {
+                return;
+            }
+            if write_packet(&mut stream, b"ok").await.is_err() {
+                return;
+            }
+            while let Ok(packet) = read_packet(&mut stream).await {
+                let Ok(request) = serde_json::from_slice::<Value>(&packet) else {
+                    return;
+                };
+                let response = json!({
+                    "requestId": request["requestId"],
+                    "type": "hello",
+                    "protocolMajor": protocol_major,
+                    "protocolMinor": protocol_minor,
+                    "serverBuild": "fake-service",
+                });
+                if write_packet(&mut stream, &serde_json::to_vec(&response).unwrap())
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+        })
+    }
+
+    /// macOS caps a Unix socket path at ~104 bytes, so tests root at /tmp (the
+    /// `sun_path` law from tests/terminal_unit.rs).
+    async fn handshake_with(protocol_major: u16, protocol_minor: u16) -> Result<()> {
+        let dir = tempfile::Builder::new()
+            .prefix("vfhello")
+            .tempdir_in("/tmp")
+            .expect("tempdir under /tmp");
+        let socket = dir.path().join("termctl.sock");
+        let _service = fake_service(&socket, protocol_major, protocol_minor);
+        ControlClient::connect(&socket, "a-token").await.map(|_| ())
+    }
+
+    /// GT-5d: the client announces a minor and then has to LIVE with what came
+    /// back. `session-created` — the whole GT-D11 custody claim — is withheld
+    /// below minor 9 silently, because withholding an event is not an error, so
+    /// a service under our floor has to be refused at the handshake or it is
+    /// never noticed at all.
+    #[tokio::test]
+    async fn a_service_below_our_protocol_floor_is_refused_at_the_handshake() {
+        handshake_with(PROTOCOL_MAJOR, PROTOCOL_MINOR)
+            .await
+            .expect("a service serving exactly our floor is what we asked for");
+        handshake_with(PROTOCOL_MAJOR, PROTOCOL_MINOR + 4)
+            .await
+            .expect("a NEWER service is fine — the answer is the server's ceiling, not a contract");
+
+        let refused = handshake_with(PROTOCOL_MAJOR, PROTOCOL_MINOR - 1)
+            .await
+            .expect_err("one minor below the floor still cannot push session-created");
+        let refused = format!("{refused:#}");
+        assert!(
+            refused.contains(&format!("{PROTOCOL_MAJOR}.{PROTOCOL_MINOR} is required")),
+            "the refusal names the floor it needs: {refused}"
+        );
+
+        handshake_with(PROTOCOL_MAJOR + 1, PROTOCOL_MINOR)
+            .await
+            .expect_err("and the major check it sits beside still stands");
+    }
 }

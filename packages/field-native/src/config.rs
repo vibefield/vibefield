@@ -48,9 +48,16 @@ pub struct NativeConfig {
     /// EL7, twice over: it is `FIELD_`-prefixed, so it rides
     /// `registries::ENV_PREFIXES` into ghosttea's strip list and cannot reach an
     /// agent PTY even in inherit mode; and it is never logged — the log records
-    /// only whether one is configured. Upstream compares it in constant time
-    /// (`TruffleTerminalConfig::access_for` → `subtle::ct_eq`), which is why the
-    /// value travels as an opaque string rather than anything we compare here.
+    /// only whether one is configured. The value travels as an opaque string
+    /// rather than anything we compare here, because upstream owns the compare.
+    ///
+    /// That compare is constant-time in its CONTENTS and not in its length:
+    /// `TruffleTerminalConfig::access_for` (ghosttea-truffle 0.9.2 lib.rs:3962-3979)
+    /// tests `expected.len() == supplied.len()` before reaching `subtle::ct_eq`,
+    /// so a peer that may attach repeatedly can learn how long this string is —
+    /// it cannot learn a byte of it. Length is the one fact the timing leaks, and
+    /// a capability worth guessing at is long enough for that to buy nothing;
+    /// per-device scoped tokens retire the question along with the shared secret.
     pub terminal_mirror_write: Option<String>,
 }
 
