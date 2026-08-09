@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import type { TerminalInfo, TerminalTicket } from "@vibefield/contracts";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap } from "../src/index";
 import { helloAs, WsRpc } from "./ws-rpc";
@@ -21,19 +21,6 @@ const BIN = join(ROOT, "target/debug/field-native");
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
-
-beforeAll(async () => {
-  // Async on purpose: a synchronous build blocks the vitest worker's event
-  // loop, and on a cold CI cache that starves the worker→host RPC past its
-  // timeout (the "onTaskUpdate" red with every test green).
-  await new Promise<void>((resolveBuild, reject) => {
-    const build = spawn("cargo", ["build", "-p", "field-native"], { cwd: ROOT, stdio: "ignore" });
-    build.once("error", reject);
-    build.once("exit", (code) =>
-      code === 0 ? resolveBuild() : reject(new Error(`cargo build -p field-native exited ${code}`)),
-    );
-  });
-}, 180_000);
 
 afterEach(async () => {
   // error-isolated: a rejecting cleanup must not leak the daemons behind it

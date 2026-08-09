@@ -6,8 +6,13 @@ import { defineConfig } from "vitest/config";
 // vitest's internal worker RPC ("Timeout calling onTaskUpdate") — every test
 // green, exit code red (two runs proved it: 376/376 passing, 2 unhandled
 // infra errors). CI runs the files serially; local keeps full parallelism.
+//
+// The native binary those suites spawn is built ONCE here rather than in five
+// competing `beforeAll` hooks — see test/global-setup.ts for what the queue
+// used to cost.
 export default defineConfig({
   test: {
     fileParallelism: !process.env["CI"],
+    globalSetup: ["./test/global-setup.ts"],
   },
 });

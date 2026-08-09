@@ -1344,3 +1344,72 @@ standalone with vitest workers capped at 2 — staggering the build queue; same 
 tree — which Nx cached into the verifying run: the gate's own caching, disclosed here.
 Follow-ups this argues for: a fieldd vitest globalSetup that builds field-native once per
 run, and an upstream tar-stability petition (G-series).
+
+> **Erratum 2026-08-09 (same day, at the source rather than only downstream):** the mechanism
+> in the paragraph above is retracted. A repeat build is indeed never a no-op — 38 s then 53 s,
+> measured back-to-back on an idle machine — but `ghosttea-vt-sys` does **not** rewrite the tar
+> of an existing unit; the file's mtime is stable across builds. Cargo mints a **new** build
+> unit instead: 26 `ghosttea-vt-sys-*` directories in one target dir, 13 holding their own
+> separately downloaded copy of the byte-identical 2.3 MB artifact (30 MB). The symptom, the
+> cost, and the gate consequence all stand; only "rewrites its OUT_DIR tar on every build"
+> was inference, and the probe killed it. Petition G12 carries the corrected evidence and
+> deliberately leaves the mechanism open for upstream to name.
+
+## The gate stops failing by lottery — one native build per run, and the petition for why one costs 40 s
+
+**Landed 2026-08-09 (James: "go ahead fix both"), the same day the finding surfaced.** Five
+`fieldd` suites — `terminal-seam`, `terminal-kill-matrix`, `cross-daemon`, `mesh-lane`,
+`two-pairs` — each built `field-native` in its own 180 s `beforeAll`. Vitest runs files in
+parallel workers, so those five builds served a single cargo target-dir lock: the budget was
+never per-suite, it was per *queue position*. That is survivable only while a repeat build is
+approximately free, and it is not — **38 s then 53 s for two identical back-to-back builds** on
+an idle machine. The tail of the queue therefore blew its budget, and which suite died was
+luck: three consecutive runs failed 46/47 with a different victim each time, every victim
+passing in isolation. It reads as flake, which is why it survived this long.
+
+**The fix is one build per run.** `packages/fieldd/test/global-setup.ts` builds the binary once
+in the vitest host process before the first worker starts; `vitest.config.ts` wires it as
+`globalSetup`; the five `beforeAll` hooks are deleted. Same guarantee the hooks were making —
+the binary is on disk when a suite opens — minus the queue. The setup captures cargo's stderr
+and puts it in the rejection, because a failure here kills the whole run and a silent one would
+be worse than the bug.
+
+**Measured, not assumed.** A process sampler across the whole run counted **exactly one**
+`cargo build -p field-native` (was five). The suite went **47/47 files, 415/415 tests, 71.14 s**
+— from 3m08s–3m17s with one or two files failing. Note the old red was hiding more than it
+showed: a timed-out `beforeAll` reports its file's tests as *skipped*, so those runs also had
+**ten tests that never executed at all** and reported as green-ish. Zero skips now. The four
+native suites that used to die on the budget now finish in 2.6–4.8 s each.
+
+**The upstream half is petition G12** (`draft/petitions/G12-ghosttea-vt-sys-build-fingerprint.md`,
+DRAFTED — not posted). Evidence: the A/B timings, cargo's own `fingerprint=info` verdict
+(`ghosttea-vt-sys` dirty, then `ghosttea-vt` → `ghosttea-core` → `ghosttea` → `field-native` as
+`StaleDepFingerprint`), and the churn visible in one `ls` — 26 `ghosttea-vt-sys-*` build dirs,
+13 with their own copy of the same 2.3 MB artifact. The source-visible suspect is three
+`cargo:rerun-if-changed` declarations naming paths inside the script's own `OUT_DIR`
+(build.rs :231/:267/:282 at 0.9.2), stated **per branch** because each site is correct on some
+paths and wrong on others — the `GHOSTTY_VT_PREFIX` pair (:226–227) is correct today and
+explicitly untouched. The petition asks for provenance-aware declarations, leans on the
+already-declared content-addressed `artifacts.json`, and offers an optional shared bundle cache;
+it does **not** ask for any change to checksum verification, the env contract, or the API. It
+also declines to name the mechanism: the anti-pattern may not fully explain 13 units, we cannot
+instrument the crate from here, and guessing at cargo internals in someone else's tracker is how
+a petition gets dismissed. `globalSetup` does **not** retire when G12 lands — building once per
+run is right regardless; what retires is the ~40 s each run pays and the 30 MB of duplicates.
+
+**Gate:** `pnpm verify` exit 0, bare (no pipe — a piped gate reported tail's exit 0 over a red
+run earlier this same session, which is its own lesson). That run cache-hit `fieldd:test` from
+the live 47/47 minutes before, so the gate was re-run with **`NX_SKIP_NX_CACHE=true`** —
+stricter than the gate, not weaker — and there `fieldd:test` **executed live inside the gate
+and passed 47/47**, which is the proof this particular slice owed.
+
+**One finding that run surfaced, recorded rather than fixed.** With every cache disabled, all
+18 test projects run at once, and three `logging` tests went red on deadlines — two 5 s test
+timeouts (9.6 s and 6.9 s actual) and one `logging flush deadline exceeded`. `packages/logging`
+is untouched by this slice (its last commit is `17862a5`), it passes **7 files / 49 tests in
+5.45 s** standalone, and the normal gate is green — so this is load, not regression. But it is
+worth watching for a reason this slice created: fieldd's suite went 190 s → 71 s, so it no
+longer serializes behind cargo and now **overlaps** the rest of the graph. The gate got denser,
+and tests sitting close to their deadlines have less headroom than they did yesterday. Whether
+those three deadlines want raising, or logging's timing tests want a fake clock, is a different
+package's question and James's to scope.

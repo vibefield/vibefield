@@ -7,7 +7,7 @@ import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddHealth, NativeLink } from "../src/index";
 import { helloAs, until, WsRpc } from "./ws-rpc";
@@ -26,19 +26,6 @@ function nativeEnv(dataDir: string): NodeJS.ProcessEnv {
     FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
   };
 }
-
-beforeAll(async () => {
-  // Async on purpose: a synchronous build blocks the vitest worker's event
-  // loop, and on a cold CI cache that starves the worker→host RPC past its
-  // timeout (the "onTaskUpdate" red with every test green).
-  await new Promise<void>((resolveBuild, reject) => {
-    const build = spawn("cargo", ["build", "-p", "field-native"], { cwd: ROOT, stdio: "ignore" });
-    build.once("error", reject);
-    build.once("exit", (code) =>
-      code === 0 ? resolveBuild() : reject(new Error(`cargo build -p field-native exited ${code}`)),
-    );
-  });
-}, 180_000);
 
 afterEach(async () => {
   // SIGKILL is asynchronous: a dying daemon (or its segment writer) can still

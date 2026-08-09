@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { UserRecord } from "@vibefield/contracts";
 import { createUser, mintLockedUsersFile, userRootFor, usersFilePath } from "@vibefield/users";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { helloAs, WsRpc } from "./ws-rpc";
@@ -21,18 +21,6 @@ const BIN = join(ROOT, "target/debug/field-native");
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
-
-beforeAll(async () => {
-  // Async on purpose (the kill-matrix lesson): a synchronous build starves the
-  // vitest worker RPC on a cold cache.
-  await new Promise<void>((resolveBuild, reject) => {
-    const build = spawn("cargo", ["build", "-p", "field-native"], { cwd: ROOT, stdio: "ignore" });
-    build.once("error", reject);
-    build.once("exit", (code) =>
-      code === 0 ? resolveBuild() : reject(new Error(`cargo build -p field-native exited ${code}`)),
-    );
-  });
-}, 180_000);
 
 afterEach(async () => {
   const fns = cleanup.reverse();
