@@ -35,6 +35,30 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   never a copy of its markup or CSS**. `packages/field-app/test/ui-system-boundaries.test.ts`
   enforces both, so a replica fails the gate rather than a review.
 
+## Workspace taxonomy (the per-package map is README.md §Monorepo layout)
+
+Four kinds of `packages/*`; the flat listing is deliberate. Assessed 2026-08-09 (James
+ratified): do NOT merge the small packages into a `core` — the browser/Node boundary, the
+EL7 review surface (`audit` is a one-sitting read), and Nx affected-granularity are encoded
+in the split.
+
+- **Wire truth:** `contracts` — the zero-dep root of the graph, imported from every
+  environment (renderer, workers, Node daemons; Rust side generated). Keep it dependency-free.
+- **Node-only spine libraries**, consumed by the Node hosts (fieldd, Electron main), never by
+  browser-compatible code: `logging` + `audit` (LOG track), `users` (UA track).
+- **Daemon plane:** `fieldd` · `field-native` (the sole Cargo workspace member) ·
+  `fieldd-supervisor` (a library inside Electron main, never its own process) ·
+  `fieldd-client` (the renderer/worker client).
+- **Renderer plane:** `field-app` — the browser-compatible product (`@vibefield/fieldd` is a
+  test-only devDependency; runtime deps stay browser-safe) · `shell-ui` — the DESIGN KIT
+  (tokens + primitives, shared with plugin-sdk), not electron-shell's UI · `electron-shell` —
+  composition root (main/preload/renderer-host + the renderer vite build; no product logic).
+  The UI Bench splits the same way: `electron-shell/src/design-bench` is the window bootstrap,
+  `field-app/src/design-system` is the catalog page it mounts.
+- **Plugin system:** `plugin-sdk` (the R10 door; its `ui.ts` is the only shell-ui re-export
+  plugins may touch) · `plugin-runtime` · `tooling/plugin-build`; product plugins live at the
+  repo root. `tooling/dev-runner` is the `pnpm dev` supervisor; `apps/*` are packaging roots.
+
 ## Machine setup
 
 The repo builds standalone since 2026-07-28. `truffle-core` is an **exact crates-io pin**
