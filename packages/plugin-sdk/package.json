@@ -16,7 +16,7 @@
   "dependencies": {
     "@vibecook/ice": "*",
     "@vibefield/contracts": "workspace:*",
-    "@vibefield/shell-ui": "workspace:*"
+    "@vibefield/design-kit": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.0.0"

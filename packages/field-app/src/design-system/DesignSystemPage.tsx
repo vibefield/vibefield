@@ -1,14 +1,14 @@
 import {
-  ArtifactPanelPreview,
-  type ArtifactPanelPreviewState,
-} from "@vibefield/plugin-browser/design-system";
-import { WEATHER_GRADIENT } from "@vibefield/plugin-widgetlab";
-import {
   EmptyState,
   StatusDot,
   SegmentedControl as UiSegmentedControl,
   UnavailableState,
-} from "@vibefield/shell-ui";
+} from "@vibefield/design-kit";
+import {
+  ArtifactPanelPreview,
+  type ArtifactPanelPreviewState,
+} from "@vibefield/plugin-browser/design-system";
+import { WEATHER_GRADIENT } from "@vibefield/plugin-widgetlab";
 import {
   type CSSProperties,
   type ReactElement,
@@ -306,7 +306,7 @@ export function DesignSystemPage(): ReactElement {
           description="Neutral chrome gives content and honest state the room to speak. Every sample below switches through the same light and dark tokens as the desktop renderer."
         >
           <div className="vf-ds-grid vf-ds-grid-2">
-            <Specimen title="Surface palette" source="shell-ui/tokens.css">
+            <Specimen title="Surface palette" source="design-kit/tokens.css">
               <div className="vf-ds-swatches vf-ds-swatches-4">
                 {SURFACE_COLORS.map((color) => (
                   <ColorSwatch key={color.token} {...color} />
@@ -375,7 +375,7 @@ export function DesignSystemPage(): ReactElement {
             </Specimen>
           </div>
 
-          <Specimen title="Motion vocabulary" source="shell-ui/tokens.css">
+          <Specimen title="Motion vocabulary" source="design-kit/tokens.css">
             <div className="vf-ds-motion-grid">
               <MotionSample name="Island" token="--vf-ease-island" duration="600ms" />
               <MotionSample name="Lift" token="--vf-ease-lift" duration="180ms" />
@@ -824,7 +824,7 @@ function CardsSection(): ReactElement {
       title="Content has the color. Chrome has the physics."
       description="Committed widget surfaces survive both app themes. The shared rounded shell supplies ambient depth, lift, selection, and overlap feedback."
     >
-      <Specimen title="Content surfaces" source="shell-ui/CardShell.tsx">
+      <Specimen title="Content surfaces" source="design-kit/CardShell.tsx">
         <div className="vf-ds-widget-card-grid">
           <WidgetCard kind="weather" />
           <WidgetCard kind="terminal" />

@@ -1,6 +1,6 @@
+import { StatusDot } from "@vibefield/design-kit";
 import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
-import { StatusDot } from "@vibefield/shell-ui";
 import { type ReactElement, useSyncExternalStore } from "react";
 import { getBoardStatus, subscribeBoardStatus } from "../board-status";
 import { labelCls, SettingsSection } from "./settings-ui";

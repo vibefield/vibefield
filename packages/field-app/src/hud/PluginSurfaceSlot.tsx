@@ -1,4 +1,4 @@
-import { UnavailableState } from "@vibefield/shell-ui";
+import { UnavailableState } from "@vibefield/design-kit";
 import { Component, type ReactElement, type ReactNode, useSyncExternalStore } from "react";
 import { getRendererLogger } from "../logging";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";

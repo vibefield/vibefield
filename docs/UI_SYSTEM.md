@@ -5,10 +5,10 @@ code and how the design catalog stays identical to the product.
 
 ## The four layers
 
-1. **Tokens — `packages/shell-ui/src/tokens.css`**
+1. **Tokens — `packages/design-kit/src/tokens.css`**
    Owns palette, semantic text and chrome colors, radii, materials, shadows, and motion curves.
    Component styles consume tokens; they do not introduce a parallel palette or eyeballed shadow.
-2. **Primitives — `packages/shell-ui/src/primitives.tsx` and `primitives.css`**
+2. **Primitives — `packages/design-kit/src/primitives.tsx` and `primitives.css`**
    Owns reusable control and state anatomy: buttons, icon buttons, fields, switches, segmented
    controls, pills, empty/unavailable states, notices, placeholders, and status dots.
 3. **Product compositions — colocated component and CSS files**

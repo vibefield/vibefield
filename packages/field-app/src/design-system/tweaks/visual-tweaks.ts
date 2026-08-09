@@ -44,7 +44,7 @@ export function defaultVisualTweakValues(): VisualTweakValues {
         rimLight: "#808080",
         rimDark: "#FFFFFF",
       },
-      // Match shell-ui/tokens.css exactly. The retired in-app panel used a
+      // Match design-kit/tokens.css exactly. The retired in-app panel used a
       // second set of defaults, so development and packaged builds disagreed.
       glowAlpha: [0.25, 0.25],
       glowSize: [60, 60],

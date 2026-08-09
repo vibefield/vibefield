@@ -250,7 +250,7 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
 
 ## 8. Component canon
 
-- **Card anatomy** (CardShell, landing in `@vibefield/shell-ui` — 03·A D14): rounded-22
+- **Card anatomy** (CardShell, landing in `@vibefield/design-kit` — 03·A D14): rounded-22
   clip → content → glow layer → rim layer → ring layer. Chrome layers are
   `pointer-events: none` and ride the base transform. Header = eyebrow row (label left,
   meta right). Every widget ships a **compact face** for the zoom readability floor
@@ -397,7 +397,7 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
 
 ## 10. Implementation & governance
 
-- **Tokens live in `@vibefield/shell-ui`** (design kit, 03·A D14) as CSS vars under
+- **Tokens live in `@vibefield/design-kit`** (design kit, 03·A D14) as CSS vars under
   `--vf-*`, exposed to Tailwind v4 via `@theme`. Upstream vars bridge onto ours
   (`--ic-*` chrome knobs, `--mille-*` tree vars — design-00 §3.4); widgets consume
   tokens, never hex literals (exception: a widget's own committed content surface).

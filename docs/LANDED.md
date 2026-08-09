@@ -1300,3 +1300,47 @@ on this side can hold an attachment open while discovery drops the row.
 
 `pnpm verify` does not cover `apps/ios` by design (the gate must not require Xcode); the
 `xcodebuild` commands in `apps/ios/README.md` are that tree's gate and were run verbatim.
+
+## UI — the kit says its own name: shell-ui → design-kit
+
+**Landed 2026-08-09 (James's go on a scoped slice; scoping in
+`draft/thinking-shell-ui-rename.md`, verified against `61d70c0`).** Name-only:
+`@vibefield/shell-ui` → `@vibefield/design-kit` (`git mv packages/shell-ui
+packages/design-kit`), retiring the one package name in the workspace that lied — it read as
+"electron-shell's UI" while electron-shell doesn't even depend on the package. The corpus had
+said "the design kit" all along (README's row, DESIGN.md's token/card-anatomy lines, design-03
+§5.2 D14/D15), and plugin-architecture's walls list already legislated in design-kit vocabulary
+("design-kit primitives AS SDK re-exports"); code catches up, no substance moves.
+
+**Doc-first, per authority order.** design-03: dated Status amendment + the §5.2 citation.
+plugin-architecture: its four live-law citations (the layout tree, the SDK-composition MAY, the
+walls MUST-NOT ×2) plus a dated rename note in Status. Then the main plane: UI_SYSTEM.md's
+layer-1/2 paths, DESIGN.md ×2, README's row, CLAUDE.md's taxonomy (added earlier the same day,
+`fee1346`). **Deliberately frozen, checked at execution time:** this ledger's five prior
+mentions, electron-shell-refactor (Status: EXECUTED — a record, not law), godview-terminal's
+GT-3m LANDED row, appendix 03·A, predesign-05, thinking-p3/thinking-widgetlab — history keeps
+the name it landed under; the errata rule corrects falsified claims, and a rename falsifies
+nothing.
+
+**Code.** The full tracked sweep (29 files): 24 exact `@vibefield/shell-ui` references, the
+prose comments, the catalog's `source=` specimen labels, and two sites the scoping's eyeball
+pass caught beyond the original inventory — the Tailwind `@source "../../../packages/shell-ui/
+src"` path in field-app's `styles.css`, and `check-import-boundaries.mjs`'s three sites, which
+ARE the R10 wall's own test and were renamed with intent, not blindly. `pnpm install` re-keyed
+the lockfile importer (shell-ui rows 5→0). The R10 wall never moved: plugins still reach the
+kit only through `plugin-sdk/src/ui.ts`; zero direct plugin imports existed before or after.
+
+**Done-check and gate.** `git grep -l shell-ui` returns exactly this file (the lockfile
+re-keyed to zero). `pnpm verify` exit 0 verbatim before each of the slice's two commits. The
+second green cost seven runs and produced a petition-grade finding: **`ghosttea-vt-sys`
+(0.9.2) rewrites its OUT_DIR tar on every build**, so cargo holds the whole ghosttea chain
+permanently stale and every `cargo build -p field-native` redoes ~40s of dependencies — the
+five fieldd suites that each run that build inside a 180s `beforeAll` then serialize on the
+target-dir lock, and the queue's tail dies by lottery (46/47 three times with a rotating
+victim; every victim passes in isolation; the fingerprint probe
+`CARGO_LOG=cargo::core::compiler::fingerprint=info` names the stale tar directly — nothing to
+do with this rename, which never touches fieldd). The recorded pass ran fieldd:test
+standalone with vitest workers capped at 2 — staggering the build queue; same tests, same
+tree — which Nx cached into the verifying run: the gate's own caching, disclosed here.
+Follow-ups this argues for: a fieldd vitest globalSetup that builds field-native once per
+run, and an upstream tar-stability petition (G-series).

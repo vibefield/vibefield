@@ -1,4 +1,4 @@
-import { UnavailableState } from "@vibefield/shell-ui";
+import { UnavailableState } from "@vibefield/design-kit";
 import {
   Component,
   type ComponentType,

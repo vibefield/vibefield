@@ -147,7 +147,7 @@ const RULES = [
         modules: [
           "@vibecook/ice",
           "@vibefield/field-app",
-          "@vibefield/shell-ui",
+          "@vibefield/design-kit",
           "loro-crdt",
           "react",
           "react-dom",
@@ -249,7 +249,7 @@ const RULES = [
           "@vibefield/fieldd-client",
           "@vibefield/fieldd-supervisor",
           "@vibefield/plugin-runtime",
-          "@vibefield/shell-ui",
+          "@vibefield/design-kit",
           "electron",
           "ws",
         ],
@@ -641,7 +641,7 @@ function runSelfTest() {
     {
       id: "R10",
       file: "examples/plugins/widgetlab/src/uses-electron.ts",
-      body: 'import { app } from "electron";\nimport { CardShell } from "@vibefield/shell-ui";\n',
+      body: 'import { app } from "electron";\nimport { CardShell } from "@vibefield/design-kit";\n',
     },
     {
       id: "R11",

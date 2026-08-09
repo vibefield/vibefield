@@ -11,13 +11,13 @@ import {
   WireTo,
 } from "@vibecook/ice";
 import type { PluginManifestV1 } from "@vibefield/contracts";
+import { setPreviewBackground } from "@vibefield/design-kit";
 import { browserManifest, browserRenderer } from "@vibefield/plugin-browser";
 import { fieldToolsManifest, fieldToolsRenderer } from "@vibefield/plugin-field-tools";
 import { noteManifest, noteRenderer } from "@vibefield/plugin-note";
 import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
 import type { RendererPluginModule, WidgetBinding } from "@vibefield/plugin-sdk";
 import { widgetlabManifest, widgetlabRenderer } from "@vibefield/plugin-widgetlab";
-import { setPreviewBackground } from "@vibefield/shell-ui";
 import { getRendererLogger } from "./logging";
 import { buildWidgetType } from "./plugin-host/build-widget";
 import { failedFaceComponent } from "./plugin-host/faces";
@@ -93,7 +93,7 @@ export function buildRegistry(): PluginRegistry<WidgetType> {
     // honest failed faces; peers and the canvas are untouched.
     registerCanonical(registry, manifest, activation);
   }
-  // Spine wiring: manifest SafePreview data → shell-ui's silhouette registry
+  // Spine wiring: manifest SafePreview data → design-kit's silhouette registry
   // (folder minis + tray fallbacks read previewBackground — one source, P-3).
   for (const plugin of registry.all()) {
     for (const w of plugin.v1.contributes?.widgets ?? []) {

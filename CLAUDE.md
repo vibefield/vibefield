@@ -50,12 +50,12 @@ in the split.
   `fieldd-supervisor` (a library inside Electron main, never its own process) ·
   `fieldd-client` (the renderer/worker client).
 - **Renderer plane:** `field-app` — the browser-compatible product (`@vibefield/fieldd` is a
-  test-only devDependency; runtime deps stay browser-safe) · `shell-ui` — the DESIGN KIT
+  test-only devDependency; runtime deps stay browser-safe) · `design-kit` — the DESIGN KIT
   (tokens + primitives, shared with plugin-sdk), not electron-shell's UI · `electron-shell` —
   composition root (main/preload/renderer-host + the renderer vite build; no product logic).
   The UI Bench splits the same way: `electron-shell/src/design-bench` is the window bootstrap,
   `field-app/src/design-system` is the catalog page it mounts.
-- **Plugin system:** `plugin-sdk` (the R10 door; its `ui.ts` is the only shell-ui re-export
+- **Plugin system:** `plugin-sdk` (the R10 door; its `ui.ts` is the only design-kit re-export
   plugins may touch) · `plugin-runtime` · `tooling/plugin-build`; product plugins live at the
   repo root. `tooling/dev-runner` is the `pnpm dev` supervisor; `apps/*` are packaging roots.
 

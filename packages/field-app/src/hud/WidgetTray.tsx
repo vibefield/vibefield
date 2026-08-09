@@ -41,8 +41,8 @@ import {
   type WidgetType,
 } from "@vibecook/ice";
 import { useStageHold, WidgetPreview } from "@vibecook/ice/react";
+import { CARD_BG, CARD_RADIUS } from "@vibefield/design-kit";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
-import { CARD_BG, CARD_RADIUS } from "@vibefield/shell-ui";
 import {
   type ReactElement,
   type ReactNode,

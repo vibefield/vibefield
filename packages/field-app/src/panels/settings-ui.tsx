@@ -1,4 +1,4 @@
-import { UiPill, UiSwitch, uiButtonClass, uiFieldClass, uiLabelClass } from "@vibefield/shell-ui";
+import { UiPill, UiSwitch, uiButtonClass, uiFieldClass, uiLabelClass } from "@vibefield/design-kit";
 import type { ReactElement, ReactNode } from "react";
 
 /** Shared settings-surface vocabulary. These are app chrome, so hierarchy is

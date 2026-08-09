@@ -8,7 +8,7 @@
  * diving into the picture you were already looking at — and a 36px bottom
  * bar: accent folder icon, name, count pill. Minis are true card silhouettes
  * (2026-07-17, James): CARD_RADIUS scaled by the same affine, and each mini
- * wears its card's REAL background via shell-ui's previewBackground (manifest
+ * wears its card's REAL background via design-kit's previewBackground (manifest
  * `preview` data, spine-wired — the P-3 reshape of widgetlab's preview.ts).
  *
  * `container.accepts: ["widget"]` arms drop-to-consume + nested canvas, and

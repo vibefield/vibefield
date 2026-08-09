@@ -2,7 +2,7 @@
 
 /* The window IS the field (2026-07-21): no app bar, no pages — chrome floats
    over the canvas per DESIGN.md §1. Base styles only; every surface color
-   comes from the shell-ui tokens. Browser-gesture guards are the widgetlab
+   comes from the design-kit tokens. Browser-gesture guards are the widgetlab
    rules minus global user-select (which would kill text selection in the
    note editor — the engine prevents selection during its own gestures). */
 html,

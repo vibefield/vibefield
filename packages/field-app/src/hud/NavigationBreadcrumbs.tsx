@@ -29,7 +29,7 @@ import {
   PrefabId,
   widgets,
 } from "@vibecook/ice";
-import { UiIconButton } from "@vibefield/shell-ui";
+import { UiIconButton } from "@vibefield/design-kit";
 import { useCallback, useRef, useSyncExternalStore } from "react";
 import "./NavigationBreadcrumbs.css";
 

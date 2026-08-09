@@ -1,7 +1,7 @@
 import type { DeviceInfo, DocSyncDocState } from "@vibefield/contracts";
+import { StatusDot } from "@vibefield/design-kit";
 import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddClient, useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
-import { StatusDot } from "@vibefield/shell-ui";
 import type { ReactElement } from "react";
 import { useDocSyncStatuses } from "../doc-sync-store";
 import { getRendererLogger } from "../logging";

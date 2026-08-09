@@ -1,4 +1,4 @@
-import { uiIconButtonClass } from "@vibefield/shell-ui";
+import { uiIconButtonClass } from "@vibefield/design-kit";
 
 // v1 theme constants + hex plumbing (widgetlab App.tsx verbatim), extracted
 // from FieldView by 3b: BootRoot feeds the live token writes, CanvasStage

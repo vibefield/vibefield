@@ -1,4 +1,4 @@
-import { SegmentedControl } from "@vibefield/shell-ui";
+import { SegmentedControl } from "@vibefield/design-kit";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
 import type { AccentSlot } from "../account/AccentPicker";
 import type { LinkFace } from "../account/link";

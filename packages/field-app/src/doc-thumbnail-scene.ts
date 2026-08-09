@@ -13,7 +13,7 @@ import {
   WireTo,
   widgets,
 } from "@vibecook/ice";
-import { previewBackground } from "@vibefield/shell-ui";
+import { previewBackground } from "@vibefield/design-kit";
 
 // A thumbnail is a sanitized projection of durable canvas structure. It never
 // reads widget React faces or live bindings, so terminal/browser/agent runtime

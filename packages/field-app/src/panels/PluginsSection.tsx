@@ -1,6 +1,6 @@
 import type { PluginRecord, PluginSource, SettingsContribution } from "@vibefield/contracts";
+import { StatusDot } from "@vibefield/design-kit";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
-import { StatusDot } from "@vibefield/shell-ui";
 import { type ReactElement, useState } from "react";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import { PluginCapabilities } from "./PluginCapabilities";
