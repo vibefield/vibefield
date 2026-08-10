@@ -1545,3 +1545,51 @@ previous entry's saturated-machine story. **`smoke:canvas` is RED — and was re
 slice**: its bundle assert fails identically at clean-worktree rebuilds of `d36528a` /
 `fee1346` / HEAD `c33bcf4`, so the Electron leg never runs for anyone; control-proven
 unrelated to this consumption and recorded as its own dated debt row in `ROADMAP.md`.
+*(Fixed the next morning — see the entry below.)*
+
+## The splash split comes back — one class-name import had been loading the 3D world
+
+**LANDED 2026-08-10.** The `smoke:canvas` red recorded hours earlier turned out to be two
+defects wearing one failure, and only one of them was real.
+
+**The real one, and it was product-visible.** `field/theme-constants.ts` imported a single
+class-name string (`uiIconButtonClass`) from design-kit's BARREL. The barrel re-exports
+`GlLiftGroup`, whose `@vibecook/ice/r3f` import reaches three, and ICE reaches loro — so every
+module the barrel names had to be kept, and the whole 3D world landed in the eager graph. The
+boot path arrives there through `mount` → `BootRoot` → `OnboardingWizard` → `wizard-ui` →
+`ThemeToggleButton` → `theme-constants`, an edge that did not exist until **UA-3w's Setup
+Assistant (2026-08-06)** — which dates the regression precisely and explains why `d36528a`
+(2026-08-07) was already red. **Cold opens paid 5798.4 KB raw / 1902.6 KB gz for four days.
+Now 455.4 KB / 118.2 KB, world lazy.** That is not the ESR-cited 269.8 KB and this entry does
+not pretend otherwise: the Setup Assistant legitimately joined the boot path in between, so
+455.4 KB is the honest new baseline. With the assert passing, `smoke:canvas` ran its Electron
+leg for the first time in days — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4}`.
+
+**The fix, attributed by experiment rather than by argument.** `"sideEffects": ["*.css"]` on
+design-kit is load-bearing: every JS module there is pure and the CSS imports are the only
+side effects, so declaring it lets the bundler drop what the barrel merely re-exports. The
+three-way control was RUN: barrel import + no `sideEffects` reproduces the original failure
+byte-for-byte (same chunk name, same three messages) · barrel + `sideEffects` passes · leaf
+import + `sideEffects` passes. So the new `@vibefield/design-kit/primitives` deep export, which
+`theme-constants` now uses, is HARDENING — it keeps the boot path off the barrel rather than
+trusting tree-shaking — and the entry says which is which because the control said so.
+
+**The false one, corrected at its source.** The same failure listed both CSS canaries as
+missing, and the debt row written the night before repeated it as fact ("the utilities are
+absent from the built renderer"). They were never absent. `bundle-report.mjs` graded canaries
+against `[...chunks.keys()].find(n => n.endsWith(".css"))` — the first stylesheet by name —
+while the renderer emits one CSS per chunk; `.tabular-nums` and `.leading-none` were sitting in
+`main-*.css` throughout. The script now unions every built stylesheet. The correction is
+stamped in the ROADMAP row itself, not only here: a false alarm beside a real one is how a
+tripwire loses the authority it needs on the day it is right.
+
+**The structural half — why this survived four days.** The assert lived only in
+`smoke:canvas`, which no routine gate runs, so `pnpm verify` exited 0 at `d36528a` and again
+during the ice-0.4.0 consumption while the splash bundle was 21× its budget. `pnpm
+bundle:assert` (renderer build + assert) is now wired into `pnpm verify` between clippy and
+the test suites. A static import wall could not have caught this — the offending file is not
+under `boot/`, and the defect is reachability, not a forbidden import — so the gate needs the
+built bundle, and now has it.
+
+**Gate: `pnpm verify` VERBATIM exit 0**, with `bundle:assert` inside it, plus `smoke:canvas`
+green end to end.

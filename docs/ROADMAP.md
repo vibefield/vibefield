@@ -229,22 +229,35 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
 ## Open debts (dated, sourced)
 
-- **`smoke:canvas` is RED on committed main — since 2026-08-07 at the latest, and `pnpm verify`
-  cannot see it.** The bundle assert (the ESR splash-split + CSS-canary tripwire) fails at
-  clean-worktree rebuilds of `d36528a`, `fee1346`, and HEAD `c33bcf4` with one failure set:
-  three + loro wasm ride the INITIAL graph ("no lazy chunk carries the workspace — the split
-  did not happen") and BOTH CSS canaries are missing (`.tabular-nums` field-app,
-  `.leading-none` plugins — the `0ccf7d1` silent-CSS class the tripwire was built for).
-  Control-proven UNRELATED to the ice-0.4.0 consumption and the in-flight mille/G12 work
-  (identical red on the clean tree). The failing chunk is NAMED `frame-stats` but `src/perf/*`
-  imports zero ICE — the name is a Rollup naming artifact; the real boot→three/loro edge is
-  undetermined (`src/boot/` imports no design-kit either). A commit-level bisect stalled on
-  era-installs (the pnpm store rejected old lockfiles tonight; one piped `| tail` masked such
-  a failure into a false P7-red, caught by identical-chunk-hash forensics — P7's gate record
-  stays the last VALID green citation). Named next steps: emit the renderer graph (vite
-  metafile / visualizer) to name the boot edge, then re-run the bisect where era-installs
-  work. Standing hazard, recorded plainly: the tripwire lives only in `smoke:canvas`, which no
-  routine gate runs — `pnpm verify` exited 0 at `d36528a` while this was red (2026-08-10).
+- ~~**`smoke:canvas` is RED on committed main**~~ — **FIXED 2026-08-10, and the tripwire now
+  lives inside `pnpm verify`.** The eager-graph half was REAL and product-visible: the boot
+  path reached `@vibefield/design-kit`'s BARREL (`mount` → `BootRoot` → `OnboardingWizard` →
+  `wizard-ui` → `ThemeToggleButton` → `field/theme-constants.ts`, which imported one class-name
+  string from it), the barrel re-exports `GlLiftGroup`, and its `@vibecook/ice/r3f` import
+  dragged three + loro into the splash bundle. The edge arrived with **UA-3w's Setup Assistant
+  (2026-08-06)**, which dates the regression and matches the observed reds. **Cold opens paid
+  5798.4 KB raw / 1902.6 KB gz for four days; now 455.4 KB / 118.2 KB with the world lazy**
+  (not the ESR-cited 269.8 KB — the Setup Assistant legitimately joined the boot path since,
+  and that is the honest new baseline). `smoke:canvas` then ran its Electron leg for the first
+  time in days: `SMOKE_CANVAS {"widgetTypes":21,"plugins":4}`.
+  **The load-bearing fix is `"sideEffects": ["*.css"]` on design-kit** (every JS module there
+  is pure; the CSS imports are the only side effects — without it a bundler must keep every
+  module the barrel re-exports). Three-way control, run rather than reasoned: barrel import +
+  no `sideEffects` REPRODUCES the exact failure (same chunk, same three messages) · barrel +
+  `sideEffects` passes · leaf import + `sideEffects` passes. The leaf import
+  (`@vibefield/design-kit/primitives`, a new deep export) is hardening, not the cure — it keeps
+  the boot path off the barrel instead of relying on tree-shaking.
+  **CORRECTION AT SOURCE to this row's own earlier text (2026-08-09):** it claimed both CSS
+  canaries were missing, and I repeated to James that the utilities were "actually absent from
+  the built renderer." **That was false.** `.tabular-nums` and `.leading-none` were both in
+  `main-*.css` the whole time; `bundle-report.mjs` graded canaries against
+  `[...chunks.keys()].find(n => n.endsWith(".css"))` — the FIRST stylesheet by name — and the
+  renderer emits one per chunk, so it read the wrong file. The script now checks the union of
+  every built stylesheet. A false alarm standing beside a real one is how a tripwire loses its
+  authority; the check was wrong, the CSS never was.
+  **The standing hazard is closed:** `pnpm bundle:assert` (renderer build + assert) is wired
+  into `pnpm verify` between clippy and the test suites, so this class can no longer regress
+  behind a green gate — the reason it survived four days and two ledger entries (2026-08-10).
 - **Install-a-widget-plugin does not exist — the renderer half of plugin distribution is dead
   code (2026-08-09, onboarding review).** No plugin builds: no `dist/` exists anywhere, no
   plugin has a build script (`gen:manifest`/`test`/`typecheck` only), and every widget-bearing

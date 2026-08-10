@@ -1,4 +1,9 @@
-import { uiIconButtonClass } from "@vibefield/design-kit";
+// Leaf import, NOT the barrel: this module is reachable from the boot path
+// (wizard-ui → ThemeToggleButton → here), and the barrel re-exports GlLiftGroup,
+// whose @vibecook/ice/r3f import pulls three + loro into the eager graph — the
+// ESR splash split (269.8 KB initial) died that way at UA-3w. The bundle assert
+// in smoke:canvas is the tripwire; keep class-name imports on leaves.
+import { uiIconButtonClass } from "@vibefield/design-kit/primitives";
 
 // v1 theme constants + hex plumbing (widgetlab App.tsx verbatim), extracted
 // from FieldView by 3b: BootRoot feeds the live token writes, CanvasStage
