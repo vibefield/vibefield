@@ -124,6 +124,16 @@
   --vf-radius-sheet: 40px;
   --vf-radius-control: 9px;
 
+  /* §8 The file tree. Geometry only — every COLOR the tree wears is one of
+     the tokens above. The theme itself ships upstream
+     (`@vibecook/mille-ui/theme/vibefield.css`) and reads these by name with
+     its own published fallbacks, so the numbers stay ours: change one here
+     and the tree follows without a mille release. */
+  --vf-tree-row-height: 26px;
+  --vf-tree-row-height-compact: 22px;
+  --vf-tree-indent: 14px;
+  --vf-tree-gutter: 8px;
+
   /* §5 canonical material recipes. Keeping the complete shadow in a token is
      what lets a side panel in a plugin and a side panel in the shell remain the
      same physical material. */

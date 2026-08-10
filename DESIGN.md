@@ -381,6 +381,60 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
   declares none (device/secret keys are never on the stack), and the honest outcome when
   an action no-ops ("nothing to undo", "history horizon reached"). No optimistic echo — an
   applied undo re-gets every row from the daemon.
+- **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
+  `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
+  the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
+  §0: "the drama stays in what the agents said, never in the chrome"). `@vibecook/mille-ui`
+  ships its own GitHub-derived palette; **none of it reaches a VibeField pixel.**
+  **The theme lives upstream, in mille** — `@vibecook/mille-ui/theme/vibefield.css`, mounted
+  as `data-mille-theme="vibefield"` (2026-08-09; it sits beside mille's own `minimal.css`,
+  which is the established shape for an app-specific theme there). It is self-contained so it
+  can ship on npm, and every value additionally reads its `--vf-*` token first
+  (`var(--vf-fill, …)`), so THIS file still governs: move a token in `tokens.css` and the tree
+  moves with it, with no mille release and no second palette. Geometry rides the same bridge —
+  the `--vf-tree-*` constants below are what the theme reads for row height, indent and gutter.
+  **Geometry:** `--vf-tree-row-height` `26px` (`--vf-tree-row-height-compact` `22px` for long
+  rails), `--vf-tree-indent` `14px`, `--vf-tree-gutter` `8px`, and rows rounded to
+  `--vf-radius-control` *inside* that gutter — an iOS list inset, not an IDE gutter. Name is
+  **12px medium in the sans stack**, matching the projects-rail row it sits beside; a file
+  NAME is a label, and only full paths and ids go mono (§3).
+  **The icon set is ours and it is deliberately small** (`vibefieldIconTheme`, from
+  `@vibecook/mille-ui/icons/vibefield`): eleven monoline glyphs on a 16-unit grid, `fill: none` +
+  `stroke: currentColor`, so every glyph inherits the row's ramp and carries no color of its
+  own — a file's TYPE is not a §2.5 state, and a colored icon pack is a violation on sight.
+  The glyph renders at `1em` of a 12px row, and §8's own readability floor already refuses
+  detail at that scale ("no micro-text"), so the set is **category-first and the mark IS the
+  icon** — no page silhouette competing for the same twelve pixels. The page shape is kept
+  for the two things that really are pages: prose, and the unknown file. Categories are the
+  distinctions that change how you treat a row in a reading rail — code · style · prose ·
+  config · media · a lockfile you must not hand-edit (EL8) · a secrets file (EL7) · git's own
+  plumbing — never which language the code is written in. **Named folders are declined** for
+  the same reason: a mark inside a folder at 12px is the micro-text again, and a derived
+  directory already arrives ignored and wearing the muted ramp, which says "not your code"
+  more legibly than any glyph this size. Per-language glyphs stay one map away if the rail
+  ever proves otherwise.
+  **Location vs interaction is the tree's whole state grammar** — four-views §4 settles it:
+  *"the current project wears `--vf-fill`, not the select ring — selection ring is
+  interaction, this is location."* So: the **active** entry (the file actually open) wears
+  `--vf-fill` · **selected** rows wear the hover-step fill one notch up from hover · the
+  **focused** row alone wears §7's `1.5px` inside `--vf-select` ring. One ring at a time —
+  a multi-selection is N fills and one ring, never N rings (§7's sole/multi law, applied to
+  a list that has no union box). Indent guides are `--vf-hairline-strong`, solid; the
+  archival dashed rail belongs to mille's minimal theme, not to us.
+  **Decorations carry §2.5's meanings, not git's colors:** added/untracked green ·
+  deleted red · modified/renamed **cyan** (a dirty file is a live fact about the tree, and
+  orange must stay scarce enough to still mean *act*) · conflict orange (a human must
+  resolve it) · ignored the muted ramp at no hue. Diagnostics: error red · warning orange ·
+  info cyan · hint muted. Tests follow the agent-state mapping literally (§2.5: `working`
+  green, `done` muted): running green · failed red · errored orange · **passed and skipped
+  muted** — a passing test is not news, and quiet is the honesty. Loading is colorless (the
+  veil's rule: loading is not a §2.5 state). An unavailable root keeps §2.5's `unknown`
+  treatment — muted italic, never an error, because a disconnected folder has not failed.
+  A dragged row takes the card's lift opacity (`0.75`, §7 — every file row is a drag source
+  for file chips); a drop-into-folder target takes the `--vf-select` ring, and a
+  between-siblings drop a 2px `--vf-select` line. mille ships its context menu **unstyled**,
+  so the bridge dresses that one part in island material (§5) — the menu is chrome floating
+  over the reader, and the only place in the tree where a material appears at all.
 
 ---
 
