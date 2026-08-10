@@ -15,6 +15,7 @@ import { useDocSyncFeed } from "./doc-sync-store";
 import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { defaultCanvasGridConfig } from "./field/canvas-appearance";
+import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import { getRendererLogger } from "./logging";
@@ -118,6 +119,11 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
 
   const effectiveGrid = useMemo(() => defaultCanvasGridConfig(dark), [dark]);
 
+  // I1 (ice 0.4.0): the C key's "selection decides" behavior rides the engine
+  // keymap's own override surface — stable entries; runs read the Settings
+  // gate through a ref (field-keymap.ts).
+  const keymapOverrides = useFieldKeymapOverrides(chrome.showSettings);
+
   return (
     <div className="field-wrap" data-doc-transition={hudMotion}>
       {/* The recede (reference design): the canvas eases to 0.98 while the
@@ -134,6 +140,7 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
         <CanvasStage
           ce={ce}
           grid={effectiveGrid}
+          keymapOverrides={keymapOverrides}
           ecsOpen={chrome.showEcs}
           devtoolsRef={devtoolsRef}
           disposeRef={stageDisposeRef}

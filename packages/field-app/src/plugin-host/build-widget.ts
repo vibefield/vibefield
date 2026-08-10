@@ -2,6 +2,7 @@ import { defineWidget, p, type WidgetType } from "@vibecook/ice";
 import type { PropSpec, WidgetContribution } from "@vibefield/contracts";
 import type { WidgetBinding } from "@vibefield/plugin-sdk";
 import { withPluginFace } from "./faces";
+import { TYPE_RENAMES } from "./type-renames";
 
 // §12.2 — the HOST builds every prefab from manifest data; plugins export
 // components, never call defineWidget (thinking-p1-canonical-manifests.md).
@@ -38,6 +39,21 @@ function buildProp(type: string, name: string, spec: PropSpec) {
       throw new Error(`widget ${type} prop ${name}: kind ${spec.kind} has no engine constructor`);
   }
 }
+
+// I5 consumed (ice 0.4.0, design-008): the C2 rename history projects into
+// `renamedFrom` declarations, and the ENGINE folds pre-rename docs in-band —
+// the offline byte surgery is retired. Renames are HOST history, not manifest
+// data: the old ids predate plugins authoring against the SDK at all.
+// `atVersion` is omitted — every C2-era pack wrote version 1, the default.
+const RENAMED_FROM: Readonly<Record<string, readonly { type: string }[]>> = (() => {
+  const inverted: Record<string, { type: string }[]> = {};
+  for (const [oldType, newType] of Object.entries(TYPE_RENAMES)) {
+    const olds = inverted[newType] ?? [];
+    olds.push({ type: oldType });
+    inverted[newType] = olds;
+  }
+  return inverted;
+})();
 
 // defineWidget registers into ICE's process-global catalog and THROWS on a
 // duplicate type. The retired hand calls ran once per process as import side
@@ -87,6 +103,7 @@ export function buildWidgetType(
     ...(w.container !== undefined ? { container: w.container } : {}),
     ...(w.provides !== undefined ? { provides: w.provides } : {}),
     ...(w.ports !== undefined ? { ports: w.ports } : {}),
+    ...(RENAMED_FROM[w.type] !== undefined ? { renamedFrom: RENAMED_FROM[w.type] } : {}),
   };
   // Boundary cast, attested: zod `.optional()` infers `| undefined` on every
   // optional under exactOptionalPropertyTypes, which WidgetDef's optionals

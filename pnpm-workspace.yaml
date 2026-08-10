@@ -38,7 +38,12 @@ overrides:
   # parks the engine outright (no step, no reflectors, no rAF) where a stage hold
   # only quiets the GL compositor over a still-stepping world. Godview covers the
   # window, so the freeze is what its overlay wanted all along.
-  "@vibecook/ice": 0.3.0
+  # 2026-08-09 bumped 0.3.0 → 0.4.0 — petitions I1/I4/I5 land upstream: the
+  # design-007 focus model (keyboard claim + wheel cede + keymapOverrides) and
+  # the design-008 in-band prefab rename migration. Consumption retires the
+  # ChromeLayer C-key capture trap, note's wheel stopPropagation pair, and the
+  # C2 offline rename surgery (renamedFrom declarations replace it).
+  "@vibecook/ice": 0.4.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -93,7 +98,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.11.0'
-  - '@vibecook/ice@0.3.0'
+  - '@vibecook/ice@0.4.0'
   - '@vibecook/ghosttea-client@0.9.3'
   - '@vibecook/ghosttea-protocol@0.9.3'
   - '@vibecook/chopsticks-adapter-acp@0.1.4'

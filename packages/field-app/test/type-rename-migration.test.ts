@@ -2,13 +2,18 @@ import { decodeEnvelope, defineQuery, encodeEnvelope, PrefabId } from "@vibecook
 import { LoroDoc, LoroMap } from "loro-crdt";
 import { describe, expect, it } from "vitest";
 import { buildRegistry, createFieldEngine } from "../src/field-engine";
-import { migrateTypeRenames } from "../src/plugin-host/migrate-type-renames";
+import { buildGhostWidgetTypes } from "../src/plugin-host/ghost-stubs";
 
-// C2 — the durable-ID migration, proven against a hand-built PRE-RENAME board
-// (the encoding-probe's empirically verified shapes: comp:PrefabId values,
-// comp:<type>:<group> cell names, engine.pack markers, the ICE1 envelope's
-// prefabVersions). The migrated bytes must open under the CURRENT schema —
-// which registers only ratified names — with values and relations intact.
+// C2 renames, folded IN-BAND (ice 0.4.0 design-008 — petition I5 consumed):
+// the host's TYPE_RENAMES history projects into `renamedFrom` declarations
+// (build-widget), so a hand-built PRE-RENAME board — the encoding probe's
+// empirically verified shapes: comp:PrefabId values, comp:<type>:<group> cell
+// names, engine.pack markers, the envelope's prefabVersions — must open
+// through the ENGINE's own rename runner: writable (the version gate resolves
+// old ids as renames instead of bricking readOnly), ratified types projected,
+// no offline surgery anywhere. The wrapper module this file used to pin
+// (migrate-type-renames.ts) is deleted; these tests pin the WIRING that
+// replaced it.
 
 const OLD_NOTE = "note.card";
 const OLD_FOLDER = "field.folder";
@@ -37,46 +42,38 @@ function oldShapeBoard(): Uint8Array {
   );
 }
 
-function dumpJson(bytes: Uint8Array): string {
-  const { payload } = decodeEnvelope(bytes);
-  const doc = new LoroDoc();
-  doc.import(payload);
-  return JSON.stringify(doc.toJSON());
+function collectTypes(ce: ReturnType<typeof createFieldEngine>): Set<string> {
+  const idQ = defineQuery([PrefabId]);
+  const types = new Set<string>();
+  ce.world.query(idQ).each((b) => {
+    for (const r of b) {
+      const id = ce.world.get(b.entity(r), PrefabId)?.id;
+      if (typeof id === "string") types.add(id);
+    }
+  });
+  return types;
 }
 
-describe("migrateTypeRenames (C2)", () => {
-  it("rewrites cells, markers, and the envelope — then opens under the ratified schema", () => {
-    const migration = migrateTypeRenames(oldShapeBoard(), []);
-    expect(migration.migrated).toBe(true);
-    // 2 PrefabId values + 2 comp cells + 2 pack markers
-    expect(migration.renamedCells).toBe(6);
-    const json = dumpJson(migration.bytes);
-    expect(json.includes(OLD_NOTE)).toBe(false);
-    expect(json.includes(OLD_FOLDER)).toBe(false);
-    expect(decodeEnvelope(migration.bytes).header.prefabVersions).toEqual({
-      "vibefield.note": 1,
-      "vibefield.field-tools.folder": 1,
-    });
-
+describe("type renames fold in-band (I5 consumed, ice 0.4.0)", () => {
+  it("opens a pre-rename board WRITABLE with ratified types projected", () => {
     const ce = createFieldEngine(buildRegistry());
-    const res = ce.docs.open(migration.bytes);
+    const res = ce.docs.open(oldShapeBoard());
     expect(res.ok, res.ok ? "" : `open failed: ${(res as { reason?: string }).reason}`).toBe(true);
+    if (!res.ok) return;
+    // The 0.4.0 version gate resolves the old ids through the rename registry
+    // ("migrate", never readOnly) — the assert that would have failed on 0.3.0
+    // without the offline surgery.
+    expect(res.session.readOnly).toBe(false);
     ce.world.sync();
-    const idQ = defineQuery([PrefabId]);
-    const types = new Set<string>();
-    ce.world.query(idQ).each((b) => {
-      for (const r of b) {
-        const id = ce.world.get(b.entity(r), PrefabId)?.id;
-        if (typeof id === "string") types.add(id);
-      }
-    });
+    const types = collectTypes(ce);
     expect(types.has("vibefield.note")).toBe(true);
     expect(types.has("vibefield.field-tools.folder")).toBe(true);
     expect(types.has(OLD_NOTE)).toBe(false);
+    expect(types.has(OLD_FOLDER)).toBe(false);
     ce.docs.close();
   });
 
-  it("folds the journal BEFORE renaming — a stale update cannot resurrect old cells", () => {
+  it("accepts a pre-rename journal entry arriving after open", () => {
     const base = oldShapeBoard();
     // fork the doc, edit the OLD-named cell, export just that op as an update
     const { payload } = decodeEnvelope(base);
@@ -89,17 +86,25 @@ describe("migrateTypeRenames (C2)", () => {
     fork.commit();
     const update = fork.export({ mode: "update", from });
 
-    const migration = migrateTypeRenames(base, [update]);
-    expect(migration.migrated).toBe(true);
-    const json = dumpJson(migration.bytes);
-    expect(json.includes(OLD_NOTE)).toBe(false); // no zombie cell
-    expect(json.includes("edited later")).toBe(true); // the journal's edit survived the fold
+    const ce = createFieldEngine(buildRegistry());
+    const res = ce.docs.open(base);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // The old-named delivery is the zombie sweep's case (design-008): it must
+    // apply without throwing, and the ratified projection must stand.
+    res.session.applyRemote(update);
+    ce.world.sync();
+    const types = collectTypes(ce);
+    expect(types.has("vibefield.note")).toBe(true);
+    ce.docs.close();
   });
 
-  it("is idempotent and a no-op on ratified boards (bytes returned by reference)", () => {
-    const once = migrateTypeRenames(oldShapeBoard(), []);
-    const twice = migrateTypeRenames(once.bytes, []);
-    expect(twice.migrated).toBe(false);
-    expect(twice.bytes).toBe(once.bytes);
+  it("never ghost-stubs an old id whose successor is registered; truly absent ids still stub", () => {
+    const registered = new Set(["vibefield.note"]);
+    // A pre-rename envelope names note.card until it self-heals — the rename
+    // runner owns it; a stub would collide with vibefield.note's renamedFrom.
+    expect(buildGhostWidgetTypes({ [OLD_NOTE]: 1 }, registered)).toHaveLength(0);
+    const stubs = buildGhostWidgetTypes({ "acme.vanished.widget": 1 }, registered);
+    expect(stubs).toHaveLength(1);
   });
 });

@@ -67,7 +67,7 @@ The repo builds standalone since 2026-07-28. `truffle-core` is an **exact crates
 again (a new petition window), re-add the `[patch]` and restore the sibling-pin machinery from
 git history; never leave a path patch unpinned.
 
-`@vibecook/ice` is an **exact registry pin** (`0.3.0`, declared once in the pnpm-workspace.yaml
+`@vibecook/ice` is an **exact registry pin** (`0.4.0`, declared once in the pnpm-workspace.yaml
 overrides — packages ask for `"*"`). It stopped being a `file:` sibling on 2026-07-25: npm ships
 its dist, so the B2 stale-dist class is gone and upgrading is a version edit, not a SHA chase.
 To co-develop ice against this repo, link it locally and never commit that:

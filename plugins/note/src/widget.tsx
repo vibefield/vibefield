@@ -11,8 +11,12 @@ import "./note.css";
 // - the textarea is a native editable → the canvas keymap ignores keys and the
 //   pointer adapter skips select/drag on it automatically;
 // - dblclick-to-edit stops propagation so the gesture never becomes a canvas fact;
-// - wheel inside scrollable text stops propagation (the one gap ICE leaves to
-//   widgets today — I4 will make it a predicate).
+// - wheel needs NOTHING since ice 0.4.0 (I4 consumed): the editor textarea is
+//   an editable scroller, so the adapter's wheel cede scrolls it natively and
+//   falls through to canvas zoom at the bounds. The read-only body is plain
+//   content under the same law — wheel over it belongs to the canvas (marking
+//   it data-canvas-interactive would also opt its pointerdowns out of card
+//   drag, which is the note's primary gesture).
 // Durable text commits ONCE on blur (undo-stack hygiene), never per keystroke.
 
 const TYPE = "vibefield.note";
@@ -57,7 +61,6 @@ function NoteView({ entity, world }: WidgetComponentProps): ReactElement {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey))
                 (e.target as HTMLTextAreaElement).blur();
             }}
-            onWheel={(e) => e.stopPropagation()}
             autoFocus
             spellCheck={false}
             className="vf-note-card__editor"
@@ -69,7 +72,6 @@ function NoteView({ entity, world }: WidgetComponentProps): ReactElement {
               setDraft(text);
               setEditing(true);
             }}
-            onWheel={(e) => e.stopPropagation()}
             className="vf-note-card__body"
           >
             {text.length > 0 ? (

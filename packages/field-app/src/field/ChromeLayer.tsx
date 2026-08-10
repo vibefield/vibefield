@@ -1,4 +1,4 @@
-import { type CanvasEngine, selectedEntities, type WidgetType } from "@vibecook/ice";
+import type { CanvasEngine, WidgetType } from "@vibecook/ice";
 import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
 import type { DesktopShellState } from "@vibefield/contracts";
@@ -42,7 +42,7 @@ import { fabCls } from "./theme-constants";
 // §13.1 windowId: the renderer has no per-window identity yet (v1 is one field
 // window). A stable constant names it honestly; the id becomes real when
 // multi-window lands (recorded delta).
-const FIELD_WINDOW_ID = "field";
+export const FIELD_WINDOW_ID = "field";
 
 /** Chrome-only state shared with FieldView's sheet/recede choreography. */
 export interface ChromeState {
@@ -225,14 +225,12 @@ export function ChromeLayer({
 
   // Keyboard shortcuts. <InfiniteCanvas> already installs the engine default
   // keymap (⌘Z undo, ⇧⌘Z redo, ⌫ delete, Esc cancel, v/h/c tools — all
-  // skipping editable targets). This handler adds ONLY the two pieces the
+  // skipping editable targets), and since ice 0.4.0 the C-with-selection
+  // behavior rides the keymap's OWN override surface (field-keymap.ts, wired
+  // through CanvasStage) — the capture-phase stopPropagation trap this layer
+  // carried retired with petition I1. This handler adds ONLY the one piece the
   // default keymap lacks (widgetlab App law — a duplicate listener would fire
-  // engine actions twice):
-  //  - Esc exits the current container when nested;
-  //  - C with a SELECTION wraps it in a comment (capture phase +
-  //    stopPropagation, so the keymap's connect-tool binding never sees it;
-  //    with no selection C falls through and stays the tool shortcut — the
-  //    widgetlab C/connect collision resolved by "selection decides").
+  // engine actions twice): Esc exits the current container when nested.
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null): boolean => {
       if (!(target instanceof HTMLElement)) return false;
@@ -247,30 +245,9 @@ export function ChromeLayer({
         ce.ops.exitContainer();
       }
     };
-    const onKeyDownCapture = (e: KeyboardEvent) => {
-      if (showSettings) return;
-      if ((e.key !== "c" && e.key !== "C") || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isEditableTarget(e.target)) return;
-      const sel = selectedEntities(ce.world);
-      if (sel.length === 0) return; // fall through → connect tool
-      e.preventDefault();
-      e.stopPropagation();
-      // §13 — the C-key is a canvas-context invocation of field-tools' declared
-      // command through the SPINE registry, not a direct plugin import (R10 — the
-      // field-app must import nothing from plugins/*). The registry carries
-      // provenance and the {source:"canvas-context"} invocation.
-      void commandRegistry.invoke("vibefield.field-tools.comment-around-selection", undefined, {
-        source: "canvas-context",
-        windowId: FIELD_WINDOW_ID,
-        selection: sel.map((en) => String(en)),
-        userGesture: true,
-      });
-    };
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keydown", onKeyDownCapture, true);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keydown", onKeyDownCapture, true);
     };
   }, [ce, showSettings]);
 

@@ -229,6 +229,48 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
 ## Open debts (dated, sourced)
 
+- **`smoke:canvas` is RED on committed main — since 2026-08-07 at the latest, and `pnpm verify`
+  cannot see it.** The bundle assert (the ESR splash-split + CSS-canary tripwire) fails at
+  clean-worktree rebuilds of `d36528a`, `fee1346`, and HEAD `c33bcf4` with one failure set:
+  three + loro wasm ride the INITIAL graph ("no lazy chunk carries the workspace — the split
+  did not happen") and BOTH CSS canaries are missing (`.tabular-nums` field-app,
+  `.leading-none` plugins — the `0ccf7d1` silent-CSS class the tripwire was built for).
+  Control-proven UNRELATED to the ice-0.4.0 consumption and the in-flight mille/G12 work
+  (identical red on the clean tree). The failing chunk is NAMED `frame-stats` but `src/perf/*`
+  imports zero ICE — the name is a Rollup naming artifact; the real boot→three/loro edge is
+  undetermined (`src/boot/` imports no design-kit either). A commit-level bisect stalled on
+  era-installs (the pnpm store rejected old lockfiles tonight; one piped `| tail` masked such
+  a failure into a false P7-red, caught by identical-chunk-hash forensics — P7's gate record
+  stays the last VALID green citation). Named next steps: emit the renderer graph (vite
+  metafile / visualizer) to name the boot edge, then re-run the bisect where era-installs
+  work. Standing hazard, recorded plainly: the tripwire lives only in `smoke:canvas`, which no
+  routine gate runs — `pnpm verify` exited 0 at `d36528a` while this was red (2026-08-10).
+- **Install-a-widget-plugin does not exist — the renderer half of plugin distribution is dead
+  code (2026-08-09, onboarding review).** No plugin builds: no `dist/` exists anywhere, no
+  plugin has a build script (`gen:manifest`/`test`/`typecheck` only), and every widget-bearing
+  manifest's `entries.renderer: "./dist/renderer.js"` names a file nothing produces and nothing
+  loads — the renderer imports plugins from source through the static `BUNDLED` list
+  (`field-engine.ts:70-76`, whose own comment names the §19.2 staged import-map loader as the
+  replacement), and async `activate` is refused (renderer-harness). `entries.service` is real
+  by contrast: the worker host imports kv-service's checked-in `service.js` off disk. So the P7
+  chain can deliver a signed `.vfplugin` end-to-end whose *services* run but whose *widgets*
+  cannot load. Seam set: real plugin builds + the staged loader; WP8 covers only the packaged
+  staging half and was already recorded (2026-08-09).
+- **The §5.4 authoring kit was never scheduled** — `plugin-cli`, `create-plugin`, and
+  `apps/plugin-playground` are spec-named (the ten-minute bar) and absent from the tree; only
+  `plugin-build` exists. The §21 ladder completed without an authoring rung, so this appeared
+  on no list until now. It becomes critical path the moment anyone but this repo authors a
+  widget — including the four-views Widget Builder character (2026-08-09).
+- **`PluginWidgetProps` (03·A / plugin spec §12.1) is unimplemented — widgets ship on ICE's raw
+  contract** through the curated door, which says so itself (`plugin-sdk/src/canvas.ts:6-8`:
+  "The deep target (PluginWidgetProps — 03·A) replaces most of this"); §12.1's register-time
+  invariants (contiguous migration chains) are unenforced, and plugin code stays coupled to ICE
+  vocabulary — the widgetlab-port V-4 `ValueOf<>` papercut reaches plugins through exactly this
+  coupling. PA-27 retires it together with the already-recorded `ctx.canvas` engine stopgap
+  (P6 delta) (2026-08-09).
+- **`ctx.pool`** — spec'd (plugin spec §12.6 / altitude A3), absent from the SDK by design
+  ("pool arrives with its runtime", `plugin-sdk/src/index.ts:11-12`); with terminals
+  spine-owned (GT), the first real attachment kind now rides AR (2026-08-09).
 - **THE LEDGER LOST TWO WHOLE TRACKS (2026-08-07) — the discipline's own worst failure to
   date, now repaired.** IOS-3 (six commits) and the UI system (ten commits) both landed and
   **neither had a single entry in `LANDED.md`, a mention in this file, or a row in
@@ -351,8 +393,20 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 - **Per-section undo, ⌘Z, timeline** — D29′ residue (P7, 2026-07-24).
 - **Sideload** — post first-party publishing (P7).
 - **R2 `host:"process"`** — the plugin process-isolation rung (P4/P6 deferral).
-- **I1/I4 ICE input arbitration** — implementation gated on James reading ICE `design-007`.
-- **I5 ICE in-band rename migration** — needed before replica-everywhere (C2, 2026-07-23).
+- **I1/I4/I5 CONSUMED — ice 0.4.0 in-tree the night of the release (2026-08-09; `pnpm verify`
+  VERBATIM exit 0, one process, on the combined working tree).** The bump and the whole
+  retirement sweep in one slice: the ChromeLayer C-key capture trap → two `keymapOverrides`
+  entries with exact parity (selection decides; Settings suppresses the comment, never the
+  tool; ⇧C comment-only), still invoking field-tools' declared command through the SPINE
+  registry (R10); note's two `onWheel` stops deleted — the editor rides the editable cede,
+  and the read-only body's wheel now belongs to the canvas, a RECORDED behavior delta for
+  James's eyeball (revert = one `data-canvas-interactive`, at the cost of body-drag);
+  `migrate-type-renames.ts` DELETED — build-widget projects TYPE_RENAMES into `renamedFrom`
+  and the engine folds pre-rename boards in-band, writable through the version gate
+  (test-pinned on the probe-era fixture; the C2 old-board eyeball retires with the surgery).
+  Found while consuming, fixed and pinned: ghost stubs would have registered a pre-rename
+  envelope's OLD ids as live types, colliding with their successors' `renamedFrom` claims —
+  a renamed id whose successor is registered is now covered, never stubbed (2026-08-09).
 - **`terminal.list` lags for readers** — GT-1 fixed create, not list; assertions poll past
   the window (GT-2 finding 6).
 - **Terminal unit health self-report** — the unit publishes `starting / "binding terminal
@@ -482,9 +536,12 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
 ghosttea `=0.9.2` + **`ghosttea-truffle =0.9.2`** on all planes (GT-4, 2026-08-06; preflight
-pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata 0.10.0 (via ICE) ·
-`@vibecook/ice` **0.3.0** (registry pin — corrected 2026-08-07; this line and `CLAUDE.md` both
-still said 0.2.0 while `pnpm-workspace.yaml` and the lockfile had moved) · **`apps/ios` is in
+pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata **0.11.0** (via ICE — corrected
+2026-08-09; this line said 0.10.0 while `pnpm-workspace.yaml:95` and the lockfile resolve
+0.11.0) ·
+`@vibecook/ice` **0.4.0** (registry pin; **bumped 2026-08-09 — the I1/I4/I5 consumption**, the
+same night upstream released; pin-drift history 2026-08-07: this line and `CLAUDE.md` had
+trailed the manifests at 0.2.0) · **`apps/ios` is in
 lockstep too** (`Package.resolved`: ghosttea 0.9.2 / truffle 0.7.12), which is what retires the
 staleness debt above. **The 0.9.2 release exists because of GT-4**: our
 `=0.7.12` and upstream's `=0.7.11` could not resolve together, and James moved ghosttea to

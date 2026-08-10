@@ -1496,3 +1496,52 @@ headline number is a direct measurement, not a test verdict: 53 s → 0.47 s.
 change there is a version string, the test asserting it, the manifest pin, and two resolved
 files; the commands in `apps/ios/README.md` are what should confirm it on a quiet machine.
 
+## ICE 0.4.0 — I1/I4/I5 consumed: the focus model, the wheel cede, the in-band rename fold
+
+**LANDED overnight 2026-08-09/10 (the commit carrying this entry is the consumption event).**
+Hours after upstream cut `@vibecook/ice` 0.4.0 (design-007 rev 2: the I1 keyboard claim +
+`keyboardEscape` + I4 wheel cede + facade `keymapOverrides`; design-008: the I5 `renamedFrom`
+rename migration; the Space-in-textarea live-bug fix), VibeField consumed it as one EL8 bump
+event — pin 0.3.0 → 0.4.0 in `pnpm-workspace.yaml` (override + release-age exclusion) — and
+every named workaround retired in the same slice:
+
+- **The ChromeLayer C-key capture trap is DELETED (I1).** The "selection decides" behavior is
+  two `keymapOverrides` entries (`field-keymap.ts`, threaded FieldView → CanvasStage → the
+  mount) with exact parity: C-with-selection invokes field-tools' DECLARED
+  comment-around-selection through the SPINE command registry (R10 held — field-app still
+  imports nothing from plugins/*); C-without re-issues the engine default it replaces
+  (connect tool); ⇧C stays comment-only; Settings-open suppresses the comment through a ref
+  gate while the tool shortcut behaves exactly as it always did. The engine keymap's own
+  editable guard runs before overrides — the window-bubble race is simply gone.
+- **note's two `onWheel` stopPropagations are DELETED (I4).** The editor textarea rides the
+  editable-scroller cede (scrolls natively, falls through to zoom at the bounds). RECORDED
+  BEHAVIOR DELTA, James's eyeball owed: the read-only body is plain content under the landed
+  law, so wheel over it now zooms the canvas instead of scrolling long note text — the revert
+  is one `data-canvas-interactive`, which would also opt the body's pointerdowns out of card
+  drag (the note's primary gesture); the widget's header comment records the trade.
+- **The C2 offline rename surgery is DELETED (I5).** `migrate-type-renames.ts` and its
+  pre-attach call are gone; `build-widget` projects the append-only TYPE_RENAMES history into
+  `renamedFrom` declarations and the ENGINE folds pre-rename boards in-band — the version
+  gate resolves old ids as "migrate" instead of bricking readOnly, and the envelope
+  self-heals at the next save. The C2 old-board eyeball (watch the migration log line)
+  retires with the log line itself; the ordinary open path is the replacement. The rewritten
+  test opens the probe-era pre-rename fixture through the engine's own runner: writable,
+  ratified types projected, an old-named journal entry accepted post-open.
+- **Found while consuming, fixed and pinned:** ghost stubs would have registered a pre-rename
+  envelope's OLD ids as live types — colliding with their successors' `renamedFrom` claims —
+  because the stub filter only knew "registered". A renamed id whose successor is registered
+  is now covered, never stubbed (`ghost-stubs.ts`), with its own test beside the fold tests.
+
+Breaking surface consumed without a scratch: `WidgetType` +`keyboard`/`keyboardEscape`,
+`InfiniteCanvasHandle` +`focus`, `DocVersionReport` +`renamedInDoc` — engine-constructed
+types; nothing here hand-rolls one (18-project typecheck green). Deliberately NOT taken (A7 —
+no shipped need): no widget declares `interaction.keyboard` yet; `keyboardEscape` and the
+`focus` handle wait for the first widget that wants them.
+
+**Gate: `pnpm verify` VERBATIM exit 0, one process, on the combined working tree** (this slice
+atop the uncommitted ghosttea-0.9.3/G12 + mille-theme work) — field-app 417/417 with the
+rewritten rename tests aboard, Rust suites green, gen freshness clean; notable against the
+previous entry's saturated-machine story. **`smoke:canvas` is RED — and was red BEFORE this
+slice**: its bundle assert fails identically at clean-worktree rebuilds of `d36528a` /
+`fee1346` / HEAD `c33bcf4`, so the Electron leg never runs for anyone; control-proven
+unrelated to this consumption and recorded as its own dated debt row in `ROADMAP.md`.

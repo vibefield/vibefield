@@ -1,6 +1,8 @@
 // C2 — the durable-ID ratification map (2026-07-23, James; plugin spec §21.2).
 // THE ONLY home of the retired dev-era type strings: boards written before C2
-// carry these ids; the doc-open migration rewrites them exactly once. Ids are
+// carry these ids. Since ice 0.4.0 (design-008, petition I5) build-widget
+// projects this map into `renamedFrom` declarations and the ENGINE folds
+// pre-rename docs in-band — the offline doc-open surgery is retired. Ids are
 // forever — entries here are append-only history, never edited or reused.
 
 /** old widget type → ratified widget type (PrefabId values + `${type}:props`

@@ -34,7 +34,7 @@ a private mesh across machines, and an iPhone companion.
 
 Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify`.
 The repo builds standalone: `truffle-core` is an exact crates-io pin (`=0.7.12`) and
-`@vibecook/ice` an exact npm pin (`0.3.0`) — no sibling checkouts. Both numbers live in the
+`@vibecook/ice` an exact npm pin (`0.4.0`) — no sibling checkouts. Both numbers live in the
 manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from there, not from prose — this
 line said `=0.7.11`/`0.2.0` until 2026-08-07. (A truffle petition window
 reopens the `../p008/truffle` `[patch.crates-io]` + `siblings.lock.json` dance; see

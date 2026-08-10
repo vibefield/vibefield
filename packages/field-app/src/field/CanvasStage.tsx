@@ -9,7 +9,7 @@ import {
   GLViews,
   type GlFrameStats,
 } from "@vibecook/ice/r3f";
-import type { InfiniteCanvasHandle } from "@vibecook/ice/react";
+import type { InfiniteCanvasHandle, KeymapEntry } from "@vibecook/ice/react";
 import {
   type MutableRefObject,
   type ReactElement,
@@ -69,12 +69,15 @@ function EnvLoader({ onTex }: { onTex: (t: Texture | null) => void }) {
 export function CanvasStage({
   ce,
   grid,
+  keymapOverrides,
   ecsOpen,
   devtoolsRef,
   disposeRef,
 }: {
   ce: CanvasEngine;
   grid: Partial<GridConfig>;
+  /** FieldView's stable override entries (I1, ice 0.4.0 — field-keymap.ts). */
+  keymapOverrides: readonly KeymapEntry[];
   /** GL frame profiling wires only while the ECS panel is open. */
   ecsOpen: boolean;
   /** ChromeLayer's live devtools handle — the stage feeds its GL lanes. */
@@ -182,6 +185,7 @@ export function CanvasStage({
     <InfiniteCanvasGround
       engine={ce}
       grid={grid}
+      keymapOverrides={keymapOverrides}
       glRoute={glRoute}
       onReady={onReady}
       className="field-canvas"

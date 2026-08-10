@@ -14,7 +14,6 @@ import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
 import { getRendererLogger } from "../logging";
 import { setActiveCanvasEngine } from "../plugin-host/canvas-engine-ref";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
-import { migrateTypeRenames } from "../plugin-host/migrate-type-renames";
 import { bindPersistence } from "./persistence-controller";
 
 // WorkspaceSession (§5.4.3): exactly ONE ICE engine generation and ONE
@@ -81,35 +80,11 @@ export function useWorkspaceSession(
     if (pending === null) return;
     const lane = pending.lane;
     if (pending.initialBytes !== null) {
-      // C2 — the durable-ID migration: fold the journal and rename ONCE,
-      // pre-attach (a pre-rename journal entry replayed post-rewrite would
-      // resurrect old cells). Migration failure falls through to the untouched
-      // bytes — the quarantine path below stays the honest catch.
-      let bytes = pending.initialBytes;
-      let updates: readonly Uint8Array[] = pending.initialUpdates;
-      try {
-        const migration = migrateTypeRenames(pending.initialBytes, pending.initialUpdates);
-        if (migration.migrated) {
-          getRendererLogger()
-            .child({ component: "board.session", docId: pending.docId })
-            .info(
-              "renderer.board.type_rename_completed",
-              "Legacy widget type identifiers were migrated",
-              { renamedCells: migration.renamedCells },
-            );
-          bytes = migration.bytes;
-          updates = []; // the journal is folded into the migrated snapshot
-        }
-      } catch (error) {
-        getRendererLogger()
-          .child({ component: "board.session", docId: pending.docId })
-          .error(
-            "renderer.board.type_rename_skipped",
-            "Widget type migration failed; the original bytes remain untouched",
-            error,
-          );
-      }
-      const res = ce.docs.open(bytes);
+      // C2 renames fold IN-BAND since ice 0.4.0 (design-008, petition I5): the
+      // widgets' `renamedFrom` declarations drive the engine's own open-path
+      // runner and zombie sweep, so pre-rename bytes and journals need no
+      // offline surgery — the envelope header self-heals at the next save.
+      const res = ce.docs.open(pending.initialBytes);
       if (!res.ok) {
         // Honest quarantine (the M5 law): the at-rest bytes stay untouched on
         // disk; a blank board + surfaced state beats autosaving over them.
@@ -128,7 +103,7 @@ export function useWorkspaceSession(
         return () => ce.docs.close();
       }
       try {
-        for (const update of updates) res.session.applyRemote(update);
+        for (const update of pending.initialUpdates) res.session.applyRemote(update);
       } catch (error) {
         ce.docs.close();
         const detail = error instanceof Error ? error.message : String(error);
