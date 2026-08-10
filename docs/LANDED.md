@@ -1634,3 +1634,38 @@ behind a live tailnet, the order would have had nothing watching it — so it ga
 one OFFLINE test, which asserts (not skips) on an installed workspace and rides `pnpm verify`.
 
 **Gate: `pnpm verify` VERBATIM exit 0**, with both new tests observed inside that run.
+
+## R5 stops keeping its own copy of what each package publishes
+
+**LANDED 2026-08-10.** The wall that cost main 22 hours of red preflight on a CORRECT import
+(`11765bc` declared an export and imported it; the wall knew nothing about either) graded deep
+imports against `NEW_PACKAGE_ENTRIES` — one hardcoded set of subpath names, shared by all three
+walled packages. It is now derived per package from each `package.json`'s own `exports`.
+
+The union list was wrong in both directions, which is what a second source of truth buys you:
+it let `@vibefield/field-app/main` through (`main` is electron-shell's entry, not field-app's),
+and it still carried `host`, a subpath no package has exported for some time. Both are now
+graded against the manifest that actually decides. Entries are read from the REPO root rather
+than the scanned tree, because the self-test scans a temp fixture directory and the question
+"what does this package publish" is always about the real package; an unreadable manifest
+throws rather than silently allowing or denying.
+
+**The wall's own clean fixture was part of the defect.** It imported
+`@vibefield/field-app/host` to prove "R5 accepts declared entries" — an entry that does not
+exist, passing only because the union list contained the word. It now imports a real one
+(`/logging`), and a second clean fixture pins the cross-package case that used to leak.
+
+Controls, run rather than argued: a probe importing `@vibefield/field-app/main` is now REPORTED
+by the enforcing scan (it was clean before), and a probe importing a freshly declared
+`./probe-entry` export is clean with ZERO edits to the wall — which is precisely the 22-hour
+bug, now structurally impossible. Both probes were removed; `pnpm verify` exit 0 with the
+walls' self-test and the enforcing scan inside it.
+
+**Recorded, not fixed: F-C6-21.** The audit-integration flake was investigated in the same
+sitting and no production change was made, because the mechanism was not reproduced — 5
+consecutive runs passed under concurrent load. Two findings are banked in the ROADMAP row so
+the next attempt starts ahead: the timer hypothesis is dead (`health()` reads the field
+directly; all three `markHealthy()` callers are event-driven, leaving the recovery drain as the
+one candidate), and the refusal assertion above the failing line is NOT a second witness —
+`AuditUnavailableError` hardcodes `state: "degraded"` in its details, so only line 112 tests
+health at all.

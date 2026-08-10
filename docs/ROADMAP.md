@@ -395,7 +395,26 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   for the per-device-token upgrade (GT review, verified at the pinned source, 2026-08-06).
 - **F-C6-21 audit-integration flake** — struck 3× under full-suite load, green in isolation;
   "the track's oldest debt" (C6-6, 2026-07-28). The mcp EPIPE flake is separate and PAID
-  (`37cce3b`).
+  (`37cce3b`). **NOT FIXED 2026-08-10, but narrowed by a source read — recorded so the next
+  attempt starts ahead of where this one did.** The failing assertion is
+  `audit-integration.test.ts:112` (`daemon.health().audit.state` reads `"healthy"` where the
+  row wants `"degraded"`, while the test's `failWrites` hook is still on).
+  (1) **The timer hypothesis is dead.** `health()` returns `this.state` directly with no
+  re-probe, and `markHealthy()` has exactly three callers — `start()`, a SUCCESSFUL append, and
+  the completed recovery drain. None is timer- or interval-driven, so nothing can flip the
+  verdict on a clock; the flake needs one of those three to land AFTER `markFailure()`. Since
+  `auditTestHooks.beforeWrite` throws for every write while the flag is on, the drain path
+  (`audit-service.ts` ~:500, the one `markHealthy()` not guarded by a fresh visible append) is
+  where the next look should start.
+  (2) **The refusal assertion above it is not evidence about health, and must not be treated as
+  a second witness:** `AuditUnavailableError` hardcodes `state: "degraded"` as a LITERAL in its
+  details (`audit-service.ts:90`), so lines 100–110 would read `degraded` even with the service
+  perfectly healthy. Line 112 is the row's only real health check — any future "deflake" that
+  softens it leaves this test proving nothing.
+  (3) **Not reproduced here:** 5 consecutive runs of the file passed with a full `pnpm verify`
+  loading the machine concurrently, which is not the reported trigger (full-suite parallel
+  interleaving inside the fieldd project). No production change was made on a mechanism that
+  had not been reproduced — the alternative was rewriting live health semantics on a guess.
 - **fleet-v3 gate** — delete the C5 hello-claim fallback once every sidecar speaks v3+
   (C6-T1, 2026-07-28).
 - **Doc existence does not replicate** — the doc registry is a local JSON file, not a
