@@ -24,14 +24,20 @@ let package = Package(
   dependencies: [
     // The Ghosttea Apple stack (terminal + Truffle mesh). Exact pin — EL8:
     // bumping it is a deliberate upgrade event, moved in lockstep with
-    // field-native's truffle-core pin (both planes ride truffle 0.7.11).
-    // 0.9.2 is THE meeting point: GT-4a2 moved every desktop plane to it
-    // (cargo ghosttea + ghosttea-truffle "=0.9.2", truffle-core "=0.7.12"),
-    // and 0.9.2's Swift manifest pins the same truffle 0.7.12 — one wire, one
-    // Arc<Node> type, both planes. It carries 0.9.0's appearance parity and
-    // 0.7.0's reconnect layer, and it is the version whose TruffleTerminalMesh
-    // the desktop floor now publishes terminal hosts with (IOS-3's server).
-    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.9.2")
+    // field-native's ghosttea and truffle-core pins (both planes ride truffle
+    // 0.7.12 — this line read 0.7.11 until 2026-08-09, contradicting the very
+    // next sentence; the manifests were always the authority).
+    // 0.9.3 is THE meeting point: G12 (2026-08-09) moved every desktop plane to
+    // it (cargo ghosttea + ghosttea-truffle "=0.9.3", npm overrides), and its
+    // Swift manifest still pins truffle 0.7.12 — one wire, one Arc<Node> type,
+    // both planes. This plane has NO delta to consume: v0.9.2…v0.9.3 is one
+    // build-script fix (`ghosttea-vt-sys/build.rs`), one new upstream regression
+    // check, and version strings/lockfiles/SBOMs — verified against the compare,
+    // not assumed. The pin moves only to keep the one-version law true. It still
+    // carries 0.9.0's appearance parity and 0.7.0's reconnect layer, and remains
+    // the version whose TruffleTerminalMesh the desktop floor publishes terminal
+    // hosts with (IOS-3's server).
+    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.9.3")
   ],
   targets: [
     // Design tokens and shared chrome — the godview monochrome language.

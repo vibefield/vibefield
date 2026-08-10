@@ -47,31 +47,31 @@ try {
 // enforced one layer earlier.
 const PIN_EXPECTATIONS = [
   { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.12"/m, label: 'truffle-core = "=0.7.12"' },
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.9\.2"/m, label: 'ghosttea = "=0.9.2"' },
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.9\.3"/m, label: 'ghosttea = "=0.9.3"' },
   {
     file: "Cargo.toml",
-    re: /^ghosttea-truffle\s*=\s*"=0\.9\.2"/m,
-    label: 'ghosttea-truffle = "=0.9.2"',
+    re: /^ghosttea-truffle\s*=\s*"=0\.9\.3"/m,
+    label: 'ghosttea-truffle = "=0.9.3"',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.9\.2/,
-    label: '"@vibecook/ghosttea-client": 0.9.2',
+    re: /"@vibecook\/ghosttea-client":\s*0\.9\.3/,
+    label: '"@vibecook/ghosttea-client": 0.9.3',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-electron":\s*0\.9\.2/,
-    label: '"@vibecook/ghosttea-electron": 0.9.2',
+    re: /"@vibecook\/ghosttea-electron":\s*0\.9\.3/,
+    label: '"@vibecook/ghosttea-electron": 0.9.3',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-react":\s*0\.9\.2/,
-    label: '"@vibecook/ghosttea-react": 0.9.2',
+    re: /"@vibecook\/ghosttea-react":\s*0\.9\.3/,
+    label: '"@vibecook/ghosttea-react": 0.9.3',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-protocol":\s*0\.9\.2/,
-    label: '"@vibecook/ghosttea-protocol": 0.9.2',
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.9\.3/,
+    label: '"@vibecook/ghosttea-protocol": 0.9.3',
   },
 ];
 for (const { file, re, label } of PIN_EXPECTATIONS) {

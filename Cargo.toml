@@ -50,7 +50,18 @@ truffle-core = "=0.7.12"
 # 0.9.1 → 0.9.2, the release that moves upstream's own workspace to truffle-core
 # =0.7.12 so this workspace can consume the mesh half at all. CONTROL protocol
 # minor is UNCHANGED at 13, so terminal_client.rs still announces 1.9.
-ghosttea = "=0.9.2"
+# G12 (2026-08-09) bumps 0.9.2 → 0.9.3, and this one is ours: upstream fixed
+# `ghosttea-vt-sys`'s build script, which declared three of its own OUT_DIR
+# artifacts as `rerun-if-changed` INPUTS. Cargo writes a unit's fingerprint
+# reference before the script finishes populating OUT_DIR, so a declared path
+# under it is unconditionally newer than the reference — the unit could never be
+# fresh, and every consumer build re-fetched the Ghostty VT tarball and
+# recompiled the whole ghosttea chain (38s then 53s back-to-back here). It was
+# invisible upstream because a build from their own checkout resolves
+# `Prefix::Repository` and never takes the download path. Zero API/protocol
+# delta; CONTROL minor unchanged at 13, so terminal_client.rs still announces
+# 1.9. The payoff is measured below the fold, not assumed.
+ghosttea = "=0.9.3"
 # GT-4 (native-floor §7 / GT-D7): the mesh half of the terminal floor, added at
 # the same version as `ghosttea` — it depends on that crate by path upstream, so
 # a split would be two ghosttea revisions in one graph. It brings truffle-core
@@ -58,4 +69,4 @@ ghosttea = "=0.9.2"
 # mismatch is a resolver refusal, never a silent second Arc<Node> type. Consumed
 # ONLY behind FIELD_NATIVE_TERMINAL_MESH — with the flag off the crate is linked
 # but never constructed, and the floor is bit-for-bit its pre-GT-4 self.
-ghosttea-truffle = "=0.9.2"
+ghosttea-truffle = "=0.9.3"

@@ -4,6 +4,6 @@ import Testing
 
 @Suite struct FieldTerminalModuleTests {
   @Test func moduleCarriesItsUpstreamVersion() {
-    #expect(FieldTerminal.ghostteaVersion == "0.9.2")
+    #expect(FieldTerminal.ghostteaVersion == "0.9.3")
   }
 }

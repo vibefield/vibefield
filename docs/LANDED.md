@@ -1413,3 +1413,86 @@ longer serializes behind cargo and now **overlaps** the rest of the graph. The g
 and tests sitting close to their deadlines have less headroom than they did yesterday. Whether
 those three deadlines want raising, or logging's timing tests want a fake clock, is a different
 package's question and James's to scope.
+
+## EL8 — ghosttea 0.9.3: the petition filed this morning comes back as a 0.47 s no-op
+
+**Landed 2026-08-09, hours after G12 was drafted.** Upstream implemented it directly, cut
+**0.9.3** (PR #55), and VibeField consumed it the same day. The whole round trip — symptom to
+diagnosis to petition to release to consumption — fits in one day's ledger, which is the
+argument for writing petitions with a deterministic repro attached.
+
+**What upstream's review changed before implementing, because the file was wrong in two
+places.** It refuted the petition's hypothesis (b): the unit key is *stable*, a clean repro
+holds at 2 unit dirs and 1 tar across four builds, and our 26 directories were `13 units × 2`
+(compile dir + run dir) accumulated over 11 days of config changes, since cargo never GCs an
+abandoned unit — so "cargo mints new units, so the script re-runs" inverted cause and effect.
+It also proved (a) is **deterministic by construction, not a timing race**: cargo writes a
+unit's fingerprint reference *before* the script finishes populating `OUT_DIR`, so any declared
+path under it is unconditionally newer and the unit can never be fresh. And it killed our
+proposal 3 — a shared bundle cache would *not* have fixed the loop, because extraction always
+lands in `OUT_DIR`, so :267/:282 keep it alive no matter where the bundle came from. All three
+sites are independently sufficient; cargo only ever names the first one it hits.
+
+**Fixed better than asked.** Rather than three provenance-aware call sites, one
+`rerun_if_changed(path, out)` guard now owns every declaration and drops anything under
+`OUT_DIR` — a structural invariant instead of a rule each future call site must re-derive. It
+ships with `scripts/check-build-script-inputs.mjs`, whose source half runs **offline**: that is
+precisely the blind spot that let this reach 0.9.2, because a build from upstream's own checkout
+resolves `Prefix::Repository` and never takes the download path, so the bug was only ever
+visible to consumers. A latent second bug closed on the way — targets marked
+`reproducible: false` skip `validate_library`, so on those the archive was never declared an
+input at all and a local Ghostty rebuild left a stale archive linked.
+
+**The published delta, read from the compare rather than the changelog:** `v0.9.2...v0.9.3` is
+31 files over 4 commits — **one** source change (`ghosttea-vt-sys/build.rs`, +37/-8), **one**
+added file (the regression check), and version strings, lockfiles, and regenerated SBOM/Apple
+artifact locks. No Rust API, no Swift, no TS delta; CONTROL minor unchanged at 13, so
+`terminal_client.rs` still announces 1.9.
+
+**The payoff, measured here.** The upgrade build cost **2m35s** — a full chain recompile at a
+genuinely new version, expected exactly once — and the next identical `cargo build -p
+field-native` finished in **0.47 s: a true no-op**. That same repeat cost **53 s** yesterday.
+Tar copies went 13 → 14 (0.9.3's unit, fetched once) and stop there. `globalSetup` stays, as
+its file and the petition both said it would; what retired is the ~40 s every fieldd test run
+was paying for a build that changed nothing.
+
+**Consumed on every plane in one event, because that is what EL8 means:** cargo `ghosttea` +
+`ghosttea-truffle` `=0.9.3` · the four npm overrides and six age-gate rows (no transitional rows
+needed — 0.9.3 aged past the cutoff by the time we consumed it) · **preflight's six pin rows**,
+since editing a pin and that table together is the ritual · SwiftPM `exact: "0.9.3"` with
+**both** `Package.resolved` files at `d099882`, plus the `FieldTerminal.ghostteaVersion`
+constant, the test that pins it, and two `apps/ios/README.md` lines. The iOS surface is the
+lesson worth keeping: a pin bump there is six files, not one, and only the manifest is obvious.
+Xcode's DerivedData held a stale *extracted* artifact and failed to resolve until that one cache
+entry was cleared — cache only, and SwiftPM's shared cache already had the new zip.
+
+**Correction at source:** `Package.swift`'s pin comment claimed both planes "ride truffle
+0.7.11" while its very next sentence named `=0.7.12`. Corrected while editing, in the same
+spirit as CLAUDE.md's own version errata — the manifests were always the authority.
+
+**Gate — stated exactly, because this one did not land as a single green run.** Every stage
+passed, but never all in one process: preflight (the six-row pin table, which is the whole
+point of the ritual) · icons · typecheck · biome · `cargo fmt --check` · clippy · `gen:check` ·
+the JS suite (green with the test projects serialized, `NX_PARALLEL=1` — every test still runs)
+· the Rust workspace suite (green on its own). Five full attempts each reddened on a *different*
+deadline-based test — field-app's shader cards (5.1–5.8 s against a 5 s budget; 300–600 ms each
+when run alone), `godview-remote-door`'s settle race, TS logging's fuzz test, and
+field-native's own `logging.flush(4s)` — which is the signature of a saturated machine, not a
+regression.
+
+It was saturated: **load average 37 / 101 / 91**, from WebStorm at 157 %, a `VibeField.app`
+left running in an iOS Simulator for **2 days 20 hours** at 97 % (plus ~160 % more across its
+render and backboard services), WindowServer at 87 %, and a live `pnpm dev` session. None of it
+this slice's, and none of it safe to kill from here.
+
+**Controls that exonerate 0.9.3 rather than excuse it:** field-app run alone at 0.9.3 passes the
+appearance/shader tests — the surface built from upstream's blessed data, and the one a bad data
+bump would break — leaving only the `godview-remote-door` race, which failed *identically at
+0.9.2 this morning*, before any pin moved. The Rust and logging suites pass alone. And the
+headline number is a direct measurement, not a test verdict: 53 s → 0.47 s.
+
+**Not gated this session: `apps/ios`.** Its gate is `xcodebuild` (CLAUDE.md keeps it out of
+`pnpm verify` deliberately), and a simulator run on a box at load 100 would answer nothing. The
+change there is a version string, the test asserting it, the manifest pin, and two resolved
+files; the commands in `apps/ios/README.md` are what should confirm it on a quiet machine.
+
