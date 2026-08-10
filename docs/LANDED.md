@@ -1593,3 +1593,44 @@ built bundle, and now has it.
 
 **Gate: `pnpm verify` VERBATIM exit 0**, with `bundle:assert` inside it, plus `smoke:canvas`
 green end to end.
+
+## Two GT-review follow-ups close — ⌘W actually lets go, and the probes run the pinned sidecar
+
+**LANDED 2026-08-10.** Both were recorded at the GT close-out with their mechanisms already
+diagnosed; neither had been repaired. Each is now fixed at the site the record named, and each
+gained the test whose absence let it stand.
+
+**⌘W never worked, and now does the only thing that can work.** The close item kept
+`role: "close"` in both overlay states and merely OMITTED the accelerator — which releases
+nothing, because Electron resolves an item's accelerator as `explicit ?? roleDefault` and
+`close`'s default IS `CommandOrControl+W`. The smoke had already measured every alternative on
+Electron 43.1.1, and that measurement was the design input: `accelerator: null` and
+`registerAccelerator: false` BOTH still resolve to the role default, so **a role-less item is
+the only spelling that reports null**. While the overlay is open the item is now a plain
+labelled command carrying no role, and the close behaviour the role used to supply arrives as
+`actions.closeWindow` (focused window, same subject as the Godview toggle). The overlay-closed
+state is untouched: role, label, ⌘W. Cost, stated rather than buried: that one state's label is
+ours, so it is English where Electron's role would have localized it — against a menu that eats
+the deck's ⌘W in every language.
+The test that passed through the entire defect is the story's other half. It asserted
+`role: "close"` while the overlay was open — the very thing that broke it — so it graded the
+bug as correct. It now asserts the role is GONE, and the control was run: restore the role and
+it fails with *expected 'close' to be undefined*. The smoke's two verdict fields stop being a
+record and become the claim — it throws if the open state reports any chord, or if the two
+states ever read alike again. **Deliberately still owed: the OS-level witness.** No harness can
+prove macOS routes a real ⌘W to the pane rather than the menu — `sendInputEvent` injects below
+AppKit's key-equivalent dispatch — so this remains a chord without a delivery probe until it is
+pressed by hand with a deck open. The repo's own lesson, honoured rather than papered over.
+
+**The tailnet probes ran a binary the product never ships.** `tests/common/mod.rs` searched only
+the machine-wide truffle installs, so on this box it found a **Jul 16**
+`~/.config/truffle/bin/sidecar-slim` while the workspace pinned and vendored the **Aug 2**
+0.7.12 copy — the concrete mechanism behind identity looking assertable at GT-4. The harness now
+resolves the pinned binary first, through `apps/desktop`'s own `@vibecook/truffle-sidecar-*`
+dependency (the same artifact the packaged app ships), with `FIELD_NATIVE_SIDECAR_PATH` still
+authoritative above it and the machine installs kept as a last resort so a checkout without
+`pnpm install` can still run the probes. Because every other test in that family is `#[ignore]`d
+behind a live tailnet, the order would have had nothing watching it — so it gained the family's
+one OFFLINE test, which asserts (not skips) on an installed workspace and rides `pnpm verify`.
+
+**Gate: `pnpm verify` VERBATIM exit 0**, with both new tests observed inside that run.

@@ -325,10 +325,13 @@ class MarkerWatch<T> {
  * states, and the handover releases nothing. An explicit accelerator does
  * override (a probe with `CommandOrControl+K` reported ⌘K), and an item with no
  * role at all reports null; `accelerator: null` and `registerAccelerator: false`
- * both still resolve to the role default. So the conditional dance is a no-op
- * today, and the fix belongs in `app-menu-model.ts` — outside this slice's file
- * set, hence recorded rather than repaired. Both states are put in the verdict
- * on every run so the fact travels with the evidence.
+ * both still resolve to the role default.
+ *
+ * FIXED 2026-08-10 on exactly that measurement: the model now DROPS the role
+ * while the overlay is open (the only spelling this probe found that reports
+ * null), and supplies the role's close behaviour as an action. The two verdict
+ * fields below stop being a record and become the ASSERTION — they are supposed
+ * to differ, and this smoke now fails if they ever read alike again.
  *
  * What the smoke asserts: an application menu is INSTALLED while it presses ⌘W,
  * which is the gap the review named and the precondition for any of the rest.
@@ -1180,12 +1183,21 @@ export async function runSmokeGodview(opts: {
     ).sessionId;
     opts.toggleGodview(); // closed, so the reload comes up with the deck unmounted
     await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
-    // The arbitration's OTHER state, recorded here because this is the one
-    // moment the overlay is closed with the menu installed and the deck still
+    // The arbitration's OTHER state, read here because this is the one moment
+    // the overlay is closed with the menu installed and the deck still
     // reporting. Read together with `closeAcceleratorWhileGodviewOpen`, the two
-    // fields are the whole claim: they are supposed to differ, and on Electron
-    // 43.1.1 they do not. See `closeWindowAccelerator`.
-    verdict["closeAcceleratorWhileGodviewClosed"] = closeWindowAccelerator();
+    // fields are the whole claim — and since 2026-08-10 they are asserted, not
+    // merely recorded. See `closeWindowAccelerator`.
+    const closedAccel = closeWindowAccelerator();
+    verdict["closeAcceleratorWhileGodviewClosed"] = closedAccel;
+    if (closedAccel !== "CommandOrControl+W") {
+      throw new Error(
+        `the close item must HOLD ⌘W while the overlay is closed, but the live menu reports ${String(closedAccel)}`,
+      );
+    }
+    // The two-state comparison lives at the OPEN reading below, which happens
+    // later in this run — comparing here would grade against a field that does
+    // not exist yet and pass for that reason alone.
     await win.webContents.executeJavaScript("localStorage.clear()");
     // 5b. GT-3f: seed the VIEWER's shader the way a returning user's would
     //     already be sitting there. The appearance store reads localStorage
@@ -1242,7 +1254,23 @@ export async function runSmokeGodview(opts: {
         "no application menu is installed, so the ⌘W arbitration this row is about is not in place — which is exactly the state this smoke was in before GT-5a",
       );
     }
-    verdict["closeAcceleratorWhileGodviewOpen"] = closeWindowAccelerator();
+    const openAccel = closeWindowAccelerator();
+    verdict["closeAcceleratorWhileGodviewOpen"] = openAccel;
+    // THE HANDOVER, asserted rather than recorded (2026-08-10). The closed
+    // reading is taken earlier in this same run, so both fields are real by now.
+    // An item still holding a chord here is the defect this row exists for; an
+    // item reporting the SAME thing in both states is that defect's signature.
+    const closedReading = verdict["closeAcceleratorWhileGodviewClosed"];
+    if (openAccel !== null) {
+      throw new Error(
+        `the close item must RELEASE ⌘W while the overlay is open, but the live menu reports ${openAccel} — a role-bearing item inherits CommandOrControl+W no matter what the model omits`,
+      );
+    }
+    if (openAccel === closedReading) {
+      throw new Error(
+        `the ⌘W handover released nothing: the live menu reports ${String(openAccel)} in BOTH overlay states — the defect measured on Electron 43.1.1 and fixed by dropping the role`,
+      );
+    }
     pressChord(win, "w");
     const closed = await deck.until(
       (facts) => facts.panes === panesBeforeClose - 1,

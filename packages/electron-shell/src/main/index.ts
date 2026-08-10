@@ -764,6 +764,15 @@ async function main(
     if (window === null || window.isDestroyed()) return;
     godviewStates?.ensure(window.webContents).set();
   };
+  /** Close Window's action, needed only while the overlay is open: the item
+   * drops `role: "close"` there to release ⌘W for the deck's panes, and the
+   * role's own close behaviour has to be supplied by hand with it
+   * (`app-menu-model`'s `closeWindowItem`). Same subject as the toggle. */
+  const closeWindow = (): void => {
+    const window = BrowserWindow.getFocusedWindow() ?? registry.primary();
+    if (window === null || window.isDestroyed()) return;
+    window.close();
+  };
 
   // THE APPLICATION MENU, installed before the godview harness rather than
   // after it (GT-5a).
@@ -783,6 +792,7 @@ async function main(
   if (MODE !== "smoke-canvas") {
     redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
       toggleGodview,
+      closeWindow,
     });
   }
 

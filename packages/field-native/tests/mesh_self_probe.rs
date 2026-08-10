@@ -8,9 +8,38 @@
 //! the tailnet courtesies (ephemeral nodes, probe app id).
 mod common;
 
-use common::{authkey, build_node, probe_app_id, redact, sidecar, AUTHKEY_ENV};
+use common::{authkey, build_node, probe_app_id, redact, sidecar, vendored_sidecar, AUTHKEY_ENV};
 use std::time::Duration;
 use tokio::time::timeout;
+
+/// THE ONLY OFFLINE TEST IN THE PROBE FAMILY, and it guards the fidelity every
+/// other probe's verdict rests on: which binary they actually run.
+///
+/// It lives beside S1 because S1 is the claim that suffered — the probes ran a
+/// **Jul 16** machine-wide `~/.config/truffle/bin/sidecar-slim` while this
+/// workspace pinned and vendored an **Aug 2** one, so a WhoIs-capable sidecar
+/// sat in `node_modules` unused and identity looked assertable (GT-4). Every
+/// other test here is `#[ignore]`d behind a live tailnet, so without this row
+/// nothing in `pnpm verify` would notice the order silently inverting again.
+#[test]
+fn sidecar_resolution_prefers_the_workspace_pinned_binary() {
+    if std::env::var_os("FIELD_NATIVE_SIDECAR_PATH").is_some() {
+        // An explicit override is authoritative by design, so a run that sets
+        // one says nothing about the fallback order this test is about.
+        eprintln!("[skip] sidecar order: FIELD_NATIVE_SIDECAR_PATH is set and outranks it");
+        return;
+    }
+    let Some(vendored) = vendored_sidecar() else {
+        // A checkout without `pnpm install` has nothing to prefer.
+        eprintln!("[skip] sidecar order: this workspace vendors no sidecar for this platform");
+        return;
+    };
+    assert_eq!(
+        sidecar().as_deref(),
+        Some(vendored.as_path()),
+        "the harness must run the sidecar this workspace PINS, not whatever is installed on the machine"
+    );
+}
 
 #[tokio::test]
 #[ignore = "real tailnet: needs TRUFFLE_TEST_AUTHKEY; run with --ignored"]

@@ -321,17 +321,32 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   *prove the row can fail*, and it did: with the recovery ladder commented out the smoke
   exited 2 at exactly the right place, carrying the deck's own "the terminal bridge died —
   rebuilding"; restored, exit 0. `recoveredBackend` now reports `"starting"` instead of
-  echoing the pre-kill backend. Remaining follow-ups from the same work: **⌘W never worked**
-  (Electron resolves `explicit ?? roleDefault` and `role:"close"` defaults to
-  `CommandOrControl+W`, so omitting the accelerator releases nothing — both smoke fields read
-  identical every run; fix belongs in `app-menu-model.ts`) · **G13 petition**: no
+  echoing the pre-kill backend. Remaining follow-ups from the same work: ~~**⌘W never worked**~~
+  **— FIXED 2026-08-10.** The handover now DROPS `role: "close"` while the overlay is open
+  instead of merely omitting the accelerator, which released nothing (Electron resolves
+  `explicit ?? roleDefault`). The fix took the smoke's own measurement as its design input:
+  `accelerator: null` and `registerAccelerator: false` both still resolve to the role default,
+  so a role-less item is the only spelling that reports null. The role's close behaviour
+  arrives as `actions.closeWindow`; cost is an English label in that one state. The model test
+  that passed through the whole defect (it asserted `role: "close"` while the overlay was open)
+  now asserts the role is GONE — control-run, it fails with *expected 'close' to be undefined*
+  — and the smoke's two verdict fields stop being a record: it throws if they ever read alike
+  again, or if the open state reports any chord. **Still owed: the OS-level witness.** No
+  harness can prove macOS routes a real ⌘W to the pane rather than the menu
+  (`sendInputEvent` injects below AppKit's key-equivalent dispatch), so this is a chord
+  without a delivery probe until James presses it with a deck open · **G13 petition**: no
   browse-handler seam exists at 0.9.2, verified against the workspace's own `.d.ts`, so the
-  dead "Browse sessions" button cannot be fixed from our side · **the tailnet probes run on a
-  STALE sidecar** (`resolve_sidecar` never looks in `node_modules`, so dev lands on a Jul-16
-  binary with no `whoisResult` while the repo vendors an Aug-2 one that has it) — a
-  test-fidelity gap, not a security regression: pointing `FIELD_NATIVE_SIDECAR_PATH` at the
-  vendored binary drops the WhoIs diagnostic to zero, proven by the orchestrator, and the
-  harness fix is a few lines in `tests/common/mod.rs` · **R5 keeps a second source of truth**
+  dead "Browse sessions" button cannot be fixed from our side · ~~**the tailnet probes run on a
+  STALE sidecar**~~ **— FIXED 2026-08-10** in `tests/common/mod.rs` as predicted: the harness
+  now resolves the binary this workspace PINS (through `apps/desktop`'s own
+  `@vibecook/truffle-sidecar-*` dependency) BEFORE the machine-wide installs, with
+  `FIELD_NATIVE_SIDECAR_PATH` still authoritative above both and the installs kept as a last
+  resort for a checkout without `pnpm install`. Confirmed on this machine, where the old order
+  found a **Jul 16** `~/.config/truffle/bin/sidecar-slim` while the pinned **Aug 2** 0.7.12
+  copy sat unused. Because every other probe here is `#[ignore]`d behind a live tailnet, the
+  order now has the family's one OFFLINE test guarding it — it asserts rather than skips on an
+  installed workspace, so `pnpm verify` notices if it ever inverts again · **R5 keeps a second
+  source of truth**
   for package entry points, which is what made main red on a correct import (`1e4f9ac`);
   deriving it from `package.json` exports is the real fix. **Correction to `1e4f9ac`'s own
   body (2026-08-07):** it dates the breakage "since `3ca1f8a`", but `3ca1f8a` only *modified*

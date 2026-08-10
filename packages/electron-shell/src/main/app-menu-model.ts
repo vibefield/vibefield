@@ -36,6 +36,10 @@ export interface AppMenuActions {
    * flip — the item still appears (an absent menu item reads as a missing
    * feature), disabled, which is the honest face of "not here yet". */
   toggleGodview?: () => void;
+  /** Close the focused window. Needed only while the overlay is open, when the
+   * close item drops `role: "close"` to release ⌘W (see `closeWindowItem`) and
+   * therefore loses the role's built-in behaviour along with its accelerator. */
+  closeWindow?: () => void;
 }
 
 export interface AppMenuState {
@@ -104,13 +108,32 @@ function godviewItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem 
  * with the overlay open the item gives ⌘W up and the deck's panes answer it —
  * and closing a pane detaches a session that goes on living (GT-D5), which is
  * the gesture a user in a terminal actually means. With the overlay closed the
- * item takes ⌘W back and the window closes, as it should. Role and label never
- * move: the menu still says Close Window and still works by click. */
-function closeWindowItem(state: AppMenuState): AppMenuItem {
+ * item takes ⌘W back and the window closes, as it should.
+ *
+ * THE HANDOVER DROPS THE ROLE, and that is the whole fix (2026-08-10). Until
+ * now this item kept `role: "close"` in both states and merely OMITTED the
+ * accelerator — which released nothing, because Electron resolves an item's
+ * accelerator as `explicit ?? roleDefault` and `close`'s default IS
+ * `CommandOrControl+W`. The smoke measured every alternative on Electron 43.1.1
+ * before this was written (`testing/smoke.ts` §⌘W): `accelerator: null` and
+ * `registerAccelerator: false` BOTH still resolve to the role default, and only
+ * an item carrying no role at all reports null. So while the overlay is open the
+ * item becomes a plain labelled command — no role, no inherited chord — and the
+ * close behaviour the role used to supply arrives as `actions.closeWindow`.
+ * With the overlay closed nothing changes: role, label and ⌘W as before.
+ *
+ * The cost, stated: the overlay-open label is ours rather than Electron's, so it
+ * is English where the role would have been localized. The alternative is a menu
+ * that eats the deck's ⌘W in every language. */
+function closeWindowItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem {
+  if (!state.godviewOpen) {
+    return { id: CLOSE_WINDOW_ITEM_ID, role: "close", accelerator: "CommandOrControl+W" };
+  }
   return {
     id: CLOSE_WINDOW_ITEM_ID,
-    role: "close",
-    ...(state.godviewOpen ? {} : { accelerator: "CommandOrControl+W" }),
+    label: "Close Window",
+    enabled: actions.closeWindow !== undefined,
+    ...(actions.closeWindow !== undefined ? { click: actions.closeWindow } : {}),
   };
 }
 
@@ -127,7 +150,7 @@ export function buildAppMenu(
   // the deck would lose the gesture to whichever fired first.
   const appSection: readonly AppMenuItem[] = platform === "darwin" ? [{ role: "appMenu" }] : [];
   const fileSubmenu: readonly AppMenuItem[] =
-    platform === "darwin" ? [closeWindowItem(state)] : [{ role: "quit" }];
+    platform === "darwin" ? [closeWindowItem(state, actions)] : [{ role: "quit" }];
   return [
     ...appSection,
     { label: "File", submenu: fileSubmenu },
@@ -149,7 +172,7 @@ export function buildAppMenu(
       submenu:
         platform === "darwin"
           ? [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }]
-          : [{ role: "minimize" }, { role: "zoom" }, closeWindowItem(state)],
+          : [{ role: "minimize" }, { role: "zoom" }, closeWindowItem(state, actions)],
     },
   ];
 }
