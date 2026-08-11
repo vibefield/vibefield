@@ -5,7 +5,8 @@
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
 > stays in the design docs + specs. Last rewritten: **2026-08-11** — the WIN milestone: the Windows
 > port's first wave (WIN-0…4, `5ffd30b`/`85cce04`/`f982d27`) landed on `f98f58a`; this pass adds the WIN
-> track row and its Next-up bullet, the wave's residue named there. Previously **2026-08-07** — a
+> track row and its Next-up bullet, the wave's residue named there — and the WIN-6 terminal rung
+> (`03cc648`, WIN-D2 adopted) folded into the same row and ledger. Previously **2026-08-07** — a
 > RECONCILIATION pass, not a milestone. An onboarding read found this file had gone stale against its own tree: two
 > whole bodies of work (IOS-3 and the UI system) had landed with **zero** entries in `LANDED.md`
 > and zero mentions here or in `DECISIONS.md`, one debt below was already closed, and three
@@ -80,7 +81,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | UI — design system | **LANDED** 2026-08-05/06, James's hands — tokens → primitives → production compositions → a catalog that mounts shipping views → `pnpm dev:design` UI Bench, with ownership enforced by test | `DESIGN.md` (authority) · **`docs/UI_SYSTEM.md`** (where it lives in code) | the catalog's own acceptance is an eyeball (light/dark · keyboard focus · reduced motion · narrow); `codex/settings-review-fixes` is unmerged and undecided |
 | UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
-| WIN — Windows port | **IN FLIGHT** — WIN-0…4 landed `5ffd30b`/`85cce04`/`f982d27` (2026-08-11; ratified 2026-08-10, James: "follow your plan"): gate + dev loop portable, the endpoint law in two languages (WIN-D1), the native plane on named pipes with a real stderr floor, the pair's probe/env/spawn doors, the stop VERB (WIN-D5; WIN-D3 resolved by construction) — all proven on the box (WORKSTATION4090) | `draft/thinking-windows-port.md` (plan; spec graduates with the track) | box gates green (Rust workspace; fieldd 445/9-skip · fieldd-client 12/12 · field-app 417); next: WIN-5 shell (WIN-D9 chrome), WIN-6 ConPTY spike, WIN-7 mesh coexistence + sidecar resolver, WIN-8 packaging + the EL8 pin delta (electron-builder vs EDP-39) |
+| WIN — Windows port | **IN FLIGHT** — WIN-0…4 landed `5ffd30b`/`85cce04`/`f982d27` (2026-08-11; ratified 2026-08-10, James: "follow your plan"): gate + dev loop portable, the endpoint law in two languages (WIN-D1), the native plane on named pipes with a real stderr floor, the pair's probe/env/spawn doors, the stop VERB (WIN-D5; WIN-D3 resolved by construction) — all proven on the box (WORKSTATION4090) · **WIN-6 terminal hosting landed `03cc648`** (WIN-D2 adopted 2026-08-11: hosting in GA — the ConPTY kill matrix, two-plane adoption, and frame-plane I/O all on the box; the case-variant env-strip gap booked upstream as G13) | `draft/thinking-windows-port.md` (plan; spec graduates with the track) | box gates green (Rust workspace incl. terminal_unit 14/14 · terminal_mesh 7/7; fieldd terminal-seam 3/3 · terminal-kill-matrix 6/6 · the full fieldd suite 454/2-skip (the 2 = the tracked concurrent-edit doc-sync pair) · fieldd-client 12/12 · field-app 417); next: WIN-5 shell (WIN-D9 chrome), WIN-7 mesh coexistence + sidecar resolver, WIN-8 packaging + the EL8 pin delta (electron-builder vs EDP-39) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
 ## In flight now
@@ -221,13 +222,15 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   device closes it: the S1 live probe, the two-account guest refusal (gates ANY
   shared-tailnet login), the switch kill-matrix row (live session survives
   switch-away-and-back), and the switcher/wizard eyeball in both themes.
-- **WIN ladder continues** — WIN-5 shell (needs the WIN-D9 chrome decision), the WIN-6 one-evening
-  ConPTY spike, WIN-7 mesh (the tsnet-coexistence spike is cheap — the box runs host Tailscale today),
-  WIN-8 packaging. Named residue from the wave, none blocking: the two concurrent-edit doc-sync tests are
-  win32-gated (a slow-box stall past the raised 15s timeout under sustained load — the router is
-  in-process, transport is proven in `quic_lane_transport.rs`); MockMgmtServer + mesh-lane `fakeBridge`
-  still bind filesystem paths (~20 suites); `/bin/sh` terminal-shell defaults at two src sites;
-  `process-service` group-kill → Job Objects; snapshot-prune EBUSY policy.
+- **WIN ladder continues** — WIN-6 terminal hosting landed (`03cc648`); next: WIN-5 shell (needs the
+  WIN-D9 chrome decision), WIN-7 mesh (the tsnet-coexistence spike is cheap — the box runs host
+  Tailscale today), WIN-8 packaging. Named residue, none blocking: the WIN-6 env-case gap is booked
+  upstream as G13 (a case-variant private-env key leaks past ghosttea's case-sensitive strip on
+  Windows; row 6b is an `it.fails` witness that flips green when the pin consuming G13 lands); the two
+  concurrent-edit doc-sync tests are win32-gated (a slow-box stall past the raised 15s timeout under
+  sustained load — the router is in-process, transport is proven in `quic_lane_transport.rs`);
+  MockMgmtServer + mesh-lane `fakeBridge` still bind filesystem paths (~20 suites); `process-service`
+  group-kill → Job Objects; snapshot-prune EBUSY policy.
 - **AR** — the agent tracks; the reason everything else exists, and the only thing between here
   and the P0 exit. Its seam is one module wide and every dependency it named is landed.
 - **IOS-3c's capability leg** — the Keychain store, the write capability supplied at attach, and

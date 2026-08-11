@@ -1753,3 +1753,40 @@ stall past a raised 15s timeout — the router is in-process, so transport is pr
 `quic_lane_transport.rs` over real QUIC), the PTY-hosting suites terminal-seam / terminal-kill-matrix
 (WIN-6 ConPTY, mirroring `terminal_unit.rs`'s `cfg(unix)`). The four-process two-fieldds-over-a-real-tailnet
 doc-sync witness remains a COVERAGE gap, not an argument gap — both halves are proven at their own seam.
+
+## WIN-6 — terminal hosting on Windows: the ConPTY rung
+
+**LANDED 2026-08-11 `03cc648`** (WIN-D2 decided by James the same day: "build WIN-6 now" —
+terminal hosting is IN Windows GA, not deferred). The `85cce04`-era spike had proved ghosttea's
+ConPTY backend hosts a real terminal on the box; this rung makes it the product path and replaces
+the throwaway spike with the real suites, every one run on WORKSTATION4090.
+
+`defaultShell` (fieldd/terminal-service.ts) falls to COMSPEC on win32 (GT-D10) instead of
+`/bin/sh` — a default `terminal.create` used to die at SPAWN_REFUSAL there; a new real-spawn seam
+test witnesses it. The **kill matrix runs on the box** (the §5/§6 gate): `terminal_unit.rs` is
+cross-platform — the survivor-authority logic was always platform-agnostic, so only the seam
+moved (MgmtClient + control dials through one `local_ipc` stream split for its halves; `alive`
+via OpenProcess beside libc::kill; cmd.exe tenants; the endpoint-shape assertion and the 0600
+mode loop platform-split). 14/14 on the box. One test stays unix-only, recorded at source:
+`stale_endpoints_are_rebound` is a stale-socket-NODE mechanism with no Windows analogue — an
+in-process pipe rebind reads ACCESS_DENIED until the holder's process EXITS (the real restart,
+witnessed cross-process by the TS matrix), so it is gated, not masked. `terminal_mesh.rs`'s one
+gated PTY test un-gates (cmd.exe tenant); the TS suites un-gate too — `terminal-seam` 3/3 (I/O +
+the default-shell witness), `terminal-kill-matrix` 6/6 (the two-plane crash/adopt/re-arm rows are
+cross-process, so they hold unchanged but for the shell).
+
+**Two EL7 findings the box's own suite surfaced, measured not argued:** the env strip HOLDS on
+Windows for exact-case prefixes (row 6 — `FIELD_`/`FIELDD_`/`GHOSTTEA_` bait stripped from a real
+PTY, `env`→`set` and `HOME`→USERPROFILE by platform); but a case-VARIANT of a prefix LEAKS (row
+6b — a `Field_Native_*` key survived into a live cmd.exe PTY), because ghosttea's strip decides
+with a case-sensitive `starts_with` over Windows' case-insensitive env. field-native sets its own
+secrets exact-case, so those ARE stripped — a defense-in-depth gap, not a live mirror-write
+escape. Unfixable from the embedder (a fork-local strip is what G1 retired); **petition G13
+drafted** (renumbered from the plan's provisional G15), and row 6b is an `it.fails` witness that
+flips to a live pass the moment the pin consuming G13 lands. VibeField's own TS strip half was
+already case-folded in WIN-3. WIN-D3 needed no petition (resolved by construction in WIN-2).
+
+**Gate: `pnpm verify` VERBATIM exit 0** (combined tree, one process). Box (WORKSTATION4090):
+terminal_unit 14/14 · terminal_mesh 7/7 · terminal-seam 3/3 · terminal-kill-matrix 6/6 — the
+ConPTY kill matrix, the two-plane adoption, the frame-plane I/O, and the EL7 witnesses, all on
+real Windows.
