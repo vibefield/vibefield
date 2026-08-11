@@ -79,6 +79,7 @@ import {
 } from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
+import { nativeMgmtEndpoint } from "./boot-env";
 import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -102,6 +103,7 @@ import { ProductApi } from "./product-api";
 import { type PluginServiceLogRecord, ServiceHost } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
+import { shimSpawn } from "./spawn-shim";
 import { TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
 
@@ -212,6 +214,11 @@ export interface FielddDaemon {
   health(): FielddHealth;
   nativeHealth(): NativeHealth | null;
   stop(): Promise<void>;
+  /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
+   * (its own graceful shutdown: stop() then exit). The `system.shutdown`
+   * handler invokes it AFTER the response flushes; unregistered, the verb
+   * answers honestly that nothing is listening. */
+  onShutdownRequest(callback: () => void): void;
 }
 
 /** The daemon's own version, published in the device slice (package version). */
@@ -283,7 +290,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   let detachHealthSources: (() => void) | null = null;
 
   const native = new NativeLink({
-    socketPath: join(config.dataDir, ...LAYOUT.MGMT_SOCKET),
+    // WIN-D1: path on unix, pipe name on win32 — one law, boot-env owns it
+    socketPath: nativeMgmtEndpoint(config.dataDir),
     pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
     bootId,
     ...(config.userId !== undefined ? { userId: config.userId } : {}),
@@ -521,10 +529,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       callDynamic: (method, params) => services.callProjected(method, params),
       providerUp: (ns) => services.providerUp(ns),
       spawn: (req) => {
-        const child = spawnChild(req.executable, req.args, {
+        const env = pluginChildEnv(req.env);
+        // WIN-3 (§4.5) — `npx`/`uvx`, the practical MCP config, ARE `.cmd` shims
+        // on Windows and node refuses a batch file without a shell
+        // (CVE-2024-27980). The shim quotes them into `cmd.exe /d /s /c` itself;
+        // it is a passthrough on unix and for real executables.
+        const cmd = shimSpawn(req.executable, req.args, process.platform, {
+          env,
           ...(req.cwd !== undefined ? { cwd: req.cwd } : {}),
-          env: pluginChildEnv(req.env),
+        });
+        const child = spawnChild(cmd.command, cmd.args, {
+          ...(req.cwd !== undefined ? { cwd: req.cwd } : {}),
+          env,
           stdio: ["pipe", "pipe", "pipe"],
+          windowsHide: true,
+          ...(cmd.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
         });
         return {
           stdin: child.stdin as NodeJS.WritableStream,
@@ -636,6 +655,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // a hello racing the bootstrap window resolves to undefined (claim
     // fallback), never a TDZ crash (the C6-6 supersession lesson).
     let devicesRef: DeviceService | null = null;
+    // WIN-D5 — what "please stop" means is the process owner's to define
+    // (bin.ts: graceful stop then exit); late-bound because stop() closes over
+    // resources constructed after the api below.
+    let shutdownRequested: (() => void) | null = null;
     const api = new ProductApi({
       // UA-D12 — ephemeral default; the fixed registry number is legacy
       // documentation, and product.json is the only discovery
@@ -702,6 +725,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
 
     api.register("system.health", () => health());
+    // WIN-D5 — the stop verb. The response flushes first (setImmediate), then
+    // the process owner's registered shutdown runs — the same graceful path the
+    // unix signal handlers take, now reachable on every platform. Unregistered
+    // (a library embedding without a process owner) the verb says so honestly.
+    api.register("system.shutdown", () => {
+      if (!shutdownRequested) return { stopping: false, detail: "no shutdown owner registered" };
+      logger.info("fieldd.lifecycle.shutdown_requested", "system.shutdown received");
+      const callback = shutdownRequested;
+      setImmediate(() => callback());
+      return { stopping: true };
+    });
     api.register("system.capabilities", () => ({
       methods: METHODS.filter((m) => m.surface === "product").map((m) => m.method),
     }));
@@ -2409,6 +2443,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       health,
       nativeHealth: () => latestHealth,
       stop,
+      onShutdownRequest(callback) {
+        shutdownRequested = callback;
+      },
     };
   } catch (e) {
     detachHealthSources?.();

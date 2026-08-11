@@ -109,6 +109,19 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // WIN-D5 — the graceful stop verb. Signals are platform folklore (SIGTERM
+  // never fires on win32, so every teardown there was a hard kill and fieldd's
+  // child sweep / run-file cleanup / audit close silently skipped); the stop
+  // REQUEST rides the authenticated channel instead, and signals demote to
+  // escalation. native.admin: trusted local principals only — the scope sits in
+  // D32's local-only-forever set, so no tailnet caller can stop a daemon.
+  defineMethod({
+    surface: "product",
+    method: "system.shutdown",
+    scope: "native.admin",
+    idempotent: true,
+    locality: "local",
+  }),
 
   // LOG-L6 — append-only audit ingress for shell-owned actions. The scope is
   // absent from every federated/plugin preset, and fieldd additionally proves

@@ -5,8 +5,7 @@
 // automation input, and terminate runs the real ladder. This is the seam half
 // of the spec's §9 NF-3 gate; the kill matrix proper is NF-4.
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
@@ -14,10 +13,11 @@ import type { TerminalInfo, TerminalTicket } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap } from "../src/index";
+import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const BIN = join(ROOT, "target/debug/field-native");
+const BIN = nativeBinPath(ROOT);
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -38,9 +38,8 @@ afterEach(async () => {
 });
 
 async function spawnNative(): Promise<string> {
-  // /tmp, not tmpdir(): macOS sun_path caps socket paths ~104 bytes and the
-  // ghosttea control/frame endpoints live under <dataDir>/native/run/.
-  const dir = mkdtempSync("/tmp/vf-seam-");
+  // the short-root rule (and why unix keeps /tmp) lives in native-harness.ts
+  const dir = shortTmpRoot("vf-seam-");
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const child = spawn(BIN, [], {
     env: {
@@ -52,12 +51,7 @@ async function spawnNative(): Promise<string> {
     stdio: "ignore",
   });
   children.push(child);
-  const socket = join(dir, "native/run/mgmt.sock");
-  const deadline = Date.now() + 15_000;
-  while (!existsSync(socket)) {
-    if (Date.now() > deadline) throw new Error("field-native did not come up");
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  await waitForMgmtEndpoint(dir, 15_000);
   return dir;
 }
 
@@ -71,7 +65,8 @@ async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T>
   }
 }
 
-describe("the terminal seam (NF-3, real field-native)", () => {
+// Windows terminal hosting is WIN-6 (ConPTY) — thinking-windows-port §6; the mesh/health surface is covered elsewhere
+describe.skipIf(process.platform === "win32")("the terminal seam (NF-3, real field-native)", () => {
   it("create → observe → ticket-attach → automate → terminate, one authority", async () => {
     const dataDir = await spawnNative();
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });

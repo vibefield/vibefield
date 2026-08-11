@@ -1881,24 +1881,29 @@ function atomicWriteIntent(path: string, body: string): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const tmp = `${path}.tmp`;
   writeFileSync(tmp, body, { mode: 0o600 });
-  const file = openSync(tmp, "r");
+  // "r+", not "r": Windows FlushFileBuffers (fsync) needs a WRITE-access handle,
+  // so fsync of a read-only fd throws EACCES there. r+ works on both platforms.
+  const file = openSync(tmp, "r+");
   try {
     fsyncSync(file);
   } finally {
     closeSync(file);
   }
   renameSync(tmp, path);
-  // Persist the rename itself. Some filesystems reject directory fsync; the
-  // file is still atomically replaced, so only propagate errors from opening
-  // or syncing platforms that support the operation.
-  let directory: number | null = null;
-  try {
-    directory = openSync(dirname(path), "r");
-    fsyncSync(directory);
-  } catch (error) {
-    if (!isCode(error, "EINVAL") && !isCode(error, "ENOTSUP")) throw error;
-  } finally {
-    if (directory !== null) closeSync(directory);
+  // Persist the rename itself. Windows cannot open a directory handle for fsync
+  // (EPERM) — the file is still atomically replaced, so skip it there (matching
+  // the audit store and doc-service). Elsewhere, some filesystems still reject
+  // it, so only propagate errors from platforms that support the operation.
+  if (process.platform !== "win32") {
+    let directory: number | null = null;
+    try {
+      directory = openSync(dirname(path), "r");
+      fsyncSync(directory);
+    } catch (error) {
+      if (!isCode(error, "EINVAL") && !isCode(error, "ENOTSUP")) throw error;
+    } finally {
+      if (directory !== null) closeSync(directory);
+    }
   }
 }
 
@@ -1906,21 +1911,27 @@ async function atomicWriteCache(path: string, body: string): Promise<void> {
   await mkdirAsync(dirname(path), { recursive: true, mode: 0o700 });
   const tmp = `${path}.tmp`;
   await writeFileAsync(tmp, body, { mode: 0o600 });
-  const file = await openAsync(tmp, "r");
+  // "r+", not "r": Windows fsync (FlushFileBuffers) needs a write-access handle.
+  const file = await openAsync(tmp, "r+");
   try {
     await file.sync();
   } finally {
     await file.close();
   }
   await renameAsync(tmp, path);
-  let directory: Awaited<ReturnType<typeof openAsync>> | null = null;
-  try {
-    directory = await openAsync(dirname(path), "r");
-    await directory.sync();
-  } catch (error) {
-    if (!isCode(error, "EINVAL") && !isCode(error, "ENOTSUP")) throw error;
-  } finally {
-    await directory?.close();
+  // Directory fsync: Windows cannot open a dir handle for fsync (EPERM) — the
+  // atomic rename holds, so skip it there (matching the audit store, doc-service,
+  // and atomicWriteIntent above). Other filesystems may reject it too.
+  if (process.platform !== "win32") {
+    let directory: Awaited<ReturnType<typeof openAsync>> | null = null;
+    try {
+      directory = await openAsync(dirname(path), "r");
+      await directory.sync();
+    } catch (error) {
+      if (!isCode(error, "EINVAL") && !isCode(error, "ENOTSUP")) throw error;
+    } finally {
+      await directory?.close();
+    }
   }
 }
 

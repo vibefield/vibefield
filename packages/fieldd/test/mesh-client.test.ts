@@ -1,13 +1,14 @@
 // MeshClient (C2): declarative serve replay-set + honest UNAVAILABLE handling,
 // against the scripted mock (no cargo, no tailnet).
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { PORTS } from "@vibefield/contracts";
+import { dirname, join } from "node:path";
+import { isPipeEndpoint, PORTS, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { MeshClient, type ServeState } from "../src/mesh-client";
 import { NativeLink } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -29,11 +30,16 @@ async function setup(): Promise<{ mock: MockMgmtServer; link: NativeLink; mesh: 
   const dir = mkdtempSync(join(tmpdir(), "vf-mesh-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, "pairing"), "ab".repeat(32));
-  const mock = new MockMgmtServer(join(dir, "mgmt.sock"));
+  // One resolution (WIN-D1) reused by both ends: a filesystem path on unix, a
+  // root-scoped pipe name on win32. Resolving twice is how a bind and a dial
+  // drift apart.
+  const endpoint = nativeEndpoint(dir, SOCKETS.MGMT);
+  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  const mock = new MockMgmtServer(endpoint);
   await mock.start();
   cleanup.push(() => mock.stop());
   const link = new NativeLink({
-    socketPath: join(dir, "mgmt.sock"),
+    socketPath: endpoint,
     pairingFile: join(dir, "pairing"),
     bootId: "b",
   });

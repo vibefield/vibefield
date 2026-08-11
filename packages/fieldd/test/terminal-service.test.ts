@@ -10,10 +10,12 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   type DeviceInfo,
+  isPipeEndpoint,
   METHODS,
+  SOCKETS,
   TerminalConfigDocument,
   TerminalConfigWriteResult,
   TerminalConnectTicketResult,
@@ -27,6 +29,7 @@ import WebSocket from "ws";
 import { bootstrap, RpcCallError } from "../src/index";
 import { TerminalService } from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint, shortTmpRoot } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -52,7 +55,7 @@ function makeDataDir(): string {
 async function startMock(dataDir: string): Promise<MockMgmtServer> {
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-  const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await mock.start();
   cleanup.push(() => mock.stop());
   return mock;
@@ -149,9 +152,17 @@ async function startFakeFloor(
   /** how many control connections this floor has accepted */
   connections: () => number;
 }> {
-  const dir = mkdtempSync(join("/tmp", "vf-fake-"));
+  // The root is the harness's (short on unix for the sun_path budget, tmpdir()
+  // on win32 where no /tmp exists), and the fake binds the endpoint the real
+  // floor would: `native/run/termctl.sock` under it on unix — the run dir is
+  // ours to make, nothing spawned field-native here — or a root-scoped pipe
+  // name on win32, which `net.Server.listen` needs instead of any path.
+  const dir = shortTmpRoot("vf-fake-");
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
-  const socketPath = join(dir, "control.sock");
+  const controlEndpoint = nativeEndpoint(dir, SOCKETS.TERMINAL_CONTROL);
+  if (!isPipeEndpoint(controlEndpoint)) {
+    mkdirSync(dirname(controlEndpoint), { recursive: true });
+  }
   const createdSessionId = "fake-session-1";
   const live = new Set<Socket>();
   const document: FakeConfigDocument = {
@@ -236,7 +247,7 @@ async function startFakeFloor(
       }
     });
   });
-  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+  await new Promise<void>((resolve) => server.listen(controlEndpoint, resolve));
   cleanup.push(
     () =>
       new Promise<void>((r) => {
@@ -248,8 +259,10 @@ async function startFakeFloor(
   );
   return {
     endpoints: {
-      controlSocket: socketPath,
-      frameSocket: join(dir, "frame.sock"),
+      controlSocket: controlEndpoint,
+      // never bound by this fake — the frame plane belongs to a real floor, and
+      // this only has to be the endpoint a ticket would carry
+      frameSocket: nativeEndpoint(dir, SOCKETS.TERMINAL_FRAME),
       authToken: "fake-token",
     },
     createdSessionId,

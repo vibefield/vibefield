@@ -984,11 +984,17 @@ async function atomicWrite(dir: string, name: string, data: Uint8Array | string)
     await rm(tmp, { force: true }).catch(() => {});
     throw e;
   }
-  const dirFd = await open(dir, "r");
-  try {
-    await dirFd.sync();
-  } finally {
-    await dirFd.close();
+  // Directory fsync persists the rename. Windows cannot open a directory handle
+  // for fsync (EPERM); the atomic rename still holds, so skip it there — the
+  // same durability posture the audit store takes (audit/src/index.ts
+  // syncDirectory), with packaged-Windows durability proven by its own gate.
+  if (process.platform !== "win32") {
+    const dirFd = await open(dir, "r");
+    try {
+      await dirFd.sync();
+    } finally {
+      await dirFd.close();
+    }
   }
 }
 

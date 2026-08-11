@@ -11,6 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineQuery, ENGINE_SCHEMA_VERSION, Position, PrefabId } from "@vibecook/ice";
+import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
@@ -42,7 +43,12 @@ async function stack(dataDir?: string): Promise<{ dataDir: string; daemon: Field
     cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
     mkdirSync(join(dir, "native", "run"), { recursive: true });
     writeFileSync(join(dir, "native", "pairing"), "ab".repeat(32));
-    const mock = new MockMgmtServer(join(dir, "native", "run", "mgmt.sock"));
+    // WIN-D1: pipe name on win32, joined LAYOUT path on unix (what fieldd dials)
+    const mock = new MockMgmtServer(
+      process.platform === "win32"
+        ? pipeEndpointFor(dir, SOCKETS.MGMT)
+        : join(dir, ...LAYOUT.MGMT_SOCKET),
+    );
     await mock.start();
     cleanup.push(() => mock.stop());
   }

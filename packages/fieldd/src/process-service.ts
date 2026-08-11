@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { isAbsolute, resolve, sep } from "node:path";
+import { posix, resolve, sep } from "node:path";
 import {
   ENV_PREFIXES,
   type ProcessRecord,
@@ -10,21 +10,30 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
+import { shimSpawn } from "./spawn-shim";
 
 // ProcessService (plugin spec §17.1, P6): the ONLY door to plugin child
 // processes. fieldd owns the process group and the termination ladder; plugin
 // code never touches ambient child_process (the import wall enforces the SDK
 // side; this service is the daemon side). Every child:
-//   - runs with a MINIMAL base env, plugin additions layered under it, and
-//     every FIELD_*/FIELDD_* key stripped LAST (EL7 — the host wins; daemon
-//     and plugin bearer tokens never reach a child, even via params.env);
+//   - runs with a MINIMAL, platform-shaped base env, plugin additions layered
+//     under it, and every FIELD_*/FIELDD_* key stripped LAST (EL7 — the host
+//     wins; daemon and plugin bearer tokens never reach a child, even via
+//     params.env). WIN-3: that strip folds case on win32, where the env itself
+//     does — an exact-prefix compare leaves `Field_Token` in place and the child
+//     reads it back folded, a leak that fails NO test on unix (§4.2);
 //   - is provenance-recorded (§15.5) and visible via process.stat/subscribe;
 //   - dies no later than fieldd shutdown in v1 (stopAll).
 //
 // v1 executable policy (§17.1 "resolves executable policy" — recorded
 // decision): an ABSOLUTE path, or a bare command name resolved via PATH.
 // Relative paths are refused (no cwd-dependent surprises); a later rung can
-// tighten this to per-plugin allowlists without an SDK break.
+// tighten this to per-plugin allowlists without an SDK break. On win32 that
+// promise costs three more refusals, because three Windows spellings are
+// working-directory-dependent while reading absolute-ish: `..\evil.exe`,
+// the drive-relative `C:evil` (resolved against that drive's own cwd), and the
+// current-drive-rooted `\evil.exe`. Drive-absolute and UNC paths are absolute
+// and stay allowed.
 
 const MAX_PROCS_PER_PLUGIN = 8;
 /** §18.3-shaped restart ladder for restart:"on-crash" children. */
@@ -70,20 +79,68 @@ const isUnderRoot = (path: string, root: string): boolean => {
   return p === r || p.startsWith(r + sep);
 };
 
+/** The POSIX floor: a shell, a locale, a temp dir, a search path, a home. */
+const UNIX_BASE_KEYS = ["PATH", "HOME", "LANG", "TMPDIR", "SHELL"];
+/** The win32 floor (WIN-3, §4.5). Those five say almost nothing here, and a
+ * child with no `SystemRoot` cannot load its own runtime — "many Windows
+ * binaries won't start" is the measured failure, not a theory. PATHEXT/COMSPEC
+ * are the `.cmd` door; the temp pair, the per-user roots and the two CPU facts
+ * are what language runtimes read before main(). Names are CANONICAL here: the
+ * parent's own keys are matched case-insensitively, because Windows env keys are
+ * and they arrive with whatever casing set them. */
+const WIN32_BASE_KEYS = [
+  "PATH",
+  "PATHEXT",
+  "SystemRoot",
+  "windir",
+  "COMSPEC",
+  "TEMP",
+  "TMP",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "USERPROFILE",
+  "PROGRAMDATA",
+  "NUMBER_OF_PROCESSORS",
+  "PROCESSOR_ARCHITECTURE",
+];
+
 /** Minimal, boring base env — never process.env wholesale (EL7). */
-const baseEnv = (): Record<string, string> => {
+const baseEnv = (
+  platform = process.platform,
+  parent: NodeJS.ProcessEnv = process.env,
+): Record<string, string> => {
   const out: Record<string, string> = {};
-  for (const key of ["PATH", "HOME", "LANG", "TMPDIR", "SHELL"]) {
-    const v = process.env[key];
+  if (platform !== "win32") {
+    for (const key of UNIX_BASE_KEYS) {
+      const v = parent[key];
+      if (v !== undefined) out[key] = v;
+    }
+    return out;
+  }
+  const folded = new Map<string, string>();
+  for (const [k, v] of Object.entries(parent)) if (v !== undefined) folded.set(k.toUpperCase(), v);
+  for (const key of WIN32_BASE_KEYS) {
+    const v = folded.get(key.toUpperCase());
     if (v !== undefined) out[key] = v;
   }
   return out;
 };
 
-const stripPrefixed = (env: Record<string, string>): Record<string, string> => {
+const stripPrefixed = (
+  env: Record<string, string>,
+  platform = process.platform,
+): Record<string, string> => {
+  // Case folds on win32 ONLY: unix env keys are genuinely case-sensitive, so
+  // folding there would eat a legitimately distinct variable that merely spells
+  // a reserved prefix in another case.
+  const fold = platform === "win32";
+  const prefixes: readonly string[] = fold
+    ? ENV_PREFIXES.map((p) => p.toUpperCase())
+    : ENV_PREFIXES;
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(env)) {
-    if (ENV_PREFIXES.some((p) => k.startsWith(p))) continue;
+    const probe = fold ? k.toUpperCase() : k;
+    if (prefixes.some((p) => probe.startsWith(p))) continue;
     out[k] = v;
   }
   return out;
@@ -93,8 +150,24 @@ const stripPrefixed = (env: Record<string, string>): Record<string, string> => {
  * child (MCP stdio servers ride this too): minimal base, additions layered,
  * FIELD_-/FIELDD_-prefixed keys stripped LAST so nothing smuggles a daemon
  * secret (EL7). */
-export const pluginChildEnv = (extra?: Record<string, string>): Record<string, string> =>
-  stripPrefixed({ ...baseEnv(), ...(extra ?? {}) });
+export const pluginChildEnv = (
+  extra?: Record<string, string>,
+  platform = process.platform,
+  parent: NodeJS.ProcessEnv = process.env,
+): Record<string, string> =>
+  stripPrefixed({ ...baseEnv(platform, parent), ...(extra ?? {}) }, platform);
+
+/** The executable candidates a plugin may name (§17.1), platform-shaped: unix
+ * refuses any relative path; win32 allows a drive-absolute or UNC path, or a
+ * name with no separator or drive at all, and refuses everything else. */
+export const executableAllowed = (executable: string, platform = process.platform): boolean => {
+  if (executable.length === 0) return false;
+  if (platform === "win32") {
+    if (/^[A-Za-z]:[\\/]/.test(executable) || executable.startsWith("\\\\")) return true;
+    return !/[\\/:]/.test(executable); // a bare name — PATH resolves it
+  }
+  return posix.isAbsolute(executable) || !executable.includes("/");
+};
 
 export class ProcessService extends EventEmitter {
   private readonly log: Logger;
@@ -132,7 +205,7 @@ export class ProcessService extends EventEmitter {
         false,
         { pluginKind: "PLUGIN_QUOTA_EXCEEDED", limit: MAX_PROCS_PER_PLUGIN },
       );
-    if (!isAbsolute(params.executable) && params.executable.includes("/"))
+    if (!executableAllowed(params.executable))
       throw new RpcCallError(
         "PRECONDITION_FAILED",
         "executable must be an absolute path or a bare PATH command",
@@ -175,14 +248,23 @@ export class ProcessService extends EventEmitter {
 
   private launch(sup: Supervised): void {
     // additions first, host strip LAST — a plugin cannot smuggle FIELD_* back in
-    const env = stripPrefixed({ ...baseEnv(), ...(sup.params.env ?? {}) });
+    const env = pluginChildEnv(sup.params.env);
+    // WIN-3 — a `.cmd`/`.bat` target cannot be spawned without a shell since
+    // CVE-2024-27980, so the shim door quotes it into `cmd.exe /d /s /c` itself
+    // rather than handing plugin argv to a shell. Transparent everywhere else.
+    const cmd = shimSpawn(sup.params.executable, sup.params.args, process.platform, {
+      env,
+      ...(sup.params.cwd !== undefined ? { cwd: sup.params.cwd } : {}),
+    });
     let child: ChildProcess;
     try {
-      child = spawn(sup.params.executable, sup.params.args, {
+      child = spawn(cmd.command, cmd.args, {
         ...(sup.params.cwd !== undefined ? { cwd: sup.params.cwd } : {}),
         env,
         stdio: ["ignore", "ignore", "ignore"],
         detached: true, // its own process group — fieldd owns and kills the GROUP
+        windowsHide: true, // a supervised background child flashes no console
+        ...(cmd.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
       });
     } catch (e) {
       sup.state = "failed";

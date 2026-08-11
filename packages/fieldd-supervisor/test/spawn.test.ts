@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { CONTRACTS_VERSION } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  assertDataRootUsable,
   createFielddSupervisor,
   type FielddSupervisorEvent,
   type FielddSupervisorOptions,
@@ -357,5 +358,11 @@ describe("the sun_path guard (slice-0 finding 4)", () => {
     expect((err as SupervisorError).kind).toBe("data-root-too-long");
     expect(existsSync(sentinel)).toBe(false); // nothing was spawned
     expect(hasLifecycle(logs, "fieldd.supervisor.spawned")).toBe(false);
+  });
+
+  it("the budget is a unix law — win32 endpoints are pipes, not paths (WIN-D1)", () => {
+    const root = h.mkLongRoot();
+    expect(() => assertDataRootUsable(root, "win32")).not.toThrow();
+    expect(() => assertDataRootUsable(root, "darwin")).toThrow(SupervisorError);
   });
 });

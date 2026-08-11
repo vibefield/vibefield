@@ -55,8 +55,11 @@ describe("@vibefield/audit storage", () => {
     const name = (await readdir(auditRoot)).find((entry) => entry.endsWith(".jsonl"));
     expect(name).toBeDefined();
     const path = join(auditRoot, name as string);
-    expect((await stat(auditRoot)).mode & 0o777).toBe(0o700);
-    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    // POSIX mode bits are a no-op on Windows (WIN-D4); the 0600/0700 boundary is an ACL there, proven by the packaged gate.
+    if (process.platform !== "win32") {
+      expect((await stat(auditRoot)).mode & 0o777).toBe(0o700);
+      expect((await stat(path)).mode & 0o777).toBe(0o600);
+    }
     const verified = await verifyAuditSegment(path);
     expect(verified).toMatchObject({
       valid: true,

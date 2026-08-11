@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import {
   LOG_TRANSPORT_LIMITS,
@@ -211,7 +212,12 @@ export class ServiceHost {
     }
 
     const harness =
-      this.cfg.harnessPath ?? new URL("./service-worker-harness.mjs", import.meta.url).pathname;
+      // fileURLToPath, not `.pathname`: on Windows `.pathname` is `/C:/…/harness.mjs`
+      // (a leading-slash drive path) that new Worker cannot load, so the service
+      // never activates and every `until(active)` times out. fileURLToPath yields
+      // the native path on both platforms.
+      this.cfg.harnessPath ??
+      fileURLToPath(new URL("./service-worker-harness.mjs", import.meta.url));
     let worker: Worker;
     try {
       worker = new Worker(harness, {

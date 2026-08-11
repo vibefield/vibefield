@@ -229,7 +229,14 @@ export async function mutateUsersFile(
 // BEFORE any directory exists, naming the socket. 103 = macOS sun_path − NUL.
 const SUN_PATH_MAX_BYTES = 103;
 
-export function assertUserRootBudget(rootReal: string, fuid: number): void {
+export function assertUserRootBudget(
+  rootReal: string,
+  fuid: number,
+  platform = process.platform,
+): void {
+  // WIN-D1: named pipes carry no sun_path budget — the guard is a unix law
+  // (see fieldd-supervisor/src/paths.ts, the spawn-time twin of this check).
+  if (platform === "win32") return;
   const userRoot = join(rootReal, ...LAYOUT.USERS_DIR, String(fuid));
   for (const segments of Object.values(LAYOUT)) {
     const last = segments[segments.length - 1];

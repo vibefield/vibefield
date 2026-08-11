@@ -94,9 +94,12 @@ describe("LOG-L6 append-only audit ledger", () => {
     const files = await auditFiles(service.root);
     expect(files).toHaveLength(1);
     expect(files[0]).toContain("own-actions.2026-07.fieldd-audit-test.jsonl");
-    expect((await stat(service.root)).mode & 0o777).toBe(0o700);
-    expect((await stat(files[0] as string)).mode & 0o777).toBe(0o600);
-    expect((await stat(`${files[0]}.integrity.json`)).mode & 0o777).toBe(0o600);
+    // POSIX mode bits are a no-op on Windows (WIN-D4); the 0600/0700 boundary is an ACL there, proven by the packaged gate.
+    if (process.platform !== "win32") {
+      expect((await stat(service.root)).mode & 0o777).toBe(0o700);
+      expect((await stat(files[0] as string)).mode & 0o777).toBe(0o600);
+      expect((await stat(`${files[0]}.integrity.json`)).mode & 0o777).toBe(0o600);
+    }
 
     const verified = await verifyAuditSegment(files[0] as string);
     expect(verified).toMatchObject({

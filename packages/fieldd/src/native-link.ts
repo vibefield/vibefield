@@ -1,7 +1,12 @@
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
-import { CONTRACTS_VERSION, MESH_CONTROL_LIMITS, TerminalEndpoints } from "@vibefield/contracts";
+import {
+  CONTRACTS_VERSION,
+  isPipeEndpoint,
+  MESH_CONTROL_LIMITS,
+  TerminalEndpoints,
+} from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { computePairingMac } from "./pairing";
 
@@ -121,7 +126,13 @@ export class NativeLink extends EventEmitter {
     let lastTransportFailure: unknown;
     while (Date.now() <= deadline) {
       this.assertOpen();
-      if (existsSync(this.opts.pairingFile) && existsSync(this.opts.socketPath)) {
+      // WIN-D1: the pairing file is a real file on every platform, but the
+      // endpoint is a filesystem node only on unix — a named pipe never
+      // appears on disk, so there the dial attempt itself is the probe.
+      if (
+        existsSync(this.opts.pairingFile) &&
+        (isPipeEndpoint(this.opts.socketPath) || existsSync(this.opts.socketPath))
+      ) {
         try {
           await this.dial();
           return;
@@ -559,7 +570,10 @@ function isRetryableInitialTransportFailure(error: unknown): boolean {
     code === "ECONNRESET" ||
     code === "ENOENT" ||
     code === "ENOTSOCK" ||
-    code === "EPIPE"
+    code === "EPIPE" ||
+    // win32 named pipe between listener instances — the documented retry code
+    // (ghosttea-client's openEndpoint carries the same contract)
+    code === "EBUSY"
   );
 }
 

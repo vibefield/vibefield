@@ -2,18 +2,21 @@
 // (Rust binary) over the mgmt UDS — D8 end to end, then the full spine:
 // WS client → ProductAPI → NativeLink → field-native and back.
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddHealth, NativeLink } from "../src/index";
+import { nativeBinPath, nativeEndpoint, waitForMgmtEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const BIN = join(ROOT, "target/debug/field-native");
+const BIN = nativeBinPath(ROOT);
+const mgmtOf = (dir: string) => nativeEndpoint(dir, SOCKETS.MGMT);
 
 let children: ChildProcess[] = [];
 let dirs: string[] = [];
@@ -58,12 +61,7 @@ async function spawnNative(): Promise<string> {
     stdio: "ignore",
   });
   children.push(child);
-  const socket = join(dir, "native/run/mgmt.sock");
-  const deadline = Date.now() + 10_000;
-  while (!existsSync(socket)) {
-    if (Date.now() > deadline) throw new Error("field-native socket never appeared");
-    await new Promise((r) => setTimeout(r, 50));
-  }
+  await waitForMgmtEndpoint(dir, 10_000);
   return dir;
 }
 
@@ -82,7 +80,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
   it("NativeLink pairs with the real daemon and drives the survivor set", async () => {
     const dir = await spawnNative();
     const link = new NativeLink({
-      socketPath: join(dir, "native/run/mgmt.sock"),
+      socketPath: mgmtOf(dir),
       pairingFile: join(dir, "native/pairing"),
       bootId: "fieldd-test-boot",
     });
@@ -106,7 +104,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     const dir = await spawnNative();
     const mk = (bootId: string) =>
       new NativeLink({
-        socketPath: join(dir, "native/run/mgmt.sock"),
+        socketPath: mgmtOf(dir),
         pairingFile: join(dir, "native/pairing"),
         bootId,
       });
@@ -217,7 +215,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     const wsClosed = new Promise<void>((r) => ws.once("close", () => r()));
     // a newer fieldd takes over the native plane
     const usurper = new NativeLink({
-      socketPath: join(dir, "native/run/mgmt.sock"),
+      socketPath: mgmtOf(dir),
       pairingFile: join(dir, "native/pairing"),
       bootId: "fieldd-usurper",
     });
@@ -244,7 +242,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
 
     // rollback released its mgmt connection: a fresh link pairs and works immediately
     const fresh = new NativeLink({
-      socketPath: join(dir, "native/run/mgmt.sock"),
+      socketPath: mgmtOf(dir),
       pairingFile: join(dir, "native/pairing"),
       bootId: "fieldd-after-rollback",
     });

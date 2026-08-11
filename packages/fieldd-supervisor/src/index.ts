@@ -1,6 +1,13 @@
 // @vibefield/fieldd-supervisor — Node-only fieldd ownership for the shell
 // (ESR spec §5.3). No Electron anywhere below this line (wall R3).
-export { assertDataRootUsable, nativeSocketPath, productPath, runDir, tokenPath } from "./paths";
+export {
+  assertDataRootUsable,
+  nativeMgmtEndpoint,
+  nativeSocketPath,
+  productPath,
+  runDir,
+  tokenPath,
+} from "./paths";
 export { type ProbeResult, tryAdopt } from "./probe";
 export {
   createLineBuffer,

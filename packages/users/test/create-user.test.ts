@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { UsersError } from "../src/errors";
 import {
+  assertUserRootBudget,
   createUser,
   mintLockedUsersFile,
   readUsersFile,
@@ -72,5 +73,12 @@ describe("UA-5 — createUser", () => {
     expect((caught as UsersError).message).toContain("termframe.sock");
     expect(readFileSync(usersFilePath(root), "utf8")).toBe(before);
     expect(existsSync(join(root, "users", "2"))).toBe(false);
+  });
+
+  it("the budget is a unix law — win32 endpoints are pipes, not paths (WIN-D1)", () => {
+    // same 70-byte root that just refused on darwin: pure byte math, no fs
+    const root = `/tmp/${"x".repeat(65)}`;
+    expect(() => assertUserRootBudget(root, 2, "win32")).not.toThrow();
+    expect(() => assertUserRootBudget(root, 2, "darwin")).toThrow(UsersError);
   });
 });

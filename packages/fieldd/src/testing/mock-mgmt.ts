@@ -4,7 +4,7 @@
 // protocol: hello, *.subscribe → {subId, snapshot}, everything else → {}.
 import { rmSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
-import { LOG_STREAMS, STORES } from "@vibefield/contracts";
+import { isPipeEndpoint, LOG_STREAMS, STORES } from "@vibefield/contracts";
 
 export class MockMgmtServer {
   server: Server | null = null;
@@ -75,14 +75,20 @@ export class MockMgmtServer {
   /** Historical subscribe requests, retained across scripted reconnects. */
   readonly subscriptionRequests: string[] = [];
 
-  constructor(public readonly socketPath: string) {}
+  /** `endpoint` is a WIN-D1 endpoint, resolved by the suite (which owns its data
+   * root) — a filesystem path on unix, a `\\.\pipe\…` name on win32. Node's
+   * `listen`/`createConnection` speak both from the string alone. */
+  constructor(public readonly endpoint: string) {}
 
   async start(): Promise<void> {
-    rmSync(this.socketPath, { force: true });
+    // Unlink a stale inode from a previous bind — a unix-only act: a named pipe
+    // has no filesystem presence for `rmSync` to find, and handing it a
+    // `\\.\pipe\…` path asks the disk about a namespace it does not own.
+    if (!isPipeEndpoint(this.endpoint)) rmSync(this.endpoint, { force: true });
     this.server = createServer((sock) => this.onConn(sock));
     await new Promise<void>((resolve, reject) => {
       this.server!.once("error", reject);
-      this.server!.listen(this.socketPath, resolve);
+      this.server!.listen(this.endpoint, resolve);
     });
   }
 

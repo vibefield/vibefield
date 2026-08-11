@@ -30,6 +30,7 @@ import {
   ShellProviderCallParams,
   type ShellWebContentsCaptureArtifactPreviewParams,
   type ShellWebContentsCaptureArtifactPreviewResult,
+  SOCKETS,
 } from "@vibefield/contracts";
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -48,6 +49,7 @@ import { bootstrap, verifyAuditSegment } from "../src/index";
 import type { ObservedServe, ServeSpec, ServeState } from "../src/mesh-client";
 import { RpcCallError } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const A = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
@@ -1207,7 +1209,7 @@ describe("Artifact Hub over a real daemon", () => {
   async function boot(dataDir: string, configure?: (mock: MockMgmtServer) => void) {
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
     configure?.(mock);
     await mock.start();
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });

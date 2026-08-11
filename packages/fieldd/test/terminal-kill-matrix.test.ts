@@ -5,7 +5,7 @@
 // through the D6 ticket; churn leaves no residue. Row 2 (field-native's own
 // SIGTERM sweep) is pinned Rust-side in field-native/tests/terminal_unit.rs.
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
@@ -13,10 +13,11 @@ import type { TerminalInfo, TerminalTicket } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
+import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const BIN = join(ROOT, "target/debug/field-native");
+const BIN = nativeBinPath(ROOT);
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -42,7 +43,7 @@ interface NativeHandle {
 }
 
 async function spawnNative(dir?: string): Promise<NativeHandle> {
-  const dataDir = dir ?? mkdtempSync("/tmp/vf-km-");
+  const dataDir = dir ?? shortTmpRoot("vf-km-");
   if (dir === undefined) cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   const child = spawn(BIN, [], {
     env: {
@@ -59,12 +60,7 @@ async function spawnNative(dir?: string): Promise<NativeHandle> {
     stdio: "ignore",
   });
   children.push(child);
-  const socket = join(dataDir, "native/run/mgmt.sock");
-  const deadline = Date.now() + 15_000;
-  while (!existsSync(socket)) {
-    if (Date.now() > deadline) throw new Error("field-native did not come up");
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  await waitForMgmtEndpoint(dataDir, 15_000);
   return { dir: dataDir, child };
 }
 
@@ -94,7 +90,8 @@ async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T>
 const listOf = async (rpc: WsRpc): Promise<TerminalInfo[]> =>
   ((await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] }).terminals;
 
-describe("the kill matrix (NF-4, real field-native)", () => {
+// Windows terminal hosting is WIN-6 (ConPTY) — thinking-windows-port §6; the mesh/health surface is covered elsewhere
+describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field-native)", () => {
   it("row 1: the PTY survives fieldd; the next fieldd adopts it inside 2s", async () => {
     const native = await spawnNative();
     const daemon1 = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });

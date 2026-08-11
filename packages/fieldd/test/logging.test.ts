@@ -2,9 +2,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { until } from "./ws-rpc";
 
 interface Fixture {
@@ -37,7 +39,7 @@ async function setup(): Promise<Fixture> {
   // Produces one of the migrated doc-service events during pre-listen
   // composition, proving the sink exists before product services.
   writeFileSync(join(dataDir, "registries", "field.docs.v1.json"), '[{"invalid":true}]\n');
-  const native = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  const native = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await native.start();
   const daemon = await bootstrap({
     dataDir,
@@ -95,7 +97,10 @@ describe("fieldd process-owned logging", () => {
     ).toBe("docs.service");
     expect(raw).not.toContain(shellToken);
     expect(raw).not.toContain(pairingSecret);
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    // POSIX mode bits are a no-op on Windows (WIN-D4); the 0600/0700 boundary is an ACL there, proven by the packaged gate.
+    if (process.platform !== "win32") {
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+    }
 
     const pluginFile = join(logRoot, "plugins", "service.ndjson");
     const pluginRaw = readFileSync(pluginFile, "utf8");
@@ -133,6 +138,8 @@ describe("fieldd process-owned logging", () => {
     );
     expect(raw).not.toContain("fixture service stdout");
     expect(pluginRaw).not.toContain("plugin-secret-canary-abcdefghijklmnopqrstuvwxyz");
-    expect(statSync(pluginFile).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") {
+      expect(statSync(pluginFile).mode & 0o777).toBe(0o600);
+    }
   }, 15_000);
 });

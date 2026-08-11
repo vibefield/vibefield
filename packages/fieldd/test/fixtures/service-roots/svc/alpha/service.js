@@ -33,12 +33,16 @@ export default {
         // P6 — the §17.1 chain end-to-end: lease scope → ctx.process →
         // product method → ProcessService. The child outlives this call so
         // the suite can prove the disable cascade kills it.
+        //
+        // WIN-4: the idle child is THIS node (`process.execPath`, absolute on
+        // every platform) rather than `/bin/sh -c "sleep 30"`, which does not
+        // exist on Windows — it took the whole disable-cascade test down there.
         spawnproc: {
           kind: "mutation",
           handle: async () => {
             const handle = await ctx.process.spawn({
-              executable: "/bin/sh",
-              args: ["-c", "sleep 30"],
+              executable: process.execPath,
+              args: ["-e", "setInterval(() => {}, 1000)"],
               restart: "never",
             });
             const rec = await handle.stat();

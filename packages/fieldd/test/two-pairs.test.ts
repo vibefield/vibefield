@@ -6,7 +6,7 @@
 // this possible at all — the fixed 9410/9411 were the accidental machine-wide
 // mutex V5 named, and this test is the mutex's tombstone.
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { UserRecord } from "@vibefield/contracts";
@@ -14,10 +14,11 @@ import { createUser, mintLockedUsersFile, userRootFor, usersFilePath } from "@vi
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
+import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const BIN = join(ROOT, "target/debug/field-native");
+const BIN = nativeBinPath(ROOT);
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -47,12 +48,7 @@ async function spawnNativeAt(dataDir: string): Promise<ChildProcess> {
     stdio: "ignore",
   });
   children.push(child);
-  const socket = join(dataDir, "native/run/mgmt.sock");
-  const deadline = Date.now() + 15_000;
-  while (!existsSync(socket)) {
-    if (Date.now() > deadline) throw new Error("field-native did not come up");
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  await waitForMgmtEndpoint(dataDir, 15_000);
   return child;
 }
 
@@ -84,7 +80,7 @@ async function health(daemon: FielddDaemon): Promise<unknown> {
 
 describe("UA-5 — two resident pairs on one machine", () => {
   it("no port/socket/store collision, both answer concurrently, users.json untouched", async () => {
-    const vfRoot = mkdtempSync("/tmp/vf-2p-");
+    const vfRoot = shortTmpRoot("vf-2p-");
     cleanup.push(() => rmSync(vfRoot, { recursive: true, force: true }));
     const { file } = mintLockedUsersFile(vfRoot);
     const first = file.users[0];
@@ -101,9 +97,14 @@ describe("UA-5 — two resident pairs on one machine", () => {
     for (const port of ports) expect(port).toBeGreaterThan(0);
     expect(new Set(ports).size).toBe(4);
 
-    // the socket audit — each pair's floor under its OWN root, both alive
-    expect(existsSync(join(userRootFor(vfRoot, first), "native/run/mgmt.sock"))).toBe(true);
-    expect(existsSync(join(userRootFor(vfRoot, second), "native/run/mgmt.sock"))).toBe(true);
+    // the socket audit — each pair's floor under its OWN root, BOTH still
+    // answering now that the other is up. A dial, not existsSync: a win32
+    // endpoint is a named pipe with no filesystem presence (WIN-D1), and
+    // "answers" was always the claim the file's existence stood in for. These
+    // throw (naming the endpoint) rather than returning false.
+    for (const record of [first, second]) {
+      await waitForMgmtEndpoint(userRootFor(vfRoot, record), 1_000);
+    }
 
     // both product planes answer WHILE the other lives — the resident promise
     const [healthA, healthB] = await Promise.all([health(a), health(b)]);

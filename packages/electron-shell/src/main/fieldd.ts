@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { PLUGIN_LIMITS } from "@vibefield/contracts";
 import { createFielddSupervisor, type FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
@@ -78,10 +78,14 @@ export function buildSupervisor(opts: {
       ...(nodeMode ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
       // PLUG-P2 — plugin discovery roots (§9.1), now layout-derived: the repo in
       // development, Resources/plugins/bundled when packaged. Explicit env still
-      // wins (PATH-style lists, see fieldd bin.ts).
-      FIELDD_PLUGIN_ROOTS: process.env["FIELDD_PLUGIN_ROOTS"] ?? pluginRoots.bundled.join(":"),
+      // wins (PATH-style lists, see fieldd bin.ts). WIN-3: `path.delimiter` —
+      // this is the ENCODER half, whose decoder is fieldd's `splitPathList`; on
+      // Windows a `:` join shreds every `C:\…` root, and flipping one side alone
+      // just moves the silent break.
+      FIELDD_PLUGIN_ROOTS:
+        process.env["FIELDD_PLUGIN_ROOTS"] ?? pluginRoots.bundled.join(delimiter),
       FIELDD_PLUGIN_DEV_ROOTS:
-        process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? pluginRoots.devLinked.join(":"),
+        process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? pluginRoots.devLinked.join(delimiter),
       // The shell resolved this root under its own mode policy. Passing that
       // trusted absolute decision keeps all three process owners aligned while
       // fieldd still refuses an ambient override on its own.

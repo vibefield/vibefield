@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { nativeBinPath } from "./native-harness";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -23,6 +25,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 // simply gets cheaper.
 export async function setup(): Promise<void> {
   await new Promise<void>((resolveBuild, reject) => {
+    // the cargo PACKAGE name — never `.exe`, on any platform. Only the artifact
+    // this produces carries the suffix, and only nativeBinPath knows that.
     const build = spawn("cargo", ["build", "-p", "field-native"], {
       cwd: ROOT,
       stdio: ["ignore", "ignore", "pipe"],
@@ -42,4 +46,11 @@ export async function setup(): Promise<void> {
           ),
     );
   });
+  // A green cargo whose artifact is not where the suites will look for it is a
+  // naming assumption, not a build failure — say so once here rather than five
+  // times as an opaque spawn ENOENT inside the suites.
+  const bin = nativeBinPath(ROOT);
+  if (!existsSync(bin)) {
+    throw new Error(`cargo build -p field-native succeeded but ${bin} does not exist`);
+  }
 }

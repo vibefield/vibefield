@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { SOCKETS } from "@vibefield/contracts";
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import {
   buildFixtureRegistry,
@@ -12,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { bootstrap, type FielddDaemon, verifyAuditSegment } from "../src/index";
 import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { until } from "./ws-rpc";
 
 // PLUG-P7 — §16.6 convergence: the DESIRED set in the settings doc drives
@@ -79,7 +81,7 @@ describe("install-set reconciliation (§16.6)", () => {
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
     await mock.start();
     cleanup.push(() => mock.stop());
     const registry = await setupRegistry();
@@ -148,7 +150,7 @@ describe("install-set reconciliation (§16.6)", () => {
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
     await mock.start();
     cleanup.push(() => mock.stop());
     const registry = await setupRegistry();

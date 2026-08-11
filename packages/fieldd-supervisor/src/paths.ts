@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { LAYOUT } from "@vibefield/contracts";
+import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { SupervisorError } from "./types";
 
 /** Run-file layout under the data root (design-02 §3.6) — LAYOUT segments only
@@ -17,9 +17,19 @@ export function tokenPath(dataRoot: string): string {
   return join(dataRoot, ...LAYOUT.SHELL_TOKEN);
 }
 
-export function nativeSocketPath(dataRoot: string): string {
-  return join(dataRoot, ...LAYOUT.MGMT_SOCKET);
+/** WIN-D1 — where field-native's management channel lives under `dataRoot`: a
+ * name derived from the root in the flat pipe namespace on win32 (nothing
+ * appears on disk, which is why the old name lied), the joined LAYOUT path
+ * everywhere else. fieldd's own twin of this law is fieldd/src/boot-env.ts —
+ * both planes must derive from the SAME root string or they miss each other. */
+export function nativeMgmtEndpoint(dataRoot: string, platform = process.platform): string {
+  return platform === "win32"
+    ? pipeEndpointFor(dataRoot, SOCKETS.MGMT)
+    : join(dataRoot, ...LAYOUT.MGMT_SOCKET);
 }
+
+/** @deprecated the name predates named pipes — call `nativeMgmtEndpoint`. */
+export const nativeSocketPath = nativeMgmtEndpoint;
 
 // sun_path is 104 bytes on macOS (108 on Linux); a longer socket path makes
 // field-native's bind fail SILENTLY downstream (pairing file appears, socket
@@ -30,7 +40,11 @@ export function nativeSocketPath(dataRoot: string): string {
 // 103 = 104 - NUL, the exact macOS strlen limit libuv and std enforce.
 const SUN_PATH_MAX_BYTES = 103;
 
-export function assertDataRootUsable(dataRoot: string): void {
+export function assertDataRootUsable(dataRoot: string, platform = process.platform): void {
+  // WIN-D1: on win32 the endpoints are named pipes, not socket files — there is
+  // no sun_path and this byte budget would refuse perfectly valid data roots
+  // (a stock profile path already clears 103 bytes). The guard is a unix law.
+  if (platform === "win32") return;
   for (const segments of Object.values(LAYOUT)) {
     const last = segments[segments.length - 1];
     if (typeof last !== "string" || !last.endsWith(".sock")) continue;
