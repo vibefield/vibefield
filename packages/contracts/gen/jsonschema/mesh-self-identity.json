@@ -1,0 +1,744 @@
+{
+  "$ref": "#/definitions/MeshSelfIdentity",
+  "definitions": {
+    "SemverString": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
+    },
+    "ClientKind": {
+      "type": "string",
+      "enum": [
+        "shell-main",
+        "renderer",
+        "plugin-worker",
+        "ios",
+        "peer-fieldd",
+        "mcp-agent",
+        "fieldd",
+        "field-native",
+        "debug"
+      ]
+    },
+    "ServerKind": {
+      "type": "string",
+      "enum": [
+        "fieldd",
+        "field-native"
+      ]
+    },
+    "PairingMac": {
+      "type": "object",
+      "properties": {
+        "bootId": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "mac": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bootId",
+        "ts",
+        "mac"
+      ],
+      "additionalProperties": true
+    },
+    "TerminalEndpoints": {
+      "type": "object",
+      "properties": {
+        "controlSocket": {
+          "type": "string"
+        },
+        "frameSocket": {
+          "type": "string"
+        },
+        "authToken": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "controlSocket",
+        "frameSocket",
+        "authToken"
+      ],
+      "additionalProperties": true
+    },
+    "ErrorKind": {
+      "type": "string",
+      "enum": [
+        "UNAUTHORIZED",
+        "FORBIDDEN_SCOPE",
+        "NOT_FOUND",
+        "CONFLICT",
+        "PRECONDITION_FAILED",
+        "UNAVAILABLE",
+        "AUDIT_UNAVAILABLE",
+        "TIMEOUT",
+        "INCOMPATIBLE",
+        "RESOURCE_EXHAUSTED",
+        "INTERNAL"
+      ]
+    },
+    "UnavailableDetails": {
+      "type": "object",
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "device": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "state"
+      ],
+      "additionalProperties": true
+    },
+    "ErrorData": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/ErrorKind"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {}
+      },
+      "required": [
+        "kind",
+        "retryable"
+      ],
+      "additionalProperties": true
+    },
+    "RpcError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/definitions/ErrorData"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": true
+    },
+    "RpcId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        }
+      ]
+    },
+    "RpcFailure": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/definitions/RpcId"
+        },
+        "error": {
+          "$ref": "#/definitions/RpcError"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id",
+        "error"
+      ],
+      "additionalProperties": true
+    },
+    "RpcSuccess": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "id": {
+          "$ref": "#/definitions/RpcId"
+        },
+        "result": {}
+      },
+      "required": [
+        "jsonrpc",
+        "id"
+      ],
+      "additionalProperties": true
+    },
+    "UnitState": {
+      "type": "string",
+      "enum": [
+        "starting",
+        "up",
+        "degraded",
+        "crashed",
+        "disabled"
+      ]
+    },
+    "UnitHealth": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/UnitState"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "authUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit",
+        "state"
+      ],
+      "additionalProperties": true
+    },
+    "NativeHealth": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "up",
+            "degraded"
+          ]
+        },
+        "bootId": {
+          "type": "string"
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UnitHealth"
+          }
+        }
+      },
+      "required": [
+        "state",
+        "bootId",
+        "units"
+      ],
+      "additionalProperties": true
+    },
+    "DesiredTerminal": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "persistence": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": true
+    },
+    "DesiredWorker": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "config": {}
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "additionalProperties": true
+    },
+    "MeshConfig": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "DesiredState": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer"
+        },
+        "terminals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DesiredTerminal"
+          }
+        },
+        "workers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DesiredWorker"
+          }
+        },
+        "meshConfig": {
+          "$ref": "#/definitions/MeshConfig"
+        },
+        "observedBootId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation",
+        "terminals",
+        "workers"
+      ],
+      "additionalProperties": true
+    },
+    "ObservedTerminal": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "pid": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "integer"
+        },
+        "persistence": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": true
+    },
+    "ObservedWorker": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/UnitState"
+        }
+      },
+      "required": [
+        "id",
+        "state"
+      ],
+      "additionalProperties": true
+    },
+    "ObservedState": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer"
+        },
+        "bootId": {
+          "type": "string"
+        },
+        "terminals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ObservedTerminal"
+          }
+        },
+        "workers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ObservedWorker"
+          }
+        }
+      },
+      "required": [
+        "generation",
+        "bootId",
+        "terminals",
+        "workers"
+      ],
+      "additionalProperties": true
+    },
+    "WhoIsIdentity": {
+      "type": "object",
+      "properties": {
+        "login": {
+          "type": "string"
+        },
+        "deviceName": {
+          "type": "string"
+        },
+        "tailscaleId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "login"
+      ],
+      "additionalProperties": true
+    },
+    "PeerInfo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "deviceId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "online": {
+          "type": "boolean"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "whois": {
+          "$ref": "#/definitions/WhoIsIdentity"
+        }
+      },
+      "required": [
+        "id",
+        "online"
+      ],
+      "additionalProperties": true
+    },
+    "MeshSelfIdentity": {
+      "$ref": "#/definitions/MeshSelfIdentity"
+    },
+    "MeshRetireResult": {
+      "type": "object",
+      "properties": {
+        "retired": {
+          "type": "boolean"
+        },
+        "archivedTo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "retired",
+        "archivedTo"
+      ],
+      "additionalProperties": true
+    },
+    "StoreSnapshot": {
+      "type": "object",
+      "properties": {
+        "storeId": {
+          "type": "string"
+        },
+        "slices": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "storeId",
+        "slices"
+      ],
+      "additionalProperties": true
+    },
+    "ServeTarget": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "port"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "scheme": {
+              "type": "string",
+              "enum": [
+                "http",
+                "https"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "port"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "dir"
+            },
+            "path": {
+              "type": "string"
+            },
+            "fallback": {
+              "type": "string",
+              "const": "/index.html"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ],
+          "additionalProperties": true
+        }
+      ]
+    },
+    "ServeConfig": {
+      "type": "object",
+      "properties": {
+        "serveId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "listenPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "target": {
+          "$ref": "#/definitions/ServeTarget"
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tls": {
+          "type": "boolean"
+        },
+        "previewDir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pathSecret": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "target"
+      ],
+      "additionalProperties": true
+    },
+    "ServeEntry": {
+      "type": "object",
+      "properties": {
+        "serveId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "listenPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "target": {
+          "$ref": "#/definitions/ServeTarget"
+        },
+        "url": {
+          "type": "string"
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tls": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "running",
+            "stopped",
+            "error"
+          ]
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serveId",
+        "name",
+        "listenPort",
+        "target",
+        "url"
+      ],
+      "additionalProperties": true
+    },
+    "MeshLaneClass": {
+      "type": "string",
+      "enum": [
+        "reliable",
+        "lossy"
+      ]
+    },
+    "MeshLaneProtocol": {
+      "type": "string",
+      "enum": [
+        "doc-sync",
+        "presence"
+      ]
+    },
+    "MeshLaneOpenRequest": {
+      "type": "object",
+      "properties": {
+        "laneId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "class": {
+          "$ref": "#/definitions/MeshLaneClass"
+        },
+        "peer": {
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/definitions/MeshLaneProtocol"
+        },
+        "docId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "laneId",
+        "class",
+        "peer",
+        "protocol"
+      ],
+      "additionalProperties": true
+    },
+    "MeshLaneCloseRequest": {
+      "type": "object",
+      "properties": {
+        "laneId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "laneId"
+      ],
+      "additionalProperties": true
+    },
+    "MeshLanePeerOpened": {
+      "type": "object",
+      "properties": {
+        "laneId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inbound": {
+          "type": "boolean",
+          "const": true
+        },
+        "class": {
+          "$ref": "#/definitions/MeshLaneClass"
+        },
+        "peer": {
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/definitions/MeshLaneProtocol"
+        },
+        "docId": {
+          "type": "string"
+        },
+        "whois": {
+          "$ref": "#/definitions/WhoIsIdentity"
+        }
+      },
+      "required": [
+        "laneId",
+        "inbound",
+        "class",
+        "peer",
+        "protocol"
+      ],
+      "additionalProperties": true
+    },
+    "MeshLaneClosed": {
+      "type": "object",
+      "properties": {
+        "laneId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inbound": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "laneId",
+        "reason"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

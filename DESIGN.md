@@ -31,6 +31,18 @@ Three surface families, one physics:
 | **The chrome** (HUD islands, tray, panels, palette) | Floating translucent materials over the field. Dual-theme, near-colorless, hairline-bordered, blurred. |
 | **The control room** (Godview, diagnostics) | May commit to dark — it is a stage, not a document. Its palette still derives from §2 (no bespoke greens). |
 
+### 1.1 Godview visual source
+
+Godview is the deliberate control-room exception to the iOS-widget chrome around it. Its
+visual source of truth is `p008/chopsticks/apps/godview`: a flat 40px instrument bar, compact
+monospace controls, a gridded agent stage, stark monochrome status bodies, a parchment terminal
+deck in light mode, a graphite terminal deck in dark mode, and the reference scanline/vignette
+treatment. VibeField keeps its own host mechanics, honest mock label, and renderer-native terminal
+alpha, but does not reinterpret that reference through rounded cards, colorful agent fills, or
+floating pills. The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
+composites those status-body colors at 72% by default so they remain legible glass over the field;
+the temporary system-control panel exposes that alpha for live tuning.
+
 **The two signatures** (spend boldness here, keep everything else quiet):
 1. **The living card** — CardShell physics: lift-on-grab, hot-point glow and rim on overlap,
    the sole-selection ring. A VibeField card feels *held*, not dragged.
@@ -46,8 +58,12 @@ Three surface families, one physics:
 | Token | Light | Dark |
 |---|---|---|
 | `--vf-canvas-bg` | `#FAFAFA` | `#171717` |
-| `--vf-canvas-dot` (GL ground) | `#BFC4CC` | `#595E66` |
+| `--vf-canvas-dot` (GL ground) | `#A6A6A6` | `#1C1C1C` |
 | `--vf-canvas-dot` (CSS fallback) | `rgba(0,0,0,0.16)` | `rgba(255,255,255,0.08)` |
+
+The ICE ground projection uses `spacings: [20, 100, 500]`, `dotAlpha: 0.85`,
+`fadeIn: [12, 16]`, `fadeOut: [120, 200]`, `dotRadius: [1.5, 1.5]`, and
+`levelWeight: [1, 0]`.
 
 ### 2.2 Surfaces
 
@@ -97,6 +113,21 @@ orange · `waiting`/`idle` muted (text ramp, no hue) · `done` muted with green 
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
 #06B6D4 · #8B5CF6 · #EF4444 · #3B82F6`. Tint recipe: body fill at 12% (`{hex}1F`),
 hairline at ~35%, label at full. These group and label; they never signal state.
+
+### 2.7 Godview instrument palette
+
+These values are scoped to Godview and reproduce the Chopsticks reference rather than extending
+the general chrome palette.
+
+| Role | Light | Dark |
+|---|---|---|
+| monitor ground | `#F7F7F7` | `#0A0A0A` |
+| panel | `#FFFFFF` | `#111111` |
+| panel border | `#E0E0E0` | `#333333` |
+| text main / muted / faint | `#111111 / #888888 / #B8B8B8` | `#FFFFFF / #777777 / #555555` |
+| idle body / text | `#E5E5E5 / #666666` | `#2A2A2A / #AAAAAA` |
+| working body / text | `#222222 / #FFFFFF` | `#EEEEEE / #111111` |
+| terminal ground / divider | `#ECE8DC / #D2CEC3` | `#282C34 / #414650` |
 
 ---
 
@@ -192,6 +223,11 @@ read as an immediate response to the hold").
   along their travel; only cancelled ghosts fade.
 - **M5 — The stage recedes.** When a sheet opens, the canvas eases to `scale(0.98)` and
   discretionary per-frame work pauses (stage hold) — focus is physical.
+  *Correction, 2026-08-04:* "discretionary per-frame work" is narrower than it reads. A
+  stage hold freezes GL island repaints and parks the compositor's demand loop; the world
+  keeps stepping, which is what keeps undo and collab landing visibly behind a partial
+  overlay. Chrome that COVERS the window instead takes `useFrameFreeze` (ice 0.3.0), which
+  parks the engine outright. Sheets recede → hold. Godview covers → freeze.
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
 
@@ -209,16 +245,17 @@ read as an immediate response to the hold").
 | **Hover / active** (tiles, buttons) | `scale(1.03)` hover · `scale(0.95)` active · fills step `black/5 → black/10` (dark `white/10 → white/20`) · `cursor-grab/-grabbing`. |
 | **Keyboard focus** | visible ring, always (quality floor); Esc = close/cancel, consistently. |
 
-Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
-`--ic-glow-size-t/-c: 60px` · `--ic-glow-alpha-t/-c: 0.25` · `--ic-glow-color: 128,128,128`
-(dark theme: white) · `--ic-rim-width: 1.5px` · `--ic-rim-radius: 600px` ·
-`--ic-rim-alpha-t: 0.85` / `-c: 0.55`.
+Glow/rim knobs are live CSS vars (UI Bench adjustable, defaults in code):
+`--ic-glow-size-t/-c: 60px` · `--ic-glow-alpha-t: 0.5` / `-c: 0.25` · glow color
+light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
+`--ic-rim-width: 1.5px` · `--ic-rim-radius: 600px` · `--ic-rim-alpha-t: 0.85` /
+`-c: 0.55`.
 
 ---
 
 ## 8. Component canon
 
-- **Card anatomy** (CardShell, landing in `@vibefield/shell-ui` — 03·A D14): rounded-22
+- **Card anatomy** (CardShell, landing in `@vibefield/design-kit` — 03·A D14): rounded-22
   clip → content → glow layer → rim layer → ring layer. Chrome layers are
   `pointer-events: none` and ride the base transform. Header = eyebrow row (label left,
   meta right). Every widget ships a **compact face** for the zoom readability floor
@@ -349,6 +386,60 @@ Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
   declares none (device/secret keys are never on the stack), and the honest outcome when
   an action no-ops ("nothing to undo", "history horizon reached"). No optimistic echo — an
   applied undo re-gets every row from the daemon.
+- **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
+  `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
+  the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
+  §0: "the drama stays in what the agents said, never in the chrome"). `@vibecook/mille-ui`
+  ships its own GitHub-derived palette; **none of it reaches a VibeField pixel.**
+  **The theme lives upstream, in mille** — `@vibecook/mille-ui/theme/vibefield.css`, mounted
+  as `data-mille-theme="vibefield"` (2026-08-09; it sits beside mille's own `minimal.css`,
+  which is the established shape for an app-specific theme there). It is self-contained so it
+  can ship on npm, and every value additionally reads its `--vf-*` token first
+  (`var(--vf-fill, …)`), so THIS file still governs: move a token in `tokens.css` and the tree
+  moves with it, with no mille release and no second palette. Geometry rides the same bridge —
+  the `--vf-tree-*` constants below are what the theme reads for row height, indent and gutter.
+  **Geometry:** `--vf-tree-row-height` `26px` (`--vf-tree-row-height-compact` `22px` for long
+  rails), `--vf-tree-indent` `14px`, `--vf-tree-gutter` `8px`, and rows rounded to
+  `--vf-radius-control` *inside* that gutter — an iOS list inset, not an IDE gutter. Name is
+  **12px medium in the sans stack**, matching the projects-rail row it sits beside; a file
+  NAME is a label, and only full paths and ids go mono (§3).
+  **The icon set is ours and it is deliberately small** (`vibefieldIconTheme`, from
+  `@vibecook/mille-ui/icons/vibefield`): eleven monoline glyphs on a 16-unit grid, `fill: none` +
+  `stroke: currentColor`, so every glyph inherits the row's ramp and carries no color of its
+  own — a file's TYPE is not a §2.5 state, and a colored icon pack is a violation on sight.
+  The glyph renders at `1em` of a 12px row, and §8's own readability floor already refuses
+  detail at that scale ("no micro-text"), so the set is **category-first and the mark IS the
+  icon** — no page silhouette competing for the same twelve pixels. The page shape is kept
+  for the two things that really are pages: prose, and the unknown file. Categories are the
+  distinctions that change how you treat a row in a reading rail — code · style · prose ·
+  config · media · a lockfile you must not hand-edit (EL8) · a secrets file (EL7) · git's own
+  plumbing — never which language the code is written in. **Named folders are declined** for
+  the same reason: a mark inside a folder at 12px is the micro-text again, and a derived
+  directory already arrives ignored and wearing the muted ramp, which says "not your code"
+  more legibly than any glyph this size. Per-language glyphs stay one map away if the rail
+  ever proves otherwise.
+  **Location vs interaction is the tree's whole state grammar** — four-views §4 settles it:
+  *"the current project wears `--vf-fill`, not the select ring — selection ring is
+  interaction, this is location."* So: the **active** entry (the file actually open) wears
+  `--vf-fill` · **selected** rows wear the hover-step fill one notch up from hover · the
+  **focused** row alone wears §7's `1.5px` inside `--vf-select` ring. One ring at a time —
+  a multi-selection is N fills and one ring, never N rings (§7's sole/multi law, applied to
+  a list that has no union box). Indent guides are `--vf-hairline-strong`, solid; the
+  archival dashed rail belongs to mille's minimal theme, not to us.
+  **Decorations carry §2.5's meanings, not git's colors:** added/untracked green ·
+  deleted red · modified/renamed **cyan** (a dirty file is a live fact about the tree, and
+  orange must stay scarce enough to still mean *act*) · conflict orange (a human must
+  resolve it) · ignored the muted ramp at no hue. Diagnostics: error red · warning orange ·
+  info cyan · hint muted. Tests follow the agent-state mapping literally (§2.5: `working`
+  green, `done` muted): running green · failed red · errored orange · **passed and skipped
+  muted** — a passing test is not news, and quiet is the honesty. Loading is colorless (the
+  veil's rule: loading is not a §2.5 state). An unavailable root keeps §2.5's `unknown`
+  treatment — muted italic, never an error, because a disconnected folder has not failed.
+  A dragged row takes the card's lift opacity (`0.75`, §7 — every file row is a drag source
+  for file chips); a drop-into-folder target takes the `--vf-select` ring, and a
+  between-siblings drop a 2px `--vf-select` line. mille ships its context menu **unstyled**,
+  so the bridge dresses that one part in island material (§5) — the menu is chrome floating
+  over the reader, and the only place in the tree where a material appears at all.
 
 ---
 
@@ -365,7 +456,7 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
 
 ## 10. Implementation & governance
 
-- **Tokens live in `@vibefield/shell-ui`** (design kit, 03·A D14) as CSS vars under
+- **Tokens live in `@vibefield/design-kit`** (design kit, 03·A D14) as CSS vars under
   `--vf-*`, exposed to Tailwind v4 via `@theme`. Upstream vars bridge onto ours
   (`--ic-*` chrome knobs, `--mille-*` tree vars — design-00 §3.4); widgets consume
   tokens, never hex literals (exception: a widget's own committed content surface).

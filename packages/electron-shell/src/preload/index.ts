@@ -12,6 +12,12 @@ import {
   TerminalBackendAttachResult,
   type TerminalBridgeStatus,
   TerminalTicket,
+  type UserRecord,
+  UserRecord as UserRecordSchema,
+  UsersCreateParams,
+  UsersListSnapshot,
+  UsersSwitchParams,
+  UsersUpdateParams,
   WindowConnection,
 } from "@vibefield/contracts";
 import { contextBridge, ipcRenderer } from "electron";
@@ -146,6 +152,39 @@ contextBridge.exposeInMainWorld("vibefield", {
   submitRendererLogs: (serializedBatch: string): boolean => logging.submit(serializedBatch),
   getConnection: async (): Promise<{ port: number; token: string }> =>
     WindowConnection.parse(await ipcRenderer.invoke(IPC_CHANNELS.windowBootstrap)),
+  /** UA-3 — the Account page's profile write (name/color/resident/onboarded).
+   * Validated both directions; main owns users.json and refuses empty or
+   * unregistered-sender updates. */
+  usersUpdate: async (params: UsersUpdateParams): Promise<UserRecord> =>
+    UserRecordSchema.parse(
+      await ipcRenderer.invoke(IPC_CHANNELS.usersUpdate, UsersUpdateParams.parse(params)),
+    ),
+  /** UA-5 — the roster read: every user on this machine plus main's LIVE
+   * attachment (never `lastAttached`, which is only the next-boot hint). The
+   * one read behind both the Account switcher and the tray submenu, so they
+   * cannot disagree about who is current. */
+  usersList: async (): Promise<UsersListSnapshot> =>
+    UsersListSnapshot.parse(await ipcRenderer.invoke(IPC_CHANNELS.usersList, {})),
+  /** UA-5 — mint user N under the §3.3 lock, then ATTACH to it. Identity is not
+   * decided here: the mint only needs to exist, and the reloaded window runs
+   * the Setup Assistant's second-user variant (§6.2) to ask for a name.
+   *
+   * THE RELOAD RACE (shared with `usersSwitch`): attaching re-targets this
+   * window and reloads it (UA-D15), which tears down the very context this
+   * promise would resolve into. It may resolve, or it may never settle — both
+   * are correct. Callers fire-and-forget: disable the control that was pressed,
+   * and gate nothing else on the answer. The reload IS the feedback. */
+  usersCreate: async (params: UsersCreateParams): Promise<UserRecord> =>
+    UserRecordSchema.parse(
+      await ipcRenderer.invoke(IPC_CHANNELS.usersCreate, UsersCreateParams.parse(params)),
+    ),
+  /** UA-5 — re-target the attachment to an existing user and reload (UA-D15).
+   * Switching to the user already attached is main's no-op, not this bridge's
+   * business. Same reload race as `usersCreate` — see it for the rule. */
+  usersSwitch: async (params: UsersSwitchParams): Promise<UserRecord> =>
+    UserRecordSchema.parse(
+      await ipcRenderer.invoke(IPC_CHANNELS.usersSwitch, UsersSwitchParams.parse(params)),
+    ),
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {
       const request = CloseRequest.safeParse(raw);

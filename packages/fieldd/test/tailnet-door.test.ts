@@ -162,7 +162,14 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; login: string } };
     };
-    expect(probe.result.principal).toEqual({ kind: "tailnet", login: "me@jamesyong42.com" });
+    // UA-4 fills the declared tailscaleId slot from the transport fact; no
+    // stored login in this harness, so `self` stays absent (toEqual pins
+    // that too) — and the KIND still never follows the software claim
+    expect(probe.result.principal).toEqual({
+      kind: "tailnet",
+      login: "me@jamesyong42.com",
+      tailscaleId: "nQRJl4CNTRL",
+    });
   });
 
   it("THE SPOOF: typed headers on the ordinary door are ignored — token still required", async () => {

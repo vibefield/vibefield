@@ -10,7 +10,8 @@ import {
   TerminalTicket,
 } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu } from "electron";
+import { CLOSE_WINDOW_ITEM_ID } from "../main/app-menu-model";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 
@@ -19,32 +20,50 @@ import { createMainWindow, loadRenderer } from "../main/windows";
 // index.ts reaches it via a runtime-external dynamic import, and packaging
 // omits the file entirely. Everything here is test-only by construction.
 
-/** Resolve when a renderer console line starting with `prefix` arrives. */
+/** The text of one `console-message` payload, whichever shape Electron used.
+ * The event's arguments changed shape between majors — a string in one, an
+ * object carrying `message` in another — so both are read rather than one being
+ * assumed and the other silently reading as empty. */
+function consoleText(arg: unknown): string {
+  if (typeof arg === "string") return arg;
+  if (arg !== null && typeof arg === "object" && "message" in arg) {
+    return String((arg as { message: unknown }).message);
+  }
+  return "";
+}
+
+/** Resolve when a renderer console line starting with `prefix` arrives.
+ *
+ * The listener is REMOVED on both settle paths. The godview smoke arms one of
+ * these per reload plus one each for the monitor and cold-open lines, and a
+ * listener that outlived its promise pushed the window past Node's default cap
+ * of ten — so the harness printed `MaxListenersExceededWarning` into its own
+ * output, which is a harness teaching its reader to ignore warnings. */
 export function waitForConsole(
   win: BrowserWindow,
   prefix: string,
   timeoutMs: number,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(
-      () => reject(new Error(`no "${prefix}" within ${timeoutMs}ms`)),
-      timeoutMs,
-    );
-    win.webContents.on("console-message", (...args: unknown[]) => {
+    const listener = (...args: unknown[]): void => {
       for (const a of args) {
-        const text =
-          typeof a === "string"
-            ? a
-            : a && typeof a === "object" && "message" in a
-              ? String((a as { message: unknown }).message)
-              : "";
+        const text = consoleText(a);
         if (text.startsWith(prefix)) {
-          clearTimeout(t);
+          settle();
           resolve(text.slice(prefix.length));
           return;
         }
       }
-    });
+    };
+    const settle = (): void => {
+      clearTimeout(t);
+      win.webContents.off("console-message", listener);
+    };
+    const t = setTimeout(() => {
+      settle();
+      reject(new Error(`no "${prefix}" within ${timeoutMs}ms`));
+    }, timeoutMs);
+    win.webContents.on("console-message", listener);
   });
 }
 
@@ -161,38 +180,93 @@ interface DeckFacts {
   exitedSessionIds?: string[];
   /** the pane the deck's own affordances act on */
   activeSessionId?: string;
+  /** GT-3v: the alpha the RENDERER was handed, and whose palette it came from */
+  glass: { paneBackgroundAlpha: number; opacityCells: boolean; themeName: string | null };
+  /** GT-3f: the shader the renderer was handed. Null means the deck passed no
+   * `effects` prop at all, which is how an unchosen shader is spelled. */
+  effects: { shaderEffect: string | null; animate: boolean };
 }
 
-/** A running tail of the deck's markers, armed BEFORE the load so a fast deck
+/** The renderer-local home of the viewer's appearance (GT-D12). Named here so
+ * the smoke seeds the same key the deck reads, and so a rename of that key
+ * fails this harness rather than silently seeding nothing. */
+const GODVIEW_APPEARANCE_STORAGE_KEY = "vf-godview-appearance-v1";
+/** The port the smoke selects — a `GHOSTTEA_SHADER_OPTIONS` id, static by
+ * choice (see row 5b). */
+const SMOKE_SHADER_EFFECT = "ghosttea:crt";
+/** The alpha row 11 writes into the DEVICE config document.
+ *
+ * Named because two rows need the same number for opposite reasons: row 11
+ * writes it, and row 11b asserts the VIEWER's glass is not it. That second use
+ * is the negative control the two-homes proof was missing — a before/after
+ * comparison alone passes on a data dir where the deck already holds this
+ * value, which is exactly the state a merged home would leave behind. */
+const SMOKE_CONFIG_BACKGROUND_OPACITY = 0.62;
+
+/** One `GODVIEW_MONITOR {…}` line, as the monitor stage published it. */
+interface MonitorFacts {
+  viewId: string;
+  agents: number;
+  agentBacked: number;
+  mockLabel: string;
+  /** GT-4: the split, counted — how many rows each source contributed. */
+  mockAgents: number;
+  remoteSessions: number;
+  remoteHosts: number;
+  /** `no-door` · `serving` · `unavailable`; the second is what makes an empty
+   * mesh distinguishable from a mesh nobody asked. */
+  remoteState: string;
+  remoteReason?: string;
+  swarmPhysics: string;
+}
+
+/** A running tail of one marker channel, armed BEFORE the load so a fast page
  * cannot report into a gap. Every wait is a predicate over the LATEST line,
- * because the deck says what it is on every change and the interesting states
- * are transient. */
-class DeckWatch {
-  private latest: DeckFacts | null = null;
+ * because these surfaces say what they are on every change and the interesting
+ * states are transient.
+ *
+ * Generic since GT-4: the monitor needs the same tail the deck has had since
+ * GT-2 — a wait armed once and re-read after a gesture — and two copies of this
+ * class would be two answers to "what did it last say".
+ */
+class MarkerWatch<T> {
+  private latest: T | null = null;
+  private seen: T[] = [];
   private readonly waiters = new Set<() => void>();
 
-  constructor(win: BrowserWindow) {
+  constructor(
+    win: BrowserWindow,
+    private readonly prefix: string,
+  ) {
     win.webContents.on("console-message", (...args: unknown[]) => {
       for (const arg of args) {
-        const text =
-          typeof arg === "string"
-            ? arg
-            : arg && typeof arg === "object" && "message" in arg
-              ? String((arg as { message: unknown }).message)
-              : "";
-        if (!text.startsWith("GODVIEW_DECK ")) continue;
+        const text = consoleText(arg);
+        if (!text.startsWith(this.prefix)) continue;
         try {
-          this.latest = JSON.parse(text.slice("GODVIEW_DECK ".length)) as DeckFacts;
+          this.latest = JSON.parse(text.slice(this.prefix.length)) as T;
         } catch {
           continue;
         }
+        this.seen.push(this.latest);
         for (const notify of [...this.waiters]) notify();
       }
     });
   }
 
-  current(): DeckFacts | null {
+  current(): T | null {
     return this.latest;
+  }
+
+  /** EVERY marker since the last `reset()`, oldest first.
+   *
+   * A predicate over the LATEST line cannot answer a question about a face that
+   * was up and is gone. The restore consent prompt is exactly that: it is
+   * published with zero panes and replaced the moment it is answered or the
+   * moment the workspace mounts without it — so "no prompt appeared" is a claim
+   * about the whole window between the reload and the restored deck, and asking
+   * the last line is asking about the one moment the answer is always no. */
+  history(): readonly T[] {
+    return this.seen;
   }
 
   /** Forget what the deck last said. Called immediately before a renderer
@@ -201,13 +275,14 @@ class DeckWatch {
    * what the deck did on COMING BACK would be about the deck that left. */
   reset(): void {
     this.latest = null;
+    this.seen = [];
   }
 
   /** Resolve on the first marker satisfying `predicate`, including one already
    * seen — a state reached before the wait began is still the state. */
-  async until(predicate: (facts: DeckFacts) => boolean, what: string, timeoutMs: number) {
+  async until(predicate: (facts: T) => boolean, what: string, timeoutMs: number) {
     if (this.latest !== null && predicate(this.latest)) return this.latest;
-    return new Promise<DeckFacts>((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.waiters.delete(notify);
         reject(
@@ -225,6 +300,56 @@ class DeckWatch {
       this.waiters.add(notify);
     });
   }
+}
+
+/** The accelerator the LIVE application menu binds to Close Window, read out of
+ * Electron's own installed menu rather than out of the template that built it —
+ * and the difference between those two readings is the whole point.
+ *
+ * THE ⌘W ARBITRATION, what a smoke can prove about it, and what this reading
+ * found the moment it was first taken (GT-5a).
+ *
+ * ⌘W means "close this window" in macOS and "close this pane" inside a terminal
+ * deck; an application accelerator always wins, so with the overlay open the
+ * close item must GIVE ⌘W UP or the deck's panes can never answer it.
+ * `app-menu-model`'s `closeWindowItem` implements that handover by OMITTING the
+ * accelerator while the overlay is open, and `installAppMenu` rebuilds the menu
+ * on every toggle to make the omission take effect. Until GT-5a that function
+ * ran after the godview harness returned, so the smoke pressed ⌘W with no
+ * application menu installed at all and none of this was ever observed.
+ *
+ * MEASURED, on Electron 43.1.1, once it was: an omitted accelerator on a
+ * `role`-bearing item is NOT an absent one. `MenuItem.accelerator` resolves to
+ * `explicit ?? roleDefault`, and `role: "close"` carries a default of
+ * `CommandOrControl+W` — so the item reports and binds ⌘W in BOTH overlay
+ * states, and the handover releases nothing. An explicit accelerator does
+ * override (a probe with `CommandOrControl+K` reported ⌘K), and an item with no
+ * role at all reports null; `accelerator: null` and `registerAccelerator: false`
+ * both still resolve to the role default.
+ *
+ * FIXED 2026-08-10 on exactly that measurement: the model now DROPS the role
+ * while the overlay is open (the only spelling this probe found that reports
+ * null), and supplies the role's close behaviour as an action. The two verdict
+ * fields below stop being a record and become the ASSERTION — they are supposed
+ * to differ, and this smoke now fails if they ever read alike again.
+ *
+ * What the smoke asserts: an application menu is INSTALLED while it presses ⌘W,
+ * which is the gap the review named and the precondition for any of the rest.
+ *
+ * What it still cannot reach: whether macOS DELIVERS the chord to the page.
+ * `sendInputEvent` injects synthesized events into Chromium's input pipeline,
+ * below AppKit's key-equivalent dispatch, so a menu accelerator can neither
+ * swallow nor pass the harness's ⌘W the way it would a real one. Row 6's
+ * closing pane is honest evidence that the PANE answers ⌘W; it is not evidence
+ * about what the menu would do to a keystroke from a keyboard. That step needs
+ * a human at the machine — the repo's own lesson, that a chord needs a delivery
+ * probe, and this chord has none. */
+function closeWindowAccelerator(): string | null {
+  const menu = Menu.getApplicationMenu();
+  if (menu === null) return null;
+  const item = menu.getMenuItemById(CLOSE_WINDOW_ITEM_ID);
+  if (item === null) return null;
+  return item.accelerator ?? null;
 }
 
 /** Press a chord the way a keyboard does: down, then up, with the character
@@ -283,8 +408,47 @@ async function focusReport(win: BrowserWindow): Promise<string> {
   }
 }
 
+/** The `UNAVAILABLE` fieldd answers `terminal.list` with before its first
+ * snapshot from the floor has applied, if it answers one at all.
+ *
+ * An UNARMED inventory is not an empty one, and until fieldd learned to say so
+ * it answered `[]` — indistinguishable from "no terminals here", which is how a
+ * restore came to offer to delete a layout whose sessions were alive (GT §9
+ * finding 2). A harness must read the refusal the way the deck does: as a state
+ * with a name, meaning ASK AGAIN, not as a failure. Recognised structurally
+ * rather than by message text, and tolerated whether or not the fieldd on the
+ * other end has learned to send it yet. */
+function unobservedRefusal(error: unknown): string | null {
+  if (!(error instanceof Error) || !("kind" in error) || error.kind !== "UNAVAILABLE") return null;
+  const details = (error as { details?: unknown }).details;
+  const state =
+    details !== null && typeof details === "object" && "state" in details
+      ? String((details as { state: unknown }).state)
+      : "unstated";
+  return state;
+}
+
 const listTerminals = async (handle: FielddHandle): Promise<TerminalListResult["terminals"]> =>
   TerminalListResult.parse(await handle.client.request("terminal.list", {})).terminals;
+
+/** `terminal.list`, retried through an honest refusal. Every read of the floor
+ * in this harness goes through here or through `untilFloor`, which does the
+ * same: a row that failed because fieldd had not looked yet would be reporting
+ * on the clock rather than on the product. */
+async function listTerminalsWhenObserved(
+  handle: FielddHandle,
+  timeoutMs = 20_000,
+): Promise<TerminalListResult["terminals"]> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      return await listTerminals(handle);
+    } catch (error) {
+      if (unobservedRefusal(error) === null || Date.now() >= deadline) throw error;
+      await sleep(150);
+    }
+  }
+}
 
 /** Poll `terminal.list` until it agrees.
  *
@@ -303,12 +467,75 @@ async function untilFloor(
 ): Promise<TerminalListResult["terminals"]> {
   const deadline = Date.now() + timeoutMs;
   let last: TerminalListResult["terminals"] = [];
+  let refusals = 0;
+  let lastRefusal = "";
   while (Date.now() < deadline) {
-    last = await listTerminals(handle);
+    try {
+      last = await listTerminals(handle);
+    } catch (error) {
+      // An unarmed inventory is fieldd declining to guess, which is the whole
+      // point of the refusal — so it is a reason to ask again, never a failure.
+      const state = unobservedRefusal(error);
+      if (state === null) throw error;
+      refusals += 1;
+      lastRefusal = state;
+      await sleep(150);
+      continue;
+    }
     if (predicate(last)) return last;
     await sleep(150);
   }
-  throw new Error(`the floor never ${what} within ${timeoutMs}ms (saw ${last.length} terminals)`);
+  const refused =
+    refusals > 0 ? `; ${refusals} refusal(s), last UNAVAILABLE {state:"${lastRefusal}"}` : "";
+  throw new Error(
+    `the floor never ${what} within ${timeoutMs}ms (saw ${last.length} terminals${refused})`,
+  );
+}
+
+/** Every persistence value the floor was ever seen to hold for one session, in
+ * the order they were observed.
+ *
+ * The flip rows (GT-D11) assert that field-native RE-GOVERNS a workspace birth
+ * from `terminate-with-app` to `keep-until-exit`. Waiting for the destination
+ * alone cannot tell a working flip from a door that never needed one: if a
+ * ghosttea upgrade started defaulting workspace panes to `keep-until-exit`, the
+ * native flip could be dead code and the rows would stay green. So the harness
+ * records what it SAW, and the row says out loud whether the precondition was
+ * ever observable — the sampler runs from the toggle, ahead of the birth, which
+ * is the earliest any observed inventory can be asked. */
+class PersistenceSampler {
+  private readonly observed = new Map<string, string[]>();
+  private stopped = false;
+  readonly running: Promise<void>;
+
+  constructor(handle: FielddHandle, intervalMs = 50) {
+    this.running = (async () => {
+      while (!this.stopped) {
+        try {
+          for (const row of await listTerminals(handle)) {
+            const seen = this.observed.get(row.sessionId) ?? [];
+            const persistence = row.persistence ?? "unstated";
+            if (seen.at(-1) !== persistence) seen.push(persistence);
+            this.observed.set(row.sessionId, seen);
+          }
+        } catch {
+          /* a refusal or a blip is not this sampler's business to report */
+        }
+        await sleep(intervalMs);
+      }
+    })();
+  }
+
+  /** What this session was observed to be, oldest first. Empty means the
+   * sampler never saw the session at all. */
+  trail(sessionId: string): readonly string[] {
+    return this.observed.get(sessionId) ?? [];
+  }
+
+  async stop(): Promise<void> {
+    this.stopped = true;
+    await this.running;
+  }
 }
 
 /** Ask a real pane what shell it is, and prove it ran the question.
@@ -427,6 +654,119 @@ async function clickDeckButton(win: BrowserWindow, label: string): Promise<void>
   throw new Error(`no "${label}" button appeared within 20s (${seen})`);
 }
 
+/**
+ * Click a bubble on the MONITOR stage, by CSS selector (GT-4).
+ *
+ * A DOM click for `clickDeckButton`'s reason (GT-2 finding 4: a synthesized
+ * mousedown skips Chromium's default actions and blurs a terminal on the way
+ * past), and selected by class rather than by text because a bubble's words are
+ * a project name — the fact under test is which SOURCE the row came from, and
+ * that is what the class says.
+ *
+ * Returns the bubble's accessible name, so the verdict records what was
+ * actually clicked instead of asserting that something was.
+ */
+async function clickMonitorBubble(win: BrowserWindow, selector: string): Promise<string> {
+  const deadline = Date.now() + 20_000;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const clicked = (await win.webContents.executeJavaScript(
+      `(() => {
+        const bubble = document.querySelector(${JSON.stringify(selector)});
+        if (!bubble) return "absent";
+        const label = bubble.getAttribute("aria-label") ?? "";
+        bubble.click();
+        return "ok:" + label;
+      })()`,
+    )) as string;
+    if (clicked.startsWith("ok:")) return clicked.slice(3);
+    seen = clicked;
+    await sleep(200);
+  }
+  throw new Error(`no monitor bubble matched ${selector} within 20s (${seen})`);
+}
+
+/**
+ * Wait until the deck has published nothing new for `quietMs` (GT-4).
+ *
+ * A before/after comparison needs a BEFORE that is not still moving. This row's
+ * predecessor is the bridge kill, and a recovered deck goes on working after it
+ * reports: a new runtime remounts the workspace, which re-reads the saved
+ * layout, which rehydrates the pane whose session the kill row ended — a birth
+ * that lands a second or two later and has nothing to do with the click under
+ * test. The first version of this row sampled into that window and blamed a
+ * mock agent for it (measured, not imagined: the id it saw replaced was
+ * `killedSession`).
+ *
+ * Quiescence rather than a fixed sleep, because the settling time is the
+ * machine's, not ours.
+ */
+async function deckSettled(
+  deck: MarkerWatch<DeckFacts>,
+  quietMs: number,
+  timeoutMs: number,
+): Promise<DeckFacts> {
+  const deadline = Date.now() + timeoutMs;
+  let last = JSON.stringify(deck.current());
+  let quietSince = Date.now();
+  while (Date.now() < deadline) {
+    await sleep(250);
+    const now = JSON.stringify(deck.current());
+    if (now !== last) {
+      last = now;
+      quietSince = Date.now();
+      continue;
+    }
+    const facts = deck.current();
+    if (facts !== null && Date.now() - quietSince >= quietMs) return facts;
+  }
+  throw new Error(`the deck never settled for ${quietMs}ms within ${timeoutMs}ms (last: ${last})`);
+}
+
+/** What the stage last said out loud about a gesture. The acknowledgement is
+ * the monitor's honest confirmation, and reading it is how the harness checks
+ * the WORDS a person would have read rather than only the state behind them. */
+async function readMonitorAck(win: BrowserWindow): Promise<string> {
+  return (await win.webContents.executeJavaScript(
+    `(document.querySelector(".vf-monitor-ack")?.textContent ?? "").trim()`,
+  )) as string;
+}
+
+/** GT-D13's disclosure, as a person can read it: the words in the mock chip
+ * ELEMENT, and whether it is actually on screen.
+ *
+ * The stage's own marker carries the same sentence, but it carries the pure
+ * function's return value — so deleting the `<span>`, or hiding it, or letting
+ * a layout push it out of the viewport, would leave the marker honest while the
+ * screen disclosed nothing. Absent is an empty string and not a throw: an empty
+ * disclosure is the failure this row exists to name, and it should be named in
+ * the row's own words rather than as a TypeError from the harness.
+ *
+ * Polled for `readMonitorAck`'s reason and `clickDeckButton`'s: a marker says
+ * what the stage WAS when it published, and a chip can still be a render away. */
+async function readMonitorMockChip(win: BrowserWindow, timeoutMs: number): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let seen = "";
+  while (Date.now() < deadline) {
+    seen = (await win.webContents.executeJavaScript(
+      `(() => {
+        const chip = document.querySelector(".vf-monitor-mock-chip");
+        if (!chip) return "";
+        const box = chip.getBoundingClientRect();
+        // On screen at a readable size, or it is not a disclosure. A zero-box
+        // or off-viewport chip reads to a person exactly like no chip at all.
+        if (box.width < 1 || box.height < 1) return "";
+        if (box.bottom < 0 || box.right < 0) return "";
+        if (box.top > window.innerHeight || box.left > window.innerWidth) return "";
+        return (chip.textContent ?? "").trim();
+      })()`,
+    )) as string;
+    if (seen !== "") return seen;
+    await sleep(200);
+  }
+  return seen;
+}
+
 /** The deck's saved layout, as the page holds it. Read so the smoke can assert
  * what `paneMeta` actually persisted rather than trusting that it did. */
 async function readDeckLayout(win: BrowserWindow): Promise<string | null> {
@@ -440,7 +780,7 @@ async function readDeckLayout(win: BrowserWindow): Promise<string | null> {
  * staged: the document dies and comes back while the FLOOR does not. */
 async function reopenAfterReload(opts: {
   win: BrowserWindow;
-  deck: DeckWatch;
+  deck: MarkerWatch<DeckFacts>;
   toggleGodview: () => void;
   viteUrl: string;
 }): Promise<void> {
@@ -595,7 +935,11 @@ export async function runSmokeGodview(opts: {
         console.log(`[renderer] ${args.map((a) => JSON.stringify(a)).join(" ")}`);
       });
     }
-    const deck = new DeckWatch(win);
+    const deck = new MarkerWatch<DeckFacts>(win, "GODVIEW_DECK ");
+    // GT-4: the monitor's own tail, armed with the deck's and for the same
+    // reason — the door rows below re-read the stage AFTER a click, and a
+    // one-shot line wait can only ever answer about the mount.
+    const monitorWatch = new MarkerWatch<MonitorFacts>(win, "GODVIEW_MONITOR ");
     const canvas = waitForConsole(win, "CANVAS_READY ", 60_000);
     canvas.catch(() => undefined);
     await loadRenderer(win, "smoke-godview", opts.viteUrl);
@@ -603,7 +947,7 @@ export async function runSmokeGodview(opts: {
     win.focus();
     win.webContents.focus();
 
-    const before = await listTerminals(opts.handle);
+    const before = await listTerminalsWhenObserved(opts.handle);
     if (before.length > 0) {
       throw new Error(
         `the init-door row needs an EMPTY floor; found ${before.length} session(s) already`,
@@ -614,13 +958,30 @@ export async function runSmokeGodview(opts: {
     // previous run's saved layout is still sitting there — and since GT-3 that
     // layout is not silently dropped, it is a QUESTION (every session it names
     // died with the last run's floor). Clearing here rather than reloading
-    // because nothing has mounted yet: the deck is not built until ⌘G.
+    // because nothing has mounted yet: the deck is not built until ⇧⇧.
     await win.webContents.executeJavaScript("localStorage.clear()");
 
-    // 1. ⌘G's own action. The overlay opens, the deck redeems a ticket for the
+    // GT-3m: armed BEFORE the toggle, because the monitor stage mounts WITH the
+    // overlay and its field is already populated at tick 0 — a wait placed after
+    // the open would be racing a line that has already been printed.
+    const monitorLine = waitForConsole(win, "GODVIEW_MONITOR ", 90_000);
+    monitorLine.catch(() => undefined);
+    // GT-3p: the cold open's phase breakdown, armed for the same reason. The
+    // renderer publishes it once, when the first open reaches a presented
+    // frame, so a wait armed after the toggle could miss it outright.
+    const coldOpenLine = waitForConsole(win, "GODVIEW_COLD_OPEN ", 90_000);
+    coldOpenLine.catch(() => undefined);
+
+    // 1. ⇧⇧'s own action. The overlay opens, the deck redeems a ticket for the
     //    CONNECTION — no session — and the workspace then creates its own first
     //    pane through its own door (GT-D10). Nothing outside it asked for a
     //    shell; there is one because the workspace decided there should be.
+    //
+    //    The persistence sampler starts HERE, before the key, because the fact
+    //    the flip rows below need is the state a session was born in and that
+    //    state is gone within one management round trip. Started after the
+    //    birth, a sampler can only ever record the destination.
+    const persistence = new PersistenceSampler(opts.handle);
     opts.toggleGodview();
     const opened = await deck.until(
       (facts) => facts.active && facts.panes >= 1,
@@ -641,6 +1002,63 @@ export async function runSmokeGodview(opts: {
       )
       .then((facts) => facts.rendererBackend)
       .catch(() => opened.rendererBackend);
+
+    // 1b. THE MONITOR ROW (GT-3m). The stage above the deck, on the registry's
+    //     default view, with the mock field on it and WEARING ITS LABEL.
+    //
+    //     The label is the assertion that earns this row. Everything the monitor
+    //     draws is invented, and GT-D13 makes saying so a law rather than a
+    //     courtesy — so the smoke fails if the words are missing, exactly as it
+    //     would for a pane that lied about its shell. The other two facts are
+    //     structure, not pixels: which view mounted, and that it has rows. What
+    //     it LOOKS like is James's eye, as with the glass.
+    const monitor = JSON.parse(await monitorLine) as MonitorFacts;
+    verdict["monitorView"] = monitor.viewId;
+    verdict["monitorAgents"] = monitor.agents;
+    verdict["swarmPhysics"] = monitor.swarmPhysics;
+    if (monitor.viewId !== "swarm") {
+      throw new Error(`the monitor opened on "${monitor.viewId}", not the default swarm`);
+    }
+    if (!(monitor.agents > 0)) {
+      throw new Error("the monitor stage mounted with no agents on it");
+    }
+    // The disclosure is read OFF THE SCREEN, not off the marker.
+    //
+    // The marker's `mockLabel` is the pure function's return value, and the law
+    // GT-D13 states is about what a person can read — so a chip deleted from
+    // the DOM, or moved off-screen, or rendered empty, left the marker saying
+    // the right sentence while the stage said nothing at all. `readMonitorAck`
+    // already had this right for the acknowledgement; this is the same reading
+    // for the label beside it, and the marker becomes the corroboration rather
+    // than the evidence.
+    const mockChip = await readMonitorMockChip(win, 20_000);
+    verdict["monitorMockChip"] = mockChip;
+    verdict["monitorMockLabel"] = monitor.mockLabel;
+    if (!mockChip.includes("mock")) {
+      throw new Error(
+        `the monitor is showing ${monitor.agents} invented agents without saying so on screen (chip: ${JSON.stringify(mockChip)}, marker said: ${JSON.stringify(monitor.mockLabel)})`,
+      );
+    }
+    // GT-4: the label's claim must also be SCOPED once real rows join it —
+    // "these are mock" over a real remote session is the lie GT-D17 forbids.
+    // With no peer serving there is nothing to scope and the whole-stage
+    // sentence is correct, which is why this row reads the counts and not a
+    // fixed string.
+    if (monitor.remoteSessions > 0 && !/\d/.test(mockChip)) {
+      throw new Error(
+        `${monitor.remoteSessions} real remote session(s) are sitting under an unscoped mock label: ${JSON.stringify(mockChip)}`,
+      );
+    }
+    // GT-3c: the substrate, pinned. The swarm's physics has an honest fallback
+    // for a renderer that cannot start a worker (a fixture under happy-dom is
+    // one), and a fallback that shipped would look EXACTLY like the slice
+    // working while undoing it. This row is the only thing standing between
+    // those two states, so it asserts rather than reports.
+    if (monitor.swarmPhysics !== "worker") {
+      throw new Error(
+        `the swarm is simulating "${monitor.swarmPhysics}", not in its worker — GT-D16's whole point is that this runs off the main thread`,
+      );
+    }
 
     // The pane is a FLOOR session, not a renderer's idea of one.
     const afterOpen = await untilFloor(
@@ -684,16 +1102,38 @@ export async function runSmokeGodview(opts: {
       20_000,
     );
     verdict["firstPaneRegoverned"] = true;
+    // …and the PRECONDITION, which the destination alone cannot prove. If a
+    // ghosttea upgrade started defaulting workspace panes to keep-until-exit,
+    // the native flip would be dead code and every row above would stay green.
+    //
+    // MEASURED (GT-5a) and reported rather than asserted, because the
+    // measurement says asserting it is not possible from here: sampling
+    // `terminal.list` every 50ms from BEFORE this pane was born — the earliest
+    // any observed inventory can be asked — caught `terminate-with-app` zero
+    // times, for either pane. field-native re-governs the birth on its own
+    // `session-created` event, inside the floor, and fieldd's observed
+    // inventory is a management round trip behind that; the pre-flip state is
+    // over before the plane that could report it has heard of the session. So
+    // the trail is `["keep-until-exit"]` on a working flip AND on a dead one,
+    // and a row that failed on it would fail always. The trails are in the
+    // verdict so the fact is on the record every run, and the residual is named
+    // where it belongs: this smoke proves the DESTINATION, not the flip.
+    verdict["firstPaneTrail"] = persistence.trail(freeShell);
 
     // 4. Split — the workspace's own ⌘D, through the workspace's OWN create
     //    door now that the deck no longer intercepts it. The new session is a
     //    floor session, and it is re-governed exactly like the first.
     await focusDeck(win);
     verdict["focusAtSplit"] = await focusReport(win);
+    const panesBeforeSplit = opened.panes;
     pressChord(win, "d");
+    // ONE MORE than there were, not "at least two". The deck opens with one
+    // pane today, so the two readings agree by accident — and an accident is
+    // exactly what a harness must not rest on: a deck that came up with two
+    // panes would satisfy `>= 2` before the key was ever pressed.
     const split = await deck.until(
-      (facts) => facts.panes >= 2,
-      `⌘D to split the deck into a second pane (focus: ${String(verdict["focusAtSplit"])})`,
+      (facts) => facts.panes === panesBeforeSplit + 1,
+      `⌘D to split the deck's ${panesBeforeSplit} pane(s) into ${panesBeforeSplit + 1} (focus: ${String(verdict["focusAtSplit"])})`,
       45_000,
     );
     const splitSession = split.sessionIds.find((id) => id !== freeShell);
@@ -706,6 +1146,32 @@ export async function runSmokeGodview(opts: {
     );
     verdict["splitCreated"] = true;
     verdict["splitRegoverned"] = true;
+    verdict["splitPaneTrail"] = persistence.trail(splitSession);
+    // The two trails together are what makes the flip rows non-vacuous, and the
+    // rule is stated where it can be checked rather than left to a reader: a
+    // pane observed to have been `terminate-with-app` at any point is the
+    // precondition holding. If NEITHER pane was ever caught in that state, the
+    // rows above proved only that the floor ends up where we want it — which
+    // is worth knowing and is not the flip.
+    const caughtPreFlip = [freeShell, splitSession].some((id) =>
+      persistence.trail(id).includes("terminate-with-app"),
+    );
+    verdict["flipPreconditionObserved"] = caughtPreFlip;
+    await persistence.stop();
+    // The instrumentation's own anti-vacuity guard. `flipPreconditionObserved`
+    // is only worth reading if the sampler was actually running — an empty
+    // trail would report "never observed" for a sampler that never looked, and
+    // a measurement that reads the same whether or not it ran is not one.
+    for (const [name, id] of [
+      ["the workspace's first pane", freeShell],
+      ["the split pane", splitSession],
+    ] as const) {
+      if (persistence.trail(id).length === 0) {
+        throw new Error(
+          `the persistence sampler never saw ${name} (${id}) at all, so its trail proves nothing about the flip`,
+        );
+      }
+    }
 
     // 5. Claim. `claimExistingSessions` is first-run-only upstream (gated on
     //    there being no saved workspace), so this stages a genuine first run:
@@ -717,7 +1183,37 @@ export async function runSmokeGodview(opts: {
     ).sessionId;
     opts.toggleGodview(); // closed, so the reload comes up with the deck unmounted
     await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
+    // The arbitration's OTHER state, read here because this is the one moment
+    // the overlay is closed with the menu installed and the deck still
+    // reporting. Read together with `closeAcceleratorWhileGodviewOpen`, the two
+    // fields are the whole claim — and since 2026-08-10 they are asserted, not
+    // merely recorded. See `closeWindowAccelerator`.
+    const closedAccel = closeWindowAccelerator();
+    verdict["closeAcceleratorWhileGodviewClosed"] = closedAccel;
+    if (closedAccel !== "CommandOrControl+W") {
+      throw new Error(
+        `the close item must HOLD ⌘W while the overlay is closed, but the live menu reports ${String(closedAccel)}`,
+      );
+    }
+    // The two-state comparison lives at the OPEN reading below, which happens
+    // later in this run — comparing here would grade against a field that does
+    // not exist yet and pass for that reason alone.
     await win.webContents.executeJavaScript("localStorage.clear()");
+    // 5b. GT-3f: seed the VIEWER's shader the way a returning user's would
+    //     already be sitting there. The appearance store reads localStorage
+    //     synchronously at module init, so the fresh document below comes up
+    //     with the port chosen — the real production path, and it rides the
+    //     reload this row was already doing rather than adding one.
+    //
+    //     A NON-animated port deliberately: the claim under test is that a
+    //     viewer-local selection reached the renderer, and an animated one
+    //     would make that fact depend on frame timing. Whether CRT LOOKS right
+    //     is James's eye; that its id crossed is what a harness can hold.
+    await win.webContents.executeJavaScript(
+      `localStorage.setItem(${JSON.stringify(GODVIEW_APPEARANCE_STORAGE_KEY)}, ${JSON.stringify(
+        JSON.stringify({ shaderEffect: SMOKE_SHADER_EFFECT }),
+      )})`,
+    );
     const reloaded = waitForConsole(win, "CANVAS_READY ", 60_000);
     reloaded.catch(() => undefined);
     deck.reset();
@@ -749,6 +1245,32 @@ export async function runSmokeGodview(opts: {
     //    this asserts rather than assumes.
     await focusDeck(win);
     const panesBeforeClose = claimed.panes;
+    // THE ARBITRATION, read where it matters: the overlay is open, so this is
+    // the state in which the close item is supposed to have released ⌘W. See
+    // `closeWindowAccelerator` for what this proves, what it found, and what it
+    // cannot reach.
+    if (Menu.getApplicationMenu() === null) {
+      throw new Error(
+        "no application menu is installed, so the ⌘W arbitration this row is about is not in place — which is exactly the state this smoke was in before GT-5a",
+      );
+    }
+    const openAccel = closeWindowAccelerator();
+    verdict["closeAcceleratorWhileGodviewOpen"] = openAccel;
+    // THE HANDOVER, asserted rather than recorded (2026-08-10). The closed
+    // reading is taken earlier in this same run, so both fields are real by now.
+    // An item still holding a chord here is the defect this row exists for; an
+    // item reporting the SAME thing in both states is that defect's signature.
+    const closedReading = verdict["closeAcceleratorWhileGodviewClosed"];
+    if (openAccel !== null) {
+      throw new Error(
+        `the close item must RELEASE ⌘W while the overlay is open, but the live menu reports ${openAccel} — a role-bearing item inherits CommandOrControl+W no matter what the model omits`,
+      );
+    }
+    if (openAccel === closedReading) {
+      throw new Error(
+        `the ⌘W handover released nothing: the live menu reports ${String(openAccel)} in BOTH overlay states — the defect measured on Electron 43.1.1 and fixed by dropping the role`,
+      );
+    }
     pressChord(win, "w");
     const closed = await deck.until(
       (facts) => facts.panes === panesBeforeClose - 1,
@@ -762,7 +1284,7 @@ export async function runSmokeGodview(opts: {
     // NOTICED a death would read as survival, so this waits well past the
     // observed round trip before believing the good news.
     await sleep(2_000);
-    const afterClose = await listTerminals(opts.handle);
+    const afterClose = await listTerminalsWhenObserved(opts.handle);
     const survivor = afterClose.find((terminal) => terminal.sessionId === detached);
     if (survivor === undefined) {
       throw new Error(`closing a pane KILLED session ${detached} — GT-D5 broken`);
@@ -790,9 +1312,20 @@ export async function runSmokeGodview(opts: {
       "the deck to come back with the panes it had",
       90_000,
     );
-    if (restored.consent !== undefined) {
+    // The prompt that must not have been drawn, asked of the WHOLE reopen
+    // window rather than of the line that happened to be last. Reading
+    // `restored.consent` was unreachable code: consent is published with zero
+    // panes and the wait above only returns on `panes === closed.panes`, so the
+    // marker in hand could never be a consent marker — the face could have been
+    // up, answered and gone, and this row would have read the deck that came
+    // after it. `deck.history()` starts at the reset inside `reopenAfterReload`,
+    // which is exactly the window this claim is about.
+    const promptedDuringRestore = deck.history().filter((facts) => facts.consent !== undefined);
+    if (promptedDuringRestore.length > 0) {
       throw new Error(
-        `an all-alive restore asked for consent it did not need: ${JSON.stringify(restored.consent)}`,
+        `an all-alive restore asked for consent it did not need: ${JSON.stringify(
+          promptedDuringRestore.map((facts) => facts.consent),
+        )}`,
       );
     }
     const rejoined = beforeReload.every((id) => restored.sessionIds.includes(id));
@@ -959,15 +1492,36 @@ export async function runSmokeGodview(opts: {
     // 11. THE CONFIG ROW (GT-3 rider). A real write through the product door,
     //     the floor's own reload verdict, and the one property that matters
     //     more than any restyle: nothing died for a settings change.
-    const beforeConfig = await listTerminals(opts.handle);
+    const beforeConfig = await listTerminalsWhenObserved(opts.handle);
     const document = TerminalConfigDocument.parse(
       await opts.handle.client.request("terminal.config.read", {}),
     );
     verdict["configPath"] = document.path;
     verdict["configExisted"] = document.exists;
+    // THE SHADER-LEAK CAPTURE, and it has to happen HERE — before the write.
+    //
+    // The viewer chose its shader at row 5b, many rows ago. Row 11c used to
+    // prove "no leak" by reading the file back AFTER this write and comparing
+    // it to the bytes this write put there — but the write below OVERWRITES the
+    // whole document, so a genuine leak from 5b was destroyed by the very row
+    // that then certified its absence. These are the bytes that carry the
+    // answer: everything the appearance path could have written since 5b is in
+    // them, and nothing this harness wrote is.
+    const configBeforeWrite = document.exists ? document.text : "";
+    verdict["configBytesBeforeWrite"] = configBeforeWrite.length;
+    // GT-3v: the written text now carries an APPEARANCE-class key. It is the
+    // interesting case for this document precisely because 0.9.0 gave the same
+    // concept a second, viewer-local home — so the write proves the device file
+    // still owns its key, and the deck's own glass (asserted below) proves the
+    // two homes do not leak into one another.
+    const configText = `# written by pnpm smoke:godview\nfont-size = 13\nbackground-opacity = ${SMOKE_CONFIG_BACKGROUND_OPACITY}\n`;
+    const glassBefore = deck.current()?.glass;
+    if (glassBefore === undefined) {
+      throw new Error("the deck reported no glass before the config write");
+    }
     const wrote = TerminalConfigWriteResult.parse(
       await opts.handle.client.request("terminal.config.write", {
-        text: `# written by pnpm smoke:godview\nfont-size = 13\n`,
+        text: configText,
         revision: document.revision,
       }),
     );
@@ -982,15 +1536,20 @@ export async function runSmokeGodview(opts: {
     if (!wrote.ok) {
       throw new Error(`the floor refused a benign config: ${JSON.stringify(wrote.diagnostics)}`);
     }
-    if (
-      readFileSync(document.path, "utf8") !== "# written by pnpm smoke:godview\nfont-size = 13\n"
-    ) {
+    if (readFileSync(document.path, "utf8") !== configText) {
       throw new Error(`the config file does not hold what was written: ${document.path}`);
+    }
+    // `effectiveChanged` is the floor's own verdict that the reload moved its
+    // effective configuration — which for an appearance key is the round trip
+    // worth naming: the document authority accepted it, the loader read it, and
+    // it landed somewhere real rather than being parsed and dropped.
+    if (!wrote.effectiveChanged) {
+      throw new Error("background-opacity reached the file but changed no effective configuration");
     }
     // A settings change must not be a kill. Read PAST the observed round trip
     // before believing the good news, the same way row 6 does.
     await sleep(2_000);
-    const afterConfig = await listTerminals(opts.handle);
+    const afterConfig = await listTerminalsWhenObserved(opts.handle);
     const lost = beforeConfig
       .filter((row) => row.exited !== true)
       .filter(
@@ -1001,6 +1560,96 @@ export async function runSmokeGodview(opts: {
     }
     verdict["configSurvivors"] = afterConfig.length;
 
+    // 11b. THE GLASS ROW (GT-3v / GT-D12). Structure, not pixels — whether the
+    //      result looks right is James's eye; that a non-opaque background
+    //      reached the RENDERER is a fact, and so is which home it came from.
+    const glassAfter = deck.current()?.glass;
+    if (glassAfter === undefined) throw new Error("the deck stopped reporting its glass");
+    verdict["glassPaneAlpha"] = glassAfter.paneBackgroundAlpha;
+    verdict["glassThemeName"] = glassAfter.themeName;
+    if (!(glassAfter.paneBackgroundAlpha < 1)) {
+      throw new Error(
+        `the deck handed the renderer an opaque pane background (${glassAfter.paneBackgroundAlpha})`,
+      );
+    }
+    // The other direction, and the one a regression would take: appearance is
+    // the VIEWER's (GT-D12), so the value just written into the DEVICE file must
+    // not have moved this deck. If these ever agree, the two homes have merged
+    // and GT-5's phone would inherit this desktop's glass.
+    if (glassAfter.paneBackgroundAlpha !== glassBefore.paneBackgroundAlpha) {
+      throw new Error(
+        `the device config moved the viewer's appearance: ${glassBefore.paneBackgroundAlpha} → ${glassAfter.paneBackgroundAlpha}`,
+      );
+    }
+    // THE NEGATIVE CONTROL, and without it the row above proves nothing on a
+    // machine that has run this smoke before. "Did not change" is satisfied by
+    // a deck that was ALREADY holding the device file's value — a fully merged
+    // home on a persisted data dir looks identical to two separate ones. So the
+    // claim is also stated positively: the viewer's alpha is not the number the
+    // device document holds.
+    for (const [when, alpha] of [
+      ["before", glassBefore.paneBackgroundAlpha],
+      ["after", glassAfter.paneBackgroundAlpha],
+    ] as const) {
+      if (alpha === SMOKE_CONFIG_BACKGROUND_OPACITY) {
+        throw new Error(
+          `the viewer's glass ${when} the write IS the device file's background-opacity (${alpha}) — the two homes have merged, or this deck inherited the device value from a previous run`,
+        );
+      }
+    }
+
+    // 11c. THE EFFECTS ROW (GT-3f / petition G11). The same two-homes law as
+    //      the glass, now for the third of appearance that could not be
+    //      viewer-local until 0.9.1 — and it is proven in both directions,
+    //      because one direction alone is what a regression would satisfy.
+    //
+    //      Direction one: the port this viewer chose reached the renderer. The
+    //      deck reads this off the object it actually handed the workspace, so
+    //      the line is what the panes were told and not what the store holds.
+    const effects = deck.current()?.effects;
+    if (effects === undefined) throw new Error("the deck stopped reporting its effects");
+    verdict["shaderEffect"] = effects.shaderEffect;
+    verdict["shaderAnimate"] = effects.animate;
+    if (effects.shaderEffect !== SMOKE_SHADER_EFFECT) {
+      throw new Error(
+        `the viewer's shader never reached the renderer: expected ${SMOKE_SHADER_EFFECT}, deck reported ${String(effects.shaderEffect)}`,
+      );
+    }
+    // Direction two: choosing it wrote NOTHING into the device document — and
+    // the bytes that answer that are the ones captured BEFORE row 11's write.
+    //
+    // This row used to read the file back afterwards and compare it to the
+    // exact text row 11 had just written, which cannot fail for the reason it
+    // claims: the write replaces the whole document, so a genuine leak from row
+    // 5b was erased by the write and the read-back could only ever agree with
+    // itself. `configBeforeWrite` is the document as it stood after the viewer
+    // had chosen a shader and before this harness touched it, so a
+    // `custom-shader` key, a managed block, or the port id in any spelling is
+    // still in it if the appearance path put one there.
+    //
+    // Named weakness, measured: on a fresh data dir the document does not exist
+    // yet, so these bytes are empty and the check passes easily. Not vacuous —
+    // a leak has to CREATE or extend that file, and creating it is exactly what
+    // is being watched for — but a weaker pass than it looks, and `configExisted`
+    // is in the verdict so a reader can tell which of the two runs they had.
+    const shaderLeak = [SMOKE_SHADER_EFFECT, SMOKE_SHADER_EFFECT.split(":").pop() ?? "", "shader"]
+      .filter((needle) => needle !== "")
+      .filter((needle) => configBeforeWrite.includes(needle));
+    if (shaderLeak.length > 0) {
+      throw new Error(
+        `the viewer's shader leaked into the device config document (${shaderLeak.join(", ")} present before this harness wrote anything): ${JSON.stringify(configBeforeWrite)}`,
+      );
+    }
+    // …and it did not appear between that read and now either. Cheap, and it
+    // covers the window this harness itself opened.
+    const configAfterShader = readFileSync(document.path, "utf8");
+    if (configAfterShader !== configText) {
+      throw new Error(
+        `the device config document changed under the smoke after its write: ${JSON.stringify(configAfterShader)}`,
+      );
+    }
+    verdict["shaderLeftConfigAlone"] = true;
+
     // 12. The recovery row, inherited from the GT-1 spike: SIGKILL the bridge
     //    and watch the deck come back on a new runtime with the same sessions.
     //    field-native owns them; the bridge is only a pipe.
@@ -1010,16 +1659,52 @@ export async function runSmokeGodview(opts: {
     //    stale list would be asserting about a deck that no longer exists.
     //    The killed session is excluded: a rebuild does not resurrect, and
     //    demanding it back would make a passing recovery impossible.
+    //    THIS ROW HAD TO BE ABLE TO FAIL, and until GT-5a it could not.
+    //
+    //    It read the pre-kill marker, derived its expectations from that same
+    //    marker, killed the bridge, and then asked `until` for a state the
+    //    marker in hand already satisfied by construction — and `until`
+    //    short-circuits on a marker it already holds. It returned instantly,
+    //    reported the PRE-kill backend, and stayed green with the entire
+    //    recovery ladder deleted. Eight slices cited it as their recovery proof.
+    //
+    //    What makes it evidence now is the reset plus the SEQUENCE. The
+    //    expectations are still read from the pre-kill deck — that is what they
+    //    are about — but the watch is emptied before the kill, and the row then
+    //    waits for two states in order that no pre-kill marker can supply:
+    //
+    //      · the deck admitting the bridge DIED — `error` is the renderer's own
+    //        record of receiving `bridge-down`, and a healthy deck has none;
+    //      · the deck back with no error and every survivor — which it can only
+    //        reach by having received `bridge-up`, retired the dead runtime and
+    //        remounted, because that is the only path that clears the error.
+    //
+    //    Delete the ladder now and the first wait still passes (the death is
+    //    real) while the second times out with the deck's own words in the
+    //    message. Demonstrated, not assumed — see the slice's commit body.
     const current = deck.current();
     if (current === null) throw new Error("the deck said nothing before the bridge kill");
     const survivors = current.sessionIds.filter((id) => id !== killTarget);
     const panesBeforeKill = current.panes;
+    if (current.error !== undefined) {
+      throw new Error(
+        `the deck was already reporting an error before the bridge kill, so a post-kill error would prove nothing: ${current.error}`,
+      );
+    }
+    deck.reset();
     const pid = killTerminalBridge();
     if (pid === null) throw new Error("no ghosttea bridge utility process to kill");
     verdict["bridgeKilledPid"] = pid;
+    const noticed = await deck.until(
+      (facts) => facts.error !== undefined,
+      "the deck to notice the bridge died (main's bridge-down reaching the page)",
+      60_000,
+    );
+    verdict["bridgeDownFace"] = noticed.error;
     const recovered = await deck.until(
       (facts) =>
         facts.active &&
+        facts.error === undefined &&
         facts.panes === panesBeforeKill &&
         survivors.every((id) => facts.sessionIds.includes(id)),
       "the deck to rebuild itself on a new bridge with the same sessions",
@@ -1033,6 +1718,241 @@ export async function runSmokeGodview(opts: {
       "still listed every session after the bridge died",
       15_000,
     );
+
+    // ── 13. THE GT-4 DOOR ROWS (GT-D17) ───────────────────────────────────
+    //
+    // Placed after the recovery deliberately: an attach REPLACES what the
+    // active pane is showing, and every row above asserts about the sessions
+    // this deck was holding. Nothing below them asserts anything.
+    //
+    // 13a. THE SPLIT-HONESTY ROW, and it runs on every machine: a mock agent
+    //      still mounts NOTHING. The monitor now has a real door beside it, so
+    //      "the stage holds no runtime" stopped being the structural guarantee
+    //      it was at GT-3m — this row is what replaces that guarantee with a
+    //      measurement.
+    //
+    //      The claim is asserted two ways, and NEITHER is "the pane ids did not
+    //      change" — the first draft of this row said that and failed twice on
+    //      a truth about the deck rather than about the click: the pane whose
+    //      session row 10 killed rehydrates into a fresh shell some seconds
+    //      after the recovery above reports, and the id it replaces is exactly
+    //      `killedSession`. What holds regardless:
+    //
+    //        · the pane COUNT is unchanged (a mount that split would raise it)
+    //        · every pane holds a session THE FLOOR KNOWS
+    //
+    //      The second is the one that means what this row is about. The mock's
+    //      sessions are inventions — they exist in a seeded generator and
+    //      nowhere else — so an invented row reaching a pane could only ever
+    //      put an id there that `terminal.list` has never heard of, and the
+    //      rehydrated shell (a real floor session) passes it untouched.
+    const beforeMockClick = await deckSettled(deck, 2_000, 60_000);
+    const mockClicked = await clickMonitorBubble(win, ".vf-monitor-bubble:not(.is-remote)");
+    verdict["mockBubbleClicked"] = mockClicked;
+    // Quiescence, not a stopwatch. The BEFORE of this comparison already waits
+    // for the deck to stop moving and for exactly the right reason (the pane
+    // the kill row ended rehydrates seconds later, on the machine's schedule
+    // and not ours) — so an AFTER read off a fixed 1.5s sleep was sampling
+    // into the same window the BEFORE was written to avoid. If a mock click
+    // DID mount something, the deck moves and this waits for it to finish
+    // moving; the assertions below then read a settled deck either way.
+    const afterMockClick = await deckSettled(deck, 1_500, 45_000);
+    const mockAck = await readMonitorAck(win);
+    verdict["mockAck"] = mockAck;
+    // The words a person would have read. GT-D13 makes the acknowledgement the
+    // mock's whole answer, so a silent mock is as wrong as a mounting one.
+    if (!mockAck.includes("nothing was mounted")) {
+      throw new Error(
+        `the preview acknowledged a mock selection without saying nothing was mounted: ${JSON.stringify(mockAck)}`,
+      );
+    }
+    if (afterMockClick.panes !== beforeMockClick.panes) {
+      throw new Error(
+        `clicking an invented agent changed the deck's shape (${beforeMockClick.panes} → ${afterMockClick.panes} panes)`,
+      );
+    }
+    const paneSessions = afterMockClick.sessionIds;
+    await untilFloor(
+      opts.handle,
+      (terminals) => paneSessions.every((id) => terminals.some((t) => t.sessionId === id)),
+      `list every session the deck's panes hold after a mock click (${JSON.stringify(paneSessions)}) — an invented agent that mounted would put an id here the floor never created`,
+      20_000,
+    );
+    verdict["mockMountsNothing"] = true;
+    verdict["mockPaneSessions"] = paneSessions.length;
+
+    // 13b. THE DOOR ROW. A peer's session is a bubble in the swarm, and
+    //      CLICKING it attaches the active pane to it — no palette anywhere in
+    //      this path (⌘⇧O stays off; GT-D7's amendment).
+    //
+    //      Behind an honest capability check, because a peer is not something
+    //      this harness can conjure: the mesh floor is GT-4's other half, and
+    //      two floors on a tailnet are not stageable here yet. With no peer the
+    //      row REPORTS `unavailable` with the monitor's own state — it never
+    //      fakes a host, and it never passes silently as though it had run.
+    const monitorNow = monitorWatch.current();
+    verdict["remoteState"] = monitorNow?.remoteState ?? "unreported";
+    verdict["remoteSessions"] = monitorNow?.remoteSessions ?? 0;
+    verdict["remoteHosts"] = monitorNow?.remoteHosts ?? 0;
+    if (monitorNow?.remoteReason !== undefined) verdict["remoteReason"] = monitorNow.remoteReason;
+    if (monitorNow === null || monitorNow === undefined || monitorNow.remoteSessions === 0) {
+      // The monitor asked and got nothing, or had nobody to ask. Both are
+      // states with names, and neither is a remote session.
+      verdict["remotePeer"] = "unavailable";
+    } else {
+      verdict["remotePeer"] = "available";
+      const beforeAttach = deck.current();
+      if (beforeAttach === null) throw new Error("the deck said nothing before the attach");
+      const attachedLabel = await clickMonitorBubble(win, ".vf-monitor-bubble.is-remote");
+      verdict["remoteBubbleClicked"] = attachedLabel;
+      const attached = await deck.until(
+        (facts) =>
+          facts.activeSessionId !== undefined &&
+          !beforeAttach.sessionIds.includes(facts.activeSessionId),
+        "the active pane to be showing the peer's session",
+        30_000,
+      );
+      verdict["remoteAttachedSessionId"] = attached.activeSessionId ?? null;
+      verdict["remoteAttachAck"] = await readMonitorAck(win);
+      // The pane COUNT is unchanged: GT-D17 attaches the pane the user is in,
+      // it does not split one open. That is the difference between our door
+      // and upstream's palette, and it is worth asserting rather than assuming.
+      if (attached.panes !== beforeAttach.panes) {
+        throw new Error(
+          `the attach changed the deck's shape (${beforeAttach.panes} → ${attached.panes} panes); GT-D17 attaches the ACTIVE pane`,
+        );
+      }
+    }
+
+    // ── GT-3p, REPORT-ONLY ────────────────────────────────────────────────
+    // Everything below records numbers and asserts nothing. A performance row
+    // that could fail this smoke would be a budget nobody has agreed to yet
+    // (the `keystrokeEchoMs` precedent, GT-3), and these numbers move with
+    // machine load — the same load that already makes the reload rows flaky.
+    //
+    // THE COLD OPEN, and it is genuinely cold even though the prewarm is on:
+    // row 1 presses ⇧⇧ the moment the canvas reports, and `claimWarmTransport`
+    // deliberately never blocks an open on a warm still in flight (GT-D14) — so
+    // the first open of this harness takes the cold path by construction, and
+    // `prewarmed: false` in this object is the proof rather than a disappointment.
+    // It is the BEFORE number, measured on the same run as the after.
+    verdict["coldOpen"] = await coldOpenLine
+      .then((raw) => JSON.parse(raw) as Record<string, unknown>)
+      .catch((error) => ({ unmeasured: error instanceof Error ? error.message : String(error) }));
+
+    // The steady-state frame cost, sampled from the page itself while the
+    // overlay is open with the swarm running and a pane focused. One second of
+    // rAF intervals; the median is the honest summary of a sample this short.
+    //
+    // GT-3c crosses the cadence with LoAF, which is `frame-stats.ts`'s own pairing
+    // (its module note: neither source alone is a diagnosis, their disagreement
+    // is). Cadence says whether frames are late; `blockingMs` says how much of
+    // the lateness the main thread owes. A slice that moves work OFF the main
+    // thread is supposed to leave the first number alone and shrink the second —
+    // and LoAF reporting zero in both directions is itself a finding, not a
+    // failure, because a swarm this small may never build a 50ms frame to be
+    // seen. Still report-only: it asserts nothing.
+    verdict["frameMs"] = await win.webContents
+      .executeJavaScript(
+        `new Promise((resolve) => {
+          const intervals = [];
+          const loaf = [];
+          let observer = null;
+          try {
+            observer = new PerformanceObserver((list) => {
+              for (const entry of list.getEntries()) {
+                loaf.push({
+                  duration: entry.duration,
+                  blocking: entry.blockingDuration ?? 0,
+                  script: entry.scriptDuration ?? 0,
+                });
+              }
+            });
+            observer.observe({ type: "long-animation-frame", buffered: false });
+          } catch {
+            // An engine without LoAF reports null rather than a silent zero —
+            // "unobservable" and "nothing blocked" are different answers.
+            observer = null;
+          }
+          let last = performance.now();
+          const tick = (now) => {
+            intervals.push(now - last);
+            last = now;
+            if (now - start < 1000) requestAnimationFrame(tick);
+            else {
+              observer?.disconnect();
+              const sorted = intervals.slice(1).sort((a, b) => a - b);
+              const round = (value) => Math.round(value * 10) / 10;
+              resolve(sorted.length === 0 ? null : {
+                frames: sorted.length,
+                p50: round(sorted[Math.floor(sorted.length * 0.5)]),
+                p95: round(sorted[Math.floor(sorted.length * 0.95)]),
+                loafFrames: observer === null ? null : loaf.length,
+                loafBlockingMs:
+                  observer === null
+                    ? null
+                    : round(loaf.reduce((total, entry) => total + entry.blocking, 0)),
+                loafScriptMs:
+                  observer === null
+                    ? null
+                    : round(loaf.reduce((total, entry) => total + entry.script, 0)),
+                loafWorstMs:
+                  observer === null
+                    ? null
+                    : round(loaf.reduce((worst, entry) => Math.max(worst, entry.duration), 0)),
+              });
+            }
+          };
+          const start = performance.now();
+          requestAnimationFrame(tick);
+        })`,
+      )
+      .catch((error) => ({ unmeasured: error instanceof Error ? error.message : String(error) }));
+
+    // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
+    //
+    // A renderer reload resets the page's module state, so the next open is a
+    // first open again; the difference from the row above is that this one WAITS
+    // for the idle prewarm to land before pressing the key, which is the case a
+    // real user is in (the app has been sitting there since login). The wait is
+    // a plain sleep because the warm state lives in a module the page does not
+    // publish — and the resulting line's own `prewarmed` field says whether the
+    // transport was actually inherited, so a wait that was too short reports as
+    // an honest `prewarmed: false` rather than a mislabelled number.
+    //
+    // The consent face is expected here: an earlier row killed a pane, so the
+    // saved layout names a session the floor no longer has, and GT-3's gate asks
+    // before the workspace may mount. Answering it is part of the path being
+    // measured — this is the returning-user road to a pane, prompt and all.
+    try {
+      const warmLine = waitForConsole(win, "GODVIEW_COLD_OPEN ", 60_000);
+      warmLine.catch(() => undefined);
+      opts.toggleGodview();
+      await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
+      const reloaded = waitForConsole(win, "CANVAS_READY ", 60_000);
+      reloaded.catch(() => undefined);
+      deck.reset();
+      await loadRenderer(win, "smoke-godview", opts.viteUrl);
+      await reloaded;
+      win.focus();
+      win.webContents.focus();
+      // Long enough for the idle callback (2s ceiling) plus a ticket, a bridge
+      // fork and a device request on a loaded machine.
+      await sleep(5_000);
+      opts.toggleGodview();
+      const asked = await deck.until(
+        (facts) => facts.active && (facts.panes >= 1 || facts.consent !== undefined),
+        "the warm open to reach a pane or the restore question",
+        60_000,
+      );
+      if (asked.consent !== undefined) await clickDeckButton(win, "restore");
+      await deck.until((facts) => facts.panes >= 1, "the warm open's first pane", 60_000);
+      verdict["coldOpenWarm"] = JSON.parse(await warmLine) as Record<string, unknown>;
+    } catch (error) {
+      verdict["coldOpenWarm"] = {
+        unmeasured: error instanceof Error ? error.message : String(error),
+      };
+    }
 
     verdict["ok"] = true;
   } catch (error) {

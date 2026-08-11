@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
+import type { FielddClient } from "@vibefield/fieldd-client";
 import { assertDataRootUsable } from "./paths";
 import { type ProbeResult, tryAdopt } from "./probe";
 import { createLineBuffer, createLogTail, redactLine } from "./process-log";
@@ -23,6 +24,10 @@ const ADOPT_PROBE_MS = 1_500;
 const POLL_PROBE_MS = 600;
 const POLL_INTERVAL_MS = 200;
 const STOP_TERM_WAIT_MS = 2_000;
+/** WIN-D5 — how long the stop VERB gets before the signal ladder takes over.
+ * Short: the request is one loopback round trip; a daemon that cannot answer
+ * it inside this budget is what the ladder exists for. */
+const SHUTDOWN_RPC_WAIT_MS = 1_500;
 
 export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSupervisor {
   const emit = (event: FielddSupervisorEvent): void => {
@@ -86,6 +91,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       opts.adoptProbeMs ?? ADOPT_PROBE_MS,
       signal,
       opts.expectedBuildId,
+      opts.userId,
     );
     throwIfAborted(signal);
     if (adopted.ok) {
@@ -142,7 +148,13 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
             lastFailure,
           );
         }
-        const probe = await tryAdopt(opts.dataRoot, POLL_PROBE_MS, signal, opts.expectedBuildId);
+        const probe = await tryAdopt(
+          opts.dataRoot,
+          POLL_PROBE_MS,
+          signal,
+          opts.expectedBuildId,
+          opts.userId,
+        );
         if (probe.ok) {
           const ownership = probe.info.pid === spawned.pid ? "spawned" : "adopted";
           if (ownership === "adopted") {
@@ -207,6 +219,14 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     const env: Record<string, string | undefined> = {
       ...opts.environment,
       FIELDD_DATA_DIR: opts.dataRoot,
+      // UA-1 — the supervisor already resolved the attached USER root; the
+      // explicit variable tells fieldd's standalone entry to skip its own
+      // ensure (a bare run without it treats FIELDD_DATA_DIR as the VibeField
+      // root and is its own supervisor).
+      FIELDD_USER_ROOT: opts.dataRoot,
+      // UA-2 — and WHICH user that root serves; fieldd records it in
+      // product.json and asserts it in every hello ack.
+      ...(opts.userId !== undefined ? { FIELDD_USER_ID: opts.userId } : {}),
       ...(opts.nativeExecutable ? { FIELDD_NATIVE_BIN: opts.nativeExecutable } : {}),
       ...(opts.allowedOrigins && opts.allowedOrigins.length > 0
         ? { FIELDD_ALLOWED_ORIGINS: opts.allowedOrigins.join(",") }
@@ -220,6 +240,10 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       spawned = spawn(opts.spawn.command, [...opts.spawn.args], {
         env,
         stdio: ["ignore", "pipe", "pipe"],
+        // WIN-3 — a spawned fieldd is a background daemon; without this every
+        // launch flashes a console window on Windows (EDP §10.2 forbids it).
+        // Detach and job breakaway are a separate decision (§4.3), not here.
+        windowsHide: true,
       });
     } catch (e) {
       throw new SupervisorError(
@@ -271,13 +295,17 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       ...(ownedChild?.pid !== undefined ? { childPid: ownedChild.pid } : {}),
       stopOwned(): Promise<void> {
         if (ownership !== "spawned" || !ownedChild) return Promise.resolve(); // never kill adopted
-        stopping ??= stopChild(ownedChild, probe.info.nativePid);
+        stopping ??= stopChild(ownedChild, probe.info.nativePid, probe.client);
         return stopping;
       },
     };
   }
 
-  async function stopChild(proc: ChildProcess, nativePid: number | null): Promise<void> {
+  async function stopChild(
+    proc: ChildProcess,
+    nativePid: number | null,
+    client?: FielddClient,
+  ): Promise<void> {
     // stop-owned is FULL dev/smoke teardown: the spawned fieldd and the
     // field-native it recorded. (In production nothing calls this — the
     // two-plane law keeps daemons alive past the shell.)
@@ -285,6 +313,25 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       ...(proc.pid !== undefined ? { pid: proc.pid } : {}),
       nativePid,
     });
+    // WIN-D5 — ask before signalling: the stop REQUEST rides the authenticated
+    // channel (system.shutdown), because a signal is not a request — on win32
+    // SIGTERM is a hard TerminateProcess and fieldd's graceful path (child
+    // sweep, run-file cleanup, audit close) never ran. Refusal, timeout, or a
+    // dead socket all fall through to the ladder below, which is unchanged.
+    if (client && proc.exitCode === null) {
+      const asked = await Promise.race([
+        client.request("system.shutdown", {}).then(
+          () => true,
+          () => false,
+        ),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SHUTDOWN_RPC_WAIT_MS)),
+      ]);
+      if (asked) {
+        lifecycle("fieldd.supervisor.shutdown_requested_rpc", "fieldd accepted system.shutdown", {
+          ...(proc.pid !== undefined ? { pid: proc.pid } : {}),
+        });
+      }
+    }
     if (proc.exitCode === null && !proc.killed) proc.kill("SIGTERM");
     await new Promise<void>((resolve) => {
       if (proc.exitCode !== null) return resolve();
@@ -327,8 +374,10 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     const h = handle;
     handle = null;
     if (h) {
-      h.client.close();
+      // stop BEFORE closing the client: the WIN-D5 stop verb rides that
+      // connection. Close afterwards is idempotent on a dead socket.
       if (opts.shutdownPolicy === "stop-owned") await h.stopOwned();
+      h.client.close();
     } else if (opts.shutdownPolicy === "stop-owned" && child && child.exitCode === null) {
       // ensure() never resolved but we DID spawn — don't leak the child
       // (slice-0 finding 3: failure paths must not orphan daemons)

@@ -19,6 +19,10 @@ const appMasterPath = join(iconRoot, "app-master.svg");
 const trayMasterPath = join(iconRoot, "tray-master.svg");
 const appleIconPath = join(iconRoot, "app.icon");
 const appleComposerRenditionPath = join(iconRoot, "app-macos-1024.png");
+// The Xcode build that rendered the COMMITTED Icon Composer/actool assets.
+// Only this build regenerates them (their output is not byte-stable across
+// Xcode releases); every other machine validates the committed bytes.
+const APPLE_ICON_TOOLCHAIN_BUILD = "17F113";
 const appleFallbackIconPath = join(iconRoot, "app.icns");
 
 const APP_ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 256];
@@ -192,7 +196,13 @@ function generateAssets({
 }
 
 async function compileAppleIconAssets() {
-  const toolchain = await findAppleIconToolchain();
+  // Check mode NEVER invokes the Apple toolchain: Icon Composer's render is
+  // not byte-stable across machines even at the IDENTICAL Xcode build (CI
+  // run 30879428413: a 17F113 runner re-rendered 17F113-authored assets to
+  // different bytes — the OS rendering stack is part of the output). The
+  // committed bytes are the truth everywhere; re-rendering is exclusively
+  // the deliberate `icons:generate` act on the authoring machine.
+  const toolchain = checkOnly ? null : await findAppleIconToolchain();
   if (toolchain === null) {
     let committed;
     try {
@@ -212,7 +222,9 @@ async function compileAppleIconAssets() {
     validateAppleComposerRendition(committed.appleComposerRendition);
     validateAppleFallbackIcns(committed.appleFallbackIcns);
     console.warn(
-      "Xcode Icon Composer and actool are unavailable; validated the committed macOS PNG and ICNS without regenerating them",
+      checkOnly
+        ? "check mode validates the committed macOS PNG and ICNS as-is; re-rendering them is icons:generate's act"
+        : "Xcode Icon Composer and actool are unavailable; validated the committed macOS PNG and ICNS without regenerating them",
     );
     return committed;
   }
@@ -325,6 +337,24 @@ async function findAppleIconToolchain() {
         access(candidate.iconComposer, fsConstants.X_OK),
         access(candidate.actool, fsConstants.X_OK),
       ]);
+      // Only the PINNED Xcode build may regenerate: Icon Composer and actool
+      // output are not byte-stable across Xcode releases, so any other build
+      // (e.g. a CI runner's) would render honest-but-different bytes and read
+      // the committed assets as stale. A different build is treated exactly
+      // like an absent toolchain — validate the committed bytes, never
+      // regenerate. Upgrading Xcode is a deliberate event: regenerate the
+      // assets and move APPLE_ICON_TOOLCHAIN_BUILD in the same commit.
+      const { stdout } = await execFileAsync("xcodebuild", ["-version"], {
+        env: { ...process.env, DEVELOPER_DIR: candidate.developerDir },
+      });
+      const build = stdout.match(/Build version (\S+)/)?.[1];
+      if (build !== APPLE_ICON_TOOLCHAIN_BUILD) {
+        console.warn(
+          `Xcode build ${build ?? "unknown"} is not the pinned icon toolchain ` +
+            `${APPLE_ICON_TOOLCHAIN_BUILD}; treating it as unavailable`,
+        );
+        return null;
+      }
       return candidate;
     } catch {
       // Try the next full-Xcode installation.

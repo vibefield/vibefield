@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTRACTS_VERSION } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, type Scope } from "@vibefield/contracts";
 import { ProductApi } from "@vibefield/fieldd";
 import type { FielddSupervisor } from "../src/index";
 
@@ -15,9 +15,11 @@ import type { FielddSupervisor } from "../src/index";
 const DEFAULT_TOKEN = "shell-token-0123456789abcdefghij";
 
 /** The token-service slice ProductApi needs; the grant's scopes are irrelevant
- * to adoption (hello only), so an empty grant suffices for a live listener. */
-function acceptOnly(token: string) {
-  return (t: string) => (t === token ? { tokenId: "tk-shell", scopes: [], label: "shell" } : null);
+ * to adoption (hello only), so an empty grant suffices for a live listener.
+ * WIN-D5 tests grant `native.admin` to exercise the stop verb's happy path. */
+function acceptOnly(token: string, scopes: readonly Scope[] = []) {
+  return (t: string) =>
+    t === token ? { tokenId: "tk-shell", scopes: [...scopes], label: "shell" } : null;
 }
 
 export interface Harness {
@@ -30,7 +32,8 @@ export interface Harness {
    * accepting exactly `token`; pass `verify: () => null` for a foreign listener. */
   startProduct(opts?: {
     token?: string;
-    verify?: (t: string) => { tokenId: string; scopes: never[]; label: string } | null;
+    scopes?: readonly Scope[];
+    verify?: (t: string) => { tokenId: string; scopes: Scope[]; label: string } | null;
   }): Promise<{ api: ProductApi; port: number; token: string }>;
   /** Write the shell bootstrap run files (product.json + shell.token) that
    * fieldd would write — the adoption contract from daemon.ts:361. */
@@ -84,7 +87,7 @@ export function createHarness(): Harness {
       const token = opts?.token ?? DEFAULT_TOKEN;
       const api = new ProductApi({
         port: 0,
-        tokens: { verify: opts?.verify ?? acceptOnly(token) },
+        tokens: { verify: opts?.verify ?? acceptOnly(token, opts?.scopes) },
       });
       // a scope-null product method, so a hello'd client can request with no grant
       api.register("system.health", () => ({ ok: true, state: "READY" }));

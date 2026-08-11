@@ -1,12 +1,36 @@
 import { readFile, unlink } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
+import { repoRoot } from "./paths.mjs";
 import { isPidAlive, waitForPidExit } from "./processes.mjs";
+
+// UA-D10 — run-file paths come from the contracts LAYOUT registry. The dev
+// runner is plain .mjs with no build step, so it reads the COMMITTED generated
+// artifact rather than importing the TS source (gen freshness is verify-gated).
+const LAYOUT = createRequire(import.meta.url)(
+  join(repoRoot, "packages", "contracts", "gen", "layout.json"),
+);
+
+/** UA-1 — run files live under the attached user's root. Resolve it from
+ * users.json (lastAttached → fuid); a pre-user-shaped root answers itself,
+ * so the runner keeps working across the migration boundary. */
+export async function resolvePairRoot(dataRoot) {
+  try {
+    const users = JSON.parse(await readFile(join(dataRoot, ...LAYOUT.USERS_FILE), "utf8"));
+    const active = users.users?.find?.((u) => u.userId === users.lastAttached) ?? users.users?.[0];
+    if (active && Number.isInteger(active.fuid) && active.fuid > 0) {
+      return join(dataRoot, ...LAYOUT.USERS_DIR, String(active.fuid));
+    }
+  } catch {
+    /* absent or unreadable users.json — legacy root */
+  }
+  return dataRoot;
+}
 
 export async function readDevProduct(dataRoot) {
   try {
-    const value = JSON.parse(
-      await readFile(join(dataRoot, "fieldd", "run", "product.json"), "utf8"),
-    );
+    const pairRoot = await resolvePairRoot(dataRoot);
+    const value = JSON.parse(await readFile(join(pairRoot, ...LAYOUT.PRODUCT_JSON), "utf8"));
     if (
       !Number.isInteger(value.pid) ||
       value.pid <= 0 ||
@@ -60,9 +84,9 @@ export async function clearDeadDevProductFiles(dataRoot, expectedProduct, pidAli
   const live = [current.pid, current.nativePid].filter((pid) => pid !== null && pidAlive(pid));
   if (live.length > 0) return false;
 
-  const runDir = join(dataRoot, "fieldd", "run");
-  await unlinkIfPresent(join(runDir, "shell.token"));
-  await unlinkIfPresent(join(runDir, "product.json"));
+  const pairRoot = await resolvePairRoot(dataRoot);
+  await unlinkIfPresent(join(pairRoot, ...LAYOUT.SHELL_TOKEN));
+  await unlinkIfPresent(join(pairRoot, ...LAYOUT.PRODUCT_JSON));
   return true;
 }
 

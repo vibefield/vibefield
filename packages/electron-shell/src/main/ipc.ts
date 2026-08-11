@@ -3,6 +3,11 @@ import {
   GodviewState as GodviewStateSchema,
   IPC_CHANNELS,
   TerminalBackendAttachResult,
+  type UserRecord,
+  UsersCreateParams,
+  type UsersListSnapshot,
+  UsersSwitchParams,
+  UsersUpdateParams,
 } from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
@@ -54,6 +59,80 @@ export function registerWindowBootstrap(
       );
       throw error;
     }
+  });
+}
+
+/** UA-3 — the Account page's profile door. Main owns users.json (UA-D10:
+ * fieldd never writes it); the sender gate is bootstrap's and the payload is
+ * schema-validated before it may touch anything. One door, two verbs: an
+ * update with no recognized fields is an honest READ of the current record —
+ * no lock, no write — which is how the page loads the profile it edits. */
+export function registerUsersUpdate(
+  registry: WindowRegistry,
+  handlers: {
+    apply: (params: UsersUpdateParams) => Promise<UserRecord>;
+    read: () => Promise<UserRecord>;
+  },
+  logger?: Logger,
+): void {
+  ipcMain.handle(IPC_CHANNELS.usersUpdate, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) {
+      throw new Error("users update refused: unregistered sender");
+    }
+    const params = UsersUpdateParams.parse(raw);
+    const empty =
+      params.name === undefined &&
+      params.color === undefined &&
+      params.resident === undefined &&
+      params.onboarded === undefined;
+    if (empty) return handlers.read();
+    const record = await handlers.apply(params);
+    logger?.info("desktop.users.updated", "The attached user's profile was updated", {
+      webContentsId: event.sender.id,
+      fields: Object.keys(params).join(","),
+    });
+    return record;
+  });
+}
+
+/** UA-5 — the roster surface: list / create / switch, one sender gate. The
+ * handlers are injected because main owns the attachment machinery (pair
+ * bundles, window reload); this file owns only the wire. The create/switch
+ * answers deliberately RACE the reload main performs on success — the calling
+ * context may be torn down before the resolution lands, and that is fine:
+ * the reload is the outcome, not the response. */
+export function registerUsersRoster(
+  registry: WindowRegistry,
+  handlers: {
+    list: () => Promise<UsersListSnapshot>;
+    create: (params: UsersCreateParams) => Promise<UserRecord>;
+    switchTo: (params: UsersSwitchParams) => Promise<UserRecord>;
+  },
+  logger?: Logger,
+): void {
+  ipcMain.handle(IPC_CHANNELS.usersList, async (event) => {
+    if (!registry.owns(event.sender)) throw new Error("users list refused: unregistered sender");
+    return handlers.list();
+  });
+  ipcMain.handle(IPC_CHANNELS.usersCreate, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) throw new Error("users create refused: unregistered sender");
+    const params = UsersCreateParams.parse(raw);
+    const record = await handlers.create(params);
+    logger?.info("desktop.users.created", "A new user was minted and attached", {
+      webContentsId: event.sender.id,
+      fuid: record.fuid,
+    });
+    return record;
+  });
+  ipcMain.handle(IPC_CHANNELS.usersSwitch, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) throw new Error("users switch refused: unregistered sender");
+    const params = UsersSwitchParams.parse(raw);
+    const record = await handlers.switchTo(params);
+    logger?.info("desktop.users.switched", "The shell attached a different user", {
+      webContentsId: event.sender.id,
+      fuid: record.fuid,
+    });
+    return record;
   });
 }
 

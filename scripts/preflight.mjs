@@ -38,13 +38,40 @@ try {
 // Pins are deliberate upgrade events (EL8); drift or deletion fails HERE, not as
 // an Arc<Node> type split or a resolver surprise three slices later. Bumping a
 // pin means editing the pin AND this table in one commit — that is the ritual.
+// GT-4 (2026-08-05): ghosttea-truffle joins the table at the same version as
+// ghosttea — it depends on that crate by path upstream, so a split would put two
+// ghosttea revisions in one graph. It also carries truffle-core, which is why the
+// truffle-core row and ghosttea's must agree with what upstream's own manifest
+// names; when they did not, the resolver refused outright (GT-4a) rather than
+// silently splitting the Arc<Node> type. That refusal is this table's whole point,
+// enforced one layer earlier.
 const PIN_EXPECTATIONS = [
   { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.12"/m, label: 'truffle-core = "=0.7.12"' },
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.8\.0"/m, label: 'ghosttea = "=0.8.0"' },
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.9\.3"/m, label: 'ghosttea = "=0.9.3"' },
+  {
+    file: "Cargo.toml",
+    re: /^ghosttea-truffle\s*=\s*"=0\.9\.3"/m,
+    label: 'ghosttea-truffle = "=0.9.3"',
+  },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.8\.0/,
-    label: '"@vibecook/ghosttea-client": 0.8.0',
+    re: /"@vibecook\/ghosttea-client":\s*0\.9\.3/,
+    label: '"@vibecook/ghosttea-client": 0.9.3',
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/ghosttea-electron":\s*0\.9\.3/,
+    label: '"@vibecook/ghosttea-electron": 0.9.3',
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/ghosttea-react":\s*0\.9\.3/,
+    label: '"@vibecook/ghosttea-react": 0.9.3',
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.9\.3/,
+    label: '"@vibecook/ghosttea-protocol": 0.9.3',
   },
 ];
 for (const { file, re, label } of PIN_EXPECTATIONS) {

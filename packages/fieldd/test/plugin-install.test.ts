@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { SOCKETS } from "@vibefield/contracts";
 import {
   buildFixtureRegistry,
   generateRegistryKeypair,
@@ -12,6 +13,7 @@ import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { semverNewer } from "../src/plugin-install";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 // PLUG-P7 — the §5.3.1 distribution chain END TO END, dogfooding the REAL
@@ -43,7 +45,7 @@ async function setup(): Promise<{
   cleanup.push(() => rmSync(registryDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-  const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await mock.start();
   cleanup.push(() => mock.stop());
 

@@ -1,3 +1,4 @@
+import { UnavailableState } from "@vibefield/design-kit";
 import { Component, type ReactElement, type ReactNode, useSyncExternalStore } from "react";
 import { getRendererLogger } from "../logging";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
@@ -7,6 +8,7 @@ import {
   type SurfaceEntry,
   subscribeSurfaces,
 } from "../plugin-host/surface-registry";
+import "./PluginSurfaceSlot.css";
 
 // The spine's fixed surface slots (P6, spec §8.4/§13.2): ChromeLayer mounts one
 // PluginSurfaceHost per LIVE slot. The spine owns layout, focus, visibility, and
@@ -36,20 +38,11 @@ class SurfaceErrorBoundary extends Component<
     if (this.state.error === null) return this.props.children;
     // DESIGN.md §2.3/§8: dashed hairline, text-secondary ramp — honest, quiet.
     return (
-      <div
-        style={{
-          borderRadius: "var(--vf-radius-card)",
-          border: "1px dashed rgba(128, 128, 128, 0.35)",
-          background: "rgba(128, 128, 128, 0.06)",
-          color: "var(--vf-text-secondary, rgba(128,128,128,0.8))",
-          padding: "10px 12px",
-          fontSize: 11,
-          lineHeight: 1.35,
-          userSelect: "none",
-        }}
-      >
-        surface failed: {this.state.error}
-      </div>
+      <UnavailableState
+        compact
+        title="Surface unavailable"
+        description={`Renderer failed: ${this.state.error}`}
+      />
     );
   }
 }
@@ -86,7 +79,7 @@ export function PluginSurfaceHost({
   if (shown.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, pointerEvents: "auto" }}>
+    <div className="vf-plugin-surface-stack">
       {shown.map((s) => {
         const Surface = s.component;
         const props =

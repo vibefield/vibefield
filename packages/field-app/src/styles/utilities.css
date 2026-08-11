@@ -1,0 +1,19 @@
+/* Small renderer-wide utilities used by more than one domain component. */
+.vf-no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.vf-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.vf-mask-fade-right {
+  mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
+
+.vf-mask-fade-bottom {
+  mask-image: linear-gradient(to bottom, black 70%, transparent 97%);
+  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 97%);
+}

@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LOG_STREAMS } from "@vibefield/contracts";
+import { LOG_STREAMS, SOCKETS } from "@vibefield/contracts";
 import type {
   DiagnosticLeaseListV1,
   DiagnosticLeaseV1,
@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 interface Fixture {
@@ -38,7 +39,7 @@ async function setup(): Promise<Fixture> {
   const dataDir = join(root, "data");
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-  const native = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  const native = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await native.start();
   const daemon = await bootstrap({
     dataDir,

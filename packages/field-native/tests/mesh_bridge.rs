@@ -4,17 +4,20 @@
 //! routing between them. The remote leg rides `LaneTransport`, and these tests
 //! run it against the loopback implementation so the local behaviour is pinned
 //! before C6-3 puts truffle QUIC behind the same seam.
+use field_native::local_ipc;
 use field_native::services::mesh_bridge::{
     encode_frame, FrameReader, Lane, LaneClass, LoopbackTransport, FRAME_DATA, FRAME_ERR,
     FRAME_HELLO, FRAME_HELLO_OK, HEADER_BYTES, INBOUND_LANE_ID_BASE, LENGTH_PREFIX_BYTES,
-    LOSSY_MAX_PAYLOAD_BYTES, MAX_FRAME_BYTES, SOCKET_NAME,
+    LOSSY_MAX_PAYLOAD_BYTES, MAX_FRAME_BYTES,
 };
+// only the filesystem-shape test reads it, and that test is unix-only
+#[cfg(unix)]
+use field_native::services::mesh_bridge::SOCKET_NAME;
 use field_native::{bootstrap, config::NativeConfig, pairing, RunningDaemon};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::UnixStream;
 use tokio::time::timeout;
 
 async fn boot() -> (tempfile::TempDir, RunningDaemon) {
@@ -26,18 +29,18 @@ async fn boot() -> (tempfile::TempDir, RunningDaemon) {
 }
 
 fn read_secret(daemon: &RunningDaemon) -> Vec<u8> {
-    let path = daemon
-        .mgmt_socket
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("pairing");
-    hex::decode(std::fs::read_to_string(path).unwrap().trim()).unwrap()
+    // WIN-D1: from the file the daemon loaded, not walked up from the endpoint
+    // — a pipe name is not a path with a parent (mgmt_server.rs uses the same).
+    hex::decode(
+        std::fs::read_to_string(&daemon.pairing_file)
+            .unwrap()
+            .trim(),
+    )
+    .unwrap()
 }
 
 struct BridgeClient {
-    stream: UnixStream,
+    stream: local_ipc::ClientStream,
     reader: FrameReader,
     /// One socket read can carry several frames. Holding the surplus is the
     /// difference between "the second one was dropped" and "it is next" — a
@@ -48,7 +51,7 @@ struct BridgeClient {
 
 impl BridgeClient {
     async fn connect(daemon: &RunningDaemon) -> Self {
-        let stream = UnixStream::connect(&daemon.meshdata_socket)
+        let stream = local_ipc::connect(&daemon.meshdata_endpoint)
             .await
             .expect("connect meshdata");
         Self {
@@ -204,13 +207,24 @@ fn codec_refuses_a_length_shorter_than_its_own_header() {
 
 // ---- the socket ------------------------------------------------------------
 
+// unix-only by content: it asserts filesystem SHAPE (a node on disk, a shared
+// parent dir, a .sock suffix). On win32 the endpoints are pipe names with none
+// of those properties, and every other test in this file proves the portable
+// claim — the endpoint answers a dial.
+#[cfg(unix)]
 #[tokio::test]
 async fn the_bridge_binds_its_socket_beside_mgmt() {
     let (_dir, daemon) = boot().await;
-    assert!(daemon.meshdata_socket.exists(), "meshdata socket not bound");
-    assert!(daemon.meshdata_socket.ends_with(SOCKET_NAME));
+    assert!(
+        std::path::Path::new(&daemon.meshdata_endpoint).exists(),
+        "meshdata socket not bound"
+    );
+    assert!(daemon.meshdata_endpoint.ends_with(SOCKET_NAME));
     // beside mgmt.sock in the same 0700 run dir — one trust boundary, two planes
-    assert_eq!(daemon.meshdata_socket.parent(), daemon.mgmt_socket.parent());
+    assert_eq!(
+        std::path::Path::new(&daemon.meshdata_endpoint).parent(),
+        std::path::Path::new(&daemon.mgmt_endpoint).parent()
+    );
     daemon.shutdown().await;
 }
 
@@ -509,17 +523,17 @@ async fn the_bridge_reports_itself_in_native_health() {
 // handle directly, so the contract in methods.ts is what is actually exercised.
 
 struct MgmtClient {
-    reader: tokio::io::Lines<tokio::io::BufReader<tokio::net::unix::OwnedReadHalf>>,
-    writer: tokio::net::unix::OwnedWriteHalf,
+    reader: tokio::io::Lines<tokio::io::BufReader<tokio::io::ReadHalf<local_ipc::ClientStream>>>,
+    writer: tokio::io::WriteHalf<local_ipc::ClientStream>,
 }
 
 impl MgmtClient {
     async fn connect(daemon: &RunningDaemon) -> Self {
         use tokio::io::AsyncBufReadExt;
-        let stream = UnixStream::connect(&daemon.mgmt_socket)
+        let stream = local_ipc::connect(&daemon.mgmt_endpoint)
             .await
             .expect("connect mgmt");
-        let (r, w) = stream.into_split();
+        let (r, w) = tokio::io::split(stream);
         Self {
             reader: tokio::io::BufReader::new(r).lines(),
             writer: w,

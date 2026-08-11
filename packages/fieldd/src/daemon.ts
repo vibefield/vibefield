@@ -17,13 +17,16 @@ import {
   DocOpenParams,
   type DocOpenResult,
   DocRenameParams,
+  DocSetSyncIntentParams,
   KvDeleteParams,
   KvGetParams,
   KvListParams,
   KvSetParams,
+  LAYOUT,
   LegacyArtifactPublishParams,
   LOG_STREAMS,
   METHODS,
+  type MeshSyncPosture,
   type NativeHealth,
   PluginsDisableParams,
   PluginsEnableParams,
@@ -34,7 +37,6 @@ import {
   type PluginsOpenRendererSessionResult,
   PluginsReloadParams,
   PluginsUninstallParams,
-  PORTS,
   ProcessStatParams,
   type ProcessSubEvent,
   type ProductInfo,
@@ -50,8 +52,10 @@ import {
   type ShellOpenExternalResult,
   STORES,
   type TerminalConfigDocument,
+  TerminalConfigReadParams,
   TerminalConfigWriteParams,
   type TerminalConfigWriteResult,
+  TerminalConnectTicketParams,
   type TerminalConnectTicketResult,
   TerminalCreateParams,
   type TerminalCreateResult,
@@ -68,9 +72,14 @@ import {
   PluginLogRouter,
   pluginLogProvenance,
 } from "@vibefield/logging";
-import { effectiveAppPreferences } from "./app-preferences";
+import {
+  DEFAULT_APP_PREFERENCES,
+  effectiveAppPreferences,
+  resolveSyncIntent,
+} from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
+import { nativeMgmtEndpoint } from "./boot-env";
 import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -79,8 +88,9 @@ import { DocSyncService, type LaneInfo } from "./doc-sync";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { InstallSetReconciler } from "./install-reconciler";
+import { LinkService } from "./link-service";
 import { McpService } from "./mcp-service";
-import { MeshClient } from "./mesh-client";
+import { MeshClient, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
@@ -93,6 +103,7 @@ import { ProductApi } from "./product-api";
 import { type PluginServiceLogRecord, ServiceHost } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
+import { shimSpawn } from "./spawn-shim";
 import { TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
 
@@ -109,7 +120,7 @@ import { TokenService } from "./token-service";
 
 export interface FielddConfig {
   dataDir: string;
-  controlPort?: number; // default PORTS.FIELDD_WS_CONTROL; 0 = ephemeral (tests)
+  controlPort?: number; // default 0 = ephemeral (UA-D12; product.json records the actual)
   // default 0 = ephemeral; bin.ts supplies PORTS.FIELDD_WS_DATA for the real
   // launch. Kept ephemeral-by-default so parallel test daemons never collide on
   // a fixed port — the bound port always travels in doc.open's laneUrl anyway.
@@ -125,6 +136,10 @@ export interface FielddConfig {
   nativePid?: number;
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
+  /** UA-2 — the user this daemon serves (users.json userId). Recorded in
+   * product.json and asserted in every hello ack; the supervisor probe refuses
+   * a mismatch. Unset for embedded/unit daemons. */
+  userId?: string;
   /** PLUG-P2 — plugin discovery roots (§9.1): dirs whose children are plugin
    * dirs. Unset ⇒ an empty registry (honest, never a scan of guessed paths). */
   pluginRoots?: { bundled?: string[]; devLinked?: string[] };
@@ -199,6 +214,11 @@ export interface FielddDaemon {
   health(): FielddHealth;
   nativeHealth(): NativeHealth | null;
   stop(): Promise<void>;
+  /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
+   * (its own graceful shutdown: stop() then exit). The `system.shutdown`
+   * handler invokes it AFTER the response flushes; unregistered, the verb
+   * answers honestly that nothing is listening. */
+  onShutdownRequest(callback: () => void): void;
 }
 
 /** The daemon's own version, published in the device slice (package version). */
@@ -270,9 +290,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   let detachHealthSources: (() => void) | null = null;
 
   const native = new NativeLink({
-    socketPath: join(config.dataDir, "native", "run", "mgmt.sock"),
-    pairingFile: join(config.dataDir, "native", "pairing"),
+    // WIN-D1: path on unix, pipe name on win32 — one law, boot-env owns it
+    socketPath: nativeMgmtEndpoint(config.dataDir),
+    pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
     bootId,
+    ...(config.userId !== undefined ? { userId: config.userId } : {}),
     logger: logger.child({ component: "native_link" }),
   });
   let diagnostics: DiagnosticsService | null = null;
@@ -291,19 +313,35 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics = diagnosticsService;
     await diagnosticsService.start();
     const mesh = new MeshClient(native);
+    // UA-3 — the link lifecycle (spec §7.1/§7.2): capture the S1 self-whois
+    // login once the node is Running; the stored login is UA-4's trust
+    // comparison value. link.json lives under this user's root.
+    const links = new LinkService({
+      dataDir: config.dataDir,
+      native,
+      logger: logger.child({ component: "link" }),
+    });
+    links.start();
     // C6-3g: sync is constructed after docs but has to be reachable from its
     // commit hook, so the hook reads a binding that is filled in below. It is
     // optional the whole way down — with the mesh off (the default) `docSync`
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
+    // UA-D7 — the user's posture, CACHED because the three sync gates ask
+    // synchronously (a commit hook cannot await a settings-document read) and
+    // because the settings doc is constructed further down. It starts at the
+    // product default, so the window before the first read behaves exactly as
+    // fieldd always has; `refreshSyncPosture` below primes it and keeps it
+    // current on every settings change.
+    let syncPosture: MeshSyncPosture = DEFAULT_APP_PREFERENCES.syncPosture;
     const docs = new DocumentService({
       dataDir: config.dataDir,
       logger: logger.child({ component: "docs.service" }),
       onCommit: (commit) => docSync?.onCommit(commit),
     });
     const laneLink = new MeshLaneLink({
-      socketPath: join(config.dataDir, "native", "run", "meshdata.sock"),
-      pairingFile: join(config.dataDir, "native", "pairing"),
+      socketPath: join(config.dataDir, ...LAYOUT.MESHDATA_SOCKET),
+      pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
       bootId,
       logger: logger.child({ component: "mesh.lane" }),
     });
@@ -311,7 +349,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // so the first snapshot is warm. No module code loads here (§19.1).
     // P7 — the installed root is fieldd-OWNED: absent on first boot is the
     // normal empty state, so create it rather than report it as a problem
-    const installedRoot = join(config.dataDir, "plugins", "installed");
+    const installedRoot = join(config.dataDir, ...LAYOUT.PLUGINS_INSTALLED_DIR);
     mkdirSync(installedRoot, { recursive: true });
     const plugins = new PluginRegistryService({
       dataDir: config.dataDir,
@@ -354,6 +392,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             .map((p) => ({ id: p.id, online: p.online !== false }))
         );
       },
+      // UA-D7 — the one place per-doc intent and user posture are folded
+      // together; the service itself never learns that a posture exists.
+      resolveIntent: (docId) => resolveSyncIntent(docs.syncIntentOf(docId), syncPosture),
       logger: logger.child({ component: "doc.sync" }),
     });
     try {
@@ -411,6 +452,24 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       dataDir: config.dataDir,
       logger: logger.child({ component: "plugin.settings.doc" }),
     });
+    // UA-D7 — keep the cached posture honest. A read failure LEAVES the last
+    // known value rather than reverting to the default: silently starting to
+    // sync docs a user asked to keep home is the one outcome this must not have.
+    const refreshSyncPosture = async (): Promise<void> => {
+      try {
+        syncPosture = effectiveAppPreferences(await settingsDoc.appValues()).syncPosture;
+      } catch (error) {
+        logger.warn(
+          "fieldd.doc_sync.posture_unreadable",
+          "The mesh sync posture could not be read; the last known value stands",
+          { error: String(error) },
+        );
+      }
+    };
+    settingsDoc.on("changed", (event: { section: string }) => {
+      if (event.section === "app") void refreshSyncPosture();
+    });
+    await refreshSyncPosture();
     // P5 — settings + KV storage (§16.2/§16.3); user scope rides the doc
     const settings = new PluginSettingsService({
       dataDir: config.dataDir,
@@ -470,10 +529,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       callDynamic: (method, params) => services.callProjected(method, params),
       providerUp: (ns) => services.providerUp(ns),
       spawn: (req) => {
-        const child = spawnChild(req.executable, req.args, {
+        const env = pluginChildEnv(req.env);
+        // WIN-3 (§4.5) — `npx`/`uvx`, the practical MCP config, ARE `.cmd` shims
+        // on Windows and node refuses a batch file without a shell
+        // (CVE-2024-27980). The shim quotes them into `cmd.exe /d /s /c` itself;
+        // it is a passthrough on unix and for real executables.
+        const cmd = shimSpawn(req.executable, req.args, process.platform, {
+          env,
           ...(req.cwd !== undefined ? { cwd: req.cwd } : {}),
-          env: pluginChildEnv(req.env),
+        });
+        const child = spawnChild(cmd.command, cmd.args, {
+          ...(req.cwd !== undefined ? { cwd: req.cwd } : {}),
+          env,
           stdio: ["pipe", "pipe", "pipe"],
+          windowsHide: true,
+          ...(cmd.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
         });
         return {
           stdin: child.stdin as NodeJS.WritableStream,
@@ -585,12 +655,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // a hello racing the bootstrap window resolves to undefined (claim
     // fallback), never a TDZ crash (the C6-6 supersession lesson).
     let devicesRef: DeviceService | null = null;
+    // WIN-D5 — what "please stop" means is the process owner's to define
+    // (bin.ts: graceful stop then exit); late-bound because stop() closes over
+    // resources constructed after the api below.
+    let shutdownRequested: (() => void) | null = null;
     const api = new ProductApi({
-      port: config.controlPort ?? PORTS.FIELDD_WS_CONTROL,
+      // UA-D12 — ephemeral default; the fixed registry number is legacy
+      // documentation, and product.json is the only discovery
+      port: config.controlPort ?? 0,
       tokens,
       ...(config.allowedOrigins ? { allowedOrigins: config.allowedOrigins } : {}),
       tailnetPathSecret: servePathSecret,
       correlateNodeId: (nodeId) => devicesRef?.deviceIdByNodeId(nodeId),
+      ...(config.userId !== undefined ? { userId: config.userId } : {}),
+      // UA-4 — the door's comparison value (UA-D13): read fresh per hello, so
+      // a capture landing mid-uptime activates the law without a restart
+      getLinkedLogin: () => links.status().link?.login ?? null,
     });
     diagnosticsService.register(api);
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));
@@ -645,6 +725,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
 
     api.register("system.health", () => health());
+    // WIN-D5 — the stop verb. The response flushes first (setImmediate), then
+    // the process owner's registered shutdown runs — the same graceful path the
+    // unix signal handlers take, now reachable on every platform. Unregistered
+    // (a library embedding without a process owner) the verb says so honestly.
+    api.register("system.shutdown", () => {
+      if (!shutdownRequested) return { stopping: false, detail: "no shutdown owner registered" };
+      logger.info("fieldd.lifecycle.shutdown_requested", "system.shutdown received");
+      const callback = shutdownRequested;
+      setImmediate(() => callback());
+      return { stopping: true };
+    });
     api.register("system.capabilities", () => ({
       methods: METHODS.filter((m) => m.surface === "product").map((m) => m.method),
     }));
@@ -840,6 +931,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // label-only edit — docCount is unchanged, so no emitHealth here
       return docs.rename(parsed.data.docId, parsed.data.name);
     });
+    // UA-D7 — "may this doc leave the device?". The registry write is the whole
+    // mutation: the three sync gates read the resolver on every decision, so
+    // the next commit, the next lane, and the next status fold all see the new
+    // answer without anything being told about it.
+    api.register("doc.setSyncIntent", async (ctx, params) => {
+      requireLocalDocumentCaller(ctx);
+      const parsed = DocSetSyncIntentParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { docId: uuid, intent: sync|local }",
+          false,
+        );
+      // posture, not content — docCount and updatedAt both stand
+      return docs.setSyncIntent(parsed.data.docId, parsed.data.intent);
+    });
     // C6-4 — per-doc sync standing. Registered even with sync unavailable
     // (mesh off, the default): the empty list is the honest snapshot then, and
     // the renderer reads it as "sync does not apply" rather than an error.
@@ -920,7 +1027,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
       return parsed.data.sessionId;
     };
-    api.register("terminal.list", (): TerminalListResult => ({ terminals: terminals.list() }));
+    // GT-5b: `list` REFUSES (UNAVAILABLE `unobserved`) until the first observed
+    // snapshot applies rather than answering an empty floor it has not looked
+    // at, and carries the observation it IS answering from — see the service.
+    api.register("terminal.list", (): TerminalListResult => {
+      const rows = terminals.list();
+      const observation = terminals.observation();
+      return { terminals: rows, ...(observation !== undefined ? { observation } : {}) };
+    });
     api.register("terminal.get", (_ctx, params) => {
       const sessionId = requireSessionId(params);
       const info = terminals.get(sessionId);
@@ -950,13 +1064,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // rather than a session id, because that is what was granted.
     api.register(
       "terminal.connectTicket",
-      async (ctx): Promise<TerminalConnectTicketResult> =>
-        await audit.required(
+      async (ctx, params): Promise<TerminalConnectTicketResult> => {
+        // The declared params shape, actually parsed (GT-5b): it accepts
+        // anything object-shaped today and is the seam a device selector (D35)
+        // would grow into, but a contract nothing reads is not a contract.
+        if (!TerminalConnectTicketParams.safeParse(params ?? {}).success)
+          throw new RpcCallError("PRECONDITION_FAILED", "expected an object or no params", false);
+        return await audit.required(
           ctx,
           { action: "terminal.ticket.mint", target: { kind: "terminal", id: "connection" } },
           () => ({ ticket: terminals.ticket() }),
           () => ({ outcome: "succeeded" }),
-        ),
+        );
+      },
     );
     // GT-1: create ALSO mints. openTicket gates on the observed inventory,
     // which is a mgmt round trip behind the spawn — so create-then-ticket
@@ -969,7 +1089,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const parsed = TerminalCreateParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "malformed terminal.create params", false);
-      return await audit.required(
+      // GT-5b: the mint is SEQUENCED AFTER the create's own outcome, not nested
+      // inside its effect. Nested, a mint that threw (the floor died between
+      // the spawn and the mint; the audit ledger degraded) made the outer
+      // record say `session.create → failed` for a PTY that exists — a lie in
+      // the one log whose whole job is to be the record of what happened, and
+      // it named no session, so the birth was unrecoverable from the log.
+      //
+      // `audit.required`'s `rollbackOnOutcomeFailure` does NOT cover this, the
+      // review's suggested fix notwithstanding: it fires only when the OUTCOME
+      // APPEND fails on a successful effect (`audit-service.ts:360-372`), never
+      // when the effect itself throws. Ordering is the fix that fits.
+      //
+      // The session is NOT terminated when the mint fails. It exists, the log
+      // now names it, `terminal.list` shows it and `openTicket` can mint for it
+      // later — killing a live PTY because a credential grant hiccuped destroys
+      // the user's work to tidy our bookkeeping.
+      const created = await audit.required(
         ctx,
         {
           // the session id does not exist until the effect runs; the outcome
@@ -984,21 +1120,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
           },
         },
-        async (): Promise<TerminalCreateResult> => {
-          const created = await terminals.create(parsed.data);
-          const ticket = await audit.required(
-            ctx,
-            { action: "terminal.ticket.mint", target: { kind: "terminal", id: created.sessionId } },
-            () => terminals.ticket(),
-            () => ({ outcome: "succeeded" }),
-          );
-          return { sessionId: created.sessionId, ticket };
-        },
-        (result) => ({
-          outcome: "succeeded",
-          attrs: { sessionId: result.sessionId, ticketMinted: true },
-        }),
+        async () => await terminals.create(parsed.data),
+        // no `ticketMinted` here any more: nothing has been minted yet, and an
+        // attr claiming otherwise was true only because the nesting made it so.
+        (result) => ({ outcome: "succeeded", attrs: { sessionId: result.sessionId } }),
       );
+      const ticket = await audit.required(
+        ctx,
+        { action: "terminal.ticket.mint", target: { kind: "terminal", id: created.sessionId } },
+        () => terminals.ticket(),
+        () => ({ outcome: "succeeded" }),
+      );
+      return { sessionId: created.sessionId, ticket } satisfies TerminalCreateResult;
     });
     api.register("terminal.terminate", async (ctx, params) => {
       const sessionId = requireSessionId(params);
@@ -1023,10 +1156,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // attrs record the shape of the edit (bytes, the revision it replaced) and
     // never its CONTENTS — a config file can hold a shell path or a font name,
     // and the audit log is not the place to copy a user's file into.
-    api.register(
-      "terminal.config.read",
-      async (): Promise<TerminalConfigDocument> => await terminals.readConfig(),
-    );
+    api.register("terminal.config.read", async (_ctx, params): Promise<TerminalConfigDocument> => {
+      // connectTicket's reasoning (GT-5b): the declared shape is parsed.
+      if (!TerminalConfigReadParams.safeParse(params ?? {}).success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected an object or no params", false);
+      return await terminals.readConfig();
+    });
     api.register("terminal.config.write", async (ctx, params) => {
       const parsed = TerminalConfigWriteParams.safeParse(params);
       if (!parsed.success)
@@ -1040,7 +1175,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         {
           action: "terminal.config.write",
           target: { kind: "terminal", id: "config" },
-          attrs: { bytes: parsed.data.text.length, replaces: parsed.data.revision },
+          // BYTES, measured (GT-5b). `.length` counts UTF-16 code units, so an
+          // attr named `bytes` under-reported every non-ASCII config — an emoji
+          // in a comment counted 2 for 4 — and the file is written as UTF-8.
+          attrs: {
+            bytes: Buffer.byteLength(parsed.data.text, "utf8"),
+            replaces: parsed.data.revision,
+          },
         },
         async (): Promise<TerminalConfigWriteResult> =>
           await terminals.writeConfig(parsed.data.text, parsed.data.revision),
@@ -1523,6 +1664,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       }
     };
+    // UA-3 — the user's tailscale link (spec §7.1): trusted-desktop posture,
+    // identical to the app-preference rows below. Unlink is identity
+    // retirement — audited attempt-before-effect, and there is no rollback:
+    // a retired node key cannot be un-retired, only relinked fresh.
+    api.register("user.link.get", (ctx) => {
+      requireAppPreferencesCaller(ctx);
+      return links.status();
+    });
+    api.registerSubscription("user.link.subscribe", (ctx, _params, emit) => {
+      requireAppPreferencesCaller(ctx);
+      const fn = (status: unknown) => emit(status);
+      links.on("changed", fn);
+      return { snapshot: links.status(), dispose: () => links.off("changed", fn) };
+    });
+    api.register("user.link.unlink", async (ctx) => {
+      requireAppPreferencesCaller(ctx);
+      return audit.requiredSystem(
+        {
+          action: "user.link.unlink",
+          target: { kind: "mesh", id: "tailnet-link" },
+        },
+        () => links.unlink(),
+        (result) => ({ attrs: { retired: result.retired } }),
+      );
+    });
     const appPreferencesSnapshot = async () =>
       effectiveAppPreferences(await settingsDoc.appValues());
     api.register("storage.appPreferences.get", async (ctx, _params) => {
@@ -1535,7 +1701,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell, value: boolean }",
+          "expected { key: desktop.showTray|desktop.backgroundShell (boolean) | mesh.syncPosture (automatic|opt-in) }",
           false,
         );
       }
@@ -1820,19 +1986,59 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // bootstrap's tail runs); its serves are declared later via start(), once
     // the control port is bound. The bridge reads controlPort lazily, and the
     // product serve's secret never enters the service.
+    // UA-4 — the serve-allow belt (UA-D13): the product serve carries
+    // allow:[login] so the sidecar's verified-login glob refuses guests before
+    // the upgrade ever reaches fieldd (the door's comparison stays the
+    // suspenders). Login is read live at declare time; a capture or unlink
+    // mid-uptime re-issues the LAST declared set with the product spec
+    // rebuilt — setServes replaces the whole desired set, so the remembered
+    // artifact specs ride along intact (mesh-client C3). Artifact serves keep
+    // their own per-artifact allow semantics — those are the deliberate guest
+    // surfaces (spec §7.3).
+    const serveLog = logger.child({ component: "mesh.serves" });
+    const linkedLogin = (): string | null => links.status().link?.login ?? null;
+    const productServeSpec = (): ServeSpec => {
+      const login = linkedLogin();
+      return {
+        name: "product",
+        target: { kind: "port", port: controlPort },
+        tls: false,
+        pathSecret: servePathSecret,
+        // the sidecar matches with Go path.Match, lowercased both sides — a
+        // login is a LITERAL here, so its glob metacharacters are escaped
+        ...(login !== null ? { allow: [login.replace(/[\\*?[]/g, (c) => `\\${c}`)] } : {}),
+      };
+    };
+    let lastArtifactServeSpecs: ServeSpec[] | null = null;
+    let lastServeAllowLogin: string | null = null;
+    links.on("changed", () => {
+      const login = linkedLogin();
+      if (lastArtifactServeSpecs === null || login === lastServeAllowLogin) return;
+      lastServeAllowLogin = login;
+      const specs = [productServeSpec(), ...lastArtifactServeSpecs];
+      void (async () => {
+        // the sidecar has no upsert (same-id add = PROXY_EXISTS) and the
+        // reconcile SKIPS live serveIds — re-gating a live serve is
+        // remove-then-add, or the old gate keeps running while the reported
+        // state adopts the new spec (the mesh-client skip is recorded C3
+        // debt; the brief serve blink here is once per link transition)
+        await mesh.removeServe("product").catch(() => {});
+        await mesh.setServes(specs);
+      })().catch((error: unknown) => {
+        // mesh down/degraded: the next declare re-runs the reconcile; the
+        // door's comparison still refuses guests meanwhile
+        serveLog.debug("fieldd.serve.allow_refresh_deferred", "product allow refresh deferred", {
+          error: String(error),
+        });
+      });
+    });
     const artifacts = new ArtifactService({
       dataDir: config.dataDir,
       bridge: {
         declare: async (specs) => {
-          await mesh.setServes([
-            {
-              name: "product",
-              target: { kind: "port", port: controlPort },
-              tls: false,
-              pathSecret: servePathSecret,
-            },
-            ...specs,
-          ]);
+          lastArtifactServeSpecs = specs;
+          lastServeAllowLogin = linkedLogin();
+          await mesh.setServes([productServeSpec(), ...specs]);
         },
         remove: async (serveId) => await mesh.removeServe(serveId),
         states: () => mesh.serves(),
@@ -1899,6 +2105,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           processes.stopAll(),
         ]);
         detachHealthSources?.();
+        links.stop();
         docSync?.stop();
         laneLink.close();
         docs.dispose();
@@ -2119,7 +2326,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     void reconciler.reconcile();
 
     // -- run files (shell bootstrap contract) --
-    const runDir = join(config.dataDir, "fieldd", "run");
+    const runDir = join(config.dataDir, ...LAYOUT.FIELDD_RUN_DIR);
     mkdirSync(runDir, { recursive: true });
     const shellTokenId = tokens.reserveTokenId();
     const shellGrant = await audit.requiredSystem(
@@ -2143,8 +2350,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         tokens.revoke(grant.tokenId);
       },
     );
-    const tokenPath = join(runDir, "shell.token");
-    const productPath = join(runDir, "product.json");
+    const tokenPath = join(config.dataDir, ...LAYOUT.SHELL_TOKEN);
+    const productPath = join(config.dataDir, ...LAYOUT.PRODUCT_JSON);
     writeFileSync(tokenPath, shellGrant.token, { mode: 0o600 });
     chmodSync(tokenPath, 0o600); // umask-proof
     writeFileSync(
@@ -2158,6 +2365,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           startedAt,
           nativePid: config.nativePid ?? null,
           buildId: config.buildId ?? null,
+          userId: config.userId ?? null,
         } satisfies ProductInfo, // the shell/supervisor adoption contract (shell.ts)
         null,
         2,
@@ -2235,6 +2443,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       health,
       nativeHealth: () => latestHealth,
       stop,
+      onShutdownRequest(callback) {
+        shutdownRequested = callback;
+      },
     };
   } catch (e) {
     detachHealthSources?.();

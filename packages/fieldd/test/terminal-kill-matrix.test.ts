@@ -4,26 +4,29 @@
 // env strip holds through the real spawn path; epoch arbitration reaches
 // through the D6 ticket; churn leaves no residue. Row 2 (field-native's own
 // SIGTERM sweep) is pinned Rust-side in field-native/tests/terminal_unit.rs.
-import { type ChildProcess, execSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { type ChildProcess, spawn } from "node:child_process";
+import { readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import type { TerminalInfo, TerminalTicket } from "@vibefield/contracts";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
+import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const BIN = join(ROOT, "target/debug/field-native");
+const BIN = nativeBinPath(ROOT);
+// WIN-6: on Windows both roles collapse to cmd.exe (the ConPTY shell). On unix
+// they stay distinct — /bin/cat holds the PTY open, /bin/sh runs a command.
+const WIN = process.platform === "win32";
+const CMD = process.env["COMSPEC"] ?? "C:\\Windows\\System32\\cmd.exe";
+const HOLD = WIN ? CMD : "/bin/cat";
+const SH = WIN ? CMD : "/bin/sh";
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
-
-beforeAll(() => {
-  execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
-}, 180_000);
 
 afterEach(async () => {
   // error-isolated: a rejecting cleanup must not leak the daemons behind it
@@ -46,7 +49,7 @@ interface NativeHandle {
 }
 
 async function spawnNative(dir?: string): Promise<NativeHandle> {
-  const dataDir = dir ?? mkdtempSync("/tmp/vf-km-");
+  const dataDir = dir ?? shortTmpRoot("vf-km-");
   if (dir === undefined) cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   const child = spawn(BIN, [], {
     env: {
@@ -59,16 +62,16 @@ async function spawnNative(dir?: string): Promise<NativeHandle> {
       // environment:{mode:"inherit"} spawns must lose them).
       FIELD_SMUGGLE: "leak-me",
       FIELDD_SMUGGLE: "leak-me-too",
+      // WIN-6 / G13 bait: a CASE-VARIANT of a stripped prefix. On unix this is a
+      // genuinely different (non-FIELD_) var; on Windows env is case-insensitive,
+      // so it IS a FIELD_ var — and ghosttea's case-sensitive `starts_with` strip
+      // may miss it. Whether it leaks is asserted (empirically) below.
+      Field_Native_Case_Probe: "CASE_LEAK_WITNESS",
     },
     stdio: "ignore",
   });
   children.push(child);
-  const socket = join(dataDir, "native/run/mgmt.sock");
-  const deadline = Date.now() + 15_000;
-  while (!existsSync(socket)) {
-    if (Date.now() > deadline) throw new Error("field-native did not come up");
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  await waitForMgmtEndpoint(dataDir, 15_000);
   return { dir: dataDir, child };
 }
 
@@ -98,6 +101,9 @@ async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T>
 const listOf = async (rpc: WsRpc): Promise<TerminalInfo[]> =>
   ((await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] }).terminals;
 
+// WIN-6: ConPTY terminal hosting is live on Windows (the Rust kill matrix runs on
+// the box in field-native/tests/terminal_unit.rs), so this NF-4 matrix runs on
+// both platforms — the two-plane crash/adopt/re-arm rows are cross-process.
 describe("the kill matrix (NF-4, real field-native)", () => {
   it("row 1: the PTY survives fieldd; the next fieldd adopts it inside 2s", async () => {
     const native = await spawnNative();
@@ -106,7 +112,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     // stop must not leak a live fieldd (the afterEach tolerates double-stop)
     cleanup.push(() => daemon1.stop());
     const rpc1 = await connect(daemon1);
-    const created = (await rpc1.call("terminal.create", { shell: "/bin/cat" })) as {
+    const created = (await rpc1.call("terminal.create", { shell: HOLD })) as {
       sessionId: string;
     };
     const ticket = (await poll(async () =>
@@ -157,20 +163,48 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
     const rpc = await connect(daemon);
-    const created = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+    const created = (await rpc.call("terminal.create", { shell: HOLD })) as {
       sessionId: string;
     };
     await poll(async () =>
       (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
     );
 
+    // a ticket minted while the floor is ALIVE is the control: it proves the
+    // refusals below are the kill talking and not a door that never worked
+    const beforeKill = (await rpc.call("terminal.openTicket", {
+      sessionId: created.sessionId,
+    })) as TerminalTicket;
+    expect(beforeKill.token).toBeTruthy();
+
     // crash the floor: sessions die with it (the honest ceiling) and the seam
     // must refuse interactive ops rather than pretend
     native.child.kill("SIGKILL");
     await poll(async () => {
-      const err = await rpc.callErr("terminal.create", { shell: "/bin/cat" });
+      const err = await rpc.callErr("terminal.create", { shell: HOLD });
       return err.data?.kind === "UNAVAILABLE" ? true : undefined;
     }, 10_000);
+
+    // GT-5b — the hole this row never checked. `create` was the only op
+    // re-tested after the kill, and the TICKET doors were the ones that had
+    // gone wrong: `terminalEndpoints` was captured on the pairing hello and
+    // cleared nowhere, so both of these kept answering with socket paths that
+    // no longer existed plus the dead boot's token, audited as successful
+    // grants. Floor-died-AFTER-hello had no coverage anywhere, and this is
+    // where it surfaces.
+    // Polled, not asserted once: `create` can reach UNAVAILABLE through the
+    // dead CONTROL socket a beat before the mgmt link's close clears the
+    // endpoints, and it is the cleared endpoints these two doors read.
+    for (const [method, params] of [
+      ["terminal.connectTicket", {}],
+      ["terminal.openTicket", { sessionId: created.sessionId }],
+    ] as const) {
+      const kind = await poll(async () => {
+        const err = await rpc.callErr(method, params);
+        return err.data?.kind === "UNAVAILABLE" ? err.data.kind : undefined;
+      }, 10_000).catch(() => "MINTED-FOR-A-CORPSE");
+      expect(kind, `${method} must not mint for a corpse`).toBe("UNAVAILABLE");
+    }
 
     // a replacement native on the SAME data dir: re-pair re-delivers fresh
     // endpoints (new token), the observed snapshot honestly EMPTIES (no
@@ -179,7 +213,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     await poll(async () => ((await listOf(rpc)).length === 0 ? true : undefined), 20_000);
     const reborn = await poll(async () => {
       try {
-        return (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+        return (await rpc.call("terminal.create", { shell: HOLD })) as {
           sessionId: string;
         };
       } catch {
@@ -196,7 +230,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     cleanup.push(() => daemon.stop());
     const rpc = await connect(daemon);
 
-    const created = (await rpc.call("terminal.create", { shell: "/bin/sh" })) as {
+    const created = (await rpc.call("terminal.create", { shell: SH })) as {
       sessionId: string;
     };
     const ticket = (await poll(async () =>
@@ -214,7 +248,11 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     await client.connect();
 
     const out = join(native.dir, "smuggle.txt");
-    const input = await client.pasteAndSubmit(created.sessionId, `env > ${out}`);
+    // dump the child env: `env` on unix, cmd's `set` on Windows.
+    const input = await client.pasteAndSubmit(
+      created.sessionId,
+      WIN ? `set > ${out}` : `env > ${out}`,
+    );
     expect(input.accepted).toBe(true);
     const env = await poll(async () => {
       try {
@@ -234,15 +272,64 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     expect(env).not.toContain("FIELD_SMUGGLE");
     expect(env).not.toContain("FIELDD_SMUGGLE");
     expect(env).not.toContain("GHOSTTEA_");
-    expect(env).toContain("HOME=");
+    // an ordinary (non-prefixed) var survives the strip: HOME on unix, the user
+    // profile path on Windows (the strip is exact-prefix, so both are untouched).
+    expect(env).toContain(WIN ? "USERPROFILE=" : "HOME=");
   }, 60_000);
+
+  // WIN-6 / G13: the exact-case prefixes are stripped (row 6). This probes the
+  // CASE gap ghosttea's case-sensitive `starts_with` opens on Windows'
+  // case-insensitive env — CONFIRMED to leak on the box (a `Field_Native_*`
+  // variant survived). field-native sets its OWN secrets exact-case, so those are
+  // stripped; this is a defense-in-depth gap the fix (G13, upstream) closes. Until
+  // the pin consuming G13 lands, the correct assertion (variant stripped) is
+  // EXPECTED-FAIL on Windows; when G13 lands it STARTS passing — drop `.fails`
+  // then. On unix a case variant is a genuinely different var, so this is skipped.
+  const caseGapWitness = WIN ? it.fails : it.skip;
+  caseGapWitness(
+    "row 6b: a case-variant of a stripped prefix must not leak (EL7, G13)",
+    async () => {
+      const native = await spawnNative();
+      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => daemon.stop());
+      const rpc = await connect(daemon);
+      const created = (await rpc.call("terminal.create", { shell: SH })) as { sessionId: string };
+      const ticket = (await poll(async () =>
+        (await listOf(rpc)).some((t) => t.sessionId === created.sessionId)
+          ? ((await rpc.call("terminal.openTicket", { sessionId: created.sessionId })) as
+              | TerminalTicket
+              | undefined)
+          : undefined,
+      )) as TerminalTicket;
+      const client = new GhostteaAutomationClient(
+        { controlSocket: ticket.controlSocket, authToken: ticket.token },
+        { clientBuild: "kill-matrix" },
+      );
+      cleanup.push(() => client.dispose());
+      await client.connect();
+
+      const out = join(native.dir, "case-smuggle.txt");
+      const input = await client.pasteAndSubmit(created.sessionId, `set > ${out}`);
+      expect(input.accepted).toBe(true);
+      const env = await poll(async () => {
+        try {
+          const text = readFileSync(out, "utf8");
+          return text.length > 0 ? text : undefined;
+        } catch {
+          return undefined;
+        }
+      });
+      expect(env).not.toContain("CASE_LEAK_WITNESS");
+    },
+    60_000,
+  );
 
   it("epoch arbitration reaches through the ticket path", async () => {
     const native = await spawnNative();
     const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
     const rpc = await connect(daemon);
-    const created = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+    const created = (await rpc.call("terminal.create", { shell: HOLD })) as {
       sessionId: string;
     };
     const ticket = (await poll(async () =>
@@ -278,7 +365,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     const rpc = await connect(daemon);
 
     for (let i = 0; i < 10; i++) {
-      const { sessionId } = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+      const { sessionId } = (await rpc.call("terminal.create", { shell: HOLD })) as {
         sessionId: string;
       };
       await poll(async () =>

@@ -61,7 +61,10 @@ function fakeClient(): FielddClient {
       }
       throw new Error(`unexpected subscription: ${method}`);
     }),
-    request: vi.fn(),
+    // A promise, like the real client's: the section's row action attaches a
+    // rejection handler, and a fake that answered `undefined` would make a
+    // clean call throw in the click handler.
+    request: vi.fn(async () => ({})),
   } as unknown as FielddClient;
 }
 
@@ -88,17 +91,19 @@ afterEach(() => {
   act(() => resetDocSyncStatuses());
 });
 
-async function mount(): Promise<void> {
+/** Returns the client so a test can assert what the section CALLED, not only
+ * what it rendered (UA-6's row action). */
+async function mount(): Promise<FielddClient> {
+  const client = fakeClient();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(
-      createElement(FielddProvider, { client: fakeClient() }, createElement(MeshSection)),
-    );
+    root?.render(createElement(FielddProvider, { client }, createElement(MeshSection)));
     await Promise.resolve();
     await Promise.resolve();
   });
+  return client;
 }
 
 describe("MeshSection doc sync rows (C6-4)", () => {
@@ -142,5 +147,28 @@ describe("MeshSection doc sync rows (C6-4)", () => {
     expect(text).toContain("a peer's doc · not held here");
     expect(text).toContain("declined");
     expect(text).toContain("unknown-doc"); // the verbatim reason, as provenance
+  });
+
+  it("UA-D7: offers 'keep local' on a held doc's row, and calls doc.setSyncIntent", async () => {
+    act(() => setDocSyncStatuses([status({ docId: "doc-1", name: "Field" })]));
+    const client = await mount();
+    const keep = container?.querySelector("[data-keep-local='doc-1']") as HTMLButtonElement;
+    expect(keep.textContent).toBe("keep local");
+    await act(async () => {
+      keep.click();
+      await Promise.resolve();
+    });
+    expect(client.request).toHaveBeenCalledWith("doc.setSyncIntent", {
+      docId: "doc-1",
+      intent: "local",
+    });
+  });
+
+  it("UA-D7: offers nothing on a doc this device does not hold", async () => {
+    // There is no intent to set on a doc we have no registry entry for; the
+    // daemon would answer NOT_FOUND, so the row must not offer the action.
+    act(() => setDocSyncStatuses([status({ docId: "ghost", name: null })]));
+    await mount();
+    expect(container?.querySelector("[data-keep-local]")).toBeNull();
   });
 });

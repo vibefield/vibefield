@@ -49,10 +49,12 @@ export function KillActivePane({
   // longer looking at — the worst possible kind of correct click.
   useEffect(() => setStep({ kind: "idle" }), [session.id]);
 
-  // Esc disarms, consistently (DESIGN.md §7). Not capture-phase: the overlay's
-  // own Esc closes the Godview, and an armed confirm should be given up before
-  // the whole stage is — so this listens on the bubble and stops the event only
-  // while there is a question on screen to withdraw.
+  // Esc disarms, consistently (DESIGN.md §7). Still not capture-phase, though
+  // the reason changed on 2026-08-04: the overlay's own Escape ladder is gone
+  // (⇧⇧ is the only Godview toggle now) and Escape belongs to whatever holds
+  // focus. Bubble phase is how this stays the narrow exception — it is armed
+  // only while a question is on screen, and a terminal that wants the key keeps
+  // it, because a pane with a kill confirm up is not a pane being typed into.
   useEffect(() => {
     if (step.kind !== "arming") return;
     const onKeyDown = (event: KeyboardEvent): void => {

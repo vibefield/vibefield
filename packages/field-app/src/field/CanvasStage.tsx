@@ -1,7 +1,6 @@
 import { Canvas, useThree } from "@react-three/fiber";
 import type { CanvasEngine, GridConfig } from "@vibecook/ice";
 import type { DevtoolsHandle } from "@vibecook/ice/devtools";
-import { ground } from "@vibecook/ice/ground";
 import {
   createGLBridge,
   createGLPointerRouter,
@@ -10,7 +9,7 @@ import {
   GLViews,
   type GlFrameStats,
 } from "@vibecook/ice/r3f";
-import { InfiniteCanvas, type InfiniteCanvasHandle } from "@vibecook/ice/react";
+import type { InfiniteCanvasHandle, KeymapEntry } from "@vibecook/ice/react";
 import {
   type MutableRefObject,
   type ReactElement,
@@ -24,6 +23,7 @@ import { createPortal } from "react-dom";
 import { PMREMGenerator, type Texture } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { installCursorHalo } from "../cursor";
+import { InfiniteCanvasGround } from "./InfiniteCanvasGround";
 
 // CanvasStage (§5.4.3): renderer-local ICE/DOM/GL composition and
 // frame-coupled state — InfiniteCanvas, the GL bridge/pointer router/P2
@@ -69,12 +69,15 @@ function EnvLoader({ onTex }: { onTex: (t: Texture | null) => void }) {
 export function CanvasStage({
   ce,
   grid,
+  keymapOverrides,
   ecsOpen,
   devtoolsRef,
   disposeRef,
 }: {
   ce: CanvasEngine;
   grid: Partial<GridConfig>;
+  /** FieldView's stable override entries (I1, ice 0.4.0 — field-keymap.ts). */
+  keymapOverrides: readonly KeymapEntry[];
   /** GL frame profiling wires only while the ECS panel is open. */
   ecsOpen: boolean;
   /** ChromeLayer's live devtools handle — the stage feeds its GL lanes. */
@@ -82,10 +85,6 @@ export function CanvasStage({
   /** The session's engine-disposal cleanup calls this BEFORE ce.dispose(). */
   disposeRef: MutableRefObject<(() => void) | null>;
 }): ReactElement {
-  // The P0 ground layer (grid + wires + snap guides, one WebGPU canvas) —
-  // one factory per stage mount: the ground remounts WITH the engine.
-  const groundFactory = useMemo(() => ground(), []);
-
   // --- GL root: bridge + router + P2 plane arrive in onReady; glRoute delegates
   // via ref. glRef keeps the whole set so we can tear it down — onReady fires
   // from InfiniteCanvas's mount effect, so a StrictMode double-mount would
@@ -183,10 +182,10 @@ export function CanvasStage({
   );
 
   return (
-    <InfiniteCanvas
+    <InfiniteCanvasGround
       engine={ce}
-      ground={groundFactory}
       grid={grid}
+      keymapOverrides={keymapOverrides}
       glRoute={glRoute}
       onReady={onReady}
       className="field-canvas"
@@ -201,7 +200,7 @@ export function CanvasStage({
             orthographic
             frameloop="never"
             gl={{ alpha: true, antialias: false }}
-            style={{ pointerEvents: "none", position: "absolute", inset: 0 }}
+            className="field-gl-canvas"
           >
             <EnvLoader onTex={setEnvTex} />
             <GLViews
@@ -214,6 +213,6 @@ export function CanvasStage({
           </Canvas>,
           gl.plane,
         )}
-    </InfiniteCanvas>
+    </InfiniteCanvasGround>
   );
 }

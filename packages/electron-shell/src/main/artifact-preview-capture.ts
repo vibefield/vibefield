@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   ARTIFACT_PREVIEW_LIMITS,
   type ShellWebContentsCaptureArtifactPreviewResult as CaptureResult,
+  LAYOUT,
   type ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
 } from "@vibefield/contracts";
@@ -126,7 +127,7 @@ export class ArtifactPreviewCapture {
   readonly #randomId: () => string;
 
   constructor(options: ArtifactPreviewCaptureOptions) {
-    this.#previewRoot = join(options.dataDir, "artifacts", "previews");
+    this.#previewRoot = join(options.dataDir, ...LAYOUT.ARTIFACT_PREVIEWS_DIR);
     this.#native = options.native;
     this.#randomId = options.randomId ?? (() => randomBytes(18).toString("base64url"));
   }

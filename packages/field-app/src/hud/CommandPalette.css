@@ -1,0 +1,14 @@
+.vf-command-palette {
+  border: 1px solid var(--vf-hairline);
+  border-radius: var(--vf-radius-card);
+  background: var(--vf-chrome-surface);
+  box-shadow: var(--vf-shadow-island);
+  backdrop-filter: blur(24px);
+  transition: transform 280ms var(--vf-ease-pop);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-command-palette {
+    transition: none;
+  }
+}

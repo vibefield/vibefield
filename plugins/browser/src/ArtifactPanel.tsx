@@ -5,6 +5,14 @@ import {
 } from "@vibefield/contracts";
 import type { PluginProductClient, PluginSurfaceProps } from "@vibefield/plugin-sdk";
 import {
+  EmptyState,
+  InlineNotice,
+  PlaceholderFace,
+  StatusDot,
+  UiButton,
+  uiFieldClass,
+} from "@vibefield/plugin-sdk/ui";
+import {
   type FormEvent,
   type ReactElement,
   useCallback,
@@ -79,11 +87,13 @@ function friendlyError(error: unknown, action: string): string {
   return `Could not ${action}. Try again.`;
 }
 
-function statusColor(status: ArtifactView["availability"]): string {
-  if (status === "active") return "var(--vf-green)";
-  if (status === "source-unavailable") return "var(--vf-orange)";
-  if (status === "error") return "var(--vf-red)";
-  return "rgba(128, 128, 128, 0.55)";
+function statusTone(
+  status: ArtifactView["availability"],
+): "attention" | "error" | "healthy" | "muted" {
+  if (status === "active") return "healthy";
+  if (status === "source-unavailable") return "attention";
+  if (status === "error") return "error";
+  return "muted";
 }
 
 function statusLabel(status: ArtifactView["availability"]): string {
@@ -378,21 +388,21 @@ export function ArtifactPanel({
     if (catalog.phase === "error") {
       return (
         <QuietState title="Artifacts unavailable" detail={catalog.message}>
-          <button
-            type="button"
+          <UiButton
+            variant="primary"
             className="vf-artifact-button"
             onClick={() => setSubscriptionEpoch((value) => value + 1)}
           >
             Try again
-          </button>
+          </UiButton>
         </QuietState>
       );
     }
     if (artifacts.length === 0) {
       return (
         <QuietState title="No artifacts yet" detail="Add a proxy or folder">
-          <button
-            type="button"
+          <UiButton
+            variant="primary"
             className="vf-artifact-button"
             onClick={() => {
               setConfirmRemove(null);
@@ -400,7 +410,7 @@ export function ArtifactPanel({
             }}
           >
             Add artifact
-          </button>
+          </UiButton>
         </QuietState>
       );
     }
@@ -473,9 +483,9 @@ export function ArtifactPanel({
       </header>
 
       {mutationError !== null && (
-        <div className="vf-artifact-inline-error" role="alert">
+        <InlineNotice className="vf-artifact-inline-error" tone="error" role="alert">
           {mutationError}
-        </div>
+        </InlineNotice>
       )}
 
       {content}
@@ -499,14 +509,13 @@ function QuietState({
   children?: ReactElement;
 }): ReactElement {
   return (
-    <div className="vf-artifact-quiet">
-      <div className="vf-artifact-placeholder" aria-hidden="true">
-        <span />
-      </div>
-      <strong>{title}</strong>
-      <span>{detail}</span>
-      {children}
-    </div>
+    <EmptyState
+      className="vf-artifact-quiet"
+      title={title}
+      description={detail}
+      visual={<PlaceholderFace className="vf-artifact-placeholder" />}
+      actions={children}
+    />
   );
 }
 
@@ -594,6 +603,7 @@ function ProxyForm({
       <label className="vf-artifact-field">
         <span>Local port</span>
         <input
+          className={uiFieldClass}
           type="number"
           min="1"
           max="65535"
@@ -606,9 +616,9 @@ function ProxyForm({
         />
       </label>
       <TailnetFact />
-      <button type="submit" className="vf-artifact-primary" disabled={!valid || pending}>
+      <UiButton type="submit" variant="primary" disabled={!valid || pending}>
         {pending ? "Publishing…" : "Publish proxy"}
-      </button>
+      </UiButton>
     </form>
   );
 }
@@ -656,6 +666,7 @@ function FolderForm({
       <label className="vf-artifact-field">
         <span>Name</span>
         <input
+          className={uiFieldClass}
           value={title}
           maxLength={128}
           onChange={(event) => setTitle(event.target.value)}
@@ -675,13 +686,9 @@ function FolderForm({
         </span>
       </label>
       <TailnetFact />
-      <button
-        type="submit"
-        className="vf-artifact-primary"
-        disabled={title.trim().length === 0 || pending}
-      >
+      <UiButton type="submit" variant="primary" disabled={title.trim().length === 0 || pending}>
         {pending ? "Publishing…" : "Publish folder"}
-      </button>
+      </UiButton>
     </form>
   );
 }
@@ -741,7 +748,7 @@ function ArtifactRow({
             {artifact.originDeviceName} · {artifact.kind}
           </small>
           <span className="vf-artifact-status">
-            <i style={{ background: statusColor(artifact.availability) }} />
+            <StatusDot tone={statusTone(artifact.availability)} />
             {statusLabel(artifact.availability)}
           </span>
         </span>
@@ -774,6 +781,7 @@ function ArtifactRow({
       {renaming !== null && (
         <form className="vf-artifact-rename" onSubmit={onRename}>
           <input
+            className={uiFieldClass}
             autoFocus
             value={renaming}
             maxLength={128}
@@ -876,10 +884,9 @@ function ChoiceIcon({ kind }: { kind: "proxy" | "folder" }): ReactElement {
 function Chevron({ back = false }: { back?: boolean }): ReactElement {
   return (
     <svg
-      className="vf-artifact-chevron"
       aria-hidden="true"
       viewBox="0 0 24 24"
-      style={back ? { transform: "rotate(180deg)" } : undefined}
+      className={`vf-artifact-chevron${back ? " is-back" : ""}`}
     >
       <path d="m9 5 7 7-7 7" />
     </svg>

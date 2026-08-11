@@ -10,6 +10,7 @@ import {
   type TerminalCreateParams,
   type TerminalEndpoints,
   type TerminalInfo,
+  type TerminalObservation,
   type TerminalTerminateResult,
   type TerminalTicket,
 } from "@vibefield/contracts";
@@ -42,6 +43,9 @@ export interface TerminalServiceOptions {
   logger?: Logger;
   /** injectable for tests; production = the user's login shell */
   defaultShell?: () => string;
+  /** Test seam for the unresponsive-floor classification; production leaves it
+   * to the client's own 10s default. */
+  requestTimeoutMs?: number;
 }
 
 /** Free-shell spawn geometry until an attached view claims resize authority
@@ -56,10 +60,16 @@ const OWNER_ID = "vibefield.fieldd";
 export class TerminalService {
   private readonly logger: Logger;
   private terminals: TerminalInfo[] = [];
+  /** Which floor observation `terminals` came from — undefined until the first
+   * one applies, which is exactly the state `list`/`get` refuse in. */
+  private lastObservation: TerminalObservation | undefined;
   private client: GhostteaAutomationClient | null = null;
   /** the token the live client authenticated with — a new native boot mints a
    * new token, and a stale client must be rebuilt, not trusted */
   private clientToken: string | null = null;
+  /** in-flight control dial, keyed by the token it is authenticating with */
+  private connecting: { token: string; promise: Promise<GhostteaAutomationClient> } | null = null;
+  private disposed = false;
   /** true once the observed subscription is armed; NativeLink replays it across
    * reconnects from then on (P5), so ensureStarted becomes a no-op */
   private subscribed = false;
@@ -89,6 +99,10 @@ export class TerminalService {
         const parsed = ObservedState.safeParse(payload);
         if (parsed.success) {
           this.terminals = parsed.data.terminals;
+          // Kept, not discarded (GT-5b): these two fields are what let a
+          // consumer tell an inventory apart from a LATER floor's, and their
+          // presence is also the flag that `list`/`get` are answerable at all.
+          this.lastObservation = { bootId: parsed.data.bootId, generation: parsed.data.generation };
         } else {
           this.logger.debug(
             "fieldd.terminal.observed_unparsed",
@@ -119,17 +133,51 @@ export class TerminalService {
     return this.starting;
   }
 
+  /** The observed inventory — or a refusal, if nothing has been observed yet.
+   *
+   * GT-5b, and the sharpest of the honest-states cases because the dishonest
+   * answer was WELL-FORMED. Before the first snapshot applies this returned
+   * `[]`, which reads as "this floor holds no sessions" and is a claim fieldd
+   * had made no observation to support. The costly case is the two-plane one
+   * the whole design exists for: fieldd restarts while field-native keeps
+   * running, its first observed-subscribe is refused (swallowed by design, it
+   * re-arms), and the empty answer tells the Godview's restore that every
+   * saved pane is dead — offering "start clean", which DELETES the layout of
+   * sessions that are alive one plane down.
+   *
+   * Refusing instead reaches the deck's existing correct branch: it mounts
+   * unarmed on a failed list, commented that guessing every saved pane is dead
+   * would be the one answer certain to be wrong. The flag is one-way. A link
+   * drop does NOT un-observe: a dead mgmt connection kills no PTYs, the last
+   * inventory is the last thing fieldd actually saw, and health carries the
+   * outage. */
   list(): TerminalInfo[] {
+    this.requireObserved();
     return this.terminals;
   }
 
   get(sessionId: string): TerminalInfo | undefined {
+    this.requireObserved();
     return this.terminals.find((t) => t.sessionId === sessionId);
+  }
+
+  /** Which floor observation `list` is answering from; undefined only when
+   * `list` would refuse. */
+  observation(): TerminalObservation | undefined {
+    return this.lastObservation;
   }
 
   /** D6: the ticket IS the endpoints — the single native service token, socket
    * paths stable across fieldd restarts. Fails honest when the floor is absent
    * (native down, terminal unit degraded, pre-NF-2 daemon).
+   *
+   * That sentence was a comment asserting a protection that did not exist
+   * until GT-5b: `terminalEndpoints` was assigned on the pairing hello and
+   * cleared nowhere, so once a floor had EVER said hello this minted forever —
+   * after a field-native SIGKILL it handed out socket paths that no longer
+   * existed plus a dead boot's token, and the audit recorded the grant as a
+   * success. NativeLink now clears the endpoints whenever the mgmt link stops
+   * being live, which is what makes `endpoints()` below reachable again.
    *
    * Deliberately NOT session-scoped: the credential is the floor's, not the
    * session's, so minting one for a just-created session needs no inventory
@@ -177,10 +225,24 @@ export class TerminalService {
       // Failure classification (the NF-6 review's theme): a dead transport is
       // UNAVAILABLE, never INTERNAL — the floor is gone, not the request wrong.
       if (!client.connected) throw this.unavailable("the terminal floor died mid-create", error);
+      // GT-5b: `connected` is `authenticated && socket !== undefined` in the
+      // pinned client, and a request TIMEOUT leaves both untouched — so a
+      // wedged floor used to answer INTERNAL(retryable) here. It is worse than
+      // a misnomer for create: the PTY may have been born and merely replied
+      // late, so fieldd reported a fault for an effect that happened, the
+      // caller retried, and the first session was left unnamed. UNAVAILABLE
+      // says what is true (the floor is not answering) without claiming to
+      // know whether the spawn landed.
+      if (isRequestTimeout(error)) throw this.unresponsive("create", error);
       const message = errorMessage(error);
-      // a service-level spawn refusal on a live connection is the caller's
-      // input (bad executable/cwd), not a daemon fault
-      if (/spawn/i.test(message))
+      // A spawn refusal on a live connection is the caller's input (bad
+      // executable/cwd), not a daemon fault — but only THIS refusal. The test
+      // was an unanchored /spawn/i over free prose, which also caught the
+      // floor's own `session spawn task stopped` (its blocking task falling
+      // over: a floor fault, and it was being reported to the caller as bad
+      // input, non-retryable). Anchored to the exact wording the pinned floor
+      // emits; anything else it refuses with stays INTERNAL and retryable.
+      if (SPAWN_REFUSAL.test(message))
         throw new RpcCallError("PRECONDITION_FAILED", `create failed: ${message}`, false);
       throw new RpcCallError("INTERNAL", `create failed: ${message}`, true);
     }
@@ -203,15 +265,25 @@ export class TerminalService {
       return { terminated: true };
     } catch (error) {
       if (!client.connected) throw this.unavailable("the terminal floor died mid-terminate", error);
+      // GT-5b: a floor that never answered is unresponsive, not internally
+      // broken — and emphatically not "already gone", which is what the
+      // probe below would eventually have to guess.
+      if (isRequestTimeout(error)) throw this.unresponsive("terminate", error);
       if (isUnknownSession(error)) return { terminated: false };
       // a service-level refusal on a live connection: probe once for the
-      // already-exited race; a probe that itself hits transport death is
-      // UNAVAILABLE like any other
-      const gone = await client.getSession(sessionId).then(
-        (s) => Boolean((s as { exited?: unknown }).exited),
-        (probeError) => client.connected && isUnknownSession(probeError),
+      // already-exited race; a probe that itself hits transport death or a
+      // timeout is UNAVAILABLE like any other
+      const probe = await client.getSession(sessionId).then(
+        (session) => ({ answered: true as const, exited: Boolean(session.exited) }),
+        (probeError: unknown) => ({ answered: false as const, probeError }),
       );
-      if (gone) return { terminated: false };
+      if (probe.answered) {
+        if (probe.exited) return { terminated: false };
+      } else {
+        if (isRequestTimeout(probe.probeError))
+          throw this.unresponsive("terminate", probe.probeError);
+        if (client.connected && isUnknownSession(probe.probeError)) return { terminated: false };
+      }
       if (!client.connected) throw this.unavailable("the terminal floor died mid-terminate", error);
       throw new RpcCallError("INTERNAL", `terminate failed: ${errorMessage(error)}`, true);
     }
@@ -260,7 +332,11 @@ export class TerminalService {
     try {
       before = (await client.getConfig()).revision;
     } catch (error) {
-      throw this.configFailure("read", client, error);
+      // The caller asked to WRITE. This step is a read, but naming it one told
+      // an editor that its read had failed when nothing it did was a read
+      // (GT-5b); the stage says where the write broke instead of relabelling
+      // the operation.
+      throw this.configFailure("write", client, error, "reading the effective configuration");
     }
     try {
       const update = await client.replaceConfigDocument(revision, text);
@@ -307,10 +383,21 @@ export class TerminalService {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.connecting = null;
     this.dropClient();
   }
 
   // ---- internals ----
+
+  /** The refusal `list`/`get` owe a caller before the first snapshot applies. */
+  private requireObserved(): void {
+    if (this.lastObservation !== undefined) return;
+    throw new RpcCallError("UNAVAILABLE", "the terminal inventory has not been observed", true, {
+      service: "terminal",
+      state: "unobserved",
+    });
+  }
 
   private endpoints(): TerminalEndpoints {
     const endpoints = this.opts.link.terminalEndpoints;
@@ -324,12 +411,33 @@ export class TerminalService {
   }
 
   /** Lazy, per-native-boot control client. Rebuilt when the token rotates (a
-   * new field-native boot) or after a connection error surfaces. */
+   * new field-native boot) or after a connection error surfaces.
+   *
+   * GT-5b: guarded in flight, the way `ensureStarted` guards its subscribe.
+   * Without it two concurrent calls each built AND CONNECTED a client, and the
+   * loser was never disposed — its close handler checks `this.client ===
+   * client`, so it sat authenticated on the floor's control socket until the
+   * process exited. Keyed by token, because two dials for two different native
+   * boots are two different clients and joining them would be the bug. */
   private async connectedClient(): Promise<GhostteaAutomationClient> {
     const endpoints = this.endpoints();
     if (this.client !== null && this.clientToken === endpoints.authToken) {
       return this.client;
     }
+    const inFlight = this.connecting;
+    if (inFlight !== null && inFlight.token === endpoints.authToken) {
+      return await inFlight.promise;
+    }
+    let tracked: Promise<GhostteaAutomationClient>;
+    tracked = this.openClient(endpoints).finally(() => {
+      if (this.connecting?.promise === tracked) this.connecting = null;
+    });
+    this.connecting = { token: endpoints.authToken, promise: tracked };
+    return await tracked;
+  }
+
+  /** Build, connect, and install the control client for these endpoints. */
+  private async openClient(endpoints: TerminalEndpoints): Promise<GhostteaAutomationClient> {
     this.dropClient();
     const client = new GhostteaAutomationClient(
       {
@@ -337,7 +445,12 @@ export class TerminalService {
         frameSocket: endpoints.frameSocket,
         authToken: endpoints.authToken,
       },
-      { clientBuild: "vibefield-fieldd" },
+      {
+        clientBuild: "vibefield-fieldd",
+        ...(this.opts.requestTimeoutMs !== undefined
+          ? { requestTimeoutMs: this.opts.requestTimeoutMs }
+          : {}),
+      },
     );
     try {
       await client.connect();
@@ -347,6 +460,19 @@ export class TerminalService {
         service: "terminal",
         state: "unreachable",
         detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+    // The floor may have died or rebooted while this dial was in the air, and
+    // the link is the authority on that — caching a client here would cache one
+    // authenticated to a boot that is over. Likewise a service disposed
+    // mid-dial: installing then leaks a connected client nothing will ever
+    // close. Refuse; the next call dials whatever floor is actually there
+    // (GT-5b).
+    if (this.disposed || this.opts.link.terminalEndpoints?.authToken !== endpoints.authToken) {
+      client.dispose();
+      throw new RpcCallError("UNAVAILABLE", "the terminal floor changed while connecting", true, {
+        service: "terminal",
+        state: "rotated",
       });
     }
     // a dead socket drops the cached client so the next call redials
@@ -392,6 +518,18 @@ export class TerminalService {
     });
   }
 
+  /** A floor whose socket is up and whose service did not answer inside the
+   * request budget. Distinct from `unreachable`, because the connection is
+   * fine and the DAEMON is wedged, and distinct from INTERNAL, because
+   * nothing here says the request was wrong. */
+  private unresponsive(operation: string, cause: unknown): RpcCallError {
+    return new RpcCallError("UNAVAILABLE", `the terminal floor did not answer ${operation}`, true, {
+      service: "terminal",
+      state: "unresponsive",
+      detail: errorMessage(cause),
+    });
+  }
+
   /** Classify a config-document failure the way create/terminate classify
    * theirs (NF-6): a dead transport is UNAVAILABLE, and so is a live floor that
    * has no app-owned overlay to edit — that is a degraded SERVICE state (an
@@ -403,10 +541,12 @@ export class TerminalService {
     operation: "read" | "write",
     client: GhostteaAutomationClient,
     error: unknown,
+    stage?: string,
   ): RpcCallError {
     if (!client.connected) {
       return this.unavailable(`the terminal floor died mid-config-${operation}`, error);
     }
+    if (isRequestTimeout(error)) return this.unresponsive(`config ${operation}`, error);
     if (NO_OVERLAY.test(errorMessage(error))) {
       return new RpcCallError(
         "UNAVAILABLE",
@@ -415,11 +555,40 @@ export class TerminalService {
         { service: "terminal", state: "no-overlay", detail: errorMessage(error) },
       );
     }
-    return new RpcCallError("INTERNAL", `config ${operation} failed: ${errorMessage(error)}`, true);
+    // GT-5b: the comment above promises honesty for "an older field-native",
+    // and this is the shape that actually arrives from one. The overlay case
+    // is the floor's own `ConfigDocumentError::Unavailable`; a floor below
+    // protocol 1.11 never gets asked at all — the pinned CLIENT refuses first,
+    // with its own prose — and that refusal was landing as INTERNAL, i.e. as a
+    // bug in us rather than as the capability gap it is. Not retryable: no
+    // amount of asking again teaches an old daemon a new command.
+    if (NO_CONFIG_DOCUMENTS.test(errorMessage(error))) {
+      return new RpcCallError(
+        "UNAVAILABLE",
+        "this terminal floor is too old to serve configuration documents",
+        false,
+        { service: "terminal", state: "unsupported", detail: errorMessage(error) },
+      );
+    }
+    const where = stage === undefined ? "" : ` while ${stage}`;
+    return new RpcCallError(
+      "INTERNAL",
+      `config ${operation} failed${where}: ${errorMessage(error)}`,
+      true,
+    );
   }
 
   private defaultShell(): string {
     if (this.opts.defaultShell) return this.opts.defaultShell();
+    if (process.platform === "win32") {
+      // GT-D10: Windows has no login shell (`userInfo().shell` is null) and no
+      // `$SHELL`, so the unix chain below would fall to `/bin/sh` and every
+      // default `terminal.create` would die at SPAWN_REFUSAL. COMSPEC is the
+      // shell on Windows; a missing one is not a real Windows.
+      const comspec = process.env["COMSPEC"];
+      if (typeof comspec === "string" && comspec.length > 0) return comspec;
+      return "C:\\Windows\\System32\\cmd.exe";
+    }
     try {
       const shell = userInfo().shell;
       if (typeof shell === "string" && shell.length > 0) return shell;
@@ -442,6 +611,36 @@ function errorMessage(error: unknown): string {
  * read as this). */
 function isUnknownSession(error: unknown): boolean {
   return /unknown session/i.test(errorMessage(error));
+}
+
+/** The floor's OWN spawn refusal, anchored (GT-5b). `error.to_string()` on the
+ * service side prints the top anyhow context and drops the cause, so this
+ * exact string is the whole message the wire carries for a create the PTY
+ * layer refused (`ghosttea-0.9.2 session.rs:1182`).
+ *
+ * Anchored because the old unanchored `/spawn/i` was a substring test over free
+ * prose, and the floor has a second spawn-bearing refusal —
+ * `session spawn task stopped` (`service.rs:2017`, its blocking task falling
+ * over), which is the FLOOR failing and was being reported to the caller as
+ * bad input, non-retryable. Honest limit, worth stating: because the cause is
+ * dropped upstream, this one string covers a bad executable AND a resource
+ * exhaustion at spawn time, and fieldd cannot tell them apart. It classifies
+ * the case it can name and leaves everything else INTERNAL. */
+const SPAWN_REFUSAL = /^failed to spawn PTY command$/;
+
+/** The pinned CLIENT's own refusal when the server's protocol minor is below
+ * the config-document floor (1.11) — thrown before anything reaches the wire,
+ * so it is the client's prose and not the service's. */
+const NO_CONFIG_DOCUMENTS = /does not support configuration documents/i;
+
+/** The pinned client's request-budget expiry: `Ghosttea request timed out:
+ * <command>`, thrown from its own timer with the socket untouched. Anchored to
+ * the start so a floor that quotes the phrase inside a longer refusal of its
+ * own does not read as a transport state. */
+const REQUEST_TIMEOUT = /^Ghosttea request timed out\b/;
+
+function isRequestTimeout(error: unknown): boolean {
+  return REQUEST_TIMEOUT.test(errorMessage(error));
 }
 
 /** The service's refusal when no explicit overlay path was configured

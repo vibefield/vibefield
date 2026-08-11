@@ -20,6 +20,7 @@
     "@vibefield/logging": "workspace:*",
     "@vibefield/plugin-build": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*",
+    "@vibefield/users": "workspace:*",
     "ajv": "^8.17.1",
     "loro-crdt": "^1.13.8",
     "ws": "^8.18.0"

@@ -4,27 +4,29 @@
 // ticket attaches an external ghosttea client, the epoch path accepts
 // automation input, and terminate runs the real ladder. This is the seam half
 // of the spec's §9 NF-3 gate; the kill matrix proper is NF-4.
-import { type ChildProcess, execSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { type ChildProcess, spawn } from "node:child_process";
+import { rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import type { TerminalInfo, TerminalTicket } from "@vibefield/contracts";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap } from "../src/index";
+import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const BIN = join(ROOT, "target/debug/field-native");
+const BIN = nativeBinPath(ROOT);
+// /bin/cat holds the PTY open reading stdin on unix; an interactive cmd.exe is
+// its Windows equivalent (WIN-6 — the ConPTY spike proved both halves on the box).
+const SHELL =
+  process.platform === "win32"
+    ? (process.env["COMSPEC"] ?? "C:\\Windows\\System32\\cmd.exe")
+    : "/bin/cat";
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
-
-beforeAll(() => {
-  execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
-}, 180_000);
 
 afterEach(async () => {
   // error-isolated: a rejecting cleanup must not leak the daemons behind it
@@ -42,9 +44,8 @@ afterEach(async () => {
 });
 
 async function spawnNative(): Promise<string> {
-  // /tmp, not tmpdir(): macOS sun_path caps socket paths ~104 bytes and the
-  // ghosttea control/frame endpoints live under <dataDir>/native/run/.
-  const dir = mkdtempSync("/tmp/vf-seam-");
+  // the short-root rule (and why unix keeps /tmp) lives in native-harness.ts
+  const dir = shortTmpRoot("vf-seam-");
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const child = spawn(BIN, [], {
     env: {
@@ -56,12 +57,7 @@ async function spawnNative(): Promise<string> {
     stdio: "ignore",
   });
   children.push(child);
-  const socket = join(dir, "native/run/mgmt.sock");
-  const deadline = Date.now() + 15_000;
-  while (!existsSync(socket)) {
-    if (Date.now() > deadline) throw new Error("field-native did not come up");
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  await waitForMgmtEndpoint(dir, 15_000);
   return dir;
 }
 
@@ -75,6 +71,8 @@ async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T>
   }
 }
 
+// WIN-6: ConPTY terminal hosting is live on Windows (the kill matrix runs on the
+// box in field-native/tests/terminal_unit.rs), so this seam runs on both platforms.
 describe("the terminal seam (NF-3, real field-native)", () => {
   it("create → observe → ticket-attach → automate → terminate, one authority", async () => {
     const dataDir = await spawnNative();
@@ -92,7 +90,7 @@ describe("the terminal seam (NF-3, real field-native)", () => {
     await helloAs(rpc, grant.token);
 
     // the free-shell door (an explicit program: quiet, portable, no login shell)
-    const created = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+    const created = (await rpc.call("terminal.create", { shell: SHELL })) as {
       sessionId: string;
     };
     expect(created.sessionId).toBeTruthy();
@@ -157,7 +155,7 @@ describe("the terminal seam (NF-3, real field-native)", () => {
     const rpc = new WsRpc(ws);
     await helloAs(rpc, grant.token);
 
-    const created = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+    const created = (await rpc.call("terminal.create", { shell: SHELL })) as {
       sessionId: string;
       ticket: TerminalTicket;
     };
@@ -199,6 +197,34 @@ describe("the terminal seam (NF-3, real field-native)", () => {
     })) as TerminalTicket;
     expect(attach).toEqual(created.ticket);
 
+    await rpc.call("terminal.terminate", { sessionId: created.sessionId });
+  }, 60_000);
+
+  it("a default create (no shell) spawns the platform shell (WIN-6, GT-D10)", async () => {
+    const dataDir = await spawnNative();
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", resolve);
+      ws.once("error", reject);
+    });
+    cleanup.push(() => ws.close());
+    const rpc = new WsRpc(ws);
+    await helloAs(rpc, grant.token);
+
+    // no `shell` → defaultShell(): COMSPEC on Windows, the login shell on unix.
+    // Before WIN-6 the Windows arm fell to /bin/sh and every default create died
+    // at SPAWN_REFUSAL; here it must produce a live PTY on both platforms.
+    const created = (await rpc.call("terminal.create", {})) as { sessionId: string };
+    const row = await poll(async () => {
+      const { terminals } = (await rpc.call("terminal.list", {})) as {
+        terminals: TerminalInfo[];
+      };
+      return terminals.find((t) => t.sessionId === created.sessionId);
+    });
+    expect(row.pid).toBeGreaterThan(0);
     await rpc.call("terminal.terminate", { sessionId: created.sessionId });
   }, 60_000);
 });

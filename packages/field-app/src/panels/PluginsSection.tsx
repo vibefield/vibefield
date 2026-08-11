@@ -1,4 +1,5 @@
 import type { PluginRecord, PluginSource, SettingsContribution } from "@vibefield/contracts";
+import { StatusDot } from "@vibefield/design-kit";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useState } from "react";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
@@ -8,13 +9,13 @@ import { PluginUpdates } from "./PluginUpdates";
 import { buttonCls, labelCls, SettingsPill, SettingsSection, SettingsSwitch } from "./settings-ui";
 
 function Dot({ state }: { state: string }): ReactElement {
-  const color =
+  const tone =
     state === "enabled"
-      ? "var(--vf-green)"
+      ? "healthy"
       : state === "invalid" || state === "incompatible"
-        ? "var(--vf-red)"
-        : "rgba(128, 128, 128, 0.45)";
-  return <span className="h-2 w-2 flex-none rounded-full" style={{ background: color }} />;
+        ? "error"
+        : "muted";
+  return <StatusDot tone={tone} className="is-large" />;
 }
 
 const SOURCE_LABEL: Record<PluginSource, string> = {
@@ -65,8 +66,7 @@ function PluginUninstall({ plugin }: { plugin: PluginRecord }): ReactElement {
           </button>
           <button
             type="button"
-            className={`${buttonCls} bg-transparent`}
-            style={{ color: "var(--vf-red)" }}
+            className={`${buttonCls} vf-ui-tone-danger bg-transparent`}
             onClick={() => setConfirm("data")}
           >
             Remove plugin and data
@@ -89,8 +89,7 @@ function PluginUninstall({ plugin }: { plugin: PluginRecord }): ReactElement {
             <button
               type="button"
               disabled={busy}
-              className={buttonCls}
-              style={confirm === "data" ? { color: "var(--vf-red)" } : undefined}
+              className={`${buttonCls}${confirm === "data" ? " vf-ui-tone-danger" : ""}`}
               onClick={() => void run(confirm === "data")}
             >
               {busy ? "Working…" : confirm === "data" ? "Remove data" : "Uninstall"}

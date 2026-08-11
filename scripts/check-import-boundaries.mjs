@@ -15,6 +15,11 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// This script's own home, so manifest-derived rules (R5) read the REAL packages
+// no matter which tree is being scanned — the self-test scans a temp fixture dir.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // Extensions that carry imports; R6/R7 narrow to .ts/.tsx per spec wording.
 const SOURCE_EXT = /\.(?:ts|tsx|mts|mjs)$/;
@@ -88,13 +93,64 @@ function matchesForbid(spec, forbid) {
 // A cross-package deep import: reaching past a new package's public entries. Bare
 // `@vibefield/field-app` (no subpath) is the public root and allowed; `/main`,
 // `/preload`, `/host` are the declared entries (spec §8.2), plus field-app's
-// browser-safe `/logging` seam and its exported `/spike` implementation,
-// consumed by the shell's test-only spike page.
-const NEW_PACKAGE_ENTRIES = new Set(["main", "preload", "host", "logging", "spike"]);
+// browser-safe `/logging` seam, its exported `/spike` implementation consumed by
+// the shell's test-only spike page, and `/design-system`, the UI Bench entry the
+// shell's renderer-host mounts.
+//
+// KNOWN DEBT (2026-08-07): this set is a SECOND source of truth for what each
+// package publishes — the first is the `exports` map in its own package.json,
+// which is what `declared public entries only` in the rule description actually
+// means. They drifted the moment a legitimately-declared entry was added, and
+// the wall failed a correct import on main. Deriving this from the workspace's
+// package.json `exports` keys would make the rule enforce the declaration rather
+// than a copy of it, exactly as registries-as-code does for ports and scopes.
+// R5's public entries are DERIVED FROM THE MANIFESTS, never restated here
+// (2026-08-10). This used to be one hardcoded set of subpath names shared by all
+// three packages, which made the wall a SECOND SOURCE OF TRUTH about what each
+// package publishes — and on 2026-08-06 that cost the repo 22 hours of red
+// preflight on main for an import that was correct by `exports` (`11765bc`
+// added the entry and its import together; the wall knew nothing about it).
+//
+// A union list is also wrong in the other direction: it let any of the six names
+// through for ANY of the three packages, and it still carried `host`, which no
+// package exports today. Per-package derivation fixes both — a subpath is public
+// exactly when its own package.json says so.
+const R5_PACKAGES = ["electron-shell", "field-app", "fieldd-supervisor"];
+const R5_DEEP_IMPORT = new RegExp(`^@vibefield/(${R5_PACKAGES.join("|")})/(.+)$`);
+
+/** The first path segment of every subpath `pkg` publishes, or `null` when the
+ * package exports a wildcard (everything under it is public by declaration).
+ * Read from the REPO's manifests, not the scanned tree: the self-test scans a
+ * temp fixture directory, and the question "what does this package publish" is
+ * always about the real package. */
+function declaredEntries(pkg) {
+  const manifest = join(REPO_ROOT, "packages", pkg, "package.json");
+  let json;
+  try {
+    json = JSON.parse(readFileSync(manifest, "utf8"));
+  } catch (error) {
+    // A checkout where this cannot be read is broken in a way that would make
+    // every R5 verdict a guess. Say so instead of quietly allowing or denying.
+    throw new Error(`R5 cannot read ${manifest}: ${error.message}`);
+  }
+  const entries = new Set();
+  for (const key of Object.keys(json.exports ?? {})) {
+    if (key === ".") continue; // the bare entry is not a deep import
+    const first = key.replace(/^\.\//, "").split("/")[0];
+    if (first.includes("*")) return null; // wildcard: the package publishes its subtree
+    entries.add(first);
+  }
+  return entries;
+}
+
+const R5_ENTRIES = new Map(R5_PACKAGES.map((pkg) => [pkg, declaredEntries(pkg)]));
+
 function isDeepPackageImport(spec) {
-  const m = /^@vibefield\/(?:electron-shell|field-app|fieldd-supervisor)\/(.+)$/.exec(spec);
+  const m = R5_DEEP_IMPORT.exec(spec);
   if (m === null) return false;
-  return !NEW_PACKAGE_ENTRIES.has(m[1].split("/")[0]);
+  const entries = R5_ENTRIES.get(m[1]);
+  if (entries === null) return false;
+  return !entries.has(m[2].split("/")[0]);
 }
 
 // A specifier reaching into a testing/ or spike- module by path segment.
@@ -131,7 +187,7 @@ const RULES = [
         modules: [
           "@vibecook/ice",
           "@vibefield/field-app",
-          "@vibefield/shell-ui",
+          "@vibefield/design-kit",
           "loro-crdt",
           "react",
           "react-dom",
@@ -233,7 +289,7 @@ const RULES = [
           "@vibefield/fieldd-client",
           "@vibefield/fieldd-supervisor",
           "@vibefield/plugin-runtime",
-          "@vibefield/shell-ui",
+          "@vibefield/design-kit",
           "electron",
           "ws",
         ],
@@ -625,7 +681,7 @@ function runSelfTest() {
     {
       id: "R10",
       file: "examples/plugins/widgetlab/src/uses-electron.ts",
-      body: 'import { app } from "electron";\nimport { CardShell } from "@vibefield/shell-ui";\n',
+      body: 'import { app } from "electron";\nimport { CardShell } from "@vibefield/design-kit";\n',
     },
     {
       id: "R11",
@@ -664,11 +720,24 @@ function runSelfTest() {
     },
   ];
   const cleans = [
-    // react + a /host entry import + plain code: proves R1/R2/R9 don't overfire and
-    // R5 accepts declared entries.
+    // react + a DECLARED entry import + plain code: proves R1/R2/R9 don't
+    // overfire and R5 accepts what the manifest publishes.
+    //
+    // The entry named here must be real (2026-08-10). This fixture used to
+    // import `@vibefield/field-app/host` — a subpath NO package exports — and
+    // passed anyway, because R5 graded against a hardcoded union list rather
+    // than the manifests. It was the same second-source-of-truth that made main
+    // red on a correct import; a fixture asserting a fictional entry is how the
+    // wall's own test stopped being evidence about the wall.
     {
       file: "packages/field-app/src/clean.ts",
-      body: 'import React from "react";\nimport { host } from "@vibefield/field-app/host";\nexport const ok = 1;\n',
+      body: 'import React from "react";\nimport { getRendererLogger } from "@vibefield/field-app/logging";\nexport const ok = 1;\n',
+    },
+    // Cross-package entry names do NOT leak: `main` is electron-shell's export,
+    // and importing it from field-app's name was clean under the union list.
+    {
+      file: "packages/fieldd/src/uses-shell-main.ts",
+      body: 'import { start } from "@vibefield/electron-shell/main";\nexport const s = start;\n',
     },
     // the R7 single-file and R6 whole-package contract exclusions, together.
     {

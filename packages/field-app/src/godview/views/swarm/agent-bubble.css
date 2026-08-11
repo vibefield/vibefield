@@ -1,0 +1,494 @@
+/* One Godview swarm circle: state bodies, identity layers, pane relationships,
+   and motion. Geometry/placement belongs to AgentSwarm's physics controller. */
+
+.vf-godview.theme-light {
+  /* Pre-blurred shadow layers replace animated drop-shadow filters. Their alpha
+     follows the live fill-opacity control, so tuning the body also tunes the
+     silhouette it casts. */
+  --vf-monitor-bubble-working-shadow-rest-blur: 5px;
+  --vf-monitor-bubble-working-shadow-peak-blur: 8.5px;
+  --vf-monitor-bubble-waiting-shadow-rest-blur: 6.5px;
+  --vf-monitor-bubble-waiting-shadow-peak-blur: 12px;
+  --vf-monitor-bubble-working-shadow-rest-fill: rgb(
+    0 0 0 /
+    calc(0.18 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+  --vf-monitor-bubble-working-shadow-peak-fill: rgb(
+    0 0 0 /
+    calc(0.34 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+  --vf-monitor-bubble-waiting-shadow-rest-fill: rgb(
+    0 0 0 /
+    calc(0.24 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+  --vf-monitor-bubble-waiting-shadow-peak-fill: rgb(
+    0 0 0 /
+    calc(0.4 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+}
+
+.vf-godview.theme-dark {
+  --vf-monitor-bubble-working-shadow-rest-blur: 6px;
+  --vf-monitor-bubble-working-shadow-peak-blur: 10px;
+  --vf-monitor-bubble-waiting-shadow-rest-blur: 6.5px;
+  --vf-monitor-bubble-waiting-shadow-peak-blur: 12px;
+  --vf-monitor-bubble-working-shadow-rest-fill: rgb(
+    255 255 255 /
+    calc(0.12 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+  --vf-monitor-bubble-working-shadow-peak-fill: rgb(
+    255 255 255 /
+    calc(0.3 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+  --vf-monitor-bubble-waiting-shadow-rest-fill: rgb(
+    255 255 255 /
+    calc(0.16 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+  --vf-monitor-bubble-waiting-shadow-peak-fill: rgb(
+    255 255 255 /
+    calc(0.25 * var(--vf-monitor-bubble-fill-opacity, 72%))
+  );
+}
+
+.vf-monitor-bubble-positioner {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  will-change: width, height, transform;
+  transition:
+    width 300ms ease,
+    height 300ms ease;
+}
+
+.vf-monitor-bubble-positioner.is-working {
+  z-index: 4;
+}
+
+.vf-monitor-bubble-positioner.is-waiting {
+  z-index: 5;
+}
+
+/* The breathe and wait shadows are two pre-blurred layers that cross-fade.
+   Nothing re-blurs on an animation frame; only opacity moves. Pseudo-elements
+   live on the positioner because the circle clips its own children. */
+.vf-monitor-bubble-positioner.is-working::before,
+.vf-monitor-bubble-positioner.is-working::after,
+.vf-monitor-bubble-positioner.is-waiting::before,
+.vf-monitor-bubble-positioner.is-waiting::after {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+}
+
+.vf-monitor-bubble-positioner.is-working::before {
+  background: var(--vf-monitor-bubble-working-shadow-rest-fill);
+  filter: blur(var(--vf-monitor-bubble-working-shadow-rest-blur));
+  transform: translateY(8px);
+  animation: vf-godview-agent-shadow-rest 3s ease-in-out infinite;
+}
+
+.vf-monitor-bubble-positioner.is-working::after {
+  background: var(--vf-monitor-bubble-working-shadow-peak-fill);
+  filter: blur(var(--vf-monitor-bubble-working-shadow-peak-blur));
+  opacity: 0;
+  transform: translateY(12px);
+  animation: vf-godview-agent-shadow-peak 3s ease-in-out infinite;
+}
+
+.vf-monitor-bubble-positioner.is-waiting::before {
+  background: var(--vf-monitor-bubble-waiting-shadow-rest-fill);
+  filter: blur(var(--vf-monitor-bubble-waiting-shadow-rest-blur));
+  transform: translateY(9px);
+  animation: vf-godview-agent-shadow-rest 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.vf-monitor-bubble-positioner.is-waiting::after {
+  background: var(--vf-monitor-bubble-waiting-shadow-peak-fill);
+  filter: blur(var(--vf-monitor-bubble-waiting-shadow-peak-blur));
+  opacity: 0;
+  transform: translateY(17px);
+  animation: vf-godview-agent-shadow-peak 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.vf-monitor-bubble {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: var(--idle-text);
+  background: color-mix(
+    in srgb,
+    var(--vf-godview-bubble-idle, var(--idle-bg)) var(--vf-monitor-bubble-fill-opacity, 72%),
+    transparent
+  );
+  box-shadow: none;
+  text-align: center;
+  cursor: grab;
+  inset: 0;
+  touch-action: none;
+  transform-origin: center;
+  outline: none;
+  will-change: transform, opacity;
+  transition:
+    color 260ms ease,
+    background-color 260ms ease,
+    border-color 260ms ease,
+    box-shadow 180ms ease;
+}
+
+.vf-monitor-bubble:active {
+  cursor: grabbing;
+}
+
+.vf-monitor-bubble:focus-visible {
+  outline: 2px solid var(--agent-color);
+  outline-offset: 4px;
+}
+
+.vf-monitor-bubble.is-working {
+  z-index: 4;
+  border-color: var(--working-border);
+  color: var(--working-text);
+  background: color-mix(
+    in srgb,
+    var(--vf-godview-bubble-working, var(--working-bg)) var(--vf-monitor-bubble-fill-opacity, 72%),
+    transparent
+  );
+  box-shadow: none;
+}
+
+.vf-monitor-bubble.is-waiting {
+  z-index: 5;
+  border-color: var(--waiting-border);
+  color: var(--waiting-text);
+  background: color-mix(
+    in srgb,
+    var(--vf-godview-bubble-waiting, var(--waiting-bg)) var(--vf-monitor-bubble-fill-opacity, 72%),
+    transparent
+  );
+  box-shadow: none;
+}
+
+.vf-monitor-bubble.is-idle,
+.vf-monitor-bubble.is-unassigned {
+  border-color: transparent;
+  color: var(--idle-text);
+  background: color-mix(
+    in srgb,
+    var(--vf-godview-bubble-idle, var(--idle-bg)) var(--vf-monitor-bubble-fill-opacity, 72%),
+    transparent
+  );
+  box-shadow: none;
+}
+
+/* Remote is an identity facet, never a status hue. The hairline occupies a
+   slot local rows leave empty; a linked remote receives the stronger link ring
+   below, exactly like a linked local row. */
+.vf-monitor-bubble.is-remote {
+  border-color: color-mix(in srgb, var(--agent-color) 55%, transparent);
+}
+
+.vf-monitor-bubble.is-linked {
+  border-color: var(--agent-color);
+  box-shadow:
+    0 0 0 4px var(--agent-color),
+    0 0 18px color-mix(in srgb, var(--agent-color) 46%, transparent);
+}
+
+.vf-monitor-bubble-context-fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  max-height: 100%;
+  background: var(--agent-color);
+  opacity: 0.1;
+  pointer-events: none;
+  transition: height 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vf-monitor-bubble-ignition,
+.vf-monitor-bubble-particles,
+.vf-monitor-bubble-mirrors {
+  position: absolute;
+  border-radius: inherit;
+  inset: 0;
+  pointer-events: none;
+}
+
+.vf-monitor-bubble-ignition {
+  z-index: 1;
+  overflow: hidden;
+}
+
+.vf-monitor-bubble-core-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 72%;
+  height: 72%;
+  border-radius: 50%;
+  background: var(--agent-color);
+  filter: blur(13px);
+  opacity: 0.12;
+  transform: translate(-50%, -50%) scale(0.35);
+  animation: vf-godview-agent-ignition-core 1.5s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.vf-monitor-bubble-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--ignition-size);
+  height: var(--ignition-size);
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: var(--agent-color);
+  box-shadow: 0 0 7px var(--agent-color);
+  opacity: 0;
+  animation: vf-godview-agent-ignition-particle var(--ignition-duration)
+    cubic-bezier(0.2, 0.8, 0.2, 1) infinite var(--ignition-delay);
+  will-change: transform, opacity;
+}
+
+.vf-monitor-bubble-mirrors {
+  z-index: 1;
+}
+
+.vf-monitor-bubble-mirrors i {
+  position: absolute;
+  border: 1px solid;
+  border-radius: 50%;
+  opacity: 0.9;
+}
+
+.vf-monitor-bubble-glyph {
+  position: absolute;
+  z-index: 1;
+  top: 42%;
+  left: 50%;
+  color: currentcolor;
+  font-size: 58px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0.055;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.vf-monitor-bubble-glyph svg {
+  display: block;
+}
+
+.vf-monitor-bubble.is-working .vf-monitor-bubble-glyph,
+.vf-monitor-bubble.is-waiting .vf-monitor-bubble-glyph {
+  opacity: 0.12;
+}
+
+.vf-monitor-bubble.is-ignited .vf-monitor-bubble-glyph {
+  animation: vf-godview-agent-ignition-glyph 1.5s ease-out infinite;
+  will-change: transform, opacity;
+}
+
+.vf-monitor-bubble-copy {
+  position: relative;
+  z-index: 2;
+  max-width: 78%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.05;
+  pointer-events: none;
+}
+
+.vf-monitor-bubble-copy strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-monitor-bubble.is-working .vf-monitor-bubble-copy strong {
+  font-size: 14px;
+}
+
+.vf-monitor-bubble.is-waiting .vf-monitor-bubble-copy strong {
+  font-size: 18px;
+}
+
+.vf-monitor-bubble-provider {
+  max-width: 100%;
+  margin-top: 3px;
+  overflow: hidden;
+  color: currentcolor;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  opacity: 0.58;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vf-monitor-bubble-host {
+  max-width: 100%;
+  margin-bottom: 4px;
+  overflow: hidden;
+  color: currentcolor;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  opacity: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vf-monitor-bubble-branch {
+  display: none;
+  max-width: 100%;
+  margin-bottom: 4px;
+  overflow: hidden;
+  color: currentcolor;
+  font-size: 7px;
+  opacity: 0.67;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-monitor-bubble.is-working .vf-monitor-bubble-branch,
+.vf-monitor-bubble.is-waiting .vf-monitor-bubble-branch {
+  display: block;
+}
+
+.vf-monitor-bubble-branch::before {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--vf-godview-rain-green);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--vf-godview-rain-green) 80%, transparent);
+  content: "";
+}
+
+.vf-monitor-bubble-context {
+  position: absolute;
+  right: 0;
+  bottom: 6px;
+  left: 0;
+  z-index: 2;
+  color: currentcolor;
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  opacity: 0.62;
+  pointer-events: none;
+}
+
+@keyframes vf-godview-agent-ignition-core {
+  0%,
+  100% {
+    opacity: 0.1;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+  50% {
+    opacity: 0.44;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes vf-godview-agent-ignition-particle {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--ignition-angle)) translateY(0) scale(0.65);
+  }
+  12% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--ignition-angle) + 20deg))
+      translateY(calc(0px - var(--ignition-distance))) scale(0);
+  }
+}
+
+@keyframes vf-godview-agent-ignition-glyph {
+  0%,
+  100% {
+    opacity: 0.08;
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  50% {
+    opacity: 0.24;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+@keyframes vf-godview-agent-shadow-rest {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes vf-godview-agent-shadow-peak {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The stage diagnostic disables every circle loop without changing layout,
+   size, color, or the state anatomy being inspected. */
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-positioner::before,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-positioner::after,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-core-glow,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-particle,
+.vf-godview[data-godview-animations="off"] .vf-monitor-bubble-glyph {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-monitor-bubble,
+  .vf-monitor-bubble-core-glow,
+  .vf-monitor-bubble-particle,
+  .vf-monitor-bubble.is-ignited .vf-monitor-bubble-glyph {
+    animation: none;
+  }
+
+  .vf-monitor-bubble-context-fill {
+    transition: none;
+  }
+
+  .vf-monitor-bubble-particle {
+    opacity: 0;
+  }
+
+  .vf-monitor-bubble-core-glow {
+    opacity: 0.18;
+    transform: translate(-50%, -50%) scale(0.72);
+  }
+}

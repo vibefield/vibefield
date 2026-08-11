@@ -1,36 +1,61 @@
 import { join } from "node:path";
-import { SOCKETS } from "@vibefield/contracts";
+import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { SupervisorError } from "./types";
 
-/** Run-file layout under the data root (design-02 §3.6; registry names only). */
+/** Run-file layout under the data root (design-02 §3.6) — LAYOUT segments only
+ * (UA-D10): this file used to be an independent copy of the tree and is now a
+ * consumer like everyone else. */
 export function runDir(dataRoot: string): string {
-  return join(dataRoot, "fieldd", "run");
+  return join(dataRoot, ...LAYOUT.FIELDD_RUN_DIR);
 }
 
 export function productPath(dataRoot: string): string {
-  return join(runDir(dataRoot), "product.json");
+  return join(dataRoot, ...LAYOUT.PRODUCT_JSON);
 }
 
 export function tokenPath(dataRoot: string): string {
-  return join(runDir(dataRoot), "shell.token");
+  return join(dataRoot, ...LAYOUT.SHELL_TOKEN);
 }
 
-export function nativeSocketPath(dataRoot: string): string {
-  return join(dataRoot, "native", "run", SOCKETS.MGMT);
+/** WIN-D1 — where field-native's management channel lives under `dataRoot`: a
+ * name derived from the root in the flat pipe namespace on win32 (nothing
+ * appears on disk, which is why the old name lied), the joined LAYOUT path
+ * everywhere else. fieldd's own twin of this law is fieldd/src/boot-env.ts —
+ * both planes must derive from the SAME root string or they miss each other. */
+export function nativeMgmtEndpoint(dataRoot: string, platform = process.platform): string {
+  return platform === "win32"
+    ? pipeEndpointFor(dataRoot, SOCKETS.MGMT)
+    : join(dataRoot, ...LAYOUT.MGMT_SOCKET);
 }
+
+/** @deprecated the name predates named pipes — call `nativeMgmtEndpoint`. */
+export const nativeSocketPath = nativeMgmtEndpoint;
 
 // sun_path is 104 bytes on macOS (108 on Linux); a longer socket path makes
 // field-native's bind fail SILENTLY downstream (pairing file appears, socket
-// never does, fieldd times out generic — slice-0 finding 4). Guard with margin.
-const SUN_PATH_SAFE_BYTES = 100;
+// never does, fieldd times out generic — slice-0 finding 4). The check walks
+// EVERY socket-bearing LAYOUT row — the 2026-08-05 dev-root regression got
+// through because the old guard measured only mgmt.sock, the SHORTEST name,
+// while terminal-control.sock (12 bytes longer) blew the ceiling unchecked.
+// 103 = 104 - NUL, the exact macOS strlen limit libuv and std enforce.
+const SUN_PATH_MAX_BYTES = 103;
 
-export function assertDataRootUsable(dataRoot: string): void {
-  const sock = nativeSocketPath(dataRoot);
-  if (Buffer.byteLength(sock, "utf8") > SUN_PATH_SAFE_BYTES) {
-    throw new SupervisorError(
-      "data-root-too-long",
-      `data root makes the native socket path ${Buffer.byteLength(sock, "utf8")} bytes ` +
-        `(> ${SUN_PATH_SAFE_BYTES} safe under the OS sun_path limit): ${sock}`,
-    );
+export function assertDataRootUsable(dataRoot: string, platform = process.platform): void {
+  // WIN-D1: on win32 the endpoints are named pipes, not socket files — there is
+  // no sun_path and this byte budget would refuse perfectly valid data roots
+  // (a stock profile path already clears 103 bytes). The guard is a unix law.
+  if (platform === "win32") return;
+  for (const segments of Object.values(LAYOUT)) {
+    const last = segments[segments.length - 1];
+    if (typeof last !== "string" || !last.endsWith(".sock")) continue;
+    const sock = join(dataRoot, ...segments);
+    const bytes = Buffer.byteLength(sock, "utf8");
+    if (bytes > SUN_PATH_MAX_BYTES) {
+      throw new SupervisorError(
+        "data-root-too-long",
+        `data root makes ${last} ${bytes} bytes ` +
+          `(> ${SUN_PATH_MAX_BYTES}, the OS sun_path limit): ${sock}`,
+      );
+    }
   }
 }

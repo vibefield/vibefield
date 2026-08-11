@@ -3,9 +3,10 @@ import FieldDesign
 import SwarmPhysics
 import SwiftUI
 
-/// The full-screen agent field: every session a physical bubble, nestling
-/// around the center, ranked by how much it needs you. Tap to open the
-/// session card; hold empty ground to conjure a new agent there.
+/// The full-screen field: every session a physical bubble — an agent's or a
+/// peer's terminal, the field does not care — nestling around the center and
+/// ranked by how much it needs you. Tap to open the session card; hold empty
+/// ground to conjure a new agent there.
 ///
 /// `chrome` floats above the bubbles inside the field's coordinate space
 /// (the slot owns its own alignment); any chrome element marked
@@ -14,10 +15,10 @@ public struct SwarmFieldView<Chrome: View>: View {
   /// Desktop `USAGE_OBSTACLE_PADDING`: breathing room around chrome.
   private static var obstaclePadding: Double { 7 }
 
-  private let agents: [AgentSnapshot]
+  private let bubbles: [FieldBubble]
   private let parameters: SwarmParameters
   private let isActive: Bool
-  private let onSelect: (AgentSnapshot) -> Void
+  private let onSelect: (FieldBubble) -> Void
   /// Called when the user holds empty ground. Returns the new session's id
   /// so the field can place its body exactly under the finger, or nil when
   /// creation is unavailable.
@@ -29,14 +30,14 @@ public struct SwarmFieldView<Chrome: View>: View {
   @State private var pendingHold: PendingHold?
 
   public init(
-    agents: [AgentSnapshot],
+    bubbles: [FieldBubble],
     parameters: SwarmParameters = .default,
     isActive: Bool = true,
-    onSelect: @escaping (AgentSnapshot) -> Void,
+    onSelect: @escaping (FieldBubble) -> Void,
     onCreate: ((SIMD2<Double>) -> String?)? = nil,
     @ViewBuilder chrome: () -> Chrome
   ) {
-    self.agents = agents
+    self.bubbles = bubbles
     self.parameters = parameters
     self.isActive = isActive
     self.onSelect = onSelect
@@ -55,14 +56,14 @@ public struct SwarmFieldView<Chrome: View>: View {
         GridGroundView()
           .ignoresSafeArea()
 
-        bubbles
+        bubbleViews
 
         if let hold = pendingHold {
           HoldToCreateIndicator()
             .position(hold.start)
         }
 
-        if agents.isEmpty {
+        if bubbles.isEmpty {
           EmptyFieldView()
         }
 
@@ -93,7 +94,7 @@ public struct SwarmFieldView<Chrome: View>: View {
         model.world.setBounds(SIMD2(Double(size.width), Double(size.height)))
       }
     }
-    .onChange(of: agents) { syncAgents() }
+    .onChange(of: bubbles) { syncAgents() }
     .onChange(of: parameters) { model.world.parameters = parameters }
     .onChange(of: isActive) {
       if isActive { driver.start() } else { driver.stop() }
@@ -103,19 +104,20 @@ public struct SwarmFieldView<Chrome: View>: View {
   // MARK: - Bubbles
 
   private struct Ranked: Identifiable {
-    let agent: AgentSnapshot
+    let bubble: FieldBubble
     let visual: AgentBubbleVisual
     let radius: Double
-    var id: String { agent.id }
+    var id: String { bubble.id }
   }
 
+  /// The projection already decided who is on the field and what they are
+  /// doing; this only decides how big and how high they sit.
   private var rankedAgents: [Ranked] {
-    agents
-      .compactMap { agent -> Ranked? in
-        guard let status = classifyAgentStatus(agent.state) else { return nil }
-        let visual = bubbleVisual(for: status)
+    bubbles
+      .map { bubble in
+        let visual = bubbleVisual(for: bubble.status)
         return Ranked(
-          agent: agent,
+          bubble: bubble,
           visual: visual,
           radius: bubbleRadius(for: visual.appearance, parameters: parameters))
       }
@@ -132,29 +134,29 @@ public struct SwarmFieldView<Chrome: View>: View {
   }
 
   @ViewBuilder
-  private var bubbles: some View {
+  private var bubbleViews: some View {
     // One observed value per frame; positions are read fresh each pass.
     let _ = driver.frame
     ForEach(rankedAgents) { ranked in
-      if let state = model.world.state(of: SwarmBodyID(ranked.agent.id)) {
-        AgentBubbleView(
-          agent: ranked.agent,
+      if let state = model.world.state(of: SwarmBodyID(ranked.bubble.id)) {
+        FieldBubbleView(
+          bubble: ranked.bubble,
           visual: ranked.visual,
           diameter: state.visualRadius * 2,
           onDragBegan: { point in
             model.world.beginDrag(
-              id: SwarmBodyID(ranked.agent.id), at: SIMD2(Double(point.x), Double(point.y)))
+              id: SwarmBodyID(ranked.bubble.id), at: SIMD2(Double(point.x), Double(point.y)))
           },
           onDragChanged: { point in
             model.world.updateDrag(
-              id: SwarmBodyID(ranked.agent.id), to: SIMD2(Double(point.x), Double(point.y)))
+              id: SwarmBodyID(ranked.bubble.id), to: SIMD2(Double(point.x), Double(point.y)))
           },
           onDragEnded: {
-            model.world.endDrag(id: SwarmBodyID(ranked.agent.id))
+            model.world.endDrag(id: SwarmBodyID(ranked.bubble.id))
           },
           onTap: {
-            model.world.nudge(id: SwarmBodyID(ranked.agent.id))
-            onSelect(ranked.agent)
+            model.world.nudge(id: SwarmBodyID(ranked.bubble.id))
+            onSelect(ranked.bubble)
           }
         )
         .animation(FieldMotion.bubbleResize, value: state.visualRadius)
@@ -166,12 +168,12 @@ public struct SwarmFieldView<Chrome: View>: View {
   private func syncAgents() {
     var present = Set<SwarmBodyID>()
     for ranked in rankedAgents {
-      let id = SwarmBodyID(ranked.agent.id)
+      let id = SwarmBodyID(ranked.bubble.id)
       present.insert(id)
       model.world.upsert(
         id: id,
         visualRadius: ranked.radius,
-        spawnPosition: model.pendingSpawnPositions.removeValue(forKey: ranked.agent.id))
+        spawnPosition: model.pendingSpawnPositions.removeValue(forKey: ranked.bubble.id))
     }
     for state in model.world.states where !present.contains(state.id) {
       model.world.remove(id: state.id)
@@ -227,14 +229,14 @@ public struct SwarmFieldView<Chrome: View>: View {
 
 extension SwarmFieldView where Chrome == EmptyView {
   public init(
-    agents: [AgentSnapshot],
+    bubbles: [FieldBubble],
     parameters: SwarmParameters = .default,
     isActive: Bool = true,
-    onSelect: @escaping (AgentSnapshot) -> Void,
+    onSelect: @escaping (FieldBubble) -> Void,
     onCreate: ((SIMD2<Double>) -> String?)? = nil
   ) {
     self.init(
-      agents: agents, parameters: parameters, isActive: isActive,
+      bubbles: bubbles, parameters: parameters, isActive: isActive,
       onSelect: onSelect, onCreate: onCreate
     ) { EmptyView() }
   }

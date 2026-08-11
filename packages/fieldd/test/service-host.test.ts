@@ -2,10 +2,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 // PLUG-P4 — the worker host end-to-end (spec §14.2/§18): a REAL worker runs
@@ -39,7 +41,7 @@ async function setup(): Promise<{
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-  const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await mock.start();
   cleanup.push(() => mock.stop());
   const pluginLogs: Array<{
@@ -234,7 +236,7 @@ describe("the example KV service — a real plugin through the real host", () =>
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
     await mock.start();
     cleanup.push(() => mock.stop());
     const daemon = await bootstrap({

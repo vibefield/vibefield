@@ -30,6 +30,11 @@ use truffle_core::{network::tailscale::TailscaleProvider, Node};
 
 /// = @vibefield/contracts registries APP_ID (one tailnet app namespace per product).
 const APP_ID: &str = "vibefield";
+// WIN-7: the truffle sidecar ships `sidecar-slim.exe` on Windows; a bare
+// `sidecar-slim` name would never match the file beside field-native.exe.
+#[cfg(windows)]
+const SIDECAR_NAMES: [&str; 2] = ["sidecar-slim.exe", "truffle-sidecar.exe"];
+#[cfg(not(windows))]
 const SIDECAR_NAMES: [&str; 2] = ["sidecar-slim", "truffle-sidecar"];
 
 pub type MeshNode = Node<TailscaleProvider>;
@@ -47,6 +52,13 @@ struct Shared {
     /// facade state (C2): open stores + declared serves (config JSON kept for list)
     stores: tokio::sync::Mutex<HashMap<String, Arc<JsonStore>>>,
     serves: tokio::sync::Mutex<HashMap<String, Value>>,
+    /// truffle state root (identity + keys) — lives on Shared so the mgmt
+    /// facade can retire it even when no node ever came up (UA-3 unlink).
+    state_dir: PathBuf,
+    /// UA-3 — set by retire(); the bring-up task checks it before installing
+    /// a node, so a login completing AFTER an unlink cannot resurrect the
+    /// identity the user just archived.
+    retired: std::sync::atomic::AtomicBool,
 }
 
 /// Cloneable door to the mesh for the mgmt server (design-02: fieldd consumes
@@ -59,6 +71,15 @@ pub struct MeshHandle {
 impl MeshHandle {
     pub fn node(&self) -> Option<Arc<MeshNode>> {
         self.shared.node.borrow().clone()
+    }
+
+    /// The gateway's own health, for a consumer that must decide whether
+    /// waiting for a node is still worth doing (GT-4a's terminal mesh). A
+    /// `disabled`/`degraded` gateway will never produce one, and its `detail`
+    /// is the reason — so a borrower reports the gateway's words rather than
+    /// inventing its own account of a failure it did not see.
+    pub fn health(&self) -> UnitHealth {
+        self.shared.health.lock().unwrap().clone()
     }
 
     /// Park until the node exists, then hand it over. Never resolves while the
@@ -107,6 +128,28 @@ impl MeshHandle {
     pub async fn serve_config(&self, name: &str) -> Option<Value> {
         self.shared.serves.lock().await.get(name).cloned()
     }
+
+    /// UA-3 unlink, native half: drop the node (the sidecar dies with it),
+    /// clear the facade's node-bound state, mark the unit retired so a
+    /// mid-flight bring-up cannot resurrect the identity, and hand back the
+    /// state dir to archive — Some only when there is state on disk. The
+    /// caller (the mgmt handler) owns the rename; this owns the lifecycle.
+    pub async fn retire(&self) -> Option<PathBuf> {
+        self.shared
+            .retired
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let old = self.shared.node.send_replace(None);
+        self.shared.stores.lock().await.clear();
+        self.shared.serves.lock().await.clear();
+        drop(old); // node drop kills the sidecar (kill_on_drop)
+        self.shared.set(
+            UnitState::Disabled,
+            Some("retired — relink to mint a new tailnet identity".into()),
+            None,
+        );
+        let dir = self.shared.state_dir.clone();
+        dir.exists().then_some(dir)
+    }
 }
 
 impl Shared {
@@ -125,7 +168,6 @@ pub struct MeshUnit {
     enabled: bool,
     sidecar: Option<PathBuf>,
     searched: Vec<String>,
-    state_dir: PathBuf,
     shared: Arc<Shared>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
@@ -138,7 +180,6 @@ impl MeshUnit {
             enabled: config.mesh_enabled,
             sidecar,
             searched,
-            state_dir: config.mesh_state_dir(),
             shared: Arc::new(Shared {
                 health: Mutex::new(UnitHealth {
                     unit: "mesh-gateway".into(),
@@ -150,6 +191,8 @@ impl MeshUnit {
                 ping,
                 stores: tokio::sync::Mutex::new(HashMap::new()),
                 serves: tokio::sync::Mutex::new(HashMap::new()),
+                state_dir: config.mesh_state_dir(),
+                retired: std::sync::atomic::AtomicBool::new(false),
             }),
             task: Mutex::new(None),
         }
@@ -194,7 +237,7 @@ impl NativeService for MeshUnit {
             );
             return Ok(()); // degraded, not fatal — the daemon keeps serving
         };
-        std::fs::create_dir_all(&self.state_dir)?;
+        std::fs::create_dir_all(&self.shared.state_dir)?;
         self.shared.set(
             UnitState::Starting,
             Some("bringing up tailnet node".into()),
@@ -202,7 +245,7 @@ impl NativeService for MeshUnit {
         );
 
         let shared = self.shared.clone();
-        let state_dir = self.state_dir.to_string_lossy().into_owned();
+        let state_dir = self.shared.state_dir.to_string_lossy().into_owned();
         let handle = tokio::spawn(async move {
             let auth_shared = shared.clone();
             let built = async {
@@ -230,6 +273,17 @@ impl NativeService for MeshUnit {
             .await;
             match built {
                 Ok(node) => {
+                    if shared.retired.load(std::sync::atomic::Ordering::SeqCst) {
+                        // UA-3: retired mid-bring-up — never resurrect an
+                        // identity the user just archived; dropping the node
+                        // kills the sidecar and the retired face stands.
+                        tracing::info!(
+                            event = "field_native.mesh.bring_up_discarded",
+                            component = "mesh",
+                            "Mesh bring-up completed after retire; node discarded"
+                        );
+                        return;
+                    }
                     let node = Arc::new(node);
                     let info = node.local_info();
                     let name = info
@@ -293,6 +347,14 @@ fn resolve_sidecar(override_path: Option<PathBuf>, searched: &mut Vec<String>) -
             }
         }
     }
+    #[cfg(windows)]
+    if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        // truffle's own Windows install dir — the fallback to the exe-adjacent primary.
+        for name in SIDECAR_NAMES {
+            candidates.push(local.join("truffle").join("bin").join(name));
+        }
+    }
+    #[cfg(unix)]
     if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
         #[cfg(target_os = "macos")]
         for name in SIDECAR_NAMES {
@@ -305,6 +367,7 @@ fn resolve_sidecar(override_path: Option<PathBuf>, searched: &mut Vec<String>) -
             candidates.push(home.join(".config/truffle/bin").join(name));
         }
     }
+    #[cfg(unix)]
     for name in SIDECAR_NAMES {
         candidates.push(PathBuf::from("/usr/local/bin").join(name));
     }
@@ -315,4 +378,75 @@ fn resolve_sidecar(override_path: Option<PathBuf>, searched: &mut Vec<String>) -
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    // UA-3 — the retire lifecycle at the handle seam: state-dir custody and
+    // the resurrection guard. The archive RENAME belongs to the mgmt handler
+    // and the live sidecar path to the #[ignore]d probes.
+
+    #[tokio::test]
+    async fn retire_hands_back_nothing_when_no_state_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::config::NativeConfig::for_data_dir(dir.path().to_path_buf());
+        let (ping, _rx) = mpsc::unbounded_channel();
+        let unit = MeshUnit::new(&config, ping);
+        let handle = unit.handle();
+        assert!(handle.retire().await.is_none());
+        let health = unit.shared.health.lock().unwrap().clone();
+        assert!(matches!(health.state, UnitState::Disabled));
+        assert!(health.detail.unwrap_or_default().contains("retired"));
+    }
+
+    #[tokio::test]
+    async fn retire_hands_back_an_existing_state_dir_and_blocks_resurrection() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::config::NativeConfig::for_data_dir(dir.path().to_path_buf());
+        std::fs::create_dir_all(config.mesh_state_dir()).unwrap();
+        let (ping, _rx) = mpsc::unbounded_channel();
+        let unit = MeshUnit::new(&config, ping);
+        let handle = unit.handle();
+        let handed = handle
+            .retire()
+            .await
+            .expect("existing state dir handed back");
+        assert_eq!(handed, config.mesh_state_dir());
+        // the retired flag stands — a bring-up finishing AFTER an unlink must
+        // never install a node over the archived identity
+        assert!(unit
+            .shared
+            .retired
+            .load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    // WIN-7: the resolver must find the Windows sidecar by its `.exe` name in
+    // truffle's own `%LOCALAPPDATA%\truffle\bin` — both halves of the fix at once.
+    #[cfg(windows)]
+    #[test]
+    fn resolve_sidecar_finds_the_windows_exe_in_localappdata() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("truffle").join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let exe = bin.join("sidecar-slim.exe");
+        std::fs::write(&exe, b"x").unwrap();
+
+        let prev = std::env::var_os("LOCALAPPDATA");
+        std::env::set_var("LOCALAPPDATA", dir.path());
+        let mut searched = Vec::new();
+        let found = resolve_sidecar(None, &mut searched);
+        match prev {
+            Some(v) => std::env::set_var("LOCALAPPDATA", v),
+            None => std::env::remove_var("LOCALAPPDATA"),
+        }
+
+        assert_eq!(
+            found.as_deref(),
+            Some(exe.as_path()),
+            "the resolver should find the .exe under LOCALAPPDATA; searched: {searched:?}"
+        );
+    }
 }

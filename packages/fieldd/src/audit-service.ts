@@ -125,6 +125,8 @@ function actorFor(ctx: CallerContext): AuditPrincipalV1 {
       return { kind: "local-token", id: ctx.principal.tokenId };
     case "tailnet":
       return { kind: "tailnet", id: ctx.principal.login };
+    case "tailnet-guest":
+      return { kind: "tailnet-guest", id: ctx.principal.login };
     case "mcp-agent":
       return { kind: "mcp-agent", id: ctx.principal.sessionId };
     case "peer-fieldd":

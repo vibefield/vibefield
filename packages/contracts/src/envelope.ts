@@ -47,6 +47,11 @@ export const Hello = z
      * the grant stays the D32 preset either way, so the claim cannot escalate.
      * Retires when the sidecar injects the node id (truffle petition). */
     deviceId: z.string().optional(),
+    /** UA-2 — the client's EXPECTATION of which user this daemon serves.
+     * Restrict-only, like clientKind: a configured daemon refuses a mismatch
+     * the way it refuses a version mismatch (INCOMPATIBLE); the claim can
+     * narrow a connection, never escalate one. */
+    userId: z.string().optional(),
   })
   .passthrough();
 export type Hello = z.infer<typeof Hello>;
@@ -80,6 +85,10 @@ export const HelloAck = z
      * being inferred from missing capabilities. Opaque provenance, never parsed
      * for behavior. Absence is itself the tell: a daemon predating GT-2d. */
     nativeBuild: z.string().optional(),
+    /** UA-2 — the SERVER's assertion of which user this pair serves. null =
+     * unconfigured (embedded/unit daemons); absent = a pre-UA-2 daemon.
+     * Display + verification truth; never a grant. */
+    userId: z.string().nullable().optional(),
   })
   .passthrough();
 export type HelloAck = z.infer<typeof HelloAck>;
@@ -143,8 +152,15 @@ export type Principal =
   | { kind: "shell-main"; tokenId: string; scopes: string[] }
   // deviceName/tailscaleId optional (C3): the sidecar proxy injects only
   // login/name/pic — absent transport facts stay absent, never empty-string
-  // (node-id header injection is an upstream truffle petition).
-  | { kind: "tailnet"; login: string; deviceName?: string; tailscaleId?: string }
+  // (node-id header injection is an upstream truffle petition). `self` is the
+  // UA-4 door verdict (spec §7.3): true = the peer's login matched this
+  // user's stored link at hello; ABSENT = pre-capture era (no stored login to
+  // compare against) — never false, a mismatch mints tailnet-guest instead.
+  | { kind: "tailnet"; login: string; deviceName?: string; tailscaleId?: string; self?: boolean }
+  // UA-4 (spec §7.3, UA-D5): a WhoIs-verified tailnet peer whose login does
+  // NOT match the stored link — empty scope grant, only guestOk methods
+  // answer. The polite door: an honest "no access", never a socket slam.
+  | { kind: "tailnet-guest"; login: string }
   | { kind: "mcp-agent"; sessionId: string; scopes: string[] }
   | { kind: "peer-fieldd"; deviceId: string }
   | { kind: "plugin"; id: string; scopes: string[] }; // design-03 D20

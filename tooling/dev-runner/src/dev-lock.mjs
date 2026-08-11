@@ -29,6 +29,7 @@ export async function acquireDevLock({
   repoRoot,
   runnerPid = process.pid,
   pidAlive = isPidAlive,
+  platform = process.platform,
 }) {
   await mkdir(dirname(lockDir), { recursive: true });
   const ownerPath = join(lockDir, OWNER_FILE);
@@ -59,7 +60,10 @@ export async function acquireDevLock({
           throw new DevLockError(
             `the development data root still has live daemon pid ${existingLive.join(
               ", ",
-            )} — a previous dev session exited uncleanly; stop them with: kill ${existingLive.join(" ")}`,
+            )} — a previous dev session exited uncleanly; stop them with: ${stopPidsRemedy(
+              existingLive,
+              platform,
+            )}`,
           );
         }
         if (existingProduct) {
@@ -76,10 +80,10 @@ export async function acquireDevLock({
     const product = await readDevProduct(dataRoot);
     const live = liveOwners(stale, product, pidAlive);
     if (live.length > 0) {
-      throw new DevLockError(describeLiveStack(live));
+      throw new DevLockError(describeLiveStack(live, platform));
     }
 
-    if (!(await reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive }))) {
+    if (!(await reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive, platform }))) {
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
   }
@@ -109,7 +113,7 @@ async function publishInitializedLock(lockDir, record) {
   }
 }
 
-async function reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive }) {
+async function reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive, platform }) {
   const claimPath = join(lockDir, RECLAIM_DIRECTORY);
   try {
     await mkdir(claimPath);
@@ -126,7 +130,7 @@ async function reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive }) {
     const product = await readDevProduct(dataRoot);
     const live = liveOwners(stale, product, pidAlive);
     if (live.length > 0) {
-      throw new DevLockError(describeLiveStack(live));
+      throw new DevLockError(describeLiveStack(live, platform));
     }
 
     const entries = await readdir(lockDir);
@@ -154,15 +158,24 @@ async function reclaimStaleLock({ lockDir, runnerPid, dataRoot, pidAlive }) {
   }
 }
 
-function describeLiveStack(live) {
+function describeLiveStack(live, platform = process.platform) {
   const names = live.map(([name, pid]) => `${name} pid ${pid}`).join(", ");
   const daemonsOnly = live.every(([name]) => name === "fieldd" || name === "field-native");
   if (!daemonsOnly) return `another development stack is still live (${names})`;
   // Runner and Electron are gone but the pair survived (dev is
   // leave-running): tell the user how to get unstuck instead of only why.
-  return `another development stack is still live (${names}) — the previous runner is gone; stop the daemons with: kill ${live
-    .map(([, pid]) => pid)
-    .join(" ")}`;
+  return `another development stack is still live (${names}) — the previous runner is gone; stop the daemons with: ${stopPidsRemedy(
+    live.map(([, pid]) => pid),
+    platform,
+  )}`;
+}
+
+/** The remedy in the shell the user actually has. `taskkill` takes repeated
+ * `/PID` flags, so one pasteable command still covers the whole pair. */
+function stopPidsRemedy(pids, platform = process.platform) {
+  return platform === "win32"
+    ? `taskkill ${pids.map((pid) => `/PID ${pid}`).join(" ")} /F`
+    : `kill ${pids.join(" ")}`;
 }
 
 function liveOwners(owner, product, pidAlive) {

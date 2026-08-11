@@ -76,10 +76,66 @@ pub fn redact(key: &str) -> String {
     }
 }
 
+/// The sidecar npm package this platform's desktop build vendors, by name.
+/// `None` on a platform the app does not ship a sidecar for.
+fn vendored_sidecar_package() -> Option<&'static str> {
+    Some(match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "truffle-sidecar-darwin-arm64",
+        ("macos", "x86_64") => "truffle-sidecar-darwin-x64",
+        ("linux", "aarch64") => "truffle-sidecar-linux-arm64",
+        ("linux", "x86_64") => "truffle-sidecar-linux-x64",
+        ("windows", "x86_64") => "truffle-sidecar-win32-x64",
+        _ => return None,
+    })
+}
+
+/// The binary this workspace PINS, resolved through `apps/desktop`'s own
+/// dependency — the same artifact the packaged app ships (EL8, exact `0.7.12`).
+pub fn vendored_sidecar() -> Option<PathBuf> {
+    let package = vendored_sidecar_package()?;
+    let mut dir: Option<&Path> = Some(Path::new(env!("CARGO_MANIFEST_DIR")));
+    while let Some(d) = dir {
+        if d.join("pnpm-workspace.yaml").is_file() {
+            let bin = d
+                .join("apps/desktop/node_modules/@vibecook")
+                .join(package)
+                .join("bin");
+            for name in ["sidecar-slim", "truffle-sidecar"] {
+                for candidate in [bin.join(name), bin.join(format!("{name}.exe"))] {
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
+                }
+            }
+            return None; // repo root found and it holds no vendored sidecar
+        }
+        dir = d.parent();
+    }
+    None
+}
+
+/// THE PINNED BINARY WINS OVER WHATEVER IS INSTALLED ON THE MACHINE, and the
+/// order is the whole point (2026-08-10).
+///
+/// This used to search the machine-wide truffle installs only, so on a developer
+/// box it found `~/.config/truffle/bin/sidecar-slim` — here, a **Jul 16** build —
+/// while the repo pinned and vendored an **Aug 2** one for the same version.
+/// Every `#[ignore]`d tailnet probe therefore exercised a binary the product
+/// never ships, which is how a WhoIs-capable sidecar sat in `node_modules` while
+/// the probes ran without it and identity looked assertable (GT-4 close-out).
+///
+/// `FIELD_NATIVE_SIDECAR_PATH` still outranks everything — an explicit override
+/// is authoritative, and a wrong one fails loudly rather than falling back.
+/// The machine installs stay as the LAST resort so a checkout without
+/// `pnpm install` can still run the probes; they are simply no longer preferred
+/// over the version this workspace declares.
 pub fn sidecar() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("FIELD_NATIVE_SIDECAR_PATH") {
         let p = PathBuf::from(p);
         return p.is_file().then_some(p);
+    }
+    if let Some(p) = vendored_sidecar() {
+        return Some(p);
     }
     let home = std::env::var_os("HOME").map(PathBuf::from)?;
     for rel in [

@@ -1,39 +1,85 @@
 import FieldAgents
 import FieldDesign
 import FieldMesh
+import FieldTerminal
 import SwiftUI
+import UIKit
 
-/// The VibeField home: the whole screen is the agent field. Bubbles are the
-/// fleet; tapping one raises its session card from the bottom; holding empty
-/// ground raises a new agent. The mesh chip floats top-leading — a physical
-/// obstacle the swarm flows around — and carries the tailnet's honest state.
+/// The VibeField home: the whole screen is the field. Bubbles are the
+/// sessions — the mock fleet's agents and, since IOS-3, every terminal a peer
+/// on the mesh is serving. Tapping one raises its card; holding empty ground
+/// raises a new agent.
 ///
-/// v0 runs on the scripted mock feed — the same snapshot shape and the same
-/// classifier the daemon feed will drive, so nothing here is a demo path.
+/// The two sources compose behind one seam and neither pretends to be the
+/// other: the mock is a preview until fieldd's agent feed exists, and a
+/// remote bubble is a fact about a machine that answered. Order says so —
+/// agents in launch order, then the mesh's own as their own segment, because
+/// a peer's session is a guest here.
 public struct HomeScreen: View {
   @State private var feed = MockAgentField()
   @State private var mesh = MeshModel()
+  @State private var remoteField = RemoteSessionField(source: nil)
   @State private var selection: SessionSelection?
+  /// The card's SUBJECT, remembered rather than looked up fresh every frame.
+  /// A card is about the session it opened on, and the field's listing is only
+  /// the field's current view of it — one that a four-second discovery hiccup
+  /// can withdraw while the terminal below is still rendering frames.
+  @State private var cardBubble: FieldBubble?
   @State private var meshSheetOpen = false
+  @State private var settingsSheetOpen = false
+  @State private var discoveryPolling = false
+  @State private var attachment: TerminalAttachment?
+  /// Latched for the width of the directory lookup. `isAttached` hides the
+  /// button, but that flip is on the far side of an `await`, and two taps
+  /// inside that window would build two lifecycles — the first of which
+  /// nothing would ever close (`TerminalAttachment` has no `deinit`, and it
+  /// could not have a useful one: closing is `async`).
+  @State private var attaching = false
+  /// Two different failures, deliberately not one field: a renderer that
+  /// refused a frame and a mesh that was never up are different facts, and
+  /// folding them into one string made the card say the renderer refused
+  /// something it had never been handed.
+  @State private var renderFailure: String?
+  @State private var attachRefusal: String?
+  /// Which host the open attachment lives on, so discovery can tell it when
+  /// that host comes back (finding 3 of the terminal leg).
+  @State private var attachedDeviceID: String?
+  @State private var copiedNote: String?
+  @State private var appearance = TerminalAppearanceStore.load()
+  /// The host's mirror-write secret, when this phone has been told it. Absent
+  /// is the honest default: a viewer, not a typist (GT-4a's asymmetry from the
+  /// client side). Its home is the Keychain and its UI is IOS-3c's settings.
+  ///
+  /// **Nothing assigns this yet** — the Keychain leg has not landed, so it is
+  /// `nil` for the whole life of the process and every attach presents no
+  /// token. That is not a defect on its own; what WAS a defect is copy that
+  /// promised typing anyway, so both the invitation and the view-only reason
+  /// now read this instead of guessing from the listing's `readWrite`.
+  @State private var mirrorWriteCapability: String?
+  #if DEBUG
+    @State private var demoRemoteActive = false
+  #endif
   @Environment(\.scenePhase) private var scenePhase
 
   public init() {}
 
-  public var body: some View {
+  /// One stage, two sources, projected by the pure functions in FieldAgents.
+  private var bubbles: [FieldBubble] {
+    feed.agents.compactMap(fieldBubble(from:)) + remoteField.snapshot.rows.map(fieldBubble(from:))
+  }
+
+  /// The stage, kept out of `body` on purpose: with every sheet and lifecycle
+  /// hook attached, one expression grew past what the type-checker will solve
+  /// in reasonable time. Splitting it is the fix SwiftUI asks for.
+  private var stage: some View {
     ZStack {
       SwarmFieldView(
-        agents: feed.agents,
+        bubbles: bubbles,
         isActive: scenePhase == .active,
-        onSelect: { agent in selection = SessionSelection(id: agent.id) },
+        onSelect: { bubble in openCard(on: bubble) },
         onCreate: { _ in feed.spawn() }
       ) {
-        MeshChip(state: mesh.state, peerCount: mesh.peers.count) {
-          meshSheetOpen = true
-        }
-        .swarmObstacle()
-        .padding(.leading, 14)
-        .padding(.top, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        chrome
       }
 
       ScanlinesOverlay()
@@ -41,7 +87,31 @@ public struct HomeScreen: View {
       VignetteOverlay()
         .ignoresSafeArea()
     }
-    .background(FieldPalette.panelBackground.ignoresSafeArea())
+  }
+
+  @ViewBuilder
+  private var chrome: some View {
+    MeshChip(state: mesh.state, peerCount: mesh.peers.count) {
+      meshSheetOpen = true
+    }
+    .swarmObstacle()
+    .padding(.leading, 14)
+    .padding(.top, 6)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+    // The second chrome corner, mirroring the mesh chip: both are physics
+    // obstacles, so the swarm flows around the whole top edge rather than
+    // hiding under one side of it.
+    FieldChip(label: "TERMINAL") { settingsSheetOpen = true }
+      .swarmObstacle()
+      .padding(.trailing, 14)
+      .padding(.top, 6)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+  }
+
+  public var body: some View {
+    stage
+      .background(FieldPalette.panelBackground.ignoresSafeArea())
     .onAppear {
       feed.start()
       #if DEBUG
@@ -51,24 +121,110 @@ public struct HomeScreen: View {
           meshSheetOpen = true
           mesh.connect()
         }
+        // `-vf-demo-remote` stands a FAKE peer up so the remote bubble's own
+        // rendering — the prompt glyph, the machine in the eyebrow, no
+        // context readout, the card's attach invitation — can be eyeballed
+        // without a desktop serving on the tailnet. It is a fixture for
+        // looking at OUR pixels, never a claim that a mesh answered: it
+        // cannot run in Release, and the real source replaces it the moment
+        // `mesh.state` reaches `.up`.
+        if ProcessInfo.processInfo.arguments.contains("-vf-demo-remote") {
+          demoRemoteActive = true
+          remoteField = RemoteSessionField(source: DemoRemoteSource())
+          remoteField.start()
+        }
+        if ProcessInfo.processInfo.arguments.contains("-vf-open-settings") {
+          settingsSheetOpen = true
+        }
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
           Task {
             try? await Task.sleep(for: .seconds(2))
-            if let agent = feed.agents.first(where: {
-              classifyAgentStatus($0.state) == .working
-            }) ?? feed.agents.first {
-              selection = SessionSelection(id: agent.id)
+            // A peer's session first when there is one: the remote face is
+            // the one with an act on it, so it is what a screenshot run is
+            // usually after.
+            let wanted =
+              bubbles.first(where: { $0.remote?.attachable == true })
+              ?? bubbles.first(where: { $0.status == .working })
+              ?? bubbles.first
+            if let wanted { openCard(on: wanted) }
+            // `-vf-auto-attach` carries the run one step further: on a phone
+            // whose mesh is up against a serving desktop, this is the whole
+            // IOS-3 path — discover, choose, attach — with no finger on the
+            // glass. Without a mesh it proves the honest-failure path instead,
+            // which is the other thing worth seeing.
+            if ProcessInfo.processInfo.arguments.contains("-vf-auto-attach"),
+              let wanted, wanted.remote?.attachable == true
+            {
+              try? await Task.sleep(for: .seconds(1))
+              beginAttachment(to: wanted)
             }
           }
         }
       #endif
     }
-    .onDisappear { feed.stop() }
-    .sheet(item: $selection) { selected in
-      // Live lookup so the open card tracks the fleet; a vanished id renders
-      // the honest ended face.
-      SessionCardView(agent: feed.agents.first(where: { $0.id == selected.id }))
-        .presentationDetents([.fraction(0.55), .large])
+    .onDisappear {
+      feed.stop()
+      // Parked, not closed: the door is still good if this view comes back.
+      remoteField.stop()
+      discoveryPolling = false
+    }
+    // Discovery follows the mesh AND the stage, and both are read through one
+    // decision so neither can leave the flag disagreeing with the poll: a
+    // directory exists only while a runtime does, and the poll belongs to the
+    // stage (PF6's spirit) — no mesh, no asking, and the field says `no-door`
+    // rather than inventing an empty answer.
+    .onChange(of: mesh.state) { _, state in
+      syncDiscovery(meshIsUp: state == .up, phase: scenePhase)
+    }
+    .onChange(of: scenePhase) { _, phase in
+      // The phase is passed rather than re-read: inside this closure the
+      // environment's own value is the one thing we should not have to guess
+      // about, and guessing wrong is what stranded the poll before.
+      syncDiscovery(meshIsUp: mesh.state == .up, phase: phase)
+      switch phase {
+      case .active:
+        // Routes internally: suspended-by-app becomes a real resume, a live
+        // session only re-snapshots. Calling upstream's resume on a session
+        // that never left would force a spurious reconnect.
+        attachment?.resumeFromForeground()
+      case .background:
+        // The orderly counterpart — without it `resumeFromForeground` has
+        // nothing to resume from (upstream §8.2).
+        attachment?.suspendForBackground()
+      default:
+        break
+      }
+    }
+    // The card's subject follows the field while the field still has one, and
+    // deliberately does NOT follow it away: a row that leaves is the listing's
+    // news, not the connection's, and `FieldHomeModel.cardFace` decides what
+    // that means.
+    .onChange(of: bubbles) { _, next in
+      guard let selection, let match = next.first(where: { $0.id == selection.id }) else { return }
+      cardBubble = match
+    }
+    // A `suspended(host absent)` attachment NEVER ends on its own — upstream's
+    // engine stops dialing and waits to be told, and its own comment says
+    // "nothing else in the app tells it". Discovery is the only thing here
+    // that learns a peer came back, so it is what tells the attachment.
+    .onChange(of: remoteField.snapshot.rows) { _, rows in
+      guard let attachedDeviceID,
+        rows.contains(where: { $0.host.deviceID == attachedDeviceID })
+      else { return }
+      attachment?.noteHostReachable()
+    }
+    .sheet(item: $selection, onDismiss: { closeCard() }) { selected in
+      sessionCard(selected)
+        // Attaching earns the room: a terminal at the 0.55 detent is a
+        // letterbox, and the keyboard would take what is left.
+        .presentationDetents(attachment == nil ? [.fraction(0.55), .large] : [.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(40)
+        .fieldGlassSheet()
+    }
+    .sheet(isPresented: $settingsSheetOpen) {
+      settingsSheet
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(40)
         .fieldGlassSheet()
@@ -95,7 +251,282 @@ public struct HomeScreen: View {
     }
   }
 
+  /// The directory is an `await` (it lives on the runtime actor), so opening
+  /// the door is a task rather than a property read. `discoveryPolling` keeps a
+  /// re-entrant mesh event — several `.up`s arrive as peers settle — from
+  /// building a second field beside the one already polling, and every path
+  /// that stops the poll goes through here so the flag can never outlive it.
+  private func syncDiscovery(meshIsUp: Bool, phase: ScenePhase) {
+    #if DEBUG
+      // The demo fixture owns the field while it is up; a mesh that is merely
+      // off must not tear down the thing we are looking at.
+      if demoRemoteActive { return }
+    #endif
+    switch FieldHomeModel.discoveryAction(
+      meshIsUp: meshIsUp, phase: phase, polling: discoveryPolling, hasDoor: remoteField.hasDoor)
+    {
+    case .none:
+      return
+    case .park:
+      remoteField.stop()
+      discoveryPolling = false
+    case .closeDoor:
+      // The runtime this field's directory belonged to is gone, and
+      // `MeshModel.connect()` builds a new one — so the source is void, not
+      // merely idle. A door-less field says `.noDoor`, which is the honest
+      // state: nobody has been asked, rather than a mesh that answered empty.
+      remoteField.stop()
+      remoteField = RemoteSessionField(source: nil)
+      discoveryPolling = false
+    case .resume:
+      remoteField.start()
+      discoveryPolling = true
+    case .open:
+      discoveryPolling = true
+      Task {
+        guard let directory = await mesh.directory else {
+          discoveryPolling = false
+          return
+        }
+        remoteField = RemoteSessionField(source: TruffleSessionSource(directory: directory))
+        remoteField.start()
+      }
+    }
+  }
+
+  // MARK: - Sheets
+
+  private func sessionCard(_ selected: SessionSelection) -> some View {
+    // The subject is the remembered one; the field is only asked whether it
+    // still LISTS it. Looking the subject up fresh here is what let a discovery
+    // blip replace a live terminal with "this session left the field".
+    let listed = bubbles.contains(where: { $0.id == selected.id })
+    let bubble = cardBubble
+    return SessionCardView(
+      bubble: bubble,
+      listed: listed,
+      isAttached: attachment != nil,
+      hasWriteKey: mirrorWriteCapability != nil,
+      statusNote: attachmentNote,
+      statusDetail: attachmentDetail,
+      statusActions: attachmentActions,
+      cooled: attachment?.banner?.coolsTerminal ?? false,
+      onAttach: { if let bubble { beginAttachment(to: bubble) } }
+    ) {
+      liveTerminal(title: bubble?.project)
+    }
+  }
+
+  @ViewBuilder
+  private func liveTerminal(title: String?) -> some View {
+    if let attachment {
+      TerminalSurface(
+        frame: attachment.frame,
+        visible: true,
+        configuration: attachment.presentation,
+        accessibilityTitle: title ?? "Remote terminal",
+        accessibilityConnectionState: attachmentNote ?? "attached",
+        onGridSize: { size in attachment.setViewport(cols: size.columns, rows: size.rows) },
+        onNeedsFullRefresh: { attachment.requestFullRefresh() },
+        onHardwareInput: { attachment.handleHardwareKey($0) },
+        onSoftwareInput: { attachment.handleSoftwareInput($0) },
+        onMouseInput: { attachment.handleMouse($0) },
+        onScrollRows: { attachment.handleScroll(rows: $0) },
+        onClipboardWrite: { text in
+          // The pasteboard is the card's business, not the attachment's —
+          // the same split the reference keeps.
+          UIPasteboard.general.string = text
+          noteCopied(bytes: text.utf8.count)
+        },
+        onRenderFailure: { renderFailure = $0 }
+      )
+    }
+  }
+
+  private var settingsSheet: some View {
+    TerminalSettingsSheet(appearance: appearance) { next in
+      // The PREFERENCE commits eagerly and is what every future attach is
+      // seeded from. Whether the terminal currently on screen took it is a
+      // different fact, and `TerminalAttachment.appearance` is the one that
+      // answers it — they disagree exactly when a reconfiguration failed, and
+      // `appearanceFailure` is that disagreement said out loud.
+      appearance = next
+      TerminalAppearanceStore.save(next)
+      // Live where it can be: the attachment splits the work itself —
+      // colors/opacity/shaders reconfigure on the running sink, and only a
+      // font-size move rebuilds the text runtime (the session stays attached
+      // either way).
+      if let attachment {
+        Task { await attachment.apply(appearance: next) }
+      }
+    }
+  }
+
+  // MARK: - Attachment
+
+  /// The attachment's own state, in words the card can render. Ordered so the
+  /// most load-bearing truth wins: a failure explains itself, a live view-only
+  /// session says why it cannot type, and nothing here invents a reason the
+  /// terminal did not give.
+  private var attachmentNote: String? {
+    // A copy is the most recent thing the user did, and it is transient —
+    // it says so and then gets out of the way.
+    if let copiedNote { return copiedNote }
+    if let attachRefusal { return attachRefusal }
+    if let renderFailure { return "the renderer refused this frame — \(renderFailure)" }
+    guard let attachment else { return nil }
+    // Upstream's banner outranks our phase words wherever it exists: it names
+    // the device ("studio is offline") where the phase can only name the
+    // condition, and it carries upstream's own timing for when to say it. The
+    // phase reasons stay as the tier beneath — the machine-readable one that
+    // covers the states a banner deliberately stays quiet for.
+    if let banner = attachment.banner { return banner.title }
+    // A look the renderer would not take is real and durable, but it is the
+    // least of these: it ranks last, so it surfaces exactly when the terminal
+    // has nothing more load-bearing to say, and waits when it does.
+    return phaseNote(attachment) ?? attachment.appearanceFailure
+  }
+
+  private func phaseNote(_ attachment: TerminalAttachment) -> String? {
+    switch attachment.phase {
+    case .idle: return nil
+    case .connecting: return "connecting over the mesh…"
+    case .live:
+      if attachment.acceptsInput { return attachment.inputCue?.text }
+      if attachment.readWrite { return attachment.inputCue?.text ?? "taking control…" }
+      // NOT `remote.readWrite`: that one says the SESSION is shared for
+      // writing, and this one is the host's answer to this device. Which of
+      // the two failed decides who to name.
+      return FieldHomeModel.viewOnlyReason(
+        sessionSharesWrites: cardBubble?.remote?.readWrite ?? false,
+        hasWriteKey: mirrorWriteCapability != nil)
+    case .suspended(let why): return "suspended — \(why)"
+    case .ended(let why): return "ended — \(why)"
+    case .failed(let why): return "failed — \(why)"
+    }
+  }
+
+  /// The banner's second line, and only ever that: our own phase words are
+  /// single-line by construction, so a detail here always belongs to a banner.
+  private var attachmentDetail: String? {
+    guard copiedNote == nil, attachRefusal == nil, renderFailure == nil else { return nil }
+    return attachment?.banner?.detail
+  }
+
+  /// Ghosttea's action vocabulary translated into acts this card can offer.
+  /// `browseSessions` becomes "back to the field": upstream means "go choose
+  /// another session", and on this phone the chooser IS the field.
+  private var attachmentActions: [CardAction] {
+    guard let attachment, let banner = attachment.banner else { return [] }
+    return banner.actions.map { action in
+      let label: String =
+        switch action {
+        case .retryNow: "RETRY"
+        case .resume: "RESUME"
+        case .browseSessions: "BACK TO THE FIELD"
+        case .close: "CLOSE"
+        }
+      return .init(id: String(describing: action), label: label) {
+        switch action {
+        case .browseSessions, .close:
+          // Navigation is the card's act, not the attachment's — dismissing
+          // the sheet is what detaches (onDismiss), so both paths agree.
+          selection = nil
+        default:
+          attachment.perform(action)
+        }
+      }
+    }
+  }
+
+  /// Raise the card on a bubble, remembering it as the card's subject. Every
+  /// path that opens a card comes through here so none of them can open one
+  /// with no subject to fall back on.
+  private func openCard(on bubble: FieldBubble) {
+    cardBubble = bubble
+    selection = SessionSelection(id: bubble.id)
+  }
+
+  private func beginAttachment(to bubble: FieldBubble) {
+    guard let remote = bubble.remote, remote.attachable else { return }
+    // One attachment at a time, latched BEFORE the await — see `attaching`.
+    guard attachment == nil, !attaching else { return }
+    attaching = true
+    renderFailure = nil
+    attachRefusal = nil
+    Task {
+      defer { attaching = false }
+      guard let directory = await mesh.directory else {
+        // Honest rather than inert: the button did something, and the reason
+        // it went nowhere is the mesh, not the session and not the renderer.
+        attachRefusal = "the mesh is not up on this device — connect it first"
+        return
+      }
+      let attachment = TerminalAttachment(
+        directory: directory,
+        appearance: appearance,
+        accessToken: mirrorWriteCapability)
+      self.attachment = attachment
+      attachedDeviceID = remote.deviceID
+      // A starting grid the surface immediately corrects through onGridSize —
+      // the host needs SOME viewport to open with, and 80×24 is the one every
+      // terminal has agreed on since the VT100.
+      // The device NAME rides along so the banner can say "studio is offline"
+      // rather than naming a ULID at the user.
+      attachment.attach(
+        deviceID: remote.deviceID, sessionID: remote.sessionID, cols: 80, rows: 24,
+        deviceName: remote.deviceName)
+    }
+  }
+
+  /// The card going away: its subject is released and any attachment with it.
+  /// Both halves unconditionally — the subject outlives the listing by design,
+  /// so nothing else would ever clear it.
+  private func closeCard() {
+    cardBubble = nil
+    attachedDeviceID = nil
+    renderFailure = nil
+    attachRefusal = nil
+    copiedNote = nil
+    guard let attachment else { return }
+    self.attachment = nil
+    Task { await attachment.detach() }
+  }
+
+  /// The pasteboard confirmation, in the reference's own vocabulary — and it
+  /// expires, because a stale "copied" line would sit on top of a real status
+  /// the terminal wanted to say.
+  private func noteCopied(bytes: Int) {
+    copiedNote = "copied \(bytes) bytes"
+    Task {
+      try? await Task.sleep(for: .seconds(2))
+      copiedNote = nil
+    }
+  }
+
   private struct SessionSelection: Identifiable {
     let id: String
   }
 }
+
+#if DEBUG
+  /// A stand-in peer for `-vf-demo-remote` (see the launch hook above).
+  private struct DemoRemoteSource: RemoteSessionSource {
+    func listAll() async throws -> (rows: [RemoteSessionRow], hosts: Int) {
+      let host = RemoteHost(deviceID: "demo-device-01", deviceName: "studio")
+      let sessions = [
+        RemoteSessionInfo(
+          sessionID: "1", title: "vibe-field", cwdLabel: "~/Projects/project100/vibe-field",
+          running: true, attachable: true, readWrite: true, createdAtMs: 0,
+          activityKind: "foreground-job"),
+        RemoteSessionInfo(
+          sessionID: "2", title: "truffle", cwdLabel: "~/Projects/project100/p008/truffle",
+          running: true, attachable: true, readWrite: false, createdAtMs: 0, activityKind: nil),
+        RemoteSessionInfo(
+          sessionID: "3", title: "ghosttea", cwdLabel: "~/Projects/project100/electron-ghostty",
+          running: true, attachable: false, readWrite: false, createdAtMs: 0, activityKind: nil),
+      ]
+      return (sessions.map { RemoteSessionRow(host: host, session: $0) }, 1)
+    }
+  }
+#endif

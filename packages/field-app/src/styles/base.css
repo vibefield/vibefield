@@ -1,0 +1,181 @@
+/* Renderer foundation and field-level chrome. Domain styles live beside their owners. */
+
+/* The window IS the field (2026-07-21): no app bar, no pages — chrome floats
+   over the canvas per DESIGN.md §1. Base styles only; every surface color
+   comes from the design-kit tokens. Browser-gesture guards are the widgetlab
+   rules minus global user-select (which would kill text selection in the
+   note editor — the engine prevents selection during its own gestures). */
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--vf-canvas-bg);
+  font:
+    14px / 1.5 -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.field-wrap {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: var(--vf-canvas-bg);
+}
+
+.field-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.field-scene {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    transform 600ms var(--vf-ease-island),
+    opacity 420ms var(--vf-ease-island);
+}
+
+.field-scene[data-sheet-open="true"] {
+  transform: scale(0.98);
+}
+
+.field-scene[data-doc-loading="true"] {
+  opacity: 0.72;
+}
+
+.field-scene[data-sheet-open="false"][data-doc-loading="true"] {
+  transform: scale(0.992);
+}
+
+.field-gl-canvas {
+  /* biome-ignore lint/complexity/noImportantStyles: The renderer supplies inline canvas positioning that the shell must normalize. */
+  position: absolute !important;
+  inset: 0;
+  /* biome-ignore lint/complexity/noImportantStyles: Field hit-testing belongs to the DOM overlay, never the renderer canvas. */
+  pointer-events: none !important;
+}
+
+/* Invisible macOS titlebar: native traffic lights remain while this strip moves the window. */
+.app-drag {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 40;
+  height: 52px;
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Document changes send each HUD island away from the canvas center. Individual
+   translate/scale properties preserve component-owned transform animations. */
+.hud-flight {
+  --hud-rest-x: 0%;
+  --hud-rest-y: 0%;
+  --hud-flight-x: 0%;
+  --hud-flight-y: 0%;
+  --hud-return-delay: 0ms;
+  backface-visibility: hidden;
+  transform-origin: center;
+  will-change: translate, scale, opacity;
+}
+
+[data-hud-flight="top-left"] {
+  --hud-flight-x: -180%;
+  --hud-flight-y: -180%;
+  --hud-return-delay: 20ms;
+}
+
+[data-hud-flight="top-right"] {
+  --hud-flight-x: 180%;
+  --hud-flight-y: -180%;
+  --hud-return-delay: 45ms;
+}
+
+[data-hud-flight="bottom-center"] {
+  --hud-rest-x: -50%;
+  --hud-flight-y: 180%;
+  --hud-return-delay: 70ms;
+}
+
+[data-hud-flight="bottom-left"] {
+  --hud-flight-x: -180%;
+  --hud-flight-y: 180%;
+  --hud-return-delay: 90ms;
+}
+
+[data-hud-flight="bottom-right"] {
+  --hud-flight-x: 180%;
+  --hud-flight-y: 180%;
+  --hud-return-delay: 110ms;
+}
+
+.field-wrap[data-doc-transition="out"] .hud-flight,
+.hud-flight[data-doc-transition="out"] {
+  animation: vf-hud-flight-out 210ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+.field-wrap[data-doc-transition="in"] .hud-flight,
+.hud-flight[data-doc-transition="in"] {
+  animation: vf-hud-flight-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--hud-return-delay);
+}
+
+@keyframes vf-hud-flight-out {
+  from {
+    opacity: 1;
+    scale: 1;
+    translate: var(--hud-rest-x) var(--hud-rest-y);
+  }
+  to {
+    opacity: 0;
+    scale: 0.94;
+    translate: calc(var(--hud-rest-x) + var(--hud-flight-x))
+      calc(var(--hud-rest-y) + var(--hud-flight-y));
+  }
+}
+
+@keyframes vf-hud-flight-in {
+  from {
+    opacity: 0;
+    scale: 0.94;
+    translate: calc(var(--hud-rest-x) + var(--hud-flight-x))
+      calc(var(--hud-rest-y) + var(--hud-flight-y));
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+    translate: var(--hud-rest-x) var(--hud-rest-y);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field-wrap[data-doc-transition="out"] .hud-flight,
+  .field-wrap[data-doc-transition="in"] .hud-flight,
+  .hud-flight[data-doc-transition="out"],
+  .hud-flight[data-doc-transition="in"] {
+    animation-delay: 0ms;
+    animation-duration: 1ms;
+  }
+}

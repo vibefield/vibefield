@@ -12,10 +12,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, type FielddHealth } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -29,7 +31,7 @@ async function setup(): Promise<{ dataDir: string; mock: MockMgmtServer; daemon:
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-  const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await mock.start();
   cleanup.push(() => mock.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0 });
@@ -53,7 +55,7 @@ describe("bootstrap lifecycle", () => {
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
     await mock.start();
     cleanup.push(() => mock.stop());
     mock.supersedeAfterSubscribe = true;
@@ -74,7 +76,10 @@ describe("run files (shell bootstrap contract)", () => {
     const productPath = join(runDir, "product.json");
 
     expect(readFileSync(tokenPath, "utf8")).toBe(daemon.shellToken);
-    expect(statSync(tokenPath).mode & 0o777).toBe(0o600);
+    // POSIX mode bits are a no-op on Windows (WIN-D4); the 0600/0700 boundary is an ACL there, proven by the packaged gate.
+    if (process.platform !== "win32") {
+      expect(statSync(tokenPath).mode & 0o777).toBe(0o600);
+    }
 
     const product = JSON.parse(readFileSync(productPath, "utf8"));
     expect(product.port).toBe(daemon.controlPort);
@@ -93,7 +98,7 @@ describe("run files (shell bootstrap contract)", () => {
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
     await mock.start();
     cleanup.push(() => mock.stop());
     const daemon = await bootstrap({ dataDir, controlPort: 0, buildId: "dev-test-build" });
@@ -262,7 +267,7 @@ describe("plugins.* (PLUG-P2 registry surface)", () => {
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-    const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
     await mock.start();
     cleanup.push(() => mock.stop());
     const root = join(dataDir, "bundled-root");

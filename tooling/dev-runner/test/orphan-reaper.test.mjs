@@ -6,8 +6,10 @@ import test from "node:test";
 import {
   classifyOrphans,
   findDevRunSockets,
+  listUnixSocketOwners,
   parseProcessList,
   parseUnixSocketOwners,
+  parseWindowsProcessList,
   reapDevOrphans,
 } from "../src/orphan-reaper.mjs";
 
@@ -98,7 +100,7 @@ test("anything holding a dev socket is a squatter, whatever its executable is", 
     ],
     socketOwners: [
       { pid: 601, socketPath: mgmtSocket },
-      { pid: 602, socketPath: `${DATA_ROOT}/native/run/terminal-control.sock` },
+      { pid: 602, socketPath: `${DATA_ROOT}/native/run/termctl.sock` },
     ],
   });
 
@@ -242,7 +244,7 @@ test("lsof records attribute every name to the pid that opened the record", () =
     "f6",
     "n->0x50cbe09e4899729a",
     "f13",
-    `n${DATA_ROOT}/native/run/terminal-control.sock`,
+    `n${DATA_ROOT}/native/run/termctl.sock`,
     "p502",
     "f9",
     `n${mgmtSocket}`,
@@ -272,6 +274,34 @@ test("ps lines keep executable paths that contain spaces", () => {
     { pid: 1, exePath: "/sbin/launchd" },
     { pid: 8321, exePath: "/Applications/My App.app/Contents/MacOS/field-native" },
   ]);
+});
+
+test("CIM rows become classifier rows, single-object shape included", () => {
+  // `ConvertTo-Json` collapses a one-row result to a bare object, and the rows
+  // we may not query carry a null ExecutablePath — no evidence, no conviction.
+  assert.deepEqual(
+    parseWindowsProcessList(
+      JSON.stringify([
+        { ProcessId: 4, ExecutablePath: null },
+        {
+          ProcessId: 8321,
+          ExecutablePath: "C:\\repo\\.vibefield\\dev\\runtime\\x\\field-native.exe",
+        },
+      ]),
+    ),
+    [{ pid: 8321, exePath: "C:\\repo\\.vibefield\\dev\\runtime\\x\\field-native.exe" }],
+  );
+  assert.deepEqual(
+    parseWindowsProcessList(JSON.stringify({ ProcessId: 501, ExecutablePath: "C:\\node.exe" })),
+    [{ pid: 501, exePath: "C:\\node.exe" }],
+  );
+  assert.deepEqual(parseWindowsProcessList(""), []);
+});
+
+test("the socket pass is honestly empty on win32 rather than shelling out", async () => {
+  // Named pipes have no filesystem presence, so there is nothing to enumerate
+  // until the pid-in-runfile follow-up lands.
+  assert.deepEqual(await listUnixSocketOwners([mgmtSocket], { platform: "win32" }), []);
 });
 
 test("the socket walk finds run/*.sock and nothing else", async (t) => {

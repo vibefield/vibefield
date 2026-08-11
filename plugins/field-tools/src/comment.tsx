@@ -28,23 +28,23 @@ import {
   useWidgetProps,
   type World,
 } from "@vibefield/plugin-sdk/canvas";
-import { CARD_RADIUS, useDragLift } from "@vibefield/plugin-sdk/ui";
+import { useDragLift } from "@vibefield/plugin-sdk/ui";
 import {
+  type CSSProperties,
   type ReactElement,
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useState,
 } from "react";
+import "./comment.css";
 
 const TYPE = "vibefield.field-tools.comment";
-
-const HEADER = 44;
 
 function CommentView({ entity, world }: { entity: Entity; world: World }): ReactElement {
   const props = useWidgetProps<{ title: string; color: string }>(world, entity, TYPE);
   const ops = useOps();
   const title = props?.title ?? "Comment";
-  const color = props?.color ?? "#6366F1";
+  const color = props?.color ?? "var(--vf-accent-1)";
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState(false);
@@ -70,39 +70,17 @@ function CommentView({ entity, world }: { entity: Entity; world: World }): React
 
   return (
     <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        borderRadius: CARD_RADIUS,
-        // Tint + hairline: the body must stay see-through — the comment sits
-        // BEHIND its members and the dot grid should read through it. No
-        // lift-dim: dimming an already-translucent tint washes it out.
-        background: `${color}1F`,
-        boxShadow: lifted
-          ? `inset 0 0 0 1.5px ${color}${selected ? "E6" : "66"}, 0 30px 60px rgba(0, 0, 0, 0.22)`
-          : `inset 0 0 0 1.5px ${color}${selected ? "E6" : "66"}`,
-        transform: lifted ? `scale(${scale})` : "scale(1)",
-        transformOrigin: "center center",
-        transition: "transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2), box-shadow 220ms ease",
-        fontFamily: "-apple-system, system-ui, sans-serif",
-      }}
+      className="vf-comment-card"
+      data-lifted={lifted ? "true" : "false"}
+      data-selected={selected ? "true" : "false"}
+      style={
+        {
+          "--vf-comment-color": color,
+          "--vf-comment-lift-scale": scale,
+        } as CSSProperties
+      }
     >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: HEADER,
-          display: "flex",
-          alignItems: "center",
-          padding: "0 14px",
-          boxSizing: "border-box",
-          borderRadius: `${CARD_RADIUS}px ${CARD_RADIUS}px 0 0`,
-          background: `${color}33`,
-        }}
-      >
+      <div className="vf-comment-card__header">
         {editing ? (
           <input
             value={draft}
@@ -111,17 +89,7 @@ function CommentView({ entity, world }: { entity: Entity; world: World }): React
             onKeyDown={onKeyDown}
             spellCheck={false}
             autoFocus
-            style={{
-              flex: 1,
-              minWidth: 0,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontSize: 13.5,
-              fontWeight: 700,
-              letterSpacing: "-0.01em",
-              color,
-            }}
+            className="vf-comment-card__title vf-comment-card__input"
             aria-label="Comment title"
           />
         ) : (
@@ -131,18 +99,7 @@ function CommentView({ entity, world }: { entity: Entity; world: World }): React
               setDraft(title);
               setEditing(true);
             }}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              fontSize: 13.5,
-              fontWeight: 700,
-              letterSpacing: "-0.01em",
-              color,
-              userSelect: "none",
-            }}
+            className="vf-comment-card__title"
             title="Double-click to rename"
             data-comment-title
           >

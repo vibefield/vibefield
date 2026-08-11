@@ -97,7 +97,10 @@ describe("ownership: adopted daemons are never killed", () => {
 });
 
 describe("ownership: a spawned child obeys the shutdown policy", () => {
-  it("stop-owned dispose() SIGKILLs the spawned child", async () => {
+  // (Retitled from "SIGKILLs": the fixture exits on the ladder's first rung, so
+  // KILL never actually fired — and with WIN-D5 the request now precedes any
+  // signal at all. The law under test is teardown, not the weapon.)
+  it("stop-owned dispose() tears the spawned child down", async () => {
     const { port, token } = await h.startProduct();
     const root = h.mkRoot();
     const { sup, handle } = await spawnReady(root, port, token, "stop-owned");
@@ -107,6 +110,27 @@ describe("ownership: a spawned child obeys the shutdown policy", () => {
 
     await sup.dispose();
     expect(alive(pid as number)).toBe(false); // stop-owned tore the child down
+  });
+
+  it("stop-owned asks over the channel first — signals are escalation (WIN-D5)", async () => {
+    const { api, port, token } = await h.startProduct({ scopes: ["native.admin"] });
+    const root = h.mkRoot();
+    const { sup, handle } = await spawnReady(root, port, token, "stop-owned");
+    const pid = handle.childPid as number;
+    let asked = false;
+    // Stand in for fieldd's side of the verb: acknowledge, then exit the way a
+    // real fieldd would run its graceful stop. (The fixture child and this api
+    // are separate processes in the harness; a signal here SIMULATES the
+    // fixture's own exit, it is not the supervisor's doing.)
+    api.register("system.shutdown", () => {
+      asked = true;
+      process.kill(pid, "SIGTERM");
+      return { stopping: true };
+    });
+
+    await sup.dispose();
+    expect(asked).toBe(true); // the verb, not a signal, initiated the stop
+    expect(alive(pid)).toBe(false);
   });
 
   it("leave-running dispose() leaves the spawned child alive", async () => {

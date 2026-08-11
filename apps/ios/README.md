@@ -16,14 +16,15 @@ connection, whole mesh through it), EL3/EL7 as ever.
 
 | Path | What |
 |---|---|
-| `VibeField.xcodeproj` | thin composition shell — hand-authored pbxproj (objectVersion 56, synthetic IDs, the GhostteaApp convention); no product code |
+| `VibeField.xcodeproj` | thin composition shell — hand-authored pbxproj (synthetic IDs, the GhostteaApp convention; objectVersion 60 since Xcode touched it); no product code |
 | `App/` | `@main` + assets + privacy manifest, nothing else |
 | `VibeFieldKit/` | the real code, one SPM package, four targets |
 | `VibeFieldKit/Sources/FieldDesign` | godview monochrome tokens (palette light+dark, mono type ramp, motion constants, grid/scanlines/vignette) |
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested |
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
-| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.7.0), login sheet, peer roster, the mesh chip |
-| `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition |
+| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
+| `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface |
+| `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
 Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`) · iOS **18.1** floor (the pinned
 TailscaleKit binary's floor — GhostteaApp's own) · simulator is arm64-only
@@ -32,8 +33,12 @@ TailscaleKit binary's floor — GhostteaApp's own) · simulator is arm64-only
 
 ## Build · test · run
 
-This machine's `xcode-select` points at CommandLineTools; every invocation
-passes `DEVELOPER_DIR` (the Ghosttea convention):
+This machine's `xcode-select` points at CommandLineTools, so every invocation
+passes `DEVELOPER_DIR` (the Ghosttea convention). Since IOS-3 the tree also
+links `GhostteaTerminal`, which ships a Metal build-tool plugin — SwiftPM asks
+for trust before running one, and on the command line that ask is
+`-skipPackagePluginValidation` (in Xcode it is a one-time prompt). Both flags
+belong on every command here:
 
 ```sh
 cd apps/ios
@@ -41,12 +46,18 @@ cd apps/ios
 # build (unsigned, simulator)
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   xcodebuild -project VibeField.xcodeproj -scheme VibeField \
-  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+  -destination 'generic/platform=iOS Simulator' \
+  -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO build
 
 # tests (the package's own scheme; the app scheme builds/launches only)
 cd VibeFieldKit && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   xcodebuild test -scheme VibeFieldKit-Package \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -skipPackagePluginValidation
+
+# one module at a time (each target has its own scheme — the fast inner loop)
+DEVELOPER_DIR=… xcodebuild -scheme FieldTerminal \
+  -destination 'generic/platform=iOS Simulator' -skipPackagePluginValidation build
 
 # run in a simulator
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer sh -c '
@@ -58,15 +69,21 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer sh -c '
   xcrun simctl launch booted com.jamesyong.vibefield.ios'
 ```
 
-Debug builds accept `-vf-auto-connect` as a launch argument (the GhostteaApp
-opt-in-automation pattern): it opens the mesh sheet and drives CONNECT, so a
-headless simulator run exercises the real runtime path — TailscaleKit start →
-control dial → the honest sign-in state — without touch injection. Not
-compiled into Release.
+Debug builds accept launch arguments (the GhostteaApp opt-in-automation
+pattern — none of them compile into Release), so a headless simulator run can
+reach states no `simctl` touch can:
 
-Device runs: open the project in Xcode and let automatic signing pick the team
-(`DEVELOPMENT_TEAM` is deliberately empty in the pbxproj — inject it at the
-command line, the Ghosttea runner pattern).
+| Argument | What it drives |
+|---|---|
+| `-vf-auto-connect` | opens the mesh sheet and drives CONNECT — TailscaleKit start → control dial → the honest sign-in state |
+| `-vf-demo-remote` | stands a FAKE peer up so remote-bubble rendering can be eyeballed without a desktop serving. A fixture for looking at our own pixels, never a claim that a mesh answered; the real source replaces it the moment the mesh is up |
+| `-vf-auto-open-card` | opens a session card, preferring an attachable remote one |
+| `-vf-auto-attach` | carries the run through ATTACH — on a phone whose mesh is up against a serving desktop this is the whole IOS-3 path with no finger on the glass; without a mesh it proves the honest-failure path instead |
+| `-vf-open-settings` | opens the terminal appearance sheet |
+
+Device runs: open the project in Xcode — automatic signing with the committed
+team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
+precedent; a Team ID is public material).
 
 This app is deliberately **outside `pnpm verify`** (the gate must not require
 Xcode); the commands above are its gate until an iOS lane exists in CI.
@@ -79,19 +96,23 @@ checked tool is a deliberate future event, not an inheritance.
 Real: the full-screen bubble field (physics, tiers, ignition, drag, tap-nudge,
 hold-to-create, spawn pop, empty state), both themes, the session card with
 live status, the mock fleet driving the **same** snapshot shape and classifier
-the daemon feed will drive, and — since IOS-2 — the mesh leg: `ghosttea`
-pinned `exact: "0.7.0"` (truffle 0.7.11, lockstep with field-native), the
-in-process Tailscale runtime behind a deliberate CONNECT act, in-app login
-(Safari sheet), the online-peer roster, and the mesh chip the bubbles
-physically flow around (`.swarmObstacle()` — the desktop obstacle pattern).
-23 headless tests.
+the daemon feed will drive; since IOS-2 the mesh leg: `ghosttea` pinned
+`exact: "0.9.3"` (truffle 0.7.12, lockstep with field-native), the in-process
+Tailscale runtime behind a deliberate CONNECT act, in-app login (Safari sheet),
+the online-peer roster, and the mesh chip the bubbles physically flow around
+(`.swarmObstacle()` — the desktop obstacle pattern); and since IOS-3 the
+terminal leg: remote-session discovery putting every peer's session on the
+field as its own bubble, ATTACH over Truffle, the Ghosttea Metal surface, 602
+themes + 4 shader ports in the settings sheet, and upstream's reconnect banner.
+135 headless tests.
 
-Honest-missing (each says so on screen where it shows): the card's terminal is
-a placeholder — live attach is IOS-3 (session browse + TSP1 + Metal surface;
-also gated desktop-side on the NF-remote leg — field-native's embedded
-TerminalService has no mesh coupling yet); approvals render as facts, never
-as buttons, until the approvals track lands; the agent feed is still the mock
-until fieldd's `agent.*` exists (IOS-4).
+Honest-missing (each says so on screen where it shows): **this device holds no
+write key** — the mirror-write capability's Keychain home is IOS-3c and has not
+landed, so every attach presents no token and the card says view-only *before*
+the tap as well as after (the session being shared read-write is a different
+fact from this device being granted writes, and conflating them was a review
+finding); approvals render as facts, never as buttons, until the approvals track
+lands; the agent feed is still the mock until fieldd's `agent.*` exists (IOS-4).
 
 Vendor glyph geometry: LobeHub Lobe Icons v5.14.0 (MIT), the set the desktop
 godview embeds.

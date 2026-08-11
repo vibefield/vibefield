@@ -17,12 +17,17 @@
  * loop driven by event ORDER.
  */
 
-import { act } from "react";
+import { act, type ComponentType } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewDeckFacts } from "../src/development-console";
+import {
+  pendingWarmTransport,
+  prewarmGodviewTransport,
+  resetWarmTransportForTest,
+} from "../src/godview/warm-transport";
 import type { FieldHost } from "../src/host";
-import { setHost } from "../src/host";
+import { getHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
 
@@ -39,11 +44,24 @@ vi.mock("@vibecook/ghosttea-react", () => ({
     const runtime = { id: runtimes.length, disposed: false };
     runtimes.push(runtime);
     return {
+      // GT-3p: the real runtime is an EventTarget and the deck listens on it
+      // for `renderer-status` (the device-ready mark, and the backend the lab
+      // reports). The stub answers the surface without ever firing — a fixture
+      // that announced a backend would be asserting about its own stub.
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
       rendererBackend: "test",
       dispose: () => {
         runtime.disposed = true;
       },
       createSession: (options: unknown) => Promise.resolve({ id: `s-${JSON.stringify(options)}` }),
+      // GT-D17's two verbs, as the door calls them. `openRemoteSession` answers
+      // with a REPLICA — a local session id standing for a peer's — which is
+      // the thing the deck has to remember the origin of (GT-5c).
+      listRemoteHosts: () => Promise.resolve([]),
+      openRemoteSession: (deviceId: string, remoteSessionId: string) =>
+        Promise.resolve({ id: `replica-${deviceId}-${remoteSessionId}`, readWrite: true }),
+      terminate: () => undefined,
     };
   },
   // The one-shot ports wait, as a promise that never settles: in production it
@@ -63,9 +81,53 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
     workspaceMounts.push(props);
     return null;
   },
+  // 0.9.0's pinned color catalog, as the two entries these tests select
+  // between. Stubbed rather than real because the fixture's whole point is to
+  // hold the library still: a 602-entry catalog would make an assertion about
+  // "the theme the deck handed over" depend on upstream's data.
+  GHOSTTY_COLOR_THEMES: [
+    {
+      name: "Test Amber",
+      background: "#201000",
+      foreground: "#ffcc66",
+      cursor: "#ffcc66",
+      cursorText: "#201000",
+      selection: "#553300",
+      selectionForeground: "#ffffff",
+      palette: [],
+    },
+  ],
+  // The real id set, spelled out: the deck's effects projection refuses an id
+  // upstream does not know, so a stub that said yes to everything would let a
+  // typo'd shader reach the workspace in a test and only fail in James's eye.
+  isGhostteaShaderEffect: (id: string) =>
+    ["ghosttea:better-crt", "ghosttea:crt", "ghosttea:vhs", "ghosttea:sparks-from-fire"].includes(
+      id,
+    ),
+  TERMINAL_THEMES: {
+    daylight: {
+      background: [0.925, 0.91, 0.86, 1],
+      foreground: [0.12, 0.12, 0.12, 1],
+      cursor: [0.12, 0.12, 0.12, 1],
+      selection: [0.3, 0.3, 0.3, 1],
+      selectionForeground: [1, 1, 1, 1],
+    },
+    midnight: {
+      background: [0.157, 0.173, 0.204, 1],
+      foreground: [1, 1, 1, 1],
+      cursor: [1, 1, 1, 1],
+      selection: [0.3, 0.3, 0.3, 1],
+      selectionForeground: [1, 1, 1, 1],
+    },
+  },
 }));
 
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
+const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
+type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
+const { DEFAULT_DECK_APPEARANCE, resetDeckAppearanceForTest, setDeckAppearance } = await import(
+  "../src/godview/deck-appearance"
+);
 
 const DECK_STORAGE_KEY = "vf-godview-deck-v1";
 
@@ -128,12 +190,12 @@ vi.mock("@vibefield/fieldd-client/react", () => ({
 /** Mount, and let the two awaited round trips (ticket, then floor) settle.
  * `act` is flushed repeatedly rather than once: the deck's gate is two
  * promises deep, and one flush would assert on a state it has not reached. */
-async function mountDeck(): Promise<void> {
+async function mountDeck(theme: "light" | "dark" = "light"): Promise<void> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(<GodviewDeck active />);
+    root?.render(<GodviewDeck active theme={theme} />);
   });
   await settle();
 }
@@ -155,6 +217,10 @@ beforeEach(() => {
   connects = 0;
   publishStatus = null;
   localStorage.clear();
+  resetDeckAppearanceForTest();
+  // GT-3p: the warm transport is a module singleton, so a case that started a
+  // prewarm would otherwise hand the next case a runtime it never asked for.
+  resetWarmTransportForTest();
   installHost();
   vi.spyOn(console, "log").mockImplementation((line: unknown) => {
     if (typeof line === "string" && line.startsWith("GODVIEW_DECK ")) {
@@ -242,6 +308,179 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     expect(workspaceMounts.length).toBe(mountsAfterRecovery);
   });
 
+  it("re-themes an OPEN deck without re-initializing it (GT-3v)", async () => {
+    // The property GT-D12's live-apply rests on. The workspace keys its
+    // initialization on `storageKey ∥ defaultShell ∥ claimExistingSessions ∥
+    // initialCwd ∥ runtime` — `theme` is deliberately not among them — so an
+    // appearance change must reach the panes as a new prop and NOTHING else.
+    // The failure this guards is not cosmetic: a re-initialization here claims
+    // sessions and creates a pane, so a user sliding an opacity control would
+    // spawn shells.
+    await mountDeck();
+    const before = workspaceMounts[workspaceMounts.length - 1]!;
+    expect((before.theme as { background: number[] }).background[3]).toBeCloseTo(
+      DEFAULT_DECK_APPEARANCE.opacity,
+    );
+
+    await act(async () => {
+      setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, opacity: 0.5 });
+    });
+    await settle();
+
+    const after = workspaceMounts[workspaceMounts.length - 1]!;
+    expect((after.theme as { background: number[] }).background[3]).toBeCloseTo(0.5);
+    expect(runtimes, "a repaint is not a rebuild").toHaveLength(1);
+    expect(connects, "nothing re-redeemed a ticket").toBe(1);
+    // The init key, field by field: identical across the change is the whole
+    // claim. Comparing the values (not the props object) is deliberate — the
+    // deck rebuilds its platform object every render by design, and only
+    // `defaultShell` off it is read by the library's initialization.
+    for (const key of ["storageKey", "claimExistingSessions", "initialCwd"] as const) {
+      expect(after[key], `${key} moved under the workspace`).toEqual(before[key]);
+    }
+    expect((after.platform as { defaultShell: string }).defaultShell).toBe(
+      (before.platform as { defaultShell: string }).defaultShell,
+    );
+  });
+
+  it("carries a named catalog theme through to the renderer's palette", async () => {
+    await mountDeck();
+    await act(async () => {
+      setDeckAppearance({
+        ...DEFAULT_DECK_APPEARANCE,
+        lightThemeName: "Test Amber",
+        opacity: 0.7,
+      });
+    });
+    await settle();
+
+    const theme = workspaceMounts[workspaceMounts.length - 1]!.theme as {
+      background: number[];
+      foreground: number[];
+    };
+    // The chosen palette is taken WHOLE — its own foreground, not this app's
+    // white — while the viewer's alpha still rides on its background.
+    expect(theme.background[3]).toBeCloseTo(0.7);
+    expect(theme.foreground[0]).toBeCloseTo(1);
+    expect(theme.foreground[1]).toBeCloseTo(0xcc / 255);
+    expect(theme.foreground[2]).toBeCloseTo(0x66 / 255);
+    expect(latest().glass.themeName).toBe("Test Amber");
+  });
+
+  it("keeps the light and dark terminal color-theme choices independent", async () => {
+    await mountDeck("dark");
+    await act(async () => {
+      setDeckAppearance({
+        ...DEFAULT_DECK_APPEARANCE,
+        lightThemeName: null,
+        darkThemeName: "Test Amber",
+      });
+    });
+    await settle();
+
+    expect(latest().glass.themeName).toBe("Test Amber");
+    expect(
+      (workspaceMounts[workspaceMounts.length - 1]!.theme as { background: number[] })
+        .background[0],
+    ).toBeCloseTo(0x20 / 255);
+  });
+
+  it("passes NO effects prop while no shader is chosen (GT-3f)", async () => {
+    // The distinction the whole slice rests on. `undefined` and absent look the
+    // same to React, so this asserts the KEY is missing: with the prop absent
+    // ghosttea keeps its own config-derived path, and a deck that sent an empty
+    // override instead would silently blank a floor-configured shader for
+    // anyone whose floor has one.
+    await mountDeck();
+    const props = workspaceMounts[workspaceMounts.length - 1]!;
+
+    expect("effects" in props, "an unchosen shader is a prop that was never sent").toBe(false);
+    expect(latest().effects).toEqual({ shaderEffect: null, animate: false });
+  });
+
+  it("hands a chosen shader over live, without re-initializing (GT-3f)", async () => {
+    // Same property the theme has, for the prop that arrived at 0.9.1: `effects`
+    // is not among the workspace's initialization deps, so picking a shader
+    // re-renders the panes rather than claiming sessions and spawning one.
+    await mountDeck();
+    const before = workspaceMounts[workspaceMounts.length - 1]!;
+
+    await act(async () => {
+      setDeckAppearance({
+        ...DEFAULT_DECK_APPEARANCE,
+        shaderEffect: "ghosttea:crt",
+        shaderAnimate: false,
+      });
+    });
+    await settle();
+
+    const after = workspaceMounts[workspaceMounts.length - 1]!;
+    expect(after.effects).toEqual({
+      postProcess: "none",
+      shaderEffects: ["ghosttea:crt"],
+      animate: false,
+    });
+    expect(runtimes, "a shader is a repaint, not a rebuild").toHaveLength(1);
+    expect(connects, "nothing re-redeemed a ticket").toBe(1);
+    for (const key of ["storageKey", "claimExistingSessions", "initialCwd"] as const) {
+      expect(after[key], `${key} moved under the workspace`).toEqual(before[key]);
+    }
+    // And the marker says what the renderer was told, which is what the smoke
+    // reads back out of the real thing.
+    expect(latest().effects).toEqual({ shaderEffect: "ghosttea:crt", animate: false });
+  });
+
+  it("holds one effects object still across renders the viewer did not cause", async () => {
+    // 0.9.1 canonicalizes equal effect objects behind `workspaceEffectsKey`, so
+    // a fresh-object-per-render would still draw correctly — and would still be
+    // this component asking the library to clean up after a prop it owns. The
+    // memo is on the stored selection; an unrelated rerender must not move it.
+    await mountDeck();
+    await act(async () => {
+      setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, shaderEffect: "ghosttea:vhs" });
+    });
+    await settle();
+    const chosen = workspaceMounts[workspaceMounts.length - 1]!.effects;
+
+    // A republished bridge state: the deck rerenders and changes nothing else.
+    await act(async () => publishStatus?.({ state: "bridge-up" }));
+    await settle();
+
+    expect(workspaceMounts[workspaceMounts.length - 1]!.effects).toBe(chosen);
+  });
+
+  it("keeps feeding the occlusion gate while an animated shader is on (PF6)", async () => {
+    // PF6's mechanism is upstream's — a surface that is not visible schedules
+    // zero shader frames, and 0.9.1's own suite proves it for prop-fed effects.
+    // What is OURS is the gate's INPUT: `active` is how the workspace learns
+    // the overlay closed. A deck that stopped reporting it whenever a shader
+    // was on would leave upstream's test passing and VHS animating behind the
+    // canvas forever.
+    await mountDeck();
+    await act(async () => {
+      setDeckAppearance({
+        ...DEFAULT_DECK_APPEARANCE,
+        shaderEffect: "ghosttea:vhs",
+        shaderAnimate: true,
+      });
+    });
+    await settle();
+    expect(workspaceMounts[workspaceMounts.length - 1]!.active).toBe(true);
+
+    await act(async () => {
+      root?.render(<GodviewDeck active={false} theme="light" />);
+    });
+    await settle();
+
+    const hidden = workspaceMounts[workspaceMounts.length - 1]!;
+    expect(hidden.active, "the overlay closed and the workspace was told").toBe(false);
+    expect(hidden.effects, "the shader stays selected — it just stops animating").toEqual({
+      postProcess: "none",
+      shaderEffects: ["ghosttea:vhs"],
+      animate: true,
+    });
+  });
+
   it("mints a fresh runtime on retry, because the spent wait can never resolve", async () => {
     // A failed connect leaves a runtime whose one-shot ports wait is used up.
     // GT-2b's retry has to build a new one, not re-ask on the corpse.
@@ -255,6 +494,50 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     await act(async () => button?.click());
     await settle();
     expect(runtimes).toHaveLength(2);
+  });
+
+  it("names FIELDD when only the control plane refused, and says the shells are alive", async () => {
+    // The two-plane law, reported as its opposite (GT-5c). field-native holds
+    // the PTYs and outlives fieldd by design, so a fieldd that will not mint a
+    // ticket says NOTHING about the sessions — and "the deck could not reach
+    // its shell" told a user the exact opposite of the property this product
+    // sells. Only the mint speaks to fieldd; everything else is transport.
+    vi.spyOn(fieldd, "request").mockImplementation((method: string) =>
+      method === "terminal.connectTicket"
+        ? Promise.reject(new Error("fieldd is not answering"))
+        : Promise.resolve({ terminals: [] }),
+    );
+    await mountDeck();
+
+    expect(container?.querySelector(".vf-godview-deck-fault-message")?.textContent).toBe(
+      "the deck could not reach fieldd",
+    );
+    expect(container?.textContent).toContain("fieldd is not answering");
+    expect(container?.textContent).toContain("your shells are still running");
+    expect(latest().errorPlane).toBe("fieldd");
+    vi.mocked(fieldd.request).mockRestore();
+  });
+
+  it("names the SHELL when the transport itself refused", async () => {
+    // The other side of the same split: a bridge that will not connect, where
+    // "could not reach its shell" is the honest sentence.
+    installHost();
+    const host = getHost();
+    setHost({
+      ...host,
+      terminal: {
+        connect: () => Promise.reject(new Error("no bridge on this host")),
+        onStatus: host.terminal?.onStatus ?? (() => () => undefined),
+      },
+    } as unknown as FieldHost);
+    await mountDeck();
+
+    expect(container?.querySelector(".vf-godview-deck-fault-message")?.textContent).toBe(
+      "the deck could not reach its shell",
+    );
+    expect(container?.textContent).toContain("no bridge on this host");
+    expect(container?.textContent).toContain("unreachable from here");
+    expect(latest().errorPlane).toBe("transport");
   });
 });
 
@@ -352,5 +635,133 @@ describe("paneMeta, the durable half of restore (GT-D8 as amended)", () => {
     });
     expect(paneMeta({ cwd: null, title: null })).toEqual({});
     expect(paneMeta({ cwd: "/repo", title: "" })).toEqual({ cwd: "/repo" });
+  });
+
+  it("learns this device's host from a LOCAL pane, because no contract carries one", async () => {
+    // The renderer is never told its own hostname — main answers the connect
+    // with `defaultShell` and `home` and nothing else — so the comparison
+    // `paneCwd` makes needs a value learned from a pane the deck knows is ours.
+    await mountDeck();
+    const paneMeta = workspaceMounts[0]?.["paneMeta"] as (session: unknown) => unknown;
+    paneMeta({ id: "local-1", cwd: "file://Jamess-MacBook.local/Users/jamesyong/src" });
+    expect(readDeviceHost()).toBe("jamess-macbook.local");
+  });
+
+  it("STAMPS A REPLICA WITH ITS PEER, and that is what refuses the local spawn", async () => {
+    // The worst finding of the GT review (2a), closed at the one moment the
+    // answer is certain rather than reconstructed from a hostname later. The
+    // deck attached this replica; it knows whose it is.
+    let door: RemoteSessionDoor | null = null;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <GodviewDeck
+          active
+          theme="light"
+          onRemoteDoor={(next) => {
+            door = next;
+          }}
+        />,
+      );
+    });
+    await settle();
+
+    // The workspace publishes its context through the sidebar slot, which is
+    // the only seam an embedder gets — and the door reads `activeSession` from
+    // it, so the attach needs a pane to land in.
+    const Sidebar = workspaceMounts[0]?.["sidebar"] as ComponentType<{ workspace: unknown }>;
+    const probe = document.createElement("div");
+    document.body.appendChild(probe);
+    const probeRoot = createRoot(probe);
+    await act(async () => {
+      probeRoot.render(
+        <Sidebar
+          workspace={{
+            activePaneId: "pane-1",
+            activeSession: { id: "local-1", cols: 100, rows: 30 },
+            panes: [{ id: "pane-1", session: { id: "local-1" } }],
+            sessions: [],
+            mountSession: () => undefined,
+          }}
+        />,
+      );
+    });
+    await settle();
+
+    const outcome = await act(async () =>
+      door?.attach({
+        deviceId: "studio-mini",
+        deviceName: "studio-mini",
+        remoteSessionId: "s1",
+        color: "#ec4899",
+      }),
+    );
+    expect(outcome).toMatchObject({ state: "attached" });
+
+    const paneMeta = workspaceMounts[0]?.["paneMeta"] as (session: unknown) => unknown;
+    const meta = paneMeta({
+      id: "replica-studio-mini-s1",
+      cwd: "file://studio-mini.local/Users/peer/src",
+      title: "zsh",
+    });
+    expect(meta).toMatchObject({ remoteDevice: "studio-mini" });
+    // …and the restore that reads it opens no local shell in a peer's folder.
+    expect(paneCwd(meta, readDeviceHost())).toBeNull();
+    // A peer's cwd must never be mistaken for this device's own name, either.
+    expect(readDeviceHost()).not.toBe("studio-mini.local");
+
+    await act(async () => probeRoot.unmount());
+    probe.remove();
+  });
+});
+
+describe("the one-runtime law (GT-3p, GT-D14)", () => {
+  // The bug this exists for, found in the smoke and not in review: main posts
+  // the two MessagePorts EXACTLY ONCE per attach, and
+  // `waitForGhostteaRendererPorts` resolves from a `window` message listener —
+  // so two runtimes waiting at the same moment both resolve, with the SAME two
+  // ports, and then both drain one control channel. The deck that loses sits at
+  // `rendererBackend: "starting"` with no panes, forever. It is not a slow
+  // deck; it is a dead one.
+  //
+  // The rule that prevents it: while a prewarm is in flight, the deck waits for
+  // THAT runtime instead of building its own.
+  it("builds no runtime of its own while a prewarm is still in flight", async () => {
+    // A warm that never settles, so "in flight" is the whole of this case.
+    let releaseTicket: (value: unknown) => void = () => undefined;
+    const slowFieldd = {
+      request: (method: string) => {
+        if (method === "terminal.connectTicket") {
+          return new Promise((resolve) => {
+            releaseTicket = resolve;
+          });
+        }
+        return Promise.resolve({ terminals: [] });
+      },
+    };
+    prewarmGodviewTransport(slowFieldd as never);
+    await settle();
+    // The prewarm owns a runtime and its ports wait.
+    expect(runtimes.length).toBe(1);
+
+    await mountDeck();
+
+    // ...and the deck has NOT built a second one. Before this law it did, and
+    // the two of them raced for one port delivery.
+    expect(runtimes.length).toBe(1);
+    expect(workspaceMounts.length).toBe(0);
+
+    // Let the warm finish: the deck inherits that runtime rather than minting.
+    releaseTicket({ ticket: { token: "t", controlSocket: "c", frameSocket: "f" } });
+    await settle();
+    expect(runtimes.length).toBe(1);
+  });
+
+  it("builds exactly one when no prewarm is pending", async () => {
+    expect(pendingWarmTransport()).toBeNull();
+    await mountDeck();
+    expect(runtimes.length).toBe(1);
   });
 });

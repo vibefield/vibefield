@@ -41,17 +41,25 @@ import {
   type WidgetType,
 } from "@vibecook/ice";
 import { useStageHold, WidgetPreview } from "@vibecook/ice/react";
+import { CARD_BG, CARD_RADIUS } from "@vibefield/design-kit";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
-import { CARD_BG, CARD_RADIUS } from "@vibefield/shell-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import { buildCatalog, CATEGORIES, type CatalogEntry } from "./tray-catalog";
 import { useReactiveResource } from "./use-reactive";
+import "./WidgetTray.css";
 
 const ghostQ = defineQuery([InsertGhost]);
 
 const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // the reference's island ease
-const MORPH_MS = 600;
 
 // --- catalog presentation -------------------------------------------------
 
@@ -94,12 +102,10 @@ function TileFace({
       height={sil.h}
       fallback={
         <div
+          className="vf-widget-tray__preview-fallback"
           style={{
-            width: "100%",
-            height: "100%",
             borderRadius: sil.r,
             background: entry.preview ?? CARD_BG,
-            boxShadow: "inset 0 0 0 1px rgba(127,127,127,0.22)",
           }}
         />
       }
@@ -155,6 +161,7 @@ function startTileDrag(
     const p = sil.cloneNode(true) as HTMLElement;
     p.removeAttribute("data-tray-sil");
     p.dataset["trayProxy"] = def.type;
+    p.classList.add("vf-widget-tray__proxy");
     // cloneNode copies a <canvas> ELEMENT but never its BITMAP — a cloned
     // canvas is blank, so a GL tile's captured 3D content vanished from the
     // proxy (James, 2026-07-19). Blit each source canvas into its clone.
@@ -171,16 +178,8 @@ function startTileDrag(
       }
     });
     Object.assign(p.style, {
-      position: "fixed",
-      left: "0",
-      top: "0",
-      margin: "0",
       width: `${silRect.width}px`,
       height: `${silRect.height}px`,
-      zIndex: "9999",
-      pointerEvents: "none",
-      willChange: "transform, opacity",
-      filter: "drop-shadow(0 24px 48px rgba(0,0,0,0.35))",
       transition: "none",
       // Scales (the 1.06 lift, the handoff morph) grow around the FINGER,
       // so the grabbed spot never moves under the cursor.
@@ -438,17 +437,15 @@ function Tile({
       <div
         ref={ref}
         data-tray-tile={def.type}
-        className="group relative flex h-full w-full cursor-grab flex-col items-center justify-center active:cursor-grabbing"
-        style={{ touchAction: "none", userSelect: "none" }}
+        className="vf-widget-tray__tile group relative flex h-full w-full cursor-grab flex-col items-center justify-center active:cursor-grabbing"
         title={`Drag onto the canvas to add a ${entry.title}`}
       >
         <div
           data-tray-sil=""
-          className="transition-transform duration-200 group-hover:scale-[1.03] group-active:scale-95"
+          className="vf-widget-tray__silhouette transition-transform duration-200 group-hover:scale-[1.03] group-active:scale-95"
           style={{
             width: sil.w,
             height: sil.h,
-            filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.16))",
           }}
         >
           <TileFace entry={entry} sil={sil} />
@@ -475,31 +472,37 @@ const activeToolId = (t: { id: string | null } | undefined): string => t?.id ?? 
 function ToolSwitcher({ ce }: { ce: CanvasEngine }) {
   // Reactive subscription (3b amendment) — fires only when the tool changes.
   const active = useReactiveResource(ce, ActiveTool, activeToolId);
+  return <WidgetTrayToolSwitcherView active={active} onChange={(tool) => ce.ops.setTool(tool)} />;
+}
+
+/** Exact tool-pill composition with controller-free state for the catalog. */
+export function WidgetTrayToolSwitcherView({
+  active,
+  onChange,
+}: {
+  active: string;
+  onChange: (tool: (typeof TOOLS)[number]["id"]) => void;
+}): ReactElement {
   const idx = Math.max(
     0,
-    TOOLS.findIndex((t) => t.id === active),
+    TOOLS.findIndex((tool) => tool.id === active),
   );
   return (
-    <div className="relative flex rounded-full border border-black/5 bg-[#F2F2F7]/80 p-1 shadow-inner dark:border-white/5 dark:bg-black/40">
+    <div className="vf-widget-tray__tools">
       <div
-        className="absolute top-1 bottom-1 rounded-full border border-black/5 bg-white shadow-sm transition-transform duration-300 dark:border-white/10 dark:bg-[#2C2C2E]"
+        className="vf-widget-tray__tool-indicator"
         style={{
-          width: SEG_W,
           transform: `translateX(${idx * SEG_W}px)`,
-          transitionTimingFunction: EASE,
         }}
       />
       {TOOLS.map((t) => (
         <button
           key={t.id}
           type="button"
-          onClick={() => ce.ops.setTool(t.id)}
-          className={`relative z-10 py-1.5 text-[13px] font-medium transition-colors ${
-            active === t.id
-              ? "text-black dark:text-white"
-              : "text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80"
+          onClick={() => onChange(t.id)}
+          className={`vf-widget-tray__tool relative z-10 py-1.5 text-[13px] font-medium transition-colors ${
+            active === t.id ? "is-active" : ""
           }`}
-          style={{ width: SEG_W }}
           title={`${t.label} tool (${t.key})`}
         >
           {t.label}
@@ -510,6 +513,115 @@ function ToolSwitcher({ ce }: { ce: CanvasEngine }) {
 }
 
 // --- the morphing island -----------------------------------------------------
+
+/** One physical tray shell shared by the live engine controller and the
+ * design catalog. Its callers provide toolbar and tile content; this component
+ * exclusively owns the morph, material, layer order, and accessibility. */
+export function WidgetTrayFrame({
+  open,
+  onOpenChange,
+  toolbar,
+  children,
+  ghostLive = false,
+  panelRef,
+  backdropRef,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  toolbar: ReactNode;
+  children: ReactNode;
+  ghostLive?: boolean;
+  panelRef?: RefObject<HTMLDivElement | null>;
+  backdropRef?: RefObject<HTMLDivElement | null>;
+}): ReactElement {
+  return (
+    <>
+      <div
+        ref={backdropRef}
+        className={`vf-ui-backdrop absolute inset-0 z-40 transition-opacity duration-500 ${
+          open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => onOpenChange(false)}
+        aria-hidden
+      />
+
+      <div
+        ref={panelRef}
+        data-tray-panel=""
+        data-tray-open={open ? "true" : "false"}
+        data-hud-flight="bottom-center"
+        className="vf-widget-tray hud-flight absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden"
+      >
+        <div className="relative flex h-full w-full flex-col">
+          <button
+            type="button"
+            aria-label="Close the widget tray"
+            className={`absolute top-3 left-1/2 h-1.5 w-12 -translate-x-1/2 cursor-pointer rounded-full bg-black/20 transition-all duration-300 hover:bg-black/40 dark:bg-white/20 dark:hover:bg-white/40 ${
+              open ? "opacity-100 delay-200" : "pointer-events-none opacity-0"
+            }`}
+            onClick={() => onOpenChange(false)}
+          />
+
+          <button
+            type="button"
+            data-tray-toggle=""
+            onClick={() => onOpenChange(!open)}
+            className={`vf-widget-tray__toggle absolute z-50 flex items-center justify-center rounded-full ${
+              open
+                ? "top-5 right-8 h-10 w-10 rotate-[135deg] bg-black/5 text-black/70 shadow-none hover:bg-black/10 hover:text-black dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20 dark:hover:text-white"
+                : "top-2 right-2 h-12 w-12 rotate-0 bg-black text-white shadow-md hover:scale-105 hover:bg-black/90 active:scale-95 dark:bg-white dark:text-black dark:hover:bg-white/90"
+            }`}
+            title={open ? "Close (Esc)" : "Widget tray (B)"}
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              role="presentation"
+            >
+              <path
+                d="M12 5v14M5 12h14"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+
+          <div
+            className={`vf-widget-tray__header relative z-40 flex w-full shrink-0 items-center ${
+              open ? "h-20 px-8 pr-[100px]" : "h-16 px-2 pr-[64px]"
+            }`}
+          >
+            {toolbar}
+          </div>
+
+          <div
+            className={`vf-widget-tray__putback pointer-events-none absolute inset-0 z-[60] flex items-center justify-center text-[13px] font-medium backdrop-blur-xl transition-opacity duration-200 ${
+              ghostLive && !open ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <span className="rounded-full border border-dashed border-neutral-400/60 px-4 py-1.5 dark:border-neutral-500/60">
+              Release here to put it back
+            </span>
+          </div>
+
+          <div
+            className={`relative flex min-h-0 flex-1 flex-col transition-all duration-500 ease-out ${
+              open
+                ? "translate-y-0 opacity-100 delay-150"
+                : "pointer-events-none absolute inset-x-0 top-16 translate-y-12 opacity-0"
+            }`}
+          >
+            {children}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 
 export function WidgetTray({
   ce,
@@ -661,173 +773,66 @@ export function WidgetTray({
   }, [open, onOpenChange]);
 
   return (
-    <>
-      {/* Dimming backdrop — click closes; canvas rests while browsing. */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: Escape is the keyboard close; the backdrop click is a redundant pointer affordance */}
-      <div
-        ref={backdropRef}
-        className={`absolute inset-0 z-40 bg-black/10 transition-opacity duration-500 dark:bg-black/40 ${
-          open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-        }`}
-        onClick={() => onOpenChange(false)}
-        aria-hidden
-      />
-
-      {/* THE morphing island: toolbar pill ⇄ widget sheet, one element. */}
-      <div
-        ref={panelRef}
-        data-tray-panel=""
-        data-tray-open={open ? "true" : "false"}
-        data-hud-flight="bottom-center"
-        className={`hud-flight absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden border transition-all ${
-          open
-            ? "bottom-0 h-[60vh] w-[min(80%,64rem)] rounded-t-[2.5rem] rounded-b-none border-b-0 border-black/5 bg-white/90 shadow-[0_-20px_40px_rgba(0,0,0,0.08)] backdrop-blur-3xl dark:border-white/10 dark:bg-[#1C1C1E]/90 dark:shadow-[0_-20px_40px_rgba(0,0,0,0.4)]"
-            : "bottom-8 h-16 w-[440px] rounded-[32px] border-black/5 bg-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl hover:bg-white/90 dark:border-white/10 dark:bg-[#1C1C1E]/80 dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] dark:hover:bg-[#1C1C1E]/90"
-        }`}
-        style={{
-          transitionDuration: `${MORPH_MS}ms`,
-          transitionTimingFunction: EASE,
-          willChange: "width, height, bottom, border-radius",
-        }}
-      >
-        <div className="relative flex h-full w-full flex-col">
-          {/* Pull indicator (open only) — a real button: keyboard closes too. */}
+    <WidgetTrayFrame
+      open={open}
+      onOpenChange={onOpenChange}
+      ghostLive={ghostLive}
+      panelRef={panelRef}
+      backdropRef={backdropRef}
+      toolbar={
+        <>
+          <ToolSwitcher ce={ce} />
+          <div className="flex-1" />
           <button
             type="button"
-            aria-label="Close the widget tray"
-            className={`absolute top-3 left-1/2 h-1.5 w-12 -translate-x-1/2 cursor-pointer rounded-full bg-black/20 transition-all duration-300 hover:bg-black/40 dark:bg-white/20 dark:hover:bg-white/40 ${
-              open ? "opacity-100 delay-200" : "pointer-events-none opacity-0"
-            }`}
-            onClick={() => onOpenChange(false)}
-          />
-
-          {/* The morphing ⊕ (plus ⇄ close via 135° rotation). */}
-          <button
-            type="button"
-            data-tray-toggle=""
-            onClick={() => onOpenChange(!open)}
-            className={`absolute z-50 flex items-center justify-center rounded-full transition-all ${
-              open
-                ? "top-5 right-8 h-10 w-10 rotate-[135deg] bg-black/5 text-black/70 shadow-none hover:bg-black/10 hover:text-black dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20 dark:hover:text-white"
-                : "top-2 right-2 h-12 w-12 rotate-0 bg-black text-white shadow-md hover:scale-105 hover:bg-black/90 active:scale-95 dark:bg-white dark:text-black dark:hover:bg-white/90"
-            }`}
-            style={{ transitionDuration: `${MORPH_MS}ms`, transitionTimingFunction: EASE }}
-            title={open ? "Close (Esc)" : "Widget tray (B)"}
+            onClick={() => ce.ops.arrange()}
+            className="flex h-11 w-11 items-center justify-center rounded-full text-[17px] transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/10"
+            title="Clean up: pack widgets into tidy rows (arranges the selection when 2+ are selected)"
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-              role="presentation"
-            >
-              <path
-                d="M12 5v14M5 12h14"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            ✨
           </button>
-
-          {/* Always-visible header: tools + actions (the toolbar itself). */}
-          <div
-            className={`relative z-40 flex w-full shrink-0 items-center transition-all ${
-              open ? "h-20 px-8 pr-[100px]" : "h-16 px-2 pr-[64px]"
-            }`}
-            style={{ transitionDuration: `${MORPH_MS}ms`, transitionTimingFunction: EASE }}
+        </>
+      }
+    >
+      <div className="vf-no-scrollbar vf-mask-fade-right mb-3 flex w-full items-center gap-2 overflow-x-auto px-8">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setCategory(cat)}
+            aria-pressed={category === cat}
+            className="vf-widget-tray__category whitespace-nowrap px-4 py-1.5 text-[13px] active:scale-95"
           >
-            <ToolSwitcher ce={ce} />
-            <div className="flex-1" />
-            <button
-              type="button"
-              onClick={() => ce.ops.arrange()}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-[17px] transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/10"
-              title="Clean up: pack widgets into tidy rows (arranges the selection when 2+ are selected)"
-            >
-              ✨
-            </button>
-          </div>
-
-          {/* Put-back affordance: covers the toolbar while an insert drags. */}
-          <div
-            className={`pointer-events-none absolute inset-0 z-[60] flex items-center justify-center bg-white/90 text-[13px] font-medium text-neutral-500 backdrop-blur-xl transition-opacity duration-200 dark:bg-[#1C1C1E]/95 dark:text-neutral-300 ${
-              ghostLive && !open ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            <span className="rounded-full border border-dashed border-neutral-400/60 px-4 py-1.5 dark:border-neutral-500/60">
-              Release here to put it back
-            </span>
-          </div>
-
-          {/* Sheet content: categories + the iOS grid. */}
-          <div
-            className={`relative flex min-h-0 flex-1 flex-col transition-all duration-500 ease-out ${
-              open
-                ? "translate-y-0 opacity-100 delay-150"
-                : "pointer-events-none absolute inset-x-0 top-16 translate-y-12 opacity-0"
-            }`}
-          >
-            <div className="mb-3 flex w-full items-center gap-2 overflow-x-auto px-8 no-scrollbar mask-fade-right">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className={`whitespace-nowrap rounded-full border px-4 py-1.5 text-[13px] font-medium transition-all active:scale-95 ${
-                    category === cat
-                      ? "border-black bg-black text-white shadow-md dark:border-white dark:bg-white dark:text-black"
-                      : "border-black/5 bg-[#F2F2F7] text-black/70 hover:bg-[#E5E5EA] hover:text-black dark:border-white/5 dark:bg-[#2C2C2E]/50 dark:text-white/70 dark:hover:bg-[#2C2C2E] dark:hover:text-white"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-            <div className="flex-1 overflow-y-auto px-8 no-scrollbar mask-fade-bottom">
-              <div
-                className="w-full pt-4 pb-28"
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: `repeat(auto-fill, ${CELL}px)`,
-                  gridAutoRows: `${CELL}px`,
-                  gridAutoFlow: "row dense", // small tiles backfill the span gaps
-                  columnGap: GAP,
-                  rowGap: GAP,
-                  justifyContent: "center",
-                }}
-              >
-                {shown.map((entry, i) => (
-                  <Tile
-                    key={entry.type}
-                    ce={ce}
-                    entry={entry}
-                    panelRef={panelRef}
-                    onHandoff={handoff}
-                    open={open}
-                    index={i}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
+            {cat}
+          </button>
+        ))}
+      </div>
+      <div className="vf-no-scrollbar vf-mask-fade-bottom flex-1 overflow-y-auto px-8">
+        <div
+          className="w-full pt-4 pb-28"
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(auto-fill, ${CELL}px)`,
+            gridAutoRows: `${CELL}px`,
+            gridAutoFlow: "row dense",
+            columnGap: GAP,
+            rowGap: GAP,
+            justifyContent: "center",
+          }}
+        >
+          {shown.map((entry, i) => (
+            <Tile
+              key={entry.type}
+              ce={ce}
+              entry={entry}
+              panelRef={panelRef}
+              onHandoff={handoff}
+              open={open}
+              index={i}
+            />
+          ))}
         </div>
       </div>
-
-      {/* Reference utility styles (scrollbar hiding + edge fade masks). */}
-      <style>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .mask-fade-right {
-          mask-image: linear-gradient(to right, black 85%, transparent 100%);
-          -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
-        }
-        .mask-fade-bottom {
-          mask-image: linear-gradient(to bottom, black 70%, transparent 97%);
-          -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 97%);
-        }
-      `}</style>
-    </>
+    </WidgetTrayFrame>
   );
 }

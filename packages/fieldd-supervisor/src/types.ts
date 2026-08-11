@@ -35,6 +35,9 @@ export type ProbeFailure =
   | "incompatible-contracts"
   /** a development daemon was produced by a different watched build */
   | "incompatible-build"
+  /** UA-2 — the daemon serves a different user than this supervisor resolved;
+   * adopting it would cross the user partition */
+  | "user-mismatch"
   | "probe-timeout";
 
 export class SupervisorError extends Error {
@@ -69,6 +72,7 @@ export type SupervisorLifecycleEventName =
   | "fieldd.supervisor.spawn_race_lost"
   | "fieldd.supervisor.ready"
   | "fieldd.supervisor.stop_requested"
+  | "fieldd.supervisor.shutdown_requested_rpc"
   | "fieldd.supervisor.force_killed"
   | "fieldd.supervisor.stopped"
   | "fieldd.supervisor.disposed";
@@ -113,6 +117,10 @@ export interface FielddSupervisorOptions {
   /** Development-only build identity. When set, adoption requires an exact
    * match and spawned fieldd receives it as FIELDD_BUILD_ID. */
   expectedBuildId?: string;
+  /** UA-2 — the attached user this pair must serve (users.json userId). When
+   * set, adoption requires product.json to record exactly it, and spawned
+   * fieldd receives it as FIELDD_USER_ID. */
+  userId?: string;
   /** production: leave-running (daemon lifetime > shell lifetime, design-00);
    * dev/smoke: stop-owned tears down what THIS supervisor spawned — never an
    * adopted process. */

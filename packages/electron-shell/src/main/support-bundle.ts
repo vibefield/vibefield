@@ -16,6 +16,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
 import { verifyAuditSegment } from "@vibefield/audit/verify";
+import { LAYOUT } from "@vibefield/contracts";
 import {
   type SupportBundleExportResultV1 as SupportBundleExportResult,
   SupportBundleExportResultV1,
@@ -459,7 +460,7 @@ export class SupportBundleService {
       now?: () => number;
     },
   ) {
-    this.stagingRoot = join(options.dataRoot, "exports", ".staging");
+    this.stagingRoot = join(options.dataRoot, ...LAYOUT.EXPORTS_STAGING_DIR);
     this.now = options.now ?? Date.now;
   }
 
@@ -689,7 +690,7 @@ export class SupportBundleService {
     }
 
     if (selection.includeAudit) {
-      const auditRoot = join(this.options.dataRoot, "audit");
+      const auditRoot = join(this.options.dataRoot, ...LAYOUT.AUDIT_DIR);
       let entries: Dirent<string>[];
       try {
         const rootInfo = await lstat(auditRoot);

@@ -16,6 +16,7 @@ window.addEventListener("pagehide", () => logging.close(), { once: true });
 mountFieldApp({
   container: root,
   host: {
+    forceOnboarding: __VIBEFIELD_FORCE_ONBOARDING__,
     platform: window.vibefield.platform,
     logger: logging.logger,
     diagnostics: {
@@ -40,6 +41,15 @@ mountFieldApp({
       copyText: (text) => window.vibefield.diagnostics.copyText(text),
     },
     getConnection: () => window.vibefield.getConnection(),
+    // UA-3 — the Account page's profile door (host.ts declares it optional;
+    // this adapter is the one place the preload global becomes FieldHost)
+    usersUpdate: (params) => window.vibefield.usersUpdate(params),
+    // UA-5 — the rest of the same door: read the roster, mint, re-target. The
+    // last two reload this window, so the app treats them as fire-and-forget
+    // (host.ts states the rule).
+    usersList: () => window.vibefield.usersList(),
+    usersCreate: (params) => window.vibefield.usersCreate(params),
+    usersSwitch: (params) => window.vibefield.usersSwitch(params),
     onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
     completeClose: (result) => window.vibefield.completeClose(result),
     onShellCommand: (handler) => window.vibefield.onShellCommand(handler),

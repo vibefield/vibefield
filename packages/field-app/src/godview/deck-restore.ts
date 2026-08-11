@@ -84,35 +84,110 @@ export function restoreQuestion(
   return { saved: unique.length, alive, dead: unique.length - alive };
 }
 
-/** A persisted pane's cwd as a FILESYSTEM PATH, or null if there is not one.
+/** Where this device's own shells say they are, remembered from a pane the deck
+ * knew was local. Viewer-local device state, so it lives beside the deck's
+ * layout rather than in any document a daemon owns. */
+const DEVICE_HOST_STORAGE_KEY = "vf-godview-device-host-v1";
+
+/** The host a `file://` URL names, normalized for comparison: lower-cased, with
+ * the trailing dot an FQDN may carry removed. Empty for a plain path, for a
+ * hostless `file:///…`, and for `localhost` — RFC 8089 reads all three as "the
+ * machine reading this", which is what makes them safe to spawn on. */
+export function paneCwdHost(value: string): string {
+  if (value.startsWith("/")) return "";
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "file:") return "";
+    const host = url.hostname.replace(/\.$/, "").toLowerCase();
+    return host === "localhost" ? "" : host;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * This device's name as its own shells announce it, or null before one has.
  *
- * This exists because of what the floor actually reports, which is not what the
- * field name suggests: a session's `cwd` is whatever the shell announced over
- * OSC 7, verbatim, and that is a URL — `file://Jamess-MacBook-Pro.local/Users/
- * jamesyong`, percent-encoded, host and all. (It is also the ONLY source: a
- * session's spawn directory is not reported, so a shell with no integration
- * emitting OSC 7 has no cwd at all, and its restored pane honestly lands at
- * home.) Handing that string to a spawn's `cwd` would fail to chdir and the
- * pane would be dropped instead of relaunched — silently, because a failed
- * rehydration is a dropped pane by design.
+ * There is no contract that hands the renderer a hostname — main answers the
+ * connect with `defaultShell` and `home` and nothing else — so this is learned
+ * rather than asked for: the first LOCAL pane whose shell emits OSC 7 names
+ * this machine in its own cwd, and that name is kept. A machine renamed later
+ * heals on the next save; until it does, its panes restore at home, which is
+ * the degraded answer and not the wrong one.
+ */
+export function readDeviceHost(): string | null {
+  try {
+    const stored = localStorage.getItem(DEVICE_HOST_STORAGE_KEY);
+    return stored === null || stored === "" ? null : stored;
+  } catch {
+    return null;
+  }
+}
+
+/** Learn this device's host from a pane the caller KNOWS is local. Callers must
+ * not pass a replica's cwd: a peer's name stored here would make every one of
+ * that peer's paths look like ours. */
+export function rememberDeviceHost(cwd: string | null | undefined): void {
+  if (typeof cwd !== "string" || cwd === "") return;
+  const host = paneCwdHost(cwd);
+  // Compared against STORAGE rather than a module cache: this runs on the
+  // persist path, so the read is worth its cost to keep the answer a fact about
+  // what is stored instead of about what this module last did.
+  if (host === "" || host === readDeviceHost()) return;
+  try {
+    localStorage.setItem(DEVICE_HOST_STORAGE_KEY, host);
+  } catch {
+    // A page with no storage restores at home. Honest, and not worth a face.
+  }
+}
+
+/** A persisted pane's cwd as a LOCAL FILESYSTEM PATH, or null if there is not
+ * one — including the case this function exists to catch: a path on ANOTHER
+ * MACHINE.
+ *
+ * What the floor reports is not what the field name suggests: a session's `cwd`
+ * is whatever the shell announced over OSC 7, verbatim, and that is a URL —
+ * `file://Jamess-MacBook-Pro.local/Users/jamesyong`, percent-encoded, host and
+ * all. (It is also the ONLY source: a session's spawn directory is not
+ * reported, so a shell with no integration emitting OSC 7 has no cwd at all,
+ * and its restored pane honestly lands at home.) Handing that string to a
+ * spawn's `cwd` would fail to chdir and the pane would be dropped instead of
+ * relaunched — silently, because a failed rehydration is a dropped pane by
+ * design.
  *
  * Both shapes are accepted, because a later ghosttea reporting a plain path
  * must not break this, and a tolerant reader does not insist on the shape it
  * happens to see today.
  *
- * Named residual: a `file://` URL carries the HOST that reported it, and this
- * ignores it. Every pane is local today (`enableRemoteSessions` is off until
- * GT-4), so there is nothing yet to confuse — but when remote panes light up, a
- * peer's path used locally is a real mistake and this is where it would be
- * caught, by comparing that host against this device's.
+ * THE HOST IS CONSULTED, in two ways, and this is no longer the conditional the
+ * GT-3 comment left here (see the 2026-08-06 erratum: the spec read that TODO
+ * as a safeguard that existed, and GT-4 then lit up remote panes against it):
+ *
+ *   1. `remoteDevice` — stamped into the meta by the deck at persist time for a
+ *      pane showing a PEER'S replica. Positive knowledge, taken at the one
+ *      moment it is certain, and the branch that makes the promise true.
+ *   2. the URL's own host against `localHost`. A foreign host is refused; an
+ *      empty host and `localhost` are this machine by RFC 8089.
+ *
+ * With no `localHost` learned yet, a hosted URL is accepted — the pre-GT-5c
+ * behaviour, reachable only by a layout persisted before this slice, and by
+ * then rule 1 covers every pane written since.
  */
-export function paneCwd(meta: unknown): string | null {
-  const value = (meta as { cwd?: unknown } | null)?.cwd;
+export function paneCwd(meta: unknown, localHost?: string | null): string | null {
+  const record = meta as { cwd?: unknown; remoteDevice?: unknown } | null;
+  // A peer's pane. Its path is a path on that peer, and a local shell opened in
+  // it is either the wrong machine's directory or a spawn failure — which is a
+  // silently dropped pane. Home is the honest answer for both.
+  if (typeof record?.remoteDevice === "string" && record.remoteDevice !== "") return null;
+  const value = record?.cwd;
   if (typeof value !== "string" || value === "") return null;
   if (value.startsWith("/")) return value;
   try {
     const url = new URL(value);
     if (url.protocol !== "file:") return null;
+    const host = paneCwdHost(value);
+    const here = localHost === undefined || localHost === null ? "" : localHost.toLowerCase();
+    if (host !== "" && here !== "" && host !== here.replace(/\.$/, "")) return null;
     const path = decodeURIComponent(url.pathname);
     return path === "" ? null : path;
   } catch {
@@ -122,7 +197,12 @@ export function paneCwd(meta: unknown): string | null {
 
 /** The consent face's fact line. Sentence-shaped rather than a template with
  * holes: "1 pane" and "2 panes" both have to read like English, and a user
- * about to relaunch shells in folders is owed a sentence, not a legend. */
+ * about to relaunch shells in folders is owed a sentence, not a legend.
+ *
+ * `on this machine` is the correction the erratum asked for and not a flourish:
+ * a pane can only be relaunched in the folder it left when that folder is HERE,
+ * and a pane that was a peer's — or whose shell never announced one — starts at
+ * home instead. The old sentence promised the folder unconditionally. */
 export function restoreSentence(question: RestoreQuestion): string {
   const panes = (count: number): string => `${count} pane${count === 1 ? "" : "s"}`;
   const rejoin =
@@ -131,6 +211,6 @@ export function restoreSentence(question: RestoreQuestion): string {
       : `${panes(question.alive)} ${question.alive === 1 ? "is" : "are"} still running and rejoin`;
   const relaunch = `${panes(question.dead)} ended — restoring opens a new shell in ${
     question.dead === 1 ? "its folder" : "their folders"
-  }`;
+  } on this machine, at home where there is none`;
   return `${rejoin} · ${relaunch}`;
 }

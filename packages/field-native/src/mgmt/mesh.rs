@@ -68,11 +68,19 @@ pub async fn handle(
         handle_lane(state, tx, method, params, id).await;
         return;
     }
+    if method == "native.mesh.retire" {
+        // UA-3 unlink — answered BEFORE the node gate, like lane control:
+        // retiring a half-authed or disabled mesh must still archive its
+        // state; the one moment retire matters most is when no node is up.
+        send(tx, retire_identity(state, id).await);
+        return;
+    }
     let Some(node) = state.mesh.node() else {
         send(tx, unavailable(state, id));
         return;
     };
     let resp = match method {
+        "native.mesh.self" => ok(id, self_identity(&node).await),
         "native.mesh.peers.list" => ok(id, json!({ "peers": list_peers(&node).await })),
         "native.mesh.peers.subscribe" => {
             let sub_id = state.sub_id();
@@ -418,6 +426,71 @@ fn spawn_lane_forwarder(
             }
         }
     });
+}
+
+/// UA-3 — the node's OWN identity incl. the S1 self-whois login: the sidecar
+/// answers WhoIs for the local address (self resolves at every lookup step —
+/// tailscale#19894 guarantees the self user-profile in the netmap). Absent
+/// fields are ABSENT, never synthesized (EL7); a tagged node yields no login
+/// and the caller treats that as a typed pre-capture state.
+async fn self_identity(node: &Arc<MeshNode>) -> Value {
+    let info = node.local_info();
+    let mut out = json!({ "deviceId": info.device_id });
+    if !info.device_name.is_empty() {
+        out["deviceName"] = json!(info.device_name);
+    }
+    if let Some(dns) = info.dns_name.clone().filter(|d| !d.is_empty()) {
+        out["dnsName"] = json!(dns);
+    }
+    if !info.tailscale_id.is_empty() {
+        out["tailscaleId"] = json!(info.tailscale_id);
+    }
+    if let Some(ip) = info.ip {
+        out["ip"] = json!(ip.to_string());
+        if let Ok(Some(identity)) = node.whois(&ip.to_string()).await {
+            if let Some(login) = identity.login_name.filter(|l| !l.is_empty()) {
+                out["login"] = json!(login);
+            }
+        }
+    }
+    out
+}
+
+/// UA-3 unlink, mgmt half: lifecycle through the handle (drop node, kill
+/// sidecar, mark retired), then archive the state dir beside itself. The
+/// sidecar's death is asynchronous (kill_on_drop), so the rename retries a
+/// few beats before reporting an honest INTERNAL.
+async fn retire_identity(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
+    let Some(dir) = state.mesh.retire().await else {
+        return ok(id, json!({ "retired": false, "archivedTo": Value::Null }));
+    };
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let target = dir.with_file_name(format!("mesh.retired-{secs}"));
+    let mut result = std::fs::rename(&dir, &target);
+    for _ in 0..4 {
+        if result.is_ok() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        result = std::fs::rename(&dir, &target);
+    }
+    match result {
+        Ok(()) => ok(
+            id,
+            json!({ "retired": true, "archivedTo": target.display().to_string() }),
+        ),
+        Err(e) => err(
+            id,
+            "INTERNAL",
+            -32000,
+            &format!("retire could not archive the mesh state dir: {e}"),
+            false,
+            None,
+        ),
+    }
 }
 
 /// UNAVAILABLE carrying the mesh unit's live state (+authUrl) — the C1 shape.
@@ -1050,6 +1123,25 @@ mod tests {
     //! integration harness.
     use super::*;
 
+    // Serve dir paths are validated with `Path::is_absolute`, which is
+    // platform-aware: `/srv/pub` is absolute on unix but NOT on Windows (no
+    // drive letter). The fixtures use a per-platform absolute dir so the LAW
+    // under test — an absolute dir builds a static route — is identical on both.
+    // Route PREFIXES and URL fallbacks (`/index.html`) are URL paths, not
+    // filesystem paths, and stay literal.
+    #[cfg(unix)]
+    const PUB_DIR: &str = "/srv/pub";
+    #[cfg(windows)]
+    const PUB_DIR: &str = r"C:\srv\pub";
+    #[cfg(unix)]
+    const PREVIEW_1_DIR: &str = "/var/lib/vibefield/previews/01";
+    #[cfg(windows)]
+    const PREVIEW_1_DIR: &str = r"C:\ProgramData\vibefield\previews\01";
+    #[cfg(unix)]
+    const PREVIEW_2_DIR: &str = "/var/lib/vibefield/previews/02";
+    #[cfg(windows)]
+    const PREVIEW_2_DIR: &str = r"C:\ProgramData\vibefield\previews\02";
+
     #[test]
     fn public_store_slice_limits_are_enforced_before_management_projection() {
         let artifact_ok = json!({"v": 1, "artifacts": []});
@@ -1139,7 +1231,7 @@ mod tests {
 
     #[test]
     fn dir_with_secret_is_rejected() {
-        let target = json!({"kind": "dir", "path": "/srv/pub"});
+        let target = json!({"kind": "dir", "path": PUB_DIR});
         let err = build_serve_config(ServeConfigInput {
             path_secret: Some("nope"),
             ..serve_input("static", &target)
@@ -1153,7 +1245,7 @@ mod tests {
 
     #[test]
     fn dir_plain_builds_static_route() {
-        let target = json!({"kind": "dir", "path": "/srv/pub"});
+        let target = json!({"kind": "dir", "path": PUB_DIR});
         let cfg = build_serve_config(ServeConfigInput {
             allow: vec!["*@corp.com".into()],
             ..serve_input("static", &target)
@@ -1161,7 +1253,7 @@ mod tests {
         .expect("dir config builds");
         assert_eq!(cfg.routes.len(), 1);
         assert_eq!(cfg.routes[0].prefix, "/");
-        assert_eq!(cfg.routes[0].dir.as_deref(), Some("/srv/pub"));
+        assert_eq!(cfg.routes[0].dir.as_deref(), Some(PUB_DIR));
         assert_eq!(cfg.allow, vec!["*@corp.com".to_string()]);
         assert_eq!(cfg.listen_port, 0);
     }
@@ -1280,7 +1372,7 @@ mod tests {
         let cfg = build_serve_config(ServeConfigInput {
             name: "artifact:01ARZ3NDEKTSV4RRFFQ69G5FAV",
             listen_port: Some(12_345),
-            preview_dir: Some("/var/lib/vibefield/previews/01"),
+            preview_dir: Some(PREVIEW_1_DIR),
             allow: vec!["*@corp.com".into()],
             tls: Some(true),
             ..serve_input("artifact-01-fingerprint", &target)
@@ -1292,10 +1384,7 @@ mod tests {
         assert!(cfg.tls);
         assert_eq!(cfg.routes.len(), 2);
         assert_eq!(cfg.routes[0].prefix, "/.vibefield/preview");
-        assert_eq!(
-            cfg.routes[0].dir.as_deref(),
-            Some("/var/lib/vibefield/previews/01")
-        );
+        assert_eq!(cfg.routes[0].dir.as_deref(), Some(PREVIEW_1_DIR));
         assert_eq!(cfg.routes[1].prefix, "/");
         assert_eq!(
             cfg.routes[1].target_url.as_deref(),
@@ -1306,18 +1395,18 @@ mod tests {
 
     #[test]
     fn artifact_folder_uses_stable_port_and_optional_spa_fallback() {
-        let target = json!({"kind": "dir", "path": "/srv/pub", "fallback": "/index.html"});
+        let target = json!({"kind": "dir", "path": PUB_DIR, "fallback": "/index.html"});
         let cfg = build_serve_config(ServeConfigInput {
             name: "artifact:01ARZ3NDEKTSV4RRFFQ69G5FAW",
             listen_port: Some(19_999),
-            preview_dir: Some("/var/lib/vibefield/previews/02"),
+            preview_dir: Some(PREVIEW_2_DIR),
             tls: Some(true),
             ..serve_input("artifact-folder-fingerprint", &target)
         })
         .expect("AH folder config builds");
         assert_eq!(cfg.listen_port, 19_999);
         assert_eq!(cfg.routes.len(), 2);
-        assert_eq!(cfg.routes[1].dir.as_deref(), Some("/srv/pub"));
+        assert_eq!(cfg.routes[1].dir.as_deref(), Some(PUB_DIR));
         assert_eq!(cfg.routes[1].fallback.as_deref(), Some("/index.html"));
     }
 }

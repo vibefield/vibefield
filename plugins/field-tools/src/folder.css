@@ -1,0 +1,75 @@
+.vf-folder-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  color: var(--vf-folder-ink);
+  box-shadow: inset 0 0 0 1px rgb(160 165 210 / 14%);
+  font-family: var(--vf-font-sans);
+}
+
+.vf-folder-card__portal {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 7px;
+  background:
+    radial-gradient(rgb(150 158 210 / 12%) 1px, transparent 1px) 0 0 / 14px 14px,
+    var(--vf-folder-portal);
+}
+
+.vf-folder-card__mini {
+  position: absolute;
+  box-shadow:
+    inset 0 0 0 1px rgb(235 240 255 / 10%),
+    0 2px 6px rgb(0 0 0 / 40%);
+}
+
+.vf-folder-card__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vf-folder-muted);
+  font-size: 11px;
+}
+
+.vf-folder-card__bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  height: var(--vf-folder-bar-height);
+  box-sizing: border-box;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.vf-folder-card__icon {
+  flex: none;
+}
+
+.vf-folder-card__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.vf-folder-card__count {
+  display: inline-flex;
+  min-width: 24px;
+  height: 17px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--vf-folder-accent);
+  background: color-mix(in srgb, var(--vf-folder-accent) 16%, transparent);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

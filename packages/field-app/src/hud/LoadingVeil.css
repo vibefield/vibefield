@@ -1,0 +1,33 @@
+.vf-loading-veil {
+  position: absolute;
+  z-index: 80;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    circle at 50% 42%,
+    color-mix(in srgb, var(--vf-canvas-bg), white 3%) 0%,
+    var(--vf-canvas-bg) 68%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 380ms var(--vf-ease-island);
+}
+
+.vf-loading-veil[data-visible="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  transition-duration: 220ms;
+}
+
+.vf-loading-veil__progress {
+  transition: width 240ms var(--vf-ease-island);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-loading-veil,
+  .vf-loading-veil__progress {
+    transition-duration: 90ms;
+  }
+}

@@ -7,27 +7,30 @@
 //     a bare daemon cannot produce because inbound delivery needs a transport
 //     and there is no mesh node in tests. The fake is not a shortcut around the
 //     real thing; it is the only way to drive bytes INTO fieldd today.
-import { type ChildProcess, execSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { type ChildProcess, spawn } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { encodeMeshDataFrame, MESHDATA_FRAME, MeshDataFrameReader } from "@vibefield/contracts";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  encodeMeshDataFrame,
+  isPipeEndpoint,
+  MESHDATA_FRAME,
+  MeshDataFrameReader,
+  SOCKETS,
+} from "@vibefield/contracts";
+import { afterEach, describe, expect, it } from "vitest";
 import { MeshLaneLink, type MeshLaneLinkOptions } from "../src/mesh-lane";
 import { NativeLink } from "../src/native-link";
+import { nativeBinPath, nativeEndpoint, waitForEndpoint } from "./native-harness";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const BIN = join(ROOT, "target/debug/field-native");
+const BIN = nativeBinPath(ROOT);
 
 let children: ChildProcess[] = [];
 let dirs: string[] = [];
 let closers: (() => void)[] = [];
-
-beforeAll(() => {
-  execSync("cargo build -p field-native", { cwd: ROOT, stdio: "ignore" });
-}, 180_000);
 
 afterEach(async () => {
   for (const c of closers) c();
@@ -78,13 +81,9 @@ async function spawnNative(): Promise<string> {
   // It survived on timing and failed under parallel suite load as ECONNREFUSED,
   // which reads as a daemon fault rather than as a harness that started early.
   // Waiting on both is also order-proof: whichever binds last, this still holds.
-  const sockets = ["meshdata.sock", "mgmt.sock"].map((s) => join(dir, "native/run", s));
   const deadline = Date.now() + 10_000;
-  for (const socket of sockets) {
-    while (!existsSync(socket)) {
-      if (Date.now() > deadline) throw new Error(`${socket} never appeared`);
-      await new Promise((r) => setTimeout(r, 50));
-    }
+  for (const socketFile of [SOCKETS.MESHDATA, SOCKETS.MGMT]) {
+    await waitForEndpoint(nativeEndpoint(dir, socketFile), Math.max(0, deadline - Date.now()));
   }
   return dir;
 }
@@ -106,7 +105,13 @@ async function fakeBridge(): Promise<{
   received: () => { laneId: number; payload: Uint8Array }[];
 }> {
   const dir = tmp("fake");
-  const socketPath = join(dir, "meshdata.sock");
+  // The fake binds the endpoint the real bridge would, by the same law (WIN-D1):
+  // the meshdata path under this root on unix — whose run dir no field-native
+  // was here to create — and a root-scoped pipe name on win32, where
+  // `net.Server.listen` cannot take a filesystem path at all. An ad-hoc temp
+  // root is fine: it only contributes the scope hash that keeps the name unique.
+  const endpoint = nativeEndpoint(dir, SOCKETS.MESHDATA);
+  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
   const pairingFile = join(dir, "pairing");
   writeFileSync(pairingFile, "ab".repeat(32));
 
@@ -128,14 +133,14 @@ async function fakeBridge(): Promise<{
       }
     });
   });
-  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+  await new Promise<void>((resolve) => server.listen(endpoint, resolve));
   closers.push(() => {
     client?.destroy();
     server.close();
   });
 
   return {
-    socketPath,
+    socketPath: endpoint,
     pairingFile,
     sendData: (laneId, payload) =>
       client?.write(encodeMeshDataFrame(MESHDATA_FRAME.DATA, laneId, payload)),
@@ -151,7 +156,7 @@ describe("MeshLaneLink ⇄ the real Rust bridge", () => {
   it("authenticates with the mgmt channel's own pairing scheme", async () => {
     const dir = await spawnNative();
     const l = link({
-      socketPath: join(dir, "native/run/meshdata.sock"),
+      socketPath: nativeEndpoint(dir, SOCKETS.MESHDATA),
       pairingFile: join(dir, "native/pairing"),
     });
     await l.connect();
@@ -165,7 +170,7 @@ describe("MeshLaneLink ⇄ the real Rust bridge", () => {
     const pairingFile = join(dir, "native/pairing");
     const real = readFileSync(pairingFile, "utf8");
     writeFileSync(pairingFile, "00".repeat(32));
-    const l = link({ socketPath: join(dir, "native/run/meshdata.sock"), pairingFile });
+    const l = link({ socketPath: nativeEndpoint(dir, SOCKETS.MESHDATA), pairingFile });
     await expect(l.connect()).rejects.toThrow(/refused|timed out/);
     expect(l.connected).toBe(false);
     writeFileSync(pairingFile, real);
@@ -174,7 +179,7 @@ describe("MeshLaneLink ⇄ the real Rust bridge", () => {
   it("gets a lane-scoped error for an unopened lane and keeps the socket", async () => {
     const dir = await spawnNative();
     const l = link({
-      socketPath: join(dir, "native/run/meshdata.sock"),
+      socketPath: nativeEndpoint(dir, SOCKETS.MESHDATA),
       pairingFile: join(dir, "native/pairing"),
     });
     await l.connect();
@@ -193,7 +198,7 @@ describe("MeshLaneLink ⇄ the real Rust bridge", () => {
     // doors to one daemon, which is the D5 split this asserts end to end.
     const dir = await spawnNative();
     const native = new NativeLink({
-      socketPath: join(dir, "native/run/mgmt.sock"),
+      socketPath: nativeEndpoint(dir, SOCKETS.MGMT),
       pairingFile: join(dir, "native/pairing"),
       bootId: "fieldd-lane-test",
       reconnect: false,
@@ -215,7 +220,7 @@ describe("MeshLaneLink ⇄ the real Rust bridge", () => {
   it("reports the daemon going away", async () => {
     const dir = await spawnNative();
     const l = link({
-      socketPath: join(dir, "native/run/meshdata.sock"),
+      socketPath: nativeEndpoint(dir, SOCKETS.MESHDATA),
       pairingFile: join(dir, "native/pairing"),
     });
     await l.connect();

@@ -13,13 +13,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   DOC_SYNC_RECORD,
+  type DocSyncIntent,
   decodeDocSyncDigest,
   decodeDocSyncRecord,
   encodeDocSyncHave,
   encodeDocSyncRecord,
   MESHDATA_INBOUND_LANE_ID_BASE,
+  type MeshSyncPosture,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import { resolveSyncIntent } from "../src/app-preferences";
 import { contentIdOf, DocumentService } from "../src/doc-service";
 import { DocSyncService, type LaneBytes, type LaneControl, type LaneInfo } from "../src/doc-sync";
 
@@ -119,13 +122,19 @@ function harness(peerIds: string[] = ["peer-a"]) {
   const docs = new DocumentService({ dataDir, onCommit: (c) => sync?.onCommit(c) });
   /** id → online; tests flip entries to take a peer off the mesh (C6-4). */
   const peerState = new Map(peerIds.map((id) => [id, true]));
+  /** UA-6: the daemon's own fold, in miniature — the doc's answer over the
+   * user's posture. Wiring the REAL resolver here is the point: a test that
+   * injected a hand-written predicate would prove the gates work and say
+   * nothing about whether the daemon asks them the right question. */
+  const posture = { value: "automatic" as MeshSyncPosture };
   sync = new DocSyncService({
     docs,
     control,
     bytes,
     peers: async () => [...peerState].map(([id, online]) => ({ id, online })),
+    resolveIntent: (docId) => resolveSyncIntent(docs.syncIntentOf(docId), posture.value),
   });
-  return { docs, control, bytes, sync, peerState };
+  return { docs, control, bytes, sync, peerState, posture };
 }
 
 /** The C6-4 fold for one doc, as `doc.sync.subscribe` would publish it. */
@@ -133,8 +142,11 @@ function stateOf(sync: DocSyncService, docId: string): string | undefined {
   return sync.statuses().find((s) => s.docId === docId)?.state;
 }
 
-async function seeded(docs: DocumentService): Promise<string> {
+async function seeded(docs: DocumentService, intent?: DocSyncIntent): Promise<string> {
   const entry = await docs.create("board");
+  // Before the first commit, deliberately: the gates must be in force for the
+  // save that CREATES the content, not merely for the ones after it.
+  if (intent !== undefined) await docs.setSyncIntent(entry.docId, intent);
   await docs.writeDoc(entry.docId, ice1(), {
     revisionId: randomUUID(),
     kind: "checkpoint",
@@ -363,7 +375,11 @@ describe("broadcasting what we commit", () => {
     bytes.deliver(laneId, record(payload));
     await new Promise((r) => setTimeout(r, 120));
     expect((await docs.readDoc(docId))?.updates).toHaveLength(1);
-    expect(stateOf(sync, docId)).toBe("in-step"); // a redelivery is not a problem
+    // a redelivery is not a problem — the doc must REACH in step. Awaited
+    // rather than read at a deadline: `syncing` derives from work still in
+    // flight, so under a loaded machine a fixed sleep was reading the queue's
+    // depth, not the protocol's answer (it flaked in a full-workspace run).
+    await until(() => stateOf(sync, docId) === "in-step", "the redelivery to settle");
   });
 
   it("reuses the lane for later commits and sends only the new record", async () => {
@@ -685,5 +701,166 @@ describe("the honest sync state (C6-4)", () => {
     const laneId = control.opened[0]?.laneId as number;
     control.announce({ kind: "closed", laneId, reason: "peer-unreachable" });
     await until(() => stateOf(sync, docId) === "peer-offline", "the unreachable fact");
+  });
+});
+
+describe("sync intent — a doc that stays home (UA-D7)", () => {
+  it("opens no lane for a local doc, however many times it is saved", async () => {
+    // Gate (a). Not "opens one and sends nothing": the lane itself is traffic a
+    // peer can see, and a doc that is staying home should be invisible on the
+    // mesh rather than quietly present on it.
+    const { docs, control, bytes, sync } = harness();
+    await sync.start();
+    const docId = await seeded(docs, "local");
+    await docs.writeDoc(docId, new Uint8Array([1, 2, 3]), {
+      revisionId: randomUUID(),
+      kind: "update",
+      baseRevisionId: (await docs.readDocMeta(docId))?.revisionId,
+      engineSchema: 11,
+      savedAt: 2,
+      byteLength: 3,
+    });
+    // Generous, because the failure mode this guards is a LATE lane: the work
+    // queue is async and an assertion that fired immediately would pass even
+    // with every gate removed.
+    await new Promise((r) => setTimeout(r, 120));
+    expect(control.opened).toHaveLength(0);
+    expect(bytes.sent).toHaveLength(0);
+  });
+
+  it("refuses the lane a peer opens for it, and opens no lane back", async () => {
+    // Gate (b). The return lane matters as much as the handler: claiming used
+    // to answer a peer's greeting with one, which for a local doc would put it
+    // on the wire by way of being polite.
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs, "local");
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 5;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    await new Promise((r) => setTimeout(r, 120));
+    expect(bytes.claimed(laneId)).toBe(false);
+    expect(control.opened).toHaveLength(0);
+  });
+
+  it("keeps a local doc out of the published fold entirely", async () => {
+    // EL5. A gated doc can never reach in-step, pending, or anything else here,
+    // so a row for it would be a state it is not in. The absence IS the
+    // statement — the same argument that keeps `solo` off the wire.
+    const { docs, control, sync } = harness();
+    const docId = await seeded(docs, "local");
+    await sync.start();
+    control.announce({
+      kind: "peerOpened",
+      laneId: MESHDATA_INBOUND_LANE_ID_BASE + 6,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    await new Promise((r) => setTimeout(r, 120));
+    expect(sync.statuses().find((s) => s.docId === docId)).toBeUndefined();
+  });
+
+  it("stands the refusal up as peer-declined once the doc syncs again", async () => {
+    // The refusal is recorded while it is invisible, and that is deliberate:
+    // flip the doc back and the standing difference is what shows — "records
+    // were refused while this stayed home, the devices may differ" — through
+    // the EXISTING derivation, with `local-only` carried verbatim as the
+    // reason. No new state was added for any of this.
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs, "local");
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 7;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    await until(
+      () => sync.statuses().length === 0 && !bytes.claimed(laneId),
+      "the lane to be refused",
+    );
+
+    await docs.setSyncIntent(docId, "sync");
+    const status = sync.statuses().find((s) => s.docId === docId);
+    expect(status?.state).toBe("peer-declined");
+    expect(status?.reason).toBe("local-only");
+  });
+
+  it("stops accepting records on a lane it had already claimed", async () => {
+    // Intent flips while a lane is live and its handler is registered. "Keep
+    // this local" has to bind to the DOC, not to the lanes that happened to
+    // exist when it was said.
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 8;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    bytes.deliver(laneId, record(new Uint8Array([4, 4])));
+    await until(
+      async () => (await docs.readDoc(docId))?.updates.length === 1,
+      "the first record to land while the doc still syncs",
+    );
+
+    await docs.setSyncIntent(docId, "local");
+    bytes.deliver(laneId, record(new Uint8Array([5, 5, 5])));
+    await new Promise((r) => setTimeout(r, 120));
+    expect((await docs.readDoc(docId))?.updates).toHaveLength(1);
+  });
+
+  it("lets the posture answer for a doc that never said anything", async () => {
+    // opt-in means "ask me": silence is local. An explicit `sync` still wins
+    // over it, because the doc's own answer is the more specific one.
+    const { docs, control, sync, posture } = harness();
+    posture.value = "opt-in";
+    await sync.start();
+    const quiet = await seeded(docs);
+    await new Promise((r) => setTimeout(r, 120));
+    expect(control.opened).toHaveLength(0);
+
+    const spoken = await docs.create("shared");
+    await docs.setSyncIntent(spoken.docId, "sync");
+    await docs.writeDoc(spoken.docId, ice1(), {
+      revisionId: randomUUID(),
+      kind: "checkpoint",
+      engineSchema: 11,
+      savedAt: 1,
+      byteLength: ice1().byteLength,
+    });
+    await until(() => control.opened.length === 1, "the opted-in doc's lane");
+    expect(control.opened[0]?.docId).toBe(spoken.docId);
+    expect(sync.statuses().find((s) => s.docId === quiet)).toBeUndefined();
+  });
+
+  it("changes nothing for a doc with no intent under the default posture", async () => {
+    // The zero-behavior-change claim, stated as a test rather than as prose.
+    const { docs, control, bytes, sync } = harness();
+    await sync.start();
+    const docId = await seeded(docs);
+    await until(
+      () => bytes.sent.some((s) => s.kind === DOC_SYNC_RECORD.HAVE),
+      "the ordinary lane and its greeting",
+    );
+    expect(control.opened).toHaveLength(1);
+    expect(control.opened[0]?.docId).toBe(docId);
+    expect(docs.syncIntentOf(docId)).toBeUndefined();
+    expect(stateOf(sync, docId)).toBeDefined();
   });
 });

@@ -47,6 +47,7 @@ let shutdownPromise = null;
 const criticalChanges = createChangeBuffer();
 const transientChildren = new Set();
 const crashTimes = [];
+const forceOnboarding = process.argv.includes("--force-onboarding");
 
 process.on("SIGINT", () => void shutdown(0, "SIGINT"));
 process.on("SIGTERM", () => void shutdown(0, "SIGTERM"));
@@ -68,9 +69,13 @@ async function main() {
   // Observe critical source roots before any generator or native build reads
   // them. Until the serialized refresh queue exists, events are deduplicated
   // in memory and then drained through that queue without a hand-off gap.
-  stopCriticalWatcher = watchCriticalRoots(criticalWatchRoots(), (file) => {
-    criticalChanges.push(file);
-  });
+  stopCriticalWatcher = watchCriticalRoots(
+    criticalWatchRoots(),
+    (file) => {
+      criticalChanges.push(file);
+    },
+    { log },
+  );
   pluginProjects = await discoverPluginProjects(repoRoot);
   log.info("preparing generated manifests and native contracts");
   await runTracked(pnpmCommand, ["-r", "--if-present", "run", "gen:manifest"], "plugin manifests");
@@ -87,8 +92,11 @@ async function main() {
       restartCoordinator?.request(name);
     },
   });
-  renderer = await startRendererServer(paths);
+  renderer = await startRendererServer(paths, { forceOnboarding });
   log.info(`renderer HMR listening at ${renderer.url}`);
+  if (forceOnboarding) {
+    log.info("onboarding preview enabled; each desktop launch will open a fresh setup wizard");
+  }
   await builds.ready;
 
   electron = createElectronStack({

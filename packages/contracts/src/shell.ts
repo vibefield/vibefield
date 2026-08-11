@@ -28,6 +28,10 @@ export const ProductInfo = z
     /** Development build identity. Production writes null; optional keeps
      * adoption compatible with product files written by older daemons. */
     buildId: z.string().min(1).max(128).nullable().optional(),
+    /** UA-2 — the user this daemon serves (users.json userId). The supervisor
+     * probe refuses a mismatch the way it refuses incompatible-build; null =
+     * unconfigured, optional keeps pre-UA-2 product files adoptable. */
+    userId: z.string().min(1).nullable().optional(),
   })
   .passthrough();
 export type ProductInfo = z.infer<typeof ProductInfo>;
@@ -81,15 +85,15 @@ export type ShellCommandRequest = z.infer<typeof ShellCommandRequest>;
 
 /** main → renderer: whether THIS window's Godview overlay is open (GT-D2).
  *
- * Main owns this bit rather than the renderer because the toggle is an
- * application accelerator: ⌘G is consumed by the menu before any renderer sees
- * a keystroke, so a renderer-owned flag would be a second copy that main must
- * be told about to keep its own menu honest. One owner, one truth, and the
- * menu's checkmark is a fact instead of a guess. */
+ * Main owns this bit rather than the renderer because the toggle is answered
+ * above the page: ⇧⇧ is detected in main before any renderer sees a keystroke,
+ * so a renderer-owned flag would be a second copy that main must be told about
+ * to keep its own menu honest. One owner, one truth, and the menu's checkmark
+ * is a fact instead of a guess. */
 export const GodviewState = z.object({ open: z.boolean() }).passthrough();
 export type GodviewState = z.infer<typeof GodviewState>;
 
-/** renderer → main: the toolbar button asking for the transition ⌘G asks for.
+/** renderer → main: the toolbar button asking for the transition ⇧⇧ asks for.
  * `open` omitted means "flip whatever it is" — the button and the accelerator
  * are the same request, so neither can drift by holding its own idea of the
  * current value. */
@@ -137,18 +141,28 @@ export type DesktopShellState = z.infer<typeof DesktopShellState>;
 export const APP_PREFERENCE_KEYS = {
   SHOW_TRAY: "desktop.showTray",
   BACKGROUND_SHELL: "desktop.backgroundShell",
+  MESH_SYNC_POSTURE: "mesh.syncPosture",
 } as const;
 
 export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.SHOW_TRAY,
   APP_PREFERENCE_KEYS.BACKGROUND_SHELL,
+  APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
+
+/** UA-D7 — what a doc that has said nothing means by its silence. `automatic`
+ * is today's behavior and stays the default; `opt-in` makes every doc local
+ * until its owner says otherwise. User-scope: it rides the settings doc and
+ * converges across the user's devices (D29′), unlike per-doc intent. */
+export const MeshSyncPosture = z.enum(["automatic", "opt-in"]);
+export type MeshSyncPosture = z.infer<typeof MeshSyncPosture>;
 
 export const AppPreferences = z
   .object({
     showTray: z.boolean(),
     backgroundShell: z.boolean(),
+    syncPosture: MeshSyncPosture,
   })
   .passthrough();
 export type AppPreferences = z.infer<typeof AppPreferences>;
@@ -156,7 +170,9 @@ export type AppPreferences = z.infer<typeof AppPreferences>;
 export const AppPreferenceSetParams = z
   .object({
     key: AppPreferenceKey,
-    value: z.boolean(),
+    // Not every preference is a switch any more (UA-6): the posture is a word.
+    // A union rather than `z.any()` — the setter still refuses what no key can hold.
+    value: z.union([z.boolean(), MeshSyncPosture]),
   })
   .passthrough();
 export type AppPreferenceSetParams = z.infer<typeof AppPreferenceSetParams>;
@@ -337,7 +353,17 @@ export type ShellProviderRegisterResult = z.infer<typeof ShellProviderRegisterRe
 
 export const ShellProviderCaller = z
   .object({
-    kind: z.enum(["local-token", "shell-main", "tailnet", "mcp-agent", "peer-fieldd", "plugin"]),
+    // tailnet-guest is total-type honesty, not a reachable path: the UA-4
+    // guest choke refuses every method before a handler could dial a provider
+    kind: z.enum([
+      "local-token",
+      "shell-main",
+      "tailnet",
+      "tailnet-guest",
+      "mcp-agent",
+      "peer-fieldd",
+      "plugin",
+    ]),
     pluginId: PluginId.optional(),
     clientKind: ClientKind.optional(),
   })

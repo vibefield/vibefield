@@ -1,0 +1,33 @@
+{
+  "name": "@vibefield/design-kit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./card-appearance": "./src/card-appearance.ts",
+    "./tokens.css": "./src/tokens.css",
+    "./primitives": "./src/primitives.tsx",
+    "./visuals": "./src/visuals.ts"
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibecook/ice": "*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@react-three/fiber": "^9.6.1",
+    "@types/react": "catalog:",
+    "@types/three": "^0.185.0",
+    "react": "catalog:",
+    "three": "^0.185.0",
+    "typescript": "catalog:"
+  }
+}

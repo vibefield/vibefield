@@ -76,7 +76,11 @@ export class TerminalBackendHost {
   private backend: TerminalBackendLike | null = null;
   private connection: ExternalBackendOptions["connection"] | null = null;
   private pending: Promise<void> = Promise.resolve();
-  private recovering: Promise<void> | null = null;
+  /** The ladder in flight AND the generation that owns it. The generation is
+   * half the value: a ladder only speaks for the connection it started on, so
+   * whether an existing one may serve a new death is a question about which
+   * generation asked, never merely about whether one is running. */
+  private recovering: { generation: number; done: Promise<void> } | null = null;
   /** Bumped by every connect. A recovery ladder from an older generation has
    * been superseded by a freshly redeemed ticket and must stop rebuilding the
    * connection the renderer already replaced. */
@@ -115,7 +119,25 @@ export class TerminalBackendHost {
         return;
       }
       this.connection = connection;
-      await this.build(connection, true);
+      try {
+        await this.build(connection, true);
+      } catch (error) {
+        // A connect that cannot build says so in the renderer's own vocabulary,
+        // and not only by rejecting. Publishing used to be reachable from the
+        // ladder alone, so a failed connect left the page holding a bare
+        // exception and no STATE — nothing for the bridge banner to draw and
+        // nothing for the deck's status listener to act on. `ticket-expired` is
+        // what actually happened: the credential in hand does not open this
+        // floor, and the only remedy is the renderer redeeming another. Zero
+        // attempts, because no ladder ran — the honest count is none.
+        this.logger?.error(
+          "desktop.terminal.connect_failed",
+          "The shell could not build a terminal bridge on the ticket the renderer redeemed",
+          error,
+        );
+        this.publish({ state: "ticket-expired", attempts: 0, detail: message(error) });
+        throw error;
+      }
     });
     return { attached: true };
   }
@@ -198,7 +220,16 @@ export class TerminalBackendHost {
    * classification we cannot verify into the renderer's hands. */
   private recover(): Promise<void> {
     const generation = this.generation;
-    this.recovering ??= (async () => {
+    const inFlight = this.recovering;
+    // One ladder per generation, and a ladder from an OLDER one may not serve
+    // this death. It is climbing toward a connection the renderer has already
+    // replaced, so it will wake from its backoff, see the generation moved,
+    // and return in silence — and silence is the one thing this death cannot
+    // be answered with. `bridge-up` and `ticket-expired` are the only two
+    // states the renderer acts on; handed a superseded ladder, it would hold
+    // `bridge-down` until the window closed.
+    if (inFlight !== null && inFlight.generation === generation) return inFlight.done;
+    const done = (async () => {
       let attempt = 0;
       let lastError: unknown;
       while (
@@ -233,9 +264,12 @@ export class TerminalBackendHost {
       );
       this.publish({ state: "ticket-expired", attempts: attempt, detail: message(lastError) });
     })().finally(() => {
-      this.recovering = null;
+      // Only its OWN entry: a superseded ladder finishing late must not clear
+      // the live one that replaced it.
+      if (this.recovering?.generation === generation) this.recovering = null;
     });
-    return this.recovering;
+    this.recovering = { generation, done };
+    return done;
   }
 
   private publish(status: TerminalBridgeStatus): void {

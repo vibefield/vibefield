@@ -2,30 +2,29 @@
 // Spawned by the Electron shell (adopt-or-spawn) or run by hand:
 //   FIELDD_DATA_DIR=… FIELDD_NATIVE_BIN=…/field-native node dist/bin.cjs
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { PORTS } from "@vibefield/contracts";
 import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
+import { ensureUsersRoot } from "@vibefield/users";
+import { defaultDataRoot, nativeAlive, nativeMgmtEndpoint, splitPathList } from "./boot-env";
 import { bootstrap } from "./daemon";
 
-function nativeAlive(socketPath: string): Promise<boolean> {
-  if (!existsSync(socketPath)) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    const s = createConnection(socketPath);
-    s.once("connect", () => {
-      s.destroy();
-      resolve(true);
-    });
-    s.once("error", () => resolve(false));
-  });
-}
-
 async function main(): Promise<void> {
-  const dataDir =
-    process.env["FIELDD_DATA_DIR"] ??
-    join(homedir(), "Library", "Application Support", "VibeField");
+  // UA-1 — a supervisor-spawned fieldd receives the resolved USER root
+  // explicitly; a standalone/headless run receives the VibeField ROOT (or the
+  // platform default, mirroring config.rs default_data_dir() exactly — UA-0)
+  // and is its own supervisor: migrate-or-mint under the §3.3 lock, then run
+  // out of the attached user's root.
+  const explicitUserRoot = process.env["FIELDD_USER_ROOT"];
+  let userId = process.env["FIELDD_USER_ID"];
+  let dataDir: string;
+  if (explicitUserRoot !== undefined) {
+    dataDir = explicitUserRoot;
+  } else {
+    const ensured = await ensureUsersRoot(process.env["FIELDD_DATA_DIR"] ?? defaultDataRoot());
+    dataDir = ensured.userRoot;
+    userId ??= ensured.user.userId;
+  }
   const portEnv = process.env["FIELDD_CONTROL_PORT"];
   // the data lane binds the registered port by default (the daemon's own default
   // is ephemeral, for test isolation) — FIELDD_DATA_PORT overrides, 0 = ephemeral.
@@ -37,10 +36,9 @@ async function main(): Promise<void> {
   ];
   // PLUG-P2 — plugin discovery roots, PATH-style lists. The spawner (shell in
   // dev, packaged app later) decides them; unset ⇒ an empty registry, honestly.
-  const splitRoots = (v: string | undefined): string[] => v?.split(":").filter(Boolean) ?? [];
   const pluginRoots = {
-    bundled: splitRoots(process.env["FIELDD_PLUGIN_ROOTS"]),
-    devLinked: splitRoots(process.env["FIELDD_PLUGIN_DEV_ROOTS"]),
+    bundled: splitPathList(process.env["FIELDD_PLUGIN_ROOTS"]),
+    devLinked: splitPathList(process.env["FIELDD_PLUGIN_DEV_ROOTS"]),
   };
   // P4 — the bundled daemon ships the worker harness beside bin.cjs; source
   // runs resolve it in-package. Explicit env always wins.
@@ -51,16 +49,20 @@ async function main(): Promise<void> {
   });
 
   let nativePid: number | undefined;
-  const socketPath = join(dataDir, "native", "run", "mgmt.sock");
-  if (nativeBin && !(await nativeAlive(socketPath))) {
+  const mgmtEndpoint = nativeMgmtEndpoint(dataDir);
+  if (nativeBin && !(await nativeAlive(mgmtEndpoint))) {
     // The native plane outlives this fieldd (OS plane; launchd owns it later).
     // field-native unlinks a stale socket itself before binding.
     const child = spawn(nativeBin, [], {
       env: {
         ...process.env,
-        FIELD_NATIVE_DATA_DIR: dataDir,
         // fieldd passes the root it already resolved under the trusted shell
         // mode decision. field-native never trusts an ambient override alone.
+        // WIN-D1 — and it is the SAME string the probe above resolved its
+        // endpoint from: on win32 both planes derive the pipe name from a hash of
+        // this root, so re-spelling it here (a resolve, a realpath, a trailing
+        // separator) is a pair that binds one name and dials another.
+        FIELD_NATIVE_DATA_DIR: dataDir,
         FIELD_LOG_DIR: logRoot,
         FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
         // Level overrides remain development/test-only even though fieldd
@@ -88,13 +90,16 @@ async function main(): Promise<void> {
   const daemon = await bootstrap({
     dataDir,
     logRoot,
-    ...(portEnv !== undefined ? { controlPort: Number(portEnv) } : {}),
-    dataPort: dataPortEnv !== undefined ? Number(dataPortEnv) : PORTS.FIELDD_WS_DATA,
+    // UA-D12 — ephemeral by default; env pins a port only when a harness
+    // explicitly asks. product.json records the ACTUAL bound ports either way.
+    controlPort: portEnv !== undefined ? Number(portEnv) : 0,
+    dataPort: dataPortEnv !== undefined ? Number(dataPortEnv) : 0,
     allowedOrigins,
     pluginRoots,
     serviceHarnessPath,
     ...(nativePid !== undefined ? { nativePid } : {}),
     ...(process.env["FIELDD_BUILD_ID"] ? { buildId: process.env["FIELDD_BUILD_ID"] } : {}),
+    ...(userId !== undefined ? { userId } : {}),
     onFatal: (reason) => {
       process.stderr.write(`fieldd fatal: ${reason}\n`);
       process.exit(1);
@@ -109,6 +114,9 @@ async function main(): Promise<void> {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  // WIN-D5 — the same graceful path, reachable as a VERB: SIGTERM never fires
+  // on win32, so the supervisor asks over the authenticated channel instead.
+  daemon.onShutdownRequest(shutdown);
 }
 
 main().catch((e: unknown) => {

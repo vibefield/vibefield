@@ -2,12 +2,8 @@
   box-sizing: border-box;
   min-height: 100%;
   padding: 1.5rem 1.25rem 2rem;
-  color: #1c1c1e;
+  color: var(--vf-foreground);
   font-family: inherit;
-}
-
-.dark .vf-artifact-panel {
-  color: #f5f5f7;
 }
 
 .vf-artifact-panel *,
@@ -42,12 +38,8 @@
 .vf-artifact-header span {
   display: block;
   margin-top: 2px;
-  color: rgb(28 28 30 / 48%);
+  color: var(--vf-text-tertiary);
   font-size: 11px;
-}
-
-.dark .vf-artifact-header span {
-  color: rgb(245 245 247 / 48%);
 }
 
 .vf-artifact-add {
@@ -96,26 +88,18 @@
   grid-template-columns: minmax(0, 1fr) 30px;
   gap: 4px;
   padding: 8px;
-  border: 1px solid rgb(0 0 0 / 5%);
+  border: 1px solid var(--vf-hairline);
   border-radius: 18px;
-  background: rgb(255 255 255 / 58%);
+  background: var(--vf-chrome-surface-soft);
   transition:
     transform 180ms ease,
     border-color 180ms ease,
     background 180ms ease;
 }
 
-.dark .vf-artifact-row {
-  border-color: rgb(255 255 255 / 8%);
-  background: rgb(255 255 255 / 5%);
-}
 .vf-artifact-row:hover {
-  border-color: rgb(0 0 0 / 9%);
-  background: rgb(255 255 255 / 78%);
-}
-.dark .vf-artifact-row:hover {
-  border-color: rgb(255 255 255 / 14%);
-  background: rgb(255 255 255 / 8%);
+  border-color: var(--vf-hairline-strong);
+  background: var(--vf-chrome-surface-hover);
 }
 .vf-artifact-row__open {
   display: grid;
@@ -191,34 +175,20 @@
   max-width: 100%;
   overflow: hidden;
   margin-top: 3px;
-  color: rgb(28 28 30 / 50%);
+  color: var(--vf-text-tertiary);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dark .vf-artifact-row__facts small {
-  color: rgb(245 245 247 / 50%);
-}
-
 .vf-artifact-status {
   display: flex;
   align-items: center;
   gap: 5px;
   margin-top: 7px;
-  color: rgb(28 28 30 / 58%);
+  color: var(--vf-text-secondary);
   font-size: 10px;
   text-transform: capitalize;
 }
-.dark .vf-artifact-status {
-  color: rgb(245 245 247 / 58%);
-}
-.vf-artifact-status i {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 999px;
-}
-
 .vf-artifact-menu {
   position: relative;
   align-self: start;
@@ -300,69 +270,18 @@
 
 .vf-artifact-inline-error {
   margin: -0.25rem 0 1rem;
-  padding: 9px 11px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--vf-red) 12%, transparent);
-  color: var(--vf-red);
-  font-size: 11px;
-  line-height: 1.35;
 }
 
 .vf-artifact-quiet {
-  display: flex;
   min-height: 50vh;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  text-align: center;
 }
 .vf-artifact-placeholder {
   width: 8rem;
-  aspect-ratio: 16 / 10;
-  margin-bottom: 18px;
 }
 .vf-artifact-quiet strong {
   font-size: 13px;
   font-weight: 600;
 }
-.vf-artifact-quiet > span {
-  margin-top: 5px;
-  color: rgb(28 28 30 / 50%);
-  font-size: 11px;
-}
-.dark .vf-artifact-quiet > span {
-  color: rgb(245 245 247 / 50%);
-}
-
-.vf-artifact-button,
-.vf-artifact-primary {
-  min-height: 38px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 999px;
-  background: #1c1c1e;
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-}
-.dark .vf-artifact-button,
-.dark .vf-artifact-primary {
-  background: #f5f5f7;
-  color: #1c1c1e;
-}
-.vf-artifact-button {
-  margin-top: 18px;
-}
-.vf-artifact-button:active,
-.vf-artifact-primary:active {
-  transform: scale(0.98);
-}
-.vf-artifact-button:disabled,
-.vf-artifact-primary:disabled {
-  opacity: 0.35;
-}
-
 .vf-artifact-flow {
   display: flex;
   flex-direction: column;
@@ -487,6 +406,9 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.vf-artifact-chevron.is-back {
+  transform: rotate(180deg);
+}
 .vf-artifact-pending,
 .vf-artifact-fact {
   margin: 2px 4px;
@@ -542,7 +464,7 @@
 }
 .dark .vf-artifact-segmented button[data-active="true"] {
   border-color: rgb(255 255 255 / 8%);
-  background: #2c2c2e;
+  background: var(--vf-chrome-solid);
 }
 
 .vf-artifact-field {
@@ -558,30 +480,14 @@
 .dark .vf-artifact-field > span {
   color: rgb(245 245 247 / 55%);
 }
-.vf-artifact-field input,
-.vf-artifact-rename input {
+.vf-artifact-field .vf-ui-field,
+.vf-artifact-rename .vf-ui-field {
   height: 42px;
-  padding: 0 13px;
-  border: 1px solid rgb(0 0 0 / 7%);
   border-radius: 13px;
-  outline: none;
-  background: rgb(255 255 255 / 60%);
-  color: inherit;
-  font: inherit;
   font-size: 13px;
-}
-.dark .vf-artifact-field input,
-.dark .vf-artifact-rename input {
-  border-color: rgb(255 255 255 / 9%);
-  background: rgb(255 255 255 / 6%);
 }
 .vf-artifact-field input[type="number"] {
   font-variant-numeric: tabular-nums;
-}
-.vf-artifact-field input:focus,
-.vf-artifact-rename input:focus {
-  border-color: var(--vf-select);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vf-select) 15%, transparent);
 }
 
 .vf-artifact-check {
@@ -611,7 +517,7 @@
   color: rgb(245 245 247 / 50%);
 }
 
-.vf-artifact-primary {
+.vf-artifact-flow > .vf-ui-button[data-variant="primary"] {
   align-self: stretch;
   margin-top: 3px;
 }

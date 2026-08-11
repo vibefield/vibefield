@@ -46,8 +46,14 @@ function fakeMachine() {
     get client() {
       return null;
     },
+    // UA-3w: this suite is about the reveal, so the wizard never opens here.
+    // The layer swap it drives has its own coverage in onboarding-wizard.test.
+    get onboarding() {
+      return null;
+    },
     start: () => {},
     retry: () => {},
+    completeOnboarding: () => {},
   };
   const set = (patch: Partial<BootView>): void => {
     view = { ...view, ...patch };
@@ -71,6 +77,19 @@ function workspaceWrapper(): HTMLElement | null {
 }
 
 describe("BootRoot reveal (the top-edge click contract)", () => {
+  it("keeps design-bench controls out of the synchronous product face", () => {
+    const { machine } = fakeMachine();
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => root?.render(createElement(BootRoot, { machine })));
+
+    const toggle = document.querySelector<HTMLButtonElement>("[data-dev-tweak-toggle]");
+    expect(toggle).toBeNull();
+    expect(document.querySelector("[data-visual-tweak-controls]")).toBeNull();
+    expect(host.querySelector(".vf-splash")).not.toBeNull();
+  });
+
   it("carries the settle transform only until settled, then goes inert", () => {
     vi.useFakeTimers();
     const { machine, set } = fakeMachine();

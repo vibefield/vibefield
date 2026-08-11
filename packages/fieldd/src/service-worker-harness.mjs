@@ -11,6 +11,7 @@
 // parent port as the small message protocol below; handlers stay worker-side,
 // only metadata crosses.
 import { registerHooks } from "node:module";
+import { pathToFileURL } from "node:url";
 import { parentPort, workerData } from "node:worker_threads";
 
 // Dev-source resolution: workspace packages export .ts sources with
@@ -274,7 +275,12 @@ function errorShape(e) {
 
 async function activate() {
   try {
-    const mod = await import(entryPath);
+    // pathToFileURL, not the bare path: ESM dynamic import of an ABSOLUTE path
+    // throws ERR_UNSUPPORTED_ESM_URL_SCHEME on Windows (it reads `C:` as a
+    // protocol) — a leading-slash unix path is accepted but a drive path is not.
+    // A file:// URL is valid on both, and it makes relative resolution FROM this
+    // module (the .ts retry hook above) consistent too.
+    const mod = await import(pathToFileURL(entryPath).href);
     const plugin = mod.default ?? mod;
     if (typeof plugin?.activate !== "function")
       throw new Error(`${entryPath} does not export an activate(ctx) module`);

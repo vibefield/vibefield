@@ -87,6 +87,17 @@ impl MgmtOutbox {
     pub fn is_closed(&self) -> bool {
         self.closing.load(Ordering::Acquire) || *self.close.borrow() || self.tx.is_closed()
     }
+
+    /// Wake a reader blocked on the same connection so it stops and drops its
+    /// half. Called by the writer AFTER it drains and shuts down (WIN-D1: a
+    /// Windows named pipe delivers EOF to the peer only when the whole handle
+    /// closes — i.e. when both `io::split` halves drop — and `shutdown()` alone
+    /// does not FIN it the way a unix socket does). Flipped here, not in
+    /// `send(Close)`, so a superseded client still receives its notification
+    /// before the connection tears down.
+    pub fn signal_closed(&self) {
+        self.close.send_replace(true);
+    }
 }
 
 /// One product plane per device: at most one authenticated mgmt client;

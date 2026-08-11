@@ -6,6 +6,12 @@ import { ErrorKind } from "./errors";
 // fieldd stores the doc payload as an OPAQUE ICE1 envelope — none of these shapes
 // carries doc bytes (EL2: bytes ride the :9411 lane, never JSON-RPC).
 
+/** UA-D7 — where a doc is willing to go. `local` keeps it on the device that
+ * holds it: no lane opens for it, no peer's record lands in it, and it leaves
+ * the sync fold entirely rather than standing at a state it can never reach. */
+export const DocSyncIntent = z.enum(["sync", "local"]);
+export type DocSyncIntent = z.infer<typeof DocSyncIntent>;
+
 /** Registry entry in `field.docs.v1`. P0 is local-single-holder: no holders[] yet;
  * baseEpoch stays 0 until compaction lands (no cross-base exchange law). */
 export const DocRegistryEntry = z
@@ -25,6 +31,13 @@ export const DocRegistryEntry = z
     /** P7/D29 — system docs (the settings doc) are hidden from every doc
      * picker and never enter last-open/most-recent launch decisions. */
     system: z.boolean().optional(),
+    /** UA-D7 — this doc's own answer to "may you leave this device?". ABSENT
+     * is the ordinary case and defers to the user's `mesh.syncPosture`, so a
+     * registry written before UA-6 keeps behaving exactly as it did (the entry
+     * is `.passthrough()`, so an older reader tolerates it in the other
+     * direction). Intent is per DEVICE until doc existence replicates — the
+     * named C6-4 debt — and nothing here pretends otherwise. */
+    syncIntent: DocSyncIntent.optional(),
   })
   .passthrough();
 export type DocRegistryEntry = z.infer<typeof DocRegistryEntry>;
@@ -43,6 +56,13 @@ export const DocRenameParams = z
   .object({ docId: z.string().uuid(), name: z.string().min(1) })
   .passthrough();
 export type DocRenameParams = z.infer<typeof DocRenameParams>;
+
+/** doc.setSyncIntent params (UA-D7) — a posture edit, not a content one: the
+ * service updates syncIntent and leaves updatedAt alone, exactly as rename does. */
+export const DocSetSyncIntentParams = z
+  .object({ docId: z.string().uuid(), intent: DocSyncIntent })
+  .passthrough();
+export type DocSetSyncIntentParams = z.infer<typeof DocSetSyncIntentParams>;
 
 /** doc.open result — the lane wiring info. The ticket is one-shot and short-TTL;
  * laneUrl carries the ACTUAL bound data port (tests bind port 0 — never hardcode). */

@@ -220,6 +220,7 @@ export const AuditPrincipalV1 = z
     kind: z.enum([
       "local-token",
       "tailnet",
+      "tailnet-guest", // UA-4 — audit is local-read, so the addition carries no cross-version skew
       "mcp-agent",
       "peer-fieldd",
       "plugin",

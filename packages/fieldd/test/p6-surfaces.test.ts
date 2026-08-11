@@ -1,10 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
 // PLUG-P6 — the HANDLER caller matrix for the new product surfaces (the
@@ -23,7 +25,7 @@ async function setup(): Promise<{ daemon: FielddDaemon }> {
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-  const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await mock.start();
   cleanup.push(() => mock.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0 });

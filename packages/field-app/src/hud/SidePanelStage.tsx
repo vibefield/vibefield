@@ -1,10 +1,37 @@
-import { type ReactElement, type RefObject, useEffect, useState } from "react";
+import { type ReactElement, type ReactNode, type RefObject, useEffect, useState } from "react";
 import { roundButtonCls } from "../field/theme-constants";
 import type { SurfaceEntry } from "../plugin-host/surface-registry";
 import { PluginSurfaceHost } from "./PluginSurfaceSlot";
 import "./SidePanelStage.css";
 
 const EXIT_MS = 600;
+
+export function SidePanelFrame({
+  open,
+  label,
+  children,
+  id,
+  className = "",
+}: {
+  open: boolean;
+  label: string;
+  children: ReactNode;
+  id?: string;
+  className?: string;
+}): ReactElement {
+  return (
+    <aside
+      id={id}
+      className={`vf-side-panel no-drag ${className}`.trim()}
+      data-open={open ? "true" : "false"}
+      aria-hidden={!open}
+      aria-label={label}
+      inert={!open}
+    >
+      <div className="vf-side-panel__scroll">{children}</div>
+    </aside>
+  );
+}
 
 export function SidePanelToggle({
   entry,
@@ -73,24 +100,19 @@ export function SidePanelStage({
   const displayed = entry ?? rendered;
 
   return (
-    <aside
+    <SidePanelFrame
       id="vf-plugin-side-panel"
-      className="vf-side-panel no-drag"
-      data-open={entry !== null ? "true" : "false"}
-      aria-hidden={entry === null}
-      aria-label={displayed?.title ?? "Side panel"}
-      inert={entry === null}
+      open={entry !== null}
+      label={displayed?.title ?? "Side panel"}
     >
-      <div className="vf-side-panel__scroll">
-        {displayed !== null && (
-          <PluginSurfaceHost
-            slot="hud.side-panel"
-            windowId={windowId}
-            requestClose={onClose}
-            surfaceId={displayed.surfaceId}
-          />
-        )}
-      </div>
-    </aside>
+      {displayed !== null && (
+        <PluginSurfaceHost
+          slot="hud.side-panel"
+          windowId={windowId}
+          requestClose={onClose}
+          surfaceId={displayed.surfaceId}
+        />
+      )}
+    </SidePanelFrame>
   );
 }

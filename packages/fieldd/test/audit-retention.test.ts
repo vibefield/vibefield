@@ -63,7 +63,10 @@ describe("audit retention independence", () => {
 
     expect(await readFile(auditPath)).toEqual(before);
     expect(await readFile(checkpointPath)).toEqual(checkpointBefore);
-    expect((await stat(auditPath)).mode & 0o777).toBe(0o600);
+    // POSIX mode bits are a no-op on Windows (WIN-D4); the 0600/0700 boundary is an ACL there, proven by the packaged gate.
+    if (process.platform !== "win32") {
+      expect((await stat(auditPath)).mode & 0o777).toBe(0o600);
+    }
     expect(await verifyAuditSegment(auditPath)).toMatchObject({
       valid: true,
       checkpointed: true,

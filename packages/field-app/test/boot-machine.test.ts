@@ -22,9 +22,17 @@ type FakeState = {
  * `new mod.DocManager(client)`, so each instance registers itself for the test to reach. */
 class FakeManager {
   static instances: FakeManager[] = [];
+  /** Set to make the NEXT construction throw once — the only way to fail the
+   * boot at a step past the onboarding hold, which is what the retry-after-
+   * completion case needs. */
+  static failNext = false;
   state: FakeState = { phase: "loading", loading: { stage: "opening doc", progress: 0 } };
   private readonly listeners = new Set<() => void>();
   constructor(readonly client: unknown) {
+    if (FakeManager.failNext) {
+      FakeManager.failNext = false;
+      throw new Error("document open failed");
+    }
     FakeManager.instances.push(this);
   }
   getState = (): FakeState => this.state;
@@ -65,7 +73,15 @@ async function flush(): Promise<void> {
 }
 
 function harness(
-  opts: { stableFrames?: number; frameBudgetMs?: number; stabilityCapMs?: number } = {},
+  opts: {
+    stableFrames?: number;
+    frameBudgetMs?: number;
+    stabilityCapMs?: number;
+    /** Absent = a shell with no supervisor bridge, which is the default a
+     * browser harness has and the state every pre-UA-3w test ran in. */
+    usersUpdate?: FieldHost["usersUpdate"];
+    forceOnboarding?: boolean;
+  } = {},
 ) {
   const marks: string[] = [];
   const rafCbs: Array<() => void> = [];
@@ -91,6 +107,8 @@ function harness(
     getConnection,
     onPrepareClose: () => () => {},
     completeClose: () => {},
+    ...(opts.forceOnboarding === undefined ? {} : { forceOnboarding: opts.forceOnboarding }),
+    ...(opts.usersUpdate === undefined ? {} : { usersUpdate: opts.usersUpdate }),
   } as unknown as FieldHost;
 
   const deps: BootMachineDeps = {
@@ -151,6 +169,24 @@ async function bootToStabilizing(h: Harness): Promise<FakeManager> {
   return mgr;
 }
 
+/** UA-3w — a freshly minted user: the one record shape that opens the wizard. */
+const NEW_USER = {
+  userId: "01J8ZQ7W9K3M5N7P9R1T3V5X7Z",
+  fuid: 1,
+  name: "james",
+  resident: true,
+  onboarded: false,
+};
+
+/** start() → bootstrap + workspace resolve → parked wherever the §6 gate left
+ * it: holding at `onboarding`, or already past it and warming. */
+async function bootToOnboarding(h: Harness): Promise<void> {
+  h.getConnection.mockResolvedValue({ port: 4242, token: "abc" });
+  h.importWorkspace.mockResolvedValue(workspaceModule);
+  h.machine.start();
+  await flush();
+}
+
 /** Fire `need` frames whose deltas stay under budget — the clean streak that reveals. */
 async function feedCleanFrames(h: Harness, need = 3, budget = 16): Promise<void> {
   const step = Math.floor(budget / 2);
@@ -161,6 +197,7 @@ async function feedCleanFrames(h: Harness, need = 3, budget = 16): Promise<void>
 beforeEach(() => {
   vi.useFakeTimers();
   FakeManager.instances = [];
+  FakeManager.failNext = false;
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -406,6 +443,160 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     fresh.machine.retry();
     expect(fresh.importWorkspace).not.toHaveBeenCalled();
     expect(fresh.machine.view().phase).toBe("requesting-bootstrap");
+  });
+
+  it("holds in `onboarding` for a user who has not been through setup, and resumes on demand", async () => {
+    const usersUpdate = vi.fn(async () => NEW_USER);
+    const h = harness({ usersUpdate });
+    const phases: BootPhase[] = [];
+    h.machine.subscribe(() => {
+      const p = h.machine.view().phase;
+      if (phases[phases.length - 1] !== p) phases.push(p);
+    });
+    await bootToOnboarding(h);
+
+    expect(h.machine.view().phase).toBe("onboarding");
+    // The empty update IS the read — the same door the wizard writes through.
+    expect(usersUpdate).toHaveBeenCalledWith({});
+    expect(h.machine.onboarding?.profile).toEqual(NEW_USER);
+    // W4 — the stages the wizard may claim are done are the ones this boot
+    // really passed, in order, and nothing further.
+    expect(h.machine.onboarding?.stagesDone).toEqual(["waking the daemon", "loading the field"]);
+    // The hold is BEFORE the document: the wizard owns the window alone.
+    expect(FakeManager.instances).toHaveLength(0);
+    expect(h.machine.client).not.toBeNull(); // ...but the client is live for pane 4
+
+    h.machine.completeOnboarding();
+    await flush();
+    expect(h.machine.onboarding).toBeNull();
+    firstManager().emit({ phase: "ready", loading: null });
+    await flush();
+    await feedCleanFrames(h);
+
+    expect(h.machine.view().phase).toBe("interactive");
+    expect(phases).toEqual([
+      "requesting-bootstrap",
+      "connecting-fieldd",
+      "onboarding",
+      "opening-document",
+      "warming",
+      "stabilizing",
+      "interactive",
+    ]);
+  });
+
+  it("the development preview reopens a fresh wizard without changing the durable profile", async () => {
+    const durableProfile = {
+      ...NEW_USER,
+      color: "accent-5",
+      setupVariant: "second-user",
+      onboarded: true,
+    };
+    const usersUpdate = vi.fn(async () => durableProfile);
+    const h = harness({ forceOnboarding: true, usersUpdate });
+
+    await bootToOnboarding(h);
+
+    expect(h.machine.view().phase).toBe("onboarding");
+    expect(h.machine.onboarding?.profile).toEqual(NEW_USER);
+    expect(durableProfile).toEqual({
+      ...NEW_USER,
+      color: "accent-5",
+      setupVariant: "second-user",
+      onboarded: true,
+    });
+
+    h.machine.completeOnboarding();
+    await flush();
+  });
+
+  it("completeOnboarding is idempotent, and inert on a machine that is not holding", async () => {
+    const h = harness({ usersUpdate: vi.fn(async () => NEW_USER) });
+    h.machine.completeOnboarding(); // never started — must not throw or arm anything
+    await bootToOnboarding(h);
+    h.machine.completeOnboarding();
+    h.machine.completeOnboarding(); // the second release must not double-advance
+    await flush();
+    expect(h.machine.view().phase).toBe("warming");
+    expect(FakeManager.instances).toHaveLength(1);
+    h.machine.completeOnboarding(); // long past the hold — still inert
+    await flush();
+    expect(h.machine.view().phase).toBe("warming");
+  });
+
+  it.each([
+    ["there is no supervisor bridge at all", undefined],
+    ["the supervisor refuses the read", vi.fn(async () => Promise.reject(new Error("locked")))],
+    [
+      "the record says setup is already done",
+      vi.fn(async () => ({ ...NEW_USER, onboarded: true })),
+    ],
+    ["the answer is not a record", vi.fn(async () => "who knows" as never)],
+    ["the record has no readable flag", vi.fn(async () => ({ name: "james" }) as never)],
+  ])("skips the wizard when %s — boot is never blocked by it", async (_case, usersUpdate) => {
+    const h = harness(usersUpdate === undefined ? {} : { usersUpdate });
+    const phases: BootPhase[] = [];
+    h.machine.subscribe(() => {
+      const p = h.machine.view().phase;
+      if (phases[phases.length - 1] !== p) phases.push(p);
+    });
+    await bootToOnboarding(h);
+
+    expect(phases).not.toContain("onboarding");
+    expect(h.machine.onboarding).toBeNull();
+    firstManager().emit({ phase: "ready", loading: null });
+    await flush();
+    await feedCleanFrames(h);
+    expect(h.machine.view().phase).toBe("interactive");
+    expect(h.machine.view().unavailable).toBeNull();
+  });
+
+  it("logs the reason it skipped when the supervisor refuses the read", async () => {
+    const h = harness({
+      usersUpdate: vi.fn(async () => Promise.reject(new Error("users.json is locked"))),
+    });
+    await bootToOnboarding(h);
+    expect(h.warn).toHaveBeenCalledWith(
+      "renderer.boot.onboarding_skipped",
+      expect.stringContaining("refused"),
+      expect.objectContaining({ reason: expect.stringContaining("users.json is locked") }),
+    );
+  });
+
+  it("re-derives the flag on retry — a completed wizard never reopens", async () => {
+    // The wizard's last act flips the durable flag, so the record ITSELF is
+    // what keeps the phase shut. Nothing here remembers "already shown".
+    const usersUpdate = vi
+      .fn<NonNullable<FieldHost["usersUpdate"]>>()
+      .mockResolvedValueOnce(NEW_USER)
+      .mockResolvedValue({ ...NEW_USER, onboarded: true });
+    const h = harness({ usersUpdate });
+    const phases: BootPhase[] = [];
+    h.machine.subscribe(() => {
+      const p = h.machine.view().phase;
+      if (phases[phases.length - 1] !== p) phases.push(p);
+    });
+    await bootToOnboarding(h);
+    expect(h.machine.view().phase).toBe("onboarding");
+
+    // The wizard finishes, and the very next step of the boot fails — the one
+    // way to reach retry() from PAST the hold.
+    FakeManager.failNext = true;
+    h.machine.completeOnboarding();
+    await flush();
+    expect(h.machine.view().unavailable?.reason).toContain("document open failed");
+
+    h.machine.retry();
+    await flush();
+    // Re-read (2 calls now), and no second visit to the wizard.
+    expect(usersUpdate).toHaveBeenCalledTimes(2);
+    expect(phases.filter((p) => p === "onboarding")).toHaveLength(1);
+    expect(h.machine.onboarding).toBeNull();
+
+    firstManager().emit({ phase: "ready", loading: null });
+    await flush();
+    await feedCleanFrames(h);
+    expect(h.machine.view().phase).toBe("interactive");
   });
 
   it("view() returns a stable reference between notifications (useSyncExternalStore contract)", () => {

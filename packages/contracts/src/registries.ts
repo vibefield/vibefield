@@ -16,9 +16,12 @@ export const DESKTOP_TRAY_GUID = "c524c40e-05b6-4d89-bbb9-82ba4e97ea91" as const
 
 /** One place for every port VibeField binds or reserves. */
 export const PORTS = {
-  /** fieldd product API — renderer control plane (loopback WS, JSON-RPC text). D27 */
+  /** fieldd product API — renderer control plane (loopback WS, JSON-RPC text). D27.
+   * UA-D12: LEGACY DEFAULT, documentation only — every pair binds ephemeral
+   * (port 0) since UA-5 and product.json is the only discovery. */
   FIELDD_WS_CONTROL: 9410,
-  /** fieldd product API — renderer data lanes (loopback WS, binary, D5 framing). D27 */
+  /** fieldd product API — renderer data lanes (loopback WS, binary, D5 framing). D27.
+   * UA-D12: LEGACY DEFAULT, documentation only — see FIELDD_WS_CONTROL. */
   FIELDD_WS_DATA: 9411,
   /** reserved by truffle's own WS bus — never bind. */
   TRUFFLE_WS_RESERVED: 9417,
@@ -176,6 +179,12 @@ export const TAILNET_SCOPES: readonly Scope[] = [
   "mcp.consume",
 ] as const;
 
+/** UA-4 (spec §7.3, UA-D5): the guest preset — a WhoIs-verified tailnet peer
+ * whose login does not match this user's stored link. Deliberately empty:
+ * guests get a polite hello and typed refusals, not capabilities. Any future
+ * guest surface grows from the `guestOk` method column, never from scopes. */
+export const TAILNET_GUEST_SCOPES: readonly Scope[] = [] as const;
+
 /** Socket file names under the daemon run dirs; paths are stable across restarts (external-mode law). */
 export const SOCKETS = {
   FIELDD: "fieldd.sock",
@@ -184,9 +193,15 @@ export const SOCKETS = {
   /** NF — Ghosttea control/frame endpoints under native/run/: bound by
    * field-native (which owns creation, permissions, and stale-unlink), dialed
    * by ticket holders. Path stability across fieldd restarts is what lets
-   * ghosttea clients read endpoints once at construction. */
-  TERMINAL_CONTROL: "terminal-control.sock",
-  TERMINAL_FRAME: "terminal-frame.sock",
+   * ghosttea clients read endpoints once at construction.
+   * RENAMED 2026-08-05 (UA-D9 regression, live dev root): the user tree
+   * (`users/<fuid>/`) pushed `terminal-control.sock` to 108 bytes on the
+   * repo-nested dev root — past the macOS sun_path ceiling — so field-native
+   * could not bind and the terminal plane crashed while mgmt.sock (96) sailed
+   * through the old shortest-name guard. Socket names live under the tightest
+   * path budget in the product; keep them ≤ 14 chars (registry lint). */
+  TERMINAL_CONTROL: "termctl.sock",
+  TERMINAL_FRAME: "termframe.sock",
 } as const;
 
 /** File names VibeField owns beneath a daemon's own data directory. A name here
@@ -199,6 +214,47 @@ export const FILES = {
   /** The app-owned Ghostty-syntax overlay the embedded terminal service loads
    * AFTER the user's own Ghostty files (GT-3 rider; ghosttea `with_config_path`). */
   TERMINAL_CONFIG: "config.ghostty",
+} as const;
+
+/** UA-D10 — the on-disk layout under a data root, as REGISTRY DATA: relative
+ * path segments, one authority, consumers join and never respell (the seven
+ * hand-copied derivations the UA census found are the R4 drift class again).
+ * Socket/file basenames compose from their own registries above. Generated
+ * into Rust by `pnpm gen` and pinned on both sides by
+ * `fixtures/layout.vector.json`; non-TS consumers (dev-runner .mjs) read the
+ * committed `gen/layout.json`. The tree these segments describe is the CURRENT
+ * flat-v1 layout — UA-1 re-roots the same segments under `users/<fuid>/` by
+ * changing the ROOT, never the segments. */
+export const LAYOUT = {
+  FIELDD_RUN_DIR: ["fieldd", "run"],
+  PRODUCT_JSON: ["fieldd", "run", "product.json"],
+  SHELL_TOKEN: ["fieldd", "run", "shell.token"],
+  DEVICE_ID: ["fieldd", "device-id"],
+  SETTINGS_DOC: ["fieldd", "settings", "doc.loro"],
+  REGISTRIES_DIR: ["registries"],
+  DOCS_DIR: ["docs"],
+  ARTIFACT_PREVIEWS_DIR: ["artifacts", "previews"],
+  AUDIT_DIR: ["audit"],
+  PLUGINS_INSTALLED_DIR: ["plugins", "installed"],
+  NATIVE_DIR: ["native"],
+  NATIVE_RUN_DIR: ["native", "run"],
+  PAIRING_FILE: ["native", "pairing"],
+  MESH_STATE_DIR: ["native", "mesh"],
+  LINK_FILE: ["fieldd", "link.json"],
+  TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
+  MGMT_SOCKET: ["native", "run", SOCKETS.MGMT],
+  MESHDATA_SOCKET: ["native", "run", SOCKETS.MESHDATA],
+  TERMINAL_CONTROL_SOCKET: ["native", "run", SOCKETS.TERMINAL_CONTROL],
+  TERMINAL_FRAME_SOCKET: ["native", "run", SOCKETS.TERMINAL_FRAME],
+  CRASH_DIR: ["crash"],
+  EXPORTS_STAGING_DIR: ["exports", ".staging"],
+  /** UA-1 — the user directory ABOVE the per-user roots. `users/<fuid>/` holds
+   * a full tree of the segments above; these four live at the VibeField root
+   * itself and are the only segments that never re-root. */
+  USERS_DIR: ["users"],
+  USERS_FILE: ["users.json"],
+  USERS_LOCK: ["users.json.lock"],
+  LAYOUT_STAMP: ["layout.json"],
 } as const;
 
 /** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): these channels, nothing
@@ -229,6 +285,20 @@ export const IPC_CHANNELS = {
    * menu item and the renderer must read ONE state, and it has to be main's) */
   godviewState: "vibefield:godview:state",
   /** renderer → main invoke: GodviewSetRequest — the toolbar button asking for
-   * the same transition ⌘G asks for; answers with the resulting GodviewState */
+   * the same transition ⇧⇧ asks for; answers with the resulting GodviewState */
   godviewSet: "vibefield:godview:set",
+  /** renderer → main invoke: UsersUpdateParams → UserRecord — the Account
+   * page's profile write. Main owns users.json (UA-D10); fieldd never writes
+   * it, which is what keeps the boundary lint honest. */
+  usersUpdate: "vibefield:users:update",
+  /** renderer → main invoke: {} → UsersListSnapshot — the roster + attached
+   * (UA-5; the Account switcher and the tray submenu read one truth) */
+  usersList: "vibefield:users:list",
+  /** renderer → main invoke: UsersCreateParams → UserRecord — mints user N
+   * under the §3.3 lock, then attaches to it (UA-5; the reloaded window runs
+   * the wizard's second-user variant) */
+  usersCreate: "vibefield:users:create",
+  /** renderer → main invoke: UsersSwitchParams → UserRecord — attach
+   * re-target + window reload (UA-D15); same-user switch is a no-op */
+  usersSwitch: "vibefield:users:switch",
 } as const;

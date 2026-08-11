@@ -9,3 +9,12 @@ declare module "*?worker" {
   const WorkerConstructor: new () => Worker;
   export default WorkerConstructor;
 }
+
+/** The renderer is built by Vite, but field-app deliberately has no build-tool dependency. */
+interface ImportMetaEnv {
+  readonly DEV: boolean;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}

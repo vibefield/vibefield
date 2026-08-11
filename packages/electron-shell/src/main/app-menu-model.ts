@@ -2,10 +2,12 @@
 // function, Electron is a thin adapter in app-menu.ts).
 //
 // The shell had no application menu until GT-2 — Electron's built-in default
-// was serving. Godview's toggle has to be an APP-LEVEL accelerator (GT-D2 /
-// design-04 §8.3): a menu accelerator is consumed before any renderer sees a
-// keystroke, so ⌘G reaches the overlay even while a terminal pane holds
-// keyboard focus, which a renderer-level listener could never promise. Owning
+// was serving. Godview's toggle has to be answered ABOVE the page (GT-D2 /
+// design-04 §8.3) so it reaches the overlay even while a terminal pane holds
+// keyboard focus, which a renderer-level listener could never promise. A menu
+// key equivalent was how that was done until 2026-08-04; it no longer is — the
+// gesture became ⇧⇧, which no accelerator can express. See
+// GODVIEW_GESTURE_HINT below and `installGodviewDoubleShift`. Owning
 // the menu means owning the whole thing — replacing Electron's default with one
 // that omits Copy or Quit would be a regression the accelerator paid for — so
 // every standard section below is present by ROLE, which is how Electron keeps
@@ -34,6 +36,10 @@ export interface AppMenuActions {
    * flip — the item still appears (an absent menu item reads as a missing
    * feature), disabled, which is the honest face of "not here yet". */
   toggleGodview?: () => void;
+  /** Close the focused window. Needed only while the overlay is open, when the
+   * close item drops `role: "close"` to release ⌘W (see `closeWindowItem`) and
+   * therefore loses the role's built-in behaviour along with its accelerator. */
+  closeWindow?: () => void;
 }
 
 export interface AppMenuState {
@@ -42,9 +48,30 @@ export interface AppMenuState {
   godviewOpen: boolean;
 }
 
-/** GT-D2, James 2026-08-01. Electron resolves `CommandOrControl` per platform,
- * so one string is the whole cross-platform statement. */
-export const GODVIEW_ACCELERATOR = "CommandOrControl+G";
+/** THE GODVIEW ITEM CARRIES NO ACCELERATOR, and the absence is the design.
+ *
+ * The gesture is ⇧⇧ — a double tap of Shift, WebStorm's Search Everywhere
+ * gesture — and an accelerator cannot express it. Accelerators describe chords,
+ * one key held with modifiers; this is a rhythm, two taps inside 300ms. It is
+ * detected in main by `installGodviewDoubleShift` (main/godview.ts), which keeps
+ * GT-D2's actual requirement: answered above the page, so it works while a
+ * terminal pane holds focus.
+ *
+ * The road here, so nobody re-walks it (all three states were shipped):
+ *   ⌘G  — worked, but IS find-next in ghostty and every macOS text surface, and
+ *         an application accelerator always wins, so the deck lost search-next
+ *         for as long as the overlay was up. GT-2 named that cost and paid it.
+ *   ⌘⎋  — never worked, and never can: macOS eats Command+Escape before the
+ *         application sees it. MEASURED, with the app focused — ⌘G and a bare ⎋
+ *         both arrived at `before-input-event`, ⌘⎋ never did. (⇧⌘⎋ and ⌃⌘⎋ do
+ *         arrive, if a chord is ever wanted again.) A menu accelerator, a
+ *         `before-input-event` interceptor and a globalShortcut would all fail
+ *         identically, because the key never reaches the process.
+ *   ⇧⇧  — costs no chord at all. Nothing in ghostty, macOS or this shell binds a
+ *         lone Shift, so there is no collision to arbitrate and ⌘G stays the
+ *         panes' — which is why the close item's conditional ⌘W dance below has
+ *         no twin here. */
+export const GODVIEW_GESTURE_HINT = "⇧ ⇧";
 
 /** The id the Window section's close item carries, so the adapter can find it
  * again when the overlay opens. Named here because the reason is policy: the
@@ -54,14 +81,19 @@ export const CLOSE_WINDOW_ITEM_ID = "window-close";
 
 export const GODVIEW_ITEM_ID = "view-godview";
 
-/** `Toggle Godview` — a checkbox, because main knows the answer (§9 voice:
- * buttons say what they do; a state we hold is stated, not implied). */
+/** `Godview` — a checkbox, because main knows the answer (§9 voice: buttons say
+ * what they do; a state we hold is stated, not implied).
+ *
+ * The gesture rides in the LABEL because it cannot ride in the accelerator
+ * column (see GODVIEW_GESTURE_HINT). The menu is still where a user looks to
+ * learn a gesture, and a Godview row that showed no way to reach it by keyboard
+ * would teach that there isn't one. WebStorm does the same for Search
+ * Everywhere, for the same reason. */
 function godviewItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem {
   return {
     id: GODVIEW_ITEM_ID,
     type: "checkbox",
-    label: "Godview",
-    accelerator: GODVIEW_ACCELERATOR,
+    label: `Godview  (${GODVIEW_GESTURE_HINT})`,
     checked: state.godviewOpen,
     enabled: actions.toggleGodview !== undefined,
     ...(actions.toggleGodview !== undefined ? { click: actions.toggleGodview } : {}),
@@ -76,13 +108,32 @@ function godviewItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem 
  * with the overlay open the item gives ⌘W up and the deck's panes answer it —
  * and closing a pane detaches a session that goes on living (GT-D5), which is
  * the gesture a user in a terminal actually means. With the overlay closed the
- * item takes ⌘W back and the window closes, as it should. Role and label never
- * move: the menu still says Close Window and still works by click. */
-function closeWindowItem(state: AppMenuState): AppMenuItem {
+ * item takes ⌘W back and the window closes, as it should.
+ *
+ * THE HANDOVER DROPS THE ROLE, and that is the whole fix (2026-08-10). Until
+ * now this item kept `role: "close"` in both states and merely OMITTED the
+ * accelerator — which released nothing, because Electron resolves an item's
+ * accelerator as `explicit ?? roleDefault` and `close`'s default IS
+ * `CommandOrControl+W`. The smoke measured every alternative on Electron 43.1.1
+ * before this was written (`testing/smoke.ts` §⌘W): `accelerator: null` and
+ * `registerAccelerator: false` BOTH still resolve to the role default, and only
+ * an item carrying no role at all reports null. So while the overlay is open the
+ * item becomes a plain labelled command — no role, no inherited chord — and the
+ * close behaviour the role used to supply arrives as `actions.closeWindow`.
+ * With the overlay closed nothing changes: role, label and ⌘W as before.
+ *
+ * The cost, stated: the overlay-open label is ours rather than Electron's, so it
+ * is English where the role would have been localized. The alternative is a menu
+ * that eats the deck's ⌘W in every language. */
+function closeWindowItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem {
+  if (!state.godviewOpen) {
+    return { id: CLOSE_WINDOW_ITEM_ID, role: "close", accelerator: "CommandOrControl+W" };
+  }
   return {
     id: CLOSE_WINDOW_ITEM_ID,
-    role: "close",
-    ...(state.godviewOpen ? {} : { accelerator: "CommandOrControl+W" }),
+    label: "Close Window",
+    enabled: actions.closeWindow !== undefined,
+    ...(actions.closeWindow !== undefined ? { click: actions.closeWindow } : {}),
   };
 }
 
@@ -99,7 +150,7 @@ export function buildAppMenu(
   // the deck would lose the gesture to whichever fired first.
   const appSection: readonly AppMenuItem[] = platform === "darwin" ? [{ role: "appMenu" }] : [];
   const fileSubmenu: readonly AppMenuItem[] =
-    platform === "darwin" ? [closeWindowItem(state)] : [{ role: "quit" }];
+    platform === "darwin" ? [closeWindowItem(state, actions)] : [{ role: "quit" }];
   return [
     ...appSection,
     { label: "File", submenu: fileSubmenu },
@@ -121,7 +172,7 @@ export function buildAppMenu(
       submenu:
         platform === "darwin"
           ? [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }]
-          : [{ role: "minimize" }, { role: "zoom" }, closeWindowItem(state)],
+          : [{ role: "minimize" }, { role: "zoom" }, closeWindowItem(state, actions)],
     },
   ];
 }

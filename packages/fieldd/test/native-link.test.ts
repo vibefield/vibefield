@@ -4,18 +4,30 @@
 // - exactly-one reconnect after connection loss (no duplicate timers);
 // - a rejected subscription cannot poison later reconnects;
 // - close is terminal, including before a connection attempt starts.
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { isPipeEndpoint, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { NativeLink, type NativeLinkOptions } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
   for (const fn of cleanup.reverse()) await fn();
   cleanup = [];
 });
+
+/** Where the mock binds under a fresh temp root, by the WIN-D1 law: a
+ * `native/run/mgmt.sock` path on unix — created here, since no field-native ran
+ * to create it — and a root-scoped pipe name on win32, which has no directory
+ * to make and would fail `listen()` if handed a filesystem path at all. */
+function mockEndpoint(dir: string): string {
+  const endpoint = nativeEndpoint(dir, SOCKETS.MGMT);
+  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  return endpoint;
+}
 
 async function setup(
   options: Pick<NativeLinkOptions, "maxFrameBytes" | "reconnect"> = {},
@@ -24,11 +36,16 @@ async function setup(
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const pairingFile = join(dir, "pairing");
   writeFileSync(pairingFile, "ab".repeat(32));
-  const socketPath = join(dir, "mgmt.sock");
-  const mock = new MockMgmtServer(socketPath);
+  const endpoint = mockEndpoint(dir);
+  const mock = new MockMgmtServer(endpoint);
   await mock.start();
   cleanup.push(() => mock.stop());
-  const link = new NativeLink({ socketPath, pairingFile, bootId: "test-boot", ...options });
+  const link = new NativeLink({
+    socketPath: endpoint,
+    pairingFile,
+    bootId: "test-boot",
+    ...options,
+  });
   cleanup.push(() => link.close());
   return { mock, link };
 }
@@ -36,16 +53,21 @@ async function setup(
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe("NativeLink concurrency", () => {
-  it("retries a transient refusal from a stale socket path until native is ready", async () => {
+  it("retries until native is ready — including past a stale unix inode", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vf-stale-native-"));
     cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
     const pairingFile = join(dir, "pairing");
-    const socketPath = join(dir, "mgmt.sock");
+    const endpoint = mockEndpoint(dir);
     writeFileSync(pairingFile, "ab".repeat(32));
-    writeFileSync(socketPath, "stale socket inode");
+    // The unix half of the premise: a dead daemon strands its socket inode, and
+    // the dial must read that as not-yet rather than as gone. A named pipe has
+    // no inode to strand, so on win32 the endpoint is simply unbound — which is
+    // the same question asked of the pipe-aware guard in NativeLink, and the
+    // only test here that asks it before the mock exists.
+    if (!isPipeEndpoint(endpoint)) writeFileSync(endpoint, "stale socket inode");
 
     const link = new NativeLink({
-      socketPath,
+      socketPath: endpoint,
       pairingFile,
       bootId: "test-boot",
       waitForDaemonMs: 1_500,
@@ -54,7 +76,7 @@ describe("NativeLink concurrency", () => {
     const connecting = link.connect();
 
     await sleep(150);
-    const mock = new MockMgmtServer(socketPath);
+    const mock = new MockMgmtServer(endpoint);
     await mock.start();
     cleanup.push(() => mock.stop());
 

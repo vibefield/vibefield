@@ -57,6 +57,9 @@ export interface FielddClientOptions {
   /** C5/D32 — the peer-fieldd identity claim, sent in hello (label only;
    * honored solely on a tailnet door — see contracts Hello.deviceId) */
   deviceId?: string;
+  /** UA-2 — the EXPECTED user of the daemon being dialed; a configured daemon
+   * refuses a mismatch INCOMPATIBLE (restrict-only — see contracts Hello.userId) */
+  userId?: string;
   webSocket?: WsCtor; // override for tests / exotic hosts
   maxBackoffMs?: number;
 }
@@ -236,6 +239,7 @@ export class FielddClient {
         clientKind: this.opts.clientKind ?? "renderer",
         ...(this.opts.token !== "" ? { credential: this.opts.token } : {}),
         ...(this.opts.deviceId !== undefined ? { deviceId: this.opts.deviceId } : {}),
+        ...(this.opts.userId !== undefined ? { userId: this.opts.userId } : {}),
       })) as { grantedScopes?: string[] };
       if (this.ws !== ws) return; // superseded by a newer dial while awaiting
       this.grantedScopes = ack.grantedScopes ?? [];

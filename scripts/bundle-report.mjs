@@ -159,8 +159,14 @@ if (args.includes("--assert")) {
     ["tabular-nums", "field-app (ZoomPill)"],
     ["leading-none", "plugins (widgetlab cards)"],
   ];
-  const cssName = [...chunks.keys()].find((n) => n.endsWith(".css"));
-  const cssText = cssName ? readFileSync(join(assetsDir, cssName), "utf8") : "";
+  // Read EVERY built stylesheet, not the first one: the renderer emits one CSS
+  // per chunk (main + workspace + shared), so a `find` first-match graded a
+  // canary against whichever name sorted first and reported utilities missing
+  // that were present in main-*.css — a FALSE failure that stood beside a real
+  // one from 2026-08-06 to 2026-08-10. A utility in ANY built sheet proves its
+  // source tree was scanned, which is all this canary ever claimed.
+  const cssNames = [...chunks.keys()].filter((n) => n.endsWith(".css"));
+  const cssText = cssNames.map((n) => readFileSync(join(assetsDir, n), "utf8")).join("\n");
   for (const [cls, source] of CSS_CANARIES) {
     if (!cssText.includes(cls)) {
       problems.push(

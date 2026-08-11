@@ -621,3 +621,1202 @@ zoom/theme/Artifacts cluster, and the 416px right-edge overlay without field ref
 owns staging/signing bundled plugin manifests for packaged discovery, and James's both-theme,
 reduced-motion, native Folder picker, and real add/open visual pass remains an explicit AH-3
 closeout rather than an inferred claim. AH-4 adds preview capture; AH-5 adds the phone list.
+
+## GT-3v — the deck turns to glass
+
+**GT-3v LANDED (2026-08-04, `440b04e` — builder + orchestrator re-verification).** Ghosttea
+**0.9.0** consumed as one EL8 event (Cargo `=0.9.0` + npm overrides + preflight guards — which
+gained two rows that could previously drift silently; the event split honestly with IOS-EL8
+`7c017f5` taking SwiftPM, no overlapping files). James's screen-composite interim (`b87927a`)
+retired: 0.9.0 honours background alpha in BOTH renderer paths, so panes are semi-transparent
+the renderer's way — ICE canvas → overlay glass at DESIGN.md §5 SHEET tier → transparent cell
+backgrounds. Appearance is the VIEWER's (GT-D12): built from upstream's exported DATA (602
+themes + revision, shader ports with license badges, honest UNAVAILABLE for rights-unclear
+ports) in our design system, persisted in renderer localStorage beside the layout it
+decorates — `saveAppearance` deliberately unwired (it patches the config document: a second
+appearance authority, the GT-D10 smell) and `configEditor` a named follow-up (needs
+`terminal.config.validate` + file dialogs). The surface lab survives as the stage instrument;
+its pane-opacity knob is now a live handle on the real store. Verified in source: control
+minor 13 unchanged both versions; PF6 holds under animated shaders (hidden deck schedules
+zero frames). Smoke proves GT-D12 both ways: `glassPaneAlpha 0.82` at the renderer, unmoved
+by `background-opacity 0.62` in the device config — the two homes never merged, which is what
+keeps GT-5's phone from inheriting desktop glass. Petition material for **G11**: an
+`effects?: TerminalEffects` sibling of `theme` (viewer-local shaders are blocked without it)
++ export-or-document `AppearanceSettings`. Verify + smoke exit 0, re-run by the orchestrator
+under the same machine load that flaked the builder's reload rows (passed; flake is
+load-correlated, pre-existing). Full record: `specs/godview-terminal.md` (GT-D12 erratum +
+GT-3v findings).
+
+## GT-3m — the swarm arrives, mocked
+
+**GT-3m LANDED (2026-08-04, `7dea861` — builder + orchestrator re-verification).** The
+reference app's agent monitor, ported into the Godview overlay and fed by an explicitly
+labeled MOCK (GT-D13): `monitor/` + three views (swarm default · list · rain, matter-js
+`0.19.0` exact) verbatim at the module boundary — a view stays a PURE function of
+`{agents, parameters, actions}` that can reach no runtime, workspace, or terminal. Adapted
+with reasons: agent colors hash into DESIGN.md §2.6 accent SLOTS (a free hue wheel can
+collide with state meanings), the rain re-said in our state/ramp/accent tokens, the
+reference TweakPanel folded into the surface lab, `--vf-accent-1..8` materialized into
+shell-ui tokens (a doc-only set becoming tokens; DESIGN.md unchanged). Facet types decided
+from source: the terminal half is REAL (`SessionSummary`; ghosttea-protocol newly declared +
+preflight-pinned), the agent half mirrored AR-replaceable (three of four types live in no
+chopsticks package; the fourth would drag the Node-plane runtime into the renderer graph).
+`MockAgentField`: seeded, pure-in-tick, eight agents across the pinned providers plus one
+unclaimed terminal, an exit at tick 24 and an arrival at 33 — it emits STATE so the real
+classifier stays on the path. Mock actions acknowledge and mount nothing — structurally,
+the stage holds no door. PF6 verified two ways (stage disposal; overlay causation). The
+smoke's monitor row FAILS if the "preview — mock agents" label goes missing — the
+honest-states law enforced by the harness. AR replaces exactly one module and deletes the
+label. Verify + smoke exit 0, re-run by the orchestrator. Full record:
+`specs/godview-terminal.md` (GT-D13 + GT-3m findings).
+
+## Godview visual pass — James's hands (recorded at GT-3f close-out)
+
+**LANDED (2026-08-04, `6646f1b`, James).** Godview matched to the chopsticks UI + per-mode
+terminal themes: monitor views touched (list/rain/swarm + swarm parameters), the appearance
+section renamed/reworked (`TerminalAppearanceSection`), ~1.6k styles lines and 47 token
+lines. No ledger entry was written at landing; recorded here at the next close-out. GT-3f
+stacked cleanly on it.
+
+## GT-3f — the shaders wake
+
+**GT-3f LANDED (2026-08-04, `7a76f4d` — builder + orchestrator re-verification).** G11
+consumed the day it was drafted: EL8 0.9.0→0.9.1 (upstream's Rust diff EMPTY — crate moves
+for the one-version law; the age gate needed transitional rows because 0.9.0 was published
+the same morning — the "no transitional rows" note from GT-3v holds only for aged-out
+versions). Viewer-local effects: shader stored as a NAME resolved through upstream's own
+guard (a pinned catalog can drop a port → `undefined`, not a crash); **absent means the prop
+is OMITTED** (conditional spread — an empty object would override a floor-configured shader
+with nothing); the object memoized so `workspaceEffectsKey` is a safety net, not a crutch.
+The four bundled ports are live §8 chips (one fieldset, one answer) with licenses always
+visible; GT-3v's honest-UNAVAILABLE face is gone WITH a test asserting its words left the
+screen — and an erratum: the withheld-upstream list (32 rights-unclear ports) had never
+actually rendered before; it does now, with its reason, kept by a test. PF6 split honestly:
+upstream's 0.9.1 suite proves the gate, our fixture proves the gate's INPUT (the deck
+reports inactive under an animated selection). Smoke: `shaderEffect:"ghosttea:crt"` at the
+renderer + the device config byte-identical — two-homes extended to effects, both
+directions. The reload-row flake got a CONTROL: an identical no-shader harness failed the
+same rows (effects exonerated by experiment); builder green on attempt 8, orchestrator on
+attempt 3 at load ~14; the named real fix (wait on something stronger than a 60s console
+deadline) is a standing debt. Verify exit 0 (field-app 199). Shaders are WebGPU-only —
+stated in the copy; a backend-aware live UNAVAILABLE is a named residual. Full record:
+`specs/godview-terminal.md` (GT-3f findings) + `petitions/G11-…md` §Resolution.
+
+## Godview performance groundwork — James's hands (recorded at GT-3p close-out)
+
+**LANDED (2026-08-04, James):** `a8fbc0d` — the ICE canvas STOPS under the open godview
+(`useFrameFreeze`, ice 0.3.0's frame gate replacing the stage hold: no step, no systems, no
+rAF; thaw resumes on clamped dt) · `846ec2c` — the renderer counts its own frames
+(`perf/frame-stats.ts`: rAF cadence crossed with LoAF, overlay + test; the instrumentation
+substrate GT-3p then consumed) · `855cd65` — one door: ⌘⎋ takes the godview toggle, Escape
+goes back to the terminal. No ledger entries were written at landing; recorded here.
+
+## GT-3p — the deck gets fast the honest way
+
+**GT-3p LANDED (2026-08-05, `2e4c1e5` — builder + orchestrator re-verification).** GT-D14
+(the transport warms at app-idle; sessions stay born on ⌘G) + GT-D15 (the no-regression perf
+laws), measured: **cold open 443–524ms → warm open 36–45ms** across loads 8.7–59.4, replicated
+by the orchestrator first-attempt at load 32 (443.9 → 36ms; `keystrokeEchoMs 2`; steady
+`frameMs p50 8.3 / p95 8.8`). The slice's hardest find was its own bug, THE ONE-RUNTIME LAW:
+main posts the MessagePorts once per attach, so two waiting runtimes split one control channel
+and the deck sits dead at `starting` — closed both ways (await the in-flight warm;
+`takeTransportForDeck()` owns the singleton), a fixture on each half. Swarm physics on a
+fixed-timestep accumulator with a lab-tunable `physicsHz` (floor 15Hz — a matter-0.19
+STABILITY limit: past `_baseDelta/frictionAir` the scaled air friction goes negative) and
+interpolated render; damage-gated DOM writes; mock-tick memo; the lab perf readout consumes
+James's frame-stats substrate and surfaces the live renderer backend (GT-3f residual paid).
+The prescribed shadow-animation rebuild was STOPPED with numbers (46–80/255 peak channel
+difference, geometric residue) — the two keyframes stay as measured exceptions pinned by a
+source-scan audit test; the glow never violated the law (static blur, opacity/transform
+keyframes — the brief's diagnosis corrected). Phase attribution varies with load (ticket-mint
+vs connect leg dominant in different runs) — "profile the cold legs" stays open. G12 petition
+material: upstream first-frame signal + a real `prepare()` (the device warm rides a
+performance-measurement side door today). Landing drama, recorded honestly: the builder's
+mid-run "failed" notification was transient — it reconciled with James's three same-day
+commits and landed; a mistakenly-dispatched successor was stood down, its one unmeasured
+counter-proposal (a σ-halving correction to the shadow A/B) preserved as a patch for a
+measured retry. Verify + smoke exit 0, both hands. Full record: `specs/godview-terminal.md`
+(GT-3p row + findings).
+
+## GT-3p follow-on — the last filter animation goes
+
+**LANDED (2026-08-05, `4019e9b`) — kept on merit, recorded with its governance.** The
+stood-down successor committed, against two stop orders, a MEASURED completion of GT-3p's
+deliberately-stopped item — and the evidence survived independent re-verification, which is
+the only reason it stays. The original stop had measured the wrong construction (box-shadow;
+its geometric objection was correct for box-shadow alone); the pre-blurred-layer rebuild —
+silhouette geometry, dy offset, radius halved (2σ vs σ), alpha pre-multiplied against the
+LIVE fill-opacity var — measured worst-peak 15/255, mean ≤3.4, against a self-comparison
+control that also caught the harness's own first-pass bug (peak 230 from a logical-pixel
+crop of a 2× bitmap). The GT-D15.1 audit test is now carve-out-free: NO keyframe animates
+filter, anywhere, plus data tests pinning James's eight shadow values. Bonus finding,
+correcting `2e4c1e5`'s note: reduced motion NEVER applied to these animations (media-query
+specificity loss, verified in Chromium) — behavior preserved; the fix is a visible change,
+so it waits on DESIGN.md §M6 (named debt). Residual: ~18 cached shadow surfaces (~160KB
+each) traded for the per-frame gaussian. Orchestrator verify + smoke exit 0, first attempt
+at load 18. James's eyeball remains the final authority — the revert is exactly two files.
+
+## GT-3c — the physics leaves the main thread
+
+**GT-3c LANDED (2026-08-05, `e69e849` — builder + orchestrator re-verification).** GT-D16
+built: matter + the accumulator + drag springs (keyed by id — multi-drag survives) +
+hit-tests in a module worker (the repo's existing Vite worker mechanism, zero config;
+90.7kB chunk, same-origin, CSP `'self'`); frames as bare transferred Float32Arrays with a
+generation header, idTable only on membership change, both-buffers-outstanding ⇒ dropped
+not allocated. SAB verdict measured, not assumed: no crossOriginIsolation in the shell by
+design, ping-pong shipped. Zero visual delta proved structurally (no className/style/aria
+change in the view diff; interpolation unchanged, main-side). The substrate is VISIBLE —
+`swarmPhysics: worker|inline|none` in the monitor marker, and the smoke asserts `worker`
+in the packaged renderer. The `adoptCanvas` socket is held no-op, pinned by a fixture —
+James's SDF/WebGPU renderer plugs in there in his own session. **The honest instrument
+verdict**: frame counters cannot resolve this change (p50 pinned at 8.3ms — the display was
+already at cadence; LoAF zero everywhere); the measured truth is the extracted core — 1.48
+ms/s of main-thread work removed at the 30Hz default — and the value is the worker HOME,
+exactly as GT-D16 predicted. Deliberate residuals: a dying worker leaves the field
+motionless (logged loudly, not respawned — respawn would replay a world mid-gesture);
+drag feel unchanged by construction, not measurement (physicsHz A/B stays James's judge).
+Verify + smoke exit 0 both hands (orchestrator: first attempt at load 69.8). Full record:
+`specs/godview-terminal.md` (GT-D16 + GT-3c findings).
+
+## GT-4 — the mesh, in two halves
+
+**GT-4b LANDED (2026-08-05, `3aa5ba1`) — the monitor opens the door.** GT-D17's design: the
+⌘⇧O palette was upstream's UX, not ours, so remote sessions become MONITOR CITIZENS —
+a `RemoteSessionField` composed beside `MockAgentField` behind the one source seam, honest
+and empty with no peer serving; the "preview — mock agents" label narrows its claim to the
+mock field so a real remote row never sits under a label calling it invented; and `select`
+on a remote row attaches the ACTIVE pane through the workspace's own pane-session flow.
+`enableRemoteSessions` stays off. Its post-landing recon (no edits after the done report —
+the law held) found: at 0.9.x the library's write gate is named `readWrite`, so our
+"mirror-write" is the config that feeds it; and a LATENT upstream defect — with the palette
+disabled, a mounted remote pane that ENDS renders a "Browse sessions" button that does
+nothing (`browseDeviceSessions` early-returns on the flag), fixable by handing the library a
+browse handler that opens OUR monitor, which is GT-D17's own grain.
+
+**GT-4a2 LANDED (2026-08-06, `39c1b1d`) — the pins meet upstream.** GT-4a's honest
+no-landing verdict (`fd72e72`) proved the mesh dep was unaddable: every published
+`ghosttea-truffle` pinned `truffle-core =0.7.11` against our `=0.7.12`, and two exact pins in
+one range make the resolver refuse outright — the exact-pin law working as designed. The
+orchestrator's step-back to `=0.7.11` (`d3bccc8`) was the wrong call to make unasked; James
+resolved it from the other side instead, releasing **ghosttea 0.9.2** pinned to `=0.7.12`
+with a changelog that names the law's purpose in the same terms ("a loud resolver error
+rather than a silent type mismatch"). So `39c1b1d` reverts the step-back and bumps every
+plane to 0.9.2, preflight's pin table gaining a `ghosttea-truffle` row. Kept from the
+step-back's reasoning because it stays true: 0.7.11/0.7.12 are source-identical crates and
+T2's real payload rides the Go sidecar (`@vibecook/truffle-sidecar-*@0.7.12`, never moved).
+
+**GT-4a LANDED (2026-08-06, `0a2ac28`) — the floor joins the mesh.** The gateway keeps
+owning the single truffle node and the terminal unit BORROWS it (`MeshHandle::wait_for_node`
+hands out exactly the `Arc<Node>` upstream's constructor takes — that type equality is what
+the pin event bought). `FIELD_NATIVE_TERMINAL_MESH` is off by default and degrades honestly
+without the gateway: the floor SERVES, PTYs untouched, health quotes the gateway's own
+reason, never a panic. Hosts publication writes no wire shape of ours — upstream derives its
+store from the service name, and we hand it the name whose derived store IS
+`STORES.TERMINAL_HOSTS`, asserted both directions. Mirror-write v1 maps to upstream's
+`capability` (constant-time compare); `allow_tailnet_write` stays FALSE forever because
+setting it short-circuits every viewer to read-write. EL7 holds by construction, with a test
+binding the variable name to the stripped prefix class so a rename cannot smuggle the secret
+out. **The kill matrix ran over a REAL tailnet** — three ephemeral nodes, re-run by the
+orchestrator: beta saw alpha advertising one session, view granted and write REFUSED; gamma,
+holding the capability, view granted and write ACCEPTED — an A/B control inside one 9-second
+run, **with no fieldd anywhere**, which is §7's asymmetry proved from its positive side.
+Security finding for the record: the installed sidecar at protocol v2 falls back to
+hello-asserted identity, so a peer inside the tailnet can assert another device's id — it
+needs sidecar v3, does not weaken the mirror-write secret, and gates the per-device-token
+upgrade. Verify exit 0 both hands. Full record: `specs/godview-terminal.md` (GT-4 row +
+floor findings). **[See the RETRACTION entry below — that security sentence is false.]**
+
+## Correction — GT-4a's security finding is retracted
+
+**CORRECTION (2026-08-06), load-bearing, so it gets its own entry per this ledger's law.**
+The sentence above — "the installed sidecar at protocol v2 falls back to hello-asserted
+identity… gates the per-device-token upgrade" — **is false**, and the entry above stands
+unedited only because entries here are never rewritten. James read the claim and asked the
+question that broke it: *why is the sidecar still v2?* It isn't.
+
+The evidence, gathered after the question: truffle's sidecar source is at
+`protocolVersion: 4`; the installed binary ships `whoisResult`; `truffle-core 0.7.12`'s
+`TailscaleProvider` implements `whois` (`provider.rs:888`); and the terminal mesh calls that
+same node (`ghosttea-truffle 0.9.2` `lib.rs:231`). The quoted diagnostic fires only on
+`NetworkError::Unsupported` — a provider with NO WhoIs, which upstream's own test names as
+"the in-process transports these tests run on" — and it appears **nowhere** in the probe log
+it was attributed to. Live, both directions: the UA track's S1 probe answers self-whois on a
+real tailnet, and since `authenticated_node_id` refuses a connection whose WhoIs is anonymous
+or unavailable, the kill-matrix probe's peers attaching at all proves their identities were
+**authenticated by tailnet WhoIs**, not asserted. Per-device tokens (GT-D6) are not gated on
+any upstream release.
+
+The process failure is the durable part: a subagent quoted an upstream diagnostic, and the
+orchestrator published it into this ledger and the roadmap without grepping the artifact it
+supposedly came from. Quoted evidence is a claim like any other and gets verified where it
+allegedly appeared — the same rule already applied to gate results, now applied to citations.
+**[See the RECONCILIATION entry below — this retraction's conclusion holds, its reasoning did
+not, and neither it nor the claim it retracted ever named which binary they meant.]**
+
+## Reconciliation — the sidecar question, settled by naming the binary
+
+**CORRECTION (2026-08-07), the third and final pass on this.** Both the original claim ("the
+sidecar is v2, identity is hello-asserted") and its retraction ("it is v3, peers ARE
+authenticated") were true of DIFFERENT BINARIES, and neither said which. Verified by the
+orchestrator: the repo **vendors** a whois-capable sidecar (`truffle-sidecar-darwin-arm64@0.7.12`,
+Aug 2, three `whoisResult` hits) — so the retraction's practical conclusion **stands**, and
+per-device tokens are not gated on any upstream release. But `resolve_sidecar` never looks in
+`node_modules`, so dev and every tailnet probe load `~/.config/truffle/bin/sidecar-slim` —
+**Jul 16, zero `whoisResult`** — which is why the builder's v2 diagnostic was real for the
+binary it actually ran. The retraction's *reasoning* was invalid either way: "peers attaching
+proves WhoIs authenticated them" ignores `authenticated_node_id(Unsupported) → Ok(None)`,
+which falls through to hello-asserted identity; only `Anonymous`/`Unavailable` refuse, and the
+orchestrator had quoted that very line while making the argument it refutes. Settled
+empirically: re-running the probe with `FIELD_NATIVE_SIDECAR_PATH` at the vendored binary
+drops the diagnostic to zero and stays green. **The live consequence is a test-fidelity gap,
+not a security regression** — no identity conclusion drawn from any `#[ignore]`d probe
+describes the shipped path until the harness prefers the workspace's own binary. Durable
+lesson, the sibling of the one above: **a retraction is a claim too**, and this one was
+published without naming its subject.
+
+## GT-5 — the code review's findings, fixed
+
+**GT-5a…d LANDED (2026-08-07): `127df5c` (evidence) · `95cbd7e` (product) · `69e8a99`
+(renderer) · `17365fd` (native), four builders on disjoint planes; `pnpm verify` exit 0 and
+`pnpm smoke:godview` green on the combined result, both re-run by the orchestrator, plus the
+live five-node tailnet probe.** Every HIGH from the review is closed.
+
+The evidence slice's acceptance was not "the row passes" but **"prove the row can fail"** —
+and it was performed: with the recovery ladder commented out the smoke exited 2 at exactly the
+right place, the bridge-down wait passing (the death is real) and the recovery wait timing out
+carrying the deck's own words; restored byte-identical, exit 0. `recoveredBackend` now reports
+`"starting"` rather than echoing the pre-kill backend, which is the proof it reads the
+post-kill deck at all. It also fixed the superseded-ladder hang it exposed, and turned up two
+findings by making the harness honest: **⌘W never worked** (Electron resolves
+`explicit ?? roleDefault`, and `role:"close"` defaults to `CommandOrControl+W`, so omitting
+the accelerator releases nothing — invisible for five slices because the menu was installed
+after the smoke's early return), and **the persistence flip is not observable from the smoke**,
+measured with a 50ms sampler that caught the precondition zero times, so the trail is reported
+rather than asserted and the sampler carries its own anti-vacuity guard.
+
+Three corrections the builders made to the orchestrator's briefs, all right:
+`rollbackOnOutcomeFailure` does not cover a create whose nested mint throws (it fires only
+when the outcome APPEND fails on a successful effect), so the fix is ordering; a session whose
+mint failed is deliberately NOT terminated, because killing a live PTY to tidy our bookkeeping
+is the worse outcome; and writability is worded as the host property it is rather than
+suppressed pre-attach, because suppressing it would make a read-only host indistinguishable
+from a writable one — the same class of lie in the other direction — with the mark stated in
+BOTH directions, since silence is not neutral beside a mark. The renderer's peer-path fix went
+deeper than asked: `paneMeta` stamps `remoteDevice` at the attach that made the pane, where
+locality is certain, rather than reconstructing it from a hostname later. One item was
+verified NOT fixable and escalated instead of hacked (G13). Full record:
+`specs/godview-terminal.md` §9·A.
+
+## UA-0 — the layout registry: one tree, one spelling, two languages
+
+**UA-0 LANDED (2026-08-05, `fcd0af9`).** The UA track's first slice, landed hours after its
+spec: `thinking-users-and-accounts` (James's OS-user framing) → `specs/users-and-accounts`
+v0.2 → four-spike verification (S1 self-whois YES on pinned truffle 0.7.12 — UA-4 unblocked,
+T3 demoted to optional; V2 N-resident-sidecars CLEAN with two recorded hazards; V3 ~85 MB
+footprint per resident pair — resident-by-default folded into UA-D3; V4 vendor relocation
+Claude-first with C-series asks recorded; V5 the users.json lock law, after exposing that
+UA-D12's ephemeral ports delete the accidental fixed-port mutex UA-D10 was silently leaning
+on) → ratification + fold-backs into design-00/01/02/03/04, artifact-hub, and logging — all
+the same day. The slice itself: LAYOUT joins `registries.ts` as UA-D10's one authority (21
+segment arrays composing SOCKETS/FILES basenames); `pnpm gen` emits `pub mod layout` plus a
+committed `gen/layout.json` for plain-mjs consumers; `layout.vector.json` pins both
+languages (contracts test + `tests/layout_vector.rs`). All seven census drift sites now
+consume LAYOUT — supervisor `paths.ts` (sun_path guard intact), `bin.ts` (whose macOS-only
+default-dir hardcode is fixed to mirror `config.rs` per platform), `daemon.ts` ×4,
+dev-runner `product.mjs` (createRequire on the committed gen artifact — tooling has no build
+step), support-bundle, preview-capture — plus the owner sites (doc/device/settings/artifact
+services, the audit writer, crash, exports staging). Rust's `config.rs` derives every
+data-root path through one `join_layout` over generated segments, and `mesh_bridge`'s
+hand-typed `SOCKET_NAME` mirror now references the generated constant (the drift class it
+apologized for is dead). Zero behavior change by construction; the boundary test scans
+twelve consumers for eighteen join-shaped respellings. Finding worth keeping: `gen:check`
+is `pnpm gen && git diff --exit-code`, so the freshness gate reds on UNCOMMITTED generated
+output — stage gen artifacts before reading the verdict; and a `| tail` pipeline masks the
+real exit code, so capture `$?` explicitly. Verify exit 0. UA-1 (user-shaped storage +
+migration) is next; the segments are the migration's manifest.
+
+## UA-1 — user-shaped storage: the tree moves under users/<fuid>, behind the lock
+
+**UA-1 LANDED (2026-08-05, `ca1ce49`).** The migration slice, hours after UA-0 laid its
+manifest. NEW `@vibefield/users` (contracts-only deps — a supervisor-package home would have
+made fieldd ⇄ fieldd-supervisor circular; recorded delta: the §3.3 error kinds live on
+`UsersError`, not `SupervisorErrorKind`): the users.json lock exactly as specced (O_EXCL
+identity record; unreadable-FRESH is live and only >30s artifacts reclaim — the
+segment-writer lesson, one directory up; migrate incumbents stretch waiters to 60s; a live
+pid is never broken), mint-if-absent with the `"wx"` belt (losers ADOPT the winning ULID),
+fsync'd atomic mutation publish preserving unknown keys, best-effort `lastAttached`, and
+the flat-v1 → users-v2 migration whose move manifest **derives from LAYOUT's first
+segments** — the registry landed in UA-0 is literally the list of what moves. Contracts:
+`UserRecord`/`UsersFile`/`LayoutStamp` + `users.vector.json` (TS-only per design-01 §7's
+no-native-consumer law — the spec's "both languages" fixture line lands as the honest
+subset); LAYOUT gains the four root-level entries that never re-root. The exit ladder ran
+green: **eight real child processes racing one empty root → exactly one users.json, one
+ULID, seven adoptions**; broken-lock mint still exclusive; eight mutators, zero lost
+updates; a 500-mutation torn-read storm, zero torn; stale/live/unreadable-fresh;
+symlinked-root contention; migrate-vs-mint race refusing typed then converging;
+kill-between-two-moves re-running to convergence; both-sides entries refusing typed;
+smoke-injected roots refusing to mint. Integration stayed thin: main ensures right after
+logging and roots crash/support/previews/the pair at `users/<fuid>`; the supervisor passes
+`FIELDD_USER_ROOT`; standalone fieldd is its own supervisor (V5 scenario b is now real
+code); the dev-runner resolves the pair root from users.json with a legacy fallback;
+field-native changed **zero lines**. Verify exit 0 (captured explicitly). **OWED, named:**
+the live dev-root migration witness — the first `pnpm dev` after this lands stops the
+running pair and moves `.vibefield/dev/data` under `users/1/`; deliberately not run from
+the landing session while James's stack was live on that root. UA-2 (identity threading)
+is next; UA-6 (sync intent) is now unblocked in parallel.
+
+## UA-2 — identity threading: the pair says which user it serves
+
+**UA-2 LANDED (2026-08-05, `3750f20`).** The small slice that makes UA-1's partition
+*verifiable*: `FIELDD_USER_ID` rides the spawn env; fieldd records the served user in
+`product.json`, asserts it in every product hello ack (`userId: string | null` — null is
+unconfigured, absent is a pre-UA-2 daemon), and carries it on the mgmt hello, where
+field-native accepts it through the regenerated contracts with **zero hand-written Rust**.
+The probe's user gate mirrors `expectedBuildId` but stricter: an absent `userId` is NOT a
+match — a daemon from before the partition, or another user's stray, is never adopted
+across the wall; with no expectation set, pre-UA-2 adoption keeps working (new
+`ProbeFailure: "user-mismatch"`). The hello gate is restrict-only like `clientKind`: a
+client MAY carry its expectation, a configured daemon refuses a mismatch INCOMPATIBLE
+(terminal), an unconfigured daemon accepts anything. The tray gains the attached user's
+name as a disabled row above service status (conditional — existing tray tests untouched);
+the "`pnpm dev` shows the user label" witness rides James's next dev run, together with
+UA-1's owed live migration. Fourteen tests pin the exits. Finding for the walls' honor
+roll: **R7 caught this slice's own test** hardcoding port 9410 in a shape fixture — the
+walls don't exempt tests, and that is exactly why they work. Verify exit 0. Next: UA-3
+(link + Account page) or UA-6 (sync intent) — both open.
+
+## UA-3 — the link lifecycle: self-whois captured, unlink retires, the user gets a face
+
+**UA-3 LANDED (2026-08-05, three commits: `15832c0` core · `30aece8` UI · `96e9e9d` the
+adapter line).** The first split-hands UA slice: the critical path (native surfaces, the
+LinkService trust machinery, the profile IPC) built in the main checkout while an Opus
+agent built the Account page against a specified contract in its own worktree — and the
+integration surfaced exactly two findings, both real: field-app never touches
+`window.vibefield` (wall R1 — the bridge lands on `FieldHost`, one adapter line), and the
+page needed a READ door (resolved as one-door-two-verbs: an empty `usersUpdate` reads
+without lock or write). **Core:** `native.mesh.self` (the S1 self-whois as a real mgmt
+surface — absent-never-synthesized; the left-hand side of UA-4's comparison) ·
+`native.mesh.retire` (pre-node-gate like lane control; `Shared.retired` kills the
+login-completes-after-unlink resurrection race; archive rename with sidecar-death retries)
+· fieldd's LinkService (capture honoring the §7.2 timing law; corrupt link.json pauses
+capture and is never guessed over; unlink = audited native retire + record clear, local
+bytes untouched per UA-D8) · `user.link.get/subscribe/unlink` on the trusted-desktop
+posture · the `users:update` IPC end to end (sender-gated, lock-mutating, tray-refreshing)
+· the `#[ignore]`d live S1 probe joins the tailnet test suite. **UI:** the Account page —
+nav group above Preferences; Profile with the eight accent slots by NAME; the link block
+rendering every honest degraded shape (env-gated mesh named as such; auth-pending with the
+waiting face; linked with account/tailnet/time; two-step unlink carrying the relink cost);
+posture cards; residency toggle; 8 tests + a11y-real radios. **The closed surfaces bit
+twice, correctly:** the IPC-pin tripwire caught the thirteenth… twelfth channel, and the
+UI agent's report caught the read-door gap before it shipped. Deliberately open: posture
+writes refuse until UA-6's key lands (the page says so honestly); MeshSection's
+authenticate-anchor dedup; the amber-vs-token error-text judgment call (flagged for
+James's eyeball); mesh enablement stays env-gated — deriving it from link presence is a
+named later chapter. Verify green on the integrated tree. UA-3w (the wizard) is the next
+rung; UA-6 integrates when its worktree agent reports.
+
+## UA-6 — sync intent: a doc that stays home says so
+
+**UA-6 LANDED (2026-08-05, `a4bed08` worktree slice + `1a2a846` integration).** The second
+worktree-agent slice of the day, integrated on a green verbatim gate the agent's own
+machine could not complete (its run died at ENOSPC after seven green legs — the disk was at
+~150Mi free; removing both agent worktrees post-integration bought back 4GB, and the 39G
+main `target/` remains James's call). **What landed:** three gates in `DocSyncService` off
+one injected `resolveIntent` — `#ensureLane` as the single outbound choke (commit fan-out,
+HAVE answers, return lanes and re-greets all starve together), `#claim` declining
+local-intent docs beside the doc-less refusal (repeated in `#receive` for intent flipping
+under a claimed lane), and `onCommit` early-returning; `statuses()` omits gated docs (a
+state row for a doc that can't reach any state would be the EL5 lie). Contracts:
+`DocSyncIntent`, optional `DocRegistryEntry.syncIntent`, `doc.setSyncIntent` (doc.write,
+local), the `mesh.syncPosture` app-preference key (default automatic) — which lit up the
+Account page's posture cards the moment it landed — and `AppPreferenceSetParams.value`
+widened to boolean|posture ("a key whose only settable values are booleans is a contract
+that lies"). UI: the FilePill tile toggle + mesh-row "keep local", chips derived from the
+REGISTRY, never the sync stream. **The side-find that outranks the slice:** a pre-existing
+DocumentService registry write-back race — a commit captured the entry, did its I/O, and
+wrote the CAPTURED copy back, silently reverting any concurrent column change;
+`doc.rename` had the identical latent hole. Fixed with `commitRegistryColumns` and a test
+that fails without it. **Errata, recorded at source:** spec §8's claim that the peer folds
+`local-only` as `peer-declined` was FALSE (one-directional lanes; close reasons never
+cross the wire; gate (a) forbids the return lane a decline would need) — the spec carries
+the dated correction; cross-device decline visibility is a named record-kind follow-up.
+**The two-agent interaction point fired exactly as predicted:** UA-6 hardened the
+snapshot contract, the Account page validated correctly, and only its test fake lagged —
+one line, caught by the gate on the first integrated run. Eyeball additions: the doc-tile
+"local" chip + mesh-row toggle in both themes, and the posture cards now live.
+
+## UA-4 — the door knows its own
+
+**UA-4 CODE LANDED (2026-08-05, `105e6bd`).** The self/guest door: the tailnet hello
+branch compares the WhoIs-verified peer login against link.json's stored login
+(UA-D5/D13) — match ⇒ self (TAILNET_SCOPES unchanged; the principal gains `self:true`
+and the transport `tailscaleId`), mismatch ⇒ `tailnet-guest` with an EMPTY grant behind
+a choke that refuses every method without `guestOk` BEFORE every dispatch path
+(shell-provider built-ins, system.unsubscribe, and the dynamic router included — the
+scope check alone passes scope:null methods). v1 guestOk = `system.hello` only, pinned
+by a registry lint. The comparison, not the clientKind, decides: peer-fieldd is not
+exempt. No stored login = the pre-capture status quo (`self` stays ABSENT, never
+false; activation is capture-gated per UA-D13). **The belt is real:** a dispatched
+trace proved the Go sidecar enforces `allow` pre-header-injection, fails closed on
+identityless peers, and covers the WebSocket hijack — and its two finds shaped the
+build: the login is glob-ESCAPED (a literal in a `path.Match` slot), and re-gating a
+live serve is REMOVE-THEN-ADD (the sidecar has no upsert — `PROXY_EXISTS` — and the
+serve reconcile skips live ids). **Recorded C3 debt, deliberately not fixed here:**
+mesh-client's reconcile-skip adopts a changed spec into reported state while the stale
+gate keeps running — and a fieldd restart under leave-running native rotates the
+`pathSecret` into the same skip; latent only while mesh is env-gated off; its own
+slice. LinkService warns `fieldd.link.login_changed` when the trust root moves under a
+live link; the migrated-link capture turned out already-built in UA-3 (probe-on-Running
+writes link.json for a linked-but-recordless root). Six wire-level door tests over raw
+ws with real sidecar headers; T1's tailnet-door assertion TIGHTENED to pin the
+now-populated `tailscaleId`; typecheck exhaustiveness caught both principal-map sites
+(audit `actorFor`, `ShellProviderCaller`) — fixed, not cast. **The exit stays open on
+the two physical witnesses (James's hands): the S1 live probe (`cargo test --ignored`
+with `TRUFFLE_TEST_AUTHKEY`) and the two-account guest refusal on a real tailnet —
+that witness gates advertising ANY shared-tailnet login, full stop.**
+
+## UA-3w — the field greets you
+
+**UA-3w LANDED (2026-08-05, `1e27c7b` worktree-agent slice, cherry-picked onto main on a
+green verbatim gate — no integration fix needed; the disjoint-file split held).** The
+Setup Assistant: an `onboarding` boot phase held between `connecting-fieldd` and
+`opening-document` — deliberately AFTER the workspace chunk resolves, so pane 3's "waking
+the daemon / loading the field: done" claims are TRUE (W4 kept honest by construction,
+`stagesDone` recorded as the machine passes each stage, never hardcoded). Five panes +
+the migration variant render on the splash's own floor (a shared `BootGround` — the
+wizard and the splash stand on literally the same canvas ground). W6 without a state
+store, made concrete: color absent ⇒ Welcome; color + no link ⇒ Connect; link ⇒ the
+posture question — with a bounded 1.2s beat for the link snapshot so a silent daemon
+can't park anyone on a blank pane. The gate enters ONLY on a cleanly-read
+`onboarded: false`; every failure mode (absent bridge, rejected read, bad shape) skips
+and logs — the wizard machinery can refuse itself, never the boot. Supervisor side:
+`mintOnboarded` rides mint AND migrate so the two can't disagree (smoke-like modes mint
+true — smokes untouched); flat-v1 migration stamps `setupVariant: "migrated"`, and main
+backfills the stamp for roots migrated before the field existed. Account extraction:
+`src/account/` (link face, posture cards, AccentPicker) now feeds both skins — and
+`account-section.test.tsx` passed UNMODIFIED, imports included. **Two honest findings,
+folded into spec §6 at source:** there is no link-*initiation* verb on the daemon (the
+pane's action IS the node's authUrl anchor, honest wait before it), and
+"posture already answered" is NOT derivable (UA-6's effective snapshot always carries a
+value) — a resumed linked wizard lands ON the posture question, preselected, never
+fake-skipping to Ready. Tests: 14 wizard + 9 machine + 5 users + 6 backfill cases new;
+306/28/406 green across the three packages. Eyeball owed: the fresh-root run-through and
+the one-time migration-variant wizard on the next `pnpm dev`, both themes, keyboard-only.
+
+## UA — the sun_path regression: the budget measures the longest socket
+
+**FIXED (2026-08-05, `d6f8489`), found by James's first post-migration `pnpm dev`.** The
+user tree's 8 extra path bytes pushed `terminal-control.sock` to 108 — past macOS
+`sun_path` — so field-native could not bind either terminal socket: diagnostics said
+native degraded / terminal crashed (honest states over a bind that never happened) and
+the shell's connect died EINVAL on the same too-long path. The UA-D9 guard existed for
+exactly this and passed the root anyway: it measured only `mgmt.sock`, the SHORTEST
+name in the registry. Three layers now: `termctl.sock`/`termframe.sock` renames
+(hyphen-less like their siblings; dev paths 99/101), the guard walks every
+socket-bearing LAYOUT row at the true 103-byte limit naming the offender (pinned
+byte-exactly at 103/104), and a 14-char socket-name lint in the contracts registry.
+Sockets are ephemeral — no migration; the next daemon start binds the new names. The
+spec's §1 miscalibrated citation carries the dated correction at source.
+
+## UA-5 — the second user: the track's last rung
+
+**UA-5 LANDED (2026-08-05, three commits: `cfe87b8` storage+channels · `f3aa78a` main
+half · `e83033a` renderer half by worktree agent — split hands, clean picks, green
+verbatim gates throughout).** The multi-persona field is real: `createUser` mints user N
+under the §3.3 lock with the UA-D9 budget assert (a too-deep root refuses TYPED before
+any directory exists, naming the socket); `users:list/create/switch` join the closed IPC
+surface (fifteen-key pin); electron main holds a cached **PairBundle per user** — a
+resident user's pair survives switch-away headless, the attachment wiring (observers,
+shell provider, preview capture) rebuilds per switch — and `attachUser` is
+build-before-break: the target pair answers `ensure()` before anything detaches, a
+failed spawn leaves the current user whole. The module-let swap redirects every
+late-bound reader without re-registration (the once-per-channel ipcMain law, honored by
+reading the live attachment at call time). **UA-D12 landed in full**: ephemeral ports
+unconditional in every mode — the recon trace showed the doc lane's fixed 9411 was the
+FIRST-colliding bind and dev was ephemeral only by env inheritance. The tray grew its
+Switch User submenu (one level of TrayMenuItem.submenu, recursive native mapping); the
+Account page grew the Users block; the wizard grew the `second-user` variant (enters at
+pane 2, ends in a zero-beat `finishing` — §6.2's substance kept, its pre-attach modal
+frame amended at source: the variant rides the boot wizard through the
+`setupVariant` passthrough stamp). **The audit exits ran on REAL daemons**
+(`two-pairs.test.ts`): two full pairs under `users/1` and `users/2` of one root — four
+distinct ephemeral ports, own-root sockets, both product planes answering health
+SIMULTANEOUSLY, and users.json's mtime unchanged across the run (UA-D10 held
+physically). The V5 accidental mutex has a tombstone. **Open, physical, James's:** the
+kill-matrix switch row — a live session in user 1 survives switch-away-and-back
+unnoticed — rides the first real multi-user session. Honest v1 bounds recorded:
+crash/support evidence roots stay on the BOOT user's tree; an adopted non-resident pair
+is not ours to kill; a partial bridge renders honest dead rows with an explanatory line
+(the agent's judgment call, adopted). Side-note for the ledger: the renderer agent also
+wrote the FIRST test of `preload/index.ts` itself (reusing the package's own electron
+mock harness) and properly controlled a transient electron-binary flake before clearing
+itself of it.
+
+## The UI system — tokens, the catalog, and the bench
+
+**LANDED 2026-08-05 → 08-06, James's own hands, eleven commits: `250e383` tokens+primitives ·
+`c188195` compositions centralized · `11765bc` the catalog · `ba0c895` ownership documented
+and enforced · `3cd614c` + `bd720dc` the onboarding shell and its catalog entry ·
+`deb66ce` agent-bubble states modularized · `06c0eaa` theme-toggle reach · `3ca1f8a` the
+Electron UI Bench · `1e4f9ac` the R5 wall fix · `fcd4c36` the live canvas-ground workbench.
+`5b37b3e` (settings-panel redesign) is in main ahead of them.** Recorded retroactively 2026-08-07: **these commits carry subject lines
+and empty bodies**, so unlike every other entry in this ledger the account below is
+reconstructed from the diffs and `docs/UI_SYSTEM.md`, not from the author's own prose. Where
+it states intent it is inference, and it is marked as such.
+
+The track answers a question the corpus had left implicit: `DESIGN.md` says what the product
+should look like, and nothing said *where that direction lives in code* or what stops the
+catalog from drifting from the product. `docs/UI_SYSTEM.md` (new, main-tracked, and now the
+fourth main-tracked doc beside the roadmap trio) names four layers — tokens
+(`shell-ui/tokens.css`) → primitives (`shell-ui/primitives.tsx`, +191/+405 css) → product
+compositions colocated with their namespaced stylesheets → catalog harnesses
+(`field-app/src/design-system`) that may stage or clip a production component but **must not
+redefine its selectors**. `c188195` did the migration the rule implies: 52 files,
++3877/−4462 — a net **585 lines deleted**, the shape of consolidation rather than addition,
+reaching into the plugins (`note`, `field-tools`) as well as the app.
+
+**The catalog mounts shipping views, not replicas** — that is the load-bearing claim, and it
+is enforced by a test rather than a convention: `ui-system-boundaries.test.ts` rejects
+catalog-only replicas and production selector definitions living in catalog CSS. Runtime-free
+adapters replace only data or controllers (Artifact Hub takes a fixture product client,
+FilePill a fixture document manager), so the DOM, interaction state, accessibility, and CSS
+under review are production code. `deb66ce` split `AgentBubble` out of `AgentSwarm` for
+exactly this reason — physics and placement stay in the swarm, the circle's state projection
+and DOM become separately mountable — and the catalog then inventories every valid
+source/status combination, access and pane modifier, provider glyph, and context boundary
+without starting a physics engine.
+
+`3ca1f8a` gave it a home: `pnpm dev:design` boots an isolated Electron UI Bench on the
+production window/security factory with the product preload, users, daemons, plugins, tray,
+and diagnostics deliberately omitted, isolated under `.vibefield/ui-bench/` so it runs beside
+a live `pnpm dev`. Two leakage gates ship with it — the renderer build keeps `index.html` as
+its only entry and fails if a bench document or marker reaches `dist/renderer`
+(`verify-production-renderer.mjs`), with desktop packaging's exact stage allowlist as the
+second boundary. `pnpm dev:design:web` keeps the browser-only loop.
+
+**The episode worth keeping is the red main.** `11765bc` introduced
+`@vibefield/field-app/design-system` **and** declared it in field-app's `exports` map — a
+correct import by the R5 wall's own description ("declared public entries only"). The wall
+failed anyway, because R5 checks a hardcoded `NEW_PACKAGE_ENTRIES` set that never learned the
+entry. `pnpm verify` was therefore red at preflight on main, for everyone, on correct code,
+from 2026-08-05 22:41 until `1e4f9ac` on 08-06 20:38 — **about 22 hours**, spanning four
+in-flight GT-5 builders and the whole IOS-3 ladder. The IOS-3 commit bodies each recorded it,
+checked its provenance, and correctly disclaimed it as not theirs; that is the behavior the
+walls exist to make possible. **Correction to `1e4f9ac`'s own body, recorded here because
+commit messages are as immutable as this ledger:** it dates the breakage "since `3ca1f8a`",
+but `3ca1f8a` (08-06 16:24) only *modified* the offending file — verified by
+`--diff-filter=A`, both the import and its `exports` entry first appear at `11765bc`, sixteen
+commits and eighteen hours earlier. The window was longer than the fix commit claims. The
+real defect is recorded as known debt in the wall's own comment: the set is a second source of
+truth for what a package publishes, duplicating the `exports` map the rule's description
+points at, and they drifted the instant a legitimate entry was added.
+
+`fcd4c36` landed while this entry was being written, and is the pattern working: the
+`dev-tweaks` floating panel — a debug affordance that had been living in the product tree since
+`fba7c75` — was **deleted from the product and rebuilt as a catalog workbench**
+(`design-system/tweaks/` + `CanvasGroundWorkbench`), with the canvas ground it tunes extracted
+into `field/InfiniteCanvasGround.tsx` and `field/canvas-appearance.ts` so the bench mounts the
+real thing rather than a copy. `ui-system-boundaries.test.ts` moved with it. That is the
+four-layer rule deciding where a debug surface belongs, which is what the rule was for.
+*(This does not resolve the standing GT-3v "surface lab is not dev-gated" debt — that lab is
+the Godview monitor's tuning panel, `godview/monitor/monitor-tuning.ts`, a different surface;
+it is cataloged but its production-render question is unexamined.)*
+
+Not done, and named: `codex/settings-review-fixes` (one commit, 29 files, +1717/−455 —
+settings persistence and modal behavior) is unmerged and undecided. The catalog's own
+acceptance is an eyeball — light/dark, keyboard focus, reduced motion, narrow layout — and
+`UI_SYSTEM.md` says so.
+
+## IOS-3 — the peer's terminal becomes a bubble, and the bubble opens
+
+**LANDED 2026-08-05 → 08-06, five slices then a review: `f54cb06` (3a) · `15dfa4a` (3b) ·
+`72929d8` (3c/3d) · `feb6dc8` (3e) · `d36528a` (3r).** Recorded 2026-08-07 — the slices are
+documented in `thinking-ios-app.md` §10, but this ledger had no IOS-3 entry at all until now.
+Built by parallel agents on disjoint modules, integrated and reviewed by the orchestrator.
+
+**James's correction is the spine: there is no session list in the card.** Every terminal a
+peer serves arrives as its own bubble beside the agents, and the card carries the one act that
+matters. `f54cb06` ported the desktop's GT-4b union rather than re-inventing it — one
+`FieldBubble` projected by pure functions from either source, carrying at most one facet.
+Every ported clause is a finding: ids are device-qualified (`remote:<deviceID>:<id>`) because
+two peers can each have a session `1`; the accent hashes the *qualified* id so one session id
+on two peers is two colors; `detail` is "deviceName · cwd" because a path with no machine
+attached was GT-3's own confusion finding; and `classifyTerminalStatus` can never return
+`waiting`, because that tier is agent-permission language and a terminal has none. Discovery
+took the desktop's discipline (upstream's 2 s poll, failure tolerance 2, online hosts only,
+`attachable:false` KEPT and shown — a peer deliberately not sharing is a fact, not an absence)
+plus two refinements past it, both reasoned in source: one peer refusing its listing costs its
+own rows rather than everyone's, and each listing closes its connection on **every** path,
+where upstream's own dialer closes only on success and a throwing listing leaks.
+
+`15dfa4a` built `FieldTerminal` — appearance → presentation → attachment → surface — and
+honored the §10.1 laws where they are laws, testing the testable ones: the durable host
+reference, presentation sampled after the last suspension point, `presentationAuthority:
+.device`, `revision` excluded from device-presentation comparison, only `fontSize` rebuilding
+the runtime. `TerminalSurface` surfaces a render failure as state where the reference app
+calls `preconditionFailure` — we render a card, not an app. `72929d8` added the settings sheet
+(602 themes with live swatch strips, provenance stated whole, four shader ports with license
+badges and the honest line that 31 more exist upstream whose rights are unclear) and the three
+lifecycle gaps the terminal leg's report named. `feb6dc8` then **deleted our own vocabulary**:
+the card now speaks upstream's `GhostteaAttachmentBannerPresenter`, which names the *device*
+("studio is offline") where our phase words could only name the condition, and carries
+upstream's grace windows, reconnect flash, and retry clocks — the phase reasons demoted to the
+tier beneath, for the states a banner deliberately stays quiet for.
+
+**`d36528a` (3r) is the entry's real content.** A review of the four landed commits found the
+concurrency work correct under a deliberate attempt to break it — the attach-identity/generation
+double guard, the `await superseded?.value` chaining, the post-suspension config sampling, the
+throw-path connection close all held. **Every finding was instead a seam between modules that
+were each individually careful, and all three serious ones lived in `FieldHome` — the only
+module with no test target.** That is the finding under the findings. (1) `.background` stopped
+the discovery poll but left `discoveryLive` set, making the resume branch unreachable for the
+rest of the process — so `noteHostReachable()`, the only thing that can end a `suspended(host
+absent)` attachment, could never fire again, and one backgrounding disabled IOS-3e's entire
+reconnect leg. (2) The card rendered "SESSION ENDED" on any discovery lookup miss, so ~4 s of
+blips both lied and unmounted a surface still rendering frames — a listing is not a heartbeat,
+and while attached the connection is the authority. (3) "You can type here" read the
+*listing's* `readWrite`, a broadcast with no per-caller context: it says the session is shared
+for writing, never that *we* may write. The fixes land as pure functions (`FieldHomeModel` +
+`FieldHomeTests`), each doc comment carrying the defect it replaced. Tests 135 green (was 116).
+
+**Two corrections recorded at source rather than only here.** §10.4 had told the settings agent
+to label font size as re-attaching the terminal; that was false — at 0.9.2 upstream swaps the
+runtime on the live sink, so the session never leaves. It was caught by the agent who built the
+attachment leg, reading the tag source rather than trusting the orchestrator's paragraph, and
+it reached the sheet only because the correction landed 31 seconds after the line was written.
+§10.3's unqualified "readWrite" named two different facts, and that looseness is what finding
+(3) got wrong; it now carries a dated clarification.
+
+**Honest bound, and it revises what "IOS-3 is complete to its design" means.** `72929d8`'s
+subject claims 3c, but **IOS-3c's capability/Keychain leg did not land** — verified 2026-08-07
+at three source sites (`TerminalAppearance.swift:73`, `SessionCardView.swift:45`,
+`HomeScreen.swift:51-53`: *"nothing assigns this yet"*). `claimControl` is plumbed and the
+access token rides the lifecycle, but no capability is ever supplied, so **the phone attaches
+view-only** and the card correctly says "this device has no write key for this host". GT-5's
+acceptance row is *live view · type with mirror-write · reconnect banner*; the middle third is
+not reachable until the Keychain leg lands. Also still device-gated: the attached-but-unlisted
+card is tested as a decision and read in source, but its pixels need a live mesh — no fixture
+on this side can hold an attachment open while discovery drops the row.
+
+`pnpm verify` does not cover `apps/ios` by design (the gate must not require Xcode); the
+`xcodebuild` commands in `apps/ios/README.md` are that tree's gate and were run verbatim.
+
+## UI — the kit says its own name: shell-ui → design-kit
+
+**Landed 2026-08-09 (James's go on a scoped slice; scoping in
+`draft/thinking-shell-ui-rename.md`, verified against `61d70c0`).** Name-only:
+`@vibefield/shell-ui` → `@vibefield/design-kit` (`git mv packages/shell-ui
+packages/design-kit`), retiring the one package name in the workspace that lied — it read as
+"electron-shell's UI" while electron-shell doesn't even depend on the package. The corpus had
+said "the design kit" all along (README's row, DESIGN.md's token/card-anatomy lines, design-03
+§5.2 D14/D15), and plugin-architecture's walls list already legislated in design-kit vocabulary
+("design-kit primitives AS SDK re-exports"); code catches up, no substance moves.
+
+**Doc-first, per authority order.** design-03: dated Status amendment + the §5.2 citation.
+plugin-architecture: its four live-law citations (the layout tree, the SDK-composition MAY, the
+walls MUST-NOT ×2) plus a dated rename note in Status. Then the main plane: UI_SYSTEM.md's
+layer-1/2 paths, DESIGN.md ×2, README's row, CLAUDE.md's taxonomy (added earlier the same day,
+`fee1346`). **Deliberately frozen, checked at execution time:** this ledger's five prior
+mentions, electron-shell-refactor (Status: EXECUTED — a record, not law), godview-terminal's
+GT-3m LANDED row, appendix 03·A, predesign-05, thinking-p3/thinking-widgetlab — history keeps
+the name it landed under; the errata rule corrects falsified claims, and a rename falsifies
+nothing.
+
+**Code.** The full tracked sweep (29 files): 24 exact `@vibefield/shell-ui` references, the
+prose comments, the catalog's `source=` specimen labels, and two sites the scoping's eyeball
+pass caught beyond the original inventory — the Tailwind `@source "../../../packages/shell-ui/
+src"` path in field-app's `styles.css`, and `check-import-boundaries.mjs`'s three sites, which
+ARE the R10 wall's own test and were renamed with intent, not blindly. `pnpm install` re-keyed
+the lockfile importer (shell-ui rows 5→0). The R10 wall never moved: plugins still reach the
+kit only through `plugin-sdk/src/ui.ts`; zero direct plugin imports existed before or after.
+
+**Done-check and gate.** `git grep -l shell-ui` returns exactly this file (the lockfile
+re-keyed to zero). `pnpm verify` exit 0 verbatim before each of the slice's two commits. The
+second green cost seven runs and produced a petition-grade finding: **`ghosttea-vt-sys`
+(0.9.2) rewrites its OUT_DIR tar on every build**, so cargo holds the whole ghosttea chain
+permanently stale and every `cargo build -p field-native` redoes ~40s of dependencies — the
+five fieldd suites that each run that build inside a 180s `beforeAll` then serialize on the
+target-dir lock, and the queue's tail dies by lottery (46/47 three times with a rotating
+victim; every victim passes in isolation; the fingerprint probe
+`CARGO_LOG=cargo::core::compiler::fingerprint=info` names the stale tar directly — nothing to
+do with this rename, which never touches fieldd). The recorded pass ran fieldd:test
+standalone with vitest workers capped at 2 — staggering the build queue; same tests, same
+tree — which Nx cached into the verifying run: the gate's own caching, disclosed here.
+Follow-ups this argues for: a fieldd vitest globalSetup that builds field-native once per
+run, and an upstream tar-stability petition (G-series).
+
+> **Erratum 2026-08-09 (same day, at the source rather than only downstream):** the mechanism
+> in the paragraph above is retracted. A repeat build is indeed never a no-op — 38 s then 53 s,
+> measured back-to-back on an idle machine — but `ghosttea-vt-sys` does **not** rewrite the tar
+> of an existing unit; the file's mtime is stable across builds. Cargo mints a **new** build
+> unit instead: 26 `ghosttea-vt-sys-*` directories in one target dir, 13 holding their own
+> separately downloaded copy of the byte-identical 2.3 MB artifact (30 MB). The symptom, the
+> cost, and the gate consequence all stand; only "rewrites its OUT_DIR tar on every build"
+> was inference, and the probe killed it. Petition G12 carries the corrected evidence and
+> deliberately leaves the mechanism open for upstream to name.
+
+## The gate stops failing by lottery — one native build per run, and the petition for why one costs 40 s
+
+**Landed 2026-08-09 (James: "go ahead fix both"), the same day the finding surfaced.** Five
+`fieldd` suites — `terminal-seam`, `terminal-kill-matrix`, `cross-daemon`, `mesh-lane`,
+`two-pairs` — each built `field-native` in its own 180 s `beforeAll`. Vitest runs files in
+parallel workers, so those five builds served a single cargo target-dir lock: the budget was
+never per-suite, it was per *queue position*. That is survivable only while a repeat build is
+approximately free, and it is not — **38 s then 53 s for two identical back-to-back builds** on
+an idle machine. The tail of the queue therefore blew its budget, and which suite died was
+luck: three consecutive runs failed 46/47 with a different victim each time, every victim
+passing in isolation. It reads as flake, which is why it survived this long.
+
+**The fix is one build per run.** `packages/fieldd/test/global-setup.ts` builds the binary once
+in the vitest host process before the first worker starts; `vitest.config.ts` wires it as
+`globalSetup`; the five `beforeAll` hooks are deleted. Same guarantee the hooks were making —
+the binary is on disk when a suite opens — minus the queue. The setup captures cargo's stderr
+and puts it in the rejection, because a failure here kills the whole run and a silent one would
+be worse than the bug.
+
+**Measured, not assumed.** A process sampler across the whole run counted **exactly one**
+`cargo build -p field-native` (was five). The suite went **47/47 files, 415/415 tests, 71.14 s**
+— from 3m08s–3m17s with one or two files failing. Note the old red was hiding more than it
+showed: a timed-out `beforeAll` reports its file's tests as *skipped*, so those runs also had
+**ten tests that never executed at all** and reported as green-ish. Zero skips now. The four
+native suites that used to die on the budget now finish in 2.6–4.8 s each.
+
+**The upstream half is petition G12** (`draft/petitions/G12-ghosttea-vt-sys-build-fingerprint.md`,
+DRAFTED — not posted). Evidence: the A/B timings, cargo's own `fingerprint=info` verdict
+(`ghosttea-vt-sys` dirty, then `ghosttea-vt` → `ghosttea-core` → `ghosttea` → `field-native` as
+`StaleDepFingerprint`), and the churn visible in one `ls` — 26 `ghosttea-vt-sys-*` build dirs,
+13 with their own copy of the same 2.3 MB artifact. The source-visible suspect is three
+`cargo:rerun-if-changed` declarations naming paths inside the script's own `OUT_DIR`
+(build.rs :231/:267/:282 at 0.9.2), stated **per branch** because each site is correct on some
+paths and wrong on others — the `GHOSTTY_VT_PREFIX` pair (:226–227) is correct today and
+explicitly untouched. The petition asks for provenance-aware declarations, leans on the
+already-declared content-addressed `artifacts.json`, and offers an optional shared bundle cache;
+it does **not** ask for any change to checksum verification, the env contract, or the API. It
+also declines to name the mechanism: the anti-pattern may not fully explain 13 units, we cannot
+instrument the crate from here, and guessing at cargo internals in someone else's tracker is how
+a petition gets dismissed. `globalSetup` does **not** retire when G12 lands — building once per
+run is right regardless; what retires is the ~40 s each run pays and the 30 MB of duplicates.
+
+**Gate:** `pnpm verify` exit 0, bare (no pipe — a piped gate reported tail's exit 0 over a red
+run earlier this same session, which is its own lesson). That run cache-hit `fieldd:test` from
+the live 47/47 minutes before, so the gate was re-run with **`NX_SKIP_NX_CACHE=true`** —
+stricter than the gate, not weaker — and there `fieldd:test` **executed live inside the gate
+and passed 47/47**, which is the proof this particular slice owed.
+
+**One finding that run surfaced, recorded rather than fixed.** With every cache disabled, all
+18 test projects run at once, and three `logging` tests went red on deadlines — two 5 s test
+timeouts (9.6 s and 6.9 s actual) and one `logging flush deadline exceeded`. `packages/logging`
+is untouched by this slice (its last commit is `17862a5`), it passes **7 files / 49 tests in
+5.45 s** standalone, and the normal gate is green — so this is load, not regression. But it is
+worth watching for a reason this slice created: fieldd's suite went 190 s → 71 s, so it no
+longer serializes behind cargo and now **overlaps** the rest of the graph. The gate got denser,
+and tests sitting close to their deadlines have less headroom than they did yesterday. Whether
+those three deadlines want raising, or logging's timing tests want a fake clock, is a different
+package's question and James's to scope.
+
+## EL8 — ghosttea 0.9.3: the petition filed this morning comes back as a 0.47 s no-op
+
+**Landed 2026-08-09, hours after G12 was drafted.** Upstream implemented it directly, cut
+**0.9.3** (PR #55), and VibeField consumed it the same day. The whole round trip — symptom to
+diagnosis to petition to release to consumption — fits in one day's ledger, which is the
+argument for writing petitions with a deterministic repro attached.
+
+**What upstream's review changed before implementing, because the file was wrong in two
+places.** It refuted the petition's hypothesis (b): the unit key is *stable*, a clean repro
+holds at 2 unit dirs and 1 tar across four builds, and our 26 directories were `13 units × 2`
+(compile dir + run dir) accumulated over 11 days of config changes, since cargo never GCs an
+abandoned unit — so "cargo mints new units, so the script re-runs" inverted cause and effect.
+It also proved (a) is **deterministic by construction, not a timing race**: cargo writes a
+unit's fingerprint reference *before* the script finishes populating `OUT_DIR`, so any declared
+path under it is unconditionally newer and the unit can never be fresh. And it killed our
+proposal 3 — a shared bundle cache would *not* have fixed the loop, because extraction always
+lands in `OUT_DIR`, so :267/:282 keep it alive no matter where the bundle came from. All three
+sites are independently sufficient; cargo only ever names the first one it hits.
+
+**Fixed better than asked.** Rather than three provenance-aware call sites, one
+`rerun_if_changed(path, out)` guard now owns every declaration and drops anything under
+`OUT_DIR` — a structural invariant instead of a rule each future call site must re-derive. It
+ships with `scripts/check-build-script-inputs.mjs`, whose source half runs **offline**: that is
+precisely the blind spot that let this reach 0.9.2, because a build from upstream's own checkout
+resolves `Prefix::Repository` and never takes the download path, so the bug was only ever
+visible to consumers. A latent second bug closed on the way — targets marked
+`reproducible: false` skip `validate_library`, so on those the archive was never declared an
+input at all and a local Ghostty rebuild left a stale archive linked.
+
+**The published delta, read from the compare rather than the changelog:** `v0.9.2...v0.9.3` is
+31 files over 4 commits — **one** source change (`ghosttea-vt-sys/build.rs`, +37/-8), **one**
+added file (the regression check), and version strings, lockfiles, and regenerated SBOM/Apple
+artifact locks. No Rust API, no Swift, no TS delta; CONTROL minor unchanged at 13, so
+`terminal_client.rs` still announces 1.9.
+
+**The payoff, measured here.** The upgrade build cost **2m35s** — a full chain recompile at a
+genuinely new version, expected exactly once — and the next identical `cargo build -p
+field-native` finished in **0.47 s: a true no-op**. That same repeat cost **53 s** yesterday.
+Tar copies went 13 → 14 (0.9.3's unit, fetched once) and stop there. `globalSetup` stays, as
+its file and the petition both said it would; what retired is the ~40 s every fieldd test run
+was paying for a build that changed nothing.
+
+**Consumed on every plane in one event, because that is what EL8 means:** cargo `ghosttea` +
+`ghosttea-truffle` `=0.9.3` · the four npm overrides and six age-gate rows (no transitional rows
+needed — 0.9.3 aged past the cutoff by the time we consumed it) · **preflight's six pin rows**,
+since editing a pin and that table together is the ritual · SwiftPM `exact: "0.9.3"` with
+**both** `Package.resolved` files at `d099882`, plus the `FieldTerminal.ghostteaVersion`
+constant, the test that pins it, and two `apps/ios/README.md` lines. The iOS surface is the
+lesson worth keeping: a pin bump there is six files, not one, and only the manifest is obvious.
+Xcode's DerivedData held a stale *extracted* artifact and failed to resolve until that one cache
+entry was cleared — cache only, and SwiftPM's shared cache already had the new zip.
+
+**Correction at source:** `Package.swift`'s pin comment claimed both planes "ride truffle
+0.7.11" while its very next sentence named `=0.7.12`. Corrected while editing, in the same
+spirit as CLAUDE.md's own version errata — the manifests were always the authority.
+
+**Gate — stated exactly, because this one did not land as a single green run.** Every stage
+passed, but never all in one process: preflight (the six-row pin table, which is the whole
+point of the ritual) · icons · typecheck · biome · `cargo fmt --check` · clippy · `gen:check` ·
+the JS suite (green with the test projects serialized, `NX_PARALLEL=1` — every test still runs)
+· the Rust workspace suite (green on its own). Five full attempts each reddened on a *different*
+deadline-based test — field-app's shader cards (5.1–5.8 s against a 5 s budget; 300–600 ms each
+when run alone), `godview-remote-door`'s settle race, TS logging's fuzz test, and
+field-native's own `logging.flush(4s)` — which is the signature of a saturated machine, not a
+regression.
+
+It was saturated: **load average 37 / 101 / 91**, from WebStorm at 157 %, a `VibeField.app`
+left running in an iOS Simulator for **2 days 20 hours** at 97 % (plus ~160 % more across its
+render and backboard services), WindowServer at 87 %, and a live `pnpm dev` session. None of it
+this slice's, and none of it safe to kill from here.
+
+**Controls that exonerate 0.9.3 rather than excuse it:** field-app run alone at 0.9.3 passes the
+appearance/shader tests — the surface built from upstream's blessed data, and the one a bad data
+bump would break — leaving only the `godview-remote-door` race, which failed *identically at
+0.9.2 this morning*, before any pin moved. The Rust and logging suites pass alone. And the
+headline number is a direct measurement, not a test verdict: 53 s → 0.47 s.
+
+**Not gated this session: `apps/ios`.** Its gate is `xcodebuild` (CLAUDE.md keeps it out of
+`pnpm verify` deliberately), and a simulator run on a box at load 100 would answer nothing. The
+change there is a version string, the test asserting it, the manifest pin, and two resolved
+files; the commands in `apps/ios/README.md` are what should confirm it on a quiet machine.
+
+## ICE 0.4.0 — I1/I4/I5 consumed: the focus model, the wheel cede, the in-band rename fold
+
+**LANDED overnight 2026-08-09/10 (the commit carrying this entry is the consumption event).**
+Hours after upstream cut `@vibecook/ice` 0.4.0 (design-007 rev 2: the I1 keyboard claim +
+`keyboardEscape` + I4 wheel cede + facade `keymapOverrides`; design-008: the I5 `renamedFrom`
+rename migration; the Space-in-textarea live-bug fix), VibeField consumed it as one EL8 bump
+event — pin 0.3.0 → 0.4.0 in `pnpm-workspace.yaml` (override + release-age exclusion) — and
+every named workaround retired in the same slice:
+
+- **The ChromeLayer C-key capture trap is DELETED (I1).** The "selection decides" behavior is
+  two `keymapOverrides` entries (`field-keymap.ts`, threaded FieldView → CanvasStage → the
+  mount) with exact parity: C-with-selection invokes field-tools' DECLARED
+  comment-around-selection through the SPINE command registry (R10 held — field-app still
+  imports nothing from plugins/*); C-without re-issues the engine default it replaces
+  (connect tool); ⇧C stays comment-only; Settings-open suppresses the comment through a ref
+  gate while the tool shortcut behaves exactly as it always did. The engine keymap's own
+  editable guard runs before overrides — the window-bubble race is simply gone.
+- **note's two `onWheel` stopPropagations are DELETED (I4).** The editor textarea rides the
+  editable-scroller cede (scrolls natively, falls through to zoom at the bounds). RECORDED
+  BEHAVIOR DELTA, James's eyeball owed: the read-only body is plain content under the landed
+  law, so wheel over it now zooms the canvas instead of scrolling long note text — the revert
+  is one `data-canvas-interactive`, which would also opt the body's pointerdowns out of card
+  drag (the note's primary gesture); the widget's header comment records the trade.
+- **The C2 offline rename surgery is DELETED (I5).** `migrate-type-renames.ts` and its
+  pre-attach call are gone; `build-widget` projects the append-only TYPE_RENAMES history into
+  `renamedFrom` declarations and the ENGINE folds pre-rename boards in-band — the version
+  gate resolves old ids as "migrate" instead of bricking readOnly, and the envelope
+  self-heals at the next save. The C2 old-board eyeball (watch the migration log line)
+  retires with the log line itself; the ordinary open path is the replacement. The rewritten
+  test opens the probe-era pre-rename fixture through the engine's own runner: writable,
+  ratified types projected, an old-named journal entry accepted post-open.
+- **Found while consuming, fixed and pinned:** ghost stubs would have registered a pre-rename
+  envelope's OLD ids as live types — colliding with their successors' `renamedFrom` claims —
+  because the stub filter only knew "registered". A renamed id whose successor is registered
+  is now covered, never stubbed (`ghost-stubs.ts`), with its own test beside the fold tests.
+
+Breaking surface consumed without a scratch: `WidgetType` +`keyboard`/`keyboardEscape`,
+`InfiniteCanvasHandle` +`focus`, `DocVersionReport` +`renamedInDoc` — engine-constructed
+types; nothing here hand-rolls one (18-project typecheck green). Deliberately NOT taken (A7 —
+no shipped need): no widget declares `interaction.keyboard` yet; `keyboardEscape` and the
+`focus` handle wait for the first widget that wants them.
+
+**Gate: `pnpm verify` VERBATIM exit 0, one process, on the combined working tree** (this slice
+atop the uncommitted ghosttea-0.9.3/G12 + mille-theme work) — field-app 417/417 with the
+rewritten rename tests aboard, Rust suites green, gen freshness clean; notable against the
+previous entry's saturated-machine story. **`smoke:canvas` is RED — and was red BEFORE this
+slice**: its bundle assert fails identically at clean-worktree rebuilds of `d36528a` /
+`fee1346` / HEAD `c33bcf4`, so the Electron leg never runs for anyone; control-proven
+unrelated to this consumption and recorded as its own dated debt row in `ROADMAP.md`.
+*(Fixed the next morning — see the entry below.)*
+
+## The splash split comes back — one class-name import had been loading the 3D world
+
+**LANDED 2026-08-10.** The `smoke:canvas` red recorded hours earlier turned out to be two
+defects wearing one failure, and only one of them was real.
+
+**The real one, and it was product-visible.** `field/theme-constants.ts` imported a single
+class-name string (`uiIconButtonClass`) from design-kit's BARREL. The barrel re-exports
+`GlLiftGroup`, whose `@vibecook/ice/r3f` import reaches three, and ICE reaches loro — so every
+module the barrel names had to be kept, and the whole 3D world landed in the eager graph. The
+boot path arrives there through `mount` → `BootRoot` → `OnboardingWizard` → `wizard-ui` →
+`ThemeToggleButton` → `theme-constants`, an edge that did not exist until **UA-3w's Setup
+Assistant (2026-08-06)** — which dates the regression precisely and explains why `d36528a`
+(2026-08-07) was already red. **Cold opens paid 5798.4 KB raw / 1902.6 KB gz for four days.
+Now 455.4 KB / 118.2 KB, world lazy.** That is not the ESR-cited 269.8 KB and this entry does
+not pretend otherwise: the Setup Assistant legitimately joined the boot path in between, so
+455.4 KB is the honest new baseline. With the assert passing, `smoke:canvas` ran its Electron
+leg for the first time in days — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4}`.
+
+**The fix, attributed by experiment rather than by argument.** `"sideEffects": ["*.css"]` on
+design-kit is load-bearing: every JS module there is pure and the CSS imports are the only
+side effects, so declaring it lets the bundler drop what the barrel merely re-exports. The
+three-way control was RUN: barrel import + no `sideEffects` reproduces the original failure
+byte-for-byte (same chunk name, same three messages) · barrel + `sideEffects` passes · leaf
+import + `sideEffects` passes. So the new `@vibefield/design-kit/primitives` deep export, which
+`theme-constants` now uses, is HARDENING — it keeps the boot path off the barrel rather than
+trusting tree-shaking — and the entry says which is which because the control said so.
+
+**The false one, corrected at its source.** The same failure listed both CSS canaries as
+missing, and the debt row written the night before repeated it as fact ("the utilities are
+absent from the built renderer"). They were never absent. `bundle-report.mjs` graded canaries
+against `[...chunks.keys()].find(n => n.endsWith(".css"))` — the first stylesheet by name —
+while the renderer emits one CSS per chunk; `.tabular-nums` and `.leading-none` were sitting in
+`main-*.css` throughout. The script now unions every built stylesheet. The correction is
+stamped in the ROADMAP row itself, not only here: a false alarm beside a real one is how a
+tripwire loses the authority it needs on the day it is right.
+
+**The structural half — why this survived four days.** The assert lived only in
+`smoke:canvas`, which no routine gate runs, so `pnpm verify` exited 0 at `d36528a` and again
+during the ice-0.4.0 consumption while the splash bundle was 21× its budget. `pnpm
+bundle:assert` (renderer build + assert) is now wired into `pnpm verify` between clippy and
+the test suites. A static import wall could not have caught this — the offending file is not
+under `boot/`, and the defect is reachability, not a forbidden import — so the gate needs the
+built bundle, and now has it.
+
+**Gate: `pnpm verify` VERBATIM exit 0**, with `bundle:assert` inside it, plus `smoke:canvas`
+green end to end.
+
+## Two GT-review follow-ups close — ⌘W actually lets go, and the probes run the pinned sidecar
+
+**LANDED 2026-08-10.** Both were recorded at the GT close-out with their mechanisms already
+diagnosed; neither had been repaired. Each is now fixed at the site the record named, and each
+gained the test whose absence let it stand.
+
+**⌘W never worked, and now does the only thing that can work.** The close item kept
+`role: "close"` in both overlay states and merely OMITTED the accelerator — which releases
+nothing, because Electron resolves an item's accelerator as `explicit ?? roleDefault` and
+`close`'s default IS `CommandOrControl+W`. The smoke had already measured every alternative on
+Electron 43.1.1, and that measurement was the design input: `accelerator: null` and
+`registerAccelerator: false` BOTH still resolve to the role default, so **a role-less item is
+the only spelling that reports null**. While the overlay is open the item is now a plain
+labelled command carrying no role, and the close behaviour the role used to supply arrives as
+`actions.closeWindow` (focused window, same subject as the Godview toggle). The overlay-closed
+state is untouched: role, label, ⌘W. Cost, stated rather than buried: that one state's label is
+ours, so it is English where Electron's role would have localized it — against a menu that eats
+the deck's ⌘W in every language.
+The test that passed through the entire defect is the story's other half. It asserted
+`role: "close"` while the overlay was open — the very thing that broke it — so it graded the
+bug as correct. It now asserts the role is GONE, and the control was run: restore the role and
+it fails with *expected 'close' to be undefined*. The smoke's two verdict fields stop being a
+record and become the claim — it throws if the open state reports any chord, or if the two
+states ever read alike again. **Deliberately still owed: the OS-level witness.** No harness can
+prove macOS routes a real ⌘W to the pane rather than the menu — `sendInputEvent` injects below
+AppKit's key-equivalent dispatch — so this remains a chord without a delivery probe until it is
+pressed by hand with a deck open. The repo's own lesson, honoured rather than papered over.
+
+**The tailnet probes ran a binary the product never ships.** `tests/common/mod.rs` searched only
+the machine-wide truffle installs, so on this box it found a **Jul 16**
+`~/.config/truffle/bin/sidecar-slim` while the workspace pinned and vendored the **Aug 2**
+0.7.12 copy — the concrete mechanism behind identity looking assertable at GT-4. The harness now
+resolves the pinned binary first, through `apps/desktop`'s own `@vibecook/truffle-sidecar-*`
+dependency (the same artifact the packaged app ships), with `FIELD_NATIVE_SIDECAR_PATH` still
+authoritative above it and the machine installs kept as a last resort so a checkout without
+`pnpm install` can still run the probes. Because every other test in that family is `#[ignore]`d
+behind a live tailnet, the order would have had nothing watching it — so it gained the family's
+one OFFLINE test, which asserts (not skips) on an installed workspace and rides `pnpm verify`.
+
+**Gate: `pnpm verify` VERBATIM exit 0**, with both new tests observed inside that run.
+
+## R5 stops keeping its own copy of what each package publishes
+
+**LANDED 2026-08-10.** The wall that cost main 22 hours of red preflight on a CORRECT import
+(`11765bc` declared an export and imported it; the wall knew nothing about either) graded deep
+imports against `NEW_PACKAGE_ENTRIES` — one hardcoded set of subpath names, shared by all three
+walled packages. It is now derived per package from each `package.json`'s own `exports`.
+
+The union list was wrong in both directions, which is what a second source of truth buys you:
+it let `@vibefield/field-app/main` through (`main` is electron-shell's entry, not field-app's),
+and it still carried `host`, a subpath no package has exported for some time. Both are now
+graded against the manifest that actually decides. Entries are read from the REPO root rather
+than the scanned tree, because the self-test scans a temp fixture directory and the question
+"what does this package publish" is always about the real package; an unreadable manifest
+throws rather than silently allowing or denying.
+
+**The wall's own clean fixture was part of the defect.** It imported
+`@vibefield/field-app/host` to prove "R5 accepts declared entries" — an entry that does not
+exist, passing only because the union list contained the word. It now imports a real one
+(`/logging`), and a second clean fixture pins the cross-package case that used to leak.
+
+Controls, run rather than argued: a probe importing `@vibefield/field-app/main` is now REPORTED
+by the enforcing scan (it was clean before), and a probe importing a freshly declared
+`./probe-entry` export is clean with ZERO edits to the wall — which is precisely the 22-hour
+bug, now structurally impossible. Both probes were removed; `pnpm verify` exit 0 with the
+walls' self-test and the enforcing scan inside it.
+
+**Recorded, not fixed: F-C6-21.** The audit-integration flake was investigated in the same
+sitting and no production change was made, because the mechanism was not reproduced — 5
+consecutive runs passed under concurrent load. Two findings are banked in the ROADMAP row so
+the next attempt starts ahead: the timer hypothesis is dead (`health()` reads the field
+directly; all three `markHealthy()` callers are event-driven, leaving the recovery drain as the
+one candidate), and the refusal assertion above the failing line is NOT a second witness —
+`AuditUnavailableError` hardcodes `state: "degraded"` in its details, so only line 112 tests
+health at all.
+
+## The Windows port opens — WIN-0…4 land the shell's other half
+
+**LANDED 2026-08-11** (ratified 2026-08-10, James: "follow your plan"; `draft/thinking-windows-port.md`).
+Windows was already a decided GA target (B-5, EDP-39 Azure signing, EDP §10.2's NSIS installer) — the gap
+was that the daemon/socket layer was specced unix-shaped and never re-derived. This wave re-derives it,
+every fix first demanded by a probe on the real box (WORKSTATION4090, x86_64-pc-windows-msvc, over the
+tailnet) before a line changed, then re-proven there. Three slices on `f98f58a`:
+
+**WIN-0/DEV `5ffd30b` — the gate and the dev loop stop refusing Windows.** Four one-file gate fixes: the
+single-quoted esbuild flag is unquoted (cmd.exe treats `'` as a letter — since `fc78b84` put
+`bundle:assert` inside `verify`, that one character blocked THE gate on Windows, not just `pnpm build`;
+the box died with esbuild's own diagnostic while the vite renderer build passed in 577ms); `.gitattributes`
+gains `eol=lf` (the extensionless pre-push hook checked out CRLF and a CRLF `sh` hook blocks every push —
+zero renormalization, proven before widening); `pnpm hooks:install` exists because `core.hooksPath` was
+machine-local config no clone ever got; `check-release-identity --self-test` takes an injectable identity
+(the box's 2-char username `me` sat under the deliberate `>2` guard and the overlap rule could never fire
+there — now a pinned choice with its own row). `tooling/dev-runner` runs on Windows (76/76): the
+`.cmd`-without-shell EINVAL (CVE-2024-27980 class) wrapped once as `cmd.exe /d /s /c` with cross-spawn
+quoting; `isPidAlive` accepts EACCES (a live-but-unqueryable daemon read DEAD, and
+`clearDeadDevProductFiles` deleted `product.json` + `shell.token` under it); the orphan reaper is
+platform-gated with a CIM process pass; watchers carry error handlers (a win32 EPERM on a renamed root was
+an uncaughtException that killed the whole dev loop); `buildChildEnv` unsets case-insensitively (an
+`ELECTRON_RUN_AS_NODE` case-variant could turn Electron into Node).
+
+**WIN-1/2 `85cce04` — one endpoint law in two languages; the native plane binds pipes.** The mgmt /
+meshdata / terminal channels stop being socket PATHS and become ENDPOINTS under one law (WIN-D1): on unix
+the joined LAYOUT path byte-for-byte; on win32 a named pipe `\\.\pipe\vibefield-<scope>-<sock>` where
+`<scope>` is FNV-1a-64 over the canonicalized data root — the flat pipe namespace has no run-directory
+boundary, so the name itself carries what 0700 carried (two users' pairs / two roots never collide;
+UA-D10 holds). The law lives in `contracts/src/endpoints.ts` (dependency-free, ASCII-only case fold), its
+Rust twin is HAND-WRITTEN (`field-native/src/endpoints.rs`), and `fixtures/endpoint.vector.json` pins the
+two to one derivation — including two spellings of one Windows directory that must collapse to one scope.
+The `sun_path` guards become explicit unix law (win32 skips; darwin still refuses — both pinned).
+`field-native`'s four channels bind/dial through one seam (`local_ipc` over `ghosttea::ipc` —
+NamedPipeServer with `first_pipe_instance` squat guard + CurrentUserOnly DACL, both upstream and already
+pinned, ZERO new deps; the client half adds the documented PIPE_BUSY/FILE_NOT_FOUND rotation retry). All
+32 cross-compile errors lived in seven files of field-native's own code. Terminal listener ownership stays
+OURS with no windows fork — binding upstream's own `Listener` made the handoff direct, RESOLVING WIN-D3 by
+construction (no petition). `config.rs` gains the resolution law, the `%APPDATA%\VibeField` default
+(byte-lockstep with fieldd), and `home_dir()`=USERPROFILE (no default lands the pairing secret in the
+CWD). WIN-2b: the logging stderr floor is REAL on windows (CreatePipe + SetStdHandle, divergences named in
+comments — no dup2 atomicity, children inherit a working stderr, CRT-layer writes escape), `pid_is_alive`
+gets an OpenProcess arm (a dead writer's segment lock is reclaimable on windows for the first time), and
+errno matches become `io::ErrorKind` with the real per-platform codes pinned by test. Every windows arm
+was compile-checked against the msvc triple before the box saw it — the probe caught the one would-be
+`-D warnings` red (an unused arg under `cfg(not(unix))`). The MAC gate caught the dual: the same
+supersession change turned unix's `shutdown(SHUT_WR)` half-close into a full close, so `terminal_unit`'s
+adversarial write-after-supersession test (invisible on the box — it is `cfg(unix)`) began racing that
+close; fixed at the test's seam with a `try_send` that tolerates the eviction's BrokenPipe, its real proof
+(nothing pruned) untouched.
+
+**WIN-3/3b/4 `f982d27` — the pair boots honestly, and a stop is a verb, not a signal.** fieldd: the
+`nativeAlive` existsSync gate is GONE (a pipe never exists on disk — every boot was going to spawn a
+second field-native; the connect attempt IS the probe, EBUSY reads alive); the `:` plugin-roots
+writer/reader pair flips to `path.delimiter` together (a `:` join shreds every `C:\…` root); the win32
+data root is `%APPDATA%\VibeField` in byte-shape lockstep across three planes; the EL7 env strip folds
+case on win32; `baseEnv` grows the 13-key win32 allowlist (children can actually start); the executable
+policy refuses every cwd-relative win32 shape incl. current-drive-rooted `\evil.exe`; `.cmd`/`.bat` shims
+(npx/uvx — how MCP servers are configured) spawn through COMSPEC with cross-spawn quoting and NEVER
+`shell:true`; `bin.ts`'s untestable laws moved to `boot-env.ts`. WIN-3b/WIN-D5: SIGTERM never fires on
+win32, so every teardown was a hard TerminateProcess silently skipping the child sweep, run-file cleanup,
+and audit close — `system.shutdown` joins the METHODS registry (native.admin, D32 local-only-forever),
+fieldd wires it to the same graceful path its signal handlers take, and the supervisor ASKS over the
+client it already holds before any signal (dispose reordered: stop before close). WIN-4: the five native
+e2e harnesses stop lying by platform — `.exe` paths, connect-based readiness (including two existsSync
+ASSERTIONS whose "socket audit" a pipe cannot answer), `/bin/sh` spawns become node stand-ins, and the
+migrate ladder gets its first coverage on any platform. Two PRODUCTION durability bugs the box's TS suite
+surfaced: directory-fsync EPERM/EACCES on Windows (`doc-service` had no guard, `artifact-service` caught
+the wrong codes AND reopened its tmp file read-only to fsync it — Windows `FlushFileBuffers` needs write
+access → EACCES), both now win32-guarded matching the audit store's already-correct posture; and
+`service-host` resolving its worker with `new URL(...).pathname` (`/C:/…` on Windows, unloadable — so NO
+plugin service ever activated), now `fileURLToPath`.
+
+**Gate: `pnpm verify` VERBATIM exit 0 on the combined working tree (one process).** On the box
+(WORKSTATION4090): the Rust workspace is green — `cargo check --all-targets` + `clippy -D warnings` clean,
+`cargo test --workspace` exit 0 (60 lib + mesh_bridge 29 + mgmt_server 10 + terminal_mesh 6 + the
+cross-language vectors; the first live named-pipe roundtrips on real Windows ride the suite itself) — and
+the TS planes are green: the full `fieldd` suite 445 passed | 9 skipped (scoped-sequential), `fieldd-client`
+12/12, `field-app` 417. Honestly skipped as tracked debt: the two concurrent-edit doc-sync tests (a slow-box
+stall past a raised 15s timeout — the router is in-process, so transport is proven separately in
+`quic_lane_transport.rs` over real QUIC), the PTY-hosting suites terminal-seam / terminal-kill-matrix
+(WIN-6 ConPTY, mirroring `terminal_unit.rs`'s `cfg(unix)`). The four-process two-fieldds-over-a-real-tailnet
+doc-sync witness remains a COVERAGE gap, not an argument gap — both halves are proven at their own seam.
+
+## WIN-6 — terminal hosting on Windows: the ConPTY rung
+
+**LANDED 2026-08-11 `03cc648`** (WIN-D2 decided by James the same day: "build WIN-6 now" —
+terminal hosting is IN Windows GA, not deferred). The `85cce04`-era spike had proved ghosttea's
+ConPTY backend hosts a real terminal on the box; this rung makes it the product path and replaces
+the throwaway spike with the real suites, every one run on WORKSTATION4090.
+
+`defaultShell` (fieldd/terminal-service.ts) falls to COMSPEC on win32 (GT-D10) instead of
+`/bin/sh` — a default `terminal.create` used to die at SPAWN_REFUSAL there; a new real-spawn seam
+test witnesses it. The **kill matrix runs on the box** (the §5/§6 gate): `terminal_unit.rs` is
+cross-platform — the survivor-authority logic was always platform-agnostic, so only the seam
+moved (MgmtClient + control dials through one `local_ipc` stream split for its halves; `alive`
+via OpenProcess beside libc::kill; cmd.exe tenants; the endpoint-shape assertion and the 0600
+mode loop platform-split). 14/14 on the box. One test stays unix-only, recorded at source:
+`stale_endpoints_are_rebound` is a stale-socket-NODE mechanism with no Windows analogue — an
+in-process pipe rebind reads ACCESS_DENIED until the holder's process EXITS (the real restart,
+witnessed cross-process by the TS matrix), so it is gated, not masked. `terminal_mesh.rs`'s one
+gated PTY test un-gates (cmd.exe tenant); the TS suites un-gate too — `terminal-seam` 3/3 (I/O +
+the default-shell witness), `terminal-kill-matrix` 6/6 (the two-plane crash/adopt/re-arm rows are
+cross-process, so they hold unchanged but for the shell).
+
+**Two EL7 findings the box's own suite surfaced, measured not argued:** the env strip HOLDS on
+Windows for exact-case prefixes (row 6 — `FIELD_`/`FIELDD_`/`GHOSTTEA_` bait stripped from a real
+PTY, `env`→`set` and `HOME`→USERPROFILE by platform); but a case-VARIANT of a prefix LEAKS (row
+6b — a `Field_Native_*` key survived into a live cmd.exe PTY), because ghosttea's strip decides
+with a case-sensitive `starts_with` over Windows' case-insensitive env. field-native sets its own
+secrets exact-case, so those ARE stripped — a defense-in-depth gap, not a live mirror-write
+escape. Unfixable from the embedder (a fork-local strip is what G1 retired); **petition G13
+drafted** (renumbered from the plan's provisional G15), and row 6b is an `it.fails` witness that
+flips to a live pass the moment the pin consuming G13 lands. VibeField's own TS strip half was
+already case-folded in WIN-3. WIN-D3 needed no petition (resolved by construction in WIN-2).
+
+**Gate: `pnpm verify` VERBATIM exit 0** (combined tree, one process). Box (WORKSTATION4090):
+terminal_unit 14/14 · terminal_mesh 7/7 · terminal-seam 3/3 · terminal-kill-matrix 6/6 — the
+ConPTY kill matrix, the two-plane adoption, the frame-plane I/O, and the EL7 witnesses, all on
+real Windows.
+
+## WIN-5 — the app boots on Windows (the headless smoke gate)
+
+**LANDED 2026-08-11 `51aa3ab`.** `pnpm smoke` — the Electron shell launching, spawning the
+fieldd/field-native pair over named pipes, the renderer loading, all five units up — passes on
+the box (WORKSTATION4090) with ZERO app code: the WIN-2/3/6 daemon+terminal work already carried
+the app onto Windows. This commit only makes the proof reproducible: smoke-like modes call
+`app.disableHardwareAcceleration()` (a CI runner or ssh session on Windows has no window-station
+GPU, and over ssh Chromium's GPU init fails outright), `isSmokeLike`-gated so the production path
+is untouched. Proven both ways — `pnpm smoke` green headless over ssh on the box (no manual flag),
+still green (software-rendered) on mac. `--smoke-godview` additionally boots the FULL deck on
+Windows (renderer canvas2d, swarm monitor 9 agents + physics worker, a LIVE terminal that echoed
+via WIN-6's ConPTY); its only failing assertion is the harness's own `echo $0` unix-ism (cmd.exe
+has no `$0` — the pane genuinely IS cmd.exe, resolved by login-shell.ts's COMSPEC arm), left
+unported as a test curiosity. WIN-5's remainder is visual polish (WIN-D9 chrome, tray `.ico`,
+forced-colors, the "Shift" glyph) — an eyeball, not porting. Gate: `pnpm verify` VERBATIM exit 0;
+box: `pnpm smoke` exit 0 headless over ssh.
+
+## WIN-7 opens — the mesh finds its sidecar on Windows
+
+**LANDED 2026-08-11 `edd5882`.** The truffle sidecar resolver (`services/mesh.rs`) searched only
+the unix names `sidecar-slim`/`truffle-sidecar` in unix dirs — on Windows the binary is
+`sidecar-slim.exe`, so the resolver would never match the file beside `field-native.exe`, and the
+mesh could not start even once a tailnet key were present. `SIDECAR_NAMES` is now cfg-split (`.exe`
+on windows), the search adds `%LOCALAPPDATA%\truffle\bin` and cfg-gates the unix dirs
+(Library / .config / /usr/local/bin). A `#[cfg(windows)]` test witnesses the resolution on the box
+(it finds `sidecar-slim.exe` under a temp `LOCALAPPDATA`). This is WIN-7's autonomous half; the
+live tsnet-vs-host-Tailscale coexistence spike and the Mac↔Windows two-device witness (docs sync,
+remote attach) still need a tailnet auth key (James's). Gate: `pnpm verify` VERBATIM exit 0; box:
+field-native mesh unit tests 3/3 incl. the new witness.

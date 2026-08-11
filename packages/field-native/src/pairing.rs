@@ -8,7 +8,6 @@ use anyhow::{Context, Result};
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -32,7 +31,15 @@ pub fn load_or_create_secret(path: &Path) -> Result<[u8; 32]> {
             fs::create_dir_all(parent)?;
         }
         fs::write(path, hex::encode(secret))?;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+        // 0600 is the unix boundary. WIN-D4: on windows the profile's inherited
+        // ACLs carry the other-user boundary and an explicit DACL is recorded
+        // hardening — on every OS the same-uid adversary is held out by the
+        // token discipline, never by the file mode.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+        }
         Ok(secret)
     }
 }

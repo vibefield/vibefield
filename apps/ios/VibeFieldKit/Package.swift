@@ -18,16 +18,26 @@ let package = Package(
     .library(name: "SwarmPhysics", targets: ["SwarmPhysics"]),
     .library(name: "FieldAgents", targets: ["FieldAgents"]),
     .library(name: "FieldMesh", targets: ["FieldMesh"]),
+    .library(name: "FieldTerminal", targets: ["FieldTerminal"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
   ],
   dependencies: [
     // The Ghosttea Apple stack (terminal + Truffle mesh). Exact pin — EL8:
     // bumping it is a deliberate upgrade event, moved in lockstep with
-    // field-native's truffle-core pin (both planes ride truffle 0.7.11).
-    // 0.7.0 brings the remote-reconnect layer (protocol minor 6, legacy hosts
-    // fenced) — field-native's embedded ghosttea crate is 0.6.0 until the NF
-    // track's next pin event, and 0.7.0 treats such hosts as quiet legacy.
-    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.7.0")
+    // field-native's ghosttea and truffle-core pins (both planes ride truffle
+    // 0.7.12 — this line read 0.7.11 until 2026-08-09, contradicting the very
+    // next sentence; the manifests were always the authority).
+    // 0.9.3 is THE meeting point: G12 (2026-08-09) moved every desktop plane to
+    // it (cargo ghosttea + ghosttea-truffle "=0.9.3", npm overrides), and its
+    // Swift manifest still pins truffle 0.7.12 — one wire, one Arc<Node> type,
+    // both planes. This plane has NO delta to consume: v0.9.2…v0.9.3 is one
+    // build-script fix (`ghosttea-vt-sys/build.rs`), one new upstream regression
+    // check, and version strings/lockfiles/SBOMs — verified against the compare,
+    // not assumed. The pin moves only to keep the one-version law true. It still
+    // carries 0.9.0's appearance parity and 0.7.0's reconnect layer, and remains
+    // the version whose TruffleTerminalMesh the desktop floor publishes terminal
+    // hosts with (IOS-3's server).
+    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.9.3")
   ],
   targets: [
     // Design tokens and shared chrome — the godview monochrome language.
@@ -39,22 +49,48 @@ let package = Package(
     // color, and the scripted mock fleet that stands in for the daemon feed.
     .target(name: "FieldAgents", dependencies: ["SwarmPhysics"]),
     // The mesh leg: the in-process Truffle/Tailscale runtime, login flow,
-    // and peer roster — the phone joins the tailnet here (IOS-2).
+    // peer roster (IOS-2) — and since IOS-3, remote-session discovery, which
+    // maps upstream's session summaries into FieldAgents' own vocabulary so
+    // the projection that makes bubbles never learns a Ghosttea type.
     .target(
       name: "FieldMesh",
       dependencies: [
         "FieldDesign",
+        "FieldAgents",
         .product(name: "GhostteaTruffle", package: "ghosttea"),
+      ]
+    ),
+    // The terminal leg (IOS-3): everything that knows Ghosttea's renderer
+    // exists — appearance → presentation config, the attachment lifecycle,
+    // and the Metal surface. Kept apart from FieldHome so the card composes
+    // a terminal without the field learning how one works.
+    .target(
+      name: "FieldTerminal",
+      dependencies: [
+        "FieldDesign",
+        .product(name: "GhostteaTruffle", package: "ghosttea"),
+        .product(name: "GhostteaTerminal", package: "ghosttea"),
+        .product(name: "GhostteaCore", package: "ghosttea"),
+        .product(name: "GhostteaAppearance", package: "ghosttea"),
       ]
     ),
     // The home screen: swarm field rendering, bubble chrome, session card.
     .target(
       name: "FieldHome",
-      dependencies: ["FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh"],
+      dependencies: [
+        "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal",
+      ],
       resources: [.process("Resources")]
     ),
     .testTarget(name: "SwarmPhysicsTests", dependencies: ["SwarmPhysics"]),
     .testTarget(name: "FieldAgentsTests", dependencies: ["FieldAgents"]),
     .testTarget(name: "FieldMeshTests", dependencies: ["FieldMesh"]),
+    .testTarget(name: "FieldTerminalTests", dependencies: ["FieldTerminal"]),
+    // The home screen's DECISIONS, which is all of it that is testable without
+    // a simulator — and, until this target existed, all of it that was
+    // untested: the integrator carried three state-machine bugs (the parked
+    // poll, the card's ended face, the double attach) that no other target
+    // could have caught.
+    .testTarget(name: "FieldHomeTests", dependencies: ["FieldHome"]),
   ]
 )

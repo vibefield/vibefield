@@ -5,7 +5,9 @@
 > decision lives and whether it still stands. Full-corpus sweep: 2026-08-02. Update the
 > relevant row when a decision is ratified, amended, superseded, or consumed. Siblings:
 > `ROADMAP.md` (now/next) · `LANDED.md` (history) · `draft/petitions/README.md` (upstream
-> petitions). AH status advanced 2026-08-03. Lives in main-tracked `docs/` (moved from
+> petitions). AH status advanced 2026-08-03; **IOS (D-i7…D-i9) and the UI system added
+> 2026-08-07** in the reconciliation pass that found both tracks missing from all three
+> main-tracked docs. Lives in main-tracked `docs/` (moved from
 > `draft/` 2026-08-02); owning-doc
 > citations (`native-floor §3`, `thinking-c6`, …) resolve under `draft/`, dev-local-only.
 
@@ -18,14 +20,16 @@
 | D11–D16 | design-03-widget-sdk (appendix 03·A) §10 | in force within design-03's architecture; **D11 SUPERSEDED** (Track D landed the GL shelf — plugin spec §28) · **D13's grace-pool is a deferred-return** (GT spec: only if AR-era cycling needs it) |
 | D17–D29 | design-03 §11 | in force; **D27 = v0.2 amendment** (dual loopback WS; the v0.1 MessagePort row is deleted) · D28 v0.2 · **D29 amended by D29′** |
 | **D29′** | design-03 §7.2 (ratified 2026-07-24, James) · plugin spec §16.6 + §28 fold-backs | AMENDS D29: the settings doc is a doc in FULL (persisted · synced · undoable), app prefs join it, three undo laws (user-scope only · never re-escalates · horizon = compaction epochs). **IMPLEMENTED at P7** (`3e3c534`); the spec's pre-P7 "not yet implemented" sentence carries a dated correction |
-| D30–D38 | design-04 §10 | in force; D31/D32 implemented (C4/C5), D35 implemented (C5/C6-5), D33/D34/D37/D38 await AR |
+| D30–D38 | design-04 §10 | in force; D31/D32 implemented (C4/C5), D35 implemented (C5/C6-5), D33/D34/D37/D38 await AR; **D30 AMENDED 2026-08-05** (UA-D4 — mesh identity is per *user-on-device*; §3.2's peer preset split self/guest by UA-D5; `specs/users-and-accounts.md`) |
 | D39 | design-03 §3.1 + §11 (v0.4, 2026-07-24) | single primary window; implemented (tray track + WP6) |
 
 ## Laws and principles (flip only on a design event)
 
-PP1–PP6 + EL1–EL10 — design-00 §2 · A1–A8 axioms + PF1–PF8 performance laws — design-03 ·
-C-1…C-7 widget constitution — 03·A (CI-gated) · NF-L1…L3 custody laws — native-floor §1 ·
-M1–M5 contract milestones — design-01 §11 (M1+M2 implemented, green cross-language).
+PP1–PP6 + EL1–EL10 — design-00 §2 (**EL3 AMENDED 2026-08-05**, UA-D4: one mesh identity per
+*user-on-device*) · A1–A8 axioms + PF1–PF8 performance laws — design-03 · C-1…C-7 widget
+constitution — 03·A (CI-gated) · NF-L1…L3 custody laws — native-floor §1 · M1–M5 contract
+milestones — design-01 §11 (M1+M2 implemented, green cross-language) · **W1–W6 onboarding
+laws — users-and-accounts §6**.
 
 ## Spec decision namespaces
 
@@ -37,8 +41,10 @@ M1–M5 contract milestones — design-01 §11 (M1+M2 implemented, green cross-l
 | ESP-1…ESP-17 | electron-security-packaging §1.1 | in force; §9.3 (operationalizing ESP-3) CLOSED 2026-07-25 (WP9) |
 | ESR-1…ESR-15 | electron-shell-refactor §1.1 | ESR COMPLETE as specced (§17) |
 | GT-D1…GT-D8 | godview-terminal §3 (v0.2) | LIVE track; GT-D9 refuted and deleted in v0.2 — retired, never reissued |
-| AH-D1…AH-D12 | artifact-hub §3 (v0.4) | RATIFIED 2026-08-02; AH-D6 AMENDED 2026-08-03 by the AH-2 as-built retained-public-cache mechanism: last-known safe slices survive Truffle peer removal until a future device-retirement policy, while explicit empty origin slices remove immediately. The 2026-08-03 review hardening fixes the interpretation: a store key owns its DeviceSlice, tolerant device/catalog readers narrow before retention, raw URL spelling is validated before normalization, self does not consume the 256-remote-origin budget, and contracts-generated cross-plane frame/slice/queue limits bind native + fieldd. Cache writes are async/coalesced; preview cleanup retains absent intent as its retry record; ArtifactService disposal is a drain barrier. AH-D7 AMENDED 2026-08-03 by James's desktop direction: a spine-owned non-modal right-edge `hud.side-panel` with an outermost top-right round toggle supersedes the unimplemented bottom-island sheet; it overlays without canvas reflow/recede while `vibefield.browser` still owns content. AH-1a/1b serving landed at `9f80f0c`; AH-2 global validated catalog landed at `9c17c46`; AH-3's desktop runtime implementation landed at `8c07bf4`, consuming AH-D7/AH-D11 with the browser-plugin panel and authenticated Electron-main `shell.*` provider. AH-4's runtime is in implementation under the ratified AH-D8 boundary; its explicit refresh is state-advancing/non-idempotent and must never be replayed automatically. The live AH-1 second-client proof, AH-3 packaged-plugin/physical UI closeout, AH-4 physical witness, and AH-5 remain open. CAS/file transfer stays gated by AH-D10; AH-D12 records that per-port origins do not isolate browser cookies |
-| LOG-1…LOG-44 | logging-and-diagnostics §1.1 (glosses in its own table) | all binding; LOG-41…44 folded in v0.2; slices LOG-L0…L6 all complete; **LOG-39 release-gated (open)**; verify-items LOG-V1 (Windows half) / V5 / V8 open, V7 optional-deferred |
+| AH-D1…AH-D12 | artifact-hub §3 (v0.4) | RATIFIED 2026-08-02; AH-D6 AMENDED 2026-08-03 by the AH-2 as-built retained-public-cache mechanism: last-known safe slices survive Truffle peer removal until a future device-retirement policy, while explicit empty origin slices remove immediately. The 2026-08-03 review hardening fixes the interpretation: a store key owns its DeviceSlice, tolerant device/catalog readers narrow before retention, raw URL spelling is validated before normalization, self does not consume the 256-remote-origin budget, and contracts-generated cross-plane frame/slice/queue limits bind native + fieldd. Cache writes are async/coalesced; preview cleanup retains absent intent as its retry record; ArtifactService disposal is a drain barrier. AH-D7 AMENDED 2026-08-03 by James's desktop direction: a spine-owned non-modal right-edge `hud.side-panel` with an outermost top-right round toggle supersedes the unimplemented bottom-island sheet; it overlays without canvas reflow/recede while `vibefield.browser` still owns content. AH-1a/1b serving landed at `9f80f0c`; AH-2 global validated catalog landed at `9c17c46`; AH-3's desktop runtime implementation landed at `8c07bf4`, consuming AH-D7/AH-D11 with the browser-plugin panel and authenticated Electron-main `shell.*` provider. AH-4's runtime is in implementation under the ratified AH-D8 boundary; its explicit refresh is state-advancing/non-idempotent and must never be replayed automatically. The live AH-1 second-client proof, AH-3 packaged-plugin/physical UI closeout, AH-4 physical witness, and AH-5 remain open. CAS/file transfer stays gated by AH-D10; AH-D12 records that per-port origins do not isolate browser cookies; AH-D6 amended again 2026-08-05 (UA-D8 — user unlink is retirement's second trigger; `allow` globs named the guest-admission exemplar) |
+| LOG-1…LOG-44 | logging-and-diagnostics §1.1 (glosses in its own table) | all binding; LOG-41…44 folded in v0.2; slices LOG-L0…L6 all complete; **LOG-39 release-gated (open)**; verify-items LOG-V1 (Windows half) / V5 / V8 open, V7 optional-deferred; amended 2026-08-05 (UA-D16 — `userId` is a record field, never a path) |
+| UA-D1…UA-D16 | users-and-accounts §2 (lock law §3.3 · wizard §6 + W1–W6 · door law §7) | **RATIFIED 2026-08-05** (James). v0.2 same-day wizard revision (UA-D11 reversed from silent-mint to the Setup Assistant at James's direction). All five verify-items (S1, V2–V5) RESOLVED by spikes 2026-08-05 and folded at §12 — UA-4 unblocked on pinned truffle 0.7.12 (self-whois works); V5's finding rewrote UA-D10/UA-D12 (the users.json lock replaces the accidental fixed-port mutex). Fold-backs executed 2026-08-05: design-00 (§1 · EL3 · §4.2 · §4.8 · §4.9 incl. the `native/mesh` path correction) · design-01 (hello/principals/registry) · design-02 (§3.6) · design-03 (§4.3 setup assistant realized) · design-04 (D30 · §3.2 · §6 · §7) · artifact-hub AH-D6 · logging UA-D16. **UA-0 LANDED 2026-08-05 `fcd0af9`** (layout registry) · **UA-1 LANDED `ca1ce49`** (user-shaped storage; live dev-root migration witness owed to the first `pnpm dev`) · **UA-2 LANDED `3750f20`** (identity threading) · **UA-3 LANDED `15832c0`+`30aece8`+`96e9e9d`** (link lifecycle: native self/retire, LinkService capture, Account page) · **UA-6 LANDED `a4bed08`+`1a2a846`** (sync intent: three DocSync gates, doc.setSyncIntent, posture key; §8 errata recorded at source — peer-declined mapping falsified by the one-directional lane protocol; side-find: pre-existing doc-registry write-back race fixed) · **UA-4 CODE LANDED `105e6bd`** (self/guest door: stored-login comparison, tailnet-guest principal, guestOk column lint-pinned to system.hello, serve-allow belt REMOVE-THEN-ADD around the traced no-upsert semantics; C3 serve-reconcile-skip debt RECORDED at spec §7.3 — stale gate + adopted state, pathSecret rotation rides the same skip; **exit open on the physical pair: S1 live probe + two-account witness — gates ANY shared-tailnet login**); **UA-3w LANDED `1e27c7b`** (Setup Assistant: onboarding boot phase held after the workspace resolve, five panes + migration variant on the splash's own ground, W6 resume from durable facts, mintOnboarded mint/migrate symmetry, setupVariant stamp + main-side backfill; two as-built notes folded at spec §6 — no link-start verb exists so the pane rides the authUrl anchor, and posture-resume is not derivable so a linked resume lands ON the posture question) · **UA-5 LANDED `cfe87b8`+`f3aa78a`+`e83033a`** (second user: createUser under the lock + UA-D9 create-time budget assert; per-user PairBundles, build-before-break attach, switch-by-reload; UA-D12 completed — ephemeral ports unconditional, two-pair audit on real daemons green incl. the UA-D10 mtime law; tray submenu + Account Users block + wizard second-user variant; §6.2 modal-frame clause amended at source — the variant rides the boot wizard). **THE TRACK IS CODE-COMPLETE — all nine slices**; remaining exits physical: S1 live probe · two-account witness · switch kill-matrix row. MeshSection dedup deferred. T3 optional-unfiled; C-series AR-era asks recorded in §13 |
+| WIN-D1…WIN-D9 | `thinking-windows-port.md` §8 (spec graduates with the track) | track OPEN 2026-08-10 (James: "follow your plan"). **WIN-D1** pipes-via-`ghosttea::ipc` + FNV-scope · **WIN-D4** `cfg(unix)` mode bits + per-pipe DACL (dir-DACL = booked hardening) · **WIN-D5** stop-verb ADOPTED (a design-02 §2.8/§3.6 amendment) — all landed 2026-08-11 (`5ffd30b`/`85cce04`/`f982d27`); **WIN-D3 RESOLVED BY CONSTRUCTION** the same wave (binding upstream's own `Listener` made the terminal handoff direct — no petition, the plan's sketched fork unneeded); **WIN-D2** ADOPTED 2026-08-11 (James: "build WIN-6 now") — terminal hosting is in Windows GA, the ConPTY rung landed `03cc648` with the kill matrix on the box, and the one residual EL7 gap (a case-variant private-env key leaking past ghosttea's case-sensitive strip) is booked upstream as G13; WIN-D6/D7/D8/D9 OPEN (James's) |
 
 ## Work / finding namespaces (status lives in their own tables — pointers only)
 
@@ -49,8 +55,23 @@ M1–M5 contract milestones — design-01 §11 (M1+M2 implemented, green cross-l
   F1 skipped.
 - **C6-1…C6-6** (+3a…3i) and **F-C6-1…F-C6-22** — thinking-c6 §4/§7. Open: F-C6-1, F-C6-4,
   **F-C6-21 (the track's oldest debt)**; F-C6-22 mitigated-not-fixed (see its corrected row).
-- **IOS-0…IOS-4** + **D-i1…D-i6** — thinking-ios-app. D-i5 superseded 2026-07-29 (upstream
-  publish).
+- **IOS-0…IOS-4** + **D-i1…D-i9** — thinking-ios-app. D-i5 superseded 2026-07-29 (upstream
+  publish). **D-i7/D-i8/D-i9 added 2026-08-06 at the IOS-3 design (§10.6)** and all three are
+  now implemented: **D-i7** one `FieldBubble` model, two pure projections (agent · remote), the
+  desktop's GT-4b shape adopted rather than re-invented — remote status is the terminal
+  classifier and can never wear the `waiting` tier, which is agent-permission language ·
+  **D-i8** appearance is upstream *data* rendered in our design system, presentation config
+  built directly, the config-document machinery deliberately not adopted (escape hatch named) ·
+  **D-i9** the viewer owns appearance (`presentationAuthority: .device`) — a desktop's theme
+  never reaches through the mesh to restyle the phone. **IOS-3a…3e LANDED 2026-08-05/06**
+  (`f54cb06` · `15dfa4a` · `72929d8` · `feb6dc8`) with the **3r review** (`d36528a`) fixing six
+  findings, three of them HIGH and all three in the one module with no test target. **Status
+  correction, 2026-08-07:** `72929d8`'s subject claims IOS-3c, but that slice's
+  capability/Keychain leg **did not land** (verified at three source sites) — the phone attaches
+  view-only, so IOS-3c is PARTIAL, not complete. §10.4's font-size instruction was falsified
+  during the build and carries a dated correction at source; §10.3's unqualified "readWrite"
+  gained a clarification for the same reason. Open and unanswered: the mock-fleet-beside-real-
+  bubbles taste call (§10.6).
 - **AH-0…AH-5** (AH-1a/1b split) — artifact-hub §10. AH-0 design ratified 2026-08-02;
   AH-1a/1b implementation landed at `9f80f0c` (physical second-client proof open);
   AH-2 implementation landed at `9c17c46`; AH-3 desktop runtime landed at `8c07bf4`
@@ -58,6 +79,10 @@ M1–M5 contract milestones — design-01 §11 (M1+M2 implemented, green cross-l
   physical witness open; AH-5 open.
 - **U1–U15** — thinking-auto-update §4 (+8 unprefixed closed decisions §8; all consumed by
   EDP v0.3).
+- **UA-0…UA-6 (+UA-3w)** slices + verify-items S1/V2–V5 (ALL RESOLVED 2026-08-05) —
+  users-and-accounts §10/§12. **UA-0 landed 2026-08-05 (`fcd0af9`)**; UA-1 is the next
+  rung; UA-4's two-account witness and the S1 live probe are the named physical gates.
+  Provenance: thinking-users-and-accounts (2026-08-04, James's OS-user framing).
 - **P-1…P-8 / V-1…V-6 / P-D1…P-D4** — thinking-widgetlab-port (all executed 2026-07-21).
 - **A0–A5** altitude ladder · **R0–R3** trust rungs · **L0 + P0–P7** slices — plugin spec
   §4.3/§20.5/§21.
@@ -72,6 +97,10 @@ treat G1′ as canonical.
 
 ## Collision warnings (read before citing an ID)
 
+- **`GT-5` names TWO different things (added 2026-08-07):** `ROADMAP.md` used it for *iOS
+  attach, the last GT rung*, while `LANDED.md` §GT-5 records `127df5c`/`95cbd7e`/`69e8a99`/
+  `17365fd` as *the code review's findings, fixed*. The attach work shipped as **IOS-3**
+  instead. Cite the slice ids, not "GT-5".
 - **`R` is THREE namespaces:** walls R1–R17 (`scripts/check-import-boundaries.mjs` — all 17
   enforce:true as of 2026-08-02) · predesign-01 standing rules R1–R12 · trust rungs R0–R3
   (plugin spec §20.5). Walls R11 ≠ predesign R11 — they conflict numerically.
@@ -84,10 +113,18 @@ treat G1′ as canonical.
   coincidence.
 - **Outside-draft ID sources:** walls R1–R17 live in code; motion rules M1/M3/M5/M6 live in
   repo-root `DESIGN.md`.
+- **`T1` names TWO petitions:** the FILED `T1-truffle-identity-surfaces.md` (RESOLVED upstream at
+  truffle 0.7.9) and the NEVER-FILED truffle Windows-coexistence ask (predesign-03 §6; the later-phase
+  list in `petitions/README.md`). The Windows ask refiles under a fresh id when WIN-7 opens — do not
+  cite "T1" for it.
 - RFC 022/023/024 (truffle) and ADR-007 (chopsticks) are upstream external ids, not VibeField
   namespaces.
 
 ## Docs that define zero numbered ids
 
-`foundations-and-architecture.md` (prose decisions; references petition ids only) and
-`agent-field-design.md` (§17 product principles are the prose origin of PP1–PP6).
+`foundations-and-architecture.md` (prose decisions; references petition ids only) ·
+`agent-field-design.md` (§17 product principles are the prose origin of PP1–PP6) ·
+**`docs/UI_SYSTEM.md`** (added 2026-08-06, main-tracked beside this trio — it states the
+four-layer ownership boundary between `DESIGN.md`'s direction and the code, and the
+catalog-mounts-shipping-views rule that `ui-system-boundaries.test.ts` enforces; binding as
+architecture, but it numbers nothing).

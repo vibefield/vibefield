@@ -8,6 +8,9 @@
   },
   "scripts": {
     "dev": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs",
+    "dev:design": "node tooling/dev-runner/src/design-bench.mjs",
+    "dev:design:web": "pnpm --filter @vibefield/electron-shell dev:design:web",
+    "dev:onboarding": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --force-onboarding",
     "smoke": "pnpm --filter @vibefield/desktop smoke",
     "smoke:canvas": "pnpm --filter @vibefield/desktop smoke:canvas",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",
@@ -27,7 +30,9 @@
     "gen:manifests": "nx run-many -t gen:manifest",
     "gen:check": "pnpm gen && git diff --exit-code -- packages/contracts/gen packages/field-native/src/contracts.rs packages/field-native/src/registries.rs",
     "preflight": "node scripts/preflight.mjs",
-    "verify": "pnpm preflight && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm test && pnpm test:rust && pnpm gen:check",
+    "bundle:assert": "pnpm --filter @vibefield/electron-shell run build:renderer && node scripts/bundle-report.mjs --dist packages/electron-shell/dist --assert",
+    "verify": "pnpm preflight && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm bundle:assert && pnpm test && pnpm test:rust && pnpm gen:check",
+    "hooks:install": "git config core.hooksPath scripts/git-hooks",
     "commit-draft": "sh scripts/commit-draft.sh"
   },
   "devDependencies": {

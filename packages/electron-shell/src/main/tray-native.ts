@@ -33,20 +33,22 @@ export function loadTrayImage(
   return assertImage(nativeImage.createFromPath(path), path);
 }
 
+function templateItem(item: TrayMenuItem): Electron.MenuItemConstructorOptions {
+  if (item.type === "separator") return { type: "separator" as const };
+  return {
+    ...(item.id !== undefined ? { id: item.id } : {}),
+    ...(item.type !== undefined ? { type: item.type } : {}),
+    ...(item.label !== undefined ? { label: item.label } : {}),
+    ...(item.enabled !== undefined ? { enabled: item.enabled } : {}),
+    ...(item.checked !== undefined ? { checked: item.checked } : {}),
+    ...(item.click !== undefined ? { click: item.click } : {}),
+    // UA-5 — the Switch User submenu; recursion keeps the mapping total
+    ...(item.submenu !== undefined ? { submenu: item.submenu.map(templateItem) } : {}),
+  };
+}
+
 function electronMenu(items: readonly TrayMenuItem[]) {
-  return Menu.buildFromTemplate(
-    items.map((item) => {
-      if (item.type === "separator") return { type: "separator" as const };
-      return {
-        ...(item.id !== undefined ? { id: item.id } : {}),
-        ...(item.type !== undefined ? { type: item.type } : {}),
-        ...(item.label !== undefined ? { label: item.label } : {}),
-        ...(item.enabled !== undefined ? { enabled: item.enabled } : {}),
-        ...(item.checked !== undefined ? { checked: item.checked } : {}),
-        ...(item.click !== undefined ? { click: item.click } : {}),
-      };
-    }),
-  );
+  return Menu.buildFromTemplate(items.map(templateItem));
 }
 
 function isFiniteRectangle(rect: TrayRectangle): boolean {
@@ -118,7 +120,13 @@ export function createElectronTrayRuntime(
       };
     },
     createTray: (image) =>
-      new Tray(image as NativeImage, guid ?? undefined) as unknown as NativeTrayPort,
+      // Pass the GUID only when there IS one: `new Tray(image, undefined)` is a
+      // two-arg call whose second arg Electron validates as a GUID string and
+      // rejects ("GUID must be a string"). Windows/Linux take the frozen slot as
+      // null (EDP §5.6) and so must call the one-arg form to bind a tray at all.
+      (guid != null
+        ? new Tray(image as NativeImage, guid)
+        : new Tray(image as NativeImage)) as unknown as NativeTrayPort,
     inspectTray: (tray) => {
       if (platform !== "darwin") {
         return { bounds: null, displayBounds: [], placement: "unknown" };

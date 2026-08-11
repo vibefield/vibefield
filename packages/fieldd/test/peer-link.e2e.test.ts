@@ -21,12 +21,18 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTRACTS_VERSION, type DeviceInfo, type DeviceSlice } from "@vibefield/contracts";
+import {
+  CONTRACTS_VERSION,
+  type DeviceInfo,
+  type DeviceSlice,
+  SOCKETS,
+} from "@vibefield/contracts";
 import type { WsCtor } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, PeerLink } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const LOGIN = "me@jamesyong42.com";
@@ -41,7 +47,7 @@ afterEach(async () => {
 async function startMock(dataDir: string): Promise<MockMgmtServer> {
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-  const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await mock.start();
   cleanup.push(() => mock.stop());
   return mock;

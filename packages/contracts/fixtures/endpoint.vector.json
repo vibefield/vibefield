@@ -1,0 +1,58 @@
+{
+  "note": "WIN-D1 — the endpoint-resolution law's cross-language vector. TS (src/endpoints.ts, pinned by test/endpoints.test.ts) and Rust (field-native/src/endpoints.rs, pinned by tests/endpoint_vector.rs) must both derive these exact strings. winA and winA-alt are two spellings of ONE directory and must share a scope — that collapse is the point of canonicalization. A deliberate change to the law edits this file in the same commit.",
+  "vectors": [
+    {
+      "tag": "winA",
+      "dataRoot": "C:\\Users\\me\\AppData\\Roaming\\VibeField",
+      "scope": "ef2ecfd8a6f57831",
+      "endpoints": {
+        "fieldd.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-fieldd",
+        "mgmt.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-mgmt",
+        "meshdata.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-meshdata",
+        "termctl.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-termctl",
+        "termframe.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-termframe"
+      }
+    },
+    {
+      "tag": "winA-alt",
+      "dataRoot": "c:/users/ME/appdata/roaming/vibefield/",
+      "scope": "ef2ecfd8a6f57831",
+      "endpoints": {
+        "mgmt.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-mgmt"
+      }
+    },
+    {
+      "tag": "winUser2",
+      "dataRoot": "C:\\Users\\me\\AppData\\Roaming\\VibeField\\users\\2",
+      "scope": "936bf339cef60dd7",
+      "endpoints": {
+        "mgmt.sock": "\\\\.\\pipe\\vibefield-936bf339cef60dd7-mgmt",
+        "termframe.sock": "\\\\.\\pipe\\vibefield-936bf339cef60dd7-termframe"
+      }
+    },
+    {
+      "tag": "winCJK",
+      "dataRoot": "C:\\Users\\赵敏\\AppData\\Roaming\\VibeField",
+      "scope": "39fc4e2df6c60f2b",
+      "endpoints": {
+        "mgmt.sock": "\\\\.\\pipe\\vibefield-39fc4e2df6c60f2b-mgmt"
+      }
+    },
+    {
+      "tag": "mac",
+      "dataRoot": "/Users/james/Library/Application Support/VibeField",
+      "scope": "dc9657b632e150a0",
+      "endpoints": {
+        "termctl.sock": "\\\\.\\pipe\\vibefield-dc9657b632e150a0-termctl"
+      }
+    },
+    {
+      "tag": "linux",
+      "dataRoot": "/home/james/.local/share/VibeField",
+      "scope": "46e04ada2481b851",
+      "endpoints": {
+        "meshdata.sock": "\\\\.\\pipe\\vibefield-46e04ada2481b851-meshdata"
+      }
+    }
+  ]
+}

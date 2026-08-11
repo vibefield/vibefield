@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(
         event = "field_native.lifecycle.ready",
         component = "bootstrap",
-        socket = %running.mgmt_socket.display(),
+        endpoint = %running.mgmt_endpoint,
         boot_id = %running.boot_id,
         "field-native ready"
     );

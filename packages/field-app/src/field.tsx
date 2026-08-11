@@ -1,4 +1,3 @@
-import type { GridConfig } from "@vibecook/ice";
 import type { DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
@@ -15,7 +14,8 @@ import type { DocManager } from "./doc-manager";
 import { useDocSyncFeed } from "./doc-sync-store";
 import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
-import { hexToRgb01 } from "./field/theme-constants";
+import { defaultCanvasGridConfig } from "./field/canvas-appearance";
+import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import { getRendererLogger } from "./logging";
@@ -117,20 +117,15 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
 
   const hudMotion = docState.phase === "loading" ? "out" : hudReturning ? "in" : "idle";
 
-  const effectiveGrid = useMemo<Partial<GridConfig>>(
-    () => ({
-      ...chrome.gridConfig,
-      dotColor: hexToRgb01(dark ? chrome.themeColors.dotDark : chrome.themeColors.dotLight),
-    }),
-    [chrome.gridConfig, dark, chrome.themeColors],
-  );
+  const effectiveGrid = useMemo(() => defaultCanvasGridConfig(dark), [dark]);
+
+  // I1 (ice 0.4.0): the C key's "selection decides" behavior rides the engine
+  // keymap's own override surface — stable entries; runs read the Settings
+  // gate through a ref (field-keymap.ts).
+  const keymapOverrides = useFieldKeymapOverrides(chrome.showSettings);
 
   return (
-    <div
-      className="field-wrap"
-      data-doc-transition={hudMotion}
-      style={{ background: "var(--vf-canvas-bg)" }}
-    >
+    <div className="field-wrap" data-doc-transition={hudMotion}>
       {/* The recede (reference design): the canvas eases to 0.98 while the
           sheet is up. Only the wrapper transforms — the tray handoff
           ratio-corrects, so the transient scale never skews engine picks.
@@ -138,21 +133,14 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
           (engine + InfiniteCanvas + GL Canvas + ground) — see the session. */}
       <div
         key={generation}
-        style={{
-          position: "absolute",
-          inset: 0,
-          transform: sheetOpen
-            ? "scale(0.98)"
-            : docState.phase === "loading"
-              ? "scale(0.992)"
-              : "scale(1)",
-          opacity: docState.phase === "loading" ? 0.72 : 1,
-          transition: "transform 600ms var(--vf-ease-island), opacity 420ms var(--vf-ease-island)",
-        }}
+        className="field-scene"
+        data-sheet-open={sheetOpen ? "true" : "false"}
+        data-doc-loading={docState.phase === "loading" ? "true" : "false"}
       >
         <CanvasStage
           ce={ce}
           grid={effectiveGrid}
+          keymapOverrides={keymapOverrides}
           ecsOpen={chrome.showEcs}
           devtoolsRef={devtoolsRef}
           disposeRef={stageDisposeRef}

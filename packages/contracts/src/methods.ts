@@ -27,6 +27,11 @@ export interface MethodDef {
   idempotent: boolean;
   locality: Locality;
   subscription?: boolean;
+  /** UA-4 (spec §7.3, UA-D14): a tailnet-guest principal may call ONLY
+   * methods that set this — the scope check alone would pass scope:null
+   * methods. The registry's first runtime-read column (`locality`'s sibling);
+   * linted: guestOk ⇒ idempotent and a non-mutating scope. Default false. */
+  guestOk?: boolean;
 }
 
 export function defineMethod(def: MethodDef): MethodDef {
@@ -47,6 +52,10 @@ export const METHODS: MethodDef[] = [
     scope: null,
     idempotent: true,
     locality: "local",
+    // UA-4 v1: the ONLY guest-admitted method — a guest gets a polite hello
+    // (grantedScopes: []) and typed refusals everywhere else. Widening this
+    // set is a deliberate act against the registry lint, never drift.
+    guestOk: true,
   }),
   defineMethod({
     surface: "product",
@@ -97,6 +106,19 @@ export const METHODS: MethodDef[] = [
     surface: "product",
     method: "system.revokeStaleWindowTokens",
     scope: "tokens.mint",
+    idempotent: true,
+    locality: "local",
+  }),
+  // WIN-D5 — the graceful stop verb. Signals are platform folklore (SIGTERM
+  // never fires on win32, so every teardown there was a hard kill and fieldd's
+  // child sweep / run-file cleanup / audit close silently skipped); the stop
+  // REQUEST rides the authenticated channel instead, and signals demote to
+  // escalation. native.admin: trusted local principals only — the scope sits in
+  // D32's local-only-forever set, so no tailnet caller can stop a daemon.
+  defineMethod({
+    surface: "product",
+    method: "system.shutdown",
+    scope: "native.admin",
     idempotent: true,
     locality: "local",
   }),
@@ -252,6 +274,20 @@ export const METHODS: MethodDef[] = [
   }),
   defineMethod({
     surface: "mgmt",
+    method: "native.mesh.self",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.retire",
+    scope: null,
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
     method: "native.mesh.peers.list",
     scope: null,
     idempotent: true,
@@ -390,6 +426,16 @@ export const METHODS: MethodDef[] = [
     scope: "doc.write",
     idempotent: true,
     locality: "sync",
+  }),
+  // UA-D7 — may this doc leave this device? `local` locality is the honest
+  // class and not a shortcut: the answer is this device's own, held in this
+  // device's registry, and it does not replicate (the C6-4 doc-existence debt).
+  defineMethod({
+    surface: "product",
+    method: "doc.setSyncIntent",
+    scope: "doc.write",
+    idempotent: true,
+    locality: "local",
   }),
   // C6-4 — per-doc sync standing (DocSyncStatus[]), snapshot-then-delta. Always
   // registered: with the mesh off the snapshot is an empty list, which the
@@ -595,6 +641,32 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
     subscription: true,
+  }),
+  // UA-3 — the user's tailscale link (spec §7.1): link truth + honest mesh
+  // reachability for the Account surface; unlink retires the node identity.
+  // settings.manage = the trusted desktop surface, same posture as the
+  // app-preference rows below; never federates.
+  defineMethod({
+    surface: "product",
+    method: "user.link.get",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "user.link.subscribe",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "user.link.unlink",
+    scope: "settings.manage",
+    idempotent: false,
+    locality: "local",
   }),
   // D29′ app-section preferences. Unlike plugin settings these are an exact,
   // trusted desktop surface; plugins, tailnet callers, and agents never receive

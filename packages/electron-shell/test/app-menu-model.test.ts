@@ -3,15 +3,15 @@ import {
   type AppMenuItem,
   buildAppMenu,
   CLOSE_WINDOW_ITEM_ID,
-  GODVIEW_ACCELERATOR,
+  GODVIEW_GESTURE_HINT,
   GODVIEW_ITEM_ID,
   type MenuPlatform,
 } from "../src/main/app-menu-model";
 
-// The application menu is where Godview's accelerator lives (GT-D2), which
-// makes two of its properties load-bearing rather than cosmetic: ⌘G must exist
-// as an APP-level binding, and ⌘W must get out of the deck's way while the
-// overlay is up. Both are asserted on the template, before Electron sees it.
+// Godview's gesture is ⇧⇧ and lives OUTSIDE this template (a double tap is a
+// rhythm; accelerators describe chords) — see godview-state.test.ts. What stays
+// load-bearing here is what the menu must not do: claim an accelerator it does
+// not own, take ⌘G back from the deck, or hold ⌘W while the overlay is up.
 
 const flatten = (items: readonly AppMenuItem[]): AppMenuItem[] =>
   items.flatMap((item) => [item, ...flatten(item.submenu ?? [])]);
@@ -21,18 +21,37 @@ const find = (items: readonly AppMenuItem[], id: string): AppMenuItem | undefine
 
 const PLATFORMS: readonly MenuPlatform[] = ["darwin", "other"];
 const noActions = {};
-const actions = { toggleGodview: () => undefined };
+const actions = { toggleGodview: () => undefined, closeWindow: () => undefined };
 
 describe("buildAppMenu", () => {
-  it.each(PLATFORMS)("puts Godview on ⌘G as a checkbox (%s)", (platform) => {
+  it.each(PLATFORMS)("offers Godview as a checkbox carrying NO accelerator (%s)", (platform) => {
+    // The absence is the assertion. ⌘⎋ sat here looking bound and firing
+    // nothing, because macOS never delivers Command+Escape to an application —
+    // a menu item that claims a key it cannot answer is worse than a silent one.
     const item = find(buildAppMenu(platform, { godviewOpen: false }, actions), GODVIEW_ITEM_ID);
-    expect(item).toMatchObject({
-      type: "checkbox",
-      accelerator: GODVIEW_ACCELERATOR,
-      checked: false,
-      enabled: true,
-    });
-    expect(GODVIEW_ACCELERATOR).toBe("CommandOrControl+G");
+    expect(item).toMatchObject({ type: "checkbox", checked: false, enabled: true });
+    expect(item?.accelerator).toBeUndefined();
+  });
+
+  it.each(PLATFORMS)("teaches the gesture in the label instead (%s)", (platform) => {
+    // A Godview row showing no way to reach it by keyboard would teach that
+    // there isn't one, so the hint rides in the label the accelerator vacated.
+    const item = find(buildAppMenu(platform, { godviewOpen: false }, actions), GODVIEW_ITEM_ID);
+    expect(item?.label).toContain("Godview");
+    expect(item?.label).toContain(GODVIEW_GESTURE_HINT);
+  });
+
+  it.each(PLATFORMS)("leaves ⌘G to the deck's panes at every state (%s)", (platform) => {
+    // The toggle moved off ⌘G on 2026-08-04 precisely to end a collision: ⌘G is
+    // find-next in ghostty, and an app accelerator always wins. Unlike ⌘W, which
+    // the close item lends out and takes back, no item declares ⌘G in either
+    // state — so search-next is the panes' whether the overlay is up or not.
+    for (const godviewOpen of [false, true]) {
+      const accelerators = flatten(buildAppMenu(platform, { godviewOpen }, actions)).map(
+        (item) => item.accelerator,
+      );
+      expect(accelerators).not.toContain("CommandOrControl+G");
+    }
   });
 
   it.each(PLATFORMS)("checks the box from main's own bit, never a guess (%s)", (platform) => {
@@ -63,12 +82,41 @@ describe("buildAppMenu", () => {
       // wins — so with the deck up the menu gives the chord back. Closing a pane
       // detaches a session that lives on (GT-D5), which is what a user pressing
       // ⌘W in a terminal means.
+      //
+      // THE ROLE MUST BE GONE, not merely the accelerator (2026-08-10). This
+      // test used to assert `role: "close"` here and passed for days while the
+      // handover released nothing: Electron resolves `explicit ?? roleDefault`
+      // and `close` defaults to ⌘W, so a role-bearing item binds the chord no
+      // matter what this model omits. The smoke measured the alternatives —
+      // `accelerator: null` and `registerAccelerator: false` both still resolve
+      // to the role default — so no-role is the only spelling that releases it,
+      // and the assertion below is the one that would have failed.
       const item = find(
         buildAppMenu(platform, { godviewOpen: true }, actions),
         CLOSE_WINDOW_ITEM_ID,
       );
       expect(item?.accelerator).toBeUndefined();
-      expect(item?.role).toBe("close");
+      expect(item?.role).toBeUndefined();
+      // Still a working menu command — the role's behaviour, supplied by hand.
+      expect(item?.label).toBe("Close Window");
+      expect(item?.enabled).toBe(true);
+      expect(item?.click).toBe(actions.closeWindow);
+    },
+  );
+
+  it.each(PLATFORMS)(
+    "keeps Close Window present-but-disabled when nothing can close it (%s)",
+    (platform) => {
+      // Same law as Godview's disabled face: an absent item reads as a missing
+      // feature. Only reachable while the overlay is open, where the item has
+      // no role to fall back on.
+      const item = find(
+        buildAppMenu(platform, { godviewOpen: true }, noActions),
+        CLOSE_WINDOW_ITEM_ID,
+      );
+      expect(item?.enabled).toBe(false);
+      expect(item?.click).toBeUndefined();
+      expect(item?.accelerator).toBeUndefined();
     },
   );
 
@@ -76,12 +124,17 @@ describe("buildAppMenu", () => {
     // The `fileMenu` and `windowMenu` roles each contain a `close` of their
     // own; taking either would plant a second, unconditional ⌘W beside the
     // conditional one and the deck would lose the chord to whichever fired.
+    //
+    // Keyed on the ITEM ID, not on `role: "close"` — since 2026-08-10 the item
+    // sheds its role while the overlay is open, so a role-keyed count would read
+    // zero there and stop watching for the very duplicate it exists to catch.
     for (const godviewOpen of [false, true]) {
-      const closes = flatten(buildAppMenu(platform, { godviewOpen }, actions)).filter(
-        (item) => item.role === "close",
-      );
-      expect(closes).toHaveLength(1);
-      expect(closes[0]?.id).toBe(CLOSE_WINDOW_ITEM_ID);
+      const items = flatten(buildAppMenu(platform, { godviewOpen }, actions));
+      expect(items.filter((item) => item.id === CLOSE_WINDOW_ITEM_ID)).toHaveLength(1);
+      // and nothing ELSE may carry a close role, in either state
+      expect(
+        items.filter((item) => item.role === "close" && item.id !== CLOSE_WINDOW_ITEM_ID),
+      ).toHaveLength(0);
     }
   });
 

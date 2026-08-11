@@ -1,11 +1,26 @@
-import { type ReactElement, useEffect, useState, useSyncExternalStore } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { BootMachine, BootView } from "./machine";
+import { OnboardingWizard } from "./onboarding/OnboardingWizard";
+import "./boot.css";
 
 // BootRoot (ESR §5.4.2): the splash is the app's first face (DESIGN.md §8 —
 // the canvas ground waking, the veil's thin bar, real stage labels); the
 // workspace mounts UNDERNEATH it as soon as the module + document exist, and
 // the reveal (240ms fade + a 560ms island-ease settle) plays only when the
 // machine reaches `interactive` — fully warm, frame-stable, never mid-hitch.
+//
+// UA-3w borrows that first face once per install: while the machine holds in
+// `onboarding` the Setup Assistant takes the splash's layer and ground, and the
+// splash's own face (wordmark, bar, stage line) stands down. When the wizard
+// releases the hold the ordinary stages return underneath it and the reveal
+// happens exactly as it always does — which is W5 in mechanism: the wizard
+// hands back to the real boot and ends inside the field, not at a door.
 
 const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
 
@@ -14,6 +29,7 @@ export function BootRoot({ machine }: { machine: BootMachine }): ReactElement {
   const ready = machine.ready;
   const revealed = view.phase === "interactive";
   const [settled, setSettled] = useState(false);
+
   useEffect(() => {
     if (!revealed) return;
     const t = setTimeout(() => setSettled(true), 600); // outlive the 560ms settle
@@ -44,8 +60,40 @@ export function BootRoot({ machine }: { machine: BootMachine }): ReactElement {
           </ready.mod.FielddProvider>
         </div>
       )}
-      <Splash view={view} onRetry={machine.retry} />
+      {view.phase === "onboarding" && machine.client !== null && machine.onboarding !== null ? (
+        <BootGround>
+          <OnboardingWizard
+            client={machine.client}
+            onboarding={machine.onboarding}
+            onComplete={machine.completeOnboarding}
+          />
+        </BootGround>
+      ) : (
+        <Splash view={view} onRetry={machine.retry} />
+      )}
     </>
+  );
+}
+
+/** The first face's ground: the canvas itself at rest (DESIGN.md §8 — the field
+ * waking, not a logo card). Shared by the splash and the Setup Assistant so
+ * handing one to the other changes the content and never the floor. */
+function BootGround({
+  className = "",
+  ariaHidden = false,
+  children,
+}: {
+  className?: string;
+  ariaHidden?: boolean;
+  children: ReactNode;
+}): ReactElement {
+  return (
+    <div
+      className={`vf-splash absolute inset-0 z-[120] flex items-center justify-center ${className}`}
+      aria-hidden={ariaHidden}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -62,11 +110,11 @@ function Splash({ view, onRetry }: { view: BootView; onRetry: () => void }): Rea
   const failed = view.unavailable;
   const progress = view.progress;
   return (
-    <div
-      className={`vf-splash absolute inset-0 z-[120] flex items-center justify-center transition-opacity duration-[240ms] ease-out ${
+    <BootGround
+      className={`transition-opacity duration-[240ms] ease-out ${
         revealed ? "pointer-events-none opacity-0" : "opacity-100"
       }`}
-      aria-hidden={revealed}
+      ariaHidden={revealed}
     >
       <div className="flex flex-col items-center gap-3">
         <div className="mb-1 text-[13px] font-medium text-black/50 dark:text-white/50">
@@ -109,22 +157,6 @@ function Splash({ view, onRetry }: { view: BootView; onRetry: () => void }): Rea
           </div>
         )}
       </div>
-
-      {/* Component-scoped utilities (tray/pill precedent): the splash face is
-          the canvas ground itself at rest — §2.1 dots at 1:1 field scale. */}
-      <style>{`
-        .vf-splash {
-          background-color: var(--vf-canvas-bg);
-          background-image: radial-gradient(circle, rgba(0, 0, 0, 0.16) 1px, transparent 1px);
-          background-size: 24px 24px;
-        }
-        .dark .vf-splash {
-          background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .vf-splash { transition-duration: 120ms; }
-        }
-      `}</style>
-    </div>
+    </BootGround>
   );
 }

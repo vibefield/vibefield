@@ -1,10 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -18,7 +20,7 @@ async function fixture(): Promise<FielddDaemon> {
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-  const native = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  const native = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await native.start();
   cleanup.push(() => native.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0 });
@@ -50,7 +52,11 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       subId: string;
       snapshot: { showTray: boolean; backgroundShell: boolean };
     };
-    expect(sub.snapshot).toEqual({ showTray: true, backgroundShell: true });
+    expect(sub.snapshot).toEqual({
+      showTray: true,
+      backgroundShell: true,
+      syncPosture: "automatic",
+    });
 
     await shell.call("storage.appPreferences.set", {
       key: "desktop.showTray",
@@ -67,6 +73,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     expect(await shell.call("storage.appPreferences.get", {})).toEqual({
       showTray: false,
       backgroundShell: true,
+      syncPosture: "automatic",
     });
 
     const rendererGrant = daemon.tokens.mint(["settings.manage"], "test-window");
@@ -74,6 +81,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     expect(await renderer.call("storage.appPreferences.get", {})).toEqual({
       showTray: false,
       backgroundShell: true,
+      syncPosture: "automatic",
     });
   });
 

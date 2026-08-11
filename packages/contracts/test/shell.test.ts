@@ -160,7 +160,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the eleven channel keys, in order", () => {
+  it("exposes exactly the fifteen channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -173,6 +173,10 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "terminalStatus",
       "godviewState",
       "godviewSet",
+      "usersUpdate", // UA-3 — the Account page's profile write (main owns users.json)
+      "usersList", // UA-5 — the roster; one truth for switcher + tray submenu
+      "usersCreate", // UA-5 — mint user N under the §3.3 lock, then attach
+      "usersSwitch", // UA-5/UA-D15 — attach re-target + window reload
     ]);
   });
 
@@ -189,6 +193,10 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       terminalStatus: "vibefield:terminal:status",
       godviewState: "vibefield:godview:state",
       godviewSet: "vibefield:godview:set",
+      usersUpdate: "vibefield:users:update",
+      usersList: "vibefield:users:list",
+      usersCreate: "vibefield:users:create",
+      usersSwitch: "vibefield:users:switch",
     });
   });
 });
@@ -270,14 +278,16 @@ describe("tray shell commands and app preferences", () => {
   });
 
   it("requires a complete effective preference snapshot", () => {
-    expect(AppPreferences.parse({ showTray: true, backgroundShell: false })).toEqual({
-      showTray: true,
-      backgroundShell: false,
-    });
+    expect(
+      AppPreferences.parse({ showTray: true, backgroundShell: false, syncPosture: "opt-in" }),
+    ).toEqual({ showTray: true, backgroundShell: false, syncPosture: "opt-in" });
     expect(AppPreferences.safeParse({ showTray: true }).success).toBe(false);
+    // UA-6: the posture is part of the EFFECTIVE snapshot, so a caller can
+    // never be handed one that leaves it to guess (the daemon folds the default).
+    expect(AppPreferences.safeParse({ showTray: true, backgroundShell: true }).success).toBe(false);
   });
 
-  it("accepts only the two boolean preference mutations", () => {
+  it("accepts the boolean preference mutations, and the posture's own word", () => {
     expect(
       AppPreferenceSetParams.parse({
         key: APP_PREFERENCE_KEYS.SHOW_TRAY,
@@ -291,6 +301,20 @@ describe("tray shell commands and app preferences", () => {
       AppPreferenceSetParams.safeParse({
         key: APP_PREFERENCE_KEYS.BACKGROUND_SHELL,
         value: "yes",
+      }).success,
+    ).toBe(false);
+    // UA-D7 — not every preference is a switch. The value union widened by
+    // exactly the posture's vocabulary and nothing else.
+    expect(
+      AppPreferenceSetParams.parse({
+        key: APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
+        value: "opt-in",
+      }),
+    ).toMatchObject({ key: "mesh.syncPosture", value: "opt-in" });
+    expect(
+      AppPreferenceSetParams.safeParse({
+        key: APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
+        value: "paranoid",
       }).success,
     ).toBe(false);
   });

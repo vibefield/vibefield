@@ -4,7 +4,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SHELL_PROVIDER_METHODS } from "@vibefield/contracts";
+import { LAYOUT, pipeEndpointFor, SHELL_PROVIDER_METHODS, SOCKETS } from "@vibefield/contracts";
 import {
   bootstrap,
   type FielddDaemon,
@@ -37,7 +37,13 @@ async function fullStack(): Promise<{ daemon: FielddDaemon; mock: MockMgmtServer
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-  const mock = new MockMgmtServer(join(dataDir, "native", "run", "mgmt.sock"));
+  // WIN-D1: the mock binds field-native's mgmt endpoint — a pipe name on win32,
+  // the joined LAYOUT path on unix — exactly what bootstrap's NativeLink dials.
+  const mock = new MockMgmtServer(
+    process.platform === "win32"
+      ? pipeEndpointFor(dataDir, SOCKETS.MGMT)
+      : join(dataDir, ...LAYOUT.MGMT_SOCKET),
+  );
   await mock.start();
   cleanup.push(() => mock.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0 });

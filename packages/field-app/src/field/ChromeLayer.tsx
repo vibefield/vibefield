@@ -1,12 +1,6 @@
-import {
-  type CanvasEngine,
-  DEFAULT_GRID_CONFIG,
-  type GridConfig,
-  selectedEntities,
-  type WidgetType,
-} from "@vibecook/ice";
+import type { CanvasEngine, WidgetType } from "@vibecook/ice";
 import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
-import { useStageHold } from "@vibecook/ice/react";
+import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
 import type { DesktopShellState } from "@vibefield/contracts";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
@@ -31,22 +25,11 @@ import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfac
 import { SidePanelStage, SidePanelToggle } from "../hud/SidePanelStage";
 import { WidgetTray } from "../hud/WidgetTray";
 import { ZoomPill } from "../hud/ZoomPill";
-import {
-  type OverlapGlowConfig,
-  type OverlapGlowThemeColors,
-  SettingsPanel,
-  type ThemeColors,
-} from "../panels";
+import { SettingsPanel } from "../panels";
 import * as commandRegistry from "../plugin-host/command-registry";
+import { ThemeToggleButton } from "../ThemeToggleButton";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
-import {
-  DEFAULT_OVERLAP_GLOW,
-  DEFAULT_OVERLAP_GLOW_THEME_COLORS,
-  DEFAULT_THEME_COLORS,
-  fabCls,
-  hexToRgb255,
-  roundButtonCls,
-} from "./theme-constants";
+import { fabCls } from "./theme-constants";
 
 // ChromeLayer (§5.4.3): HUD, file pill, the tray (DESIGN.md's bottom toolbar),
 // settings, and overlays — WITHOUT owning document or engine lifetime. All the
@@ -59,19 +42,10 @@ import {
 // §13.1 windowId: the renderer has no per-window identity yet (v1 is one field
 // window). A stable constant names it honestly; the id becomes real when
 // multi-window lands (recorded delta).
-const FIELD_WINDOW_ID = "field";
+export const FIELD_WINDOW_ID = "field";
 
-/** The chrome-owned settings state, bundled so FieldView can thread it to the
- * canvas (grid dot color, ECS profiling) without a dozen loose props. */
+/** Chrome-only state shared with FieldView's sheet/recede choreography. */
 export interface ChromeState {
-  gridConfig: GridConfig;
-  setGridConfig: Dispatch<SetStateAction<GridConfig>>;
-  themeColors: ThemeColors;
-  setThemeColors: Dispatch<SetStateAction<ThemeColors>>;
-  overlapGlow: OverlapGlowConfig;
-  setOverlapGlow: Dispatch<SetStateAction<OverlapGlowConfig>>;
-  overlapGlowThemeColors: OverlapGlowThemeColors;
-  setOverlapGlowThemeColors: Dispatch<SetStateAction<OverlapGlowThemeColors>>;
   showSettings: boolean;
   setShowSettings: Dispatch<SetStateAction<boolean>>;
   showEcs: boolean;
@@ -79,23 +53,9 @@ export interface ChromeState {
 }
 
 export function useChromeState(): ChromeState {
-  const [gridConfig, setGridConfig] = useState<GridConfig>({ ...DEFAULT_GRID_CONFIG });
-  const [themeColors, setThemeColors] = useState<ThemeColors>(DEFAULT_THEME_COLORS);
-  const [overlapGlow, setOverlapGlow] = useState<OverlapGlowConfig>(DEFAULT_OVERLAP_GLOW);
-  const [overlapGlowThemeColors, setOverlapGlowThemeColors] = useState<OverlapGlowThemeColors>(
-    DEFAULT_OVERLAP_GLOW_THEME_COLORS,
-  );
   const [showSettings, setShowSettings] = useState(false);
   const [showEcs, setShowEcs] = useState(false);
   return {
-    gridConfig,
-    setGridConfig,
-    themeColors,
-    setThemeColors,
-    overlapGlow,
-    setOverlapGlow,
-    overlapGlowThemeColors,
-    setOverlapGlowThemeColors,
     showSettings,
     setShowSettings,
     showEcs,
@@ -132,14 +92,7 @@ export function ChromeLayer({
   chrome: ChromeState;
   devtoolsRef: MutableRefObject<DevtoolsHandle | null>;
 }): ReactElement {
-  const {
-    themeColors,
-    overlapGlow,
-    overlapGlowThemeColors,
-    showSettings,
-    setShowSettings,
-    showEcs,
-  } = chrome;
+  const { showSettings, setShowSettings, showEcs } = chrome;
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
@@ -150,7 +103,7 @@ export function ChromeLayer({
   const activeSidePanel =
     sidePanelSurface?.surfaceId === sidePanelSurfaceId ? sidePanelSurface : null;
   // One state, three readers: the overlay, the toolbar button, and the stage
-  // hold. Owned by main (GT-D2) because ⌘G never reaches this page.
+  // hold. Owned by main (GT-D2) because ⇧⇧ never reaches this page.
   const godviewOpen = useGodviewOpen();
 
   const closeSidePanel = useCallback((returnFocus: boolean) => {
@@ -256,41 +209,28 @@ export function ChromeLayer({
   useStageHold(ce, docsOpen, "docs-explorer");
   useStageHold(ce, showSettings, "settings-panel");
   useStageHold(ce, docState.phase === "loading", "loading-veil");
-  // M5, the strongest case for it: the Godview covers the window outright, so
-  // every canvas frame drawn behind it is work nobody can see.
-  useStageHold(ce, godviewOpen, "godview");
+  // Godview gets the STRICTER gate (ice 0.3.0). A stage hold is
+  // presentation policy over a world that keeps stepping — right for the
+  // sheets above, which recede a canvas that stays visible behind them. But
+  // Godview COVERS the window, so the engine was still ticking at display rate
+  // for pixels nobody could see: the hold quiets the GL compositor and nothing
+  // else. A freeze parks the loop outright — no step, no systems, no notify,
+  // no reflectors, no rAF — after walking a settle so the frozen image is
+  // whole. Thaw drops the input banked behind the overlay and resumes on a
+  // clamped dt, so nothing teleports.
+  useFrameFreeze(ce, godviewOpen, "godview");
   useEffect(() => {
     if (docsOpen || showSettings) ce.ops.cancelActiveGestures();
   }, [docsOpen, showSettings, ce]);
 
-  // Theme → live tokens: the settings panel makes DESIGN.md's static defaults
-  // dynamic. We write the TOKEN source (--vf-canvas-bg — the widgetlab-compat
-  // --canvas-bg alias follows), and CardShell's glow knobs; the rim colors
-  // stay tokens.css's .dark-aware defaults. --ic-selection-radius is static in
-  // tokens.css (22px, the union-box corner).
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--vf-canvas-bg", dark ? themeColors.bgDark : themeColors.bgLight);
-    root.style.setProperty(
-      "--ic-glow-color",
-      hexToRgb255(dark ? overlapGlowThemeColors.glowDark : overlapGlowThemeColors.glowLight),
-    );
-    root.style.setProperty("--ic-glow-size-c", `${overlapGlow.glowSize[0]}px`);
-    root.style.setProperty("--ic-glow-size-t", `${overlapGlow.glowSize[1]}px`);
-    root.style.setProperty("--ic-glow-alpha-c", String(overlapGlow.glowAlpha[0]));
-    root.style.setProperty("--ic-glow-alpha-t", String(overlapGlow.glowAlpha[1]));
-  }, [dark, themeColors, overlapGlow, overlapGlowThemeColors]);
-
   // Keyboard shortcuts. <InfiniteCanvas> already installs the engine default
   // keymap (⌘Z undo, ⇧⌘Z redo, ⌫ delete, Esc cancel, v/h/c tools — all
-  // skipping editable targets). This handler adds ONLY the two pieces the
+  // skipping editable targets), and since ice 0.4.0 the C-with-selection
+  // behavior rides the keymap's OWN override surface (field-keymap.ts, wired
+  // through CanvasStage) — the capture-phase stopPropagation trap this layer
+  // carried retired with petition I1. This handler adds ONLY the one piece the
   // default keymap lacks (widgetlab App law — a duplicate listener would fire
-  // engine actions twice):
-  //  - Esc exits the current container when nested;
-  //  - C with a SELECTION wraps it in a comment (capture phase +
-  //    stopPropagation, so the keymap's connect-tool binding never sees it;
-  //    with no selection C falls through and stays the tool shortcut — the
-  //    widgetlab C/connect collision resolved by "selection decides").
+  // engine actions twice): Esc exits the current container when nested.
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null): boolean => {
       if (!(target instanceof HTMLElement)) return false;
@@ -305,30 +245,9 @@ export function ChromeLayer({
         ce.ops.exitContainer();
       }
     };
-    const onKeyDownCapture = (e: KeyboardEvent) => {
-      if (showSettings) return;
-      if ((e.key !== "c" && e.key !== "C") || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isEditableTarget(e.target)) return;
-      const sel = selectedEntities(ce.world);
-      if (sel.length === 0) return; // fall through → connect tool
-      e.preventDefault();
-      e.stopPropagation();
-      // §13 — the C-key is a canvas-context invocation of field-tools' declared
-      // command through the SPINE registry, not a direct plugin import (R10 — the
-      // field-app must import nothing from plugins/*). The registry carries
-      // provenance and the {source:"canvas-context"} invocation.
-      void commandRegistry.invoke("vibefield.field-tools.comment-around-selection", undefined, {
-        source: "canvas-context",
-        windowId: FIELD_WINDOW_ID,
-        selection: sel.map((en) => String(en)),
-        userGesture: true,
-      });
-    };
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keydown", onKeyDownCapture, true);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keydown", onKeyDownCapture, true);
     };
   }, [ce, showSettings]);
 
@@ -406,41 +325,7 @@ export function ChromeLayer({
         className="hud-flight no-drag absolute top-4 right-4 z-50 flex items-center gap-2"
       >
         <ZoomPill ce={ce} />
-        <button
-          type="button"
-          onClick={onToggleTheme}
-          className={roundButtonCls(false)}
-          title={dark ? "Switch to light mode" : "Switch to dark mode"}
-          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          {dark ? (
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            >
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" />
-            </svg>
-          ) : (
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
-            </svg>
-          )}
-        </button>
+        <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />
         {sidePanelSurface !== null && (
           <SidePanelToggle
             entry={sidePanelSurface}
@@ -531,14 +416,6 @@ export function ChromeLayer({
       {showSettings && (
         <SettingsPanel
           engine={ce}
-          gridConfig={chrome.gridConfig}
-          onGridChange={chrome.setGridConfig}
-          themeColors={themeColors}
-          onThemeColorsChange={chrome.setThemeColors}
-          overlapGlow={overlapGlow}
-          onOverlapGlowChange={chrome.setOverlapGlow}
-          overlapGlowThemeColors={overlapGlowThemeColors}
-          onOverlapGlowThemeColorsChange={chrome.setOverlapGlowThemeColors}
           stressWidgetType="vibefield.widgetlab.clock"
           platform={getHost().platform ?? "other"}
           desktopState={desktopState}

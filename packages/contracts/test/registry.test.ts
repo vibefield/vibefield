@@ -9,6 +9,7 @@ import {
   MESH_CONTROL_LIMITS,
   PORTS,
   SCOPES,
+  SOCKETS,
   TAILNET_SCOPES,
 } from "../src/registries";
 
@@ -25,6 +26,33 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
   it("method names are unique", () => {
     const names = METHODS.map((m) => m.method);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("socket names fit the tightest path budget (UA-D9 — sun_path)", () => {
+    // The tightest real prefix is the repo-nested dev root's users/<fuid>
+    // tree; 14 chars keeps every socket under the 103-byte macOS sun_path
+    // ceiling there with three-digit-fuid headroom. 2026-08-05:
+    // terminal-control.sock (21 chars → a 108-byte path) crashed the dev
+    // terminal plane exactly this way — bind failed, the guard had only
+    // measured mgmt.sock. Longer names need a shallower tree, not a waiver.
+    for (const name of Object.values(SOCKETS)) {
+      expect(name.endsWith(".sock"), `${name} must end .sock`).toBe(true);
+      expect(name.length, `${name} exceeds the 14-char socket name budget`).toBeLessThanOrEqual(14);
+    }
+  });
+
+  it("guestOk methods are idempotent, non-mutating, and exactly the v1 set (UA-4 / UA-D14)", () => {
+    const guestOk = METHODS.filter((m) => m.guestOk === true);
+    // spec §7.3 v1 law: system.hello only. Widening is a deliberate edit
+    // against this pin, never drift.
+    expect(guestOk.map((m) => m.method)).toEqual(["system.hello"]);
+    for (const m of guestOk) {
+      expect(m.idempotent, `${m.method}: guestOk ⇒ idempotent`).toBe(true);
+      expect(
+        m.scope === null || /\.(read|observe)$/.test(m.scope),
+        `${m.method}: guestOk ⇒ non-mutating scope (got ${m.scope})`,
+      ).toBe(true);
+    }
   });
 });
 

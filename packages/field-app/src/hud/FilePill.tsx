@@ -3,6 +3,7 @@ import { type ReactElement, useEffect, useRef, useState, useSyncExternalStore } 
 import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
 import { getRendererLogger } from "../logging";
+import "./FilePill.css";
 
 /**
  * The file pill (thinking-b4 §3, DESIGN.md §8): top-center chrome — new doc,
@@ -15,11 +16,6 @@ import { getRendererLogger } from "../logging";
  * as an honest placeholder face until real thumbnails exist; the current doc
  * wears the 1.5px inside --vf-select ring — it IS the selection.
  */
-
-const MORPH_MS = 560;
-const EASE = "cubic-bezier(0.32, 0.72, 0, 1)"; // native-sheet ease, fast response + soft landing
-const CLOSED_RADIUS = 20;
-const OPEN_RADIUS = 32;
 
 function fmtRelative(ms: number, now = Date.now()): string {
   const s = Math.max(0, Math.floor((now - ms) / 1000));
@@ -157,13 +153,29 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
     }
   };
 
+  /** UA-D7 — one click, both directions. The manager patches the registry
+   * entry it gets back, so the chip flips from the same fact the gates read. */
+  const toggleSyncIntent = (d: DocRegistryEntry): void => {
+    void manager
+      .setSyncIntent(d.docId, d.syncIntent === "local" ? "sync" : "local")
+      .catch((error: unknown) =>
+        getRendererLogger()
+          .child({ component: "docs.file_pill", docId: d.docId })
+          .error(
+            "renderer.docs.sync_intent_failed",
+            "Setting a document's sync intent failed",
+            error,
+          ),
+      );
+  };
+
   const docName = state.doc?.name ?? "…";
 
   return (
     <>
       {/* Dimming backdrop — click closes (Escape is the keyboard close); same tier as the tray's. */}
       <div
-        className={`absolute inset-0 z-40 bg-black/10 transition-opacity duration-500 dark:bg-black/40 ${
+        className={`vf-ui-backdrop absolute inset-0 z-40 transition-opacity duration-500 ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={() => onOpenChange(false)}
@@ -174,26 +186,16 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
       <div
         data-file-pill=""
         data-file-pill-open={open ? "true" : "false"}
-        className={`no-drag absolute left-1/2 z-50 isolate -translate-x-1/2 transform-gpu overflow-hidden border border-black/5 bg-white/[0.88] backdrop-blur-2xl transition-[top,width,height,border-radius,background-color,box-shadow] dark:border-white/10 dark:bg-[#1C1C1E]/[0.88] ${
-          open
-            ? "top-3 h-[min(46vh,420px)] w-[min(56%,34rem)] shadow-[0_24px_64px_rgba(0,0,0,0.12),0_2px_10px_rgba(0,0,0,0.04)] dark:shadow-[0_24px_64px_rgba(0,0,0,0.48),0_2px_10px_rgba(0,0,0,0.24)]"
-            : "top-4 h-10 w-[280px] shadow-[0_8px_30px_rgba(0,0,0,0.08),0_1px_4px_rgba(0,0,0,0.04)] hover:bg-white/[0.94] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4),0_1px_4px_rgba(0,0,0,0.2)] dark:hover:bg-[#1C1C1E]/[0.94]"
+        className={`vf-file-pill no-drag absolute left-1/2 z-50 isolate -translate-x-1/2 transform-gpu overflow-hidden ${
+          open ? "top-3 h-[min(46vh,420px)] w-[min(56%,34rem)]" : "top-4 h-10 w-[280px]"
         }`}
-        style={{
-          borderRadius: `${open ? OPEN_RADIUS : CLOSED_RADIUS}px`,
-          transitionDuration: `${MORPH_MS}ms`,
-          transitionTimingFunction: EASE,
-          willChange: "width, height, top, border-radius",
-          backfaceVisibility: "hidden",
-        }}
       >
         <div className="flex h-full w-full flex-col">
           {/* The persistent header row — the closed pill IS this row. */}
           <div
-            className={`flex w-full shrink-0 items-center gap-1 transition-[height,padding] ${
+            className={`vf-file-pill__header flex w-full shrink-0 items-center gap-1 ${
               open ? "h-12 px-4" : "h-10 px-1"
             }`}
-            style={{ transitionDuration: `${MORPH_MS}ms`, transitionTimingFunction: EASE }}
           >
             <button
               type="button"
@@ -269,10 +271,9 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
             <button
               type="button"
               onClick={() => onOpenChange(!open)}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-black/60 transition-[transform,color,background-color] hover:bg-black/5 hover:text-black active:scale-95 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white ${
+              className={`vf-file-pill__toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-black/60 hover:bg-black/5 hover:text-black active:scale-95 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white ${
                 open ? "rotate-180" : "rotate-0"
               }`}
-              style={{ transitionDuration: `${MORPH_MS}ms`, transitionTimingFunction: EASE }}
               title={open ? "Close (Esc)" : "Browse fields"}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -289,7 +290,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
 
           {/* The explorer grid — tray choreography: delayed rise-in behind the morph. */}
           <div
-            className={`min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-6 no-scrollbar mask-fade-bottom transition-[opacity,transform] duration-500 ease-out ${
+            className={`vf-no-scrollbar vf-mask-fade-bottom min-h-0 flex-1 overflow-y-auto px-6 pt-1 pb-6 transition-[opacity,transform] duration-500 ease-out ${
               open
                 ? "translate-y-0 opacity-100 delay-[180ms]"
                 : "pointer-events-none translate-y-6 opacity-0"
@@ -306,43 +307,69 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
                 {state.docs.map((d: DocRegistryEntry) => {
                   const current = d.docId === state.doc?.docId;
                   const thumbnailUrl = state.thumbnailUrls[d.docId];
+                  // UA-D7: the REGISTRY's answer, not the sync stream's — a
+                  // gated doc has no sync status at all to read (§8).
+                  const local = d.syncIntent === "local";
                   return (
-                    <button
+                    // The tile is two controls now, so the scaling element is
+                    // the wrapper: the chip rides the hover with the face
+                    // instead of hanging off a corner that moved without it.
+                    <div
                       key={d.docId}
-                      type="button"
-                      onClick={() => {
-                        onOpenChange(false);
-                        if (!current) void manager.switchTo(d.docId);
-                      }}
-                      className="group flex flex-col gap-1.5 text-left transition-transform duration-200 hover:scale-[1.03] active:scale-95"
-                      title={current ? `${d.name} — current` : `Open ${d.name}`}
+                      className="group relative transition-transform duration-200 hover:scale-[1.03] active:scale-95"
                     >
-                      <div className="vf-doc-face relative aspect-[16/10] w-full overflow-hidden rounded-[10px] border border-black/5 dark:border-white/10">
-                        {thumbnailUrl !== undefined && <DocThumbnailImage src={thumbnailUrl} />}
-                        {current && (
-                          <div
-                            className="absolute inset-0 rounded-[10px]"
-                            style={{ boxShadow: "inset 0 0 0 1.5px var(--vf-select)" }}
-                            aria-hidden
-                          />
-                        )}
-                      </div>
-                      <div className="min-w-0 px-0.5">
-                        <div className="truncate text-[12px] font-medium text-black/80 dark:text-white/80">
-                          {d.name}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenChange(false);
+                          if (!current) void manager.switchTo(d.docId);
+                        }}
+                        className="flex w-full flex-col gap-1.5 text-left"
+                        title={current ? `${d.name} — current` : `Open ${d.name}`}
+                      >
+                        <div className="vf-doc-face relative aspect-[16/10] w-full overflow-hidden rounded-[10px] border border-black/5 dark:border-white/10">
+                          {thumbnailUrl !== undefined && <DocThumbnailImage src={thumbnailUrl} />}
+                          {current && <div className="vf-doc-face__selection" aria-hidden />}
                         </div>
-                        <div className="truncate text-[10px] text-black/40 tabular-nums dark:text-white/40">
-                          {fmtRelative(d.updatedAt)}
-                          {/* C6-4: the honest sync word, only when there is one */}
-                          {(() => {
-                            const caption = syncCaption(
-                              syncStatuses.find((s) => s.docId === d.docId),
-                            );
-                            return caption !== null ? ` · ${caption}` : null;
-                          })()}
+                        <div className="min-w-0 px-0.5">
+                          <div className="truncate text-[12px] font-medium text-black/80 dark:text-white/80">
+                            {d.name}
+                          </div>
+                          <div className="truncate text-[10px] text-black/40 tabular-nums dark:text-white/40">
+                            {fmtRelative(d.updatedAt)}
+                            {/* C6-4: the honest sync word, only when there is one */}
+                            {(() => {
+                              const caption = syncCaption(
+                                syncStatuses.find((s) => s.docId === d.docId),
+                              );
+                              return caption !== null ? ` · ${caption}` : null;
+                            })()}
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                      {/* UA-D7 — the per-doc door. Muted, never hued: staying
+                          home is a FACT about a doc, not a status (§2.5), so
+                          it gets the text ramp and no system color. A gated
+                          doc wears its chip always; an ordinary one offers the
+                          action on hover and on keyboard focus. */}
+                      <button
+                        type="button"
+                        data-sync-intent={local ? "local" : "sync"}
+                        onClick={() => toggleSyncIntent(d)}
+                        title={
+                          local
+                            ? `${d.name} stays on this device — sync it across your devices`
+                            : `Keep ${d.name} on this device`
+                        }
+                        className={`absolute top-1.5 right-1.5 rounded-full bg-black/10 px-1.5 py-0.5 text-[9px] leading-[1.4] font-medium backdrop-blur-sm transition-opacity duration-200 ease-out focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--vf-select)] dark:bg-white/15 ${
+                          local
+                            ? "text-black/55 opacity-100 dark:text-white/60"
+                            : "text-black/45 opacity-0 group-hover:opacity-100 dark:text-white/50"
+                        }`}
+                      >
+                        {local ? "local" : "keep local"}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -350,19 +377,6 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
           </div>
         </div>
       </div>
-
-      {/* Component-scoped utilities (tray precedent): the doc tile's ground-motif
-          face — canvas-bg + the §2.1 CSS-fallback dots, dark-aware. */}
-      <style>{`
-        .vf-doc-face {
-          background-color: var(--vf-canvas-bg);
-          background-image: radial-gradient(circle, rgba(0, 0, 0, 0.16) 1px, transparent 1px);
-          background-size: 10px 10px;
-        }
-        .dark .vf-doc-face {
-          background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-        }
-      `}</style>
     </>
   );
 }

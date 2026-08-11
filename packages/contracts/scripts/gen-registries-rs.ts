@@ -2,27 +2,24 @@
 // plane consumes ports/sockets/env-prefixes/store-names as GENERATED constants —
 // the R4 drift class (hand-mirrored registries) exists to kill. Output is
 // rustfmt-stable by construction; one formatter per file: its generator.
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   APP_ID,
   ENV_PREFIXES,
   FILES,
+  LAYOUT,
   MESH_CONTROL_LIMITS,
   PORTS,
   SOCKETS,
   STORES,
 } from "../src/registries";
 
-const OUT = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "field-native",
-  "src",
-  "registries.rs",
-);
+const HERE = dirname(fileURLToPath(import.meta.url));
+const OUT = join(HERE, "..", "..", "field-native", "src", "registries.rs");
+// Committed machine artifact for non-TS consumers (dev-runner .mjs) — UA-D10.
+const LAYOUT_JSON = join(HERE, "..", "gen", "layout.json");
 
 const lines: string[] = [
   "// GENERATED from @vibefield/contracts src/registries.ts — do not edit.",
@@ -58,7 +55,22 @@ const lines: string[] = [
   "pub mod files {",
   ...Object.entries(FILES).map(([k, v]) => `    pub const ${k}: &str = "${v}";`),
   "}",
+  "",
+  "/// UA-D10 — the on-disk layout under a data root, as segments. One authority;",
+  "/// consumers join, never respell. Pinned by fixtures/layout.vector.json.",
+  "pub mod layout {",
+  ...Object.entries(LAYOUT).map(
+    ([k, v]) => `    pub const ${k}: &[&str] = &[${v.map((s) => `"${s}"`).join(", ")}];`,
+  ),
+  "    /// Every entry, for the cross-language fixture test.",
+  "    pub const ALL: &[(&str, &[&str])] = &[",
+  ...Object.keys(LAYOUT).map((k) => `        ("${k}", ${k}),`),
+  "    ];",
+  "}",
 ];
 
 writeFileSync(OUT, `${lines.join("\n")}\n`);
 console.log("wrote field-native/src/registries.rs");
+mkdirSync(dirname(LAYOUT_JSON), { recursive: true });
+writeFileSync(LAYOUT_JSON, `${JSON.stringify(LAYOUT, null, 2)}\n`);
+console.log("wrote contracts/gen/layout.json");

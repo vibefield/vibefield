@@ -7,9 +7,9 @@ edition = "2021"
 anyhow = "1.0.104"
 async-trait = "0.1.91"
 ghosttea.workspace = true
+ghosttea-truffle.workspace = true
 hex = "0.4.3"
 hmac = "0.13.0"
-libc = "0.2.186"
 rand = "0.10.2"
 regress = "0.11.1"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -20,6 +20,25 @@ tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "i
 tracing = "0.1.44"
 truffle-core.workspace = true
 tracing-subscriber = "0.3.23"
+
+[target.'cfg(unix)'.dependencies]
+# fd/signal plumbing (logging stderr capture, pid liveness) — unix-only by
+# nature; the windows arms use std + the tokio named-pipe surface instead.
+libc = "0.2.186"
+
+[target.'cfg(windows)'.dependencies]
+# The unix table's twin: handle plumbing for the logging floor (stderr capture
+# via CreatePipe/SetStdHandle, pid liveness via OpenProcess). Already in the
+# lockfile at this version through tokio/mio, so the pin follows the lock rather
+# than moving it — not an EL8 upgrade event. Win32_Security buys no API of ours;
+# windows-sys gates the `CreatePipe` declaration on it for SECURITY_ATTRIBUTES.
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Console",
+  "Win32_System_Pipes",
+  "Win32_System_Threading",
+] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

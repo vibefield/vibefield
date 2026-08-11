@@ -1,0 +1,52 @@
+/* The halo replaces the OS cursor inside the field. Its two-tone ring remains
+   legible over both cards and canvas; position and scale stay runtime-owned. */
+.wl-no-cursor,
+.wl-no-cursor * {
+  /* biome-ignore lint/complexity/noImportantStyles: Native controls must not override the field-wide cursor replacement. */
+  cursor: none !important;
+}
+
+.wl-halo-layer {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  pointer-events: none;
+}
+
+.wl-halo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--vf-halo-diameter);
+  height: var(--vf-halo-diameter);
+  border: 2px solid rgb(255 255 255 / 92%);
+  border-radius: 50%;
+  background-color: transparent;
+  box-shadow: 0 0 0 1.25px rgb(0 0 0 / 32%);
+  transition:
+    opacity 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+  will-change: transform;
+}
+
+.wl-halo.is-dot {
+  border-color: transparent;
+  background-color: var(--vf-select);
+  box-shadow: none;
+}
+
+.wl-halo.is-pressed {
+  border-width: 3px;
+}
+
+.wl-halo-layer.is-away .wl-halo {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wl-halo {
+    transition-duration: 90ms;
+  }
+}

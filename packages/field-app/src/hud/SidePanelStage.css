@@ -6,21 +6,15 @@
   bottom: 0;
   width: min(92vw, 26rem);
   overflow: hidden;
-  border: 1px solid rgb(0 0 0 / 5%);
+  border: 1px solid var(--vf-hairline);
   border-right: 0;
   border-radius: 2.5rem 0 0 2.5rem;
-  background: rgb(255 255 255 / 90%);
-  box-shadow: -20px 0 40px rgb(0 0 0 / 8%);
+  background: var(--vf-chrome-surface);
+  box-shadow: var(--vf-shadow-side-panel);
   backdrop-filter: blur(32px);
   transform: translateX(calc(100% + 2rem));
   transition: transform 600ms var(--vf-ease-island);
   pointer-events: none;
-}
-
-.dark .vf-side-panel {
-  border-color: rgb(255 255 255 / 10%);
-  background: rgb(28 28 30 / 90%);
-  box-shadow: -20px 0 40px rgb(0 0 0 / 40%);
 }
 
 .vf-side-panel[data-open="true"] {

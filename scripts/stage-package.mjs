@@ -219,6 +219,11 @@ const NEVER_SHIP = [
     hit: ({ segs }) => segs.some((s) => /^(smoke|spike)([-._]|$)/i.test(s)),
   },
   {
+    id: "ui-bench-entry",
+    why: "§7.3 — UI Bench/design-system entries and fixtures are development-only",
+    hit: ({ segs }) => segs.some((s) => /^(design-system|ui-bench)([-._]|$)/i.test(s)),
+  },
+  {
     id: "test-material",
     why: "§7.3 — tests, fixtures, coverage, snapshots",
     hit: ({ segs, name }) =>

@@ -558,10 +558,15 @@ fn writer_error(operation: WriterOperation, kind: FailureKind, message: &str) ->
 }
 
 fn from_io(operation: WriterOperation, error: std::io::Error) -> WriterError {
-    let kind = match error.raw_os_error() {
-        Some(code) if code == libc::ENOSPC => FailureKind::Enospc,
-        Some(code) if code == libc::EACCES || code == libc::EPERM => FailureKind::Eacces,
-        Some(code) if code == libc::EROFS => FailureKind::ReadOnly,
+    // One classification on every platform: std already folds the errnos this
+    // used to name (ENOSPC, EACCES/EPERM, EROFS) and their win32 twins
+    // (ERROR_DISK_FULL, ERROR_ACCESS_DENIED, ERROR_WRITE_PROTECT) into these
+    // kinds, so the code table stays in std instead of forking here.
+    // `classifies_real_os_error_codes` pins the mapping we rely on.
+    let kind = match error.kind() {
+        ErrorKind::StorageFull => FailureKind::Enospc,
+        ErrorKind::PermissionDenied => FailureKind::Eacces,
+        ErrorKind::ReadOnlyFilesystem => FailureKind::ReadOnly,
         _ => match operation {
             WriterOperation::Rename => FailureKind::Rename,
             WriterOperation::Write => FailureKind::Write,
@@ -628,6 +633,12 @@ fn create_private_lock(path: &Path) -> std::io::Result<File> {
 fn enforce_private_file(path: &Path) -> std::io::Result<()> {
     #[cfg(unix)]
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    // There are no mode bits off unix: the segment keeps whatever the log
+    // directory's ACL granted it and this call enforces nothing. Binding the
+    // argument names that instead of letting an unused parameter imply it — the
+    // explicit owner-only DACL for the write sites is booked work, not landed.
+    #[cfg(not(unix))]
+    let _ = path;
     Ok(())
 }
 
@@ -753,7 +764,34 @@ fn pid_is_alive(pid: u32) -> bool {
         let result = unsafe { libc::kill(pid as libc::pid_t, 0) };
         result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, STILL_ACTIVE};
+        use windows_sys::Win32::System::Threading::{
+            GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+
+        // SAFETY: a query-only open of a pid, with no handle inheritance. A null
+        // return is the documented failure; the handle is closed below.
+        let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+        if process.is_null() {
+            // A process we are not allowed to query still exists and still holds
+            // the lock — the unix twin reads EPERM exactly this way. Anything
+            // else (chiefly ERROR_INVALID_PARAMETER for an unknown pid) is dead.
+            return std::io::Error::last_os_error().raw_os_error()
+                == Some(ERROR_ACCESS_DENIED as i32);
+        }
+        let mut exit_code = 0_u32;
+        // SAFETY: `process` is live and `exit_code` points at live storage.
+        let queried = unsafe { GetExitCodeProcess(process, &mut exit_code) };
+        // SAFETY: `process` came from `OpenProcess` and is not used again.
+        unsafe { CloseHandle(process) };
+        // An unreadable exit code counts as alive. Refusing to reclaim a lock
+        // costs this process its log stream (WriterConflict, reported); stealing
+        // one from a live writer interleaves two writers into one segment.
+        queried == 0 || exit_code == STILL_ACTIVE as u32
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = pid;
         true
@@ -1024,9 +1062,9 @@ mod tests {
 
     #[test]
     fn classifies_open_rename_flush_and_close_faults_and_recovers() {
-        for (code, expected) in [
-            (libc::EACCES, FailureKind::Eacces),
-            (libc::EROFS, FailureKind::ReadOnly),
+        for (injected, expected) in [
+            (ErrorKind::PermissionDenied, FailureKind::Eacces),
+            (ErrorKind::ReadOnlyFilesystem, FailureKind::ReadOnly),
         ] {
             let root = tempfile::tempdir().unwrap();
             let fail = Arc::new(AtomicBool::new(true));
@@ -1039,7 +1077,7 @@ mod tests {
                         let fail = fail.clone();
                         Arc::new(move |_| {
                             if fail.load(Ordering::Relaxed) {
-                                Err(std::io::Error::from_raw_os_error(code))
+                                Err(std::io::Error::from(injected))
                             } else {
                                 Ok(())
                             }
@@ -1116,6 +1154,68 @@ mod tests {
             .path()
             .join("logs/system/field-native.ndjson.lock")
             .exists());
+    }
+
+    /// `from_io` reads `ErrorKind`, which means std owns the code table. Pin the
+    /// codes the writer actually meets, per platform, so a mapping that moves
+    /// under us fails here instead of silently reclassifying a full disk as a
+    /// generic write fault.
+    #[test]
+    fn classifies_real_os_error_codes() {
+        #[cfg(unix)]
+        let cases = [
+            (libc::ENOSPC, FailureKind::Enospc),
+            (libc::EACCES, FailureKind::Eacces),
+            (libc::EPERM, FailureKind::Eacces),
+            (libc::EROFS, FailureKind::ReadOnly),
+        ];
+        #[cfg(windows)]
+        let cases = {
+            use windows_sys::Win32::Foundation::{
+                ERROR_ACCESS_DENIED, ERROR_DISK_FULL, ERROR_WRITE_PROTECT,
+            };
+            [
+                (ERROR_DISK_FULL as i32, FailureKind::Enospc),
+                (ERROR_ACCESS_DENIED as i32, FailureKind::Eacces),
+                (ERROR_WRITE_PROTECT as i32, FailureKind::ReadOnly),
+            ]
+        };
+        for (code, expected) in cases {
+            assert_eq!(
+                from_io(
+                    WriterOperation::Write,
+                    std::io::Error::from_raw_os_error(code)
+                )
+                .kind,
+                expected,
+                "os error {code} must classify as {expected:?}"
+            );
+        }
+    }
+
+    /// The stale-lock takeover in `lock_is_stale` is only as good as this probe:
+    /// before WIN-2b the non-unix arm answered `true` for every pid, so a dead
+    /// writer's `.lock` was never reclaimable off unix.
+    #[test]
+    fn pid_liveness_separates_this_process_from_a_reaped_child() {
+        assert!(pid_is_alive(std::process::id()));
+
+        #[cfg(unix)]
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "exit 0"])
+            .spawn()
+            .unwrap();
+        #[cfg(windows)]
+        let mut child = std::process::Command::new("cmd.exe")
+            .args(["/d", "/s", "/c", "exit 0"])
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        // Unix reaped it, so the pid is gone. Windows keeps the process object
+        // alive while `child` holds a handle, but an exited process reports its
+        // real exit code rather than STILL_ACTIVE — dead either way.
+        assert!(!pid_is_alive(pid));
     }
 
     #[test]

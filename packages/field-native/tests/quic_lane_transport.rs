@@ -17,6 +17,7 @@ mod common;
 
 use common::{authkey, build_node, probe_app_id, redact, rendezvous, sidecar, AUTHKEY_ENV};
 use field_native::config::NativeConfig;
+use field_native::local_ipc;
 use field_native::services::lane_transport::{TruffleLaneTransport, DOC_SYNC_QUIC_PORT};
 use field_native::services::mesh_bridge::{
     encode_frame, Frame, FrameReader, Lane, LaneClass, LaneEvent, INBOUND_LANE_ID_BASE,
@@ -26,7 +27,6 @@ use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::UnixStream;
 use tokio::time::timeout;
 
 /// fieldd's end of one daemon's byte plane. Deliberately NOT shared with
@@ -34,7 +34,7 @@ use tokio::time::timeout;
 /// send a bad MAC, this one only ever behaves. Two small honest clients beat
 /// one with a `valid: bool` knob whose false branch is dead here.
 struct DataClient {
-    stream: UnixStream,
+    stream: local_ipc::ClientStream,
     reader: FrameReader,
     /// One socket read can carry SEVERAL frames — two lane records written back
     /// to back routinely arrive together. Holding the surplus is the difference
@@ -44,7 +44,7 @@ struct DataClient {
 
 impl DataClient {
     async fn connect(daemon: &RunningDaemon) -> Self {
-        let stream = UnixStream::connect(&daemon.meshdata_socket)
+        let stream = local_ipc::connect(&daemon.meshdata_endpoint)
             .await
             .expect("connect meshdata");
         let mut client = Self {
@@ -52,18 +52,12 @@ impl DataClient {
             reader: FrameReader::default(),
             pending: std::collections::VecDeque::new(),
         };
+        // WIN-D1: the pairing file the daemon loaded, not walked up from the
+        // endpoint (a pipe name has no parent on disk).
         let secret = hex::decode(
-            std::fs::read_to_string(
-                daemon
-                    .mgmt_socket
-                    .parent()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
-                    .join("pairing"),
-            )
-            .unwrap()
-            .trim(),
+            std::fs::read_to_string(&daemon.pairing_file)
+                .unwrap()
+                .trim(),
         )
         .unwrap();
         let ts = pairing::now_epoch_secs();

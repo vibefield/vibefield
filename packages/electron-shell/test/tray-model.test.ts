@@ -123,3 +123,46 @@ describe("buildTrayMenu", () => {
     expect(a.setTrayVisible).toHaveBeenCalledWith(false);
   });
 });
+
+describe("the Switch User submenu (UA-5)", () => {
+  const users = [
+    { userId: "01AAA", name: "James", attached: true },
+    { userId: "01BBB", name: "Work", attached: false },
+  ];
+
+  it("renders the roster: attached checked and inert, others clickable, New User last", () => {
+    const acts = { ...actions(), switchUser: vi.fn(), newUser: vi.fn() };
+    const menu = buildTrayMenu(snapshot({ userName: "James", users }), acts, "darwin");
+    const sub = byId(menu, "switch-user").submenu ?? [];
+    expect(sub.map((s) => s.id ?? s.type)).toEqual([
+      "switch-user-01AAA",
+      "switch-user-01BBB",
+      "separator",
+      "new-user",
+    ]);
+    expect(sub[0]?.checked).toBe(true);
+    expect(sub[0]?.enabled).toBe(false);
+    expect(sub[0]?.click).toBeUndefined();
+    expect(sub[1]?.checked).toBe(false);
+    sub[1]?.click?.();
+    expect(acts.switchUser).toHaveBeenCalledWith("01BBB");
+    sub[3]?.click?.();
+    expect(acts.newUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the submenu without a roster or without the action (older callers)", () => {
+    const withoutAction = buildTrayMenu(snapshot({ users }), actions(), "darwin");
+    expect(withoutAction.some((i) => i.id === "switch-user")).toBe(false);
+    const acts = { ...actions(), switchUser: vi.fn() };
+    const withoutRoster = buildTrayMenu(snapshot(), acts, "darwin");
+    expect(withoutRoster.some((i) => i.id === "switch-user")).toBe(false);
+  });
+
+  it("quitting strips every switch click", () => {
+    const acts = { ...actions(), switchUser: vi.fn(), newUser: vi.fn() };
+    const menu = buildTrayMenu(snapshot({ users, quitting: true }), acts, "darwin");
+    const sub = byId(menu, "switch-user").submenu ?? [];
+    expect(sub.length).toBeGreaterThan(0);
+    expect(sub.every((s) => s.click === undefined)).toBe(true);
+  });
+});

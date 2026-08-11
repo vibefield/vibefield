@@ -8,7 +8,7 @@ import { requestGodviewToggle } from "./overlay-state";
  * sharing it with the Settings and devtools buttons is what keeps the three
  * reading as one row rather than three decisions.
  *
- * It presses the same button ⌘G presses: `requestGodviewToggle` asks the host,
+ * It presses the same button ⇧⇧ presses: `requestGodviewToggle` asks the host,
  * the host flips its bit, and `active` here is the value that came back — so
  * the button can never be lit over a closed overlay. */
 export function GodviewToggle({ active }: { active: boolean }): ReactElement {
@@ -18,7 +18,7 @@ export function GodviewToggle({ active }: { active: boolean }): ReactElement {
       onClick={requestGodviewToggle}
       data-hud-flight="bottom-left"
       className={`hud-flight ${fabCls(active)} bottom-4 left-16`}
-      title="Godview (⌘G)"
+      title="Godview (⇧ ⇧)"
       aria-pressed={active}
     >
       {/* Panes: the deck's own silhouette, at the 1.8 stroke the neighbours use. */}

@@ -84,6 +84,27 @@ test("refuses a live daemon even when no runner lock survived", async (t) => {
   );
 });
 
+test("the remedy names a command the user's shell actually has", async (t) => {
+  const paths = await fixture(t);
+  const runDir = join(paths.dataRoot, "fieldd", "run");
+  await mkdir(runDir, { recursive: true });
+  await writeFile(
+    join(runDir, "product.json"),
+    JSON.stringify({ pid: 303, nativePid: 304, buildId: "dev-old" }),
+  );
+
+  await assert.rejects(
+    acquireDevLock({
+      ...paths,
+      repoRoot: paths.root,
+      runnerPid: 404,
+      pidAlive: () => true,
+      platform: "win32",
+    }),
+    /stop them with: taskkill \/PID 303 \/PID 304 \/F$/,
+  );
+});
+
 test("removes exact dead daemon run files before taking ownership", async (t) => {
   const paths = await fixture(t);
   const runDir = join(paths.dataRoot, "fieldd", "run");

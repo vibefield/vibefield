@@ -490,6 +490,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "ghosttea",
+ "ghosttea-truffle",
  "hex",
  "hmac",
  "libc",
@@ -504,6 +505,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "truffle-core",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -701,9 +703,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea"
-version = "0.8.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86740f96de5b9f21c7c3b36ff6c1c7ee3d579e58e6185761d0303a886afc8798"
+checksum = "e07621504048b1e4e1e83e8e4732952b06a36eeb865b2cd786a88695c9144405"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -724,10 +726,11 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-config"
-version = "0.8.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10e4cb17c790ed1a36456d627478649eaa5564301aa7f5d6c80c866de4ddc582"
+checksum = "93e1e2dc0c92019633b9bcb0b2744312f219898b4d4dc76957616836f1f7642b"
 dependencies = [
+ "libc",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -736,9 +739,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-core"
-version = "0.8.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44a48c82d2dbda8d4712ce84cb93990f2b16a6c189bce68832bd8d5527058565"
+checksum = "aa6aad5050b0a13c96b6b9aae5e1507803d6661a47c19d4166b08c9349e056ee"
 dependencies = [
  "anyhow",
  "ghosttea-text",
@@ -749,9 +752,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-text"
-version = "0.8.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e830e5cc127b8970d12a602505350d0ad2d9fbdcc99615bceffec677ad394a7"
+checksum = "771087632163c907722ba0bb6c8d2a68aabd90fa0c050be322b9c4838097a078"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -762,19 +765,40 @@ dependencies = [
 ]
 
 [[package]]
-name = "ghosttea-vt"
-version = "0.8.0"
+name = "ghosttea-truffle"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3c250667e05fe2df2a2d9d2fb9fece5885217bc8f65e6ce2056c622eac8f2dd"
+checksum = "26e24f03afaedd765b23ce0a3b9a3beb1a08cad0529125c852e79cb3eefbabaa"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ghosttea",
+ "ghosttea-text",
+ "libc",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "subtle",
+ "tokio",
+ "truffle-core",
+ "uuid",
+]
+
+[[package]]
+name = "ghosttea-vt"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abb258a18b146df2d169d18e890e44b148c1d3cb60eb40ac40508c46a5f36802"
 dependencies = [
  "ghosttea-vt-sys",
 ]
 
 [[package]]
 name = "ghosttea-vt-sys"
-version = "0.8.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0015f1f5b774e01b285dd1c45769ed79da8628a8d12253f3ef7b94bac4c724c0"
+checksum = "8022179abcb7ca15a72d0c0c1719936c1d01c1166498e33d4018137398678cf2"
 dependencies = [
  "cc",
  "serde",

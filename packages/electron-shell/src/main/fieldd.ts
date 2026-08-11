@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { PLUGIN_LIMITS } from "@vibefield/contracts";
 import { createFielddSupervisor, type FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
@@ -30,6 +30,9 @@ export function buildSupervisor(opts: {
   viteUrl: string;
   logRoot: string;
   logger: Logger;
+  /** UA-2 — the attached user this pair must serve; gates adoption and rides
+   * the spawn env as FIELDD_USER_ID. */
+  userId?: string;
 }): FielddSupervisor {
   // Env overrides still win — they are how smoke harnesses and a developer
   // testing a packaged layout redirect the daemon — but the DEFAULT now comes
@@ -54,15 +57,13 @@ export function buildSupervisor(opts: {
   }
   const expectedBuildId = opts.mode === "dev" ? process.env["VIBEFIELD_DEV_BUILD_ID"] : undefined;
   const policy = shutdownPolicy(opts.mode);
-  // Port isolation is DERIVED from the lifetime policy rather than listed
-  // again: a run that stops what it spawned must not be able to reach the
-  // ambient pair in the first place, and a leave-running mode wants the
-  // registry ports precisely so its successor can adopt. The list this
-  // replaced named smoke and smoke-canvas literally, so the next stop-owned
-  // mode added got the production ports by omission and died on EADDRINUSE
-  // against whatever daemon the machine already had (GT-0). Deriving it means
-  // a new mode cannot be forgotten here.
-  const isolatePorts = policy === "stop-owned";
+  // UA-D12/UA-5 — ephemeral ports EVERYWHERE, no mode split. The old
+  // rationale ("a leave-running mode wants the registry ports so its
+  // successor can adopt") died with UA-2: adoption dials the port RECORDED
+  // in product.json, never a well-known number. Fixed ports were also the
+  // accidental machine-wide mutex (V5) that made a second user's pair
+  // impossible — every pair now binds at 0 and run files are the only
+  // discovery, which is exactly what lets N resident pairs share a machine.
   const logger = opts.logger.child({ component: "daemon.supervisor" });
   const pluginRoots = opts.resources.pluginRoots;
   return createFielddSupervisor({
@@ -77,10 +78,14 @@ export function buildSupervisor(opts: {
       ...(nodeMode ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
       // PLUG-P2 — plugin discovery roots (§9.1), now layout-derived: the repo in
       // development, Resources/plugins/bundled when packaged. Explicit env still
-      // wins (PATH-style lists, see fieldd bin.ts).
-      FIELDD_PLUGIN_ROOTS: process.env["FIELDD_PLUGIN_ROOTS"] ?? pluginRoots.bundled.join(":"),
+      // wins (PATH-style lists, see fieldd bin.ts). WIN-3: `path.delimiter` —
+      // this is the ENCODER half, whose decoder is fieldd's `splitPathList`; on
+      // Windows a `:` join shreds every `C:\…` root, and flipping one side alone
+      // just moves the silent break.
+      FIELDD_PLUGIN_ROOTS:
+        process.env["FIELDD_PLUGIN_ROOTS"] ?? pluginRoots.bundled.join(delimiter),
       FIELDD_PLUGIN_DEV_ROOTS:
-        process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? pluginRoots.devLinked.join(":"),
+        process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? pluginRoots.devLinked.join(delimiter),
       // The shell resolved this root under its own mode policy. Passing that
       // trusted absolute decision keeps all three process owners aligned while
       // fieldd still refuses an ambient override on its own.
@@ -97,8 +102,10 @@ export function buildSupervisor(opts: {
     // landed; smoke-canvas could not see it because CANVAS_READY fires at
     // canvas mount, before the first fieldd round trip (GT-1 finding).
     allowedOrigins: [APP_ORIGIN, ...(opts.mode === "dev" ? [new URL(opts.viteUrl).origin] : [])],
-    ...(isolatePorts ? { controlPort: 0, dataPort: 0 } : {}),
+    controlPort: 0,
+    dataPort: 0,
     ...(expectedBuildId ? { expectedBuildId } : {}),
+    ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
     shutdownPolicy: policy,
     ...(policy === "stop-owned"
       ? { stopDeadlineMs: PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS + 2_000 }

@@ -10,37 +10,62 @@
 //! and inventory, and ghosttea's own control socket (through field-native's
 //! self-client) for session lifecycle.
 
+// The PTY kill matrix, cross-platform since WIN-6. The survivor-authority logic
+// is platform-agnostic; only the seam differs by cfg. unix — /bin/cat tenants,
+// libc::kill liveness, socket 0600 modes, /tmp sun_path roots. windows — cmd.exe
+// ConPTY tenants, OpenProcess liveness, the pipe DACL in place of modes (WIN-D4),
+// tempdir roots (no sun_path budget). The mgmt/control dials go through the one
+// `local_ipc` seam (UnixStream on unix, NamedPipeClient on windows). This is the
+// §5/§6 gate — "the kill matrix must run on the box before terminal hosting is
+// claimed there" — proven on WORKSTATION4090.
+
+use field_native::local_ipc::{self, ClientStream};
 use field_native::services::terminal_client::ControlClient;
 use field_native::{bootstrap, config::NativeConfig, pairing, RunningDaemon};
 use serde_json::{json, Value};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixStream;
 use tokio::time::timeout;
 
-/// A quiet, portable PTY tenant: it holds the terminal open reading stdin and
-/// dies on the first rung of the ladder (^C → SIGINT), so a sweep that works
-/// finishes in milliseconds and a sweep that does not is unmistakable.
+/// A quiet PTY tenant that holds the terminal open until it is killed: unix
+/// `/bin/cat` (reads stdin, dies on the ladder's first rung, ^C → SIGINT);
+/// windows an interactive `cmd.exe` (no signal ladder — ghosttea reaps it via
+/// the ConPTY/job path, which is just as fast and just as unmistakable).
+#[cfg(unix)]
 const TENANT: &str = "/bin/cat";
+#[cfg(windows)]
+const TENANT: &str = r"C:\Windows\System32\cmd.exe";
 
 /// macOS caps a Unix socket path at ~104 bytes (`sun_path`), and these sockets
 /// sit three levels under the data dir. The platform temp dir
 /// (`/var/folders/<32 chars>/…`) leaves almost no room, so tests root their data
 /// dir at `/tmp` and check the budget instead of discovering it as ENAMETOOLONG.
+#[cfg(unix)]
 fn short_tempdir() -> tempfile::TempDir {
     let dir = tempfile::Builder::new()
         .prefix("vfnf")
         .tempdir_in("/tmp")
         .expect("tempdir under /tmp");
-    let probe = dir.path().join("native/run/terminal-control.sock");
+    let probe = dir.path().join("native/run/termctl.sock");
     assert!(
         probe.as_os_str().len() < 100,
         "socket path would risk sun_path truncation: {}",
         probe.display()
     );
     dir
+}
+
+/// Windows endpoints are pipe names, not filesystem paths, so there is no
+/// `sun_path` budget to protect — the platform temp dir is fine as-is.
+#[cfg(windows)]
+fn short_tempdir() -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix("vfnf")
+        .tempdir()
+        .expect("tempdir")
 }
 
 async fn boot(dir: &Path) -> RunningDaemon {
@@ -59,10 +84,11 @@ enum Incoming {
 }
 
 /// The mgmt client, in the idiom of tests/mgmt_server.rs: newline JSON-RPC over
-/// the paired UDS.
+/// the paired mgmt endpoint (a UDS on unix, a named pipe on windows — one
+/// `local_ipc` stream either way, split for the reader/writer halves).
 struct MgmtClient {
-    reader: tokio::io::Lines<BufReader<tokio::net::unix::OwnedReadHalf>>,
-    writer: tokio::net::unix::OwnedWriteHalf,
+    reader: tokio::io::Lines<BufReader<tokio::io::ReadHalf<ClientStream>>>,
+    writer: tokio::io::WriteHalf<ClientStream>,
     /// Notifications that overtook a response. Acks and deltas share one socket
     /// and their order is not guaranteed, so a caller correlating an ack must
     /// hand back the deltas it read on the way — otherwise it consumes the very
@@ -77,10 +103,10 @@ struct MgmtClient {
 
 impl MgmtClient {
     async fn connect(daemon: &RunningDaemon) -> Self {
-        let stream = UnixStream::connect(&daemon.mgmt_socket)
+        let stream = local_ipc::connect(&daemon.mgmt_endpoint)
             .await
             .expect("connect mgmt");
-        let (r, w) = stream.into_split();
+        let (r, w) = tokio::io::split(stream);
         Self {
             reader: BufReader::new(r).lines(),
             writer: w,
@@ -98,6 +124,17 @@ impl MgmtClient {
         let mut line = v.to_string();
         line.push('\n');
         self.writer.write_all(line.as_bytes()).await.expect("write");
+    }
+
+    /// Like `send`, but the peer may have already closed this connection — a
+    /// superseded client's socket is fully torn down (mgmt_server's
+    /// `new_hello_supersedes_old_client` pins the EOF), so a write here races that
+    /// close and may hit a dead socket (BrokenPipe). That is an honest observable
+    /// of the eviction, not a failure: the write simply cannot take effect.
+    async fn try_send(&mut self, v: Value) {
+        let mut line = v.to_string();
+        line.push('\n');
+        let _ = self.writer.write_all(line.as_bytes()).await;
     }
 
     async fn recv(&mut self) -> Value {
@@ -265,14 +302,14 @@ impl MgmtClient {
 }
 
 fn read_secret(daemon: &RunningDaemon) -> Vec<u8> {
-    let path = daemon
-        .mgmt_socket
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("pairing");
-    hex::decode(std::fs::read_to_string(path).unwrap().trim()).unwrap()
+    // the file the daemon loaded (WIN-D1: uniform with the other harnesses,
+    // though this whole file is unix-only until the WIN-6 ConPTY rung)
+    hex::decode(
+        std::fs::read_to_string(&daemon.pairing_file)
+            .unwrap()
+            .trim(),
+    )
+    .unwrap()
 }
 
 fn terminals(payload: &Value) -> &Vec<Value> {
@@ -300,8 +337,29 @@ fn tenant_options() -> Value {
 
 /// Is this pid still around? The PTY leader is a child of THIS process in tests
 /// (field-native is embedded), so a reaped child answers ESRCH.
+#[cfg(unix)]
 fn alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+}
+
+/// The OpenProcess twin of `kill(pid, 0)` — WIN-2b's `pid_is_alive` uses the
+/// same pair for the log floor. Access-denied reads ALIVE (the process exists,
+/// we just cannot query it — the unix EPERM twin); only an unknown pid or a read
+/// exit code that is not STILL_ACTIVE reads dead.
+#[cfg(windows)]
+fn alive(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, STILL_ACTIVE};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process.is_null() {
+        return std::io::Error::last_os_error().raw_os_error() == Some(ERROR_ACCESS_DENIED as i32);
+    }
+    let mut exit_code = 0_u32;
+    let queried = unsafe { GetExitCodeProcess(process, &mut exit_code) };
+    unsafe { CloseHandle(process) };
+    queried == 0 || exit_code == STILL_ACTIVE as u32
 }
 
 async fn wait_until_gone(pid: u32, budget: Duration) -> bool {
@@ -322,13 +380,15 @@ async fn control(ack: &Value) -> (ControlClient, tokio::sync::mpsc::UnboundedRec
         .as_str()
         .expect("controlSocket");
     let token = ack["terminal"]["authToken"].as_str().expect("authToken");
-    ControlClient::connect(Path::new(socket), token)
+    ControlClient::connect(socket, token)
         .await
         .expect("dial terminal control socket")
 }
 
-/// NF-D8: endpoints ride the pairing hello, under this daemon's own run dir,
-/// with a per-boot token — and the sockets are private to the owning user (EL7).
+/// NF-D8: endpoints ride the pairing hello with a per-boot token, private to the
+/// owning user (EL7). The shape is platform-split: on unix a run-dir socket path
+/// at mode 0600; on windows a per-user pipe name whose CurrentUserOnly DACL
+/// (WIN-D1/WIN-D4) carries the same boundary the mode did.
 #[tokio::test]
 async fn hello_carries_private_terminal_endpoints() {
     let dir = short_tempdir();
@@ -336,30 +396,45 @@ async fn hello_carries_private_terminal_endpoints() {
     let mut mgmt = MgmtClient::connect(&daemon).await;
     let ack = mgmt.hello(&daemon).await;
     let terminal = &ack["terminal"];
+    let control = terminal["controlSocket"].as_str().unwrap();
+    let frame = terminal["frameSocket"].as_str().unwrap();
 
-    let run_dir = dir.path().join("native/run");
-    assert_eq!(
-        terminal["controlSocket"].as_str().unwrap(),
-        run_dir.join("terminal-control.sock").to_str().unwrap(),
-        "control socket must be the registries path under this daemon's run dir"
-    );
-    assert_eq!(
-        terminal["frameSocket"].as_str().unwrap(),
-        run_dir.join("terminal-frame.sock").to_str().unwrap()
-    );
+    #[cfg(unix)]
+    {
+        let run_dir = dir.path().join("native/run");
+        assert_eq!(
+            control,
+            run_dir.join("termctl.sock").to_str().unwrap(),
+            "control socket must be the registries path under this daemon's run dir"
+        );
+        assert_eq!(frame, run_dir.join("termframe.sock").to_str().unwrap());
+        for name in ["termctl.sock", "termframe.sock"] {
+            let path = run_dir.join(name);
+            let mode = std::fs::metadata(&path)
+                .unwrap_or_else(|e| panic!("stat {}: {e}", path.display()))
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600, "{name} must be private to the owning user");
+        }
+    }
+    #[cfg(windows)]
+    {
+        // WIN-D1: the endpoints are per-user pipe names, not run-dir paths, and
+        // the owner-only boundary is the DACL the bind carries (WIN-D4), not a
+        // mode. Assert the shape; the DACL itself is upstream's, pinned there.
+        let _ = &dir;
+        for (label, endpoint) in [("control", control), ("frame", frame)] {
+            assert!(
+                endpoint.starts_with(r"\\.\pipe\vibefield-"),
+                "{label} endpoint must be a vibefield pipe name, got {endpoint}"
+            );
+        }
+    }
+
     let token = terminal["authToken"].as_str().expect("authToken");
     assert_eq!(token.len(), 64, "32 random bytes, hex");
     assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
-
-    for name in ["terminal-control.sock", "terminal-frame.sock"] {
-        let path = run_dir.join(name);
-        let mode = std::fs::metadata(&path)
-            .unwrap_or_else(|e| panic!("stat {}: {e}", path.display()))
-            .permissions()
-            .mode()
-            & 0o777;
-        assert_eq!(mode, 0o600, "{name} must be private to the owning user");
-    }
 
     daemon.shutdown().await;
 }
@@ -606,7 +681,7 @@ async fn wrong_token_is_refused_on_the_control_socket() {
     probe.list_sessions().await.expect("service is serving");
     drop(probe);
 
-    let mut stream = UnixStream::connect(&socket).await.expect("dial control");
+    let mut stream = local_ipc::connect(&socket).await.expect("dial control");
     let wrong = b"0000000000000000000000000000000000000000000000000000000000000000";
     stream
         .write_u32_le(wrong.len() as u32)
@@ -640,7 +715,7 @@ async fn wrong_token_is_refused_on_the_control_socket() {
 /// user is a surface this crate would then owe forever (declared == shipped).
 /// The framing is the same LE-u32 the wrong-token test already writes by hand.
 async fn control_request(socket: &str, token: &str, request: Value, want: &str) -> Value {
-    let mut stream = UnixStream::connect(socket).await.expect("dial control");
+    let mut stream = local_ipc::connect(socket).await.expect("dial control");
     write_frame(&mut stream, token.as_bytes()).await;
     let ack = read_frame(&mut stream).await;
     assert_eq!(ack, b"ok", "control authentication was refused");
@@ -674,7 +749,7 @@ async fn control_request(socket: &str, token: &str, request: Value, want: &str) 
     panic!("no {want} response within the budget");
 }
 
-async fn write_frame(stream: &mut UnixStream, bytes: &[u8]) {
+async fn write_frame(stream: &mut ClientStream, bytes: &[u8]) {
     stream
         .write_u32_le(bytes.len() as u32)
         .await
@@ -683,7 +758,7 @@ async fn write_frame(stream: &mut UnixStream, bytes: &[u8]) {
     stream.flush().await.expect("flush");
 }
 
-async fn read_frame(stream: &mut UnixStream) -> Vec<u8> {
+async fn read_frame(stream: &mut ClientStream) -> Vec<u8> {
     let len = timeout(Duration::from_secs(10), stream.read_u32_le())
         .await
         .expect("a frame within the budget")
@@ -718,7 +793,10 @@ async fn the_config_overlay_is_this_daemons_own_file() {
     probe.list_sessions().await.expect("service is serving");
     drop(probe);
 
-    let expected = dir.path().join("native/config.ghostty");
+    // Per-component join, not an embedded `/`: the daemon builds this path with
+    // `Path::join` per component, so on Windows it is `native\config.ghostty` —
+    // a single `.join("native/config.ghostty")` would keep the `/` and mismatch.
+    let expected = dir.path().join("native").join("config.ghostty");
     assert!(
         !expected.exists(),
         "a fresh boot must not write a config file nobody asked for"
@@ -1185,7 +1263,7 @@ async fn a_superseded_client_may_not_prune_the_successors_sessions() {
     // known to the assertion below.
     let stale_id = 90;
     stale
-        .send(
+        .try_send(
             json!({"jsonrpc":"2.0","id":stale_id,"method":"native.lifecycle.desired.set","params":{
                 "generation": 7,
                 "terminals": [],
@@ -1194,9 +1272,10 @@ async fn a_superseded_client_may_not_prune_the_successors_sessions() {
             }}),
         )
         .await;
-    // The refusal is generated, but supersession already shut this connection's
-    // write half down, so it cannot reach the wire: the honest observables are a
-    // closed socket and two PTYs that are still running.
+    // The refusal is generated, but supersession has already CLOSED this
+    // connection, so the prune cannot take effect: the write races that close and
+    // may reach a dead socket (try_send tolerates the BrokenPipe). The honest
+    // observables are a closed socket and two PTYs that are still running.
     stale
         .await_close_without_answering(stale_id, Duration::from_secs(5))
         .await;
@@ -1392,10 +1471,18 @@ async fn the_sweep_never_waits_on_an_already_exited_session() {
     let ack = mgmt.hello(&daemon).await;
     let (client, _events) = control(&ack).await;
 
-    // `/bin/echo` exits on its own the moment it is spawned; the persistence is
-    // what makes the registry keep the row afterwards.
+    // A tenant that exits on its own the moment it is spawned (unix `/bin/echo`;
+    // windows `cmd.exe /c ver`); the persistence is what makes the registry keep
+    // the row afterwards.
     let mut options = tenant_options();
-    options["executable"] = json!("/bin/echo");
+    #[cfg(unix)]
+    {
+        options["executable"] = json!("/bin/echo");
+    }
+    #[cfg(windows)]
+    {
+        options["args"] = json!(["/c", "ver"]);
+    }
     options["persistence"] = json!("keep-until-explicit-close");
     let session = client
         .create_session(options)
@@ -1435,8 +1522,17 @@ async fn the_sweep_never_waits_on_an_already_exited_session() {
 }
 
 /// A Unix socket outlives the process that bound it, so the second boot has to
-/// replace its own endpoints. The token is minted per boot, and the inventory
-/// starts empty — no phantom sessions from a previous life (spec §10.3).
+/// unlink-then-rebind its own endpoints. The token is minted per boot, and the
+/// inventory starts empty — no phantom sessions from a previous life (spec §10.3).
+///
+/// unix-only, deliberately: this is a STALE-SOCKET-NODE mechanism. On Windows the
+/// endpoints are pipes — a `first_pipe_instance` name stays held until its handle
+/// closes, and an in-process `shutdown` does NOT close it (only process exit
+/// does), so an in-process rebind reads ACCESS_DENIED indefinitely. That is not a
+/// product path: field-native is a separate process, and a real restart releases
+/// the name on EXIT (the WIN-3 two-plane restart), which is where the
+/// cross-process rebind lives. Recorded here, not masked (WIN-6).
+#[cfg(unix)]
 #[tokio::test]
 async fn stale_endpoints_are_rebound_on_the_next_boot() {
     let dir = short_tempdir();
@@ -1461,7 +1557,7 @@ async fn stale_endpoints_are_rebound_on_the_next_boot() {
         wait_until_gone(pid, Duration::from_secs(5)).await,
         "the first boot's session must not survive its daemon"
     );
-    let socket_path = dir.path().join("native/run/terminal-control.sock");
+    let socket_path = dir.path().join("native/run/termctl.sock");
     assert!(
         socket_path.exists(),
         "the socket file is expected to be left behind — that is what makes this a rebind"

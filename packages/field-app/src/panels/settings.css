@@ -1,0 +1,132 @@
+/* Settings sheet composition. Shared controls are owned by design-kit/primitives.css. */
+
+/* Settings is a window-level sheet: calm, large, and centered. The sidebar and
+   content remain one surface, with only a hairline and opacity ramp providing
+   hierarchy. Color is reserved for real state inside the individual sections. */
+.vf-settings-backdrop {
+  background: var(--vf-backdrop-dim);
+  backdrop-filter: blur(8px) saturate(0.92);
+  animation: vf-settings-backdrop-in 180ms ease both;
+}
+
+.vf-settings-dialog {
+  min-height: min(540px, calc(100vh - 32px));
+  border: 1px solid var(--vf-hairline-strong);
+  background: var(--vf-sheet-surface);
+  box-shadow: var(--vf-shadow-dialog);
+  backdrop-filter: blur(36px) saturate(1.1);
+  animation: vf-settings-dialog-in 440ms var(--vf-ease-island) both;
+}
+
+.vf-settings-sidebar {
+  background: var(--vf-chrome-surface-soft);
+}
+
+.vf-settings-code-field {
+  width: 100%;
+  height: 16rem;
+  padding: 12px;
+  border: 1px solid var(--vf-hairline-strong);
+  border-radius: 12px;
+  outline: none;
+  resize: vertical;
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  font-size: 12px;
+  line-height: 1.25rem;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.dark .vf-settings-code-field {
+  background: var(--vf-field-surface);
+}
+
+.vf-settings-code-field:focus {
+  border-color: color-mix(in srgb, var(--vf-foreground) 25%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vf-foreground) 5%, transparent);
+}
+
+.vf-settings-code-field:disabled {
+  opacity: 0.45;
+}
+
+@keyframes vf-settings-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vf-settings-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.975) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .vf-settings-dialog {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .vf-settings-sidebar {
+    padding-inline: 8px;
+  }
+
+  .vf-settings-sidebar-title,
+  .vf-settings-nav-group,
+  .vf-settings-nav-label,
+  .vf-settings-sidebar-note {
+    display: none;
+  }
+
+  .vf-settings-nav-item {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .vf-settings-dialog > main > header,
+  .vf-settings-dialog > main > div:last-child {
+    padding-inline: 20px;
+  }
+
+  .vf-settings-history-label {
+    display: none;
+  }
+
+  .vf-settings-history-button {
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 620px) {
+  .vf-settings-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .vf-settings-row-control {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-settings-backdrop,
+  .vf-settings-dialog {
+    animation-duration: 90ms;
+  }
+
+  .vf-settings-dialog {
+    animation-name: vf-settings-backdrop-in;
+  }
+}

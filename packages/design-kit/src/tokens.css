@@ -1,0 +1,206 @@
+/* @vibefield/design-kit tokens — transcribed from DESIGN.md; the doc moves first, then this file. */
+
+:root {
+  /* Core type stacks. Components consume these instead of repeating a subtly
+     different system or monospace stack at every call site. */
+  --vf-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vf-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* §2.1 Ground (the canvas) */
+  --vf-canvas-bg: #fafafa;
+  --vf-canvas-dot: rgba(0, 0, 0, 0.16);
+  /* widgetlab-compat aliases */
+  --canvas-bg: var(--vf-canvas-bg);
+  --canvas-dot: var(--vf-canvas-dot);
+
+  /* §2.2 Surfaces */
+  --vf-card: #1c1c1e;
+  --vf-card-deep: #000000;
+  --vf-card-ink: #ffffff;
+  --vf-fill: #f2f2f7;
+  --vf-fill-hover: #e5e5ea;
+
+  /* Semantic chrome projection. These are aliases over the art-direction
+     palette, not a second palette: shared primitives and domain surfaces use
+     the names below so light/dark treatment cannot drift independently. */
+  --vf-foreground: #1c1c1e;
+  --vf-foreground-inverse: #ffffff;
+  --vf-text-primary: rgb(28 28 30 / 85%);
+  --vf-text-secondary: rgb(28 28 30 / 70%);
+  --vf-text-tertiary: rgb(28 28 30 / 45%);
+  --vf-text-faint: rgb(28 28 30 / 30%);
+  --vf-hairline: rgb(0 0 0 / 5%);
+  --vf-hairline-strong: rgb(0 0 0 / 10%);
+  --vf-chrome-solid: #ffffff;
+  --vf-chrome-surface: rgb(255 255 255 / 90%);
+  --vf-sheet-surface: rgb(255 255 255 / 96%);
+  --vf-chrome-surface-soft: rgb(255 255 255 / 58%);
+  --vf-chrome-surface-hover: rgb(255 255 255 / 78%);
+  --vf-field-surface: rgb(255 255 255 / 60%);
+  --vf-wizard-surface: rgb(255 255 255 / 55%);
+  --vf-backdrop-dim: rgb(0 0 0 / 10%);
+
+  /* §2.5 State & system color */
+  --vf-green: #30d158;
+  --vf-orange: #ff9f0a;
+  --vf-red: #ff453a;
+  --vf-yellow: #ffd60a;
+  --vf-cyan: #5ac8fa;
+  --vf-select: #4a90d9;
+  --vf-state-on-attention: #111111;
+  --vf-state-on-solid: #ffffff;
+
+  /* §2.6 Organizational accents — the curated set, assigned per object and used
+     as TINT. They group and label; they never signal state (that is §2.5's job,
+     above). Transcribed here rather than at each use site because this file is
+     the one place transcription is legitimate: the doc moves first, then this. */
+  --vf-accent-1: #6366f1;
+  --vf-accent-2: #ec4899;
+  --vf-accent-3: #22c55e;
+  --vf-accent-4: #f59e0b;
+  --vf-accent-5: #06b6d4;
+  --vf-accent-6: #8b5cf6;
+  --vf-accent-7: #ef4444;
+  --vf-accent-8: #3b82f6;
+
+  /* Domain content colors. These are stable card identities, not app state. */
+  --vf-note-surface: #f6e7a9;
+  --vf-note-ink: #3a3524;
+  --vf-folder-surface: #1d1d2b;
+  --vf-folder-portal: #14141f;
+  --vf-folder-ink: #eaeaf4;
+  --vf-folder-muted: #8b8ba6;
+
+  /* §2.7 Godview instrument palette — exact values from the Chopsticks
+     Godview reference. Both modes live here because Godview owns a local theme
+     switch independent of the field behind it. */
+  --vf-godview-light-monitor-bg: #f7f7f7;
+  --vf-godview-light-panel-bg: #ffffff;
+  --vf-godview-light-panel-border: #e0e0e0;
+  --vf-godview-light-text-main: #111111;
+  --vf-godview-light-text-muted: #888888;
+  --vf-godview-light-text-faint: #b8b8b8;
+  --vf-godview-light-control-hover-border: #777777;
+  --vf-godview-light-control-hover-bg: #f2f2f2;
+  --vf-godview-light-idle-bg: #e5e5e5;
+  --vf-godview-light-idle-text: #666666;
+  --vf-godview-light-working-bg: #222222;
+  --vf-godview-light-working-text: #ffffff;
+  --vf-godview-light-working-border: #111111;
+  --vf-godview-light-terminal-bg: #ece8dc;
+  --vf-godview-light-terminal-divider: #d2cec3;
+
+  --vf-godview-dark-monitor-bg: #0a0a0a;
+  --vf-godview-dark-panel-bg: #111111;
+  --vf-godview-dark-panel-border: #333333;
+  --vf-godview-dark-text-main: #ffffff;
+  --vf-godview-dark-text-muted: #777777;
+  --vf-godview-dark-text-faint: #555555;
+  --vf-godview-dark-control-hover-border: #a8a8a8;
+  --vf-godview-dark-control-hover-bg: #242424;
+  --vf-godview-dark-idle-bg: #2a2a2a;
+  --vf-godview-dark-idle-text: #aaaaaa;
+  --vf-godview-dark-working-bg: #eeeeee;
+  --vf-godview-dark-working-text: #111111;
+  --vf-godview-dark-working-border: #ffffff;
+  --vf-godview-dark-terminal-bg: #282c34;
+  --vf-godview-dark-terminal-divider: #414650;
+
+  --vf-godview-rain-green: #4ade80;
+  --vf-godview-rain-green-focus: #22c55e;
+  --vf-godview-rain-waiting: #fde047;
+  --vf-godview-rain-idle: #cbd5e1;
+  --vf-godview-rain-working-head: #ffffff;
+  --vf-godview-rain-working-tail: #00ff00;
+  --vf-godview-rain-waiting-head: #fef08a;
+  --vf-godview-rain-waiting-tail: #eab308;
+  --vf-godview-rain-idle-head: #94a3b8;
+  --vf-godview-rain-idle-tail: #475569;
+  --vf-godview-rain-hover-tail: #d946ef;
+
+  /* §4 Geometry */
+  --vf-radius-card: 22px;
+  --vf-radius-island: 32px;
+  --vf-radius-sheet: 40px;
+  --vf-radius-control: 9px;
+
+  /* §8 The file tree. Geometry only — every COLOR the tree wears is one of
+     the tokens above. The theme itself ships upstream
+     (`@vibecook/mille-ui/theme/vibefield.css`) and reads these by name with
+     its own published fallbacks, so the numbers stay ours: change one here
+     and the tree follows without a mille release. */
+  --vf-tree-row-height: 26px;
+  --vf-tree-row-height-compact: 22px;
+  --vf-tree-indent: 14px;
+  --vf-tree-gutter: 8px;
+
+  /* §5 canonical material recipes. Keeping the complete shadow in a token is
+     what lets a side panel in a plugin and a side panel in the shell remain the
+     same physical material. */
+  --vf-shadow-card: 0 20px 40px rgb(0 0 0 / 15%), 0 0 0 1px rgb(0 0 0 / 5%);
+  --vf-shadow-card-lifted: 0 30px 60px rgb(0 0 0 / 22%), 0 0 0 1px rgb(0 0 0 / 6%);
+  --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 8%);
+  --vf-shadow-sheet: 0 -20px 40px rgb(0 0 0 / 8%);
+  --vf-shadow-top-sheet: 0 20px 40px rgb(0 0 0 / 8%);
+  --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 8%);
+  --vf-shadow-dialog: 0 42px 100px rgb(0 0 0 / 18%), 0 12px 36px rgb(0 0 0 / 10%);
+  --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 8%);
+
+  /* §6 Motion */
+  --vf-ease-island: cubic-bezier(0.25, 1, 0.3, 1);
+  --vf-ease-lift: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --vf-ease-pop: cubic-bezier(0.34, 1.45, 0.64, 1);
+
+  /* §7 Interactive states — the engine's P4 union box wraps rounded cards
+     (world px; the chrome reflector zoom-scales it — widgetlab App law) */
+  --ic-selection-radius: 22px;
+
+  /* §7 Interactive states — overlap glow/rim knobs (light defaults) */
+  --ic-glow-color: 255, 255, 255;
+  --ic-glow-size-t: 60px;
+  --ic-glow-size-c: 60px;
+  --ic-glow-alpha-t: 0.5;
+  --ic-glow-alpha-c: 0.25;
+  --ic-rim-color: 224, 224, 224;
+  --ic-rim-alpha-t: 0.85;
+  --ic-rim-alpha-c: 0.55;
+  --ic-rim-width: 1.5px;
+  --ic-rim-radius: 600px;
+}
+
+.dark {
+  /* §2.1 Ground */
+  --vf-canvas-bg: #171717;
+  --vf-canvas-dot: rgba(255, 255, 255, 0.08);
+
+  /* §2.2 Surfaces */
+  --vf-fill: #2c2c2e;
+  --vf-fill-hover: #2c2c2e;
+
+  --vf-foreground: #f5f5f7;
+  --vf-foreground-inverse: #1c1c1e;
+  --vf-text-primary: rgb(245 245 247 / 85%);
+  --vf-text-secondary: rgb(245 245 247 / 70%);
+  --vf-text-tertiary: rgb(245 245 247 / 45%);
+  --vf-text-faint: rgb(245 245 247 / 30%);
+  --vf-hairline: rgb(255 255 255 / 10%);
+  --vf-hairline-strong: rgb(255 255 255 / 15%);
+  --vf-chrome-solid: #1c1c1e;
+  --vf-chrome-surface: rgb(28 28 30 / 90%);
+  --vf-sheet-surface: rgb(28 28 30 / 96%);
+  --vf-chrome-surface-soft: rgb(255 255 255 / 5%);
+  --vf-chrome-surface-hover: rgb(255 255 255 / 8%);
+  --vf-field-surface: rgb(255 255 255 / 6%);
+  --vf-wizard-surface: rgb(28 28 30 / 55%);
+  --vf-backdrop-dim: rgb(0 0 0 / 40%);
+  --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 40%);
+  --vf-shadow-sheet: 0 -20px 40px rgb(0 0 0 / 40%);
+  --vf-shadow-top-sheet: 0 20px 40px rgb(0 0 0 / 40%);
+  --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 40%);
+  --vf-shadow-dialog: 0 48px 120px rgb(0 0 0 / 48%), 0 14px 40px rgb(0 0 0 / 30%);
+  --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 40%);
+
+  /* §7 Interactive states — reviewed neutral glow/rim on dark */
+  --ic-glow-color: 110, 110, 110;
+  --ic-rim-color: 92, 92, 92;
+}

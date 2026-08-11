@@ -1,4 +1,9 @@
-import { DocListResult, DocOpenResult, DocRegistryEntry } from "@vibefield/contracts";
+import {
+  DocListResult,
+  DocOpenResult,
+  DocRegistryEntry,
+  type DocSyncIntent,
+} from "@vibefield/contracts";
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { setBoardStatus } from "./board-status";
@@ -59,6 +64,8 @@ export interface DocManagerApi {
   rename(name: string): Promise<void>;
   createDoc(): Promise<void>;
   switchTo(docId: string): Promise<void>;
+  /** UA-D7 — say whether this doc may leave the device. */
+  setSyncIntent(docId: string, intent: DocSyncIntent): Promise<void>;
 }
 
 export interface DocPersistenceLease {
@@ -258,6 +265,17 @@ export class DocManager {
       doc: { docId: doc.docId, name: entry.name },
       docs: this.state.docs.map((d) => (d.docId === doc.docId ? entry : d)),
     });
+  }
+
+  /** UA-D7 — where this doc is willing to go. The daemon answers with the whole
+   * updated entry, and THAT is what the explorer patches: the "local" chip is a
+   * registry fact, never inferred from the sync stream (the no-`solo`-on-the-
+   * wire law — a gated doc has no sync status at all to read). */
+  async setSyncIntent(docId: string, intent: DocSyncIntent): Promise<void> {
+    const entry = DocRegistryEntry.parse(
+      await this.request("doc.setSyncIntent", { docId, intent }),
+    );
+    this.patch({ docs: this.state.docs.map((d) => (d.docId === docId ? entry : d)) });
   }
 
   async refreshDocs(): Promise<DocRegistryEntry[]> {
