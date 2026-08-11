@@ -1669,3 +1669,87 @@ directly; all three `markHealthy()` callers are event-driven, leaving the recove
 one candidate), and the refusal assertion above the failing line is NOT a second witness —
 `AuditUnavailableError` hardcodes `state: "degraded"` in its details, so only line 112 tests
 health at all.
+
+## The Windows port opens — WIN-0…4 land the shell's other half
+
+**LANDED 2026-08-11** (ratified 2026-08-10, James: "follow your plan"; `draft/thinking-windows-port.md`).
+Windows was already a decided GA target (B-5, EDP-39 Azure signing, EDP §10.2's NSIS installer) — the gap
+was that the daemon/socket layer was specced unix-shaped and never re-derived. This wave re-derives it,
+every fix first demanded by a probe on the real box (WORKSTATION4090, x86_64-pc-windows-msvc, over the
+tailnet) before a line changed, then re-proven there. Three slices on `f98f58a`:
+
+**WIN-0/DEV `5ffd30b` — the gate and the dev loop stop refusing Windows.** Four one-file gate fixes: the
+single-quoted esbuild flag is unquoted (cmd.exe treats `'` as a letter — since `fc78b84` put
+`bundle:assert` inside `verify`, that one character blocked THE gate on Windows, not just `pnpm build`;
+the box died with esbuild's own diagnostic while the vite renderer build passed in 577ms); `.gitattributes`
+gains `eol=lf` (the extensionless pre-push hook checked out CRLF and a CRLF `sh` hook blocks every push —
+zero renormalization, proven before widening); `pnpm hooks:install` exists because `core.hooksPath` was
+machine-local config no clone ever got; `check-release-identity --self-test` takes an injectable identity
+(the box's 2-char username `me` sat under the deliberate `>2` guard and the overlap rule could never fire
+there — now a pinned choice with its own row). `tooling/dev-runner` runs on Windows (76/76): the
+`.cmd`-without-shell EINVAL (CVE-2024-27980 class) wrapped once as `cmd.exe /d /s /c` with cross-spawn
+quoting; `isPidAlive` accepts EACCES (a live-but-unqueryable daemon read DEAD, and
+`clearDeadDevProductFiles` deleted `product.json` + `shell.token` under it); the orphan reaper is
+platform-gated with a CIM process pass; watchers carry error handlers (a win32 EPERM on a renamed root was
+an uncaughtException that killed the whole dev loop); `buildChildEnv` unsets case-insensitively (an
+`ELECTRON_RUN_AS_NODE` case-variant could turn Electron into Node).
+
+**WIN-1/2 `85cce04` — one endpoint law in two languages; the native plane binds pipes.** The mgmt /
+meshdata / terminal channels stop being socket PATHS and become ENDPOINTS under one law (WIN-D1): on unix
+the joined LAYOUT path byte-for-byte; on win32 a named pipe `\\.\pipe\vibefield-<scope>-<sock>` where
+`<scope>` is FNV-1a-64 over the canonicalized data root — the flat pipe namespace has no run-directory
+boundary, so the name itself carries what 0700 carried (two users' pairs / two roots never collide;
+UA-D10 holds). The law lives in `contracts/src/endpoints.ts` (dependency-free, ASCII-only case fold), its
+Rust twin is HAND-WRITTEN (`field-native/src/endpoints.rs`), and `fixtures/endpoint.vector.json` pins the
+two to one derivation — including two spellings of one Windows directory that must collapse to one scope.
+The `sun_path` guards become explicit unix law (win32 skips; darwin still refuses — both pinned).
+`field-native`'s four channels bind/dial through one seam (`local_ipc` over `ghosttea::ipc` —
+NamedPipeServer with `first_pipe_instance` squat guard + CurrentUserOnly DACL, both upstream and already
+pinned, ZERO new deps; the client half adds the documented PIPE_BUSY/FILE_NOT_FOUND rotation retry). All
+32 cross-compile errors lived in seven files of field-native's own code. Terminal listener ownership stays
+OURS with no windows fork — binding upstream's own `Listener` made the handoff direct, RESOLVING WIN-D3 by
+construction (no petition). `config.rs` gains the resolution law, the `%APPDATA%\VibeField` default
+(byte-lockstep with fieldd), and `home_dir()`=USERPROFILE (no default lands the pairing secret in the
+CWD). WIN-2b: the logging stderr floor is REAL on windows (CreatePipe + SetStdHandle, divergences named in
+comments — no dup2 atomicity, children inherit a working stderr, CRT-layer writes escape), `pid_is_alive`
+gets an OpenProcess arm (a dead writer's segment lock is reclaimable on windows for the first time), and
+errno matches become `io::ErrorKind` with the real per-platform codes pinned by test. Every windows arm
+was compile-checked against the msvc triple before the box saw it — the probe caught the one would-be
+`-D warnings` red (an unused arg under `cfg(not(unix))`). The MAC gate caught the dual: the same
+supersession change turned unix's `shutdown(SHUT_WR)` half-close into a full close, so `terminal_unit`'s
+adversarial write-after-supersession test (invisible on the box — it is `cfg(unix)`) began racing that
+close; fixed at the test's seam with a `try_send` that tolerates the eviction's BrokenPipe, its real proof
+(nothing pruned) untouched.
+
+**WIN-3/3b/4 `f982d27` — the pair boots honestly, and a stop is a verb, not a signal.** fieldd: the
+`nativeAlive` existsSync gate is GONE (a pipe never exists on disk — every boot was going to spawn a
+second field-native; the connect attempt IS the probe, EBUSY reads alive); the `:` plugin-roots
+writer/reader pair flips to `path.delimiter` together (a `:` join shreds every `C:\…` root); the win32
+data root is `%APPDATA%\VibeField` in byte-shape lockstep across three planes; the EL7 env strip folds
+case on win32; `baseEnv` grows the 13-key win32 allowlist (children can actually start); the executable
+policy refuses every cwd-relative win32 shape incl. current-drive-rooted `\evil.exe`; `.cmd`/`.bat` shims
+(npx/uvx — how MCP servers are configured) spawn through COMSPEC with cross-spawn quoting and NEVER
+`shell:true`; `bin.ts`'s untestable laws moved to `boot-env.ts`. WIN-3b/WIN-D5: SIGTERM never fires on
+win32, so every teardown was a hard TerminateProcess silently skipping the child sweep, run-file cleanup,
+and audit close — `system.shutdown` joins the METHODS registry (native.admin, D32 local-only-forever),
+fieldd wires it to the same graceful path its signal handlers take, and the supervisor ASKS over the
+client it already holds before any signal (dispose reordered: stop before close). WIN-4: the five native
+e2e harnesses stop lying by platform — `.exe` paths, connect-based readiness (including two existsSync
+ASSERTIONS whose "socket audit" a pipe cannot answer), `/bin/sh` spawns become node stand-ins, and the
+migrate ladder gets its first coverage on any platform. Two PRODUCTION durability bugs the box's TS suite
+surfaced: directory-fsync EPERM/EACCES on Windows (`doc-service` had no guard, `artifact-service` caught
+the wrong codes AND reopened its tmp file read-only to fsync it — Windows `FlushFileBuffers` needs write
+access → EACCES), both now win32-guarded matching the audit store's already-correct posture; and
+`service-host` resolving its worker with `new URL(...).pathname` (`/C:/…` on Windows, unloadable — so NO
+plugin service ever activated), now `fileURLToPath`.
+
+**Gate: `pnpm verify` VERBATIM exit 0 on the combined working tree (one process).** On the box
+(WORKSTATION4090): the Rust workspace is green — `cargo check --all-targets` + `clippy -D warnings` clean,
+`cargo test --workspace` exit 0 (60 lib + mesh_bridge 29 + mgmt_server 10 + terminal_mesh 6 + the
+cross-language vectors; the first live named-pipe roundtrips on real Windows ride the suite itself) — and
+the TS planes are green: the full `fieldd` suite 445 passed | 9 skipped (scoped-sequential), `fieldd-client`
+12/12, `field-app` 417. Honestly skipped as tracked debt: the two concurrent-edit doc-sync tests (a slow-box
+stall past a raised 15s timeout — the router is in-process, so transport is proven separately in
+`quic_lane_transport.rs` over real QUIC), the PTY-hosting suites terminal-seam / terminal-kill-matrix
+(WIN-6 ConPTY, mirroring `terminal_unit.rs`'s `cfg(unix)`). The four-process two-fieldds-over-a-real-tailnet
+doc-sync witness remains a COVERAGE gap, not an argument gap — both halves are proven at their own seam.
