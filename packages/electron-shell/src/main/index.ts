@@ -94,6 +94,12 @@ import { createMainWindow, loadRenderer } from "./windows";
 // contains none of that code (ESR-12), and packaging simply omits the file.
 
 const MODE = parseMode(process.argv);
+// Smoke/headless runs have no GPU to talk to — a CI runner or an ssh session on
+// Windows has no window station, and over ssh Chromium's GPU init fails outright.
+// Force software rendering for smoke-like modes (harmless when a GPU is present);
+// this is what lets `pnpm smoke` run over ssh and gate the Windows boot in CI.
+// Must precede `app.whenReady()`, so it lives here at module load.
+if (isSmokeLike(MODE)) app.disableHardwareAcceleration();
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 const PRELOAD_PATH = join(__dirname, "..", "preload", "index.cjs");
 const DESKTOP_BOOT_ID = `desktop-${randomBytes(8).toString("hex")}`;
