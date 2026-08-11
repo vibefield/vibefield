@@ -1790,3 +1790,33 @@ already case-folded in WIN-3. WIN-D3 needed no petition (resolved by constructio
 terminal_unit 14/14 · terminal_mesh 7/7 · terminal-seam 3/3 · terminal-kill-matrix 6/6 — the
 ConPTY kill matrix, the two-plane adoption, the frame-plane I/O, and the EL7 witnesses, all on
 real Windows.
+
+## WIN-5 — the app boots on Windows (the headless smoke gate)
+
+**LANDED 2026-08-11 `51aa3ab`.** `pnpm smoke` — the Electron shell launching, spawning the
+fieldd/field-native pair over named pipes, the renderer loading, all five units up — passes on
+the box (WORKSTATION4090) with ZERO app code: the WIN-2/3/6 daemon+terminal work already carried
+the app onto Windows. This commit only makes the proof reproducible: smoke-like modes call
+`app.disableHardwareAcceleration()` (a CI runner or ssh session on Windows has no window-station
+GPU, and over ssh Chromium's GPU init fails outright), `isSmokeLike`-gated so the production path
+is untouched. Proven both ways — `pnpm smoke` green headless over ssh on the box (no manual flag),
+still green (software-rendered) on mac. `--smoke-godview` additionally boots the FULL deck on
+Windows (renderer canvas2d, swarm monitor 9 agents + physics worker, a LIVE terminal that echoed
+via WIN-6's ConPTY); its only failing assertion is the harness's own `echo $0` unix-ism (cmd.exe
+has no `$0` — the pane genuinely IS cmd.exe, resolved by login-shell.ts's COMSPEC arm), left
+unported as a test curiosity. WIN-5's remainder is visual polish (WIN-D9 chrome, tray `.ico`,
+forced-colors, the "Shift" glyph) — an eyeball, not porting. Gate: `pnpm verify` VERBATIM exit 0;
+box: `pnpm smoke` exit 0 headless over ssh.
+
+## WIN-7 opens — the mesh finds its sidecar on Windows
+
+**LANDED 2026-08-11 `edd5882`.** The truffle sidecar resolver (`services/mesh.rs`) searched only
+the unix names `sidecar-slim`/`truffle-sidecar` in unix dirs — on Windows the binary is
+`sidecar-slim.exe`, so the resolver would never match the file beside `field-native.exe`, and the
+mesh could not start even once a tailnet key were present. `SIDECAR_NAMES` is now cfg-split (`.exe`
+on windows), the search adds `%LOCALAPPDATA%\truffle\bin` and cfg-gates the unix dirs
+(Library / .config / /usr/local/bin). A `#[cfg(windows)]` test witnesses the resolution on the box
+(it finds `sidecar-slim.exe` under a temp `LOCALAPPDATA`). This is WIN-7's autonomous half; the
+live tsnet-vs-host-Tailscale coexistence spike and the Mac↔Windows two-device witness (docs sync,
+remote attach) still need a tailnet auth key (James's). Gate: `pnpm verify` VERBATIM exit 0; box:
+field-native mesh unit tests 3/3 incl. the new witness.
