@@ -3,6 +3,8 @@
 // (regenerate: `pnpm --filter @vibefield/contracts gen:rust`); golden fixtures pin it.
 pub mod config;
 pub mod contracts;
+pub mod endpoints;
+pub mod local_ipc;
 pub mod logging;
 pub mod manager;
 pub mod mgmt;
@@ -14,15 +16,20 @@ pub mod state;
 
 use anyhow::{Context, Result};
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::net::UnixListener;
 
 pub struct RunningDaemon {
-    pub mgmt_socket: PathBuf,
+    /// The mgmt channel's endpoint under the WIN-D1 law: a socket path on
+    /// unix, a `\\.\pipe\` name on windows. A String, not a PathBuf — a pipe
+    /// name is an endpoint, never a filesystem path.
+    pub mgmt_endpoint: String,
     /// D5's byte plane. Exposed for tests and for the C6-3 transport install.
-    pub meshdata_socket: PathBuf,
+    pub meshdata_endpoint: String,
+    /// The 0600 pairing-secret file (WIN-D1: exposed so tests forge a hello MAC
+    /// from the SECRET the daemon actually loaded, rather than reverse-deriving
+    /// its path from the mgmt endpoint — which the socket-vs-pipe split makes
+    /// impossible, a pipe name has no relationship to the data dir on disk).
+    pub pairing_file: std::path::PathBuf,
     pub bridge: services::mesh_bridge::BridgeHandle,
     pub boot_id: String,
     pub state: Arc<state::DaemonState>,
@@ -86,9 +93,19 @@ pub async fn bootstrap_with_logging(
     );
     let run_dir = config.run_dir();
     fs::create_dir_all(&run_dir).with_context(|| format!("create {}", run_dir.display()))?;
-    fs::set_permissions(&run_dir, fs::Permissions::from_mode(0o700))?;
+    // The 0700 run dir is the unix boundary around every socket and run file.
+    // WIN-D4: windows has no mode bits to set — the boundary there is the
+    // profile's inherited ACLs plus the per-pipe CurrentUserOnly DACL that
+    // rides every bind (local_ipc); an explicit directory DACL is recorded
+    // hardening, not silently skipped protection.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&run_dir, fs::Permissions::from_mode(0o700))?;
+    }
 
-    let secret = pairing::load_or_create_secret(&config.pairing_file())?;
+    let pairing_file = config.pairing_file();
+    let secret = pairing::load_or_create_secret(&pairing_file)?;
 
     // units push health transitions (e.g. mesh auth flow) via this channel;
     // a refresh task re-aggregates and publishes on every ping
@@ -146,19 +163,24 @@ pub async fn bootstrap_with_logging(
         }
     });
 
-    let socket_path = config.mgmt_socket();
-    if socket_path.exists() {
-        fs::remove_file(&socket_path)?; // unlink-stale-then-bind
-    }
-    let listener = UnixListener::bind(&socket_path)
-        .with_context(|| format!("bind {}", socket_path.display()))?;
+    let mgmt_endpoint = config
+        .mgmt_endpoint()
+        .context("data root is not valid UTF-8, which the endpoint contract requires")?;
+    let meshdata_endpoint = config
+        .meshdata_endpoint()
+        .context("data root is not valid UTF-8, which the endpoint contract requires")?;
+    // replace-stale-then-bind rides local_ipc (unlink on unix; windows adds the
+    // squat guard + CurrentUserOnly DACL through ghosttea's listener)
+    let listener =
+        local_ipc::bind(&mgmt_endpoint).with_context(|| format!("bind {mgmt_endpoint}"))?;
 
     let server = tokio::spawn(mgmt::serve(listener, state.clone()));
 
     Ok(RunningDaemon {
-        meshdata_socket: config.meshdata_socket(),
+        meshdata_endpoint,
+        pairing_file,
         bridge: bridge_handle,
-        mgmt_socket: socket_path,
+        mgmt_endpoint,
         boot_id,
         state,
         server,

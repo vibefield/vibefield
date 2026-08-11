@@ -155,6 +155,48 @@ impl NativeConfig {
     pub fn meshdata_socket(&self) -> PathBuf {
         self.join_layout(crate::registries::layout::MESHDATA_SOCKET)
     }
+
+    /// WIN-D1 — the endpoint-resolution law. On unix an endpoint IS the joined
+    /// LAYOUT path (byte-for-byte the pre-Windows behavior); on win32 it is a
+    /// named pipe carrying a scope hash of the data root (crate::endpoints,
+    /// pinned by contracts' endpoint vector), because the flat pipe namespace
+    /// has no run-directory boundary. `None` = the root cannot be spelled as
+    /// the UTF-8 the contract requires — callers degrade honestly (the terminal
+    /// unit's Endpoints comment states the same law for its pair).
+    pub fn mgmt_endpoint(&self) -> Option<String> {
+        self.local_endpoint(
+            crate::registries::sockets::MGMT,
+            crate::registries::layout::MGMT_SOCKET,
+        )
+    }
+    pub fn meshdata_endpoint(&self) -> Option<String> {
+        self.local_endpoint(
+            crate::registries::sockets::MESHDATA,
+            crate::registries::layout::MESHDATA_SOCKET,
+        )
+    }
+    pub fn terminal_control_endpoint(&self) -> Option<String> {
+        self.local_endpoint(
+            crate::registries::sockets::TERMINAL_CONTROL,
+            crate::registries::layout::TERMINAL_CONTROL_SOCKET,
+        )
+    }
+    pub fn terminal_frame_endpoint(&self) -> Option<String> {
+        self.local_endpoint(
+            crate::registries::sockets::TERMINAL_FRAME,
+            crate::registries::layout::TERMINAL_FRAME_SOCKET,
+        )
+    }
+
+    #[cfg(windows)]
+    fn local_endpoint(&self, socket_file: &str, _segments: &[&str]) -> Option<String> {
+        let root = self.data_dir.to_str()?;
+        Some(crate::endpoints::pipe_endpoint_for(root, socket_file))
+    }
+    #[cfg(not(windows))]
+    fn local_endpoint(&self, _socket_file: &str, segments: &[&str]) -> Option<String> {
+        self.join_layout(segments).to_str().map(str::to_owned)
+    }
     /// truffle node state (device identity + tsnet keys) — mesh identity lives
     /// in the longer-lived plane and survives fieldd restarts (design-02 §2.4).
     pub fn mesh_state_dir(&self) -> PathBuf {
@@ -170,17 +212,36 @@ impl NativeConfig {
     }
 }
 
-fn default_data_dir() -> PathBuf {
-    let home = std::env::var_os("HOME")
+/// `HOME` is a unix fact — Windows has `USERPROFILE`. One resolver so no
+/// default below quietly lands on `"."` (a CWD-relative data root would carry
+/// the pairing secret and every endpoint to wherever the process was launched).
+fn home_dir() -> PathBuf {
+    #[cfg(windows)]
+    let var = "USERPROFILE";
+    #[cfg(not(windows))]
+    let var = "HOME";
+    std::env::var_os(var)
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+fn default_data_dir() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
-        home.join("Library/Application Support/VibeField")
+        home_dir().join("Library/Application Support/VibeField")
     }
-    #[cfg(not(target_os = "macos"))]
+    // %APPDATA% (roaming), in lockstep with fieldd's bin.ts default — the two
+    // planes must hash ONE root string into ONE pipe scope (WIN-D1).
+    #[cfg(target_os = "windows")]
     {
-        home.join(".local/share/VibeField")
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home_dir().join("AppData/Roaming"))
+            .join("VibeField")
+    }
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    {
+        home_dir().join(".local/share/VibeField")
     }
 }
 
@@ -193,9 +254,7 @@ fn resolve_log_root() -> anyhow::Result<PathBuf> {
         }
     }
 
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
+    let home = home_dir();
     #[cfg(target_os = "macos")]
     {
         Ok(home.join("Library/Logs/VibeField"))

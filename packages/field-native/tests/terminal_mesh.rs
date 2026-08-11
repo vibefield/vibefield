@@ -13,16 +13,27 @@
 
 use field_native::config::{NativeConfig, TERMINAL_MIRROR_WRITE_ENV};
 use field_native::registries;
+// only the unix-only session-spawning test dials it (WIN-6)
+#[cfg(unix)]
 use field_native::services::terminal_client::ControlClient;
 use field_native::services::terminal_mesh::{self, MeshPlan};
 use field_native::{bootstrap, RunningDaemon};
 use serde_json::{json, Value};
-use std::path::Path;
 use std::time::{Duration, Instant};
 
 /// macOS caps a Unix socket path at ~104 bytes and these sockets sit three
 /// levels under the data dir, so tests root at /tmp (the `sun_path` law from
 /// tests/terminal_unit.rs, which this file follows rather than rediscovers).
+/// WIN-D1: named pipes carry no such budget, so win32 uses the platform temp
+/// dir — and `/tmp` does not exist there (it resolves to a missing `C:\tmp`).
+#[cfg(windows)]
+fn short_tempdir() -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix("vfgt4")
+        .tempdir()
+        .expect("tempdir")
+}
+#[cfg(unix)]
 fn short_tempdir() -> tempfile::TempDir {
     let dir = tempfile::Builder::new()
         .prefix("vfgt4")
@@ -161,6 +172,11 @@ async fn the_default_floor_says_nothing_about_a_mesh() {
 /// The floor SERVES — PTYs are unaffected — and the mesh reports off in the
 /// gateway's own words. The elapsed assertion is the point: a run that spent
 /// the attach budget would mean the gateway's surrender went unnoticed.
+// unix-only: this one proves the degraded floor STILL SERVES a session, so it
+// spawns a /bin/cat PTY tenant — Windows terminal hosting (ConPTY) is the WIN-6
+// rung (thinking-windows-port §6). The mesh-degrades-not-the-floor HEALTH half
+// runs on both platforms via the other two tests here.
+#[cfg(unix)]
 #[tokio::test]
 async fn terminal_mesh_without_a_gateway_degrades_the_mesh_and_not_the_floor() {
     let dir = short_tempdir();
@@ -198,7 +214,7 @@ async fn terminal_mesh_without_a_gateway_degrades_the_mesh_and_not_the_floor() {
     // And the floor is a floor: a real PTY still starts on it.
     let endpoints = daemon.state.terminal.get().expect("terminal endpoints");
     let (client, _events) =
-        ControlClient::connect(Path::new(&endpoints.control_socket), &endpoints.auth_token)
+        ControlClient::connect(&endpoints.control_socket, &endpoints.auth_token)
             .await
             .expect("dial the control socket");
     let session = client

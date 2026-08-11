@@ -1123,6 +1123,25 @@ mod tests {
     //! integration harness.
     use super::*;
 
+    // Serve dir paths are validated with `Path::is_absolute`, which is
+    // platform-aware: `/srv/pub` is absolute on unix but NOT on Windows (no
+    // drive letter). The fixtures use a per-platform absolute dir so the LAW
+    // under test — an absolute dir builds a static route — is identical on both.
+    // Route PREFIXES and URL fallbacks (`/index.html`) are URL paths, not
+    // filesystem paths, and stay literal.
+    #[cfg(unix)]
+    const PUB_DIR: &str = "/srv/pub";
+    #[cfg(windows)]
+    const PUB_DIR: &str = r"C:\srv\pub";
+    #[cfg(unix)]
+    const PREVIEW_1_DIR: &str = "/var/lib/vibefield/previews/01";
+    #[cfg(windows)]
+    const PREVIEW_1_DIR: &str = r"C:\ProgramData\vibefield\previews\01";
+    #[cfg(unix)]
+    const PREVIEW_2_DIR: &str = "/var/lib/vibefield/previews/02";
+    #[cfg(windows)]
+    const PREVIEW_2_DIR: &str = r"C:\ProgramData\vibefield\previews\02";
+
     #[test]
     fn public_store_slice_limits_are_enforced_before_management_projection() {
         let artifact_ok = json!({"v": 1, "artifacts": []});
@@ -1212,7 +1231,7 @@ mod tests {
 
     #[test]
     fn dir_with_secret_is_rejected() {
-        let target = json!({"kind": "dir", "path": "/srv/pub"});
+        let target = json!({"kind": "dir", "path": PUB_DIR});
         let err = build_serve_config(ServeConfigInput {
             path_secret: Some("nope"),
             ..serve_input("static", &target)
@@ -1226,7 +1245,7 @@ mod tests {
 
     #[test]
     fn dir_plain_builds_static_route() {
-        let target = json!({"kind": "dir", "path": "/srv/pub"});
+        let target = json!({"kind": "dir", "path": PUB_DIR});
         let cfg = build_serve_config(ServeConfigInput {
             allow: vec!["*@corp.com".into()],
             ..serve_input("static", &target)
@@ -1234,7 +1253,7 @@ mod tests {
         .expect("dir config builds");
         assert_eq!(cfg.routes.len(), 1);
         assert_eq!(cfg.routes[0].prefix, "/");
-        assert_eq!(cfg.routes[0].dir.as_deref(), Some("/srv/pub"));
+        assert_eq!(cfg.routes[0].dir.as_deref(), Some(PUB_DIR));
         assert_eq!(cfg.allow, vec!["*@corp.com".to_string()]);
         assert_eq!(cfg.listen_port, 0);
     }
@@ -1353,7 +1372,7 @@ mod tests {
         let cfg = build_serve_config(ServeConfigInput {
             name: "artifact:01ARZ3NDEKTSV4RRFFQ69G5FAV",
             listen_port: Some(12_345),
-            preview_dir: Some("/var/lib/vibefield/previews/01"),
+            preview_dir: Some(PREVIEW_1_DIR),
             allow: vec!["*@corp.com".into()],
             tls: Some(true),
             ..serve_input("artifact-01-fingerprint", &target)
@@ -1365,10 +1384,7 @@ mod tests {
         assert!(cfg.tls);
         assert_eq!(cfg.routes.len(), 2);
         assert_eq!(cfg.routes[0].prefix, "/.vibefield/preview");
-        assert_eq!(
-            cfg.routes[0].dir.as_deref(),
-            Some("/var/lib/vibefield/previews/01")
-        );
+        assert_eq!(cfg.routes[0].dir.as_deref(), Some(PREVIEW_1_DIR));
         assert_eq!(cfg.routes[1].prefix, "/");
         assert_eq!(
             cfg.routes[1].target_url.as_deref(),
@@ -1379,18 +1395,18 @@ mod tests {
 
     #[test]
     fn artifact_folder_uses_stable_port_and_optional_spa_fallback() {
-        let target = json!({"kind": "dir", "path": "/srv/pub", "fallback": "/index.html"});
+        let target = json!({"kind": "dir", "path": PUB_DIR, "fallback": "/index.html"});
         let cfg = build_serve_config(ServeConfigInput {
             name: "artifact:01ARZ3NDEKTSV4RRFFQ69G5FAW",
             listen_port: Some(19_999),
-            preview_dir: Some("/var/lib/vibefield/previews/02"),
+            preview_dir: Some(PREVIEW_2_DIR),
             tls: Some(true),
             ..serve_input("artifact-folder-fingerprint", &target)
         })
         .expect("AH folder config builds");
         assert_eq!(cfg.listen_port, 19_999);
         assert_eq!(cfg.routes.len(), 2);
-        assert_eq!(cfg.routes[1].dir.as_deref(), Some("/srv/pub"));
+        assert_eq!(cfg.routes[1].dir.as_deref(), Some(PUB_DIR));
         assert_eq!(cfg.routes[1].fallback.as_deref(), Some("/index.html"));
     }
 }

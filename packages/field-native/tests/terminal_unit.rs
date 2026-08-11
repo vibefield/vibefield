@@ -10,6 +10,16 @@
 //! and inventory, and ghosttea's own control socket (through field-native's
 //! self-client) for session lifecycle.
 
+// unix-only for now, DELIBERATELY (the native_logging.rs precedent — the inner
+// attribute must precede every item, so it leads the file): this is the PTY
+// kill matrix — /bin/cat tenants, libc::kill liveness probes, socket 0600 mode
+// assertions, /tmp sun_path roots. Its windows twin is real witness work, not a
+// port: ConPTY tenants (cmd.exe), OpenProcess liveness, DACL assertions in
+// place of modes — booked with the WIN track's terminal rung
+// (thinking-windows-port §6 WIN-6), where the kill matrix must run on the box
+// before terminal hosting is claimed there.
+#![cfg(unix)]
+
 use field_native::services::terminal_client::ControlClient;
 use field_native::{bootstrap, config::NativeConfig, pairing, RunningDaemon};
 use serde_json::{json, Value};
@@ -77,7 +87,7 @@ struct MgmtClient {
 
 impl MgmtClient {
     async fn connect(daemon: &RunningDaemon) -> Self {
-        let stream = UnixStream::connect(&daemon.mgmt_socket)
+        let stream = UnixStream::connect(&daemon.mgmt_endpoint)
             .await
             .expect("connect mgmt");
         let (r, w) = stream.into_split();
@@ -98,6 +108,17 @@ impl MgmtClient {
         let mut line = v.to_string();
         line.push('\n');
         self.writer.write_all(line.as_bytes()).await.expect("write");
+    }
+
+    /// Like `send`, but the peer may have already closed this connection — a
+    /// superseded client's socket is fully torn down (mgmt_server's
+    /// `new_hello_supersedes_old_client` pins the EOF), so a write here races that
+    /// close and may hit a dead socket (BrokenPipe). That is an honest observable
+    /// of the eviction, not a failure: the write simply cannot take effect.
+    async fn try_send(&mut self, v: Value) {
+        let mut line = v.to_string();
+        line.push('\n');
+        let _ = self.writer.write_all(line.as_bytes()).await;
     }
 
     async fn recv(&mut self) -> Value {
@@ -265,14 +286,14 @@ impl MgmtClient {
 }
 
 fn read_secret(daemon: &RunningDaemon) -> Vec<u8> {
-    let path = daemon
-        .mgmt_socket
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("pairing");
-    hex::decode(std::fs::read_to_string(path).unwrap().trim()).unwrap()
+    // the file the daemon loaded (WIN-D1: uniform with the other harnesses,
+    // though this whole file is unix-only until the WIN-6 ConPTY rung)
+    hex::decode(
+        std::fs::read_to_string(&daemon.pairing_file)
+            .unwrap()
+            .trim(),
+    )
+    .unwrap()
 }
 
 fn terminals(payload: &Value) -> &Vec<Value> {
@@ -322,7 +343,7 @@ async fn control(ack: &Value) -> (ControlClient, tokio::sync::mpsc::UnboundedRec
         .as_str()
         .expect("controlSocket");
     let token = ack["terminal"]["authToken"].as_str().expect("authToken");
-    ControlClient::connect(Path::new(socket), token)
+    ControlClient::connect(socket, token)
         .await
         .expect("dial terminal control socket")
 }
@@ -1185,7 +1206,7 @@ async fn a_superseded_client_may_not_prune_the_successors_sessions() {
     // known to the assertion below.
     let stale_id = 90;
     stale
-        .send(
+        .try_send(
             json!({"jsonrpc":"2.0","id":stale_id,"method":"native.lifecycle.desired.set","params":{
                 "generation": 7,
                 "terminals": [],
@@ -1194,9 +1215,10 @@ async fn a_superseded_client_may_not_prune_the_successors_sessions() {
             }}),
         )
         .await;
-    // The refusal is generated, but supersession already shut this connection's
-    // write half down, so it cannot reach the wire: the honest observables are a
-    // closed socket and two PTYs that are still running.
+    // The refusal is generated, but supersession has already CLOSED this
+    // connection, so the prune cannot take effect: the write races that close and
+    // may reach a dead socket (try_send tolerates the BrokenPipe). The honest
+    // observables are a closed socket and two PTYs that are still running.
     stale
         .await_close_without_answering(stale_id, Duration::from_secs(5))
         .await;

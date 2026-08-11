@@ -111,10 +111,9 @@ use ghosttea::{
     TextEngine,
 };
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tokio::net::UnixListener;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
 
@@ -338,12 +337,17 @@ impl TerminalUnit {
         let mesh = (!plan.is_off()).then_some(mesh);
         let run_dir = config.run_dir();
         let config_file = config.terminal_config_file();
-        let endpoints = endpoint_paths(&run_dir).map(|(control, frame)| Endpoints {
-            control,
-            frame,
-            config: config_file,
-            token: mint_token(),
-        });
+        // WIN-D1: endpoints come from the one resolution law in NativeConfig —
+        // socket paths under the run dir on unix, scoped pipe names on win32.
+        let endpoints = config
+            .terminal_control_endpoint()
+            .zip(config.terminal_frame_endpoint())
+            .map(|(control, frame)| Endpoints {
+                control,
+                frame,
+                config: config_file,
+                token: mint_token(),
+            });
         let detail = endpoints.is_none().then(|| {
             format!(
                 "run directory is not valid UTF-8, which the endpoint contract requires: {}",
@@ -395,16 +399,22 @@ impl NativeService for TerminalUnit {
             return Ok(()); // already degraded with the reason; nothing to bind
         };
 
-        // A Unix socket outlives the process that bound it, so a host that
-        // restarts replaces its own endpoints (ghosttea README, "Embedded
+        // An endpoint outlives the process that bound it on unix, so a host
+        // that restarts replaces its own endpoints (ghosttea README, "Embedded
         // service mode"). Binding is deliberately OURS, not `run()`'s: this
-        // daemon owns the directory, the permissions, and the start order.
+        // daemon owns the endpoints and the start order — and ghosttea's
+        // ipc::Listener does the platform work either way (unix socket, or a
+        // windows pipe with the squat guard + CurrentUserOnly DACL), which is
+        // what lets ownership stay here without a windows fork (WIN-D3).
         ipc::remove_stale_endpoint(&endpoints.control)?;
         ipc::remove_stale_endpoint(&endpoints.frame)?;
-        let control = UnixListener::bind(&endpoints.control)?;
-        let frames = UnixListener::bind(&endpoints.frame)?;
-        set_private_socket_permissions(&endpoints.control)?;
-        set_private_socket_permissions(&endpoints.frame)?;
+        let control = ipc::Listener::bind(&endpoints.control)?;
+        let frames = ipc::Listener::bind(&endpoints.frame)?;
+        #[cfg(unix)]
+        {
+            set_private_socket_permissions(&endpoints.control)?;
+            set_private_socket_permissions(&endpoints.frame)?;
+        }
 
         self.shared
             .set(UnitState::Starting, Some("binding terminal service".into()));
@@ -484,8 +494,8 @@ impl NativeService for TerminalUnit {
 async fn serve(
     shared: Arc<Shared>,
     endpoints: Endpoints,
-    control: UnixListener,
-    frames: UnixListener,
+    control: ipc::Listener,
+    frames: ipc::Listener,
     plan: MeshPlan,
     mesh: Option<MeshHandle>,
 ) {
@@ -616,7 +626,7 @@ async fn serve(
     // `shutdown` — the first non-failure way serving ends. The handle is
     // deposited BEFORE the await so `stop` can always reach a serving plane.
     let (handle, serving_future) =
-        service.serve_managed(TerminalServiceListeners::new(control.into(), frames.into()));
+        service.serve_managed(TerminalServiceListeners::new(control, frames));
     *shared.drain.lock().unwrap() = Some(handle);
     let outcome = serving_future.await;
     shared.serving.send_replace(false);
@@ -670,7 +680,7 @@ pub fn install_inventory(
             handle.wait_until_serving().await;
             // Dialing here rather than inside the pump is what lets a failed
             // DIAL be told apart from a pump that ran and then broke.
-            match ControlClient::connect(Path::new(&endpoints.control), &endpoints.token).await {
+            match ControlClient::connect(&endpoints.control, &endpoints.token).await {
                 Ok((client, events)) => {
                     match pump_inventory(Arc::new(client), events, &state, &mut watch).await {
                         Ok(()) => watch.disconnected(),
@@ -1109,26 +1119,15 @@ fn inventory_value(terminals: &[ObservedTerminal]) -> Value {
     serde_json::to_value(terminals).unwrap_or(Value::Null)
 }
 
-/// Socket names come from the generated registries (NF-D9); paths are stable
-/// across restarts, which is what lets ghosttea clients read endpoints once
-/// (external-mode law).
-fn endpoint_paths(run_dir: &Path) -> Option<(String, String)> {
-    let control = run_dir.join(registries::sockets::TERMINAL_CONTROL);
-    let frame = run_dir.join(registries::sockets::TERMINAL_FRAME);
-    Some((path_string(&control)?, path_string(&frame)?))
-}
-
-fn path_string(path: &Path) -> Option<String> {
-    path.to_str().map(str::to_owned)
-}
-
 fn mint_token() -> String {
     hex::encode(rand::random::<[u8; 32]>())
 }
 
 /// The 0700 run directory is the real boundary, but a socket the owning user
 /// alone may open costs one syscall and does not rely on the directory staying
-/// that way.
+/// that way. Unix-only by nature: the windows pipes get their CurrentUserOnly
+/// DACL at bind, inside ghosttea's listener (WIN-D4).
+#[cfg(unix)]
 fn set_private_socket_permissions(path: &str) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(PathBuf::from(path), std::fs::Permissions::from_mode(0o600))

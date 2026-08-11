@@ -1,23 +1,26 @@
 //! Kill-matrix seeds for the mgmt channel (design-02 §7): pairing, hello gate,
 //! single-client SUPERSEDED takeover, generation guard, subscriptions, honest stubs.
+use field_native::local_ipc;
 use field_native::{bootstrap, config::NativeConfig, pairing, RunningDaemon};
 use serde_json::{json, Value};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixStream;
 use tokio::time::timeout;
 
+// WIN-D1: the client dials through local_ipc (socket path or pipe name — the
+// endpoint string decides) and splits generically, because a named pipe has no
+// owned split. This is the same shape production dialers took.
 struct TestClient {
-    reader: tokio::io::Lines<BufReader<tokio::net::unix::OwnedReadHalf>>,
-    writer: tokio::net::unix::OwnedWriteHalf,
+    reader: tokio::io::Lines<BufReader<tokio::io::ReadHalf<local_ipc::ClientStream>>>,
+    writer: tokio::io::WriteHalf<local_ipc::ClientStream>,
 }
 
 impl TestClient {
     async fn connect(daemon: &RunningDaemon) -> Self {
-        let stream = UnixStream::connect(&daemon.mgmt_socket)
+        let stream = local_ipc::connect(&daemon.mgmt_endpoint)
             .await
             .expect("connect mgmt");
-        let (r, w) = stream.into_split();
+        let (r, w) = tokio::io::split(stream);
         Self {
             reader: BufReader::new(r).lines(),
             writer: w,
@@ -59,15 +62,15 @@ impl TestClient {
 }
 
 fn read_secret(daemon: &RunningDaemon) -> Vec<u8> {
-    // tests derive macs the way fieldd will: from the shared 0600 pairing file
-    let path = daemon
-        .mgmt_socket
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("pairing");
-    hex::decode(std::fs::read_to_string(path).unwrap().trim()).unwrap()
+    // tests derive macs the way fieldd will: from the shared 0600 pairing file.
+    // WIN-D1: from the path the daemon exposes, not walked up from the endpoint
+    // — on win32 the endpoint is a pipe name with no parent on disk.
+    hex::decode(
+        std::fs::read_to_string(&daemon.pairing_file)
+            .unwrap()
+            .trim(),
+    )
+    .unwrap()
 }
 
 async fn boot() -> (tempfile::TempDir, RunningDaemon) {

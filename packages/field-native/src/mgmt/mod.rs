@@ -19,16 +19,15 @@ mod diagnostics;
 mod mesh;
 
 use crate::contracts::{DesiredState, Hello};
+use crate::local_ipc;
 use crate::pairing;
 use crate::services::terminal;
 use crate::services::terminal_client::ControlClient;
 use crate::state::{ClientHandle, DaemonState, MgmtOutbox, OutMsg, MGMT_MAX_FRAME_BYTES};
 use serde_json::{json, Value};
 use std::collections::HashSet;
-use std::path::Path;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::{UnixListener, UnixStream};
 
 const CONTRACTS_VERSION: &str = "0.1.0";
 
@@ -83,10 +82,10 @@ fn classify_prune_error(message: &str) -> PruneErrorKind {
     }
 }
 
-pub async fn serve(listener: UnixListener, state: Arc<DaemonState>) {
+pub async fn serve(mut listener: local_ipc::Listener, state: Arc<DaemonState>) {
     loop {
         match listener.accept().await {
-            Ok((stream, _)) => {
+            Ok(stream) => {
                 let state = state.clone();
                 tokio::spawn(async move { handle_conn(stream, state).await });
             }
@@ -103,10 +102,15 @@ pub async fn serve(listener: UnixListener, state: Arc<DaemonState>) {
     }
 }
 
-async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
+async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
     let conn_id = state.conn_id();
-    let (read_half, mut write_half) = stream.into_split();
+    // io::split, not into_split: a NamedPipeServer has no owned split, and the
+    // generic halves serve both transports identically.
+    let (read_half, mut write_half) = tokio::io::split(stream);
     let (tx, mut rx, mut close_rx) = MgmtOutbox::channel();
+    // A second view of the close watch for the reader (below). The writer takes
+    // the original; both halves must stop for the pipe handle to close (WIN-D1).
+    let mut reader_close = close_rx.clone();
 
     // single writer task; Close tears the socket down
     let writer_outbox = tx.clone();
@@ -138,6 +142,10 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
             }
         }
         let _ = write_half.shutdown().await;
+        // The reader may still be parked on a read (a supersession closes this
+        // connection from another task's hello). Wake it so its half drops too
+        // and the stream closes — the client's EOF depends on it (WIN-D1).
+        writer_outbox.signal_closed();
     });
 
     let mut reader = BufReader::new(read_half);
@@ -145,10 +153,17 @@ async fn handle_conn(stream: UnixStream, state: Arc<DaemonState>) {
 
     loop {
         let mut raw = Vec::new();
-        let read = (&mut reader)
-            .take((MGMT_MAX_FRAME_BYTES + 2) as u64)
-            .read_until(b'\n', &mut raw)
-            .await;
+        // Bound to a local so the Take adapter outlives the select's read future
+        // (a temporary would be dropped while the future still borrows it).
+        let mut limited = (&mut reader).take((MGMT_MAX_FRAME_BYTES + 2) as u64);
+        let read = tokio::select! {
+            // Writer flipped the close watch after draining and shutting down.
+            // Stop reading so both io::split halves drop and the stream closes;
+            // on unix shutdown() already FINed the peer, so this only makes the
+            // teardown prompt there. Either changed() outcome means "closing".
+            _ = reader_close.changed() => break,
+            read = limited.read_until(b'\n', &mut raw) => read,
+        };
         let Ok(bytes) = read else { break };
         if bytes == 0 {
             break;
@@ -577,9 +592,7 @@ async fn handle_desired_set(
                 })),
             );
         };
-        match ControlClient::connect(Path::new(&endpoints.control_socket), &endpoints.auth_token)
-            .await
-        {
+        match ControlClient::connect(&endpoints.control_socket, &endpoints.auth_token).await {
             Ok(pair) => Some(pair),
             Err(error) => {
                 tracing::warn!(

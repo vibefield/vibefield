@@ -59,7 +59,6 @@ use ghosttea::{
 };
 use ghosttea_truffle::{MeshRuntime, TruffleTerminalMesh};
 use serde_json::json;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::timeout;
@@ -342,7 +341,7 @@ async fn a_peer_sees_and_attaches_and_only_the_capability_holder_may_write() {
     let (_drain, serving) = service.serve_managed(listeners);
     let _host = tokio::spawn(serving);
 
-    let (client, _events) = ControlClient::connect(Path::new(&control), &token)
+    let (client, _events) = ControlClient::connect(&control, &token)
         .await
         .expect("dial the host control socket");
     let session = client

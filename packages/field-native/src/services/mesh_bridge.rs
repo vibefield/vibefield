@@ -21,14 +21,13 @@
 
 use crate::config::NativeConfig;
 use crate::contracts::{UnitHealth, UnitState};
+use crate::local_ipc;
 use crate::manager::NativeService;
 use crate::pairing;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
@@ -474,7 +473,9 @@ impl BridgeHandle {
 }
 
 pub struct MeshBridge {
-    socket_path: PathBuf,
+    /// WIN-D1 endpoint (path on unix, pipe name on win32); `None` = the data
+    /// root is not the UTF-8 the contract requires, reported at start.
+    endpoint: Option<String>,
     secret: [u8; 32],
     shared: Arc<Shared>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -483,7 +484,7 @@ pub struct MeshBridge {
 impl MeshBridge {
     pub fn new(config: &NativeConfig, secret: [u8; 32], ping: UnboundedSender<()>) -> Self {
         Self {
-            socket_path: config.meshdata_socket(),
+            endpoint: config.meshdata_endpoint(),
             secret,
             shared: Arc::new(Shared {
                 health: Mutex::new(UnitHealth {
@@ -522,19 +523,20 @@ impl NativeService for MeshBridge {
     }
 
     async fn start(&self) -> anyhow::Result<()> {
-        // unlink-stale-then-bind: the path is stable across fieldd restarts
-        // (external-mode law), so a leftover node from a killed daemon must not
-        // make a fresh one unbindable.
-        if self.socket_path.exists() {
-            std::fs::remove_file(&self.socket_path)?;
-        }
-        let listener = UnixListener::bind(&self.socket_path)?;
+        let Some(endpoint) = self.endpoint.clone() else {
+            anyhow::bail!("data root is not valid UTF-8, which the endpoint contract requires");
+        };
+        // replace-stale-then-bind: the endpoint is stable across fieldd
+        // restarts (external-mode law), so a leftover node from a killed daemon
+        // must not make a fresh one unbindable. local_ipc unlinks on unix and
+        // adds the squat guard + CurrentUserOnly DACL on windows.
+        let mut listener = local_ipc::bind(&endpoint)?;
         let shared = self.shared.clone();
         let secret = self.secret;
         let handle = tokio::spawn(async move {
             loop {
                 match listener.accept().await {
-                    Ok((stream, _)) => {
+                    Ok(stream) => {
                         let shared = shared.clone();
                         tokio::spawn(async move { serve_client(stream, shared, secret).await });
                     }
@@ -566,7 +568,9 @@ impl NativeService for MeshBridge {
         }
         *self.shared.out.lock().unwrap() = None;
         self.shared.lanes.lock().unwrap().clear();
-        let _ = std::fs::remove_file(&self.socket_path);
+        if let Some(endpoint) = &self.endpoint {
+            let _ = local_ipc::remove_stale_endpoint(endpoint);
+        }
         Ok(())
     }
 }
@@ -574,9 +578,10 @@ impl NativeService for MeshBridge {
 /// One fieldd connection. Single client at a time by design (one product plane
 /// per device); a new authenticated hello supersedes the old connection the way
 /// the mgmt channel does.
-async fn serve_client(stream: UnixStream, shared: Arc<Shared>, secret: [u8; 32]) {
+async fn serve_client(stream: local_ipc::Stream, shared: Arc<Shared>, secret: [u8; 32]) {
     let conn_id = shared.next_conn_id.fetch_add(1, Ordering::Relaxed);
-    let (mut rd, mut wr) = stream.into_split();
+    // io::split, not into_split: NamedPipeServer has no owned split.
+    let (mut rd, mut wr) = tokio::io::split(stream);
     let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
     let writer = tokio::spawn(async move {
         while let Some(frame) = rx.recv().await {

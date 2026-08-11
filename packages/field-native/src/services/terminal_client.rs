@@ -20,16 +20,15 @@
 //! service deliberately writes no response to a request that uses it
 //! (service.rs:1593-1620) — so this client's ids start at 1.
 
+use crate::local_ipc;
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::UnixStream;
 use tokio::sync::{mpsc, oneshot};
 
 /// Control protocol: ghosttea 0.9.2 serves 1.13. This client announces **1.9** —
@@ -106,7 +105,7 @@ pub struct SessionSummary {
 /// with it. Events and responses share one socket, so they are demultiplexed by
 /// a single reader task; the event half is handed to the caller as a channel.
 pub struct ControlClient {
-    writer: tokio::sync::Mutex<tokio::io::WriteHalf<UnixStream>>,
+    writer: tokio::sync::Mutex<tokio::io::WriteHalf<local_ipc::ClientStream>>,
     pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Value>>>>,
     next_request_id: AtomicU64,
     reader: tokio::task::JoinHandle<()>,
@@ -135,10 +134,10 @@ impl ControlClient {
     /// slow call. The budget is the request budget: the handshake is one write
     /// and two round trips into a process on the same machine.
     pub async fn connect(
-        control_socket: &Path,
+        endpoint: &str,
         token: &str,
     ) -> Result<(Self, mpsc::UnboundedReceiver<Value>)> {
-        match tokio::time::timeout(REQUEST_TIMEOUT, Self::handshake(control_socket, token)).await {
+        match tokio::time::timeout(REQUEST_TIMEOUT, Self::handshake(endpoint, token)).await {
             Ok(result) => result,
             // Dropping the handshake future closes the half-open socket and
             // aborts any reader task it had already spawned.
@@ -147,12 +146,15 @@ impl ControlClient {
     }
 
     async fn handshake(
-        control_socket: &Path,
+        endpoint: &str,
         token: &str,
     ) -> Result<(Self, mpsc::UnboundedReceiver<Value>)> {
-        let mut stream = UnixStream::connect(control_socket)
+        // WIN-D1: the endpoint string is a socket path or a pipe name; the dial
+        // (and the windows busy/rotation retry) lives in local_ipc, bounded by
+        // the REQUEST_TIMEOUT wrapping this whole handshake.
+        let mut stream = local_ipc::connect(endpoint)
             .await
-            .with_context(|| format!("dial {}", control_socket.display()))?;
+            .with_context(|| format!("dial {endpoint}"))?;
 
         // The bare token, then the service's `ok`. Never logged, on any path.
         write_packet(&mut stream, token.as_bytes()).await?;
@@ -306,7 +308,7 @@ impl ControlClient {
 /// no waiter is left for (a timed-out caller has already given up on it) and an
 /// event no receiver is left for (see below).
 async fn read_loop(
-    read_half: tokio::io::ReadHalf<UnixStream>,
+    read_half: tokio::io::ReadHalf<local_ipc::ClientStream>,
     pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Value>>>>,
     events: mpsc::UnboundedSender<Value>,
 ) {
@@ -360,20 +362,20 @@ async fn write_packet<W: AsyncWrite + Unpin>(stream: &mut W, bytes: &[u8]) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::net::UnixListener;
 
     /// A control service that accepts any token and answers `hello` with the
     /// version it was told to claim. Exactly as much of the protocol as the
     /// handshake reads and not a line more — the point is to be a SERVICE the
     /// real client dials, not a stub of the client's own expectations.
     fn fake_service(
-        socket: &Path,
+        endpoint: &str,
         protocol_major: u16,
         protocol_minor: u16,
     ) -> tokio::task::JoinHandle<()> {
-        let listener = UnixListener::bind(socket).expect("bind the fake control socket");
+        let mut listener =
+            local_ipc::Listener::bind(endpoint).expect("bind the fake control endpoint");
         tokio::spawn(async move {
-            let Ok((mut stream, _)) = listener.accept().await else {
+            let Ok(mut stream) = listener.accept().await else {
                 return;
             };
             // The bare token, then `ok` — never inspected, this is not the
@@ -405,16 +407,41 @@ mod tests {
         })
     }
 
-    /// macOS caps a Unix socket path at ~104 bytes, so tests root at /tmp (the
-    /// `sun_path` law from tests/terminal_unit.rs).
-    async fn handshake_with(protocol_major: u16, protocol_minor: u16) -> Result<()> {
+    /// A per-test endpoint under the WIN-D1 law's two shapes. macOS caps a Unix
+    /// socket path at ~104 bytes, so unix roots at /tmp (the `sun_path` law
+    /// from tests/terminal_unit.rs); pipe names share one machine-wide
+    /// namespace, so win32 uniqueness comes from the name itself.
+    #[cfg(unix)]
+    fn unique_endpoint() -> (String, Option<tempfile::TempDir>) {
         let dir = tempfile::Builder::new()
             .prefix("vfhello")
             .tempdir_in("/tmp")
             .expect("tempdir under /tmp");
-        let socket = dir.path().join("termctl.sock");
-        let _service = fake_service(&socket, protocol_major, protocol_minor);
-        ControlClient::connect(&socket, "a-token").await.map(|_| ())
+        let socket = dir
+            .path()
+            .join("termctl.sock")
+            .to_string_lossy()
+            .into_owned();
+        (socket, Some(dir))
+    }
+    #[cfg(windows)]
+    fn unique_endpoint() -> (String, Option<tempfile::TempDir>) {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let name = format!(
+            r"\\.\pipe\vf-test-hello-{}-{}",
+            std::process::id(),
+            SEQ.fetch_add(1, Ordering::Relaxed)
+        );
+        (name, None)
+    }
+
+    async fn handshake_with(protocol_major: u16, protocol_minor: u16) -> Result<()> {
+        let (endpoint, _dir) = unique_endpoint();
+        let _service = fake_service(&endpoint, protocol_major, protocol_minor);
+        ControlClient::connect(&endpoint, "a-token")
+            .await
+            .map(|_| ())
     }
 
     /// GT-5d: the client announces a minor and then has to LIVE with what came

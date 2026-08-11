@@ -505,6 +505,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "truffle-core",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

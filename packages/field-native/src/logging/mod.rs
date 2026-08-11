@@ -885,14 +885,21 @@ fn build_logging(
         filter.map_or_else(|| "info".to_owned(), most_verbose_level),
     ));
     let leases = Arc::new(Mutex::new(HashMap::new()));
+    // `HOME` is a unix fact; Windows keeps the profile in `USERPROFILE`. Twin of
+    // `config.rs home_dir()`, repeated here because this layer sits below config
+    // (`build_logging` takes roots, never a `NativeConfig`). No `"."` default:
+    // an unset var means no `<home>` alias at all, never a CWD-rooted one that
+    // would rewrite unrelated relative paths in every record.
+    #[cfg(windows)]
+    let home = std::env::var_os("USERPROFILE");
+    #[cfg(not(windows))]
+    let home = std::env::var_os("HOME");
     let layer = NativeLayer {
         core: core.clone(),
         boot_id: boot_id.to_owned(),
         instance_id,
         aliases: PathAliases::new(
-            std::env::var_os("HOME")
-                .as_deref()
-                .map(std::path::Path::new),
+            home.as_deref().map(std::path::Path::new),
             Some(std::env::temp_dir().as_path()),
             log_root,
             data_dir,
@@ -1446,6 +1453,13 @@ mod tests {
         )
     }
 
+    /// The writer classifies by `ErrorKind`, so the injected fault is a kind and
+    /// not a platform errno. `segment.rs::classifies_real_os_error_codes` pins
+    /// the OS codes that decode to this one.
+    fn storage_full() -> std::io::Error {
+        std::io::Error::from(std::io::ErrorKind::StorageFull)
+    }
+
     fn eventually(predicate: impl Fn() -> bool, timeout: Duration) {
         let deadline = Instant::now() + timeout;
         while !predicate() {
@@ -1612,7 +1626,7 @@ mod tests {
                     let failing = failing.clone();
                     Arc::new(move |_| {
                         if failing.load(Ordering::Relaxed) {
-                            Err(std::io::Error::from_raw_os_error(libc::ENOSPC))
+                            Err(storage_full())
                         } else {
                             Ok(())
                         }
@@ -1698,7 +1712,7 @@ mod tests {
                     let failing = failing.clone();
                     Arc::new(move |_| {
                         if failing.load(Ordering::Relaxed) {
-                            Err(std::io::Error::from_raw_os_error(libc::ENOSPC))
+                            Err(storage_full())
                         } else {
                             Ok(())
                         }

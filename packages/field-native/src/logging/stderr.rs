@@ -1,27 +1,44 @@
 use super::{lock_recover, Emergency};
 use std::fs::File;
 use std::io::{self, Read, Write};
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
+
+#[cfg(unix)]
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+
+#[cfg(windows)]
+use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::{
+    DuplicateHandle, DUPLICATE_SAME_ACCESS, FALSE, HANDLE, INVALID_HANDLE_VALUE,
+};
+#[cfg(windows)]
+use windows_sys::Win32::System::Console::{GetStdHandle, SetStdHandle, STD_ERROR_HANDLE};
+#[cfg(windows)]
+use windows_sys::Win32::System::Pipes::CreatePipe;
+#[cfg(windows)]
+use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
 const MAX_LINE_BYTES: usize = 16 * 1024;
 const READ_BYTES: usize = 4 * 1024;
 const MAX_EMERGENCY_BYTES: usize = 1_024;
 const SIDECAR_PREFIX: &str = "[sidecar-stderr] ";
 
+/// The retained pre-route stderr: the one sink an emergency may use, and the
+/// thing shutdown puts back. Both platforms hold the same two obligations but
+/// with different primitives, so the type is written twice instead of cfg'd
+/// field by field — `segment.rs` is the house template for the split.
+#[cfg(unix)]
 struct OriginalStderr {
     file: Mutex<File>,
 }
 
+#[cfg(unix)]
 impl OriginalStderr {
     fn write_emergency(&self, message: &str) {
-        let clean = message.replace(['\r', '\n'], " ");
-        let clean = truncate_utf8(&clean, MAX_EMERGENCY_BYTES);
-        let mut file = lock_recover(&self.file);
-        let _ = file.write_all(clean.as_bytes());
-        let _ = file.write_all(b"\n");
+        write_emergency_line(&mut *lock_recover(&self.file), message);
     }
 
     fn restore(&self) -> io::Result<()> {
@@ -31,6 +48,51 @@ impl OriginalStderr {
         if unsafe { libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO) } == -1 {
             return Err(io::Error::last_os_error());
         }
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+struct OriginalStderr {
+    /// A private duplicate, used only for emergencies. Owning a duplicate is
+    /// this platform's `F_DUPFD_CLOEXEC`: dropping the route must never close a
+    /// handle the process itself still holds. `None` when the process started
+    /// with no stderr at all (a GUI/detached start reports NULL) — capture
+    /// still installs; an emergency then has nowhere to land and is dropped.
+    file: Mutex<Option<File>>,
+    /// The `STD_ERROR_HANDLE` value the route displaced. `SetStdHandle` does
+    /// not close what it displaces, so the pre-route object stays alive without
+    /// a second duplicate. Held as `usize` because a raw `HANDLE` is neither
+    /// `Send` nor `Sync` and the emergency sink crosses threads.
+    displaced: usize,
+    /// Our end of the capture pipe. Closing it is what hands the reader EOF;
+    /// the unix twin gets that for free when `dup2` drops fd 2's reference.
+    write_end: Mutex<Option<OwnedHandle>>,
+}
+
+#[cfg(windows)]
+impl OriginalStderr {
+    fn write_emergency(&self, message: &str) {
+        if let Some(file) = lock_recover(&self.file).as_mut() {
+            write_emergency_line(file, message);
+        }
+    }
+
+    fn restore(&self) -> io::Result<()> {
+        // SAFETY: `displaced` is the value this route swapped out at install and
+        // is still live, because `SetStdHandle` never closes what it displaces.
+        // NULL is a legitimate value to put back: it is what the process had.
+        if unsafe { SetStdHandle(STD_ERROR_HANDLE, self.displaced as HANDLE) } == FALSE {
+            // Leave the pipe writer alive — process stderr still points at it,
+            // and a closed handle in the table is worse than an uncaptured one.
+            return Err(io::Error::last_os_error());
+        }
+        // Dropping our writer after the swap is what ends the reader's read.
+        // Windows has no `dup2`, so the swap and the close cannot be one step:
+        // a stderr write racing shutdown can still hold the pipe handle it read
+        // out of the table a moment earlier. Swapping first keeps the window to
+        // exactly those writes.
+        lock_recover(&self.write_end).take();
         Ok(())
     }
 }
@@ -46,6 +108,7 @@ pub(super) struct StderrRoute {
     restored: bool,
 }
 
+#[cfg(unix)]
 impl StderrRoute {
     pub(super) fn install() -> io::Result<Self> {
         // SAFETY: fcntl duplicates the valid process stderr descriptor. The
@@ -84,11 +147,72 @@ impl StderrRoute {
             return Err(error);
         }
 
+        Self::spawn_reader(original, File::from(read_fd))
+    }
+}
+
+#[cfg(windows)]
+impl StderrRoute {
+    /// `CreatePipe` + `SetStdHandle` is the windows twin of `pipe` + `dup2`, and
+    /// it captures every Rust-level write to process stderr — including the
+    /// `eprintln!` this route exists for. It does not capture a C dependency
+    /// writing through the CRT's own `stderr`: this moves the Win32 std handle,
+    /// where the unix twin moves fd 2, the one thing both layers share.
+    pub(super) fn install() -> io::Result<Self> {
+        // SAFETY: the call takes a constant selector and returns a handle owned
+        // by the process std-handle table rather than by this call.
+        let displaced = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
+        if displaced == INVALID_HANDLE_VALUE {
+            return Err(io::Error::last_os_error());
+        }
+        let original = if displaced.is_null() {
+            None
+        } else {
+            Some(duplicate_for_emergency(displaced)?)
+        };
+
+        let mut read: HANDLE = std::ptr::null_mut();
+        let mut write: HANDLE = std::ptr::null_mut();
+        // SAFETY: both out-params point at live storage. A null attribute
+        // pointer is documented as "the handles cannot be inherited", which is
+        // the `FD_CLOEXEC` the unix twin sets on both ends of its pipe.
+        if unsafe { CreatePipe(&mut read, &mut write, std::ptr::null(), 0) } == FALSE {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: a successful `CreatePipe` returns two newly owned handles.
+        let read_end = unsafe { OwnedHandle::from_raw_handle(read) };
+        // SAFETY: a successful `CreatePipe` returns two newly owned handles.
+        let write_end = unsafe { OwnedHandle::from_raw_handle(write) };
+
+        // SAFETY: the handle is live, and `OriginalStderr` below keeps owning it
+        // so the value parked in the std-handle table outlives the table entry.
+        if unsafe { SetStdHandle(STD_ERROR_HANDLE, write_end.as_raw_handle()) } == FALSE {
+            return Err(io::Error::last_os_error());
+        }
+
+        // Unlike `FD_CLOEXEC`, a non-inheritable handle does not keep children
+        // out of the route: a `Command` that inherits stderr is handed an
+        // inheritable duplicate by std. That is the safer divergence — children
+        // keep a working stderr instead of a closed one — but a child outliving
+        // `close` holds the pipe open, and the reader is then detached as usual.
+        Self::spawn_reader(
+            Arc::new(OriginalStderr {
+                file: Mutex::new(original),
+                displaced: displaced as usize,
+                write_end: Mutex::new(Some(write_end)),
+            }),
+            File::from(read_end),
+        )
+    }
+}
+
+impl StderrRoute {
+    fn spawn_reader(original: Arc<OriginalStderr>, input: File) -> io::Result<Self> {
         let (completed_tx, completed) = mpsc::channel();
         let reader = match std::thread::Builder::new()
             .name("vf-native-stderr".into())
             .spawn(move || {
-                read_stderr(File::from(read_fd));
+                read_stderr(input);
                 let _ = completed_tx.send(());
             }) {
             Ok(reader) => reader,
@@ -97,7 +221,6 @@ impl StderrRoute {
                 return Err(error);
             }
         };
-
         Ok(Self {
             original,
             reader: Some(reader),
@@ -141,10 +264,12 @@ impl Drop for StderrRoute {
     }
 }
 
+#[cfg(unix)]
 fn set_close_on_exec(fd: &OwnedFd) -> io::Result<()> {
     set_close_on_exec_raw(fd.as_raw_fd())
 }
 
+#[cfg(unix)]
 fn set_close_on_exec_raw(fd: libc::c_int) -> io::Result<()> {
     // SAFETY: `fd` is a live descriptor owned by this process.
     let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
@@ -156,6 +281,44 @@ fn set_close_on_exec_raw(fd: libc::c_int) -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
     Ok(())
+}
+
+/// The emergency sink writes through a private duplicate of the pre-route
+/// stderr, so the route's own drop can never close the process's real one.
+#[cfg(windows)]
+fn duplicate_for_emergency(displaced: HANDLE) -> io::Result<File> {
+    let mut duplicate: HANDLE = std::ptr::null_mut();
+    // SAFETY: the source handle is live, source and target process are this
+    // process, and the out-param points at live storage. `FALSE` keeps the
+    // duplicate out of children, matching the unix `F_DUPFD_CLOEXEC`.
+    let duplicated = unsafe {
+        DuplicateHandle(
+            GetCurrentProcess(),
+            displaced,
+            GetCurrentProcess(),
+            &mut duplicate,
+            0,
+            FALSE,
+            DUPLICATE_SAME_ACCESS,
+        )
+    };
+    if duplicated == FALSE {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: a successful `DuplicateHandle` returns a newly owned handle.
+    Ok(File::from(unsafe {
+        OwnedHandle::from_raw_handle(duplicate)
+    }))
+}
+
+/// One sanitized line on the pre-route stderr: an emergency is what the logging
+/// stack says when the structured stream is the thing that failed, so it must
+/// not become a paragraph on a descriptor someone else is also writing.
+fn write_emergency_line(sink: &mut impl Write, message: &str) {
+    let clean = message.replace(['\r', '\n'], " ");
+    let clean = truncate_utf8(&clean, MAX_EMERGENCY_BYTES);
+    let _ = sink.write_all(clean.as_bytes());
+    let _ = sink.write_all(b"\n");
 }
 
 fn read_stderr(mut input: File) {
