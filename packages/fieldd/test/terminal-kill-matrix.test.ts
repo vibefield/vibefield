@@ -18,6 +18,12 @@ import { helloAs, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = nativeBinPath(ROOT);
+// WIN-6: on Windows both roles collapse to cmd.exe (the ConPTY shell). On unix
+// they stay distinct — /bin/cat holds the PTY open, /bin/sh runs a command.
+const WIN = process.platform === "win32";
+const CMD = process.env["COMSPEC"] ?? "C:\\Windows\\System32\\cmd.exe";
+const HOLD = WIN ? CMD : "/bin/cat";
+const SH = WIN ? CMD : "/bin/sh";
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -56,6 +62,11 @@ async function spawnNative(dir?: string): Promise<NativeHandle> {
       // environment:{mode:"inherit"} spawns must lose them).
       FIELD_SMUGGLE: "leak-me",
       FIELDD_SMUGGLE: "leak-me-too",
+      // WIN-6 / G13 bait: a CASE-VARIANT of a stripped prefix. On unix this is a
+      // genuinely different (non-FIELD_) var; on Windows env is case-insensitive,
+      // so it IS a FIELD_ var — and ghosttea's case-sensitive `starts_with` strip
+      // may miss it. Whether it leaks is asserted (empirically) below.
+      Field_Native_Case_Probe: "CASE_LEAK_WITNESS",
     },
     stdio: "ignore",
   });
@@ -90,8 +101,10 @@ async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T>
 const listOf = async (rpc: WsRpc): Promise<TerminalInfo[]> =>
   ((await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] }).terminals;
 
-// Windows terminal hosting is WIN-6 (ConPTY) — thinking-windows-port §6; the mesh/health surface is covered elsewhere
-describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field-native)", () => {
+// WIN-6: ConPTY terminal hosting is live on Windows (the Rust kill matrix runs on
+// the box in field-native/tests/terminal_unit.rs), so this NF-4 matrix runs on
+// both platforms — the two-plane crash/adopt/re-arm rows are cross-process.
+describe("the kill matrix (NF-4, real field-native)", () => {
   it("row 1: the PTY survives fieldd; the next fieldd adopts it inside 2s", async () => {
     const native = await spawnNative();
     const daemon1 = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
@@ -99,7 +112,7 @@ describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field
     // stop must not leak a live fieldd (the afterEach tolerates double-stop)
     cleanup.push(() => daemon1.stop());
     const rpc1 = await connect(daemon1);
-    const created = (await rpc1.call("terminal.create", { shell: "/bin/cat" })) as {
+    const created = (await rpc1.call("terminal.create", { shell: HOLD })) as {
       sessionId: string;
     };
     const ticket = (await poll(async () =>
@@ -150,7 +163,7 @@ describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field
     const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
     const rpc = await connect(daemon);
-    const created = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+    const created = (await rpc.call("terminal.create", { shell: HOLD })) as {
       sessionId: string;
     };
     await poll(async () =>
@@ -168,7 +181,7 @@ describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field
     // must refuse interactive ops rather than pretend
     native.child.kill("SIGKILL");
     await poll(async () => {
-      const err = await rpc.callErr("terminal.create", { shell: "/bin/cat" });
+      const err = await rpc.callErr("terminal.create", { shell: HOLD });
       return err.data?.kind === "UNAVAILABLE" ? true : undefined;
     }, 10_000);
 
@@ -200,7 +213,7 @@ describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field
     await poll(async () => ((await listOf(rpc)).length === 0 ? true : undefined), 20_000);
     const reborn = await poll(async () => {
       try {
-        return (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+        return (await rpc.call("terminal.create", { shell: HOLD })) as {
           sessionId: string;
         };
       } catch {
@@ -217,7 +230,7 @@ describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field
     cleanup.push(() => daemon.stop());
     const rpc = await connect(daemon);
 
-    const created = (await rpc.call("terminal.create", { shell: "/bin/sh" })) as {
+    const created = (await rpc.call("terminal.create", { shell: SH })) as {
       sessionId: string;
     };
     const ticket = (await poll(async () =>
@@ -235,7 +248,11 @@ describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field
     await client.connect();
 
     const out = join(native.dir, "smuggle.txt");
-    const input = await client.pasteAndSubmit(created.sessionId, `env > ${out}`);
+    // dump the child env: `env` on unix, cmd's `set` on Windows.
+    const input = await client.pasteAndSubmit(
+      created.sessionId,
+      WIN ? `set > ${out}` : `env > ${out}`,
+    );
     expect(input.accepted).toBe(true);
     const env = await poll(async () => {
       try {
@@ -255,15 +272,64 @@ describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field
     expect(env).not.toContain("FIELD_SMUGGLE");
     expect(env).not.toContain("FIELDD_SMUGGLE");
     expect(env).not.toContain("GHOSTTEA_");
-    expect(env).toContain("HOME=");
+    // an ordinary (non-prefixed) var survives the strip: HOME on unix, the user
+    // profile path on Windows (the strip is exact-prefix, so both are untouched).
+    expect(env).toContain(WIN ? "USERPROFILE=" : "HOME=");
   }, 60_000);
+
+  // WIN-6 / G13: the exact-case prefixes are stripped (row 6). This probes the
+  // CASE gap ghosttea's case-sensitive `starts_with` opens on Windows'
+  // case-insensitive env — CONFIRMED to leak on the box (a `Field_Native_*`
+  // variant survived). field-native sets its OWN secrets exact-case, so those are
+  // stripped; this is a defense-in-depth gap the fix (G13, upstream) closes. Until
+  // the pin consuming G13 lands, the correct assertion (variant stripped) is
+  // EXPECTED-FAIL on Windows; when G13 lands it STARTS passing — drop `.fails`
+  // then. On unix a case variant is a genuinely different var, so this is skipped.
+  const caseGapWitness = WIN ? it.fails : it.skip;
+  caseGapWitness(
+    "row 6b: a case-variant of a stripped prefix must not leak (EL7, G13)",
+    async () => {
+      const native = await spawnNative();
+      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => daemon.stop());
+      const rpc = await connect(daemon);
+      const created = (await rpc.call("terminal.create", { shell: SH })) as { sessionId: string };
+      const ticket = (await poll(async () =>
+        (await listOf(rpc)).some((t) => t.sessionId === created.sessionId)
+          ? ((await rpc.call("terminal.openTicket", { sessionId: created.sessionId })) as
+              | TerminalTicket
+              | undefined)
+          : undefined,
+      )) as TerminalTicket;
+      const client = new GhostteaAutomationClient(
+        { controlSocket: ticket.controlSocket, authToken: ticket.token },
+        { clientBuild: "kill-matrix" },
+      );
+      cleanup.push(() => client.dispose());
+      await client.connect();
+
+      const out = join(native.dir, "case-smuggle.txt");
+      const input = await client.pasteAndSubmit(created.sessionId, `set > ${out}`);
+      expect(input.accepted).toBe(true);
+      const env = await poll(async () => {
+        try {
+          const text = readFileSync(out, "utf8");
+          return text.length > 0 ? text : undefined;
+        } catch {
+          return undefined;
+        }
+      });
+      expect(env).not.toContain("CASE_LEAK_WITNESS");
+    },
+    60_000,
+  );
 
   it("epoch arbitration reaches through the ticket path", async () => {
     const native = await spawnNative();
     const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
     const rpc = await connect(daemon);
-    const created = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+    const created = (await rpc.call("terminal.create", { shell: HOLD })) as {
       sessionId: string;
     };
     const ticket = (await poll(async () =>
@@ -299,7 +365,7 @@ describe.skipIf(process.platform === "win32")("the kill matrix (NF-4, real field
     const rpc = await connect(daemon);
 
     for (let i = 0; i < 10; i++) {
-      const { sessionId } = (await rpc.call("terminal.create", { shell: "/bin/cat" })) as {
+      const { sessionId } = (await rpc.call("terminal.create", { shell: HOLD })) as {
         sessionId: string;
       };
       await poll(async () =>

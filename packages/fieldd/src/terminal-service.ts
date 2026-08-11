@@ -580,6 +580,15 @@ export class TerminalService {
 
   private defaultShell(): string {
     if (this.opts.defaultShell) return this.opts.defaultShell();
+    if (process.platform === "win32") {
+      // GT-D10: Windows has no login shell (`userInfo().shell` is null) and no
+      // `$SHELL`, so the unix chain below would fall to `/bin/sh` and every
+      // default `terminal.create` would die at SPAWN_REFUSAL. COMSPEC is the
+      // shell on Windows; a missing one is not a real Windows.
+      const comspec = process.env["COMSPEC"];
+      if (typeof comspec === "string" && comspec.length > 0) return comspec;
+      return "C:\\Windows\\System32\\cmd.exe";
+    }
     try {
       const shell = userInfo().shell;
       if (typeof shell === "string" && shell.length > 0) return shell;

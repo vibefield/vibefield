@@ -14,7 +14,6 @@
 use field_native::config::{NativeConfig, TERMINAL_MIRROR_WRITE_ENV};
 use field_native::registries;
 // only the unix-only session-spawning test dials it (WIN-6)
-#[cfg(unix)]
 use field_native::services::terminal_client::ControlClient;
 use field_native::services::terminal_mesh::{self, MeshPlan};
 use field_native::{bootstrap, RunningDaemon};
@@ -173,10 +172,9 @@ async fn the_default_floor_says_nothing_about_a_mesh() {
 /// gateway's own words. The elapsed assertion is the point: a run that spent
 /// the attach budget would mean the gateway's surrender went unnoticed.
 // unix-only: this one proves the degraded floor STILL SERVES a session, so it
-// spawns a /bin/cat PTY tenant — Windows terminal hosting (ConPTY) is the WIN-6
-// rung (thinking-windows-port §6). The mesh-degrades-not-the-floor HEALTH half
-// runs on both platforms via the other two tests here.
-#[cfg(unix)]
+// spawns a PTY tenant (unix /bin/cat, windows cmd.exe). WIN-6 landed ConPTY
+// terminal hosting, so this runs on both platforms now; the mesh-degrades-not-
+// the-floor HEALTH half is also covered by the other two tests here.
 #[tokio::test]
 async fn terminal_mesh_without_a_gateway_degrades_the_mesh_and_not_the_floor() {
     let dir = short_tempdir();
@@ -217,9 +215,13 @@ async fn terminal_mesh_without_a_gateway_degrades_the_mesh_and_not_the_floor() {
         ControlClient::connect(&endpoints.control_socket, &endpoints.auth_token)
             .await
             .expect("dial the control socket");
+    #[cfg(unix)]
+    let tenant = "/bin/cat";
+    #[cfg(windows)]
+    let tenant = r"C:\Windows\System32\cmd.exe";
     let session = client
         .create_session(json!({
-            "executable": "/bin/cat",
+            "executable": tenant,
             "args": [],
             "cols": 80,
             "rows": 24,
