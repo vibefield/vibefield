@@ -30,6 +30,11 @@ use truffle_core::{network::tailscale::TailscaleProvider, Node};
 
 /// = @vibefield/contracts registries APP_ID (one tailnet app namespace per product).
 const APP_ID: &str = "vibefield";
+// WIN-7: the truffle sidecar ships `sidecar-slim.exe` on Windows; a bare
+// `sidecar-slim` name would never match the file beside field-native.exe.
+#[cfg(windows)]
+const SIDECAR_NAMES: [&str; 2] = ["sidecar-slim.exe", "truffle-sidecar.exe"];
+#[cfg(not(windows))]
 const SIDECAR_NAMES: [&str; 2] = ["sidecar-slim", "truffle-sidecar"];
 
 pub type MeshNode = Node<TailscaleProvider>;
@@ -342,6 +347,14 @@ fn resolve_sidecar(override_path: Option<PathBuf>, searched: &mut Vec<String>) -
             }
         }
     }
+    #[cfg(windows)]
+    if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        // truffle's own Windows install dir — the fallback to the exe-adjacent primary.
+        for name in SIDECAR_NAMES {
+            candidates.push(local.join("truffle").join("bin").join(name));
+        }
+    }
+    #[cfg(unix)]
     if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
         #[cfg(target_os = "macos")]
         for name in SIDECAR_NAMES {
@@ -354,6 +367,7 @@ fn resolve_sidecar(override_path: Option<PathBuf>, searched: &mut Vec<String>) -
             candidates.push(home.join(".config/truffle/bin").join(name));
         }
     }
+    #[cfg(unix)]
     for name in SIDECAR_NAMES {
         candidates.push(PathBuf::from("/usr/local/bin").join(name));
     }
@@ -407,5 +421,32 @@ mod tests {
             .shared
             .retired
             .load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    // WIN-7: the resolver must find the Windows sidecar by its `.exe` name in
+    // truffle's own `%LOCALAPPDATA%\truffle\bin` — both halves of the fix at once.
+    #[cfg(windows)]
+    #[test]
+    fn resolve_sidecar_finds_the_windows_exe_in_localappdata() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("truffle").join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let exe = bin.join("sidecar-slim.exe");
+        std::fs::write(&exe, b"x").unwrap();
+
+        let prev = std::env::var_os("LOCALAPPDATA");
+        std::env::set_var("LOCALAPPDATA", dir.path());
+        let mut searched = Vec::new();
+        let found = resolve_sidecar(None, &mut searched);
+        match prev {
+            Some(v) => std::env::set_var("LOCALAPPDATA", v),
+            None => std::env::remove_var("LOCALAPPDATA"),
+        }
+
+        assert_eq!(
+            found.as_deref(),
+            Some(exe.as_path()),
+            "the resolver should find the .exe under LOCALAPPDATA; searched: {searched:?}"
+        );
     }
 }
