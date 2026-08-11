@@ -120,7 +120,13 @@ export function createElectronTrayRuntime(
       };
     },
     createTray: (image) =>
-      new Tray(image as NativeImage, guid ?? undefined) as unknown as NativeTrayPort,
+      // Pass the GUID only when there IS one: `new Tray(image, undefined)` is a
+      // two-arg call whose second arg Electron validates as a GUID string and
+      // rejects ("GUID must be a string"). Windows/Linux take the frozen slot as
+      // null (EDP §5.6) and so must call the one-arg form to bind a tray at all.
+      (guid != null
+        ? new Tray(image as NativeImage, guid)
+        : new Tray(image as NativeImage)) as unknown as NativeTrayPort,
     inspectTray: (tray) => {
       if (platform !== "darwin") {
         return { bounds: null, displayBounds: [], placement: "unknown" };
