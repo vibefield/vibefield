@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { buildChildEnv } from "./env.mjs";
 import { repoRoot, workspacePaths } from "./paths.mjs";
 import { startRendererServer } from "./vite-server.mjs";
 
@@ -28,13 +29,13 @@ export function designBenchRendererUrl(baseUrl) {
 }
 
 export function designBenchLaunchSpec({ electronExecutable, paths, rendererUrl, env }) {
-  const launchEnv = {
-    ...env,
-    VIBEFIELD_UI_BENCH_URL: designBenchRendererUrl(rendererUrl),
-  };
-  // Electron main sets this only for Node-mode children. Inheriting it here
-  // would turn the bench shell itself into a plain Node process.
-  delete launchEnv.ELECTRON_RUN_AS_NODE;
+  const launchEnv = buildChildEnv(env, {
+    set: { VIBEFIELD_UI_BENCH_URL: designBenchRendererUrl(rendererUrl) },
+    // Electron main sets this only for Node-mode children. Inheriting it here
+    // would turn the bench shell itself into a plain Node process; on Windows a
+    // variant spelling is the same variable, so removal is case-insensitive.
+    unset: ["ELECTRON_RUN_AS_NODE"],
+  });
   return {
     command: electronExecutable,
     args: [`--user-data-dir=${paths.userData}`, paths.appRoot],

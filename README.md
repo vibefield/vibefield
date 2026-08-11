@@ -43,6 +43,7 @@ reopens the `../p008/truffle` `[patch.crates-io]` + `siblings.lock.json` dance; 
 ```sh
 pnpm install
 pnpm preflight      # tool versions + import-boundary walls
+pnpm hooks:install  # one-time: wires scripts/git-hooks (the dev-local push guard)
 pnpm dev            # desktop app dev loop
 pnpm dev:design     # Electron UI Bench, no daemon or product data required
 pnpm dev:design:web # optional browser-only UI Bench loop

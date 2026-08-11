@@ -32,6 +32,7 @@
     "preflight": "node scripts/preflight.mjs",
     "bundle:assert": "pnpm --filter @vibefield/electron-shell run build:renderer && node scripts/bundle-report.mjs --dist packages/electron-shell/dist --assert",
     "verify": "pnpm preflight && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm bundle:assert && pnpm test && pnpm test:rust && pnpm gen:check",
+    "hooks:install": "git config core.hooksPath scripts/git-hooks",
     "commit-draft": "sh scripts/commit-draft.sh"
   },
   "devDependencies": {

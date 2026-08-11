@@ -87,6 +87,11 @@ const FORMATS = {
  * shapes, so it catches the common accident (pasting a resolved local path)
  * without pretending to catch every possible one.
  *
+ * `identity` defaults to this machine and is injectable ONLY so the self-test can
+ * pin the rules against a synthetic user/host: building a fixture from the live
+ * username means the rules stop firing on some machines — a ≤2-character user
+ * (`me`) silenced the overlap case entirely until 2026-08-09.
+ *
  * Returns `{fatal}` because the two findings are NOT the same severity. A path
  * shape is never a legitimate identity — always fatal. A name overlap is
  * ambiguous: `com.jamesyong.vibefield` contains this machine's username because
@@ -96,9 +101,12 @@ const FORMATS = {
  * acknowledgeable — with a written reason, per field. Silence is still a
  * violation; the exemption has to be argued in the ledger where a reviewer sees
  * it. */
-function machineDerived(value, acknowledgement) {
-  const user = userInfo().username;
-  const host = hostname();
+function machineDerived(
+  value,
+  acknowledgement,
+  identity = { user: userInfo().username, host: hostname() },
+) {
+  const { user, host } = identity;
   const haystack = value.toLowerCase();
   if (/^([a-z]:[\\/]|\/(users|home|var|tmp|opt|private)\/)/i.test(value))
     return { note: "looks like an absolute local path", fatal: true };
@@ -123,7 +131,9 @@ function credentialShaped(value) {
   return null;
 }
 
-function checkLedger(ledger, committed) {
+// `identity` is threaded through to machineDerived; left undefined (every runtime
+// caller) it falls back to this machine, so only the self-test sees a fixture.
+function checkLedger(ledger, committed, identity) {
   const violations = [];
   const blockers = [];
   const notes = [];
@@ -162,7 +172,7 @@ function checkLedger(ledger, committed) {
       const verdict = format(value, name);
       if (verdict !== true) violations.push(`${name}: ${verdict}`);
     }
-    const derived = machineDerived(value, field.machineOverlapAcknowledged);
+    const derived = machineDerived(value, field.machineOverlapAcknowledged, identity);
     if (derived !== null) {
       const line = `${name}: ${derived.note} (EDP-30)`;
       // An acknowledged overlap is still REPORTED — the point is that a reviewer
@@ -288,6 +298,11 @@ function committedLedger(path) {
 }
 
 // --- self-test: every rule proven to trip on a synthetic ledger --------------
+// The identity is synthetic too, so the rules behave identically on every box. A
+// fixture built from the LIVE username is a rule that fires only where the
+// username happens to be long enough — see the short-username case below.
+const FIXTURE_IDENTITY = { user: "fixtureuser", host: "fixturehost" };
+
 function selfTest() {
   const base = () => JSON.parse(readFileSync(LEDGER_PATH, "utf8"));
   const cases = [
@@ -307,12 +322,14 @@ function selfTest() {
         const l = base();
         l.fields.windowsPublisher = {
           status: "frozen",
-          value: `/Users/${userInfo().username}/certs`,
+          value: `/Users/${FIXTURE_IDENTITY.user}/certs`,
           format: "publisher-name",
         };
         return l;
       })(),
-      2, // path shape + username, both reported
+      // Two: the publisher-name FORMAT rejects a path, and the EDP-30 shape check
+      // reports it again. Not the username — the path branch returns first.
+      2,
     ],
     [
       "a credential parked in the ledger is refused",
@@ -342,7 +359,7 @@ function selfTest() {
         const l = base();
         l.fields.windowsPublisher = {
           status: "frozen",
-          value: `${userInfo().username} Ltd`,
+          value: `${FIXTURE_IDENTITY.user} Ltd`,
           format: "publisher-name",
         };
         return l;
@@ -355,7 +372,7 @@ function selfTest() {
         const l = base();
         l.fields.windowsPublisher = {
           status: "frozen",
-          value: `${userInfo().username} Ltd`,
+          value: `${FIXTURE_IDENTITY.user} Ltd`,
           format: "publisher-name",
           machineOverlapAcknowledged: "the company is named after the developer",
         };
@@ -392,18 +409,39 @@ function selfTest() {
 
   let failures = 0;
   for (const [name, ledger, expected] of cases) {
-    const { violations } = checkLedger(ledger, null);
+    const { violations } = checkLedger(ledger, null, FIXTURE_IDENTITY);
     const ok = violations.length === expected;
     if (!ok) failures++;
     console.log(`${ok ? "ok  " : "FAIL"} ${name} (${violations.length} violation(s))`);
     if (!ok) for (const v of violations) console.log(`       ${v}`);
   }
 
+  // A ≤2-character username is DELIBERATELY exempt (machineDerived's `> 2`
+  // guard): on a box whose user is `me`, half the identifiers in the ledger would
+  // "contain the username" and the rule would be noise. Pinned as a choice, not
+  // left to be rediscovered as a bug — it is also why the fixtures above use a
+  // synthetic user: the Windows box's user IS `me`, so a live-username fixture
+  // made the overlap case above unable to fire at all.
+  const shortUser = base();
+  shortUser.fields.windowsPublisher = {
+    status: "frozen",
+    value: "me Ltd",
+    format: "publisher-name",
+  };
+  const shortIdentity = { user: "me", host: "fixturehost" };
+  const shortUserViolations = checkLedger(shortUser, null, shortIdentity).violations;
+  const shortUserOk = shortUserViolations.length === 0;
+  if (!shortUserOk) failures++;
+  console.log(
+    `${shortUserOk ? "ok  " : "FAIL"} a ≤2-character username is exempt from the overlap rule`,
+  );
+  if (!shortUserOk) for (const v of shortUserViolations) console.log(`       ${v}`);
+
   // The freeze rule needs a "committed" counterpart rather than a lone ledger.
   const before = base();
   const after = base();
   after.fields.productName.value = "FieldVibe";
-  const drifted = checkLedger(after, before).violations;
+  const drifted = checkLedger(after, before, FIXTURE_IDENTITY).violations;
   const driftOk = drifted.some((v) => v.includes("without bumping identityRevision"));
   if (!driftOk) failures++;
   console.log(`${driftOk ? "ok  " : "FAIL"} a frozen value cannot change without a revision bump`);
@@ -411,7 +449,7 @@ function selfTest() {
   const bumped = base();
   bumped.fields.productName.value = "FieldVibe";
   bumped.identityRevision = before.identityRevision + 1;
-  const bumpedViolations = checkLedger(bumped, before).violations.filter((v) =>
+  const bumpedViolations = checkLedger(bumped, before, FIXTURE_IDENTITY).violations.filter((v) =>
     v.includes("identityRevision"),
   );
   const bumpOk = bumpedViolations.length === 0;

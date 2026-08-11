@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import { buildChildEnv } from "./env.mjs";
 import { terminateChild } from "./processes.mjs";
 import { readDevProduct, stopVerifiedDevProduct } from "./product.mjs";
 
@@ -23,25 +24,28 @@ export function createElectronStack({
   async function start(runtime) {
     if (child !== null) throw new Error("Electron is already running");
     const { buildId, daemonBuildId } = runtime;
-    const env = {
-      ...process.env,
-      VITE_DEV_SERVER_URL: viteUrl,
-      // The adoption gate compares product.json's buildId against this value,
-      // and product.json describes the DAEMON plane — a shell-only rebuild
-      // must still adopt the running fieldd, so the daemon identity is what
-      // crosses this boundary, never the combined snapshot identity.
-      VIBEFIELD_DEV_BUILD_ID: daemonBuildId,
-      VIBEFIELD_DEV_REPO_ROOT: paths.repoRoot,
-      FIELDD_DATA_DIR: paths.dataRoot,
-      FIELDD_CONTROL_PORT: "0",
-      FIELDD_DATA_PORT: "0",
-      FIELDD_BIN: runtime.fielddOutput,
-      FIELDD_NATIVE_BIN: runtime.nativeOutput,
-      FIELD_LOG_DIR: paths.logRoot,
-    };
-    // This flag is set only by Electron main for its fieldd child. Inheriting
-    // it into the desktop process would turn Electron itself into Node.
-    delete env.ELECTRON_RUN_AS_NODE;
+    const env = buildChildEnv(process.env, {
+      set: {
+        VITE_DEV_SERVER_URL: viteUrl,
+        // The adoption gate compares product.json's buildId against this value,
+        // and product.json describes the DAEMON plane — a shell-only rebuild
+        // must still adopt the running fieldd, so the daemon identity is what
+        // crosses this boundary, never the combined snapshot identity.
+        VIBEFIELD_DEV_BUILD_ID: daemonBuildId,
+        VIBEFIELD_DEV_REPO_ROOT: paths.repoRoot,
+        FIELDD_DATA_DIR: paths.dataRoot,
+        FIELDD_CONTROL_PORT: "0",
+        FIELDD_DATA_PORT: "0",
+        FIELDD_BIN: runtime.fielddOutput,
+        FIELDD_NATIVE_BIN: runtime.nativeOutput,
+        FIELD_LOG_DIR: paths.logRoot,
+      },
+      // This flag is set only by Electron main for its fieldd child. Inheriting
+      // it into the desktop process would turn Electron itself into Node — and
+      // on Windows an inherited variant spelling is the same variable, which is
+      // why removal is case-insensitive there.
+      unset: ["ELECTRON_RUN_AS_NODE"],
+    });
 
     const next = spawnProcess(
       electronExecutable,

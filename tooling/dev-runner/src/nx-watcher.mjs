@@ -1,15 +1,27 @@
 import { spawn } from "node:child_process";
+import { buildChildEnv } from "./env.mjs";
 import { parseNxChangeLine } from "./nx-events.mjs";
-import { pnpmCommand, terminateChild } from "./processes.mjs";
+import { launchSpec, pnpmCommand, terminateChild } from "./processes.mjs";
 
 export async function startNxWatcher({ repoRoot, eventScript, onChange, onUnexpectedExit }) {
   let stopping = false;
   let stdoutBuffer = "";
   let stderrBuffer = "";
-  const child = spawn(pnpmCommand, ["nx", "watch", "--all", "--", process.execPath, eventScript], {
+  // pnpm's shim is a `.cmd`, so this spawn needs the same cmd.exe relaunch every
+  // tracked command gets — a bare `.cmd` throws EINVAL on Node ≥ 20.12.
+  const launch = launchSpec(pnpmCommand, [
+    "nx",
+    "watch",
+    "--all",
+    "--",
+    ...nxWatchEventArgv(eventScript),
+  ]);
+  const child = spawn(launch.command, launch.args, {
     cwd: repoRoot,
     env: nxWatcherEnvironment(),
     stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+    windowsVerbatimArguments: launch.windowsVerbatimArguments,
   });
   await new Promise((resolve, reject) => {
     child.once("spawn", resolve);
@@ -42,15 +54,34 @@ export async function startNxWatcher({ repoRoot, eventScript, onChange, onUnexpe
   };
 }
 
-export function nxWatcherEnvironment(environment = process.env) {
-  return {
-    ...environment,
-    // Nx deliberately disables its daemon inside an Nx task. `nx watch`
-    // requires that daemon, so the nested long-lived watcher must opt back
-    // in explicitly.
-    NX_DAEMON: "true",
-    NX_TASKS_RUNNER_DYNAMIC_OUTPUT: "false",
-  };
+/**
+ * Nx re-executes the argv after `--` THROUGH A SHELL, so an unquoted path with
+ * spaces (`C:\Program Files\nodejs\node.exe` is the default install) breaks
+ * silently: the event command dies and change events simply never arrive. The
+ * quotes are literal argv content here — our own cmd.exe wrapper preserves them.
+ */
+export function nxWatchEventArgv(
+  eventScript,
+  execPath = process.execPath,
+  platform = process.platform,
+) {
+  return platform === "win32" ? [`"${execPath}"`, `"${eventScript}"`] : [execPath, eventScript];
+}
+
+export function nxWatcherEnvironment(environment = process.env, platform = process.platform) {
+  return buildChildEnv(
+    environment,
+    {
+      // Nx deliberately disables its daemon inside an Nx task. `nx watch`
+      // requires that daemon, so the nested long-lived watcher must opt back
+      // in explicitly.
+      set: {
+        NX_DAEMON: "true",
+        NX_TASKS_RUNNER_DYNAMIC_OUTPUT: "false",
+      },
+    },
+    platform,
+  );
 }
 
 function consumeLines(value, onLine) {

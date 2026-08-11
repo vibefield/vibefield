@@ -69,9 +69,13 @@ async function main() {
   // Observe critical source roots before any generator or native build reads
   // them. Until the serialized refresh queue exists, events are deduplicated
   // in memory and then drained through that queue without a hand-off gap.
-  stopCriticalWatcher = watchCriticalRoots(criticalWatchRoots(), (file) => {
-    criticalChanges.push(file);
-  });
+  stopCriticalWatcher = watchCriticalRoots(
+    criticalWatchRoots(),
+    (file) => {
+      criticalChanges.push(file);
+    },
+    { log },
+  );
   pluginProjects = await discoverPluginProjects(repoRoot);
   log.info("preparing generated manifests and native contracts");
   await runTracked(pnpmCommand, ["-r", "--if-present", "run", "gen:manifest"], "plugin manifests");

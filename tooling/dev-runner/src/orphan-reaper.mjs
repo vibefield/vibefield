@@ -207,8 +207,11 @@ function isRealPid(pid) {
   return Number.isInteger(pid) && pid > 0;
 }
 
-/** `ps -Ao pid=,comm=` — on macOS `comm` is the full executable path. */
-export async function listSystemProcesses({ log } = {}) {
+/** `ps -Ao pid=,comm=` — on macOS `comm` is the full executable path. Windows
+ * has no `ps` at all and the gate is explicit rather than by spawn failure: an
+ * MSYS `ps.exe` on PATH answers with a different table entirely. */
+export async function listSystemProcesses({ log, platform = process.platform } = {}) {
+  if (platform === "win32") return listWindowsProcesses(log);
   let stdout;
   try {
     ({ stdout } = await execFileAsync("ps", ["-Ao", "pid=,comm="], {
@@ -219,6 +222,54 @@ export async function listSystemProcesses({ log } = {}) {
     return [];
   }
   return parseProcessList(stdout);
+}
+
+/** CIM is the portable process table on Windows; `Select-Object` keeps the
+ * payload to the two fields the classifier convicts on. */
+async function listWindowsProcesses(log) {
+  let stdout;
+  try {
+    ({ stdout } = await execFileAsync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        "Get-CimInstance Win32_Process | Select-Object ProcessId,ExecutablePath | ConvertTo-Json -Compress",
+      ],
+      { maxBuffer: 8 * 1024 * 1024 },
+    ));
+  } catch (error) {
+    log?.warn(`could not list processes; stale-snapshot orphans go unreaped: ${messageOf(error)}`);
+    return [];
+  }
+  const processes = parseWindowsProcessList(stdout);
+  if (processes.length === 0) {
+    log?.warn("the process table came back empty; stale-snapshot orphans go unreaped");
+  }
+  return processes;
+}
+
+/**
+ * `ConvertTo-Json` emits a bare object rather than a one-element array when the
+ * query matches a single row, so both shapes are accepted. A row without an
+ * ExecutablePath (the ones we may not query) carries no evidence at all and is
+ * dropped — reaping is by evidence, never by name.
+ */
+export function parseWindowsProcessList(stdout) {
+  let value;
+  try {
+    value = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+  const processes = [];
+  for (const row of Array.isArray(value) ? value : [value]) {
+    const pid = Number(row?.ProcessId);
+    const exePath = row?.ExecutablePath;
+    if (!isRealPid(pid) || typeof exePath !== "string" || exePath.trim() === "") continue;
+    processes.push({ pid, exePath });
+  }
+  return processes;
 }
 
 /** `<pid> <executable path>` per line; the path may contain spaces. */
@@ -237,7 +288,12 @@ export function parseProcessList(stdout) {
  * unix socket even though lsof prints that same path in its NAME column, so the
  * only reliable query is the whole unix-socket table filtered by name.
  */
-export async function listUnixSocketOwners(socketPaths, { log } = {}) {
+export async function listUnixSocketOwners(socketPaths, { log, platform = process.platform } = {}) {
+  // Windows: the endpoints are named pipes, which have no filesystem presence
+  // for anything to enumerate — the socket-squatter class needs a pid recorded
+  // in a run file (or an ask-the-daemon probe) instead, which is the WIN
+  // follow-up. Until it lands this pass honestly contributes nothing.
+  if (platform === "win32") return [];
   const wanted = new Set(socketPaths.map((path) => resolve(path)));
   if (wanted.size === 0) return [];
   let stdout;
