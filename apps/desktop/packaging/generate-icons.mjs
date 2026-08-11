@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, extname, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Resvg } from "@resvg/resvg-js";
@@ -853,17 +853,23 @@ async function validateGeneratedTree({ outputs, sourceFiles }) {
   const expectedTrayFiles = new Set(
     [...outputs.keys()]
       .filter((path) => dirname(path) === trayRoot)
-      .map((path) => relative(trayRoot, path)),
+      .map((path) => toPosix(relative(trayRoot, path))),
   );
   const actualTrayFiles = await listFiles(trayRoot);
   for (const file of actualTrayFiles) {
     if (!expectedTrayFiles.has(file)) problems.push(`tray/${file} is an unexpected staged asset`);
   }
 
+  // Both sides of this comparison are posix-shaped (see toPosix): the absolute
+  // keys come from join(), so the containment test must use the platform `sep`,
+  // but every RELATIVE key — here, listFiles, and STATIC_SOURCE_FILES — speaks
+  // forward slashes. Matching `${iconRoot}/` against a join()ed key selected
+  // nothing on Windows, so the expected set came out empty and every committed
+  // icon was reported an unexpected asset.
   const expectedIconFiles = new Set(
     [...outputs.keys()]
-      .filter((path) => path.startsWith(`${iconRoot}/`))
-      .map((path) => relative(iconRoot, path)),
+      .filter((path) => path.startsWith(`${iconRoot}${sep}`))
+      .map((path) => toPosix(relative(iconRoot, path))),
   );
   const actualIconFiles = await listFiles(iconRoot);
   for (const file of actualIconFiles) {
@@ -879,6 +885,13 @@ async function validateGeneratedTree({ outputs, sourceFiles }) {
   }
 }
 
+/** Relative asset keys are compared against literals written with forward
+ * slashes (STATIC_SOURCE_FILES, icon.json layer names), so they are normalised
+ * to posix regardless of the host separator. */
+function toPosix(path) {
+  return sep === "/" ? path : path.split(sep).join("/");
+}
+
 async function listFiles(root) {
   const files = [];
   let entries;
@@ -891,7 +904,7 @@ async function listFiles(root) {
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (entry.isDirectory()) {
       for (const child of await listFiles(join(root, entry.name))) {
-        files.push(join(entry.name, child));
+        files.push(`${entry.name}/${child}`);
       }
     } else if (entry.isFile()) {
       files.push(entry.name);

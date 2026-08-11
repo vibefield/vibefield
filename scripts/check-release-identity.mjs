@@ -82,6 +82,16 @@ const FORMATS = {
   },
 };
 
+/** The live machine's identity, injectable so the self-test can prove the rule
+ * below on a synthetic machine. Reading `userInfo()` inside the rule made the
+ * check untestable on some hosts: a username of two characters or fewer trips
+ * the short-name guard, so the self-test's `${username} Ltd` fixture could not
+ * fire the very rule it exists to prove, and the whole gate failed for reasons
+ * that had nothing to do with the ledger. */
+function machineIdentity() {
+  return { user: userInfo().username, host: hostname() };
+}
+
 /** EDP-30's real target: a value that differs per developer machine is not an
  * identity. Checked against THIS machine's user/host plus the universal path
  * shapes, so it catches the common accident (pasting a resolved local path)
@@ -96,9 +106,8 @@ const FORMATS = {
  * acknowledgeable — with a written reason, per field. Silence is still a
  * violation; the exemption has to be argued in the ledger where a reviewer sees
  * it. */
-function machineDerived(value, acknowledgement) {
-  const user = userInfo().username;
-  const host = hostname();
+function machineDerived(value, acknowledgement, identity = machineIdentity()) {
+  const { user, host } = identity;
   const haystack = value.toLowerCase();
   if (/^([a-z]:[\\/]|\/(users|home|var|tmp|opt|private)\/)/i.test(value))
     return { note: "looks like an absolute local path", fatal: true };
@@ -123,7 +132,7 @@ function credentialShaped(value) {
   return null;
 }
 
-function checkLedger(ledger, committed) {
+function checkLedger(ledger, committed, identity = machineIdentity()) {
   const violations = [];
   const blockers = [];
   const notes = [];
@@ -162,7 +171,7 @@ function checkLedger(ledger, committed) {
       const verdict = format(value, name);
       if (verdict !== true) violations.push(`${name}: ${verdict}`);
     }
-    const derived = machineDerived(value, field.machineOverlapAcknowledged);
+    const derived = machineDerived(value, field.machineOverlapAcknowledged, identity);
     if (derived !== null) {
       const line = `${name}: ${derived.note} (EDP-30)`;
       // An acknowledged overlap is still REPORTED — the point is that a reviewer
@@ -290,6 +299,11 @@ function committedLedger(path) {
 // --- self-test: every rule proven to trip on a synthetic ledger --------------
 function selfTest() {
   const base = () => JSON.parse(readFileSync(LEDGER_PATH, "utf8"));
+  // A synthetic machine, so every rule below is proven identically on every
+  // developer's box and in CI. Both names are long enough to clear the
+  // short-name guard and distinctive enough not to collide with a real ledger
+  // value by accident.
+  const MACHINE = { user: "selftestdev", host: "selftestbox" };
   const cases = [
     ["clean ledger has no violations", base(), 0],
     [
@@ -307,7 +321,7 @@ function selfTest() {
         const l = base();
         l.fields.windowsPublisher = {
           status: "frozen",
-          value: `/Users/${userInfo().username}/certs`,
+          value: `/Users/${MACHINE.user}/certs`,
           format: "publisher-name",
         };
         return l;
@@ -342,7 +356,7 @@ function selfTest() {
         const l = base();
         l.fields.windowsPublisher = {
           status: "frozen",
-          value: `${userInfo().username} Ltd`,
+          value: `${MACHINE.user} Ltd`,
           format: "publisher-name",
         };
         return l;
@@ -355,7 +369,7 @@ function selfTest() {
         const l = base();
         l.fields.windowsPublisher = {
           status: "frozen",
-          value: `${userInfo().username} Ltd`,
+          value: `${MACHINE.user} Ltd`,
           format: "publisher-name",
           machineOverlapAcknowledged: "the company is named after the developer",
         };
@@ -392,7 +406,7 @@ function selfTest() {
 
   let failures = 0;
   for (const [name, ledger, expected] of cases) {
-    const { violations } = checkLedger(ledger, null);
+    const { violations } = checkLedger(ledger, null, MACHINE);
     const ok = violations.length === expected;
     if (!ok) failures++;
     console.log(`${ok ? "ok  " : "FAIL"} ${name} (${violations.length} violation(s))`);
@@ -403,7 +417,7 @@ function selfTest() {
   const before = base();
   const after = base();
   after.fields.productName.value = "FieldVibe";
-  const drifted = checkLedger(after, before).violations;
+  const drifted = checkLedger(after, before, MACHINE).violations;
   const driftOk = drifted.some((v) => v.includes("without bumping identityRevision"));
   if (!driftOk) failures++;
   console.log(`${driftOk ? "ok  " : "FAIL"} a frozen value cannot change without a revision bump`);
@@ -411,7 +425,7 @@ function selfTest() {
   const bumped = base();
   bumped.fields.productName.value = "FieldVibe";
   bumped.identityRevision = before.identityRevision + 1;
-  const bumpedViolations = checkLedger(bumped, before).violations.filter((v) =>
+  const bumpedViolations = checkLedger(bumped, before, MACHINE).violations.filter((v) =>
     v.includes("identityRevision"),
   );
   const bumpOk = bumpedViolations.length === 0;

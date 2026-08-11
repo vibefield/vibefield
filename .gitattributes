@@ -1,2 +1,10 @@
-* text=auto
+# The working tree is LF on EVERY platform, not just the ones that default to
+# it. biome's formatter emits LF (the config takes its default), so a CRLF
+# checkout fails `pnpm lint` on all 595 files — the whole verify gate, for a
+# reason that has nothing to do with the code. `eol` overrides core.autocrlf,
+# which Git for Windows sets to `true` system-wide, so this needs no per-machine
+# config from anyone. Linux and macOS see no change; they already check out LF.
+# No tracked file needs CRLF (no .bat/.cmd/.ps1 in the tree) — add an explicit
+# `eol=crlf` exception here if that ever stops being true.
+* text=auto eol=lf
 *.sh text eol=lf
