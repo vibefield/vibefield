@@ -9,10 +9,11 @@ describe("canvas appearance", () => {
   it("projects the reviewed light and dark dot colors onto one grid contract", () => {
     expect(defaultCanvasGridConfig(false)).toMatchObject({
       spacings: [20, 100, 500],
-      dotColor: [191 / 255, 196 / 255, 204 / 255],
-      dotRadius: [0.75, 0.75],
+      dotColor: [166 / 255, 166 / 255, 166 / 255],
+      dotAlpha: 0.85,
+      dotRadius: [1.5, 1.5],
     });
-    expect(defaultCanvasGridConfig(true).dotColor).toEqual([89 / 255, 94 / 255, 102 / 255]);
+    expect(defaultCanvasGridConfig(true).dotColor).toEqual([28 / 255, 28 / 255, 28 / 255]);
   });
 
   it("returns isolated editable values without mutating product defaults", () => {
@@ -25,6 +26,6 @@ describe("canvas appearance", () => {
       dotColor: [18 / 255, 52 / 255, 86 / 255],
     });
     expect(defaultCanvasAppearance().worldGrid.spacings[0]).toBe(20);
-    expect(defaultCanvasAppearance().canvasPalette.dotLight).toBe("#BFC4CC");
+    expect(defaultCanvasAppearance().canvasPalette.dotLight).toBe("#A6A6A6");
   });
 });

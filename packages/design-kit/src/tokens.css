@@ -156,12 +156,12 @@
   --ic-selection-radius: 22px;
 
   /* §7 Interactive states — overlap glow/rim knobs (light defaults) */
-  --ic-glow-color: 128, 128, 128;
+  --ic-glow-color: 255, 255, 255;
   --ic-glow-size-t: 60px;
   --ic-glow-size-c: 60px;
-  --ic-glow-alpha-t: 0.25;
+  --ic-glow-alpha-t: 0.5;
   --ic-glow-alpha-c: 0.25;
-  --ic-rim-color: 128, 128, 128;
+  --ic-rim-color: 224, 224, 224;
   --ic-rim-alpha-t: 0.85;
   --ic-rim-alpha-c: 0.55;
   --ic-rim-width: 1.5px;
@@ -200,7 +200,7 @@
   --vf-shadow-dialog: 0 48px 120px rgb(0 0 0 / 48%), 0 14px 40px rgb(0 0 0 / 30%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 40%);
 
-  /* §7 Interactive states — glow/rim go white on dark */
-  --ic-glow-color: 255, 255, 255;
-  --ic-rim-color: 255, 255, 255;
+  /* §7 Interactive states — reviewed neutral glow/rim on dark */
+  --ic-glow-color: 110, 110, 110;
+  --ic-rim-color: 92, 92, 92;
 }

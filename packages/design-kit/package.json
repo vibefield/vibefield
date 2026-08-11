@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./card-appearance": "./src/card-appearance.ts",
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",
     "./visuals": "./src/visuals.ts"

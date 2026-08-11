@@ -12,6 +12,38 @@ import {
 } from "../src/design-system/tweaks/visual-tweaks";
 
 describe("visual tweak document", () => {
+  it("uses the reviewed exported preset as the complete product default", () => {
+    expect(defaultVisualTweakValues()).toEqual({
+      canvasPalette: {
+        dotLight: "#A6A6A6",
+        dotDark: "#1C1C1C",
+        bgLight: "#FAFAFA",
+        bgDark: "#171717",
+      },
+      worldGrid: {
+        spacings: [20, 100, 500],
+        dotAlpha: 0.85,
+        fadeIn: [12, 16],
+        fadeOut: [120, 200],
+        dotRadius: [1.5, 1.5],
+        levelWeight: [1, 0],
+      },
+      overlapFeedback: {
+        colors: {
+          glowLight: "#FFFFFF",
+          glowDark: "#6E6E6E",
+          rimLight: "#E0E0E0",
+          rimDark: "#5C5C5C",
+        },
+        glowAlpha: [0.25, 0.5],
+        glowSize: [60, 60],
+        rimAlpha: [0.55, 0.85],
+        rimWidth: 1.5,
+        rimRadius: 600,
+      },
+    });
+  });
+
   it("round-trips every canvas, world-grid, and overlap property", () => {
     const values = defaultVisualTweakValues();
     values.canvasPalette.bgLight = "#123456";

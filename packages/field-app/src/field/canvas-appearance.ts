@@ -31,17 +31,17 @@ export interface CanvasAppearance {
 export function defaultCanvasAppearance(): CanvasAppearance {
   return {
     canvasPalette: {
-      dotLight: "#BFC4CC",
-      dotDark: "#595E66",
+      dotLight: "#A6A6A6",
+      dotDark: "#1C1C1C",
       bgLight: "#FAFAFA",
       bgDark: "#171717",
     },
     worldGrid: {
       spacings: [20, 100, 500],
-      dotAlpha: 1,
-      fadeIn: [8, 16],
+      dotAlpha: 0.85,
+      fadeIn: [12, 16],
       fadeOut: [120, 200],
-      dotRadius: [0.75, 0.75],
+      dotRadius: [1.5, 1.5],
       levelWeight: [1, 0],
     },
   };

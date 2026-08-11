@@ -20,7 +20,18 @@
  */
 import type { Entity, World } from "@vibecook/ice";
 import type { CSSProperties, ReactNode } from "react";
+import { OVERLAP_FEEDBACK_DEFAULTS } from "./card-appearance";
 import { useCardChromeProjection } from "./chrome-projection";
+
+const rgbChannels = (hex: string): string => {
+  const packed = Number.parseInt(hex.slice(1), 16);
+  return `${(packed >> 16) & 0xff}, ${(packed >> 8) & 0xff}, ${packed & 0xff}`;
+};
+
+// CSS tokens supply the active theme. These light-theme values are the honest
+// standalone fallback when a CardShell consumer has not loaded tokens.css.
+const FALLBACK_GLOW_CHANNELS = rgbChannels(OVERLAP_FEEDBACK_DEFAULTS.colors.glowLight);
+const FALLBACK_RIM_CHANNELS = rgbChannels(OVERLAP_FEEDBACK_DEFAULTS.colors.rimLight);
 
 /** Card corner radius — exported so folder minis can scale the same silhouette. */
 export const CARD_RADIUS = 22;
@@ -84,6 +95,7 @@ export function CardShell({
   };
 
   const tier = overlap === "accept" ? "t" : "c";
+  const tierIndex = tier === "t" ? 1 : 0;
   // v1 CardChrome verbatim: the inset glow's offset puts the bright spot on
   // the hot-point side (−(hot−0.5)·16 → ±8px), and the rim is a radial
   // gradient anchored AT the hot point, masked to the border ring.
@@ -94,19 +106,19 @@ export function CardShell({
     inset: 0,
     pointerEvents: "none",
     borderRadius: "inherit",
-    boxShadow: `inset ${offsetX}px ${offsetY}px var(--ic-glow-size-${tier}, 60px) rgba(var(--ic-glow-color, 128, 128, 128), var(--ic-glow-alpha-${tier}, 0.25))`,
+    boxShadow: `inset ${offsetX}px ${offsetY}px var(--ic-glow-size-${tier}, ${OVERLAP_FEEDBACK_DEFAULTS.glowSize[tierIndex]}px) rgba(var(--ic-glow-color, ${FALLBACK_GLOW_CHANNELS}), var(--ic-glow-alpha-${tier}, ${OVERLAP_FEEDBACK_DEFAULTS.glowAlpha[tierIndex]}))`,
     opacity: overlap !== "none" ? 1 : 0,
     transition: "opacity 220ms ease, box-shadow 220ms ease",
   };
 
-  const rimColor = `rgba(var(--ic-rim-color, 128, 128, 128), var(--ic-rim-alpha-${tier}, ${tier === "t" ? 0.85 : 0.55}))`;
+  const rimColor = `rgba(var(--ic-rim-color, ${FALLBACK_RIM_CHANNELS}), var(--ic-rim-alpha-${tier}, ${OVERLAP_FEEDBACK_DEFAULTS.rimAlpha[tierIndex]}))`;
   const rim: CSSProperties = {
     position: "absolute",
     inset: 0,
     pointerEvents: "none",
     borderRadius: "inherit",
-    padding: "var(--ic-rim-width, 1.5px)",
-    background: `radial-gradient(var(--ic-rim-radius, 600px) circle at ${hot.x * 100}% ${hot.y * 100}%, ${rimColor}, transparent 40%)`,
+    padding: `var(--ic-rim-width, ${OVERLAP_FEEDBACK_DEFAULTS.rimWidth}px)`,
+    background: `radial-gradient(var(--ic-rim-radius, ${OVERLAP_FEEDBACK_DEFAULTS.rimRadius}px) circle at ${hot.x * 100}% ${hot.y * 100}%, ${rimColor}, transparent 40%)`,
     WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
     WebkitMaskComposite: "xor",
     mask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",

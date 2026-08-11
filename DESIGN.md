@@ -58,8 +58,12 @@ the temporary system-control panel exposes that alpha for live tuning.
 | Token | Light | Dark |
 |---|---|---|
 | `--vf-canvas-bg` | `#FAFAFA` | `#171717` |
-| `--vf-canvas-dot` (GL ground) | `#BFC4CC` | `#595E66` |
+| `--vf-canvas-dot` (GL ground) | `#A6A6A6` | `#1C1C1C` |
 | `--vf-canvas-dot` (CSS fallback) | `rgba(0,0,0,0.16)` | `rgba(255,255,255,0.08)` |
+
+The ICE ground projection uses `spacings: [20, 100, 500]`, `dotAlpha: 0.85`,
+`fadeIn: [12, 16]`, `fadeOut: [120, 200]`, `dotRadius: [1.5, 1.5]`, and
+`levelWeight: [1, 0]`.
 
 ### 2.2 Surfaces
 
@@ -241,10 +245,11 @@ read as an immediate response to the hold").
 | **Hover / active** (tiles, buttons) | `scale(1.03)` hover · `scale(0.95)` active · fills step `black/5 → black/10` (dark `white/10 → white/20`) · `cursor-grab/-grabbing`. |
 | **Keyboard focus** | visible ring, always (quality floor); Esc = close/cancel, consistently. |
 
-Glow/rim knobs are live CSS vars (settings-panel adjustable, defaults in code):
-`--ic-glow-size-t/-c: 60px` · `--ic-glow-alpha-t/-c: 0.25` · `--ic-glow-color: 128,128,128`
-(dark theme: white) · `--ic-rim-width: 1.5px` · `--ic-rim-radius: 600px` ·
-`--ic-rim-alpha-t: 0.85` / `-c: 0.55`.
+Glow/rim knobs are live CSS vars (UI Bench adjustable, defaults in code):
+`--ic-glow-size-t/-c: 60px` · `--ic-glow-alpha-t: 0.5` / `-c: 0.25` · glow color
+light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
+`--ic-rim-width: 1.5px` · `--ic-rim-radius: 600px` · `--ic-rim-alpha-t: 0.85` /
+`-c: 0.55`.
 
 ---
 

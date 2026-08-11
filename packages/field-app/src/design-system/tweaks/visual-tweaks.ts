@@ -1,6 +1,14 @@
+import {
+  defaultOverlapFeedbackTuning,
+  type OverlapFeedbackTuning,
+} from "@vibefield/design-kit/card-appearance";
 import { type CanvasAppearance, defaultCanvasAppearance } from "../../field/canvas-appearance";
 import { hexToRgb255 } from "../../field/theme-constants";
 
+export type {
+  OverlapFeedbackColors,
+  OverlapFeedbackTuning,
+} from "@vibefield/design-kit/card-appearance";
 export type { CanvasPalette, WorldGridAppearance } from "../../field/canvas-appearance";
 
 /**
@@ -9,25 +17,6 @@ export type { CanvasPalette, WorldGridAppearance } from "../../field/canvas-appe
  * Keeping the whole document in one value gives import/reset one atomic seam
  * and makes it impossible for the file format to omit a control accidentally.
  */
-export interface OverlapFeedbackColors {
-  glowLight: string;
-  glowDark: string;
-  rimLight: string;
-  rimDark: string;
-}
-
-export interface OverlapFeedbackTuning {
-  colors: OverlapFeedbackColors;
-  /** Candidate first, overlap target second. */
-  glowAlpha: [number, number];
-  /** Candidate first, overlap target second. */
-  glowSize: [number, number];
-  /** Candidate first, overlap target second. */
-  rimAlpha: [number, number];
-  rimWidth: number;
-  rimRadius: number;
-}
-
 export interface VisualTweakValues extends CanvasAppearance {
   overlapFeedback: OverlapFeedbackTuning;
 }
@@ -37,21 +26,7 @@ export function defaultVisualTweakValues(): VisualTweakValues {
   const canvas = defaultCanvasAppearance();
   return {
     ...canvas,
-    overlapFeedback: {
-      colors: {
-        glowLight: "#808080",
-        glowDark: "#FFFFFF",
-        rimLight: "#808080",
-        rimDark: "#FFFFFF",
-      },
-      // Match design-kit/tokens.css exactly. The retired in-app panel used a
-      // second set of defaults, so development and packaged builds disagreed.
-      glowAlpha: [0.25, 0.25],
-      glowSize: [60, 60],
-      rimWidth: 1.5,
-      rimAlpha: [0.55, 0.85],
-      rimRadius: 600,
-    },
+    overlapFeedback: defaultOverlapFeedbackTuning(),
   };
 }
 
