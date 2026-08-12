@@ -15,6 +15,7 @@ import {
   killDaemonTree,
   nativeBinPath,
   nativeEndpoint,
+  removeTempRoot,
   waitForMgmtEndpoint,
 } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
@@ -43,7 +44,7 @@ afterEach(async () => {
   // outright. See killDaemonTree; Node's retry loop stays as the backstop.
   await Promise.all(children.map((c) => killDaemonTree(c)));
   children = [];
-  for (const d of dirs) rmSync(d, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
+  for (const d of dirs) removeTempRoot(d);
   dirs = [];
 });
 

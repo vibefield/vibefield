@@ -8,7 +8,7 @@
 // win32 branch is reachable from a unit test on a mac rather than only from a
 // Windows box.
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -122,6 +122,33 @@ export async function killDaemonTree(child: ChildProcess): Promise<void> {
     }
   }
   await exited;
+}
+
+/** Remove a suite's temp data root, tolerating Windows' slow handle release.
+ *
+ * The strictness lives one line earlier, in `killDaemonTree`: that AWAITS the
+ * real exit, so "did the daemon die" is still answered hard. What this softens
+ * is only "did Windows finish releasing its handles before we asked", which is
+ * not a claim any test here is making. Windows drops a dead process's handles
+ * asynchronously, and Defender or the indexer can hold a just-written file for
+ * longer still, so `rmSync` can read EPERM on a directory whose owner is gone.
+ *
+ * That was reddening the gate on HOUSEKEEPING: every assertion passed, then the
+ * `afterEach` threw and took the file with it — a different row each run, all
+ * green in isolation. A leaked directory under %TEMP% is not a product defect
+ * and the OS reclaims it; a false red teaches people to re-run until green,
+ * which is how a true failure gets waved through. So: a generous budget, and
+ * then a reported surrender rather than a thrown one. */
+export function removeTempRoot(dir: string): void {
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  } catch (error) {
+    // Deliberately not rethrown — see above. Named on stderr so a LEAK is still
+    // visible if one ever becomes systematic rather than incidental.
+    process.stderr.write(
+      `[native-harness] left ${dir} behind: ${(error as NodeJS.ErrnoException).code ?? error}\n`,
+    );
+  }
 }
 
 /** `waitForEndpoint` for the management plane — the gate every native suite

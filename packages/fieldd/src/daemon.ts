@@ -1,4 +1,3 @@
-import { spawn as spawnChild } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -69,6 +68,7 @@ import type { WsCtor } from "@vibefield/fieldd-client";
 import {
   createNodeLogging,
   createNoopLogger,
+  createPrivateDir,
   type NodeLogging,
   PluginLogRouter,
   pluginLogProvenance,
@@ -99,12 +99,11 @@ import { RegistryInstallService } from "./plugin-install";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
-import { ProcessService, pluginChildEnv } from "./process-service";
+import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { type PluginServiceLogRecord, ServiceHost } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
-import { shimSpawn } from "./spawn-shim";
 import { TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
 
@@ -534,31 +533,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
       callDynamic: (method, params) => services.callProjected(method, params),
       providerUp: (ns) => services.providerUp(ns),
-      spawn: (req) => {
-        const env = pluginChildEnv(req.env);
-        // WIN-3 (§4.5) — `npx`/`uvx`, the practical MCP config, ARE `.cmd` shims
-        // on Windows and node refuses a batch file without a shell
-        // (CVE-2024-27980). The shim quotes them into `cmd.exe /d /s /c` itself;
-        // it is a passthrough on unix and for real executables.
-        const cmd = shimSpawn(req.executable, req.args, process.platform, {
-          env,
-          ...(req.cwd !== undefined ? { cwd: req.cwd } : {}),
-        });
-        const child = spawnChild(cmd.command, cmd.args, {
-          ...(req.cwd !== undefined ? { cwd: req.cwd } : {}),
-          env,
-          stdio: ["pipe", "pipe", "pipe"],
-          windowsHide: true,
-          ...(cmd.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
-        });
-        return {
-          stdin: child.stdin as NodeJS.WritableStream,
-          stdout: child.stdout as NodeJS.ReadableStream,
-          stderr: child.stderr as NodeJS.ReadableStream,
-          kill: () => void child.kill(),
-          onExit: (cb: (code: number | null) => void) => void child.on("exit", cb),
-        };
-      },
+      // The spawn seam is process-service's own MCP door, not a closure here:
+      // as a closure it applied the child-env law (EL7) but skipped §17.1's
+      // executable policy, so the two doors into one subsystem disagreed about
+      // what a config may name. Composition roots wire; policy lives with it.
+      spawn: spawnMcpStdio,
     });
     // C3 — the serve route secret (thinking-c3 §1): the provenance proof
     // shared by exactly two parties, this process and the sidecar's route
@@ -2332,8 +2311,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     void reconciler.reconcile();
 
     // -- run files (shell bootstrap contract) --
+    // WIN-D4/EL7 — this directory holds the crown jewel: `shell.token` grants
+    // FULL daemon adoption, and the `0o600` two dozen lines below is a NO-OP on
+    // Windows (Node maps `mode` to the read-only attribute; NTFS has no
+    // permission bits), so on that platform the credential's whole privacy is
+    // whatever the parent happened to inherit — under %TEMP% or %LOCALAPPDATA%,
+    // SYSTEM and Administrators at minimum. `createPrivateDir` is the Windows
+    // expression of the same intent: inherited ACEs dropped, this account alone
+    // granted, and the (OI)(CI) inheritance carries it to every file created
+    // afterwards — so the token is born private with NO window between its
+    // creation and its restriction. On POSIX it is mkdir(0o700) plus a
+    // umask-proof chmod, which also tightens what the bare mkdir here used to
+    // leave at the umask's mercy.
     const runDir = join(config.dataDir, ...LAYOUT.FIELDD_RUN_DIR);
-    mkdirSync(runDir, { recursive: true });
+    await createPrivateDir(runDir);
     const shellTokenId = tokens.reserveTokenId();
     const shellGrant = await audit.requiredSystem(
       {
@@ -2358,8 +2349,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     );
     const tokenPath = join(config.dataDir, ...LAYOUT.SHELL_TOKEN);
     const productPath = join(config.dataDir, ...LAYOUT.PRODUCT_JSON);
+    // POSIX keeps its own true statement of the same law; on win32 both lines
+    // are inert and the private run dir above is what is actually holding.
     writeFileSync(tokenPath, shellGrant.token, { mode: 0o600 });
     chmodSync(tokenPath, 0o600); // umask-proof
+    // No per-FILE ACL edit on top: `restrictToCurrentUser` grants
+    // `<account>:(OI)(CI)F`, which are CONTAINER inheritance flags. Applied to a
+    // file, icacls reports success and leaves an EMPTY DACL — measured on
+    // win32: the owner then gets EPERM on read, rewrite AND delete, i.e. it
+    // bricks the credential it was meant to protect (and would break both the
+    // shell's adoption read and this daemon's own cleanup on stop). The
+    // directory grant is the mechanism that works; the helper needs a
+    // non-container form before any file may call it.
+    // product.json rides the same inherited ACL and asks for nothing more: it
+    // is the discovery contract, not a secret — port, pid, bootId — and the
+    // control port answers nothing without a scoped bearer token anyway (EL7).
     writeFileSync(
       productPath,
       `${JSON.stringify(

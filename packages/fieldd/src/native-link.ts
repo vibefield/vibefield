@@ -8,7 +8,7 @@ import {
   TerminalEndpoints,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { computePairingMac } from "./pairing";
+import { ackMacMatches, computeAckMac, computePairingMac, newPairingNonce } from "./pairing";
 
 // NativeLink (design-02 §3.3): the ONLY door to field-native. Owns the mgmt
 // UDS connection: D8 pairing hello, request/response correlation, subscription
@@ -45,6 +45,9 @@ export interface NativeLinkOptions {
   waitForDaemonMs?: number;
   /** Test seam; production uses NATIVE_MGMT_MAX_FRAME_BYTES. */
   maxFrameBytes?: number;
+  /** Test seam; production uses HELLO_TIMEOUT_MS. How long an endpoint that has
+   * ACCEPTED the connection may stay silent before the dial is abandoned. */
+  helloTimeoutMs?: number;
   logger?: Logger;
 }
 
@@ -52,6 +55,28 @@ export interface NativeLinkOptions {
  * that a compromised/native-buggy peer cannot grow fieldd without limit. */
 export const NATIVE_MGMT_MAX_FRAME_BYTES = MESH_CONTROL_LIMITS.MGMT_FRAME_BYTES;
 const NATIVE_MGMT_RETAINED_FRAME_BYTES = 1024 * 1024;
+/** How long the handshake may take before the dial is abandoned. Generous
+ * against a loaded box (field-native answers a hello in microseconds once it is
+ * listening) and finite against something that accepts and never speaks. */
+const HELLO_TIMEOUT_MS = 10_000;
+
+/** Reject with `message` if `work` has not settled within `ms`. The timer is
+ * always cleared, and a late rejection from `work` is swallowed rather than
+ * left to become an unhandled rejection after the race is decided. */
+async function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new RpcCallError("UNAVAILABLE", message, true)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    void work.catch(() => undefined);
+  }
+}
 
 type SubEventKind = "snapshot" | "delta";
 interface QueuedSubEvent {
@@ -239,19 +264,53 @@ export class NativeLink extends EventEmitter {
     const secretHex = readFileSync(this.opts.pairingFile, "utf8").trim();
     const ts = Math.floor(Date.now() / 1000);
     const mac = computePairingMac(secretHex, this.opts.bootId, ts);
-    const ack = await this.request("native.lifecycle.hello", {
-      contractsVersion: CONTRACTS_VERSION,
-      minCompatible: CONTRACTS_VERSION,
-      clientKind: "fieldd",
-      credential: { bootId: this.opts.bootId, ts, mac },
-      // UA-2 — the pair asserts which user it serves, on the mgmt surface too;
-      // field-native carries it tolerantly (no consumer until UA-5).
-      ...(this.opts.userId !== undefined ? { userId: this.opts.userId } : {}),
-    });
-    // NF-D8: a fresh native boot means fresh endpoints + token; a re-pair to
-    // the same boot re-delivers the same ones. The tolerant gate keeps a
-    // malformed/absent field as "no floor" rather than a poisoned value.
-    const record = (ack ?? {}) as { terminal?: unknown; nativeBuild?: unknown };
+    const nonce = newPairingNonce();
+    // A DEADLINE, because nothing else bounds this one. `connect()`'s budget is
+    // re-checked between dials and never during one, and no request carries a
+    // per-call timeout — so an endpoint that accepts the connection and then
+    // says nothing hangs the dial forever. That is not hypothetical on win32:
+    // the pipe namespace is flat (WIN-D1), so a squatter that cannot pass the
+    // WIN-10 proof can still simply stall, and silence would otherwise be a
+    // better attack than a wrong answer. A supervised boot is bounded by the
+    // supervisor's own readiness deadline; a standalone `node bin.cjs` had
+    // nothing at all.
+    const ack = await withTimeout(
+      this.request("native.lifecycle.hello", {
+        contractsVersion: CONTRACTS_VERSION,
+        minCompatible: CONTRACTS_VERSION,
+        clientKind: "fieldd",
+        credential: { bootId: this.opts.bootId, ts, mac, nonce },
+        // UA-2 — the pair asserts which user it serves, on the mgmt surface too;
+        // field-native carries it tolerantly (no consumer until UA-5).
+        ...(this.opts.userId !== undefined ? { userId: this.opts.userId } : {}),
+      }),
+      this.opts.helloTimeoutMs ?? HELLO_TIMEOUT_MS,
+      "the native plane accepted the connection but never answered the hello",
+    );
+    // WIN-10 — before ANY of this ack is believed, the answerer must prove it
+    // holds the pairing secret. Our own MAC above only proved US. On unix the
+    // 0700 run directory proved the server structurally; the flat Windows pipe
+    // namespace (WIN-D1) does not, and a squatter that wins the bind race is
+    // dialled by a fieldd whose connect-probe reads it as a live native. Such a
+    // squatter's ack could name its OWN terminal control/frame endpoints and
+    // auth token, which fieldd would then use — this refusal is what stops it.
+    // Refusing an ABSENT proof is the point: an attacker downgrades otherwise.
+    const record = (ack ?? {}) as {
+      terminal?: unknown;
+      nativeBuild?: unknown;
+      serverMac?: unknown;
+    };
+    const expected = computeAckMac(secretHex, nonce, this.opts.bootId);
+    if (typeof record.serverMac !== "string" || !ackMacMatches(expected, record.serverMac)) {
+      throw new RpcCallError(
+        "UNAUTHORIZED",
+        typeof record.serverMac === "string"
+          ? "the native plane answered with an invalid pairing proof — refusing to pair"
+          : "the native plane did not prove possession of the pairing secret — refusing to " +
+              "pair (a field-native predating WIN-10 must be restarted once)",
+        false,
+      );
+    }
     const parsed = TerminalEndpoints.safeParse(record.terminal);
     this.terminalEndpoints = parsed.success ? parsed.data : undefined;
     // GT-2d: read on its own terms, so a floor whose endpoints are malformed

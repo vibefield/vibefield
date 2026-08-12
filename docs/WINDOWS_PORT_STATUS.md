@@ -85,6 +85,43 @@ The first non-smoke launch (`cd apps\desktop && pnpm exec electron .`) surfaced 
   green when the pin consuming it lands. **Note for whoever files it:** the petition file is not in
   this clone (dev-local only), so from a Windows checkout row 6b is the only in-tree artifact of it.
 
+## WIN-10 — the two things POSIX gave for free and Windows does not (2026-08-11)
+
+**1. Nobody was proving the SERVER.** D8's MAC proves the CLIENT to field-native. On unix nothing
+had to prove the reverse: the socket sat inside a 0700 run directory, so only the owner could have
+created the thing answering. WIN-D1's pipes have no such boundary — the namespace is flat and
+machine-wide and the scope is a hash of a guessable data root, so another local account can publish
+our name before field-native does. fieldd's connect-probe then reads the squatter as a live native
+(so no real one is spawned) and believes its ack, **terminal control/frame endpoints and floor auth
+token included**. The client now sends a per-connection `nonce`; the server answers
+`serverMac = HMAC(secret, "fn-ack" 0x00 nonce 0x00 bootId)`. Both mgmt and the meshdata byte lane
+carry it — the lane holds no token, but a squatter there feeds fieldd forged DOCUMENT bytes that
+Loro merges as genuine. **Absence is refused, not tolerated**, because tolerating it is the downgrade
+an attacker would simply request; the cost is that a field-native predating WIN-10 must be restarted
+once, and the refusal says so. What this does NOT fix: a squatter holding the name makes
+field-native's `first_pipe_instance` bind fail closed — honest refusal to boot, not compromise.
+The pairing secret itself stays safe by the profile ACL (`%APPDATA%` is per-user by default), which
+is what keeps the whole scheme coherent: the pipe namespace is shared, the profile is not.
+
+**2. `mode` is a no-op, so "private at rest" had no Windows expression.** `mkdir(…, 0o700)` and
+`chmod(0o600)` set the READ-ONLY attribute and nothing else — NTFS has no permission bits. Every log
+segment, audit-chain file, crash dump, `users.json` and `shell.token` landed with whatever ACL it
+inherited, and a prior pass had win32-skipped the mode assertions, leaving NOTHING asserting it.
+`@vibefield/logging`'s `createPrivateDir` now applies an explicit owner-only DACL (`icacls
+/inheritance:r /grant:r <account>:(OI)(CI)F`) to the private ROOTS and lets children inherit —
+directory-level because a per-file ACL edit would spawn a process per rotated segment, and memoized
+per path per process because callers re-run it on every re-open. It is applied on first touch rather
+than only on creation, so an install predating this code is REPAIRED rather than left with its old
+grants. Both platforms now assert privacy in their own true terms (POSIX mode bits; win32 ACL reads
+that require exactly one account and no inherited entries).
+
+> **R16 amended, deliberately** (`scripts/check-import-boundaries.mjs`): the wall said audit has
+> "filesystem authority only, never network/process authority", and the second half went transitively
+> false the moment audit's root needed a DACL — Node exposes no ACL API, so the helper spawns
+> `icacls`. The mechanical rule is unchanged (audit still may not import `child_process` itself);
+> what changed is the CLAIM, so the wall states the authority audit actually has. One helper, named;
+> a second is a decision, not a precedent.
+
 ## Windows process-tree termination — what is closed and what is not (2026-08-11)
 
 `process.kill(-pid, sig)` **throws ESRCH** on Windows (measured on the box, not inferred), so the

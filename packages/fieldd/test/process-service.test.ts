@@ -2,12 +2,15 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { RpcCallError } from "../src/native-link";
 import {
   executableAllowed,
   hasGracefulTermination,
+  isUnderRoot,
   killPlan,
   ProcessService,
   pluginChildEnv,
+  spawnMcpStdio,
 } from "../src/process-service";
 
 // PLUG-P6 — §17.1 supervised children, service-level (the daemon caller
@@ -343,6 +346,112 @@ describe("the executable policy refuses every cwd-dependent Windows form", () =>
     expect(executableAllowed("../sh", "linux")).toBe(false);
     expect(executableAllowed("sub/sh", "linux")).toBe(false);
   });
+});
+
+// §17.4's stdio door is the SECOND caller of the policy above. As a closure in
+// the daemon it applied the child-env law and SKIPPED the executable rule, so an
+// MCP transport could name `..\evil.exe` where a plugin service could not. MCP
+// configs are settings-authored, which made that an asymmetry rather than an
+// injection — but EL7 reads a same-uid agent as the adversary, and these rows
+// exist so the two doors into one subsystem cannot drift apart again.
+describe("the MCP stdio door shares the process door's policy (§17.4)", () => {
+  const REFUSED =
+    process.platform === "win32"
+      ? ["..\\evil.exe", ".\\evil.exe", "C:evil", "\\evil.exe", ""]
+      : ["./evil", "../evil", "sub/evil", ""];
+
+  it("refuses every cwd-dependent spelling with the process door's own error", () => {
+    for (const executable of REFUSED) {
+      let thrown: unknown;
+      try {
+        spawnMcpStdio({ executable, args: [] });
+      } catch (error) {
+        thrown = error;
+      }
+      // The SHAPE is the assertion, not just the refusal: the MCP session lands
+      // `failed` with this message as its lastError, so a config author reads
+      // exactly what a plugin author reads.
+      expect(thrown).toBeInstanceOf(RpcCallError);
+      const error = thrown as RpcCallError;
+      expect(error.kind).toBe("PRECONDITION_FAILED");
+      expect(error.retryable).toBe(false);
+      expect(error.message).toMatch(/absolute path or a bare PATH command/);
+    }
+  });
+
+  it("still spawns a legal server over pipes, with the env law applied (EL7)", async () => {
+    // The control for the rows above — a guard that refused everything would
+    // pass them and break every real MCP server. This one also proves the moved
+    // door kept the strip: additions land, FIELD_*/FIELDD_* never do.
+    const child = spawnMcpStdio({
+      executable: NODE,
+      args: ["-e", "process.stdout.write(JSON.stringify(process.env))"],
+      env: { FIELD_SECRET: "leak", FIELDD_TOKEN: "leak", SAFE_VAR: "ok" },
+    });
+    cleanup.push(() => child.kill());
+    const out = await new Promise<string>((resolve, reject) => {
+      let acc = "";
+      child.stdout.on("data", (chunk: unknown) => {
+        acc += String(chunk);
+      });
+      child.stdout.on("end", () => resolve(acc));
+      child.stdout.on("error", reject);
+    });
+    const env = JSON.parse(out) as Record<string, string>;
+    expect(env["SAFE_VAR"]).toBe("ok");
+    expect(Object.keys(env).filter((k) => /^FIELDD?_/i.test(k))).toEqual([]);
+  });
+});
+
+// WIN-D4 — cwd confinement compares PATHS, and on NTFS two spellings of one
+// directory differ only in case (an installer records `C:\…`; a shell hands the
+// same directory back as `c:\…`). The byte-exact compare refused a plugin its
+// OWN directory over that — closed, never a bypass, but a door that refuses the
+// legitimate caller is still broken. Both arms are decided here from either
+// machine: the platform argument picks the CASE rule; the paths stay native.
+describe("cwd confinement folds case on win32 only (§17.1)", () => {
+  const root = join(tmpdir(), "VF-Case-Root");
+
+  it("accepts the same directory spelled in another case — on win32 alone", () => {
+    const under = join(root.toLowerCase(), "sub");
+    expect(under).not.toBe(join(root, "sub")); // the row is about a real difference
+    expect(isUnderRoot(under, root, "win32")).toBe(true);
+    // unix paths are genuinely case-sensitive: /Data and /data are two different
+    // directories there, so the same fold would ADMIT one for the other.
+    expect(isUnderRoot(under, root, "linux")).toBe(false);
+    // the control: the exact spelling was always under the root, on both arms
+    expect(isUnderRoot(join(root, "sub"), root, "win32")).toBe(true);
+    expect(isUnderRoot(join(root, "sub"), root, "linux")).toBe(true);
+    // and the root itself, which is `p === r` rather than the prefix branch
+    expect(isUnderRoot(root.toLowerCase(), root, "win32")).toBe(true);
+  });
+
+  it("is not a bare prefix test — the adjacent sibling stays out on both", () => {
+    for (const platform of ["win32", "linux"] as const) {
+      expect(isUnderRoot(`${root}-evil`, root, platform)).toBe(false);
+      expect(isUnderRoot(join(tmpdir(), "VF-Case-Elsewhere"), root, platform)).toBe(false);
+    }
+    // the fold must not turn the separator guard off either
+    expect(isUnderRoot(`${root.toLowerCase()}-evil`, root, "win32")).toBe(false);
+  });
+
+  it.skipIf(process.platform !== "win32")(
+    "lets a plugin spawn in its own directory under another spelling",
+    async () => {
+      const { svc, dir } = make();
+      // %TEMP% always carries capitals on Windows, so this is never the same
+      // string as the configured root — the refusal it used to earn was real.
+      expect(dir.toLowerCase()).not.toBe(dir);
+      const rec = svc.spawnFor(PLUGIN, {
+        executable: NODE,
+        args: EXIT_NOW,
+        cwd: dir.toLowerCase(),
+        restart: "never",
+      });
+      await until(() => svc.stat(PLUGIN, rec.procId)[0]?.state === "exited");
+      expect(svc.stat(PLUGIN, rec.procId)[0]?.exitCode).toBe(0);
+    },
+  );
 });
 
 // The termination verb is platform-shaped for the same reason the two above

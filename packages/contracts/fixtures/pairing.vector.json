@@ -1,7 +1,10 @@
 {
   "note": "D8 cross-language crypto vector — mac = hex(HMAC-SHA256(secret, 'fn-boot' 0x00 bootId 0x00 decimal(ts)))",
+  "ackNote": "WIN-10 mutual auth — ackMac = hex(HMAC-SHA256(secret, 'fn-ack' 0x00 nonce 0x00 bootId)). A DIFFERENT context string from the client's MAC, so neither direction's transcript replays as the other's.",
   "secretHex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
   "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
   "ts": 1784930400,
-  "mac": "6353dfab14461f4f21c9847382adf96bcec8c9512af23b3c9859ff0630a2b17e"
+  "mac": "6353dfab14461f4f21c9847382adf96bcec8c9512af23b3c9859ff0630a2b17e",
+  "nonce": "9f8e7d6c5b4a39281706f5e4d3c2b1a0",
+  "ackMac": "46a49f51a7fd24ed889df02af3cb9354d71ab0269e1770d3ff6fab6d16d99b3f"
 }

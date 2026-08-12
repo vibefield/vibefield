@@ -260,15 +260,24 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   indexer held `current.json` (predicted at `thinking-windows-port.md` §7.4 and never closed; now a
   bounded win32 retry). **Still open from that same §7.4 family: the other publish paths it named —
   users.json, log segments, the audit chain — none of which retry today.**
-  **The residue this pass CREATED, named rather than left to be discovered:** porting the suites
-  added nine win32 skips in three classes — symlink-planting (needs Developer Mode), the sun_path
-  unix law (WIN-D1: no byte budget on a pipe name; a companion row proves both arms purely), and
-  **POSIX mode bits**. That third class means **nothing on Windows now asserts that the log root,
-  crash dumps, `shell.token`, or the audit chain land owner-only** — `chmod` there flips only the
-  read-only attribute, so the old assertions measured a fiction, but the EL7 "private at rest"
-  property has no Windows expression to assert instead. WIN-D4 books the per-pipe DACL and the
-  Rust-side `cfg(unix)` mode bits; **the Node-side file ACLs are not covered by that booking** and
-  should be, since the skipped rows are now the only marker that the question is unanswered.
+  ~~**The residue this pass CREATED**~~ — **CLOSED by WIN-10 the same day.** WIN-9's suite port added
+  nine win32 skips, and one class (POSIX mode bits) meant nothing on Windows asserted that the log
+  root, crash dumps, `shell.token` or the audit chain land owner-only. WIN-10 gives EL7's
+  "private at rest" a real Windows expression (owner-only DACLs on the private roots, children
+  inheriting) and asserts it on both platforms in their own true terms; four of the five symlink
+  skips also became real junction-based tests. See the WIN-10 ledger entry.
+- **WIN-10 — the two guarantees POSIX gave for free (2026-08-11, LANDED).** Mutual pairing auth:
+  D8's MAC proved the CLIENT, nothing proved the SERVER, and unix got that free from the 0700 run
+  directory while WIN-D1's flat pipe namespace does not — a local squatter that wins the bind race is
+  dialled by fieldd's connect-probe and could hand it terminal endpoints and an auth token. Closed on
+  both mgmt and the meshdata lane with a per-connection nonce + `fn-ack`-context proof (WIN-D10),
+  refused when absent because tolerating absence IS the downgrade. Plus private-at-rest (above), the
+  MCP door's missing executable policy, case-insensitive `isUnderRoot` on NTFS, five sync commit
+  points still on a bare `renameSync`, and a `(OI)(CI)`-on-a-file bug this slice wrote and its own
+  control run caught (an empty DACL that locks the owner out of `shell.token`).
+  **Still open, deliberately:** a squatter holding a pipe name makes field-native fail closed
+  (refusal to boot, not compromise); `artifact-preview-capture`'s thumbnail rename; and the stale
+  "proven by the packaged gate" comment in four fieldd test files.
 - **AR** — the agent tracks; the reason everything else exists, and the only thing between here
   and the P0 exit. Its seam is one module wide and every dependency it named is landed.
 - **IOS-3c's capability leg** — the Keychain store, the write capability supplied at attach, and

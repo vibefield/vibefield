@@ -1,7 +1,7 @@
 import { createHash, type Hash } from "node:crypto";
 import { constants } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
-import { chmod, lstat, mkdir, open, rename, unlink } from "node:fs/promises";
+import { lstat, open, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { LAYOUT } from "@vibefield/contracts";
 import {
@@ -10,6 +10,14 @@ import {
   type AuditTargetV1,
 } from "@vibefield/contracts/diagnostics";
 import type { LogAttributesV1 } from "@vibefield/contracts/logging";
+// The two filesystem laws POSIX gives for free and Windows does not, owned by
+// @vibefield/logging so there is exactly one copy (a per-package copy is how the
+// first one silently stopped holding here). Note for the R16 wall: on win32
+// `createPrivateDir` shells out to `icacls`, so audit's authority now includes
+// one fixed-argument spawn of a system binary at root creation. That is a
+// deliberate trade — evidence any local account can read is a worse EL7 failure
+// than a bounded spawn — and the wall's wording should be amended to say so.
+import { createPrivateDir, durableRename } from "@vibefield/logging";
 import { type AuditRecordBase, auditChainHash, MAX_AUDIT_RECORD_BYTES } from "./model";
 
 export {
@@ -335,18 +343,40 @@ export class AuditLedgerWriter {
     if (this.rootReady) return;
     try {
       await this.options.hooks?.beforeRoot?.(this.root);
-      await mkdir(this.root, { recursive: true, mode: 0o700 });
-      const info = await lstat(this.root);
-      if (!info.isDirectory() || info.isSymbolicLink()) {
-        throw new Error("audit root is not a private regular directory");
-      }
-      await chmod(this.root, 0o700);
+      // The chain is evidence, so the root is private on BOTH platforms. The old
+      // mkdir(0o700) + chmod answered only the unix half — win32 maps `mode` to
+      // the read-only attribute (WIN-D4), which left every ledger readable by
+      // whatever the parent inherited. `createPrivateDir` keeps the mode bits and
+      // adds the owner-only DACL there; the 0o600 segments below inherit it.
+      //
+      // The symlink check runs on both sides of that call. Before, because chmod
+      // and the DACL rewrite both FOLLOW a link — a planted audit root would have
+      // some other directory's permissions rewritten with daemon authority. After,
+      // because that is the original guard and still catches a later plant.
+      await this.assertRootShapeIfPresent();
+      await createPrivateDir(this.root);
+      await this.assertRootShape();
       await this.syncDirectory(this.root);
       await this.syncDirectory(dirname(this.root));
       this.rootReady = true;
     } catch (error) {
       if (error instanceof AuditWriterError) throw error;
       throw new AuditWriterError("root", errorCode(error), error);
+    }
+  }
+
+  private async assertRootShape(): Promise<void> {
+    const info = await lstat(this.root);
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw new Error("audit root is not a private regular directory");
+    }
+  }
+
+  private async assertRootShapeIfPresent(): Promise<void> {
+    try {
+      await this.assertRootShape();
+    } catch (error) {
+      if (errorCode(error) !== "ENOENT") throw error;
     }
   }
 
@@ -496,7 +526,12 @@ export class AuditLedgerWriter {
       await handle.sync();
       await handle.close();
       handle = null;
-      await rename(partialPath, checkpointPath);
+      // The checkpoint's commit point: the `.partial` becomes the integrity file
+      // atomically or not at all. On win32 `MoveFileEx` refuses while any handle
+      // is open on either end — a scanner reading the segment we just closed is
+      // enough — so the bounded retry is what keeps a chain from closing
+      // uncheckpointed for a reason that has nothing to do with the chain.
+      await durableRename(partialPath, checkpointPath);
       await this.syncDirectory(this.root);
     } catch (error) {
       try {

@@ -874,6 +874,9 @@ impl Hello {
 #[doc = "    \"serverKind\": {"]
 #[doc = "      \"$ref\": \"#/definitions/ServerKind\""]
 #[doc = "    },"]
+#[doc = "    \"serverMac\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"terminal\": {"]
 #[doc = "      \"$ref\": \"#/definitions/TerminalEndpoints\""]
 #[doc = "    },"]
@@ -902,6 +905,12 @@ pub struct HelloAck {
     pub native_build: ::std::option::Option<::std::string::String>,
     #[serde(rename = "serverKind")]
     pub server_kind: ServerKind,
+    #[serde(
+        rename = "serverMac",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub server_mac: ::std::option::Option<::std::string::String>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub terminal: ::std::option::Option<TerminalEndpoints>,
     #[serde(
@@ -4049,6 +4058,9 @@ impl ObservedWorker {
 #[doc = "    \"mac\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
+#[doc = "    \"nonce\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"ts\": {"]
 #[doc = "      \"type\": \"integer\""]
 #[doc = "    }"]
@@ -4062,6 +4074,8 @@ pub struct PairingMac {
     #[serde(rename = "bootId")]
     pub boot_id: ::std::string::String,
     pub mac: ::std::string::String,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub nonce: ::std::option::Option<::std::string::String>,
     pub ts: i64,
 }
 impl PairingMac {
@@ -6828,6 +6842,10 @@ pub mod builder {
             ::std::string::String,
         >,
         server_kind: ::std::result::Result<super::ServerKind, ::std::string::String>,
+        server_mac: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         terminal: ::std::result::Result<
             ::std::option::Option<super::TerminalEndpoints>,
             ::std::string::String,
@@ -6844,6 +6862,7 @@ pub mod builder {
                 granted_scopes: Err("no value supplied for granted_scopes".to_string()),
                 native_build: Ok(Default::default()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
+                server_mac: Ok(Default::default()),
                 terminal: Ok(Default::default()),
                 user_id: Ok(Default::default()),
             }
@@ -6890,6 +6909,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for server_kind: {e}"));
             self
         }
+        pub fn server_mac<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.server_mac = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for server_mac: {e}"));
+            self
+        }
         pub fn terminal<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<super::TerminalEndpoints>>,
@@ -6919,6 +6948,7 @@ pub mod builder {
                 granted_scopes: value.granted_scopes?,
                 native_build: value.native_build?,
                 server_kind: value.server_kind?,
+                server_mac: value.server_mac?,
                 terminal: value.terminal?,
                 user_id: value.user_id?,
             })
@@ -6931,6 +6961,7 @@ pub mod builder {
                 granted_scopes: Ok(value.granted_scopes),
                 native_build: Ok(value.native_build),
                 server_kind: Ok(value.server_kind),
+                server_mac: Ok(value.server_mac),
                 terminal: Ok(value.terminal),
                 user_id: Ok(value.user_id),
             }
@@ -9057,6 +9088,10 @@ pub mod builder {
     pub struct PairingMac {
         boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         mac: ::std::result::Result<::std::string::String, ::std::string::String>,
+        nonce: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         ts: ::std::result::Result<i64, ::std::string::String>,
     }
     impl ::std::default::Default for PairingMac {
@@ -9064,6 +9099,7 @@ pub mod builder {
             Self {
                 boot_id: Err("no value supplied for boot_id".to_string()),
                 mac: Err("no value supplied for mac".to_string()),
+                nonce: Ok(Default::default()),
                 ts: Err("no value supplied for ts".to_string()),
             }
         }
@@ -9089,6 +9125,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for mac: {e}"));
             self
         }
+        pub fn nonce<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.nonce = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for nonce: {e}"));
+            self
+        }
         pub fn ts<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<i64>,
@@ -9108,6 +9154,7 @@ pub mod builder {
             Ok(Self {
                 boot_id: value.boot_id?,
                 mac: value.mac?,
+                nonce: value.nonce?,
                 ts: value.ts?,
             })
         }
@@ -9117,6 +9164,7 @@ pub mod builder {
             Self {
                 boot_id: Ok(value.boot_id),
                 mac: Ok(value.mac),
+                nonce: Ok(value.nonce),
                 ts: Ok(value.ts),
             }
         }

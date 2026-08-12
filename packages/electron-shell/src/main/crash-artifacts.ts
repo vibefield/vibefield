@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { constants, type Dirent } from "node:fs";
-import { chmod, lstat, mkdir, open, readdir, rename, unlink } from "node:fs/promises";
+import { chmod, lstat, open, readdir, unlink } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { LAYOUT } from "@vibefield/contracts";
 import {
@@ -10,7 +10,7 @@ import {
   CrashArtifactV1,
   CrashArtifactViewedV1,
 } from "@vibefield/contracts/diagnostics";
-import type { Logger } from "@vibefield/logging";
+import { createPrivateDir, durableRename, type Logger } from "@vibefield/logging";
 import type { CrashReporterStartOptions } from "electron";
 
 const CRASH_MAX_ARTIFACTS = 5;
@@ -74,13 +74,44 @@ function cleanCardinality(value: string, fallback: string): string {
   return cleaned.length > 0 ? cleaned : fallback;
 }
 
+/** EL7 / WIN-D4 — a minidump is raw process memory, so this tree is the most
+ * sensitive thing the shell writes and the least excusable to leave readable.
+ * `mkdir(…, 0o700)` + `chmod` only ever answered the unix half: on win32 `mode`
+ * is the read-only attribute, so every dump landed with whatever ACL it
+ * inherited. `createPrivateDir` keeps the mode bits and adds the owner-only
+ * (OI)(CI) DACL; the dumps and the manifest below inherit it from the directory,
+ * which is the only affordable shape (Crashpad writes files we never see).
+ *
+ * The link check runs BEFORE the private-dir call, not between a mkdir and a
+ * chmod as the old sequence did: both arms of `createPrivateDir` FOLLOW a link
+ * to its target, so a planted `crashDumpsRoot -> <someone else's directory>`
+ * would have THAT directory's mode rewritten on unix and its DACL replaced with
+ * an owner-only one on win32, with the shell's authority. The post-call assert
+ * still stands — it is the original guard, and it catches a link planted after
+ * the first one. */
 async function ensurePrivateDirectory(path: string): Promise<void> {
-  await mkdir(path, { recursive: true, mode: 0o700 });
+  await assertPrivateDirectoryIfPresent(path);
+  await createPrivateDir(path);
+  await assertPrivateDirectory(path);
+}
+
+async function assertPrivateDirectory(path: string): Promise<void> {
   const info = await lstat(path);
   if (info.isSymbolicLink() || !info.isDirectory()) {
     throw new Error("crash evidence directory is not a private regular directory");
   }
-  await chmod(path, 0o700);
+}
+
+/** The same check for a path that may not exist yet. A win32 junction lstats as
+ * a symbolic link (and NOT as a directory), so this refuses one exactly as it
+ * refuses a unix symlink — which is the point, since a junction is the reparse
+ * point an unprivileged account can actually plant. */
+async function assertPrivateDirectoryIfPresent(path: string): Promise<void> {
+  try {
+    await assertPrivateDirectory(path);
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
 }
 
 /** Starts Crashpad with a deliberately network-incapable configuration.
@@ -148,7 +179,12 @@ async function writePrivateJson(path: string, value: unknown): Promise<void> {
       throw error;
     }
   }
-  await rename(temporary, path);
+  // WIN-D4 — the unlink above narrows but does not close the win32 window:
+  // `MoveFileEx` also refuses with EPERM/EACCES/EBUSY while a handle is open on
+  // the SOURCE, and a scanner opens a freshly written file within milliseconds.
+  // Losing this publish loses the run marker, which is how the next boot decides
+  // whether the last one crashed — a silent wrong answer, not a blank one.
+  await durableRename(temporary, path);
   await chmod(path, 0o600);
 }
 

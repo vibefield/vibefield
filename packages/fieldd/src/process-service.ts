@@ -33,7 +33,9 @@ import { shimSpawn } from "./spawn-shim";
 // working-directory-dependent while reading absolute-ish: `..\evil.exe`,
 // the drive-relative `C:evil` (resolved against that drive's own cwd), and the
 // current-drive-rooted `\evil.exe`. Drive-absolute and UNC paths are absolute
-// and stay allowed.
+// and stay allowed. That policy is `assertExecutableAllowed`, and BOTH doors
+// into this subsystem call it: `spawnFor` here and `spawnMcpStdio` (§17.4)
+// below, which the daemon wires as the MCP consume half's spawn seam.
 
 const MAX_PROCS_PER_PLUGIN = 8;
 /** §18.3-shaped restart ladder for restart:"on-crash" children. */
@@ -73,9 +75,24 @@ interface Supervised {
   stopped: boolean;
 }
 
-const isUnderRoot = (path: string, root: string): boolean => {
-  const r = resolve(root);
-  const p = resolve(path);
+/** Is `path` inside `root`? Exported so both arms are decidable from either
+ * machine. The compare FOLDS CASE on win32 and nowhere else: NTFS is
+ * case-insensitive and drive-letter casing varies by producer (an installer
+ * records `C:\…`, a shell hands the same directory back as `c:\…`), so a
+ * byte-exact compare refuses a plugin its OWN directory over a spelling. That
+ * failed closed — FORBIDDEN_SCOPE, never a bypass — so this is robustness, not
+ * a hole; but a door that refuses the legitimate caller is still broken
+ * (WIN-D4). Folding on unix would be the actual hole: `/Data` and `/data` are
+ * two different directories there, so the strict compare stays.
+ *
+ * `platform` selects the CASE rule only. Path SHAPE stays native (`resolve`,
+ * `sep`), because production always asks about paths this machine produced. */
+export const isUnderRoot = (path: string, root: string, platform = process.platform): boolean => {
+  const fold = (p: string): string => (platform === "win32" ? p.toLowerCase() : p);
+  const r = fold(resolve(root));
+  const p = fold(resolve(path));
+  // The separator guard survives the fold: `…\plugin-evil` must never pass as
+  // being under `…\plugin`.
   return p === r || p.startsWith(r + sep);
 };
 
@@ -169,6 +186,71 @@ export const executableAllowed = (executable: string, platform = process.platfor
   return posix.isAbsolute(executable) || !executable.includes("/");
 };
 
+/** The refusal itself — message and shape fixed in ONE place because §17.1's
+ * policy now has two callers (the plugin process door below and the MCP stdio
+ * door beside it). EL7 reads a same-uid agent as the adversary, and two doors
+ * into one subsystem that answer differently is exactly how one of them quietly
+ * becomes the soft one. */
+export function assertExecutableAllowed(executable: string, platform = process.platform): void {
+  if (executableAllowed(executable, platform)) return;
+  throw new RpcCallError(
+    "PRECONDITION_FAILED",
+    "executable must be an absolute path or a bare PATH command",
+    false,
+  );
+}
+
+/** The handle the MCP consume half drives. Structurally `McpServiceConfig["spawn"]`'s
+ * return; the daemon's one-line wiring pins the two shapes together at typecheck. */
+export interface McpStdioChild {
+  stdin: NodeJS.WritableStream;
+  stdout: NodeJS.ReadableStream;
+  stderr: NodeJS.ReadableStream;
+  kill: () => void;
+  onExit: (cb: (code: number | null) => void) => void;
+}
+
+/** §17.4 — the MCP stdio door, spawned daemon-side with pipes.
+ *
+ * It lives HERE, beside the plugin process door, because the two must obey one
+ * executable policy and one child-env law. As a closure in the composition root
+ * it obeyed the env law (EL7) and skipped the policy, so an MCP transport could
+ * name a cwd-relative `..\evil.exe` — or the win32 spellings that merely READ
+ * absolute, `C:evil` and `\evil.exe` — where a plugin service could not. MCP
+ * configs are settings-authored, so that was an asymmetry rather than an
+ * injection; EL7 still says assume the adversary already writes there. */
+export function spawnMcpStdio(req: {
+  executable: string;
+  args: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+}): McpStdioChild {
+  assertExecutableAllowed(req.executable);
+  const env = pluginChildEnv(req.env);
+  // WIN-3 (§4.5) — `npx`/`uvx`, the practical MCP config, ARE `.cmd` shims on
+  // Windows and node refuses a batch file without a shell (CVE-2024-27980). The
+  // shim quotes them into `cmd.exe /d /s /c` itself rather than handing argv to
+  // a shell; it is a passthrough on unix and for real executables.
+  const cmd = shimSpawn(req.executable, req.args, process.platform, {
+    env,
+    ...(req.cwd !== undefined ? { cwd: req.cwd } : {}),
+  });
+  const child = spawn(cmd.command, cmd.args, {
+    ...(req.cwd !== undefined ? { cwd: req.cwd } : {}),
+    env,
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+    ...(cmd.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
+  });
+  return {
+    stdin: child.stdin as NodeJS.WritableStream,
+    stdout: child.stdout as NodeJS.ReadableStream,
+    stderr: child.stderr as NodeJS.ReadableStream,
+    kill: () => void child.kill(),
+    onExit: (cb: (code: number | null) => void) => void child.on("exit", cb),
+  };
+}
+
 /** How a platform reaches a child AND ITS DESCENDANTS (§17.1). */
 export type KillPlan =
   | { kind: "group"; pid: number; signal: NodeJS.Signals }
@@ -258,12 +340,7 @@ export class ProcessService extends EventEmitter {
         false,
         { pluginKind: "PLUGIN_QUOTA_EXCEEDED", limit: MAX_PROCS_PER_PLUGIN },
       );
-    if (!executableAllowed(params.executable))
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "executable must be an absolute path or a bare PATH command",
-        false,
-      );
+    assertExecutableAllowed(params.executable);
     if (params.cwd !== undefined) {
       const roots = this.cfg.allowedCwdRoots(pluginId);
       if (!roots.some((root) => isUnderRoot(params.cwd as string, root)))

@@ -1928,3 +1928,104 @@ NOT covered by this fix and remain open.
 
 **Gate:** `pnpm verify` VERBATIM on the box (WORKSTATION4090) — the first green run of the real gate
 on Windows. `pnpm smoke` exit 0 (shell + pipe-joined pair + renderer + all five units).
+
+## WIN-10 — the two guarantees POSIX gave for free, rebuilt for Windows
+
+**IN THE TREE 2026-08-11.** WIN-9 closed the defects a review FOUND; this closes the two it left
+NAMED, both of them cases where a law held on unix by accident of the filesystem and held nowhere on
+Windows. Three agents on disjoint packages plus the orchestrator, every fix with a control run.
+
+**1. Nobody was proving the SERVER (mutual pairing auth, WIN-D10).** D8's MAC proves the CLIENT to
+field-native. Nothing proved the reverse, and on unix nothing had to — the socket sat inside a 0700
+run directory, so only the owner could have created the thing answering. WIN-D1's pipes have no such
+boundary: the namespace is flat and machine-wide, the scope is a hash of a guessable data root, and
+another local account can publish our name before field-native does. fieldd's connect-probe then
+reads that squatter as a live native (so no real one is spawned) and believes its ack — **terminal
+control/frame endpoints and the floor's auth token included**. The client now sends a
+per-connection `nonce`; the server answers `serverMac = HMAC(secret, "fn-ack" 0x00 nonce 0x00
+bootId)`, a DIFFERENT context from the client's `fn-boot` so neither direction's transcript replays
+as the other's (asserted, not merely intended). **Both** channels carry it: mgmt, and the meshdata
+byte lane — no token rides the lane, but a squatter there feeds fieldd forged document bytes that
+Loro merges as genuine. The field is optional on the wire and **mandatory in the client**, because
+tolerating absence is exactly the downgrade an attacker would request; the cost is that a
+field-native predating this must be restarted once, and the refusal says so. Pinned by
+`fixtures/pairing.vector.json` on both sides. Witnessed by 5 mgmt rows (valid · absent · forged ·
+wrong-secret · and that no terminal endpoints are adopted from an unproven ack), 2 meshdata
+squatter rows, and the real Rust bridge end-to-end. **Not fixed, and honest about it:** a squatter
+holding the name makes field-native's `first_pipe_instance` bind fail closed — refusal to boot, not
+compromise. The scheme rests on the pairing secret staying unreadable, which the per-user `%APPDATA%`
+ACL provides: the pipe namespace is shared, the profile is not.
+
+Silence was the remaining attack — the proof check never runs if nothing answers, `connect()`'s
+budget is re-checked only BETWEEN dials, and no request carried a deadline, so a stalling endpoint
+hung a standalone boot forever. The hello now has one.
+
+**2. `mode` is a no-op, so EL7's "private at rest" had no Windows expression at all.** `mkdir(…,
+0o700)` and `chmod(0o600)` set the READ-ONLY attribute and nothing else — NTFS has no permission
+bits. Log segments, the audit chain, crash dumps (raw process memory), `users.json` and
+**`shell.token`** — the credential granting full daemon adoption — all landed with whatever ACL they
+inherited. WIN-9 had made this VISIBLE by win32-skipping the mode assertions, which left nothing
+asserting it. `@vibefield/logging`'s new `private-fs` is now the one authority: `createPrivateDir`
+applies an owner-only DACL (`icacls /inheritance:r /grant:r`) to the private ROOTS and lets children
+inherit — directory-level because a per-file edit would spawn a process per rotated segment, and
+memoized per path per process because callers re-run it on every re-open. Applied on first touch
+rather than only on creation, so an install predating this is **repaired** rather than left with its
+old grants. Consumed by logging, audit, users, crash-artifacts, and fieldd's run dir (where
+`shell.token` is now BORN private by inheritance — no window between create and restrict).
+**Both platforms now assert privacy in their own true terms:** the POSIX mode rows stay, and win32
+rows read the ACL back and require exactly one account, the right inheritance polarity, and none of
+Everyone / BUILTIN\Users / Authenticated Users / Administrators.
+
+**A bug this slice wrote, caught by its own control run and worth recording.** The first
+`restrictToCurrentUser` used `(OI)(CI)F` for every path. Those are CONTAINER inheritance flags:
+applied to a FILE, icacls exits 0, prints "Successfully processed 1 files", and produces an **empty
+DACL** — the owner then gets EPERM reading, rewriting, and deleting its own file. Had `shell.token`
+taken that path the shell could not have read its adoption credential and fieldd could not have
+cleaned it up. The helper now picks the ACE form from what the path IS, measured both ways on the box.
+
+**Also closed here:** the MCP stdio door skipped the `executableAllowed` policy the process door
+enforces (two doors into one subsystem disagreeing); `isUnderRoot` compared paths case-sensitively on
+case-insensitive NTFS (fail-closed, so robustness rather than a hole); five synchronous commit points
+(`artifact-service` ×3, `link-service`, the doc-registry quarantine) kept the plain `renameSync` whose
+win32 sharing-violation WIN-9 had just closed for the async path — `durableRenameSync` covers them,
+with a deliberately tighter budget because its wait blocks the thread.
+
+**Four of five win32 symlink skips became REAL tests.** They had been skipped because `symlinkSync`
+needs Developer Mode — but a **junction** needs no privilege, `lstat().isSymbolicLink()` reports one
+as a link, and a junction is the live Windows form of that attack. The fifth stays skipped for a
+precise reason: it plants a link AT A FILE PATH POINTING AT A FILE, and a junction is a directory
+link, so the guard under test would refuse it on the `isFile` clause and the row would prove
+something other than its name. One row was also strengthened: it asserted `skippedUnsafeEntries === 0`
+on win32, so the scan-time symlink branch it exists for had never run there.
+
+**R16 amended deliberately** (`check-import-boundaries.mjs`): the wall claimed audit has "filesystem
+authority only, never network/process authority", and the second half went transitively false the
+moment audit's root needed a DACL, since Node exposes no ACL API. The mechanical rule is unchanged —
+audit still may not import `child_process` itself — but the CLAIM now states the authority audit
+actually has. One helper, named; a second is a decision, not a precedent.
+
+**And the gate itself was never trustworthy on this box, which is why nobody had seen it.** The full
+fieldd suite failed ONE real-daemon e2e row per two-to-three runs — a different row each time, every
+one green in isolation. Attributed rather than assumed: the same measurement at the pre-WIN-10 commit
+also failed 1 in 3, so it is **pre-existing**, not a WIN-10 regression. `vitest.config.ts` already
+carried the mechanism and the reasoning — `fileParallelism: !CI`, because "on CI's starved cores that
+contention trips vitest's internal worker RPC" — and win32 needs no separate argument: a Windows
+process spawn costs orders more than a POSIX fork, these suites spawn real field-native children by
+the dozen, and Defender scans each. Serial: 3/3 clean, 472 passed. Cost is ~15 s → ~115 s for one
+project, taken deliberately, because a gate that fails two runs in five teaches people to re-run
+until green — which is exactly how a real failure gets waved through.
+
+Serialising removed most of it but not all: under full-gate load one run still reddened on the
+`afterEach` `rmSync`, not on an assertion. That is HOUSEKEEPING, and the split is now explicit —
+`killDaemonTree` still AWAITS the real exit, so "did the daemon die" stays a hard question, while
+`removeTempRoot` gets a generous budget and then reports a surrender instead of throwing. Windows
+releases a dead process's handles asynchronously and a scanner can hold a just-written file longer
+still; a leaked directory under `%TEMP%` is not a product defect and the OS reclaims it, whereas a
+test file that fails after every assertion passed is a lie about the code.
+
+**Side-finds:** the VibeField root was created 0755 on POSIX too, by a bare `mkdirSync` nothing ever
+tightened — fixed on both platforms and pinned by a row whose fixture starts at 0755 so it cannot go
+vacuous. Still open and recorded: `artifact-preview-capture`'s thumbnail commit still uses a plain
+rename (a lost thumbnail is a blemish, not evidence); `McpService.startServer` has no production
+caller yet, so its door is test-reachable only; and the stale "proven by the packaged gate" comment
+survives in four fieldd test files (audit's copy was corrected at source).

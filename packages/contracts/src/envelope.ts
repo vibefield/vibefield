@@ -31,6 +31,22 @@ export const PairingMac = z
     bootId: z.string(),
     ts: z.number().int(),
     mac: z.string(),
+    /** WIN-10 — the client's CHALLENGE, which the server answers with
+     * `HelloAck.serverMac`. Hex, ≥16 bytes of randomness, fresh per connection.
+     *
+     * The MAC above proves the CLIENT holds the pairing secret. Nothing proved
+     * the SERVER, and on unix nothing had to: the socket lived inside a 0700
+     * run directory, so only the owner could have created the thing answering.
+     * The Windows named-pipe namespace is FLAT and machine-wide (WIN-D1), so
+     * that structural guarantee is gone — another local account can publish
+     * `\\.\pipe\vibefield-<scope>-mgmt` before field-native does, and the scope
+     * is a hash of a guessable data root, not a secret. A squatter that wins
+     * that race is dialled by fieldd (the connect probe reads "alive", so no
+     * real native is even spawned) and can answer with an ack of its choosing —
+     * including `terminal` endpoints and an auth token fieldd would then use.
+     * The nonce closes that: an answer is only trusted if it proves possession
+     * of the same secret, over a value the client picked this connection. */
+    nonce: z.string().optional(),
   })
   .passthrough();
 export type PairingMac = z.infer<typeof PairingMac>;
@@ -89,6 +105,21 @@ export const HelloAck = z
      * unconfigured (embedded/unit daemons); absent = a pre-UA-2 daemon.
      * Display + verification truth; never a grant. */
     userId: z.string().nullable().optional(),
+    /** WIN-10 — the server's proof that it holds the pairing secret, answering
+     * `PairingMac.nonce`:
+     *   serverMac = hex(HMAC-SHA256(pairing_secret, "fn-ack" 0x00 nonce 0x00 bootId))
+     * A different context string from the client's MAC ("fn-boot"), so neither
+     * direction's transcript can ever be replayed as the other's.
+     *
+     * OPTIONAL on the wire and MANDATORY in the client, deliberately, and the
+     * asymmetry is the whole design: a server that was sent no nonce cannot
+     * compute one, so an OLD field-native answering a NEW fieldd omits it — and
+     * a client that sent a nonce REFUSES an ack without a valid proof rather
+     * than accepting the downgrade an attacker would otherwise just ask for.
+     * The cost is honest and bounded: a field-native predating this field must
+     * be restarted once before a newer fieldd will pair with it, which is a
+     * pair bounce, and the refusal says so. */
+    serverMac: z.string().optional(),
   })
   .passthrough();
 export type HelloAck = z.infer<typeof HelloAck>;

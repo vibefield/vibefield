@@ -14,8 +14,19 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Logger } from "@vibefield/logging";
+import {
+  currentWindowsAccount,
+  MULTI_USER_PRINCIPALS,
+  readWindowsAcl,
+} from "@vibefield/logging/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CrashArtifactManager, startLocalCrashReporter } from "../src/main/crash-artifacts";
+
+/** A directory link an ordinary win32 account can actually plant. `symlink`
+ * with type "dir" needs SeCreateSymbolicLinkPrivilege there; a junction needs
+ * none, `lstat` reports it as a symbolic link, and `Dirent.isSymbolicLink()`
+ * reports it during a scan — so it exercises the very same guards. */
+const DIR_LINK = process.platform === "win32" ? "junction" : "dir";
 
 const roots: string[] = [];
 
@@ -87,16 +98,26 @@ describe("Electron local crash evidence", () => {
       const time = new Date(now - index * 1_000);
       await utimes(path, time, time);
     }
+    // "never follows symlinks" was proving nothing on win32: the fixture was
+    // skipped there, so `skippedUnsafeEntries` was asserted to be 0 and the
+    // scan-time `Dirent.isSymbolicLink()` branch never ran. A file symlink is
+    // genuinely unavailable (SeCreateSymbolicLinkPrivilege), but the guard does
+    // not care what the link POINTS at — so win32 plants the junction it can,
+    // and both platforms now witness one skipped entry.
     const outside = join(root, "outside.dmp");
     await writeFile(outside, "outside");
-    if (process.platform !== "win32") {
-      await symlink(outside, join(crashRoot, "unsafe.dmp"));
-    }
+    const outsideDir = join(root, "outside-dir");
+    await mkdir(outsideDir);
+    await symlink(
+      process.platform === "win32" ? outsideDir : outside,
+      join(crashRoot, "unsafe.dmp"),
+      DIR_LINK,
+    );
 
     const list = await manager.refresh("renderer");
     expect(list.artifacts).toHaveLength(5);
     expect(list.cleanup.deletedArtifacts).toBe(2);
-    expect(list.cleanup.skippedUnsafeEntries).toBe(process.platform === "win32" ? 0 : 1);
+    expect(list.cleanup.skippedUnsafeEntries).toBe(1);
     expect(list.artifacts.every((artifact) => artifact.processRole === "renderer")).toBe(true);
     expect(JSON.stringify(list)).not.toContain(root);
     expect(await readFile(outside, "utf8")).toBe("outside");
@@ -143,6 +164,63 @@ describe("Electron local crash evidence", () => {
         expect((await stat(selected[0]?.path ?? "")).mode & 0o777).toBe(0o600);
       }
       expect((await stat(join(root, "crash", "manifest-state.json"))).mode & 0o777).toBe(0o600);
+      await manager.markClean();
+    },
+  );
+
+  /** Exactly one account on the ACL, this one, and none of the multi-user
+   * principals. `inherited` is which side of the boundary the path sits on: a
+   * directory `createPrivateDir` touched must carry NO inherited entry — that
+   * is what `/inheritance:r` buys — while a dump or the manifest inside one must
+   * carry ONLY an inherited entry, which is the (OI)(CI) grant doing the work.
+   * Case-insensitive because %USERNAME% and the name icacls canonicalizes to
+   * need not agree on case. */
+  async function expectOwnerOnly(path: string, inherited: boolean): Promise<void> {
+    const aces = await readWindowsAcl(path);
+    expect(aces, path).toHaveLength(1);
+    expect(aces[0]?.account.toLowerCase(), path).toBe(currentWindowsAccount().toLowerCase());
+    expect(aces[0]?.inherited, path).toBe(inherited);
+    const accounts = aces.map((ace) => ace.account.toLowerCase());
+    for (const principal of MULTI_USER_PRINCIPALS) {
+      expect(accounts, path).not.toContain(principal.toLowerCase());
+    }
+  }
+
+  // The win32 half of the row above, asserting the property in the only terms
+  // that are TRUE on NTFS. Neither row stands in for the other: a mode
+  // expectation here would measure the CRT's fiction, and there is no ACL to
+  // read on unix. This is the tree where it matters most — a .dmp is raw
+  // process memory, so an inherited `BUILTIN\Users` grant would hand a same-uid
+  // agent (EL7) the contents of every process VibeField has run, including
+  // whatever secrets were resident when it died.
+  it.skipIf(process.platform !== "win32")(
+    "keeps the dump root, each retained dump, and the manifest state private (owner-only DACL)",
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), "vibefield-crash-acl-"));
+      roots.push(root);
+      const crashRoot = join(root, "dumps");
+      const manager = new CrashArtifactManager({
+        dataRoot: root,
+        crashDumpsRoot: crashRoot,
+        bootId: "desktop-acl",
+        appVersion: "1.2.3",
+        logger: captureLogger([]),
+      });
+      await manager.initialize();
+      // A temp directory inherits a long ACL from its parents (SYSTEM,
+      // Administrators, a row of container SIDs), so an unrestricted root fails
+      // on the length alone — this is not a vacuous "no Everyone" check.
+      await expectOwnerOnly(crashRoot, false);
+      await expectOwnerOnly(join(root, "crash"), false);
+
+      await writeFile(join(crashRoot, "dump-0.dmp"), "dump 0");
+      const list = await manager.refresh("renderer");
+      expect(list.artifacts).toHaveLength(1);
+      for (const artifact of list.artifacts) {
+        const selected = await manager.selectArtifacts([artifact.artifactId]);
+        await expectOwnerOnly(selected[0]?.path ?? "", true);
+      }
+      await expectOwnerOnly(join(root, "crash", "manifest-state.json"), true);
       await manager.markClean();
     },
   );
@@ -199,9 +277,17 @@ describe("Electron local crash evidence", () => {
     });
   });
 
-  // Planting the link needs SeCreateSymbolicLinkPrivilege on win32, so these
-  // two report SKIPPED rather than returning early and counting as passes —
-  // the guard itself is cross-platform, only the attack fixture is withheld.
+  // The ONE fixture in this file that win32 genuinely cannot build. The attack
+  // it plants is a link AT A FILE PATH pointing AT A FILE — `manifest-state.json
+  // -> outside.json` — so that following it would read a stranger's bytes back
+  // as trusted state. A junction is the only reparse point an unprivileged
+  // account can create and a junction is a DIRECTORY link: point one at a file
+  // and it still lstats as a non-file, so `readPrivateJson` would refuse on the
+  // `!stat.isFile()` clause and the row would prove that instead of the
+  // symlink refusal it is named for. A file symlink needs
+  // SeCreateSymbolicLinkPrivilege (measured: EPERM without it), so this stays
+  // SKIPPED rather than returning early and counting as a pass. The guard
+  // itself is cross-platform; only this shape of fixture is withheld.
   it.skipIf(process.platform === "win32")(
     "rejects a symlinked state file instead of reading outside data",
     async () => {
@@ -226,25 +312,29 @@ describe("Electron local crash evidence", () => {
     },
   );
 
-  it.skipIf(process.platform === "win32")(
-    "refuses a symlinked crash root instead of scanning outside its authority",
-    async () => {
-      const root = await mkdtemp(join(tmpdir(), "vibefield-crash-root-link-"));
-      roots.push(root);
-      const outside = join(root, "outside-dumps");
-      const crashRoot = join(root, "dumps");
-      await mkdir(outside);
-      await writeFile(join(outside, "outside.dmp"), "outside");
-      await symlink(outside, crashRoot);
-      const manager = new CrashArtifactManager({
-        dataRoot: root,
-        crashDumpsRoot: crashRoot,
-        bootId: "desktop-link",
-        appVersion: "1.0.0",
-        logger: captureLogger([]),
-      });
-      await expect(manager.initialize()).rejects.toThrow();
-      expect(await readFile(join(outside, "outside.dmp"), "utf8")).toBe("outside");
-    },
-  );
+  // This one's link target IS a directory, so win32 can plant it as a junction
+  // and the row runs everywhere. It is also the row that most needed to: a
+  // junction at the crash root is the live win32 form of the attack, and since
+  // `ensurePrivateDirectory` now writes a DACL, a guard that fired too late
+  // would hand the linked-to directory an owner-only ACL before refusing it.
+  // The refusal therefore has to come BEFORE the private-dir call, and this row
+  // is what says so on the platform where it matters.
+  it("refuses a symlinked crash root instead of scanning outside its authority", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vibefield-crash-root-link-"));
+    roots.push(root);
+    const outside = join(root, "outside-dumps");
+    const crashRoot = join(root, "dumps");
+    await mkdir(outside);
+    await writeFile(join(outside, "outside.dmp"), "outside");
+    await symlink(outside, crashRoot, DIR_LINK);
+    const manager = new CrashArtifactManager({
+      dataRoot: root,
+      crashDumpsRoot: crashRoot,
+      bootId: "desktop-link",
+      appVersion: "1.0.0",
+      logger: captureLogger([]),
+    });
+    await expect(manager.initialize()).rejects.toThrow();
+    expect(await readFile(join(outside, "outside.dmp"), "utf8")).toBe("outside");
+  });
 });

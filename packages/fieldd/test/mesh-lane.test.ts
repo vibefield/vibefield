@@ -23,7 +23,14 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import { MeshLaneLink, type MeshLaneLinkOptions } from "../src/mesh-lane";
 import { NativeLink } from "../src/native-link";
-import { killDaemonTree, nativeBinPath, nativeEndpoint, waitForEndpoint } from "./native-harness";
+import { computeAckMac } from "../src/pairing";
+import {
+  killDaemonTree,
+  nativeBinPath,
+  nativeEndpoint,
+  removeTempRoot,
+  waitForEndpoint,
+} from "./native-harness";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = nativeBinPath(ROOT);
@@ -42,7 +49,7 @@ afterEach(async () => {
   // stays as the backstop.
   await Promise.all(children.map((c) => killDaemonTree(c)));
   children = [];
-  for (const d of dirs) rmSync(d, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
+  for (const d of dirs) removeTempRoot(d);
   dirs = [];
 });
 
@@ -103,7 +110,8 @@ async function fakeBridge(): Promise<{
   const endpoint = nativeEndpoint(dir, SOCKETS.MESHDATA);
   if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
   const pairingFile = join(dir, "pairing");
-  writeFileSync(pairingFile, "ab".repeat(32));
+  const secretHex = "ab".repeat(32);
+  writeFileSync(pairingFile, secretHex);
 
   let client: Socket | null = null;
   const received: { laneId: number; payload: Uint8Array }[] = [];
@@ -114,9 +122,27 @@ async function fakeBridge(): Promise<{
     sock.on("data", (chunk: Buffer) => {
       for (const f of reader.push(new Uint8Array(chunk))) {
         if (f.kind === MESHDATA_FRAME.HELLO) {
-          // the fake accepts any credential; the REAL bridge's refusal is
-          // covered against the real daemon below
-          sock.write(encodeMeshDataFrame(MESHDATA_FRAME.HELLO_OK, 0, new Uint8Array()));
+          // The fake accepts any CLIENT credential — the real bridge's refusal
+          // is covered against the real daemon below — but it must still prove
+          // ITSELF (WIN-10): the client refuses a HELLO_OK with no valid proof,
+          // because a squatter on this endpoint feeds fieldd forged document
+          // bytes. So the fake answers the challenge with the same secret it
+          // wrote to `pairingFile` above.
+          const hello = JSON.parse(new TextDecoder().decode(f.payload)) as {
+            bootId?: string;
+            nonce?: string;
+          };
+          const body =
+            hello.nonce === undefined || hello.bootId === undefined
+              ? {}
+              : { serverMac: computeAckMac(secretHex, hello.nonce, hello.bootId) };
+          sock.write(
+            encodeMeshDataFrame(
+              MESHDATA_FRAME.HELLO_OK,
+              0,
+              new TextEncoder().encode(JSON.stringify(body)),
+            ),
+          );
         } else if (f.kind === MESHDATA_FRAME.DATA) {
           received.push({ laneId: f.laneId, payload: f.payload });
         }
@@ -136,6 +162,44 @@ async function fakeBridge(): Promise<{
       client?.write(encodeMeshDataFrame(MESHDATA_FRAME.DATA, laneId, payload)),
     received: () => received,
   };
+}
+
+/** A bridge that holds the endpoint but cannot prove the pairing secret — the
+ * squatter WIN-10 exists to refuse. `mode` picks which lie it tells. */
+async function squatterBridge(mode: "silent" | "forged"): Promise<{
+  socketPath: string;
+  pairingFile: string;
+}> {
+  const dir = tmp("squat");
+  const endpoint = nativeEndpoint(dir, SOCKETS.MESHDATA);
+  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  const pairingFile = join(dir, "pairing");
+  writeFileSync(pairingFile, "ab".repeat(32));
+  const reader = new MeshDataFrameReader();
+  const server: Server = createServer((sock) => {
+    sock.on("data", (chunk: Buffer) => {
+      for (const f of reader.push(new Uint8Array(chunk))) {
+        if (f.kind !== MESHDATA_FRAME.HELLO) continue;
+        // "silent" omits the proof entirely (a pre-WIN-10 bridge, or an attacker
+        // hoping absence is tolerated); "forged" answers with a MAC computed
+        // over a secret it does not have.
+        const body =
+          mode === "silent"
+            ? {}
+            : { serverMac: computeAckMac("cd".repeat(32), "whatever", "fieldd-lane-test") };
+        sock.write(
+          encodeMeshDataFrame(
+            MESHDATA_FRAME.HELLO_OK,
+            0,
+            new TextEncoder().encode(JSON.stringify(body)),
+          ),
+        );
+      }
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(endpoint, resolve));
+  closers.push(() => server.close());
+  return { socketPath: endpoint, pairingFile };
 }
 
 const text = (u: Uint8Array) => new TextDecoder().decode(u);
@@ -357,4 +421,24 @@ describe("inbound lanes — the ordering hazard", () => {
     expect(got[0]?.laneId).toBe(5);
     expect([...(got[0]?.payload ?? [])]).toEqual([...payload]);
   }, 30_000);
+});
+
+// WIN-10 — the byte lane gets the same mutual proof as mgmt, for its own reason:
+// no token rides here, so INTEGRITY is the stake. A squatter on this endpoint
+// (the flat Windows pipe namespace makes one reachable, WIN-D1) would be feeding
+// fieldd forged DOCUMENT bytes that Loro would merge as genuine.
+describe("WIN-10 — the byte lane refuses an unproven bridge", () => {
+  it("refuses a bridge that answers HELLO_OK without a proof", async () => {
+    const squatter = await squatterBridge("silent");
+    const l = link(squatter);
+    await expect(l.connect()).rejects.toThrow(/did not prove the pairing secret/);
+    expect(l.connected).toBe(false);
+  }, 20_000);
+
+  it("refuses a bridge whose proof was computed with the wrong secret", async () => {
+    const squatter = await squatterBridge("forged");
+    const l = link(squatter);
+    await expect(l.connect()).rejects.toThrow(/did not prove the pairing secret/);
+    expect(l.connected).toBe(false);
+  }, 20_000);
 });

@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { LOG_STREAMS, PORTS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { createNodeLogging, type NodeLogging, type NodeLoggingTestHooks } from "../src/index";
+import { currentWindowsAccount, MULTI_USER_PRINCIPALS, readWindowsAcl } from "../src/testing/acl";
 
 const roots: string[] = [];
 const services = new Set<NodeLogging>();
@@ -90,11 +91,12 @@ describe("node logging writer lifecycle", () => {
     await service.close();
   });
 
-  // The private-by-default half of the writer, split out because mode bits are
-  // the unix expression of it (WIN-D4): Node maps `mode` to the read-only bit on
-  // win32, so a stat there answers 0o666 no matter what the writer asked for and
-  // there is nothing honest left to assert. The NDJSON row above keeps running
-  // on every platform — only the 0o700/0o600 claim sits out.
+  // The private-by-default half of the writer, split in two because the two
+  // platforms express the same property differently (WIN-D4). Mode bits are the
+  // unix expression: Node maps `mode` to the read-only attribute on win32, so a
+  // stat there answers 0o666 no matter what the writer asked for. The DACL row
+  // below is the win32 expression of the SAME EL7 claim — neither platform is
+  // left asserting nothing.
   it.skipIf(process.platform === "win32")(
     "keeps the log root, its stream directory, and the active segment private",
     async () => {
@@ -106,6 +108,48 @@ describe("node logging writer lifecycle", () => {
       expect((await stat(logRoot)).mode & 0o777).toBe(0o700);
       expect((await stat(join(logRoot, "system"))).mode & 0o777).toBe(0o700);
       expect((await stat(service.filePath)).mode & 0o777).toBe(0o600);
+      await service.close();
+    },
+  );
+
+  // The win32 arm. NTFS has no permission bits, so the question `chmod` was
+  // asked is answered by the DACL: `createPrivateDir` breaks inheritance on the
+  // directory and grants this account alone, and the segments inherit that.
+  // This is a real gate, not a restatement — a plain `mkdir` under the user
+  // temp dir inherits TEN grants on this class of box (SYSTEM, Administrators,
+  // and every app-container SID the machine carries), so dropping the
+  // createPrivateDir call site turns the account list red immediately.
+  it.skipIf(process.platform !== "win32")(
+    "grants the log root, its stream directory, and the active segment to this account alone",
+    async () => {
+      const logRoot = await root();
+      const service = await logging(logRoot);
+      service.logger.info("fieldd.test.started", "fieldd started");
+      await service.flush();
+
+      const account = currentWindowsAccount().toLowerCase();
+      for (const path of [logRoot, join(logRoot, "system"), service.filePath]) {
+        const acl = await readWindowsAcl(path);
+        // Exactly one account, and it is ours. Compared lowercased because the
+        // SAM name's stored case is not guaranteed to match %USERNAME%'s.
+        expect(acl.map((ace) => ace.account.toLowerCase())).toEqual([account]);
+        // Deliberately redundant with the line above: it names the principals
+        // that would make the segment shared, so the threat model reads off the
+        // test rather than out of it.
+        for (const principal of MULTI_USER_PRINCIPALS) {
+          expect(acl.map((ace) => ace.account.toLowerCase())).not.toContain(
+            principal.toLowerCase(),
+          );
+        }
+      }
+      // Inheritance is broken AT the directories — that is what keeps the
+      // machine's ambient grants out — and the segment is private BECAUSE it
+      // inherits the single grant from its stream directory. Asserting both
+      // arms keeps a future per-file ACL edit from passing as the same thing.
+      for (const path of [logRoot, join(logRoot, "system")]) {
+        expect((await readWindowsAcl(path)).some((ace) => ace.inherited)).toBe(false);
+      }
+      expect((await readWindowsAcl(service.filePath)).every((ace) => ace.inherited)).toBe(true);
       await service.close();
     },
   );

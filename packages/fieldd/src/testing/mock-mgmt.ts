@@ -5,6 +5,7 @@
 import { rmSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { isPipeEndpoint, LOG_STREAMS, STORES } from "@vibefield/contracts";
+import { computeAckMac } from "../pairing";
 
 export class MockMgmtServer {
   server: Server | null = null;
@@ -60,6 +61,17 @@ export class MockMgmtServer {
   /** GT-2d — the build label the hello ack carries; null = a floor predating
    * GT-2d, which fieldd must surface as "it did not say", never as a guess. */
   helloNativeBuild: string | null = null;
+  /** WIN-10 — the secret this mock proves possession of. Every suite writes
+   * "ab" x 32 as its pairing file, so that is the default; a test with a
+   * different file must set this to match or the client will refuse it. */
+  pairingSecretHex = "ab".repeat(32);
+  /** WIN-10 — set false to answer WITHOUT a proof, i.e. to impersonate a
+   * pre-WIN-10 field-native (or a squatter that simply omits it). The client
+   * must refuse: accepting absence is the downgrade the nonce exists to stop. */
+  proveServerIdentity = true;
+  /** WIN-10 — answer with THIS proof instead of the correct one: a squatter
+   * that holds the endpoint but not the pairing secret. */
+  forgedServerMac: string | null = null;
   /** NF-3 — when set, native.lifecycle.observed.subscribe answers this snapshot
    * (an ObservedState); null falls through to the generic `{n:0}` handler,
    * which the fieldd side must read as "no inventory" (tolerant reader). */
@@ -139,6 +151,17 @@ export class MockMgmtServer {
         sock.end();
         return;
       }
+      // WIN-10 — answer the client's challenge, exactly as field-native does:
+      // a client that offered a nonce REFUSES an ack without a valid proof, so
+      // a mock that skipped this would fail every pairing in the suite. The
+      // three knobs below let a test drive the refusal paths deliberately.
+      const cred = (msg.params ?? {}) as { credential?: { bootId?: unknown; nonce?: unknown } };
+      const nonce = cred.credential?.nonce;
+      const bootId = cred.credential?.bootId;
+      let serverMac: string | undefined;
+      if (this.proveServerIdentity && typeof nonce === "string" && typeof bootId === "string") {
+        serverMac = this.forgedServerMac ?? computeAckMac(this.pairingSecretHex, nonce, bootId);
+      }
       sock.write(
         JSON.stringify({
           jsonrpc: "2.0",
@@ -149,6 +172,7 @@ export class MockMgmtServer {
             grantedScopes: [],
             ...(this.helloNativeBuild !== null ? { nativeBuild: this.helloNativeBuild } : {}),
             ...(this.helloTerminal !== null ? { terminal: this.helloTerminal } : {}),
+            ...(serverMac !== undefined ? { serverMac } : {}),
           },
         }) + "\n",
       );

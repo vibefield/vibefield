@@ -8,7 +8,7 @@ import {
   MeshDataFrameReader,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { computePairingMac } from "./pairing";
+import { ackMacMatches, computeAckMac, computePairingMac, newPairingNonce } from "./pairing";
 
 // MeshLaneLink (design-02 §2.5, D5) — fieldd's end of the byte plane.
 //
@@ -64,6 +64,11 @@ export class MeshLaneLink extends EventEmitter {
   /** Whether the handshake has resolved one way or the other. Distinct from
    * `connected`, which lands a microtask later — see the HELLO_OK branch. */
   #helloSettled = false;
+  /** WIN-10 — the proof this connection's HELLO_OK must carry, set when the
+   * challenge is sent. Null only for a connection that offered no nonce, which
+   * fieldd never does; the null arm exists so a future embedder that opts out
+   * degrades to the pre-WIN-10 behaviour rather than to a false refusal. */
+  #expectedAckMac: string | null = null;
   readonly #logger: Logger;
 
   connected = false;
@@ -90,6 +95,8 @@ export class MeshLaneLink extends EventEmitter {
     const secretHex = readFileSync(this.opts.pairingFile, "utf8").trim();
     const ts = Math.floor(Date.now() / 1000);
     const mac = computePairingMac(secretHex, this.opts.bootId, ts);
+    const nonce = newPairingNonce();
+    this.#expectedAckMac = computeAckMac(secretHex, nonce, this.opts.bootId);
     // Both listeners are registered, so both must be removed — `once` only
     // removes the one that fires, and every reconnect would otherwise leave the
     // other behind (MaxListenersExceededWarning at 11, then a slow leak).
@@ -117,6 +124,7 @@ export class MeshLaneLink extends EventEmitter {
         bootId: this.opts.bootId,
         ts,
         mac,
+        nonce,
       }),
     );
     await helloOk;
@@ -232,7 +240,18 @@ export class MeshLaneLink extends EventEmitter {
           // lands on a promise that has already resolved and is swallowed. The
           // frame that reported a real lane error would simply vanish.
           this.#helloSettled = true;
-          this.emit("hello-ok");
+          // WIN-10 — the bridge must prove the pairing secret before this lane
+          // is believed. A squatter on the flat Windows pipe namespace (WIN-D1)
+          // feeds fieldd forged DOCUMENT bytes otherwise; no token rides here,
+          // so integrity is the whole stake. Absence is refused, not tolerated:
+          // an attacker would simply omit the proof.
+          if (this.#expectedAckMac === null) {
+            this.emit("hello-ok");
+          } else if (safeServerMac(frame.payload, this.#expectedAckMac)) {
+            this.emit("hello-ok");
+          } else {
+            this.emit("hello-refused", "the bridge did not prove the pairing secret");
+          }
           break;
         case MESHDATA_FRAME.DATA:
           this.#deliver(frame.laneId, frame.payload);
@@ -304,8 +323,21 @@ export class MeshLaneLink extends EventEmitter {
   #onClose(): void {
     this.connected = false;
     this.#helloSettled = false; // a reconnect gets a fresh handshake
+    this.#expectedAckMac = null; // ...and a fresh challenge; never reuse the old proof
     this.#reader.reset();
     if (!this.#closed) this.emit("disconnected");
+  }
+}
+
+/** WIN-10 — does this HELLO_OK body carry the proof we asked for? Any shape
+ * that is not a matching string is a refusal: an unparseable body, a missing
+ * field, and a wrong MAC are the same answer to the only question being asked. */
+function safeServerMac(payload: Uint8Array, expected: string): boolean {
+  try {
+    const v = JSON.parse(new TextDecoder().decode(payload)) as { serverMac?: unknown };
+    return typeof v.serverMac === "string" && ackMacMatches(expected, v.serverMac);
+  } catch {
+    return false;
   }
 }
 

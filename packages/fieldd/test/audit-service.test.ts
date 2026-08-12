@@ -94,7 +94,11 @@ describe("LOG-L6 append-only audit ledger", () => {
     const files = await auditFiles(service.root);
     expect(files).toHaveLength(1);
     expect(files[0]).toContain("own-actions.2026-07.fieldd-audit-test.jsonl");
-    // POSIX mode bits are a no-op on Windows (WIN-D4); the 0600/0700 boundary is an ACL there, proven by the packaged gate.
+    // POSIX mode bits are a no-op on Windows (WIN-D4). CORRECTED 2026-08-11: this used to
+    // claim the ACL boundary was "proven by the packaged gate" — no packaged gate runs on
+    // Windows (WIN-8 is not started), so nothing proved it. WIN-10 gives the boundary a real
+    // Windows expression and asserts it directly; see the ACL rows in
+    // packages/{logging,audit,users,electron-shell}/test and fieldd's product-surface.
     if (process.platform !== "win32") {
       expect((await stat(service.root)).mode & 0o777).toBe(0o700);
       expect((await stat(files[0] as string)).mode & 0o777).toBe(0o600);

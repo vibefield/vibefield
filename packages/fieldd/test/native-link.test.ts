@@ -5,6 +5,7 @@
 // - a rejected subscription cannot poison later reconnects;
 // - close is terminal, including before a connection attempt starts.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { isPipeEndpoint, SOCKETS } from "@vibefield/contracts";
@@ -30,7 +31,7 @@ function mockEndpoint(dir: string): string {
 }
 
 async function setup(
-  options: Pick<NativeLinkOptions, "maxFrameBytes" | "reconnect"> = {},
+  options: Pick<NativeLinkOptions, "maxFrameBytes" | "reconnect" | "helloTimeoutMs"> = {},
 ): Promise<{ mock: MockMgmtServer; link: NativeLink }> {
   const dir = mkdtempSync(join(tmpdir(), "vf-mock-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
@@ -189,9 +190,13 @@ describe("NativeLink concurrency", () => {
   });
 
   it("closes the native connection when one unterminated frame exceeds the cap", async () => {
-    const { mock, link } = await setup({ maxFrameBytes: 128, reconnect: false });
+    // The cap is an artificial seam (production is MGMT_FRAME_BYTES, 80 MB) and
+    // it must stay clear of a LEGITIMATE ack: WIN-10's 64-char server proof took
+    // the hello response past the old 128-byte ceiling, so the dial itself
+    // failed and this row timed out instead of proving the overflow path.
+    const { mock, link } = await setup({ maxFrameBytes: 512, reconnect: false });
     await link.connect();
-    for (const socket of mock.sockets) socket.write("x".repeat(129));
+    for (const socket of mock.sockets) socket.write("x".repeat(513));
 
     await sleep(50);
     expect(link.connected).toBe(false);
@@ -234,5 +239,88 @@ describe("NativeLink concurrency", () => {
     expect(mock.connections).toBe(3);
     // the KEPT entry retried on the next cycle and recovered its stream
     expect(events.filter((e) => e === "flaky:snapshot").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// WIN-10 — the pairing MAC proves the CLIENT to the server. Until now nothing
+// proved the SERVER to the client, and on unix nothing had to: the socket lived
+// inside a 0700 run directory, so only the owner could have created the thing
+// answering. The Windows pipe namespace is flat and machine-wide (WIN-D1) and
+// the scope is a hash of a guessable data root — another local account can
+// publish our name first, and fieldd's connect-probe reads that squatter as a
+// live native, so no real one is even spawned. These rows are the wall.
+describe("WIN-10 — the native plane must prove itself", () => {
+  it("pairs when the answer carries a valid proof", async () => {
+    const { link, mock } = await setup();
+    await link.connect();
+    expect(link.connected).toBe(true);
+    expect(mock.connections).toBe(1);
+  });
+
+  it("REFUSES an ack with no proof — the downgrade an attacker would just ask for", async () => {
+    const { link, mock } = await setup();
+    // exactly what a squatter (or a field-native predating WIN-10) answers
+    mock.proveServerIdentity = false;
+    await expect(link.connect()).rejects.toThrow(/did not prove possession/);
+    expect(link.connected).toBe(false);
+  });
+
+  it("REFUSES a forged proof from something holding the endpoint but not the secret", async () => {
+    const { link, mock } = await setup();
+    mock.forgedServerMac = "00".repeat(32);
+    await expect(link.connect()).rejects.toThrow(/invalid pairing proof/);
+    expect(link.connected).toBe(false);
+  });
+
+  it("REFUSES a proof computed with the wrong secret", async () => {
+    const { link, mock } = await setup();
+    // The squatter's real position: it can answer, and it can compute a MAC —
+    // over a secret it does not have. Shape is right, key is wrong.
+    mock.pairingSecretHex = "cd".repeat(32);
+    await expect(link.connect()).rejects.toThrow(/invalid pairing proof/);
+    expect(link.connected).toBe(false);
+  });
+
+  it("does not hang forever on an endpoint that accepts and then says nothing", async () => {
+    // Silence would otherwise beat a wrong answer: the proof check never runs,
+    // connect()'s budget is only re-checked BETWEEN dials, and no request
+    // carried a deadline — so a stalling squatter hung a standalone boot.
+    const dir = mkdtempSync(join(tmpdir(), "vf-mute-"));
+    cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+    const pairingFile = join(dir, "pairing");
+    writeFileSync(pairingFile, "ab".repeat(32));
+    const endpoint = mockEndpoint(dir);
+    // accepts every connection, answers nothing, ever
+    const mute = createServer(() => {});
+    await new Promise<void>((resolve) => mute.listen(endpoint, resolve));
+    cleanup.push(() => {
+      mute.close();
+    });
+
+    const link = new NativeLink({
+      socketPath: endpoint,
+      pairingFile,
+      bootId: "test-boot",
+      reconnect: false,
+      helloTimeoutMs: 300,
+    });
+    cleanup.push(() => link.close());
+    await expect(link.connect()).rejects.toThrow(/never answered the hello/);
+    expect(link.connected).toBe(false);
+  }, 15_000);
+
+  it("never adopts terminal endpoints from an unproven answer (the escalation)", async () => {
+    // The concrete prize: the mgmt ack carries the terminal control/frame
+    // endpoints AND the floor's auth token. An unproven ack naming its own
+    // endpoints would have fieldd dialling the attacker with its own token.
+    const { link, mock } = await setup();
+    mock.helloTerminal = {
+      controlSocket: "\\.pipeattacker-control",
+      frameSocket: "\\.pipeattacker-frame",
+      authToken: "attacker-token",
+    };
+    mock.proveServerIdentity = false;
+    await expect(link.connect()).rejects.toThrow(/did not prove possession/);
+    expect(link.terminalEndpoints).toBeUndefined();
   });
 });

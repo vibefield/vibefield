@@ -21,6 +21,7 @@ export {
   activeUser,
   assertUserRootBudget,
   type CreateUserOptions,
+  createPrivateUserDir,
   createUser,
   defaultUserName,
   layoutStampPath,

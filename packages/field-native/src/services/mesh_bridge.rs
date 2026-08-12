@@ -616,13 +616,18 @@ async fn serve_client(stream: local_ipc::Stream, shared: Arc<Shared>, secret: [u
         };
         for frame in frames {
             if !authed {
-                if frame.kind != FRAME_HELLO || !hello_ok(&frame.payload, &secret) {
+                let ack_body = if frame.kind == FRAME_HELLO {
+                    hello_ok(&frame.payload, &secret)
+                } else {
+                    None
+                };
+                let Some(ack_body) = ack_body else {
                     let _ = tx.send(
                         encode_frame(FRAME_ERR, 0, b"{\"reason\":\"unauthenticated\"}")
                             .unwrap_or_default(),
                     );
                     break;
-                }
+                };
                 authed = true;
                 // REPLACE and drop, rather than overwrite: dropping the previous
                 // sender closes the old writer's channel, which ends its task and
@@ -641,7 +646,7 @@ async fn serve_client(stream: local_ipc::Stream, shared: Arc<Shared>, secret: [u
                     );
                 }
                 drop(previous);
-                let _ = tx.send(encode_frame(FRAME_HELLO_OK, 0, b"{}").unwrap_or_default());
+                let _ = tx.send(encode_frame(FRAME_HELLO_OK, 0, &ack_body).unwrap_or_default());
                 tracing::info!(
                     event = "field_native.mesh_bridge.client_authenticated",
                     component = "mesh_bridge",
@@ -727,16 +732,33 @@ async fn serve_client(stream: local_ipc::Stream, shared: Arc<Shared>, secret: [u
 /// The mgmt channel's own scheme (§4.1): `{bootId, ts, mac}`, HMAC over the
 /// pairing secret, ±5min window. Same secret, same shape — a second auth design
 /// for the second socket would be a second thing to get wrong.
-fn hello_ok(payload: &[u8], secret: &[u8; 32]) -> bool {
-    let Ok(v) = serde_json::from_slice::<serde_json::Value>(payload) else {
-        return false;
-    };
+///
+/// Returns the HELLO_OK body on success: `{}` for a client that offered no
+/// challenge, and `{"serverMac":…}` for one that did (WIN-10). The byte lane
+/// gets the same mutual proof as mgmt for the same reason — a squatter on this
+/// endpoint feeds fieldd forged document bytes, which is an integrity break
+/// even though no token rides here.
+fn hello_ok(payload: &[u8], secret: &[u8; 32]) -> Option<Vec<u8>> {
+    let v = serde_json::from_slice::<serde_json::Value>(payload).ok()?;
     let (Some(boot_id), Some(ts), Some(mac)) = (
         v.get("bootId").and_then(|x| x.as_str()),
         v.get("ts").and_then(|x| x.as_i64()),
         v.get("mac").and_then(|x| x.as_str()),
     ) else {
-        return false;
+        return None;
     };
-    pairing::verify(secret, boot_id, ts, mac, pairing::now_epoch_secs())
+    if !pairing::verify(secret, boot_id, ts, mac, pairing::now_epoch_secs()) {
+        return None;
+    }
+    match v.get("nonce").and_then(|x| x.as_str()) {
+        Some(nonce) => {
+            let ack = pairing::compute_ack_mac(secret, nonce, boot_id);
+            Some(
+                serde_json::json!({ "serverMac": ack })
+                    .to_string()
+                    .into_bytes(),
+            )
+        }
+        None => Some(b"{}".to_vec()),
+    }
 }

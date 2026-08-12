@@ -17,7 +17,7 @@ import {
   TailscaleLink,
   type UserLinkStatus,
 } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
 
 // UA-3 — the link lifecycle (spec §7.1/§7.2): fieldd owns link.json, captures
@@ -214,7 +214,8 @@ export class LinkService extends EventEmitter {
     } finally {
       closeSync(fd);
     }
-    renameSync(tmp, this.linkPath);
+    // WIN-10: the commit point, retried past a scanner's handle on win32.
+    durableRenameSync(tmp, this.linkPath);
   }
 }
 

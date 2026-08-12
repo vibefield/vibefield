@@ -102,6 +102,41 @@ async fn pairing_vector_matches_cross_language_fixture() {
     );
 }
 
+/// WIN-10 — the SERVER's half of the handshake is pinned by the same vector.
+/// The client refuses an ack whose proof does not verify, so a drift here is a
+/// pair that cannot pair at all rather than a silent weakening.
+#[tokio::test]
+async fn ack_mac_vector_matches_cross_language_fixture() {
+    let raw = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../contracts/fixtures/pairing.vector.json"),
+    )
+    .unwrap();
+    let v: Value = serde_json::from_str(&raw).unwrap();
+    let secret = hex::decode(v["secretHex"].as_str().unwrap()).unwrap();
+    let ack = pairing::compute_ack_mac(
+        &secret,
+        v["nonce"].as_str().unwrap(),
+        v["bootId"].as_str().unwrap(),
+    );
+    assert_eq!(
+        ack,
+        v["ackMac"].as_str().unwrap(),
+        "WIN-10 ack MAC recipe drifted from the TS side"
+    );
+    // The two directions must never produce the same bytes for the same inputs:
+    // distinct context strings are what stop one transcript replaying as the other.
+    assert_ne!(
+        ack,
+        pairing::compute_mac(
+            &secret,
+            v["bootId"].as_str().unwrap(),
+            v["ts"].as_i64().unwrap()
+        ),
+        "the ack and client MACs share a derivation"
+    );
+}
+
 #[tokio::test]
 async fn hello_pairs_and_acks() {
     let (_dir, daemon) = boot().await;

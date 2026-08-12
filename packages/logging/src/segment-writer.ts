@@ -1,6 +1,7 @@
 import type { FileHandle } from "node:fs/promises";
-import { chmod, lstat, mkdir, open, readdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { chmod, lstat, open, readdir, readFile, rm, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { createPrivateDir, durableRename } from "./private-fs";
 import type { LogRetentionPolicy, NodeLoggingTestHooks } from "./types";
 
 export type WriterOperation = "open" | "write" | "rename" | "flush" | "close";
@@ -137,12 +138,18 @@ export class SegmentWriter {
   async open(): Promise<void> {
     if (this.active) return;
     try {
-      await mkdir(this.options.logRoot, { recursive: true, mode: 0o700 });
+      // EL7 "private at rest" for BOTH platforms. `mkdir(…, 0o700)` + `chmod`
+      // only ever answered the unix half — on win32 `mode` is the read-only
+      // attribute, so every segment landed with whatever ACL it inherited
+      // (WIN-D4). `createPrivateDir` keeps the mode bits and adds the owner-only
+      // DACL there; the segments below inherit it from the directory, which is
+      // the only affordable shape (a per-file ACL edit is a process per rotation).
+      await this.assertSafeDirectoryIfPresent(this.options.logRoot);
+      await createPrivateDir(this.options.logRoot);
       await this.assertSafeDirectory(this.options.logRoot);
-      await chmod(this.options.logRoot, 0o700);
-      await mkdir(this.categoryDir, { recursive: true, mode: 0o700 });
+      await this.assertSafeDirectoryIfPresent(this.categoryDir);
+      await createPrivateDir(this.categoryDir);
       await this.assertSafeDirectory(this.categoryDir);
-      await chmod(this.categoryDir, 0o700);
       if (!this.lock) await this.acquireLock();
       await this.rejectUnsafeActivePath();
       await this.options.hooks?.beforeOpen?.(this.activePath);
@@ -339,6 +346,21 @@ export class SegmentWriter {
     }
   }
 
+  /** The same check for a path that may not exist yet, run BEFORE the private-dir
+   * call rather than between the mkdir and the chmod as the old inline sequence
+   * did. Both arms of `createPrivateDir` follow a symlink to its target: a
+   * planted `logRoot -> <someone else's directory>` would have THAT directory's
+   * mode rewritten on unix and its DACL replaced with an owner-only one on
+   * win32, both with daemon authority (EL7). The post-call assert still stands —
+   * it is the original guard, and it catches a link planted after this one. */
+  private async assertSafeDirectoryIfPresent(path: string): Promise<void> {
+    try {
+      await this.assertSafeDirectory(path);
+    } catch (error) {
+      if (errorCode(error) !== "ENOENT") throw error;
+    }
+  }
+
   private async endsWithNewline(): Promise<boolean> {
     if (!this.active || this.activeBytes === 0) return true;
     const byte = Buffer.allocUnsafe(1);
@@ -412,7 +434,12 @@ export class SegmentWriter {
       await handle.close();
       operation = "rename";
       await this.options.hooks?.beforeRename?.(this.activePath, closedPath);
-      await rename(this.activePath, closedPath);
+      // The rotation's commit point. On win32 `MoveFileEx` refuses while any
+      // handle is open on either end, and a scanner or indexer opens a segment
+      // microseconds after we close it — so a plain rename can lose a rotation
+      // to a stranger's read. `durableRename` retries that transient class
+      // within a bounded budget and still fails loudly past it.
+      await durableRename(this.activePath, closedPath);
       operation = "open";
       await this.options.hooks?.beforeOpen?.(this.activePath);
       this.active = await open(this.activePath, "a+", 0o600);
