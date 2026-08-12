@@ -26,10 +26,18 @@ export async function resolveServiceModules(repoRoot, entryAbsolute) {
         {
           name: "vibefield-externalize-bare-imports",
           setup(pluginBuild) {
-            pluginBuild.onResolve({ filter: /^[^./]/ }, (args) => ({
-              path: args.path,
-              external: true,
-            }));
+            // The filter says "starts with neither `.` nor `/`" — a correct
+            // test for a bare specifier only on POSIX. A Windows absolute path
+            // opens with a drive letter, so on win32 this matched the ENTRY
+            // POINT and marked it external; esbuild refuses that outright
+            // ("the entry point cannot be marked as external"), the catch below
+            // swallowed the throw, and every service resolved to null. The dev
+            // loop then fell back to watching the entry file alone, so editing
+            // any sibling module of a plugin service triggered no rebuild —
+            // silently, on Windows only. Entry points are never bare.
+            pluginBuild.onResolve({ filter: /^[^./]/ }, (args) =>
+              args.kind === "entry-point" ? null : { path: args.path, external: true },
+            );
           },
         },
       ],

@@ -127,7 +127,6 @@ describe("previewed support bundles", () => {
     const destination = join(root, "support-default.tar.gz");
     const result = await service.export(preview.previewId, destination);
     expect(result).toMatchObject({ status: "exported", bundleId: preview.manifest.bundleId });
-    expect((await stat(destination)).mode & 0o777).toBe(0o600);
     const files = unpackTarGz(await readFile(destination));
     expect([...files.keys()]).toEqual(
       expect.arrayContaining([
@@ -155,6 +154,36 @@ describe("previewed support bundles", () => {
     await crashes.markClean();
     await logging.close();
   });
+
+  // POSIX mode bits do not exist on win32: `chmod` there flips only the
+  // read-only attribute, so a 0o600 expectation would stat 0o666 and prove
+  // nothing about who can read the archive. Split out of the row above so only
+  // the mode question is withheld — the second scrub it proves still runs on
+  // both platforms. A bundle carries the whole evidence set in one file, which
+  // is why its permissions are asserted at all rather than left to umask.
+  it.skipIf(process.platform === "win32")(
+    "writes the exported archive private to its owner (0600)",
+    async () => {
+      const { root, logging, crashes, service } = await fixture();
+      const now = Date.now();
+      logging.logger.info("desktop.support.normal", "normal record", {});
+      await logging.desktop.flush();
+
+      const preview = await service.preview({
+        range: { from: now - 24 * 60 * 60 * 1_000, to: now + 1_000 },
+        sources: [LOG_STREAMS.SYSTEM_DESKTOP],
+        pluginIds: [],
+        includeAudit: false,
+        crashArtifactIds: [],
+      });
+      const destination = join(root, "support-modes.tar.gz");
+      await service.export(preview.previewId, destination);
+      expect((await stat(destination)).mode & 0o777).toBe(0o600);
+
+      await crashes.markClean();
+      await logging.close();
+    },
+  );
 
   it("includes only explicitly selected plugin logs and crash artifacts", async () => {
     const { root, logging, crashes, service } = await fixture();

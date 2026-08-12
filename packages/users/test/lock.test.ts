@@ -64,23 +64,30 @@ describe("the users.json lock (§3.3)", () => {
     expect(waited).toBeGreaterThanOrEqual(60_000); // it honored the migrate window
   });
 
-  it("a symlinked root contends on the SAME lock (canonicalization)", async () => {
-    const real = root();
-    const linkParent = mkdtempSync(join(tmpdir(), "vf-users-link-"));
-    const link = join(linkParent, "alias");
-    symlinkSync(real, link);
-    const viaLink = canonicalRoot(link);
-    expect(viaLink).toBe(realpathSync(real));
-    const release = await acquireUsersLock(real, "mutate", { sleep: noSleep });
-    await expect(
-      acquireUsersLock(viaLink, "mutate", {
-        pidAlive: () => true,
-        sleep: noSleep,
-        deadlineMs: 80,
-      }),
-    ).rejects.toMatchObject({ kind: "users-locked" });
-    release();
-  });
+  // symlinkSync wants Developer Mode or an elevated shell on win32 and throws
+  // EPERM without one — an environment privilege, not a product limit. The
+  // canonicalization under test is platform-neutral (canonicalRoot realpaths
+  // either way), so the contention it buys stays witnessed on unix.
+  it.skipIf(process.platform === "win32")(
+    "a symlinked root contends on the SAME lock (canonicalization)",
+    async () => {
+      const real = root();
+      const linkParent = mkdtempSync(join(tmpdir(), "vf-users-link-"));
+      const link = join(linkParent, "alias");
+      symlinkSync(real, link);
+      const viaLink = canonicalRoot(link);
+      expect(viaLink).toBe(realpathSync(real));
+      const release = await acquireUsersLock(real, "mutate", { sleep: noSleep });
+      await expect(
+        acquireUsersLock(viaLink, "mutate", {
+          pidAlive: () => true,
+          sleep: noSleep,
+          deadlineMs: 80,
+        }),
+      ).rejects.toMatchObject({ kind: "users-locked" });
+      release();
+    },
+  );
 
   it("withUsersLock releases on throw", async () => {
     const r = root();

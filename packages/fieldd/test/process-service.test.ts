@@ -1,8 +1,14 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { executableAllowed, ProcessService, pluginChildEnv } from "../src/process-service";
+import {
+  executableAllowed,
+  hasGracefulTermination,
+  killPlan,
+  ProcessService,
+  pluginChildEnv,
+} from "../src/process-service";
 
 // PLUG-P6 — §17.1 supervised children, service-level (the daemon caller
 // matrix is covered by the kill-matrix e2e). Real processes, no mocks. The
@@ -45,11 +51,53 @@ function make(roots: string[] = []): { svc: ProcessService; dir: string } {
   return { svc, dir };
 }
 
+/** The server the shim launches: heartbeats into $BEAT_FILE forever. Its path
+ * rides the env rather than the script text, so no quoting survives two shells. */
+const HEARTBEAT = "setInterval(()=>require('fs').appendFileSync(process.env.BEAT_FILE,'.'),25)";
+
+/** Writes a SHIM that launches that server and stays in the middle — the shape
+ * `spawn-shim` produces for every `.cmd`/`.bat` target (npx, uvx: how MCP stdio
+ * servers are actually configured), where the pid fieldd tracks is the shim and
+ * the real server is one level down.
+ *
+ * The intermediate must NOT be Node, and that is the whole reason this helper
+ * exists. libuv assigns every process a Node parent spawns to a job object that
+ * dies with it, so a node-in-the-middle fixture tears its own grandchild down
+ * for free on Windows — MEASURED: the first version of this row passed with the
+ * fix reverted, proving nothing at all. cmd.exe builds no such job, which is
+ * exactly why the production defect was reachable through it. */
+function writeShim(dir: string): string {
+  if (process.platform === "win32") {
+    const shim = join(dir, "serve.cmd");
+    writeFileSync(shim, `@echo off\r\n"${process.execPath}" -e "${HEARTBEAT}"\r\n`);
+    return shim;
+  }
+  const shim = join(dir, "serve.sh");
+  // `&` + `wait` keeps the shim alive alongside its child, as cmd.exe is.
+  writeFileSync(shim, `#!/bin/sh\n"${process.execPath}" -e "${HEARTBEAT}" &\nwait\n`, {
+    mode: 0o755,
+  });
+  return shim;
+}
+
 const until = async (cond: () => boolean, ms = 5000): Promise<void> => {
   const t0 = Date.now();
   while (!cond()) {
     if (Date.now() - t0 > ms) throw new Error("condition never became true");
     await new Promise((r) => setTimeout(r, 25));
+  }
+};
+
+/** Resolves once `sample()` stops changing across `windowMs`. Proving a process
+ * stopped RUNNING beats probing its pid: a win32 pid can be unreachable while
+ * alive and reusable while dead, so the filesystem is the honest witness. */
+const untilQuiet = async (sample: () => number, windowMs = 250, ms = 8000): Promise<void> => {
+  const t0 = Date.now();
+  for (;;) {
+    const before = sample();
+    await new Promise((r) => setTimeout(r, windowMs));
+    if (sample() === before) return;
+    if (Date.now() - t0 > ms) throw new Error("the grandchild never stopped writing");
   }
 };
 
@@ -167,6 +215,38 @@ describe("ProcessService — §17.1", () => {
       svc.spawnFor(PLUGIN, { executable: NODE, args: EXIT_NOW, restart: "never" }),
     ).toThrowError(/shutting down/);
   });
+
+  it("the whole TREE dies: the shim's server does not outlive it (§17.1)", async () => {
+    // The law says children die no later than fieldd — and on win32 that was
+    // false for the commonest child there is. `process.kill(-pid)` does not
+    // misbehave on Windows, it THROWS ESRCH (measured), so the old ladder fell
+    // through to killing the tracked pid alone; with a cmd.exe shim in the
+    // middle that reached the shim and left the server running — through the
+    // plugin's kill, its disable, and fieldd's own shutdown.
+    //
+    // Control-run performed 2026-08-11: with killPlan's win32 arm reverted this
+    // row FAILS on the box ("the grandchild never stopped writing") and stays
+    // green on unix — which is exactly the asymmetry that let the defect ship.
+    const { svc, dir } = make();
+    const beat = join(dir, "beat.log");
+    const rec = svc.spawnFor(PLUGIN, {
+      // The real door: a .cmd target goes through spawn-shim → cmd.exe /d /s /c.
+      executable: writeShim(dir),
+      args: [],
+      env: { BEAT_FILE: beat },
+      cwd: dir,
+      restart: "never",
+    });
+    const beats = (): number => (existsSync(beat) ? statSync(beat).size : 0);
+    await until(() => beats() > 0); // the grandchild is alive and writing
+    svc.signal(PLUGIN, { procId: rec.procId, signal: "kill" });
+    await until(() => svc.stat(PLUGIN, rec.procId)[0]?.state === "exited");
+    // The tree verb is asynchronous (a taskkill process on win32), so poll for
+    // quiet instead of assuming it. Two samples a heartbeat-window apart answer
+    // "did it stop RUNNING" — a pid probe would answer something else on win32,
+    // where an unreachable pid and a dead one are not the same reading.
+    await untilQuiet(beats);
+  });
 });
 
 // WIN-3 (thinking-windows-port §4.2/§4.5) — the two child-spawn laws that FAIL
@@ -262,5 +342,55 @@ describe("the executable policy refuses every cwd-dependent Windows form", () =>
     expect(executableAllowed("./sh", "linux")).toBe(false);
     expect(executableAllowed("../sh", "linux")).toBe(false);
     expect(executableAllowed("sub/sh", "linux")).toBe(false);
+  });
+});
+
+// The termination verb is platform-shaped for the same reason the two above
+// are: on win32 the unix spelling does not merely misbehave, it throws, and the
+// fallback silently narrows the promise from "the tree" to "one process".
+// Both arms are decided here from either machine; the tree is WITNESSED for
+// real by the grandchild row in the suite above.
+describe("the termination verb is platform-shaped (§17.1)", () => {
+  it("signals the process GROUP through a negative pid on unix", () => {
+    expect(killPlan(4321, "term", "darwin")).toEqual({
+      kind: "group",
+      pid: 4321,
+      signal: "SIGTERM",
+    });
+    expect(killPlan(4321, "kill", "linux")).toEqual({
+      kind: "group",
+      pid: 4321,
+      signal: "SIGKILL",
+    });
+  });
+
+  it("terminates the TREE on win32, which has no signalable group", () => {
+    expect(killPlan(4321, "kill", "win32", { SystemRoot: "C:\\Windows" })).toEqual({
+      kind: "tree",
+      command: "C:\\Windows\\System32\\taskkill.exe",
+      args: ["/PID", "4321", "/T", "/F"],
+    });
+  });
+
+  it("never resolves taskkill through PATH — this runs with daemon authority", () => {
+    // EL7: a bare `taskkill` would be found through an inherited PATH a
+    // same-uid agent can arrange. Absolute in every spelling we might inherit,
+    // including a machine that hands us neither variable.
+    for (const [env, expected] of [
+      [{ SystemRoot: "C:\\Windows" }, "C:\\Windows\\System32\\taskkill.exe"],
+      [{ windir: "D:\\Win" }, "D:\\Win\\System32\\taskkill.exe"],
+      [{}, "C:\\Windows\\System32\\taskkill.exe"],
+    ] as const) {
+      const plan = killPlan(7, "kill", "win32", env);
+      expect(plan.kind === "tree" && plan.command).toBe(expected);
+    }
+  });
+
+  it("admits that win32 has no graceful rung, while unix keeps its ladder", () => {
+    // A TERM → grace → KILL ladder needs a catchable TERM. Windows has none, so
+    // scheduling a second identical kill 2s later would only delay the first.
+    expect(hasGracefulTermination("win32")).toBe(false);
+    expect(hasGracefulTermination("darwin")).toBe(true);
+    expect(hasGracefulTermination("linux")).toBe(true);
   });
 });

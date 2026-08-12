@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { posix, resolve, sep } from "node:path";
+import { posix, resolve, sep, win32 } from "node:path";
 import {
   ENV_PREFIXES,
   type ProcessRecord,
@@ -168,6 +168,59 @@ export const executableAllowed = (executable: string, platform = process.platfor
   }
   return posix.isAbsolute(executable) || !executable.includes("/");
 };
+
+/** How a platform reaches a child AND ITS DESCENDANTS (§17.1). */
+export type KillPlan =
+  | { kind: "group"; pid: number; signal: NodeJS.Signals }
+  | { kind: "tree"; command: string; args: string[] };
+
+/** unix: a negative pid names the process GROUP `spawn({detached:true})` gave
+ * the child, so one signal reaches every descendant.
+ *
+ * win32: there are no signalable process groups, and `process.kill(-pid)` does
+ * not merely misbehave — it THROWS, so the old code fell through to
+ * `child.kill()`, a TerminateProcess reaching exactly ONE process. That is a
+ * different promise from the one §17.1 makes, and the gap is not theoretical:
+ * `spawn-shim` routes every `.cmd`/`.bat` target through `cmd.exe /d /s /c`
+ * (npx and uvx — how MCP stdio servers are actually configured), so the pid
+ * fieldd holds is the SHIM and the real server is its child. Killing the shim
+ * alone left the server running past fieldd's own exit, breaking the "children
+ * die no later than fieldd shutdown" law for the commonest Windows child there
+ * is. `taskkill /T` walks the parent chain and `/F` terminates each.
+ *
+ * The honest residual: `/T` finds descendants through their LIVING parents, so
+ * a grandchild orphaned BEFORE the kill is out of its reach. A Job Object with
+ * KILL_ON_JOB_CLOSE closes that too, and Node exposes no API for one without a
+ * native addon — it stays booked (ROADMAP: "process-service group-kill → Job
+ * Objects"). This closes the observed failure and claims nothing beyond it. */
+export function killPlan(
+  pid: number,
+  signal: "term" | "kill",
+  platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): KillPlan {
+  if (platform !== "win32") {
+    return { kind: "group", pid, signal: signal === "kill" ? "SIGKILL" : "SIGTERM" };
+  }
+  // Absolute, resolved from SystemRoot: a bare `taskkill` would be found
+  // through PATH, and this runs with daemon authority (EL7).
+  const root = env["SystemRoot"] ?? env["windir"] ?? "C:\\Windows";
+  return {
+    kind: "tree",
+    command: win32.join(root, "System32", "taskkill.exe"),
+    args: ["/PID", String(pid), "/T", "/F"],
+  };
+}
+
+/** Is there a graceful rung worth waiting on before the hard one? A unix
+ * SIGTERM can be caught and handled, so TERM → grace → KILL means something.
+ * Windows has no catchable termination signal at all — TerminateProcess and
+ * `taskkill /F` are both immediate — so the same ladder there is theatre that
+ * only delays the kill. WIN-0's dev-runner reached this conclusion first ("a
+ * win32 stop admits it was forced; the unix ladder still reports grace"). */
+export function hasGracefulTermination(platform = process.platform): boolean {
+  return platform !== "win32";
+}
 
 export class ProcessService extends EventEmitter {
   private readonly log: Logger;
@@ -358,25 +411,55 @@ export class ProcessService extends EventEmitter {
   private deliver(sup: Supervised, signal: "term" | "kill"): void {
     const pid = sup.child?.pid;
     if (pid === undefined) return;
-    const groupKill = (sig: NodeJS.Signals): void => {
+    /** Fall back to the direct child when the tree verb cannot be reached at
+     * all — narrower than promised, but strictly better than nothing, and the
+     * exit handler still owns the record either way. */
+    const directChild = (): void => {
       try {
-        process.kill(-pid, sig); // negative pid — the whole group (§17.1)
+        sup.child?.kill();
       } catch {
-        try {
-          sup.child?.kill(sig);
-        } catch {
-          // already gone — exit handler owns the record from here
-        }
+        // already gone — exit handler owns the record from here
       }
     };
-    if (signal === "kill") {
-      groupKill("SIGKILL");
+    const fire = (sig: "term" | "kill"): void => {
+      const plan = killPlan(pid, sig);
+      if (plan.kind === "group") {
+        try {
+          process.kill(-plan.pid, plan.signal);
+        } catch {
+          directChild();
+        }
+        return;
+      }
+      try {
+        const killer = spawn(plan.command, plan.args, {
+          stdio: ["ignore", "ignore", "ignore"],
+          windowsHide: true,
+        });
+        // taskkill exits 128 for a pid that is already gone — a race we asked
+        // for, never an error. Only a failure to RUN it costs us the tree.
+        killer.once("error", directChild);
+        killer.unref();
+        this.log.debug("fieldd.plugin_process.tree_kill", "Terminated a child process tree", {
+          pluginId: sup.pluginId,
+          procId: sup.procId,
+          pid,
+          forced: true,
+        });
+      } catch {
+        directChild();
+      }
+    };
+    if (signal === "kill" || !hasGracefulTermination()) {
+      // No graceful rung on this platform: fire once and report honestly
+      // rather than scheduling a second, identical kill 2s later.
+      fire(signal);
       return;
     }
-    groupKill("SIGTERM");
+    fire("term");
     sup.killTimer = setTimeout(() => {
       sup.killTimer = null;
-      groupKill("SIGKILL");
+      fire("kill");
     }, TERM_GRACE_MS);
     sup.killTimer.unref();
   }

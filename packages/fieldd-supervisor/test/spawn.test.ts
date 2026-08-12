@@ -329,36 +329,45 @@ describe("spawn: no adoptable fieldd exists", () => {
 });
 
 describe("the sun_path guard (slice-0 finding 4)", () => {
-  it("an over-long data root rejects data-root-too-long BEFORE any spawn", async () => {
-    const root = h.mkLongRoot();
-    const sentinel = join(root, "spawned-anyway");
-    const logs: FielddSupervisorEvent[] = [];
-    const sup = h.track(
-      createFielddSupervisor({
-        dataRoot: root,
-        // if the guard failed to short-circuit, this spawn would create the file
-        spawn: {
-          command: process.execPath,
-          args: ["--eval", `require("node:fs").writeFileSync(${JSON.stringify(sentinel)}, "x")`],
-        },
-        environment: {},
-        shutdownPolicy: "leave-running",
-        readinessDeadlineMs: 2000,
-        onEvent: (event) => logs.push(event),
-      }),
-    );
+  // WIN-D1 — this row drives a REAL supervisor, whose guard reads the host
+  // platform with no seam to inject one, so on win32 it can only witness the
+  // early return: the guard no-ops, the fixture spawns, and the assertion fails
+  // for the right reason. The law itself loses no coverage — the row below
+  // proves BOTH arms explicitly, and the refusal-before-spawn behavior it adds
+  // is a unix-only mechanism (there is no byte budget on a pipe name).
+  it.skipIf(process.platform === "win32")(
+    "an over-long data root rejects data-root-too-long BEFORE any spawn",
+    async () => {
+      const root = h.mkLongRoot();
+      const sentinel = join(root, "spawned-anyway");
+      const logs: FielddSupervisorEvent[] = [];
+      const sup = h.track(
+        createFielddSupervisor({
+          dataRoot: root,
+          // if the guard failed to short-circuit, this spawn would create the file
+          spawn: {
+            command: process.execPath,
+            args: ["--eval", `require("node:fs").writeFileSync(${JSON.stringify(sentinel)}, "x")`],
+          },
+          environment: {},
+          shutdownPolicy: "leave-running",
+          readinessDeadlineMs: 2000,
+          onEvent: (event) => logs.push(event),
+        }),
+      );
 
-    const err = await sup.ensure().then(
-      () => null,
-      (e: unknown) => e,
-    );
-    trackSpawnedPid(logs);
+      const err = await sup.ensure().then(
+        () => null,
+        (e: unknown) => e,
+      );
+      trackSpawnedPid(logs);
 
-    expect(err).toBeInstanceOf(SupervisorError);
-    expect((err as SupervisorError).kind).toBe("data-root-too-long");
-    expect(existsSync(sentinel)).toBe(false); // nothing was spawned
-    expect(hasLifecycle(logs, "fieldd.supervisor.spawned")).toBe(false);
-  });
+      expect(err).toBeInstanceOf(SupervisorError);
+      expect((err as SupervisorError).kind).toBe("data-root-too-long");
+      expect(existsSync(sentinel)).toBe(false); // nothing was spawned
+      expect(hasLifecycle(logs, "fieldd.supervisor.spawned")).toBe(false);
+    },
+  );
 
   it("the budget is a unix law — win32 endpoints are pipes, not paths (WIN-D1)", () => {
     const root = h.mkLongRoot();

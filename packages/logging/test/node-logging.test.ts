@@ -71,7 +71,7 @@ async function fielddSegments(logRoot: string): Promise<string[]> {
 }
 
 describe("node logging writer lifecycle", () => {
-  it("writes schema-valid NDJSON with private directory and file permissions", async () => {
+  it("writes schema-valid NDJSON", async () => {
     const logRoot = await root();
     const service = await logging(logRoot);
     service.logger.info("fieldd.test.started", "fieldd started", {
@@ -87,11 +87,28 @@ describe("node logging writer lifecycle", () => {
       component: "test",
       attrs: { port: PORTS.FIELDD_WS_CONTROL },
     });
-    expect((await stat(logRoot)).mode & 0o777).toBe(0o700);
-    expect((await stat(join(logRoot, "system"))).mode & 0o777).toBe(0o700);
-    expect((await stat(service.filePath)).mode & 0o777).toBe(0o600);
     await service.close();
   });
+
+  // The private-by-default half of the writer, split out because mode bits are
+  // the unix expression of it (WIN-D4): Node maps `mode` to the read-only bit on
+  // win32, so a stat there answers 0o666 no matter what the writer asked for and
+  // there is nothing honest left to assert. The NDJSON row above keeps running
+  // on every platform — only the 0o700/0o600 claim sits out.
+  it.skipIf(process.platform === "win32")(
+    "keeps the log root, its stream directory, and the active segment private",
+    async () => {
+      const logRoot = await root();
+      const service = await logging(logRoot);
+      service.logger.info("fieldd.test.started", "fieldd started");
+      await service.flush();
+
+      expect((await stat(logRoot)).mode & 0o777).toBe(0o700);
+      expect((await stat(join(logRoot, "system"))).mode & 0o777).toBe(0o700);
+      expect((await stat(service.filePath)).mode & 0o777).toBe(0o600);
+      await service.close();
+    },
+  );
 
   it("host-stamps forwarded records while preserving bounded origin and observation time", async () => {
     const logRoot = await root();

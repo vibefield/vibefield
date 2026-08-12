@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canonicalRoot,
@@ -92,7 +92,11 @@ function inventory(dir: string): Map<string, string> {
   for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile()) continue;
     const abs = join(entry.parentPath, entry.name);
-    out.set(relative(dir, abs), readFileSync(abs, "utf8"));
+    // seedLegacy spells its keys with "/", so the inventory must too: `relative`
+    // hands back "docs\doc-1\snapshot.ice1" on win32 and every nested region
+    // would read as missing. The move itself is separator-neutral — only this
+    // fixture's bookkeeping was unix-shaped.
+    out.set(relative(dir, abs).split(sep).join("/"), readFileSync(abs, "utf8"));
   }
   return out;
 }

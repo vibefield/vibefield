@@ -50,6 +50,7 @@ import {
   type ShellDialogPickFolderResult,
   ShellOpenExternalParams,
   type ShellOpenExternalResult,
+  SOCKETS,
   STORES,
   type TerminalConfigDocument,
   TerminalConfigReadParams,
@@ -79,7 +80,7 @@ import {
 } from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
-import { nativeMgmtEndpoint } from "./boot-env";
+import { nativeEndpoint, nativeMgmtEndpoint } from "./boot-env";
 import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -340,7 +341,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       onCommit: (commit) => docSync?.onCommit(commit),
     });
     const laneLink = new MeshLaneLink({
-      socketPath: join(config.dataDir, ...LAYOUT.MESHDATA_SOCKET),
+      // WIN-D1, same law as the mgmt dial above: field-native binds this lane
+      // as a named pipe on win32, so a joined LAYOUT path could only ENOENT —
+      // and it would do so inside connect()'s best-effort catch, taking mesh
+      // doc sync down silently rather than loudly. (`socketPath` is the option's
+      // pre-pipe name, shared with NativeLink; it carries an ENDPOINT.)
+      socketPath: nativeEndpoint(config.dataDir, SOCKETS.MESHDATA),
       pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
       bootId,
       logger: logger.child({ component: "mesh.lane" }),

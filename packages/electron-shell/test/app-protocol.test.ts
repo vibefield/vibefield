@@ -1,3 +1,4 @@
+import { dirname, join, sep } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 // The application scheme (electron-security-packaging.md §8.2). The resolver is
@@ -39,8 +40,21 @@ const {
   serveAppRequest,
 } = await import("../src/main/app-protocol");
 
+/** A fixture path spelled for this host. The resolver answers with `resolve`d,
+ * `sep`-separated paths, so on win32 a POSIX literal is missing both the volume
+ * prefix (`/Applications/…` resolves onto whichever drive the suite runs from)
+ * and the `\` separators — an expectation written in `/` would compare a mac
+ * string against a Windows answer, and the `fakeFs` below would key its map on
+ * paths the resolver never produces. The URLs stay POSIX: a URL path is `/`
+ * everywhere, and that asymmetry is exactly what this resolver mediates. */
+const hostPath = (posix: string): string =>
+  process.platform === "win32" ? `C:${posix.replaceAll("/", "\\")}` : posix;
+
 /** A packaged renderer root — the only directory this scheme may ever read. */
-const ROOT = "/Applications/VibeField.app/Contents/Resources/app/renderer";
+const ROOT = hostPath("/Applications/VibeField.app/Contents/Resources/app/renderer");
+
+/** An admitted path, built with the same primitive the resolver uses. */
+const under = (...segments: string[]): string => join(ROOT, ...segments);
 
 /** What the resolver said, flattened for assertion. A refusal reports its class;
  * an admitted request reports the path, so a case that was MEANT to be refused
@@ -68,7 +82,7 @@ describe("scheme identity", () => {
   });
 
   it("resolves its own entry URL — the shell cannot load a URL the handler refuses", () => {
-    expect(ask(APP_ENTRY_URL)).toBe(`${ROOT}/index.html`);
+    expect(ask(APP_ENTRY_URL)).toBe(under("index.html"));
   });
 });
 
@@ -112,12 +126,12 @@ describe("registerAppScheme", () => {
 
 describe("resolveAppAsset — what the renderer legitimately asks for", () => {
   it("serves the entry document", () => {
-    expect(at("/index.html")).toBe(`${ROOT}/index.html`);
+    expect(at("/index.html")).toBe(under("index.html"));
     expect(mimeOf("/index.html")).toBe("text/html; charset=utf-8");
   });
 
   it("serves a hashed asset chunk", () => {
-    expect(at("/assets/main-CXh9HwVS.js")).toBe(`${ROOT}/assets/main-CXh9HwVS.js`);
+    expect(at("/assets/main-CXh9HwVS.js")).toBe(under("assets", "main-CXh9HwVS.js"));
     expect(mimeOf("/assets/main-CXh9HwVS.js")).toBe("text/javascript; charset=utf-8");
   });
 
@@ -126,7 +140,7 @@ describe("resolveAppAsset — what the renderer legitimately asks for", () => {
     // arrives as an ordinary same-origin asset request — and Chromium refuses to
     // start a worker whose script is not a JavaScript MIME type.
     expect(at("/assets/doc-thumbnail-worker-7oAO7Sth.js")).toBe(
-      `${ROOT}/assets/doc-thumbnail-worker-7oAO7Sth.js`,
+      under("assets", "doc-thumbnail-worker-7oAO7Sth.js"),
     );
     expect(mimeOf("/assets/doc-thumbnail-worker-7oAO7Sth.js")).toBe(
       "text/javascript; charset=utf-8",
@@ -142,29 +156,29 @@ describe("resolveAppAsset — what the renderer legitimately asks for", () => {
   });
 
   it("maps the bare origin and / to the index, like any static server", () => {
-    expect(ask(APP_ORIGIN)).toBe(`${ROOT}/index.html`);
-    expect(at("/")).toBe(`${ROOT}/index.html`);
+    expect(ask(APP_ORIGIN)).toBe(under("index.html"));
+    expect(at("/")).toBe(under("index.html"));
   });
 
   it("maps a trailing-slash directory to that directory's index", () => {
-    expect(at("/assets/")).toBe(`${ROOT}/assets/index.html`);
+    expect(at("/assets/")).toBe(under("assets", "index.html"));
   });
 
   it("ignores the query and fragment — they name nothing on disk", () => {
-    expect(at("/assets/main-CXh9HwVS.js?v=1#top")).toBe(`${ROOT}/assets/main-CXh9HwVS.js`);
+    expect(at("/assets/main-CXh9HwVS.js?v=1#top")).toBe(under("assets", "main-CXh9HwVS.js"));
   });
 
   it("accepts the host in any case, exactly as Chromium normalizes it", () => {
     // Chromium lower-cases the host of a registered standard scheme before the
     // handler sees it. The resolver must agree: being stricter here would refuse
     // a request the browser already considers same-origin.
-    expect(ask("VIBEFIELD-APP://SHELL/index.html")).toBe(`${ROOT}/index.html`);
+    expect(ask("VIBEFIELD-APP://SHELL/index.html")).toBe(under("index.html"));
   });
 
   it("resolves a dot segment away rather than refusing it", () => {
     // `/./index.html` is what the URL parser already normalized; there is no
     // traversal in it and nothing to report.
-    expect(at("/./index.html")).toBe(`${ROOT}/index.html`);
+    expect(at("/./index.html")).toBe(under("index.html"));
   });
 });
 
@@ -309,14 +323,14 @@ describe("resolveAppAsset — traversal", () => {
     ];
     for (const vector of vectors) {
       const result = resolveAppAsset(ROOT, `${APP_ORIGIN}${vector}`);
-      if (result.ok) expect(result.path.startsWith(`${ROOT}/`)).toBe(true);
+      if (result.ok) expect(result.path.startsWith(`${ROOT}${sep}`)).toBe(true);
     }
   });
 });
 
 describe("isStrictlyBeneath", () => {
   it("admits a file under the root", () => {
-    expect(isStrictlyBeneath(ROOT, `${ROOT}/assets/main.js`)).toBe(true);
+    expect(isStrictlyBeneath(ROOT, under("assets", "main.js"))).toBe(true);
   });
 
   it("refuses a sibling directory that merely shares the root's name prefix", () => {
@@ -333,12 +347,14 @@ describe("isStrictlyBeneath", () => {
   });
 
   it("gives the same answer whether or not the root carries a trailing separator", () => {
-    expect(isStrictlyBeneath(`${ROOT}/`, `${ROOT}/index.html`)).toBe(true);
-    expect(isStrictlyBeneath(`${ROOT}/`, "/a/app-evil/x")).toBe(false);
+    expect(isStrictlyBeneath(`${ROOT}${sep}`, under("index.html"))).toBe(true);
+    expect(isStrictlyBeneath(`${ROOT}${sep}`, "/a/app-evil/x")).toBe(false);
   });
 
   it("refuses a parent of the root", () => {
-    expect(isStrictlyBeneath(ROOT, "/Applications")).toBe(false);
+    // Taken FROM the root rather than written out, so it stays a genuine parent
+    // on a host where the root carries a volume prefix.
+    expect(isStrictlyBeneath(ROOT, dirname(ROOT))).toBe(false);
   });
 });
 
@@ -364,7 +380,11 @@ describe("mimeForPath", () => {
   });
 
   it("treats a leading dot as a dotfile, not an extension", () => {
-    expect(mimeForPath("/x/.htaccess")).toBe("application/octet-stream");
+    // `join`ed, unlike its neighbours: `mimeForPath` splits on the HOST `sep`,
+    // so a `/`-spelled path on win32 leaves the basename as the whole string and
+    // the dot lands at index 3 — the `dot <= 0` guard never fires and the row
+    // passes through the unknown-extension fallback instead, proving nothing.
+    expect(mimeForPath(join("x", ".htaccess"))).toBe("application/octet-stream");
   });
 
   it("defaults for an extension it does not know", () => {
@@ -373,7 +393,12 @@ describe("mimeForPath", () => {
 });
 
 /** A filesystem stand-in: `links` redirects a path the way a symlink would,
- * `missing` makes realpath throw the way ENOENT does. */
+ * `missing` makes realpath throw the way ENOENT does.
+ *
+ * Its keys are the resolver's OWN output (built with `under`), not URL-shaped
+ * strings: a fake keyed in `/` on win32 would answer "exists, not a link" to
+ * every lookup — turning the symlink and missing-file refusals below into
+ * silent 200s, which is the one failure mode a security fixture must not have. */
 function fakeFs(links: Record<string, string> = {}, missing: readonly string[] = []) {
   const opened: string[] = [];
   return {
@@ -411,7 +436,7 @@ describe("serveAppRequest", () => {
     // our bytes are for our own documents; no other origin may embed them
     expect(response.headers.get("Cross-Origin-Resource-Policy")).toBe("same-origin");
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
-    expect(await response.text()).toBe(`bytes of ${ROOT}/index.html`);
+    expect(await response.text()).toBe(`bytes of ${under("index.html")}`);
   });
 
   it("emits no CORS header — this origin answers no cross-origin caller", () => {
@@ -439,7 +464,9 @@ describe("serveAppRequest", () => {
     // The one check the pure resolver cannot make. Every path it returns is
     // beneath the root by construction — but a link planted beneath the root by
     // a same-uid process (EL7's adversary) reads from anywhere on the disk.
-    const fs = fakeFs({ [`${ROOT}/notes.js`]: "/Users/dev/.ssh/id_ed25519" });
+    // The link target is a sibling on the SAME volume — a cross-volume target
+    // would be refused by its prefix alone, which is not the property under test.
+    const fs = fakeFs({ [under("notes.js")]: hostPath("/Users/dev/.ssh/id_ed25519") });
     const refusals: string[] = [];
     const response = serveAppRequest(`${APP_ORIGIN}/notes.js`, {
       root: ROOT,
@@ -455,7 +482,7 @@ describe("serveAppRequest", () => {
   });
 
   it("admits a symlink that stays inside the root", async () => {
-    const fs = fakeFs({ [`${ROOT}/assets/main.js`]: `${ROOT}/assets/real/main.js` });
+    const fs = fakeFs({ [under("assets", "main.js")]: under("assets", "real", "main.js") });
     const response = serveAppRequest(`${APP_ORIGIN}/assets/main.js`, {
       root: ROOT,
       realpath: fs.realpath,
@@ -463,13 +490,13 @@ describe("serveAppRequest", () => {
     });
     expect(response.status).toBe(200);
     // the REAL path is what gets read, not the link we were asked for
-    expect(fs.opened).toEqual([`${ROOT}/assets/real/main.js`]);
+    expect(fs.opened).toEqual([under("assets", "real", "main.js")]);
   });
 
   it("refuses a root that itself resolves elsewhere", async () => {
     // Containment is judged between two real paths, so a root that is itself a
     // link is compared as its target rather than as the name we were given.
-    const fs = fakeFs({ [ROOT]: "/private/real/renderer" });
+    const fs = fakeFs({ [ROOT]: hostPath("/private/real/renderer") });
     const response = serveAppRequest(`${APP_ORIGIN}/index.html`, {
       root: ROOT,
       realpath: fs.realpath,
@@ -481,7 +508,7 @@ describe("serveAppRequest", () => {
   it("answers a missing file with the same 404 as a traversal", async () => {
     // Deliberately indistinguishable: a compromised renderer that could tell
     // "refused" from "absent" would have a directory oracle for the whole disk.
-    const fs = fakeFs({}, [`${ROOT}/nope.js`]);
+    const fs = fakeFs({}, [under("nope.js")]);
     const missing = serveAppRequest(`${APP_ORIGIN}/nope.js`, {
       root: ROOT,
       realpath: fs.realpath,
@@ -499,7 +526,7 @@ describe("serveAppRequest", () => {
   });
 
   it("reports each refusal class so the evidence names what arrived", () => {
-    const fs = fakeFs({}, [`${ROOT}/nope.js`]);
+    const fs = fakeFs({}, [under("nope.js")]);
     const refusals: [string, string][] = [];
     const options = {
       root: ROOT,
@@ -539,7 +566,7 @@ describe("installAppProtocol", () => {
     const served = await handler?.({ url: `${APP_ORIGIN}/assets/main-CXh9HwVS.js` });
     expect(served?.status).toBe(200);
     expect(served?.headers.get("Content-Type")).toBe("text/javascript; charset=utf-8");
-    expect(fs.opened).toEqual([`${ROOT}/assets/main-CXh9HwVS.js`]);
+    expect(fs.opened).toEqual([under("assets", "main-CXh9HwVS.js")]);
   });
 
   it("refuses a hostile request through the installed handler too", async () => {

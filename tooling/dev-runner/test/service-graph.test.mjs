@@ -11,6 +11,15 @@ async function fixture(t) {
   return root;
 }
 
+// This row is the regression pin for a win32-only production defect found
+// 2026-08-11: the externalize-bare-imports filter (`/^[^./]/` — "neither
+// relative nor absolute") also matches a DRIVE LETTER, so on Windows it
+// externalized the entry point, esbuild refused the build, and the resolver's
+// catch reported null. Every plugin service then degraded to entry-file-only
+// watching, silently — and the sibling row below ("returns null when the entry
+// cannot be resolved") kept passing for the wrong reason the whole time. It
+// runs on both platforms deliberately: the fix is platform-independent, and a
+// skip here is what let the defect hide.
 test("resolves the entry's relative import closure and leaves bare imports external", async (t) => {
   const root = await fixture(t);
   const pluginRoot = join(root, "plugins", "demo");

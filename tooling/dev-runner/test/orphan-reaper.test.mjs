@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import {
   classifyOrphans,
@@ -13,14 +13,20 @@ import {
   reapDevOrphans,
 } from "../src/orphan-reaper.mjs";
 
-const RUNTIME_ROOT = "/repo/.vibefield/dev/runtime";
-const DATA_ROOT = "/repo/.vibefield/dev/data";
+// Host-absolute by construction: the classifier `resolve`s every path handed
+// to it, so a POSIX literal reads back drive-qualified on win32 and only the
+// fixture would be wrong. Resolving here also puts real backslash paths
+// through the snapshot split, which is the shape Windows actually reaps.
+const RUNTIME_ROOT = resolve("/repo/.vibefield/dev/runtime");
+const DATA_ROOT = resolve("/repo/.vibefield/dev/data");
 const CURRENT = "dev-111111111111111111111111";
 const STALE = "dev-222222222222222222222222";
 
-const nativeIn = (snapshot) => `${RUNTIME_ROOT}/${snapshot}/native/field-native`;
-const fielddIn = (snapshot) => `${RUNTIME_ROOT}/${snapshot}/fieldd/bin.cjs`;
-const mgmtSocket = `${DATA_ROOT}/native/run/mgmt.sock`;
+const nativeIn = (snapshot) => join(RUNTIME_ROOT, snapshot, "native", "field-native");
+const fielddIn = (snapshot) => join(RUNTIME_ROOT, snapshot, "fieldd", "bin.cjs");
+const mgmtSocket = join(DATA_ROOT, "native", "run", "mgmt.sock");
+// The packaged app: our binary's name on somebody else's tree entirely.
+const PACKAGED_NATIVE = resolve("/Applications/VibeField.app/Contents/MacOS/field-native");
 
 function classify(overrides) {
   return classifyOrphans({
@@ -95,12 +101,12 @@ test("the runner never reaps itself", () => {
 test("anything holding a dev socket is a squatter, whatever its executable is", () => {
   const orphans = classify({
     processes: [
-      { pid: 601, exePath: "/Applications/VibeField.app/Contents/MacOS/field-native" },
-      { pid: 602, exePath: "/repo/target/debug/field-native" },
+      { pid: 601, exePath: PACKAGED_NATIVE },
+      { pid: 602, exePath: resolve("/repo/target/debug/field-native") },
     ],
     socketOwners: [
       { pid: 601, socketPath: mgmtSocket },
-      { pid: 602, socketPath: `${DATA_ROOT}/native/run/termctl.sock` },
+      { pid: 602, socketPath: join(DATA_ROOT, "native", "run", "termctl.sock") },
     ],
   });
 
@@ -111,15 +117,18 @@ test("anything holding a dev socket is a squatter, whatever its executable is", 
       { pid: 602, reason: "socket-squatter" },
     ],
   );
-  assert.equal(orphans[0].exePath, "/Applications/VibeField.app/Contents/MacOS/field-native");
+  assert.equal(orphans[0].exePath, PACKAGED_NATIVE);
 });
 
 test("a packaged pair on its own data root is left alone", () => {
   // Precision, not pattern-matching: same binary name, no evidence it is ours.
   const orphans = classify({
-    processes: [{ pid: 701, exePath: "/Applications/VibeField.app/Contents/MacOS/field-native" }],
+    processes: [{ pid: 701, exePath: PACKAGED_NATIVE }],
     socketOwners: [
-      { pid: 701, socketPath: "/Users/someone/Library/Application Support/VibeField/run/x.sock" },
+      {
+        pid: 701,
+        socketPath: resolve("/Users/someone/Library/Application Support/VibeField/run/x.sock"),
+      },
     ],
   });
 
@@ -128,10 +137,10 @@ test("a packaged pair on its own data root is left alone", () => {
 
 test("a socket outside a run directory does not convict its owner", () => {
   const orphans = classify({
-    processes: [{ pid: 801, exePath: "/usr/local/bin/something" }],
+    processes: [{ pid: 801, exePath: resolve("/usr/local/bin/something") }],
     socketOwners: [
-      { pid: 801, socketPath: `${DATA_ROOT}/native/mgmt.sock` },
-      { pid: 801, socketPath: `${DATA_ROOT}/native/run/notes.txt` },
+      { pid: 801, socketPath: join(DATA_ROOT, "native", "mgmt.sock") },
+      { pid: 801, socketPath: join(DATA_ROOT, "native", "run", "notes.txt") },
     ],
   });
 
@@ -162,8 +171,8 @@ test("an orphan whose snapshot was already pruned away is still convicted", () =
 test("a runtime-root lookalike outside the namespace is not ours", () => {
   const orphans = classify({
     processes: [
-      { pid: 1101, exePath: `${RUNTIME_ROOT}-backup/${STALE}/native/field-native` },
-      { pid: 1102, exePath: "/repo/.vibefield/dev/runtime" },
+      { pid: 1101, exePath: join(`${RUNTIME_ROOT}-backup`, STALE, "native", "field-native") },
+      { pid: 1102, exePath: RUNTIME_ROOT },
       { pid: 1103, exePath: null },
     ],
   });
@@ -239,26 +248,29 @@ test("a process that dies between the listing and the signal is not an error", a
 test("lsof records attribute every name to the pid that opened the record", () => {
   // Real `lsof -U -Fpn` output: `f<fd>` lines ride along uninvited, peer
   // addresses appear as `->0x…`, and one process can hold the socket twice.
+  // The paths stay POSIX on every host — lsof is the macOS/Linux pass, and
+  // this parser only ever matches the names it was handed, byte for byte.
+  const mgmt = "/repo/.vibefield/dev/data/native/run/mgmt.sock";
   const stdout = [
     "p400",
     "f6",
     "n->0x50cbe09e4899729a",
     "f13",
-    `n${DATA_ROOT}/native/run/termctl.sock`,
+    "n/repo/.vibefield/dev/data/native/run/termctl.sock",
     "p502",
     "f9",
-    `n${mgmtSocket}`,
+    `n${mgmt}`,
     "f11",
-    `n${mgmtSocket}`,
+    `n${mgmt}`,
     "p600",
     "f3",
     "n/private/var/run/mDNSResponder",
     "",
   ].join("\n");
 
-  assert.deepEqual(parseUnixSocketOwners(stdout, [mgmtSocket]), [
-    { pid: 502, socketPath: mgmtSocket },
-    { pid: 502, socketPath: mgmtSocket },
+  assert.deepEqual(parseUnixSocketOwners(stdout, [mgmt]), [
+    { pid: 502, socketPath: mgmt },
+    { pid: 502, socketPath: mgmt },
   ]);
 });
 

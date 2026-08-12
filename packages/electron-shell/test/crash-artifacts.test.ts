@@ -62,7 +62,7 @@ describe("Electron local crash evidence", () => {
     expect(config).not.toHaveProperty("submitURL");
   });
 
-  it("retains the newest five private dumps and never follows symlinks", async () => {
+  it("retains the newest five dumps and never follows symlinks", async () => {
     const root = await mkdtemp(join(tmpdir(), "vibefield-crash-artifacts-"));
     roots.push(root);
     const crashRoot = join(root, "dumps");
@@ -79,7 +79,6 @@ describe("Electron local crash evidence", () => {
       now: () => clock,
     });
     await manager.initialize();
-    expect((await stat(crashRoot)).mode & 0o777).toBe(0o700);
     clock = now;
 
     for (let index = 0; index < 7; index += 1) {
@@ -104,12 +103,49 @@ describe("Electron local crash evidence", () => {
     for (const artifact of list.artifacts) {
       const selected = await manager.selectArtifacts([artifact.artifactId]);
       expect(selected).toHaveLength(1);
-      expect((await stat(selected[0]?.path ?? "")).mode & 0o777).toBe(0o600);
     }
-    expect((await stat(join(root, "crash", "manifest-state.json"))).mode & 0o777).toBe(0o600);
     expect(events.map((event) => event.event)).toContain("desktop.crash.artifacts_refreshed");
     await manager.markClean();
   });
+
+  // POSIX mode bits do not exist on win32: `chmod` there flips only the
+  // read-only attribute, so the manager's 0o700/0o600 arguments are no-ops and
+  // every path stats as 0o666 — an expectation here would measure the CRT's
+  // fiction, not who can read the evidence. Split out of the retention row so
+  // ONLY the mode question is withheld; the retention, the symlink refusal, and
+  // the path redaction that row proves still run on both platforms. A dump is
+  // raw process memory, which is why its permissions are asserted at all rather
+  // than left to whatever umask the launching shell happened to carry.
+  it.skipIf(process.platform === "win32")(
+    "keeps the dump root, each retained dump, and the manifest state private (0700 / 0600)",
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), "vibefield-crash-private-"));
+      roots.push(root);
+      const crashRoot = join(root, "dumps");
+      await chmod(root, 0o700);
+      const manager = new CrashArtifactManager({
+        dataRoot: root,
+        crashDumpsRoot: crashRoot,
+        bootId: "desktop-private",
+        appVersion: "1.2.3",
+        logger: captureLogger([]),
+      });
+      await manager.initialize();
+      expect((await stat(crashRoot)).mode & 0o777).toBe(0o700);
+
+      // written 0o644, the mode Crashpad leaves behind — the manager tightening
+      // it is the property, so an already-private fixture would prove nothing
+      await writeFile(join(crashRoot, "dump-0.dmp"), "dump 0", { mode: 0o644 });
+      const list = await manager.refresh("renderer");
+      expect(list.artifacts).toHaveLength(1);
+      for (const artifact of list.artifacts) {
+        const selected = await manager.selectArtifacts([artifact.artifactId]);
+        expect((await stat(selected[0]?.path ?? "")).mode & 0o777).toBe(0o600);
+      }
+      expect((await stat(join(root, "crash", "manifest-state.json"))).mode & 0o777).toBe(0o600);
+      await manager.markClean();
+    },
+  );
 
   it("persists viewed state and reports only genuinely unclean prior runs", async () => {
     const root = await mkdtemp(join(tmpdir(), "vibefield-crash-marker-"));
@@ -163,45 +199,52 @@ describe("Electron local crash evidence", () => {
     });
   });
 
-  it("rejects a symlinked state file instead of reading outside data", async () => {
-    if (process.platform === "win32") return;
-    const root = await mkdtemp(join(tmpdir(), "vibefield-crash-state-link-"));
-    roots.push(root);
-    const stateRoot = join(root, "crash");
-    const outside = join(root, "outside.json");
-    await writeFile(outside, '{"v":1,"artifacts":{}}');
-    await mkdir(stateRoot, { recursive: true });
-    await symlink(outside, join(stateRoot, "manifest-state.json"));
-    const manager = new CrashArtifactManager({
-      dataRoot: root,
-      crashDumpsRoot: join(root, "dumps"),
-      bootId: "desktop-link",
-      appVersion: "1.0.0",
-      logger: captureLogger([]),
-    });
-    await manager.initialize();
-    expect((await lstat(join(stateRoot, "manifest-state.json"))).isFile()).toBe(true);
-    expect(await readFile(outside, "utf8")).toBe('{"v":1,"artifacts":{}}');
-    await manager.markClean();
-  });
+  // Planting the link needs SeCreateSymbolicLinkPrivilege on win32, so these
+  // two report SKIPPED rather than returning early and counting as passes —
+  // the guard itself is cross-platform, only the attack fixture is withheld.
+  it.skipIf(process.platform === "win32")(
+    "rejects a symlinked state file instead of reading outside data",
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), "vibefield-crash-state-link-"));
+      roots.push(root);
+      const stateRoot = join(root, "crash");
+      const outside = join(root, "outside.json");
+      await writeFile(outside, '{"v":1,"artifacts":{}}');
+      await mkdir(stateRoot, { recursive: true });
+      await symlink(outside, join(stateRoot, "manifest-state.json"));
+      const manager = new CrashArtifactManager({
+        dataRoot: root,
+        crashDumpsRoot: join(root, "dumps"),
+        bootId: "desktop-link",
+        appVersion: "1.0.0",
+        logger: captureLogger([]),
+      });
+      await manager.initialize();
+      expect((await lstat(join(stateRoot, "manifest-state.json"))).isFile()).toBe(true);
+      expect(await readFile(outside, "utf8")).toBe('{"v":1,"artifacts":{}}');
+      await manager.markClean();
+    },
+  );
 
-  it("refuses a symlinked crash root instead of scanning outside its authority", async () => {
-    if (process.platform === "win32") return;
-    const root = await mkdtemp(join(tmpdir(), "vibefield-crash-root-link-"));
-    roots.push(root);
-    const outside = join(root, "outside-dumps");
-    const crashRoot = join(root, "dumps");
-    await mkdir(outside);
-    await writeFile(join(outside, "outside.dmp"), "outside");
-    await symlink(outside, crashRoot);
-    const manager = new CrashArtifactManager({
-      dataRoot: root,
-      crashDumpsRoot: crashRoot,
-      bootId: "desktop-link",
-      appVersion: "1.0.0",
-      logger: captureLogger([]),
-    });
-    await expect(manager.initialize()).rejects.toThrow();
-    expect(await readFile(join(outside, "outside.dmp"), "utf8")).toBe("outside");
-  });
+  it.skipIf(process.platform === "win32")(
+    "refuses a symlinked crash root instead of scanning outside its authority",
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), "vibefield-crash-root-link-"));
+      roots.push(root);
+      const outside = join(root, "outside-dumps");
+      const crashRoot = join(root, "dumps");
+      await mkdir(outside);
+      await writeFile(join(outside, "outside.dmp"), "outside");
+      await symlink(outside, crashRoot);
+      const manager = new CrashArtifactManager({
+        dataRoot: root,
+        crashDumpsRoot: crashRoot,
+        bootId: "desktop-link",
+        appVersion: "1.0.0",
+        logger: captureLogger([]),
+      });
+      await expect(manager.initialize()).rejects.toThrow();
+      expect(await readFile(join(outside, "outside.dmp"), "utf8")).toBe("outside");
+    },
+  );
 });

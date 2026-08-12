@@ -7,6 +7,7 @@
 // Every helper takes `platform` explicitly (defaulting to the real one) so the
 // win32 branch is reachable from a unit test on a mac rather than only from a
 // Windows box.
+import { type ChildProcess, spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
@@ -73,6 +74,54 @@ export async function waitForEndpoint(endpoint: string, deadlineMs: number): Pro
     }
     await new Promise((r) => setTimeout(r, 50));
   }
+}
+
+/** Terminate a spawned daemon AND EVERY DESCENDANT, resolving once it is gone.
+ *
+ * `child.kill("SIGKILL")` is TerminateProcess on win32 and reaches exactly ONE
+ * process — but field-native spawns children of its own (the truffle sidecar),
+ * and an orphan keeps HANDLES OPEN inside the suite's temp data root. Windows
+ * refuses to remove a directory anything still holds open, so the teardown
+ * `rmSync` threw `EPERM` and reddened the whole file even though every
+ * assertion had passed. It is the harness twin of the production defect
+ * `killPlan` fixes (process-service.ts), and it is why these suites passed in
+ * isolation and failed under a full parallel run: more load, more of the tree
+ * still alive when the directory removal came around.
+ *
+ * `/T` walks the tree from a LIVING parent, so it must run BEFORE the parent is
+ * reaped — hence taskkill instead of a kill-then-sweep. */
+export async function killDaemonTree(child: ChildProcess): Promise<void> {
+  const exited =
+    child.exitCode !== null || child.signalCode !== null
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 3_000);
+          child.once("exit", () => {
+            clearTimeout(timer);
+            resolve();
+          });
+        });
+  const pid = child.pid;
+  if (process.platform === "win32" && pid !== undefined) {
+    await new Promise<void>((resolve) => {
+      const taskkill = spawn(
+        join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe"),
+        ["/PID", String(pid), "/T", "/F"],
+        { stdio: "ignore", windowsHide: true },
+      );
+      // exit 128 = "no such pid", the race we asked for; an error to LAUNCH it
+      // is equally not fatal here — the exit wait below still bounds us.
+      taskkill.once("error", () => resolve());
+      taskkill.once("exit", () => resolve());
+    });
+  } else {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // already gone
+    }
+  }
+  await exited;
 }
 
 /** `waitForEndpoint` for the management plane — the gate every native suite

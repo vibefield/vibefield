@@ -23,7 +23,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import { MeshLaneLink, type MeshLaneLinkOptions } from "../src/mesh-lane";
 import { NativeLink } from "../src/native-link";
-import { nativeBinPath, nativeEndpoint, waitForEndpoint } from "./native-harness";
+import { killDaemonTree, nativeBinPath, nativeEndpoint, waitForEndpoint } from "./native-harness";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = nativeBinPath(ROOT);
@@ -35,22 +35,12 @@ let closers: (() => void)[] = [];
 afterEach(async () => {
   for (const c of closers) c();
   closers = [];
-  // SIGKILL is asynchronous: a dying daemon can still be creating files while
-  // rmSync walks the tree (the ENOTEMPTY teardown race). Await the real
-  // exits, then remove with Node's own ENOTEMPTY retry loop as the backstop.
-  const exits = children.map((c) =>
-    c.exitCode !== null || c.signalCode !== null
-      ? Promise.resolve()
-      : new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, 2_000);
-          c.once("exit", () => {
-            clearTimeout(timer);
-            resolve();
-          });
-        }),
-  );
-  for (const c of children) c.kill("SIGKILL");
-  await Promise.all(exits);
+  // Kill each daemon's whole TREE and await the real exits before removing the
+  // root: a dying daemon can still be creating files while rmSync walks (the
+  // ENOTEMPTY race), and on win32 a surviving grandchild's open handle makes
+  // the removal EPERM outright — see killDaemonTree. Node's own retry loop
+  // stays as the backstop.
+  await Promise.all(children.map((c) => killDaemonTree(c)));
   children = [];
   for (const d of dirs) rmSync(d, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
   dirs = [];

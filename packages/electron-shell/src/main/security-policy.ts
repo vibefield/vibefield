@@ -1,25 +1,47 @@
-import { PORTS } from "@vibefield/contracts";
 import type { ShellMode } from "./modes";
 
 // The PURE security policy (ESR §5.2.3–5.2.4) — no Electron import, unit-tested
 // directly. security.ts wires these decisions into Electron.
 
-/** Production CSP enumerates the REGISTRY loopback ports — possible before
- * daemon readiness only because production ports are pinned (§5.2.4; ESR-8).
- * Smoke-like modes keep the loopback wildcard: their daemons bind ephemeral
- * test ports and their builds are never packaged. Dev returns null — the Vite
- * dev server needs its HMR inline preamble. 'wasm-unsafe-eval' admits
- * WebAssembly compilation ONLY (loro's inlined base64 wasm — B1 finding);
- * plain 'unsafe-eval' stays banned. */
+/** Every non-dev CSP admits the daemon's loopback WebSockets by HOST, with the
+ * port left open. Dev returns null — the Vite dev server needs its HMR inline
+ * preamble. 'wasm-unsafe-eval' admits WebAssembly compilation ONLY (loro's
+ * inlined base64 wasm — B1 finding); plain 'unsafe-eval' stays banned.
+ *
+ * The port is deliberately NOT enumerated, and this is a correction (2026-08-11):
+ * production used to name `PORTS.FIELDD_WS_CONTROL`/`_DATA`, and the old comment
+ * here justified that with "possible before daemon readiness only because
+ * production ports are pinned (§5.2.4; ESR-8)". **That premise died at UA-D12/UA-5**,
+ * where every pair began binding an EPHEMERAL port (`main/fieldd.ts` passes
+ * `controlPort: 0, dataPort: 0`; registries.ts calls 9410/9411 a legacy
+ * documentation default) and `product.json` became the only discovery. The
+ * renderer therefore dialled a port this policy refused: Chromium blocked the
+ * socket, FielddClient reconnect-looped without ever rejecting `ready()`, and the
+ * first request — `doc.list` — timed out at 8 s into a degraded docs session.
+ * Only production ever took the pinned branch, so dev and every smoke mode
+ * (already on this wildcard) stayed green and the fault reached the first real
+ * launch. It was NEVER Windows-specific.
+ *
+ * Naming the real port here is not merely awkward, it is structurally impossible:
+ * this policy is installed before the first window exists (ESP §6.2 — no renderer
+ * may outrun its own policy) and the window deliberately does not wait for the
+ * daemon (design-03 §4.3 — the splash is the honest face while the pair comes up),
+ * so at CSP-build time there is no port to name. A per-response rebuild would
+ * still be wrong: a document's CSP is fixed at load, while recovery and the UA-5
+ * user switch both replace the pair — and its port — under a live document.
+ *
+ * The honest bound: this admits a WebSocket to any loopback port, so a
+ * compromised renderer could reach another local service. What it does NOT widen
+ * is the wall that actually holds — fieldd binds 127.0.0.1 only, refuses an
+ * unknown `Origin` with a 1008 close, and requires a bearer token per surface
+ * (EL7). `script-src 'self'` means no remote code can arrive to exploit the
+ * aperture in the first place. */
 export function buildCsp(mode: ShellMode): string | null {
   if (mode === "dev") return null;
-  const connect =
-    mode === "production"
-      ? `ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL} ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`
-      : "ws://127.0.0.1:*";
   return (
     "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
-    `img-src 'self' data: https://*.ts.net:*; connect-src ${connect}; base-uri 'none'; object-src 'none'`
+    "img-src 'self' data: https://*.ts.net:*; connect-src ws://127.0.0.1:*; " +
+    "base-uri 'none'; object-src 'none'"
   );
 }
 

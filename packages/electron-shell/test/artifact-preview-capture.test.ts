@@ -210,22 +210,32 @@ describe("ArtifactPreviewCapture", () => {
     expect(readFileSync(join(targetDir, "thumbnail.jpg"))).toEqual(jpeg);
   });
 
-  it("rejects a symlinked artifact destination before creating a WebContents", async () => {
-    const root = dataDir();
-    const outside = dataDir();
-    const previewRoot = join(root, "artifacts", "previews");
-    mkdirSync(previewRoot, { recursive: true });
-    symlinkSync(outside, join(previewRoot, ARTIFACT_ID), "dir");
-    const createSession = vi.fn();
-    const capture = new ArtifactPreviewCapture({
-      dataDir: root,
-      native: { createSession, createWindow: vi.fn(), decodeImage: vi.fn() } as never,
-    });
-    await expect(
-      capture.capture({ artifactId: ARTIFACT_ID, url: URL }, new AbortController().signal),
-    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
-    expect(createSession).not.toHaveBeenCalled();
-  });
+  // Creating a symlink on Windows needs SeCreateSymbolicLinkPrivilege — admin,
+  // or Developer Mode — so `symlinkSync` throws EPERM for an ordinary user and
+  // the FIXTURE cannot be built at all. The guard itself is not mac-only: the
+  // `lstat().isSymbolicLink()` checks in artifact-preview-capture.ts run on
+  // every platform, and Windows directory junctions are a live version of the
+  // same EL7 attack. What is withheld here is the ability to plant one, not the
+  // property; the rest of the row's coverage stays on both platforms.
+  it.skipIf(process.platform === "win32")(
+    "rejects a symlinked artifact destination before creating a WebContents",
+    async () => {
+      const root = dataDir();
+      const outside = dataDir();
+      const previewRoot = join(root, "artifacts", "previews");
+      mkdirSync(previewRoot, { recursive: true });
+      symlinkSync(outside, join(previewRoot, ARTIFACT_ID), "dir");
+      const createSession = vi.fn();
+      const capture = new ArtifactPreviewCapture({
+        dataDir: root,
+        native: { createSession, createWindow: vi.fn(), decodeImage: vi.fn() } as never,
+      });
+      await expect(
+        capture.capture({ artifactId: ARTIFACT_ID, url: URL }, new AbortController().signal),
+      ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+      expect(createSession).not.toHaveBeenCalled();
+    },
+  );
 
   it("drops its privileged-session marker when partial policy setup fails", async () => {
     const captureSession = {
@@ -258,23 +268,27 @@ describe("ArtifactPreviewCapture", () => {
     await vi.waitFor(() => expect(captureSession.clearStorageData).toHaveBeenCalledOnce());
   });
 
-  it("rejects a symlinked preview root without creating directories outside it", async () => {
-    const root = dataDir();
-    const outside = dataDir();
-    mkdirSync(join(root, "artifacts"), { recursive: true });
-    symlinkSync(outside, join(root, "artifacts", "previews"), "dir");
-    const createSession = vi.fn();
-    const capture = new ArtifactPreviewCapture({
-      dataDir: root,
-      native: { createSession, createWindow: vi.fn(), decodeImage: vi.fn() } as never,
-    });
+  // Same win32 privilege wall as the row above — the link cannot be planted.
+  it.skipIf(process.platform === "win32")(
+    "rejects a symlinked preview root without creating directories outside it",
+    async () => {
+      const root = dataDir();
+      const outside = dataDir();
+      mkdirSync(join(root, "artifacts"), { recursive: true });
+      symlinkSync(outside, join(root, "artifacts", "previews"), "dir");
+      const createSession = vi.fn();
+      const capture = new ArtifactPreviewCapture({
+        dataDir: root,
+        native: { createSession, createWindow: vi.fn(), decodeImage: vi.fn() } as never,
+      });
 
-    await expect(
-      capture.capture({ artifactId: ARTIFACT_ID, url: URL }, new AbortController().signal),
-    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
-    expect(createSession).not.toHaveBeenCalled();
-    expect(existsSync(join(outside, ARTIFACT_ID))).toBe(false);
-  });
+      await expect(
+        capture.capture({ artifactId: ARTIFACT_ID, url: URL }, new AbortController().signal),
+      ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+      expect(createSession).not.toHaveBeenCalled();
+      expect(existsSync(join(outside, ARTIFACT_ID))).toBe(false);
+    },
+  );
 });
 
 describe("artifact preview request policy", () => {

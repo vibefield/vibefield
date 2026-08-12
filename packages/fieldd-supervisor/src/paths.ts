@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { SupervisorError } from "./types";
 
@@ -23,9 +23,14 @@ export function tokenPath(dataRoot: string): string {
  * everywhere else. fieldd's own twin of this law is fieldd/src/boot-env.ts —
  * both planes must derive from the SAME root string or they miss each other. */
 export function nativeMgmtEndpoint(dataRoot: string, platform = process.platform): string {
+  // posix.join, not the host join — the same correction fieldd's twin already
+  // carries. `platform` must FULLY determine the output, separators included:
+  // this unix arm is reachable from a win32 test host, where the host join would
+  // hand back `\data\vf\native\run\mgmt.sock` and quietly pass a byte-for-byte
+  // claim it had broken. On a real unix host the two joins are identical.
   return platform === "win32"
     ? pipeEndpointFor(dataRoot, SOCKETS.MGMT)
-    : join(dataRoot, ...LAYOUT.MGMT_SOCKET);
+    : posix.join(dataRoot, ...LAYOUT.MGMT_SOCKET);
 }
 
 /** @deprecated the name predates named pipes — call `nativeMgmtEndpoint`. */
