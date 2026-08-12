@@ -68,6 +68,25 @@ The first non-smoke launch (`cd apps\desktop && pnpm exec electron .`) surfaced 
    and shell-main), which bypass both the CSP and the Origin gate. **A green supervisor probe proves
    nothing about renderer reachability** — that asymmetry is the reusable lesson here.
 
+## What the deck proves on Windows, and the two things it cannot (2026-08-11, WIN-11)
+
+`pnpm smoke:godview` now exits 0 on the box. It had never passed; WIN-5 recorded its one failing row
+as a "test curiosity", and behind that were four more harness unix-isms (sh quoting in the shell
+probe, the macOS split chord, `;` as a command separator, and a bare `cd` that cannot switch drives)
+plus two REAL limitations worth knowing before the visual pass:
+
+- **A Windows user cannot close a split pane by keyboard.** Upstream binds `super+w` →
+  `close_surface` on macOS and **nothing** to `close_surface` off it (`ctrl+shift+w` is
+  `close_tab:this`, which would take the whole tab). Needs a binding of ours or an upstream default.
+- **Pane-cwd restore does not work.** A cwd is only what the shell announces over OSC 7, and
+  **cmd.exe announces none**, so a restored pane returns HOME instead of to its folder. This is the
+  `deck-restore.ts` risk the recon predicted, now measured end to end.
+
+Everything else held: canvas2d renderer, swarm monitor + physics worker, a live cmd.exe pane that
+echoes, ownerless-birth flips, claim-existing, silent restore, the kill chip, `config.ghostty` write
++ live reload, glass + CRT shader, **bridge-SIGKILL recovery**, and perf (cold 460.8 ms / warm
+53.5 ms / echo 16 ms).
+
 ## The remaining ladder — and what each needs (NOT autonomous)
 
 - **WIN-5 visual polish** — Windows titlebar/chrome (**WIN-D9 is James's decision**: keep the

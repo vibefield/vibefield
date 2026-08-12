@@ -2029,3 +2029,45 @@ vacuous. Still open and recorded: `artifact-preview-capture`'s thumbnail commit 
 rename (a lost thumbnail is a blemish, not evidence); `McpService.startServer` has no production
 caller yet, so its door is test-reachable only; and the stale "proven by the packaged gate" comment
 survives in four fieldd test files (audit's copy was corrected at source).
+
+## WIN-11 — the Godview deck's smoke passes on Windows, and two product findings fall out
+
+**IN THE TREE 2026-08-11.** `pnpm smoke:godview` — the deck harness, the fullest end-to-end proof
+this repo has — had never passed on Windows. WIN-5 recorded its one failing row as "the harness's own
+`echo $0` unix-ism … left unported as a test curiosity". It was not one row. Behind it were four more
+harness unix-isms and, once those were fixed, **two genuine product limitations that no other gate
+would have surfaced**. The deck now exits 0 on the box.
+
+**The harness was asking Windows questions in sh.** (1) `echo "marker:$0"` — sh strips the quotes and
+expands `$0`; cmd.exe echoes them VERBATIM, so the row read `$0"` and failed against a pane that was
+already the right shell. win32 now asks `%COMSPEC%`, which still DISCRIMINATES: only cmd expands a
+`%VAR%`, so a pane regressed to PowerShell writes the literal and fails exactly as an `sh` pane would.
+(2) The split chord was pressed as ⌘D's KEY with the platform's modifier — `ctrl+d` on Windows, which
+the deck does not bind and the SHELL does (EOF). Read from upstream's own fixtures instead of guessed:
+`keybinds-linux-default.json` binds `ctrl+shift+o` → `new_split:right`. (3) `;` chains commands in sh;
+cmd.exe treats it as an argument, so a marker was never written and the wait could only time out.
+(4) A bare `cd` on win32 changes the directory ON A DRIVE without switching drives, so a scratch dir
+on `C:` was silently not entered from a pane sitting on `D:` — this repo's own drive.
+
+**Finding 1 — a Windows user cannot close a split pane by keyboard.** Upstream's macOS defaults bind
+`super+w` → `close_surface`; the Linux/Windows defaults bind **no `close_surface` at all**
+(`ctrl+shift+w` is `close_tab:this`, a different verb that would take every pane in the tab). The ⌘W
+ARBITRATION that row is mostly about is likewise macOS-only: on Windows the application menu owns
+`CommandOrControl+W` and the deck claims nothing, so there is no chord for the two to contest. Recorded
+in the verdict as `closePaneChord: "unbound on this platform"` rather than skipped silently. It needs a
+shipped binding of ours or an upstream default — a WIN-5 keyboard-cluster item, now evidenced.
+
+**Finding 2 — pane-cwd restore does not work on Windows.** A pane's cwd is only ever what its shell
+ANNOUNCES over OSC 7; the spawn directory is never reported. zsh and bash announce on every prompt.
+**cmd.exe emits no OSC 7 at all**, so the floor cannot learn where a pane sits, `paneMeta` persists no
+cwd, and a restored pane comes back at HOME rather than in its folder — GT-3's restore promise
+degrading on Windows, exactly as the WIN recon predicted for `deck-restore.ts` and now measured end to
+end. The row records `cwdRestore: "unavailable: cmd.exe announces no OSC 7"`.
+
+**What the deck DID prove on Windows**, which is most of it: renderer on canvas2d, the swarm monitor
+with 9 agents and physics in its worker, a live cmd.exe pane that echoes, the ownerless-birth flip to
+keep-until-exit on both the first pane and the split, claim-existing, silent restore across a document
+death, the two-step kill chip, the `config.ghostty` write with a live reload and its survivors, glass
+at 0.82 with a CRT shader that left the config alone, **bridge-SIGKILL recovery** (pid 86280 → "the
+terminal bridge died — rebuilding" → 3 panes recovered), the mock-agent label discipline, the remote
+section serving honestly, and the perf legs — cold open 460.8 ms, warm 53.5 ms, keystroke echo 16 ms.
