@@ -583,6 +583,27 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // P8b (ESP §8.4) — the approved module URLs a renderer may import. Safe
+  // projection only: no filesystem path exists in the result shape.
+  defineMethod({
+    surface: "product",
+    method: "plugins.modules",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  // P8b — the privileged half. Electron main resolves ONE token to the bytes it
+  // may serve; `plugins.serve` is deliberately a scope the renderer never holds,
+  // and the handler gates on the shell-main principal on top of it (the §11.2
+  // "scope is necessary, never sufficient" rule, applied to the one method that
+  // returns a path).
+  defineMethod({
+    surface: "product",
+    method: "plugins.resolveModule",
+    scope: "plugins.serve",
+    idempotent: true,
+    locality: "local",
+  }),
 
   // PLUG-P4 — dynamic services observation (§14/§22.2). The x.* methods
   // themselves are DELIBERATELY not here: they are manifest data routed by the

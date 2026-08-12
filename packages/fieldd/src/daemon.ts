@@ -36,6 +36,7 @@ import {
   PluginsOpenRendererSessionParams,
   type PluginsOpenRendererSessionResult,
   PluginsReloadParams,
+  PluginsResolveModuleParams,
   PluginsUninstallParams,
   ProcessStatParams,
   type ProcessSubEvent,
@@ -95,6 +96,7 @@ import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
 import { PeerLink } from "./peer-link";
 import { RegistryInstallService } from "./plugin-install";
+import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
@@ -360,6 +362,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
     });
     await plugins.refresh();
+    // P8b (ESP §8.4): the module authority reads the registry and mints
+    // generation-bound tokens. It holds no state worth restoring — the
+    // registry's generation IS its cache key.
+    const pluginModules = new PluginModuleAuthority({ plugins });
 
     // C6-3g — cross-device doc sync. BEST EFFORT, and that is the honest shape:
     // the mesh is off by default, so the byte socket usually is not there at
@@ -1344,6 +1350,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // RESTRICT here (an agent claiming "renderer" still needs plugins.read,
     // which agent tokens never carry).
     const LEASE_TTL_MS = 10 * 60_000;
+    // P8b (ESP §8.4) — approved module URLs. The safe projection carries no
+    // filesystem path, so it rides the same principals as the registry snapshot
+    // the renderer already holds.
+    api.register("plugins.modules", async () => await pluginModules.modules());
+    // …and its privileged twin. `plugins.serve` is a scope the renderer never
+    // holds, and the shell-main gate is on top of it: this is the one method
+    // that returns a path, so scope is necessary and not sufficient (§11.2's
+    // rule, applied where it matters most).
+    api.register("plugins.resolveModule", async (ctx, params) => {
+      const parsed = PluginsResolveModuleParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { token }", false);
+      if (ctx.transport !== "ws-loopback" || ctx.principal.kind !== "shell-main")
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "module bytes resolve only for the local shell principal (ESP §8.4)",
+          false,
+        );
+      const resolution = await pluginModules.resolve(parsed.data.token);
+      // A token from a superseded generation is indistinguishable from one that
+      // never existed — the caller learns "not authorized now", nothing more.
+      if (resolution === undefined)
+        throw new RpcCallError("NOT_FOUND", "no such module token", false);
+      return resolution;
+    });
     api.register("plugins.openRendererSession", async (ctx, params) => {
       const parsed = PluginsOpenRendererSessionParams.safeParse(params);
       if (!parsed.success)

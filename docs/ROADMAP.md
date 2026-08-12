@@ -283,9 +283,14 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   still does not load: the renderer imports plugins from source through the static `BUNDLED` list
   (`field-engine.ts:70-76`), async `activate` is still refused (`renderer-harness.ts:184`), and
   §11.6's import map does not exist — so a signed `.vfplugin` still delivers services that run and
-  widgets that cannot. Plan + decisions: `thinking-p8-loadable-artifact.md` (P8-D1 proposes
-  serving staged modules from the existing `vibefield-app://shell` origin, since `script-src
-  'self'` already admits it) (2026-08-09, half-closed 2026-08-11).
+  widgets that cannot. **P8b-1 landed the AUTHORITY half 2026-08-12** (ESP §8.4): fieldd mints
+  generation-bound opaque module tokens, `plugins.modules` hands the renderer URLs with nowhere to
+  put a path, and `plugins.resolveModule` resolves one token to bytes for the shell principal
+  alone under the new local-only `plugins.serve` scope. **Remaining: P8b-2** (the
+  `vibefield-plugin://` handler in Electron main + its CSP admission) and **P8b-3** (the §11.6
+  import map, async `activate`, `BUNDLED` demoted to dev-only). Plan + decisions:
+  `thinking-p8-loadable-artifact.md` — note **P8-D1 was WITHDRAWN 2026-08-12**, falsified by
+  §8.4; P8-D1′ is what shipped (2026-08-09, half-closed 2026-08-11, authority landed 2026-08-12).
 - **The §5.4 authoring kit was never scheduled** — `plugin-cli`, `create-plugin`, and
   `apps/plugin-playground` are spec-named (the ten-minute bar) and absent from the tree; only
   `plugin-build` exists. The §21 ladder completed without an authoring rung, so this appeared

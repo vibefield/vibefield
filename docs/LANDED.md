@@ -1878,3 +1878,61 @@ recorded deltas from §5.4's four-stages-one-command.
 **Gate: `pnpm verify` VERBATIM exit 0** plus `pnpm build` green (which now produces plugin
 artifacts as part of the desktop build). Next rung: **P8b, the staged loader** — the reason the
 artifact still does not load.
+
+## P8b-1 — who is allowed to load a plugin, answered before anything loads one
+
+**LANDED 2026-08-12.** The planned design for this rung was WRONG, and the code said so before
+the spec did.
+
+`thinking-p8`'s P8-D1 proposed serving staged modules from the existing `vibefield-app://shell`
+origin under a second confined mount at `/plugins/<id>/<manifestHash>/renderer.js`. Opening the
+file to implement it surfaced `app-protocol.ts`'s own header: *"the reason a `plugin://<id>/<path>`
+resolver must never be modelled on this one — plugin bytes come from a fieldd generation-bound
+mapping, not from joining a path onto an ID we were handed."* That points at
+**`specs/electron-security-packaging.md` §8.4**, which is law and had already answered the
+question. **P8-D1 is withdrawn at its source with the reasoning error named:** it was argued from
+the CSP end (*what does `'self'` admit?*) when the governing question was the authority end
+(*who decides what loads?*). A serving decision in this app is a registry decision wearing a
+transport costume, which is why the corpus files it under security-packaging rather than beside
+the thing that serves bytes.
+
+**P8-D1′, as built.** fieldd is the authority; Electron main is a dumb server; the renderer holds
+URLs and never paths.
+
+- **`plugins.modules`** (scope `plugins.read`) returns the renderer-safe projection —
+  `{pluginId, moduleUrl, styleUrl?, manifestHash, installRevision}` on the new
+  `vibefield-plugin://` scheme. There is nowhere in the shape to put a path, which is the point:
+  a projection cannot leak what it has no room for. It also finally carries the hashes
+  `ctx.plugin` has been missing since P3.
+- **`plugins.resolveModule`** (scope **`plugins.serve`** — new, and deliberately one the renderer
+  never holds) resolves ONE opaque token to `{path, contentType}` for the **shell-main principal
+  only**. It is the single method that returns a filesystem path, so scope is necessary and not
+  sufficient: the handler gates on principal kind on top of it (§11.2's rule, applied where it
+  matters most).
+- **Tokens are minted, never derived** — 128 CSPRNG bits per (plugin, file, generation). A token
+  derived from an id or a manifest hash would survive a revocation that changed neither.
+- **Invalidation is structural, not remembered.** The registry already bumps a `generation` on
+  every snapshot move; the token table is rebuilt whenever the generation it was minted under is
+  no longer current, so a superseded token is *absent* rather than *revoked*. That satisfies
+  §8.4's "every URL is invalidated on disable, reload, quarantine, or install-revision change"
+  with no subscription, no cache, and **no staleness window** — the reason main pulls per token
+  instead of holding a pushed map.
+- The URL is `vibefield-plugin://<token>` with **no path segment at all**: there is nothing for a
+  caller to join onto. The scheme lives in `contracts/registries.ts` rather than beside
+  electron-shell's `APP_SCHEME`, because fieldd mints these URLs and main serves them — a scheme
+  spanning the daemon and the shell is wire truth, while one only electron-shell uses is not. And
+  it is deliberately NOT the product origin: §8.4 requires the CSP to admit "only the chosen
+  plugin module origin", which is a sentence you can only say about an origin that is not already
+  `'self'`.
+
+Six tests, one per §8.4 clause, including **the invalidation control run as a control**: mint a
+token, disable the plugin, watch the same token resolve to nothing; re-enable and watch a FRESH
+token appear while the old one stays dead — so a URL that leaked while a plugin was enabled cannot
+be replayed after a disable/enable cycle. The path-free claim is asserted by serializing the whole
+projection and proving no path shape survives anywhere in it, rather than by checking the fields
+someone remembered to look at.
+
+**Gate: `pnpm verify` VERBATIM exit 0.** Scopes do not enter the Rust bundle, so `pnpm gen`
+produced no delta (checked, not assumed). Next: **P8b-2**, the `vibefield-plugin://` scheme in
+Electron main — a handler that serves only what this authority approved — then P8b-3's import map
+and async activate.

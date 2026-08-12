@@ -202,6 +202,67 @@ export type PluginsReloadParams = z.infer<typeof PluginsReloadParams>;
 export const PluginsListResult: typeof PluginRegistrySnapshot = PluginRegistrySnapshot;
 export type PluginsListResult = z.infer<typeof PluginsListResult>;
 
+// --- P8b: approved plugin module URLs (ESP §8.4) ------------------------------
+//
+// §8.4 splits this surface in two, and the split is the security property:
+// the renderer receives an approved host-generated URL and NEVER a filesystem
+// path, while Electron main may serve bytes only from a pre-authorized,
+// generation-bound mapping and must not discover plugins or decide grants. So
+// there are two shapes here, not one with an optional field — a projection
+// cannot leak a path it has no room for.
+
+/** An opaque module token: 128 bits of unguessable hex, minted per (plugin,
+ * file, registry generation). Not derived from the plugin id or its hash —
+ * a token a caller can PREDICT is a token that outlives its authorization. */
+export const PluginModuleToken = z.string().regex(/^[0-9a-f]{32}$/);
+export type PluginModuleToken = z.infer<typeof PluginModuleToken>;
+
+/** THE RENDERER-SAFE PROJECTION. Every field here is safe to hold in a window;
+ * there is deliberately nowhere to put a path. */
+export const PluginModuleUrls = z
+  .object({
+    pluginId: PluginId,
+    /** The ES module the renderer imports (`vibefield-plugin://…`). */
+    moduleUrl: z.string().min(1).max(512),
+    /** The plugin's compiled stylesheet, when it ships one. */
+    styleUrl: z.string().min(1).max(512).optional(),
+    /** §11.4 — what `ctx.plugin` finally carries at the staged loader. */
+    manifestHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    installRevision: z.string().min(1).max(64),
+  })
+  .passthrough();
+export type PluginModuleUrls = z.infer<typeof PluginModuleUrls>;
+
+/** The generation stamps the whole set: a renderer holding an older generation
+ * knows its URLs are dead without having to probe them one by one. */
+export const PluginModulesResult = z
+  .object({
+    generation: z.number().int().nonnegative(),
+    modules: z.array(PluginModuleUrls),
+  })
+  .passthrough();
+export type PluginModulesResult = z.infer<typeof PluginModulesResult>;
+
+/** THE PRIVILEGED RESOLUTION — `plugins.serve`, shell-main only. Main asks per
+ * token rather than holding a pushed map, so a disabled or reloaded plugin's
+ * URL dies the instant fieldd's generation moves: there is no window in which
+ * main still believes a stale mapping (§8.4's "every URL is invalidated on
+ * disable, reload, quarantine, or install-revision change"). */
+export const PluginsResolveModuleParams = z.object({ token: PluginModuleToken }).passthrough();
+export type PluginsResolveModuleParams = z.infer<typeof PluginsResolveModuleParams>;
+
+export const PluginModuleResolution = z
+  .object({
+    pluginId: PluginId,
+    /** Absolute path to the authorized file. The ONE place a path crosses this
+     * wire, to the ONE principal allowed to hold it. */
+    path: z.string().min(1),
+    contentType: z.enum(["text/javascript", "text/css"]),
+    generation: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type PluginModuleResolution = z.infer<typeof PluginModuleResolution>;
+
 // --- the renderer principal lease (§11.2, P3b) --------------------------------
 
 /** The trusted renderer spine asks for a plugin-bound session. manifestHash,

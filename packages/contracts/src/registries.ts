@@ -151,6 +151,11 @@ export const SCOPES = [
   "shell.webcontents",
   "plugins.read", // registry snapshot (plugins.list/get/subscribe) — local-only like plugins.manage
   "plugins.manage",
+  // P8b (ESP §8.4): resolve a module token to the bytes' path. SHELL-MAIN ONLY —
+  // it is the one surface that hands out a filesystem path, so it is deliberately
+  // NOT plugins.read (which the renderer holds). Local-only forever, like the
+  // rest of plugins.*; it must never enter TAILNET_SCOPES.
+  "plugins.serve",
   "diagnostics.read", // LOG §14 — trusted shell only; excluded from every federated preset
   "diagnostics.manage", // diagnostic leases/support mutations; trusted shell only
   "audit.append", // shell-originated audit actions; local-only
@@ -203,6 +208,20 @@ export const SOCKETS = {
   TERMINAL_CONTROL: "termctl.sock",
   TERMINAL_FRAME: "termframe.sock",
 } as const;
+
+/** P8b (ESP §8.4) — the URL scheme staged plugin modules are served on.
+ *
+ * It lives HERE, unlike electron-shell's own `APP_SCHEME`, because two packages
+ * that share nothing else must agree on it: fieldd MINTS these URLs and Electron
+ * main SERVES them. A scheme only one package uses is that package's business; a
+ * scheme spanning the daemon and the shell is wire truth.
+ *
+ * Deliberately NOT the product window's origin. §8.4 requires the CSP to admit
+ * "only the chosen plugin module origin", which is a statement you can only make
+ * about an origin that is not already `'self'` — keeping plugin bytes off the
+ * app scheme means admitting them never widens what `'self'` means for the
+ * product document. */
+export const PLUGIN_MODULE_SCHEME = "vibefield-plugin" as const;
 
 /** File names VibeField owns beneath a daemon's own data directory. A name here
  * is resolved by the plane that OWNS the file and by nobody else — GT-3's
