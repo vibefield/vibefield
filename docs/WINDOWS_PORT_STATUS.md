@@ -87,6 +87,31 @@ echoes, ownerless-birth flips, claim-existing, silent restore, the kill chip, `c
 + live reload, glass + CRT shader, **bridge-SIGKILL recovery**, and perf (cold 460.8 ms / warm
 53.5 ms / echo 16 ms).
 
+## Before the WIN-5 eyeball: do NOT judge the renderer over RDP (2026-08-11)
+
+`smoke:godview` reports `rendererBackend: "canvas2d"`, and that is **not** a Windows finding — every
+smoke-like mode calls `app.disableHardwareAcceleration()` on purpose (`index.ts`, so the boot gate
+runs headless over ssh). It says nothing about the product.
+
+The real question — would the deck get WebGPU here — was then measured with acceleration LEFT ON, and
+the answer is environmental. In an RDP session (`qwinsta` → `rdp-tcp#0`), Chromium reports
+`webgpu: disabled_off`, `webgl: disabled_off`, `gl=none,angle=none`, `dx12FeatureLevel: Not
+supported`, and `navigator.gpu` does not exist at all. The box's **RTX 4090 is present and OK**, but
+it is not driving that session: `Win32_VideoController` lists four virtual adapters beside it —
+`Microsoft Remote Display Adapter`, `OrayIddDriver`, `Meta Virtual Monitor`, and a `Virtual Desktop
+Monitor` in an **Error** state.
+
+Two consequences worth carrying into the visual pass:
+
+- **WebGPU on the physical console is UNVERIFIED.** It very likely works (the adapter is healthy and
+  the fallback chain is doing exactly what it should over a remote display), but nobody has looked,
+  and this session cannot answer it. Judge the renderer at the machine, not over RDP.
+- **Over RDP the deck runs canvas2d, which makes an existing debt the DEFAULT experience here rather
+  than an edge case**: "Shaders are WebGPU-only — on the Canvas2D fallback the chips select something
+  that will not draw" (GT-3f). The smoke verdict shows exactly that, `shaderEffect: "ghosttea:crt"`
+  beside `rendererBackend: "canvas2d"` — a shader selected that cannot draw. If James works this box
+  remotely, that is what he will see, and it is the deck not knowing its own backend, not the port.
+
 ## The remaining ladder — and what each needs (NOT autonomous)
 
 - **WIN-5 visual polish** — Windows titlebar/chrome (**WIN-D9 is James's decision**: keep the
