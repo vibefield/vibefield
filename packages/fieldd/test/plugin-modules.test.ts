@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PLUGIN_MODULE_SCHEME } from "@vibefield/contracts";
@@ -118,6 +118,32 @@ describe("PluginModuleAuthority (ESP §8.4)", () => {
     expect(after.modules).toHaveLength(1);
     const fresh = (after.modules[0]?.moduleUrl ?? "").slice(`${PLUGIN_MODULE_SCHEME}://`.length);
     expect(fresh).not.toBe(token);
+    expect(await authority.resolve(token)).toBeUndefined();
+  });
+
+  it("REFUSES a token whose file became a symlink out of the plugin root (EL7)", async () => {
+    // The mint-time check compares path STRINGS, so a same-uid process can
+    // swap dist/renderer.js for a link AFTER a token is minted and the string
+    // check would never notice. Electron main cannot catch this either —
+    // catching it needs the plugin root, and main knowing a root would be main
+    // discovering plugins (§8.4). So containment is re-proven on the
+    // authorizing side at the moment the answer is given, and this is the
+    // control for it: authorize once, plant the link, authorize again.
+    const { authority, id } = await fixture();
+    const { modules } = await authority.modules();
+    const token = (modules[0]?.moduleUrl ?? "").slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    const resolved = await authority.resolve(token);
+    expect(resolved).toBeDefined();
+    expect(resolved?.pluginId).toBe(id);
+
+    const secretDir = mkdtempSync(join(tmpdir(), "plugmod-secret-"));
+    cleanup.push(() => rmSync(secretDir, { recursive: true, force: true }));
+    const secret = join(secretDir, "id_ed25519");
+    writeFileSync(secret, "PRIVATE KEY\n");
+    // Same token, same generation — only the bytes underneath moved.
+    rmSync(resolved?.path ?? "", { force: true });
+    symlinkSync(secret, resolved?.path ?? "");
+
     expect(await authority.resolve(token)).toBeUndefined();
   });
 

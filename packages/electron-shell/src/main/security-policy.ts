@@ -1,4 +1,4 @@
-import { PORTS } from "@vibefield/contracts";
+import { PLUGIN_MODULE_SCHEME, PORTS } from "@vibefield/contracts";
 import type { ShellMode } from "./modes";
 
 // The PURE security policy (ESR §5.2.3–5.2.4) — no Electron import, unit-tested
@@ -17,8 +17,18 @@ export function buildCsp(mode: ShellMode): string | null {
     mode === "production"
       ? `ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL} ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`
       : "ws://127.0.0.1:*";
+  // P8b (ESP §8.4): the plugin module origin is admitted EXPLICITLY and only
+  // where plugin bytes actually land — modules on script-src, their compiled
+  // stylesheet on style-src. It is a separate scheme rather than the app origin
+  // precisely so this line can exist: admitting plugin bytes never widens what
+  // `'self'` means for the product document, and the policy states which origin
+  // may carry plugin code instead of implying it. The scheme is a privileged
+  // registration served only from fieldd's generation-bound authorization, so
+  // "this origin" is a much narrower claim than a directory would be.
+  const pluginModules = `${PLUGIN_MODULE_SCHEME}:`;
   return (
-    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
+    `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' ${pluginModules}; ` +
+    `style-src 'self' 'unsafe-inline' ${pluginModules}; ` +
     `img-src 'self' data: https://*.ts.net:*; connect-src ${connect}; base-uri 'none'; object-src 'none'`
   );
 }

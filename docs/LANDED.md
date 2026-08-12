@@ -1936,3 +1936,49 @@ someone remembered to look at.
 produced no delta (checked, not assumed). Next: **P8b-2**, the `vibefield-plugin://` scheme in
 Electron main — a handler that serves only what this authority approved — then P8b-3's import map
 and async activate.
+
+## P8b-2 — the dumbest handler in the process, on purpose
+
+**LANDED 2026-08-12.** `vibefield-plugin://` is now a registered privileged scheme with a
+handler that knows nothing about plugins. It has no root, no id, no manifest, no directory —
+only `token → bytes`, answered by asking the daemon that does know. §8.4 says main "may serve
+bytes only from a pre-authorized, generation-bound mapping" and "MUST NOT discover plugins or
+decide grants", so the handler's whole claim is that it adds nothing to the decision.
+
+**The URL is one datum and the parse is strict about it.** A module URL is
+`vibefield-plugin://<32 hex>` and nothing else: a path segment, a query, or credentials each
+get their own named refusal class, following the app scheme's precedent that the reason is
+evidence while every response is an identical 404. `path-present` matters most — with the token
+as the entire address there is nothing to join a path onto, which is the shape ESP §8.4 warns
+about by name. Ten refusal rows, one per class, plus the assertion that a malformed URL never
+costs a round trip to the daemon.
+
+**Scheme privileges mirror the app scheme's**, with `bypassCSP: false` carrying the weight:
+plugin code is subject to the document's policy exactly like ours. The CSP now admits
+`vibefield-plugin:` on `script-src` and `style-src` and nowhere else — which is a sentence that
+can only be written because the scheme is NOT the app origin. Admitting plugin bytes never
+widens what `'self'` means for the product document.
+
+**Two defects the tests caught, and they were different in kind.** The handler did not catch a
+throwing `authorize`, so an unreachable daemon would have escaped the protocol handler as an
+unhandled rejection instead of becoming a 404 — fixed at the seam rather than relying on its
+caller, which happens to catch too. And one refusal-table row was simply MY expectation being
+wrong: `vibefield-plugin://evil@<token>` parses with the token still in the host, so the
+credential check must fire before the token test or the URL would be accepted as legitimate.
+The code was right; the test row was corrected to `credentials-in-url`.
+
+**A hazard found while writing the server half, fixed on the authority side.** fieldd's
+mint-time containment compares path STRINGS, so a same-uid process (EL7) could swap
+`dist/renderer.js` for a symlink AFTER a token was minted and the check would never notice.
+Main cannot catch it — catching it needs the plugin root, and main knowing a root would be main
+discovering plugins. So containment is now re-proven with `realpath` on the authorizing side at
+the moment the answer is given: a link planted after minting is refused on the very next
+request. Control-run both ways — authorize, plant the link, authorize again (refused); with the
+check removed the row goes red exactly there. A companion row in the electron suite documents
+the boundary from the other side: main serves a symlink it was told to serve, deliberately, so
+nobody "fixes" it later by teaching main about roots.
+
+**Gate: `pnpm verify` VERBATIM exit 0** — 19 protocol rows + 7 authority rows inside it. What
+remains for the artifact to actually load is **P8b-3**: the §11.6 import map (host singleton
+chunks; the map is inline, so it needs a CSP hash), async `activate` with §10.4 deadlines, and
+`BUNDLED` demoted to dev-only.

@@ -286,9 +286,15 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   widgets that cannot. **P8b-1 landed the AUTHORITY half 2026-08-12** (ESP §8.4): fieldd mints
   generation-bound opaque module tokens, `plugins.modules` hands the renderer URLs with nowhere to
   put a path, and `plugins.resolveModule` resolves one token to bytes for the shell principal
-  alone under the new local-only `plugins.serve` scope. **Remaining: P8b-2** (the
-  `vibefield-plugin://` handler in Electron main + its CSP admission) and **P8b-3** (the §11.6
-  import map, async `activate`, `BUNDLED` demoted to dev-only). Plan + decisions:
+  alone under the new local-only `plugins.serve` scope. **P8b-2 landed the SERVER half the same
+  day**: `vibefield-plugin://` is a registered privileged scheme whose handler knows nothing
+  about plugins — no root, no id, no directory, only `token → bytes` asked of the daemon — with
+  ten named refusal classes, `bypassCSP:false`, and the CSP admitting that origin on `script-src`
+  /`style-src` and nowhere else. Hardening found while building it: fieldd's containment compared
+  path STRINGS, so a same-uid symlink swap after minting would have passed; containment is now
+  re-proven with `realpath` at authorization time (control-run both ways). **Remaining: P8b-3**
+  (the §11.6 import map, async `activate`, `BUNDLED` demoted to dev-only) — the artifact still
+  does not load until it lands. Plan + decisions:
   `thinking-p8-loadable-artifact.md` — note **P8-D1 was WITHDRAWN 2026-08-12**, falsified by
   §8.4; P8-D1′ is what shipped (2026-08-09, half-closed 2026-08-11, authority landed 2026-08-12).
 - **The §5.4 authoring kit was never scheduled** — `plugin-cli`, `create-plugin`, and

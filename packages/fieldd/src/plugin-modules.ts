@@ -17,8 +17,8 @@
 // change" without a subscription, a cache, or a staleness window.
 
 import { randomBytes } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { join, resolve, sep } from "node:path";
 import {
   PLUGIN_LIMITS,
   PLUGIN_MODULE_SCHEME,
@@ -37,6 +37,9 @@ interface Grant {
   readonly pluginId: string;
   readonly path: string;
   readonly contentType: "text/javascript" | "text/css";
+  /** The plugin root this grant is contained by, kept so containment can be
+   * re-proven at AUTHORIZATION time rather than only at mint time. */
+  readonly root: string;
 }
 
 export interface PluginModuleAuthorityDeps {
@@ -72,6 +75,14 @@ export class PluginModuleAuthority {
     await this.rebuildIfStale(generation);
     const grant = this.grants.get(token);
     if (grant === undefined) return undefined;
+    // SYMLINK CONTAINMENT, RE-PROVEN HERE (EL7: a same-uid process can plant a
+    // link). The mint-time check compares path STRINGS, which a symlink at
+    // `dist/renderer.js` pointing anywhere would sail through — and main cannot
+    // catch it, because catching it needs the plugin root and main knowing a
+    // root would be main discovering plugins (§8.4). So it is checked on the
+    // authorizing side, freshly, at the moment the answer is given: a link
+    // planted after minting is refused on the very next request.
+    if (!(await isContainedFile(grant.path, grant.root))) return undefined;
     return {
       pluginId: grant.pluginId,
       path: grant.path,
@@ -104,6 +115,7 @@ export class PluginModuleAuthority {
         pluginId: record.id,
         path: modulePath,
         contentType: "text/javascript",
+        root,
       });
 
       // The stylesheet is the module's sibling, derived not declared — plugin
@@ -116,6 +128,7 @@ export class PluginModuleAuthority {
           pluginId: record.id,
           path: stylePath,
           contentType: "text/css",
+          root,
         });
       }
 
@@ -151,6 +164,20 @@ function moduleUrl(token: string): string {
 async function isFile(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** A regular file whose REAL path is still strictly beneath the plugin root.
+ * `realpath` is what makes this a symlink check rather than a string compare —
+ * the whole point is that `dist/renderer.js` may be a link planted by a
+ * same-uid process (EL7) after the token was minted. */
+async function isContainedFile(path: string, root: string): Promise<boolean> {
+  try {
+    const [realFile, realRoot] = await Promise.all([realpath(path), realpath(root)]);
+    if (!realFile.startsWith(`${realRoot}${sep}`)) return false;
+    return (await stat(realFile)).isFile();
   } catch {
     return false;
   }

@@ -10,13 +10,14 @@ import {
   type DesktopShellState,
   DesktopShellState as DesktopShellStateSchema,
   IPC_CHANNELS,
+  PluginModuleResolution,
   type ShellCommand,
   ShellCommandRequest,
   type UserRecord,
   type UsersCreateParams,
 } from "@vibefield/contracts";
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
-import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
+import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { resolvePlatformLogRoot } from "@vibefield/logging";
 import {
   createUser,
@@ -59,6 +60,7 @@ import { installLifecycle } from "./lifecycle";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
 import { isSmokeLike, parseMode } from "./modes";
+import { installPluginProtocol, registerPluginScheme } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
 import { installRendererLogging } from "./renderer-logging";
@@ -106,6 +108,10 @@ const DESKTOP_BOOT_ID = `desktop-${randomBytes(8).toString("hex")}`;
 
 let supervisor: FielddSupervisor | null = null;
 let fielddHandles: FielddHandleCoordinator | null = null;
+/** P8b-2 — the live fieldd client the plugin protocol authorizes against. Null
+ * until the pair is up, which is the honest state: with no authority reachable,
+ * no plugin module is servable. */
+let pluginModuleClient: FielddHandle["client"] | null = null;
 let logging: ElectronLogging | null = null;
 let localDiagnostics: ElectronLocalDiagnostics | null = null;
 let crashArtifacts: CrashArtifactManager | null = null;
@@ -292,6 +298,37 @@ async function main(
   // The renderer's own origin. Dev serves from Vite instead, so the handler is
   // pointless there; every other mode loads vibefield-app://shell and would show
   // a blank window without it. Root is the built renderer beside dist/main.
+  // P8b-2 (ESP §8.4) — the plugin module origin. Installed in EVERY mode
+  // including dev: the app scheme is skipped in dev because Vite serves the
+  // renderer, but plugin modules never come from Vite, and a staged plugin must
+  // load the same way in dev as in production or the staged path is only ever
+  // exercised at packaging time.
+  installPluginProtocol({
+    // The authority is fieldd, always asked, never cached (§8.4: a URL dies on
+    // disable/reload/quarantine/revision change, and a cache here would be
+    // exactly the staleness window that clause forbids).
+    authorize: async (token) => {
+      const client = pluginModuleClient;
+      if (client === null || client.status !== "ready") return undefined;
+      try {
+        const raw = await client.request("plugins.resolveModule", { token });
+        const parsed = PluginModuleResolution.safeParse(raw);
+        if (!parsed.success) return undefined;
+        return { path: parsed.data.path, contentType: parsed.data.contentType };
+      } catch {
+        // A refused token arrives as an RPC error; main treats "no" and "could
+        // not ask" identically, because serving on a failure to reach the
+        // authority would be serving without one.
+        return undefined;
+      }
+    },
+    onRefusal: (reason, url) => {
+      logger.warn("desktop.security.plugin_module_refused", "A plugin-scheme request was refused", {
+        reason,
+        url,
+      });
+    },
+  });
   const appCsp = buildCsp(MODE);
   if (MODE !== "dev") {
     installAppProtocol({
@@ -547,6 +584,14 @@ async function main(
         decodeImage: (bytes) => nativeImage.createFromBuffer(bytes),
       },
     });
+    // P8b-2: keep the plugin protocol's authority pointed at the LIVE client.
+    // Read at call time rather than captured, for the same reason the roster
+    // reads its attachment at call time — a user switch or a daemon bounce
+    // replaces the handle, and a captured one would authorize against a
+    // connection that is no longer this device's fieldd.
+    const stopPluginModuleClient = bundle.handles.onHandle((handle) => {
+      pluginModuleClient = handle.client;
+    });
     const shellProvider = new RecoveringShellProvider(
       bundle.handles,
       {
@@ -561,6 +606,8 @@ async function main(
       dispose: () => {
         observers.dispose();
         shellProvider.dispose();
+        stopPluginModuleClient();
+        pluginModuleClient = null;
       },
     };
   };
@@ -1062,6 +1109,7 @@ if (process.platform === "win32") app.setAppUserModelId(DESKTOP_APP_ID);
 // cannot host the renderer's ES-module graph. Registered in every mode so the
 // declaration cannot drift from the mode that serves it.
 registerAppScheme();
+registerPluginScheme();
 // ESP-4/§6.1 — process-wide renderer sandboxing, before ready and before any
 // window policy runs. Independent of per-window `sandbox:true` (which stays)
 // and of the RunAsNode fuse: three controls, three surfaces, no substitutes.
