@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "plugin-build",
     "gen:manifest": "tsx scripts/emit-manifest.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -29,5 +30,14 @@
     "tsx": "^4.19.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "nx": {
+    "targets": {
+      "build": {
+        "outputs": [
+          "{projectRoot}/dist"
+        ]
+      }
+    }
   }
 }

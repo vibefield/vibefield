@@ -275,17 +275,17 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   **The standing hazard is closed:** `pnpm bundle:assert` (renderer build + assert) is wired
   into `pnpm verify` between clippy and the test suites, so this class can no longer regress
   behind a green gate — the reason it survived four days and two ledger entries (2026-08-10).
-- **Install-a-widget-plugin does not exist — the renderer half of plugin distribution is dead
-  code (2026-08-09, onboarding review).** No plugin builds: no `dist/` exists anywhere, no
-  plugin has a build script (`gen:manifest`/`test`/`typecheck` only), and every widget-bearing
-  manifest's `entries.renderer: "./dist/renderer.js"` names a file nothing produces and nothing
-  loads — the renderer imports plugins from source through the static `BUNDLED` list
-  (`field-engine.ts:70-76`, whose own comment names the §19.2 staged import-map loader as the
-  replacement), and async `activate` is refused (renderer-harness). `entries.service` is real
-  by contrast: the worker host imports kv-service's checked-in `service.js` off disk. So the P7
-  chain can deliver a signed `.vfplugin` end-to-end whose *services* run but whose *widgets*
-  cannot load. Seam set: real plugin builds + the staged loader; WP8 covers only the packaged
-  staging half and was already recorded (2026-08-09).
+- **Install-a-widget-plugin does not exist — HALF CLOSED (P8a, 2026-08-11): the artifact is real
+  now; nothing loads it yet.** The build half is done — `plugin-build` gained its `bin` and its
+  renderer/service/artifact-check stages, all five plugins declare `"build": "plugin-build"`, and
+  every widget-bearing manifest's `entries.renderer` now resolves to a file the desktop build
+  produces. **The loader half (P8b) is what remains**, and it is the whole reason the artifact
+  still does not load: the renderer imports plugins from source through the static `BUNDLED` list
+  (`field-engine.ts:70-76`), async `activate` is still refused (`renderer-harness.ts:184`), and
+  §11.6's import map does not exist — so a signed `.vfplugin` still delivers services that run and
+  widgets that cannot. Plan + decisions: `thinking-p8-loadable-artifact.md` (P8-D1 proposes
+  serving staged modules from the existing `vibefield-app://shell` origin, since `script-src
+  'self'` already admits it) (2026-08-09, half-closed 2026-08-11).
 - **The §5.4 authoring kit was never scheduled** — `plugin-cli`, `create-plugin`, and
   `apps/plugin-playground` are spec-named (the ten-minute bar) and absent from the tree; only
   `plugin-build` exists. The §21 ladder completed without an authoring rung, so this appeared

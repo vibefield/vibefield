@@ -1820,3 +1820,61 @@ on windows), the search adds `%LOCALAPPDATA%\truffle\bin` and cfg-gates the unix
 live tsnet-vs-host-Tailscale coexistence spike and the Mac↔Windows two-device witness (docs sync,
 remote attach) still need a tailnet auth key (James's). Gate: `pnpm verify` VERBATIM exit 0; box:
 field-native mesh unit tests 3/3 incl. the new witness.
+
+## P8a — the plugin artifact stops being a promise
+
+**LANDED 2026-08-11**, the first rung of `thinking-p8-loadable-artifact.md` (destination
+ratified the same day: **agents author widgets** — the four-views Widget Builder).
+
+Every widget-bearing manifest had named `entries.renderer: "./dist/renderer.js"` since C1d while
+nothing produced it: `plugin-build` had no `bin` and only three of §5.4's four stages, and no
+plugin declared a build script. `externals.ts` had been written for consumers that did not
+exist — its header names "the renderer library-mode bundle, the esbuild service bundle, and the
+pack-time duplicate-singleton check" as the importers of `HOST_SINGLETON_EXTERNALS`. This slice
+built those three consumers.
+
+`plugin-build` now ships a `bin` and stages: **renderer bundle** (vite library mode, one ESM
+entry, PA-29 singletons left BARE for §11.6 to bind, Tailwind compiled into `dist/renderer.css`),
+**service bundle** (esbuild, Node target, self-contained except the SDK runtime), and **artifact
+checks** (declared entries exist; no bundled singletons). All five plugins declare
+`"build": "plugin-build"` — the spec's zero-config script, exactly as written — and each carries
+`nx.targets.build.outputs`, because Nx caches `build` and infers no outputs for a package script:
+a cache HIT would otherwise skip the build and leave `dist/` absent for whatever reads it next.
+
+Measured: note 2 KB, field-tools, widgetlab 84 KB, browser 225 KB (unminified on purpose — a
+distributable plugin is REVIEWED at rung R1, and the reviewer reads these bytes). Externals came
+out bare and correct: `react`, `react/jsx-runtime`, `@vibefield/plugin-sdk{,/ui,/canvas}`,
+`three`, `@react-three/drei`. Plugin stylesheets carry the plugin's own rules plus the utilities
+it uses and **no preflight** — a plugin loads into a page the host already reset, and shipping
+preflight from inside a plugin would restyle the host's DOM.
+
+**Two defects found by building, not by reading.** (1) Node's type stripping refuses parameter
+properties, so `constructor(readonly stage)` died in the bin — the same erasable-syntax law that
+took param properties out of fieldd-client at P5; and its twin, extensionless relative imports,
+needed the `.ts`-retry resolve hook copied from `service-worker-harness.mjs` rather than a second
+answer invented here. (2) **`export * from "./build"` in the barrel broke the daemon build**:
+fieldd imports this package for `canonicalJson` (§9.2), bundles with esbuild, and the barrel
+dragged vite plus Tailwind's native `oxide .node` binary into a daemon artifact. The build stages
+now live behind `@vibefield/plugin-build/build`, never the door the runtime uses — the same
+barrel lesson the design-kit `sideEffects` fix taught a day earlier, in a package that had no
+reason to expect it. `pnpm verify` would not have caught this; `pnpm build` did.
+
+**The PA-29 control, and why the obvious one is worthless.** Removing `react` from the externals
+list to force a bundled copy proves nothing: the bundler config and the check read the SAME
+constant, so that edit disables both — measured (react bundled, linked modules 5 → 9, check
+silent). The honest control imports a singleton **by relative path** into a fixture's own
+`node_modules/react/`, which the bare-specifier matcher never sees and the check must still
+catch; it is a permanent test rather than a one-off experiment. The predicate's other half —
+that the SDK, the one singleton every plugin imports, resolves to a workspace source tree and so
+needs its own marker — is unit-tested beside it.
+
+Deliberately not done: kv-service keeps its hand-written `service.js` (the stage reports it
+"prebuilt, not bundled"), because migrating it would make `pnpm test` depend on a build step;
+the service stage is proven by fixture instead. Manifest emit stays in `gen:manifest` rather than
+folding into `build` — the canonical artifact is freshness-pinned and must not gain a second
+producer behind a cached target; build READS it and names the command that writes it. Both are
+recorded deltas from §5.4's four-stages-one-command.
+
+**Gate: `pnpm verify` VERBATIM exit 0** plus `pnpm build` green (which now produces plugin
+artifacts as part of the desktop build). Next rung: **P8b, the staged loader** — the reason the
+artifact still does not load.

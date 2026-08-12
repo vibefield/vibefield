@@ -4,14 +4,23 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./build": "./src/build.ts"
+  },
+  "bin": {
+    "plugin-build": "./bin/plugin-build.mjs"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vibefield/contracts": "workspace:*"
+    "@tailwindcss/vite": "catalog:",
+    "@vibefield/contracts": "workspace:*",
+    "@vitejs/plugin-react": "^6.0.3",
+    "esbuild": "catalog:",
+    "tailwindcss": "catalog:",
+    "vite": "^8.1.5"
   },
   "devDependencies": {
     "@types/node": "catalog:",
