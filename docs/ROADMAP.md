@@ -9,9 +9,9 @@
 > the CSP-hash proof · one verdict corrected same-day as overbroad), the P8b-2 secure-context
 > regression found and fixed (the one-call scheme-registration law), the externals list into
 > contracts, and the staged loader landing with the census witnessed
-> (`stagedPlugins: 4`). Ledger: `LANDED.md` §P8b-3; the seam e2e (P8b-3e) runs as this pass is
-> written; a new debt row records that the census smoke sits in NO gate (two silent-red eras
-> in one week). The MORNING pass — the P8 fold + the dogfood
+> (`stagedPlugins: 4`). Ledger: `LANDED.md` §P8b-3 + §P8b-3e (the seam e2e landed `089274c`
+> before the pass closed — P8b is closed whole); a new debt row records that the census smoke
+> sits in NO gate (two silent-red eras in one week). The MORNING pass — the P8 fold + the dogfood
 > destination: thinking-p8's §7 fold map ran (owed since destination (a) — agents author
 > widgets — was ratified 2026-08-11): the four 2026-08-09 plugin debt rows consolidate into the
 > PLUG track row + one pointer row, a PLUG in-flight paragraph and Next-up bullet are added,
@@ -88,7 +88,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`) | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` | P8b-3e seam e2e (in flight) → **P8d, the authoring kit** (ten-minute bar measured on the **mind map pack** — the first prod dogfood product; Rung-3 opens with the DESIGN.md/UI_SYSTEM/design-kit visual-consistency read, James 2026-08-13); P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
+| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`) | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` | **P8b CLOSED WHOLE** (P8b-3e seam e2e landed `089274c` — every §8.4 clause tested on the real seam) → **P8d, the authoring kit** (ten-minute bar measured on the **mind map pack** — the first prod dogfood product; Rung-3 opens with the DESIGN.md/UI_SYSTEM/design-kit visual-consistency read, James 2026-08-13); P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -122,8 +122,11 @@ map, the staged loader joining `plugins.modules` to registry records through plu
 new `registerRecord` door, async `activate` under a real §10.4 deadline, `BUNDLED` demoted to
 dev-only with dead-branch elimination proven by marker. Witnessed on the final sha:
 `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` · verify VERBATIM exit 0.
-In flight: **P8b-3e**, the seam e2e (real authority wired into the real protocol handler over
-a real artifact; disable/re-enable + symlink controls). Next: **P8d**, the authoring kit, with
+**P8b-3e landed the same evening** (`089274c`): the seam e2e — real registry + real authority
+wired STRAIGHT into the real protocol handler over a real on-disk artifact, nothing double'd;
+six rows including the §8.4 disable/re-enable control WITH its own built-in sensitivity check
+(a caching `authorize` serves the disabled plugin at the instant the honest wiring refuses it)
+and the EL7 symlink-after-minting row, mutation-probed. Next: **P8d**, the authoring kit, with
 the ten-minute bar measured on the **mind map pack** (Rung 3 opens with the visual-consistency
 read — DESIGN.md · UI_SYSTEM · design-kit · existing widgets). P8c rides WP8; P8e gates any
 third-party listing.
@@ -330,8 +333,8 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 - **The plugin platform's remaining seams are P8's rungs — four rows consolidated 2026-08-13**
   (they were separate debts dated 2026-08-09; the thinking-p8 §7 fold map ran).
   ~~Install-a-widget~~ **CLOSED the same evening — P8b-3 landed `608e78e`, the artifact
-  loads, staged census witnessed** (`LANDED.md` §P8b-3; the seam e2e P8b-3e is the one
-  in-flight remainder) · the §5.4 authoring kit = **P8d** (critical path for the ratified
+  loads, staged census witnessed; the P8b-3e seam e2e landed hours later (`089274c`), so P8b
+  is closed WHOLE** (`LANDED.md` §P8b-3/§P8b-3e) · the §5.4 authoring kit = **P8d** (critical path for the ratified
   agents-author-widgets destination; measured on the mind map pack) · `PluginWidgetProps`
   §12.1 + PA-27's curated canvas tier = **P8e** (gates any third-party listing) ·
   **`ctx.pool`** stays deferred to its first attachment kind (AR — and the dev-tool pack when

@@ -2047,3 +2047,43 @@ protocol handler over a real artifact, with the disable/re-enable and symlink co
 packaged discovery stays P8c/WP8 · and the census smoke sits in NO gate — two silent-red eras
 in one week (the bundle class 2026-08-06→10, the secure-context class 2026-08-11→13) is a
 standing hazard now recorded as a ROADMAP debt row for James's call.
+
+## P8b-3e — the seam proves itself, and a second row proves the control
+
+**LANDED 2026-08-13** (`089274c`, opus builder, integrated same evening — closing the entry
+above's one in-flight remainder within hours of naming it). The two halves P8b-1/P8b-2 landed
+with two green suites and NOTHING asking whether they agree; `staged-serving-seam.test.ts`
+is that question, with **nothing double'd**: the real `PluginRegistryService` (it constructs
+standalone from `{dataDir, roots}` — no daemon boot machinery), the real
+`PluginModuleAuthority`, a real artifact on disk (bytes authored in a tmp dir, never built —
+the P8a law), and the real `servePluginRequest` with `authority.resolve` wired STRAIGHT IN as
+`authorize` — no adapter, because a resolution already IS an AuthorizedModule, so shape drift
+must fail the typecheck rather than be absorbed by test glue.
+
+Six rows: exact module bytes + type + all three security headers · the derived stylesheet ·
+an unminted token → 404 · **the §8.4 control through the protocol layer** (disable → the same
+URL 404s while the artifact is STILL ON DISK; re-enable → a fresh URL serves while the old one
+stays dead — a URL that leaked while enabled is not replayable) · **the control's own
+sensitivity check built in**: a caching `authorize` — main "remembering" — serves the disabled
+plugin 200 at the same instant the honest wiring 404s it, which is exactly why §8.4 says main
+asks per request and holds no map · **EL7 through the protocol layer**: `dist/renderer.js`
+swapped for an out-of-root symlink AFTER minting → 404, secret bytes asserted absent. The EL7
+row was mutation-probed rather than trusted: with `isContainedFile` neutered, that row ALONE
+went red — the secret would have been served — and the other five stayed green (revert
+confirmed empty before commit).
+
+One production-surface addition, flagged not buried: `PluginModuleAuthority` joined fieldd's
+barrel — the exports map publishes only `.` and `./testing`, so the class had been reachable
+solely by a deep import its own map forbids. Plus the stale `canvas.ts` comment retired
+(ctx.canvas shipped at P6 as the stopgap PA-27 retires, not "arrives at P4").
+
+Builder findings worth the record: the fresh-worktree first-verify red is `bundle:assert`
+needing one `pnpm build` (main/preload bundles absent), distinct from the electron-extraction
+race; and **a piped gate lied** — `pnpm verify 2>&1 | tail` reports the PIPE's exit, and the
+builder caught a real exit-1 run reading as 0 by reading the log rather than trusting the
+code. The never-pipe-the-gate law, rediscovered independently, now proven from both sides.
+
+Gates on the integrated tree: `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}`
+re-witnessed · `pnpm verify` VERBATIM (run recorded in the docs commit that carries this
+entry). **P8b is closed whole — every §8.4 clause now has a test on the real seam. Next rung:
+P8d.**
