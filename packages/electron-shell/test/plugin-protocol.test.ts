@@ -69,8 +69,18 @@ describe("resolvePluginUrl (pure)", () => {
     // bypassCSP is the one that matters most: plugin code is subject to the
     // document's CSP exactly like ours.
     expect(PLUGIN_SCHEME_PRIVILEGES.bypassCSP).toBe(false);
-    expect(PLUGIN_SCHEME_PRIVILEGES.corsEnabled).toBe(false);
     expect(PLUGIN_SCHEME_PRIVILEGES.allowServiceWorkers).toBe(false);
+  });
+
+  it("stays a legal CORS destination — module fetches are CORS-mode (P8b-3 probe)", () => {
+    // Flipped from false at P8b-3 (2026-08-13): with corsEnabled:false the app
+    // document's import() of a plugin URL network-errors BEFORE headers are
+    // consulted (probe rows B/C1–C3), so the scheme could never serve the one
+    // caller it exists for. Electron enforces no response CORS on cors-enabled
+    // custom schemes (row G1) — the boundary is tokens + CORP, not this flag.
+    // If this ever reads false again, every staged plugin silently stops
+    // loading; the e2e staged-load test is the row that catches it live.
+    expect(PLUGIN_SCHEME_PRIVILEGES.corsEnabled).toBe(true);
   });
 });
 

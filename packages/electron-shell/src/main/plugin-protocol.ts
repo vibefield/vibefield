@@ -29,7 +29,20 @@ const TOKEN_PATTERN = /^[0-9a-f]{32}$/;
 /** Same posture as the app scheme, for the same reasons — `standard` and
  * `secure` so ES modules and fetch behave, `codeCache` because these bytes are
  * modules, and every ambient grant refused. `bypassCSP` false in particular:
- * plugin bytes are subject to the document's policy exactly like ours. */
+ * plugin bytes are subject to the document's policy exactly like ours.
+ *
+ * `corsEnabled` is the ONE deliberate divergence from the app scheme, and it is
+ * load-bearing (P8b-3 probe, 2026-08-13): ES-module fetches are always
+ * CORS-mode, and a cors-DISABLED scheme is an illegal CORS destination — the
+ * app document's `import("vibefield-plugin://<token>")` network-errors before
+ * any response header is consulted, so with `false` here NO plugin module can
+ * ever load. The app scheme keeps `false` because nothing cross-origin may
+ * call it; this scheme EXISTS to be called from the app origin. Electron does
+ * not enforce response CORS headers on cors-enabled custom schemes (probe row
+ * G1), so the actual boundary is unchanged by the flip: unguessable
+ * generation-bound tokens, `Cross-Origin-Resource-Policy: same-origin` on
+ * every response (blocks no-cors embedding), and the handler being installed
+ * only on the shell session. */
 export const PLUGIN_SCHEME_PRIVILEGES = {
   standard: true,
   secure: true,
@@ -37,7 +50,7 @@ export const PLUGIN_SCHEME_PRIVILEGES = {
   stream: true,
   codeCache: true,
   bypassCSP: false,
-  corsEnabled: false,
+  corsEnabled: true,
   allowServiceWorkers: false,
   allowExtensions: false,
 } as const;

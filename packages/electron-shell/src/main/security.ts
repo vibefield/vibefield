@@ -6,8 +6,8 @@ import { buildCsp, decideNavigation, decidePermission, decideWindowOpen } from "
 // electron-security-packaging.md §7). Nothing here decides anything — every
 // verdict comes from the pure module so the suite can prove it without Electron.
 
-export function installCsp(mode: ShellMode): void {
-  const csp = buildCsp(mode);
+export function installCsp(mode: ShellMode, importMapHashes: readonly string[] = []): void {
+  const csp = buildCsp(mode, importMapHashes);
   if (csp === null) return;
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
     cb({ responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [csp] } });

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { homedir, release, tmpdir } from "node:os";
 import { join } from "node:path";
 import { GhostteaElectronBackend } from "@vibecook/ghosttea-electron/main";
@@ -76,7 +77,7 @@ import {
   installPermissionPolicy,
   installWebContentsBackstop,
 } from "./security";
-import { buildCsp } from "./security-policy";
+import { buildCsp, importMapHashesFromHtml } from "./security-policy";
 import { backfillMigratedSetupVariant } from "./setup-variant";
 import { RecoveringShellProvider } from "./shell-provider";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
@@ -294,7 +295,21 @@ async function main(
   }
   // ESP §6.2 — every session gate and contents guard is armed BEFORE the first
   // window exists, so no renderer can outrun its own policy.
-  installCsp(MODE);
+  // P8b-3 (§11.6): the singleton import map is an inline script in the BUILT
+  // index.html, admitted by its exact hash — computed here from the very file
+  // the app protocol serves, so the policy and the document cannot drift
+  // (build-deterministic bytes; a rebuilt map re-hashes on next boot). Dev has
+  // no built html and a null CSP; absent file ⇒ no hashes ⇒ policy unchanged.
+  const rendererRoot = join(__dirname, "..", "renderer");
+  let importMapHashes: string[] = [];
+  try {
+    importMapHashes = importMapHashesFromHtml(
+      readFileSync(join(rendererRoot, "index.html"), "utf8"),
+    );
+  } catch {
+    importMapHashes = [];
+  }
+  installCsp(MODE, importMapHashes);
   // The renderer's own origin. Dev serves from Vite instead, so the handler is
   // pointless there; every other mode loads vibefield-app://shell and would show
   // a blank window without it. Root is the built renderer beside dist/main.
@@ -329,10 +344,10 @@ async function main(
       });
     },
   });
-  const appCsp = buildCsp(MODE);
+  const appCsp = buildCsp(MODE, importMapHashes);
   if (MODE !== "dev") {
     installAppProtocol({
-      root: join(__dirname, "..", "renderer"),
+      root: rendererRoot,
       ...(appCsp !== null ? { csp: appCsp } : {}),
       onRefusal: (reason, url) => {
         logger.warn("desktop.security.app_asset_refused", "An app-scheme request was refused", {

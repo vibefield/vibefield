@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { PORTS } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import type { ShellMode } from "../src/main/modes";
@@ -6,6 +7,7 @@ import {
   decideNavigation,
   decidePermission,
   decideWindowOpen,
+  importMapHashesFromHtml,
 } from "../src/main/security-policy";
 
 // The PURE security policy (ESR §5.2.3–5.2.4). Ports come from the registry, not
@@ -66,6 +68,47 @@ describe("buildCsp", () => {
     expect(csp).toContain("img-src 'self' data: https://*.ts.net:*");
     expect(csp).not.toContain("frame-src");
     expect(csp).not.toContain("connect-src https://");
+  });
+
+  describe("import-map hashes (P8b-3, §11.6)", () => {
+    it("appends each hash to script-src ONLY — style-src never gains it", () => {
+      const csp = buildCsp("production", ["sha256-abc123"]) as string;
+      const [scriptSrc] = csp.split(";").filter((d) => d.trim().startsWith("script-src"));
+      const [styleSrc] = csp.split(";").filter((d) => d.trim().startsWith("style-src"));
+      expect(scriptSrc).toContain("'sha256-abc123'");
+      expect(styleSrc).not.toContain("sha256-abc123");
+    });
+
+    it("an empty hash list leaves the policy byte-identical (dev html has no map)", () => {
+      expect(buildCsp("production", [])).toBe(buildCsp("production"));
+    });
+  });
+});
+
+describe("importMapHashesFromHtml", () => {
+  const map = `{"imports":{"react":"vibefield-app://shell/assets/singleton-react.js"}}`;
+  const html = `<!doctype html><head><script type="importmap">${map}</script></head>`;
+
+  it("hashes the EXACT inner bytes the way Chromium hashes an inline script", () => {
+    const expected = `sha256-${createHash("sha256").update(map, "utf8").digest("base64")}`;
+    expect(importMapHashesFromHtml(html)).toEqual([expected]);
+  });
+
+  it("moves with the content — one changed byte is a different token (pairing control)", () => {
+    const [a] = importMapHashesFromHtml(html);
+    const [b] = importMapHashesFromHtml(html.replace("react", "reacd"));
+    expect(a).not.toBe(b);
+    expect(b).toMatch(/^sha256-/);
+  });
+
+  it("is not a general inline-script amnesty — ordinary inline scripts yield nothing", () => {
+    expect(importMapHashesFromHtml(`<script>alert(1)</script>`)).toEqual([]);
+    expect(importMapHashesFromHtml(`<script type="module">import "x";</script>`)).toEqual([]);
+  });
+
+  it("returns one token per map, in document order", () => {
+    const two = `<script type="importmap">{"imports":{}}</script><script type="importmap">${map}</script>`;
+    expect(importMapHashesFromHtml(two)).toHaveLength(2);
   });
 });
 
