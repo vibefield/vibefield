@@ -14,6 +14,7 @@ import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
 import { getRendererLogger } from "../logging";
 import { setActiveCanvasEngine } from "../plugin-host/canvas-engine-ref";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
+import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 import { bindPersistence } from "./persistence-controller";
 
 // WorkspaceSession (§5.4.3): exactly ONE ICE engine generation and ONE
@@ -45,6 +46,10 @@ export function useWorkspaceSession(
   /** CanvasStage publishes its GL/halo teardown here; engine disposal runs it
    * FIRST — the GL disposal order invariant, structural. */
   stageDisposeRef: MutableRefObject<(() => void) | null>,
+  /** P8b-3 — the plugins the boot phase staged and activated. Passed in rather
+   * than fetched here: the registry is built synchronously in the memo below,
+   * so every import had to finish before this hook ever ran. */
+  plugins?: PreparedRendererPlugins,
 ): WorkspaceSession {
   const docState = useSyncExternalStore(manager.subscribe, manager.getState);
   const pending = docState.pending;
@@ -53,7 +58,7 @@ export function useWorkspaceSession(
   // process-permanent — the only way enable/disable round-trips in-session);
   // disabled plugins swap FACES live (faces.tsx), never registrations. The
   // registry is therefore stable for the whole mount again.
-  const registry = useMemo(buildRegistry, []);
+  const registry = useMemo(() => buildRegistry(plugins), [plugins]);
   // Ghost stubs (§12.4 absent case): the pending doc's envelope header names
   // every widget type + pack version pre-open; types NO present plugin owns
   // register as preserving placeholders AT THE DOC'S VERSION, so the engine's

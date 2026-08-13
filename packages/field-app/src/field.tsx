@@ -21,6 +21,7 @@ import { useWorkspaceSession } from "./field/use-workspace-session";
 import { getRendererLogger } from "./logging";
 import { setPluginClientBackend } from "./plugin-host/plugin-client";
 import { usePluginRegistryFeed } from "./plugin-host/plugin-registry-store";
+import type { PreparedRendererPlugins } from "./plugin-host/staged-loader";
 import { useTheme } from "./theme";
 
 // The Field (B2 + Track D1–D4), decomposed per ESR §5.4.3 (slice 3b):
@@ -36,7 +37,16 @@ import { useTheme } from "./theme";
 // The window IS the field (2026-07-21): no app bar — the theme toggle floats
 // top-right, diagnostics live inside Settings.
 
-export function FieldView({ manager }: { manager: DocManager }): ReactElement {
+export function FieldView({
+  manager,
+  plugins,
+}: {
+  manager: DocManager;
+  /** P8b-3 — the staged set the boot phase resolved. Absent only in harnesses
+   * that mount the view without a boot machine; the session then builds an
+   * empty registry rather than reaching for a loader of its own. */
+  plugins?: PreparedRendererPlugins;
+}): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
   // Shared seams between units: the stage publishes its GL/halo teardown for
   // the session's engine disposal (the GL disposal order invariant); chrome
@@ -58,18 +68,27 @@ export function FieldView({ manager }: { manager: DocManager }): ReactElement {
     return () => setPluginClientBackend(null);
   }, [fielddClient]);
 
-  const { ce, registry, generation, docState } = useWorkspaceSession(manager, stageDisposeRef);
+  const { ce, registry, generation, docState } = useWorkspaceSession(
+    manager,
+    stageDisposeRef,
+    plugins,
+  );
   usePreviewWarmup(manager, registry);
 
+  const stagedPlugins = plugins?.staged.length ?? 0;
   useEffect(() => {
     // after mount commit — the smoke's pass condition covers InfiniteCanvas itself
     const widgetTypes = registry.allWidgets().size;
-    const plugins = registry.all().length;
+    const registered = registry.all().length;
     getRendererLogger()
       .child({ component: "canvas" })
-      .info("renderer.canvas.ready", "The canvas renderer is ready", { widgetTypes, plugins });
-    emitCanvasReadyMarker(widgetTypes, plugins);
-  }, [registry]);
+      .info("renderer.canvas.ready", "The canvas renderer is ready", {
+        widgetTypes,
+        plugins: registered,
+        stagedPlugins,
+      });
+    emitCanvasReadyMarker(widgetTypes, registered, stagedPlugins);
+  }, [registry, stagedPlugins]);
 
   const [trayOpen, setTrayOpenRaw] = useState(false);
   const [docsOpen, setDocsOpenRaw] = useState(false);

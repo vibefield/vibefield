@@ -56,7 +56,7 @@ export function BootRoot({ machine }: { machine: BootMachine }): ReactElement {
           }
         >
           <ready.mod.FielddProvider client={ready.client}>
-            <ready.mod.FieldView manager={ready.manager} />
+            <ready.mod.FieldView manager={ready.manager} plugins={ready.plugins} />
           </ready.mod.FielddProvider>
         </div>
       )}

@@ -53,6 +53,10 @@ const workspaceModule = {
   DocManager: FakeManager,
   FieldView: () => null,
   FielddProvider: ({ children }: { children?: unknown }) => children,
+  // P8b-3: the machine starts the staged load as soon as the workspace chunk
+  // lands and awaits it just before opening the document. Empty here — what
+  // this suite tests is the boot ORDER, and staged-loader.test owns the load.
+  prepareFieldPlugins: async () => ({ generation: -1, staged: [], bundled: [] }),
 } as unknown as WorkspaceModule;
 
 function deferred<T>() {

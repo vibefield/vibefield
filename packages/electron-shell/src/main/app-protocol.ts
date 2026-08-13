@@ -2,6 +2,7 @@ import { createReadStream, realpathSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { protocol } from "electron";
+import { APP_HOST, APP_ORIGIN, APP_SCHEME } from "./app-origin";
 
 // The VibeField application scheme (ESP §8.2) — the packaged renderer's OWN
 // origin, serving the built bundle out of one directory and nothing else.
@@ -19,15 +20,12 @@ import { protocol } from "electron";
 // touches Electron; the one decision the pure resolver cannot make is the
 // symlink check, which cannot be answered without asking the disk.
 
-export const APP_SCHEME = "vibefield-app";
-
-/** The ONLY host this scheme serves. A standard scheme has real origins, so a
- * second host would be a second origin — and `'self'` would stop being a single
- * statement about a single directory. */
-export const APP_HOST = "shell";
-
-/** What CSP `'self'` resolves to for the packaged renderer. */
-export const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`;
+// The scheme, host and origin moved to `app-origin.ts` at P8b-3 — unchanged, and
+// re-exported here so every existing reader keeps reading them from the module
+// that serves this origin. They live in an Electron-free file because the
+// renderer BUILD needs them too (the import map's targets are absolute URLs on
+// this origin) and a vite config cannot import `electron`.
+export { APP_HOST, APP_ORIGIN, APP_SCHEME };
 
 /** The document the shell loads. Exported so no call site string-builds a URL:
  * a typo'd origin at one call site is a silently different security origin. */

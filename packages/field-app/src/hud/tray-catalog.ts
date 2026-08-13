@@ -37,8 +37,8 @@ export function buildCatalog<W extends DefLike>(
 ): CatalogEntry<W>[] {
   const out: CatalogEntry<W>[] = [];
   for (const plugin of registry.all()) {
-    if (disabledPlugins?.has(plugin.v1.id)) continue;
-    for (const w of plugin.v1.contributes?.widgets ?? []) {
+    if (disabledPlugins?.has(plugin.id)) continue;
+    for (const w of plugin.widgetContributions) {
       const def = plugin.widgets.get(w.type);
       if (def === undefined) continue; // registerV1 guarantees the pair; belt and braces
       const preview = safePreviewToCss(w.preview);

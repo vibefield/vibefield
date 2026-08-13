@@ -9,8 +9,10 @@
 // P3 SUBSET, honest by omission (§10.2 — unavailable APIs are ABSENT, never
 // stubs): ctx carries plugin/logger/signal/track/widgets/client. Commands,
 // surfaces, and the canvas handle (ctx.canvas) arrive at P6; pool arrives with
-// its runtime. ctx.plugin omits manifestHash/installRevision until the staged
-// loader supplies them (recorded delta, thinking-p3).
+// its runtime. ctx.plugin's manifestHash/installRevision are OPTIONAL because
+// two loaders supply the context: the staged loader (§19.2) knows both from the
+// approved module row, and the dev-only bundled path has neither — a plugin
+// riding the app bundle was never installed, so there is no install to revise.
 
 import type { ComponentType } from "react";
 
@@ -65,7 +67,14 @@ export interface PluginProductClient {
 /** §11.1, the P3 subset. A capability object, not a bag of globals; properties
  * are immutable; APIs reject use after `signal` aborts. */
 export interface RendererPluginContext {
-  readonly plugin: { readonly id: string; readonly version: string };
+  readonly plugin: {
+    readonly id: string;
+    readonly version: string;
+    /** §9.2 identity of the manifest this activation was approved against, and
+     * §11.4's install revision. Present iff a staged loader supplied them. */
+    readonly manifestHash?: string;
+    readonly installRevision?: string;
+  };
   readonly signal: AbortSignal;
   readonly logger: PluginLogger;
   readonly widgets: RendererWidgetAPI;

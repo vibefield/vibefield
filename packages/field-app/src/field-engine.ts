@@ -10,18 +10,21 @@ import {
   WirePorts,
   WireTo,
 } from "@vibecook/ice";
-import type { PluginManifestV1 } from "@vibefield/contracts";
+import type { PluginManifestV1, PluginRecord, WidgetContribution } from "@vibefield/contracts";
 import { setPreviewBackground } from "@vibefield/design-kit";
-import { browserManifest, browserRenderer } from "@vibefield/plugin-browser";
-import { fieldToolsManifest, fieldToolsRenderer } from "@vibefield/plugin-field-tools";
-import { noteManifest, noteRenderer } from "@vibefield/plugin-note";
 import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
-import type { RendererPluginModule, WidgetBinding } from "@vibefield/plugin-sdk";
-import { widgetlabManifest, widgetlabRenderer } from "@vibefield/plugin-widgetlab";
+import type { WidgetBinding } from "@vibefield/plugin-sdk";
 import { getRendererLogger } from "./logging";
 import { buildWidgetType } from "./plugin-host/build-widget";
 import { failedFaceComponent } from "./plugin-host/faces";
 import { type ActivatedRenderer, activateRenderer } from "./plugin-host/renderer-harness";
+import {
+  type BundledRendererPlugin,
+  EMPTY_PREPARED,
+  type PreparedRendererPlugins,
+  prepareRendererPlugins,
+  type StagedLoaderDeps,
+} from "./plugin-host/staged-loader";
 
 // The field's engine + seed, React-free (Track D3/D4): FieldView renders it,
 // the headless contract tests (drop-consume) drive it. B3 split the two —
@@ -30,27 +33,27 @@ import { type ActivatedRenderer, activateRenderer } from "./plugin-host/renderer
 // blind-seed). `seedField` is the first-run payload — and the persistence
 // tests' named census.
 
-/** The canonical path (§12.2): build every declared prefab from manifest data
- * with its code-side binding, then register manifest + implementations as one
- * unit. P3c: every owned component is wrapped in the face policy (live
- * disabled-placeholder + the §11.4 boundary), and a declared type the
+/** Build every declared prefab from DECLARATION data with its code-side
+ * binding (§12.2). P3c: every owned component is wrapped in the face policy
+ * (live disabled-placeholder + the §11.4 boundary), and a declared type the
  * activation did NOT bind gets a failed face instead of failing the plugin —
  * the schema always registers, so boards stay writable and honest. */
-function registerCanonical(
-  registry: PluginRegistry<WidgetType>,
-  manifest: PluginManifestV1,
+function buildWidgets(
+  title: string,
+  pluginId: string,
+  contributions: readonly WidgetContribution[],
   activation: ActivatedRenderer,
-): void {
-  const owner = { pluginId: manifest.id, pluginTitle: manifest.title };
+): Record<string, WidgetType> {
+  const owner = { pluginId, pluginTitle: title };
   const activationError = activation.state === "failed" ? (activation.error ?? "failed") : null;
-  const widgets = Object.fromEntries(
-    (manifest.contributes?.widgets ?? []).map((w) => {
+  return Object.fromEntries(
+    contributions.map((w) => {
       const bound = activationError === null ? activation.bindings.get(w.type) : undefined;
       const binding =
         bound ??
         ({
           component: failedFaceComponent(
-            manifest.title,
+            title,
             activationError ?? `no binding registered for ${w.type}`,
             w.surface,
           ),
@@ -58,50 +61,145 @@ function registerCanonical(
       return [w.type, buildWidgetType(w, binding, owner)];
     }),
   );
-  registry.registerV1(manifest, widgets);
 }
 
-/** The statically bundled set — the code the shell ships either way. P3a:
- * each entry is a renderer MODULE (§10.1) — bindings come from activation
- * through the harness, not from exports. P3c: EVERY present plugin registers
- * its real schema unconditionally (ICE's catalog is process-permanent — the
- * only way enable/disable can round-trip in one session); what changes with
- * registry state is the FACE (live, faces.tsx) and the tray/seed surfaces.
- * The staged import-map loader (§19.2) later replaces the static list. */
-const BUNDLED: Array<[PluginManifestV1, RendererPluginModule]> = [
-  [browserManifest, browserRenderer],
-  [noteManifest, noteRenderer],
-  [fieldToolsManifest, fieldToolsRenderer],
-  [widgetlabManifest, widgetlabRenderer],
-];
+/** The canonical path (§12.2), now DEV-ONLY: manifest + implementations as one
+ * unit, validated by the registry's manifest door. */
+function registerCanonical(
+  registry: PluginRegistry<WidgetType>,
+  manifest: PluginManifestV1,
+  activation: ActivatedRenderer,
+): void {
+  registry.registerV1(
+    manifest,
+    buildWidgets(manifest.title, manifest.id, manifest.contributes?.widgets ?? [], activation),
+  );
+}
 
-export function buildRegistry(): PluginRegistry<WidgetType> {
+/** THE STAGED PATH (P8b-3): the same laws sourced from fieldd's sanitized
+ * record — the only description of a staged plugin this process has. */
+function registerStaged(
+  registry: PluginRegistry<WidgetType>,
+  record: PluginRecord,
+  activation: ActivatedRenderer,
+): void {
+  registry.registerRecord(
+    record,
+    buildWidgets(record.title, record.id, record.contributions.widgets, activation),
+  );
+}
+
+/** THE DEV-ONLY BUNDLED SET (P8-D2). Until P8b-3 these four rode the app bundle
+ * as static imports and WERE the plugin system; now they are the fallback for a
+ * dev run whose artifacts are not built yet, and production ships none of them
+ * — the branch folds to `false` at build time, so the dynamic imports below are
+ * eliminated with it and no plugin source reaches a production chunk.
+ *
+ * Dynamic rather than static-imported-and-branched on purpose: a static import
+ * keeps the module in the graph for its side effects no matter how dead the
+ * branch that uses it, which is exactly the double-loading this rung exists to
+ * end. Memoized because the dev fallback can be asked for more than once. */
+let devBundled: readonly BundledRendererPlugin[] | null = null;
+
+export async function loadDevBundledPlugins(): Promise<readonly BundledRendererPlugin[]> {
+  if (!import.meta.env.DEV) return [];
+  if (devBundled !== null) return devBundled;
+  const [browser, note, fieldTools, widgetlab] = await Promise.all([
+    import("@vibefield/plugin-browser"),
+    import("@vibefield/plugin-note"),
+    import("@vibefield/plugin-field-tools"),
+    import("@vibefield/plugin-widgetlab"),
+  ]);
+  devBundled = [
+    { manifest: browser.browserManifest, mod: browser.browserRenderer },
+    { manifest: note.noteManifest, mod: note.noteRenderer },
+    { manifest: fieldTools.fieldToolsManifest, mod: fieldTools.fieldToolsRenderer },
+    { manifest: widgetlab.widgetlabManifest, mod: widgetlab.widgetlabRenderer },
+  ];
+  return devBundled;
+}
+
+/** The registry the canvas is built from. SYNCHRONOUS by construction — one
+ * engine generation per memo — so everything that needed awaiting has already
+ * happened in the boot phase and arrives here as `prepared`.
+ *
+ * Staged plugins first, always. The bundled list is consulted only when the
+ * staged set is empty, and it is only ever non-empty in a dev build. A
+ * production renderer with nothing staged registers NOTHING and says so once:
+ * an empty field is the honest face of a daemon that approved no modules, and a
+ * silent second loader would hide exactly the failure this rung must surface. */
+export function buildRegistry(
+  prepared: PreparedRendererPlugins = EMPTY_PREPARED,
+): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
-  for (const [manifest, mod] of BUNDLED) {
-    const activation = activateRenderer(manifest, mod);
-    if (activation.state === "failed") {
-      getRendererLogger()
-        .child({ component: "plugin.host" })
-        .error(
+  const log = getRendererLogger().child({ component: "plugin.host" });
+  for (const staged of prepared.staged) {
+    if (staged.activation.state === "failed") {
+      log.error(
+        "renderer.plugins.activation_failed",
+        "A staged renderer plugin failed activation",
+        staged.activation.error,
+        { pluginId: staged.record.id },
+      );
+    }
+    // §11.4: a failed plugin registers face-only widgets — its boards render
+    // honest failed faces; peers and the canvas are untouched.
+    registerStaged(registry, staged.record, staged.activation);
+  }
+  if (prepared.staged.length === 0) {
+    // `devBundled` is the fallback's fallback, for a caller with no prepared set
+    // at all — the headless suites, which have no daemon and no boot phase, and
+    // whose setup file loads it once. It is null in every production build,
+    // where the loader above is compiled away entirely.
+    const bundled = prepared.bundled.length > 0 ? prepared.bundled : (devBundled ?? []);
+    for (const { manifest, mod } of bundled) {
+      const activation = activateRenderer(manifest, mod);
+      if (activation.state === "failed") {
+        log.error(
           "renderer.plugins.activation_failed",
           "A bundled renderer plugin failed activation",
           activation.error,
           { pluginId: manifest.id },
         );
+      }
+      registerCanonical(registry, manifest, activation);
     }
-    // §11.4: a failed plugin registers face-only widgets — its boards render
-    // honest failed faces; peers and the canvas are untouched.
-    registerCanonical(registry, manifest, activation);
+    if (bundled.length === 0) {
+      log.warn(
+        "renderer.plugins.none_staged",
+        "No plugin modules were staged; the field opened with no plugins registered",
+        { generation: prepared.generation },
+      );
+    }
   }
-  // Spine wiring: manifest SafePreview data → design-kit's silhouette registry
+  // Spine wiring: declared SafePreview data → design-kit's silhouette registry
   // (folder minis + tray fallbacks read previewBackground — one source, P-3).
   for (const plugin of registry.all()) {
-    for (const w of plugin.v1.contributes?.widgets ?? []) {
+    for (const w of plugin.widgetContributions) {
       const css = safePreviewToCss(w.preview);
       if (css !== undefined) setPreviewBackground(w.type, css);
     }
   }
   return registry;
+}
+
+/** The dev/test one-liner: load the bundled fallback and build from it. The
+ * headless suites use this — they have no daemon to approve modules, and what
+ * they exercise (the engine, seeding, persistence) is the same either way. */
+export async function buildDevRegistry(): Promise<PluginRegistry<WidgetType>> {
+  return buildRegistry({ generation: -1, staged: [], bundled: await loadDevBundledPlugins() });
+}
+
+/** THE BOOT ENTRY: ask the authority, and fall back to the dev-bundled set only
+ * when it approved nothing. The fallback is loaded AFTER the staged answer
+ * rather than beside it, so a dev run with real artifacts never pays for
+ * importing four plugin packages it will not use. */
+export async function prepareFieldPlugins(
+  deps: StagedLoaderDeps,
+): Promise<PreparedRendererPlugins> {
+  const prepared = await prepareRendererPlugins(deps);
+  if (prepared.staged.length > 0) return prepared;
+  return { ...prepared, bundled: await loadDevBundledPlugins() };
 }
 
 // === the demo scene — widgetlab App.tsx coordinates verbatim ===

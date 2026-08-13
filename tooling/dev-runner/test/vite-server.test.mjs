@@ -65,7 +65,16 @@ test("the production renderer and development UI Bench have disjoint build outpu
     ),
   );
 
-  assert.deepEqual(Object.keys(production.build.rollupOptions.input), ["main"]);
+  // P8b-3 §11.6: the product document, plus one entry chunk per host singleton
+  // so the import map has an address to name. The exact specifier list is
+  // contracts' and is pinned there (electron-shell's host-singletons test);
+  // what this row owns is the SHAPE — the product build carries them, the bench
+  // build carries none, and the two halves are asserted together because the
+  // bench getting a plugin loader it has no daemon for is the mistake.
+  const productionInputs = Object.keys(production.build.rollupOptions.input);
+  const singletonInputs = productionInputs.filter((name) => name.startsWith("singleton-"));
+  assert.ok(singletonInputs.length > 0, "the production renderer emits host singleton chunks");
+  assert.deepEqual(productionInputs, ["main", ...singletonInputs]);
   assert.equal(
     production.build.rollupOptions.input.main,
     join(workspacePaths.repoRoot, "packages/electron-shell/src/renderer-host/index.html"),

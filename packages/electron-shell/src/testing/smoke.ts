@@ -103,8 +103,44 @@ export async function runSmoke(
   app.exit(summary.ok ? 0 : 2); // exit is queued; the caller returns without opening a window
 }
 
-/** Full spine + real renderer, hidden: pass iff the canvas reports in.
- * Teardown runs on EVERY path — the old failure path leaked the spawned
+/** What one `CANVAS_READY {…}` line carries. */
+interface CanvasFacts {
+  widgetTypes: number;
+  plugins: number;
+  /** P8b-3 — how many plugins came through the STAGED path (fieldd approval →
+   * plugin origin → import map → async activate) rather than merely registering. */
+  stagedPlugins: number;
+}
+
+/** The census this smoke defends, and why it takes two numbers (P8-D2).
+ *
+ * `widgetTypes` is the product fact — 21 types across the four renderer-bearing
+ * plugins — and it is what a loading regression actually costs a user.
+ * `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback can satisfy
+ * the census on its own, so without this number a renderer that quietly fell
+ * back would look exactly like one that staged correctly. Asserting both is
+ * what keeps the two loaders from diverging — the field must be full AND it
+ * must have been filled the real way. (kv-service is service-only and stages no
+ * renderer module, so four is the whole renderer-bearing set.) */
+const CANVAS_CENSUS = { widgetTypes: 21, minStagedPlugins: 4 } as const;
+
+/** Every way the line disagrees with the census, named — a smoke that fails
+ * should say what it saw, not that something was wrong. */
+function censusFailures(facts: CanvasFacts): string[] {
+  const problems: string[] = [];
+  if (facts.widgetTypes !== CANVAS_CENSUS.widgetTypes) {
+    problems.push(`${facts.widgetTypes} widget types, expected ${CANVAS_CENSUS.widgetTypes}`);
+  }
+  if (facts.stagedPlugins < CANVAS_CENSUS.minStagedPlugins) {
+    problems.push(
+      `${facts.stagedPlugins} staged plugin(s), expected at least ${CANVAS_CENSUS.minStagedPlugins} — the renderer did not load through the staged path`,
+    );
+  }
+  return problems;
+}
+
+/** Full spine + real renderer, hidden: pass iff the canvas reports in WITH its
+ * census. Teardown runs on EVERY path — the old failure path leaked the spawned
  * daemons (slice-0 finding 3). */
 export async function runSmokeCanvas(opts: {
   handle: FielddHandle;
@@ -123,11 +159,22 @@ export async function runSmokeCanvas(opts: {
   });
   opts.registry.adopt(win); // the bootstrap sender policy admits only registered windows
   opts.onWindow?.(win);
+  // The godview smoke has had this since GT-2; the canvas smoke wanted it the
+  // first time its renderer failed to report (P8b-3). Without it a boot-time
+  // renderer error reads only as "no CANVAS_READY within 45s", which names the
+  // symptom and hides every cause.
+  if (process.env["VF_SMOKE_DEBUG"]) {
+    win.webContents.on("console-message", (...args: unknown[]) => {
+      console.log(`[renderer] ${args.map((a) => JSON.stringify(a)).join(" ")}`);
+    });
+  }
   let ok = false;
   try {
     await loadRenderer(win, "smoke-canvas", opts.viteUrl);
     const raw = await waitForConsole(win, "CANVAS_READY ", 45_000);
     console.log(`SMOKE_CANVAS ${raw}`);
+    const problems = censusFailures(JSON.parse(raw) as CanvasFacts);
+    if (problems.length > 0) throw new Error(problems.join(" · "));
     ok = true;
   } catch (e) {
     console.error(`SMOKE_CANVAS failed: ${e instanceof Error ? e.message : e}`);

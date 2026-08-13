@@ -1,4 +1,5 @@
 import type { PluginManifestV1 } from "@vibefield/contracts";
+import { PluginRecord } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { PluginRegistry } from "../src/index";
 
@@ -81,5 +82,97 @@ describe("PluginRegistry", () => {
       widgets: [{ ...(collider.contributes?.widgets?.[0] as object), type: "note.card" } as never],
     };
     expect(() => r.registerV1(collider, { "note.card": "impl2" })).toThrow(/already owned/);
+  });
+});
+
+// P8b-3 — the SECOND registration authority. A staged plugin's manifest lives in
+// fieldd; the renderer holds only the sanitized record (§9.4), which has no
+// `engines` and no `entries` and therefore cannot pass the manifest door. These
+// rows exist to prove the two doors enforce the SAME laws, because a second door
+// that is merely more permissive is a way around the first.
+
+const record = (over: Partial<PluginRecord> = {}): PluginRecord =>
+  PluginRecord.parse({
+    id: "note",
+    version: "0.1.0",
+    title: "Notes",
+    source: "bundled",
+    manifestHash: `sha256:${"a".repeat(64)}`,
+    installRevision: "rev-1",
+    state: "enabled",
+    compatible: true,
+    enabled: true,
+    requestedCapabilities: [],
+    grantedCapabilities: [],
+    contributions: {
+      widgets: [
+        {
+          type: "note.card",
+          title: "Note",
+          schemaVersion: 1,
+          surface: "dom",
+          sizeMode: "fixed",
+          defaultSize: { w: 240, h: 160 },
+          props: {},
+          groups: {},
+        },
+      ],
+    },
+    renderer: "inactive",
+    service: "none",
+    ...over,
+  });
+
+describe("PluginRegistry.registerRecord (staged)", () => {
+  it("registers from a sanitized record and owns its types the same way", () => {
+    const r = new PluginRegistry<string>();
+    r.registerRecord(record(), { "note.card": "impl" });
+    expect(r.ownerOf("note.card")).toBe("note");
+    expect(r.hasWidget("note.card.deep")).toBe(false);
+    expect([...r.allWidgets().keys()]).toEqual(["note.card"]);
+  });
+
+  it("exposes identity and declarations without a manifest behind them", () => {
+    const r = new PluginRegistry<string>();
+    r.registerRecord(record(), { "note.card": "impl" });
+    const [registered] = r.all();
+    expect(registered?.id).toBe("note");
+    expect(registered?.title).toBe("Notes");
+    expect(registered?.widgetContributions.map((w) => w.type)).toEqual(["note.card"]);
+    // The provenance is honest in both directions: a staged row carries the
+    // record it came from and NO manifest, because this process never saw one.
+    expect(registered?.record?.installRevision).toBe("rev-1");
+    expect(registered?.v1).toBeUndefined();
+  });
+
+  it("enforces declared⇄provided parity and refuses a duplicate id", () => {
+    const r = new PluginRegistry<string>();
+    expect(() => r.registerRecord(record(), {})).toThrow(/no implementation/);
+    expect(() => r.registerRecord(record(), { "note.card": "a", "note.extra": "b" })).toThrow(
+      /undeclared/,
+    );
+    r.registerRecord(record(), { "note.card": "impl" });
+    expect(() => r.registerRecord(record(), { "note.card": "impl" })).toThrow(/already registered/);
+  });
+
+  it("refuses a malformed id that did not come through the record schema", () => {
+    // `PluginRecord.parse` already rejects `Bad_Id` (PluginId validates shape),
+    // so this row builds one WITHOUT the schema — which is the only way the
+    // registry can ever meet a malformed id, and therefore the only thing its
+    // own check can be defending against.
+    const r = new PluginRegistry<string>();
+    const unparsed = { ...record(), id: "Bad_Id" } as PluginRecord;
+    expect(() => r.registerRecord(unparsed, {})).toThrow(/well-formed plugin id/);
+  });
+
+  it("refuses a type another plugin already owns, across BOTH doors", () => {
+    // The collision that matters is the cross-door one: a manifest-registered
+    // built-in and a staged plugin claiming the same widget type would be two
+    // owners in one exact map, and the map is what resolution trusts.
+    const r = new PluginRegistry<string>();
+    r.registerV1(manifest(), { "note.card": "impl" });
+    expect(() => r.registerRecord(record({ id: "note.card" }), { "note.card": "impl2" })).toThrow(
+      /already owned/,
+    );
   });
 });

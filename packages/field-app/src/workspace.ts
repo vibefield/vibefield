@@ -7,3 +7,7 @@
 export { FielddProvider } from "@vibefield/fieldd-client/react";
 export { DocManager } from "./doc-manager";
 export { FieldView } from "./field";
+// P8b-3: the staged loader lives behind this seam too — it imports the plugin
+// host, which is workspace weight, and the boot machine reaches it the same way
+// it reaches DocManager (through the module it already dynamically imported).
+export { prepareFieldPlugins } from "./field-engine";

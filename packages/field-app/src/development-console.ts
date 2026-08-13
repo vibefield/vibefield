@@ -1,8 +1,20 @@
 /** Explicit smoke/development console adapter. Production evidence uses the
  * renderer MessagePort; this marker remains solely because the headless canvas
- * smoke harness observes renderer console output as its pass condition. */
-export function emitCanvasReadyMarker(widgetTypes: number, plugins: number): void {
-  console.log(`CANVAS_READY {"widgetTypes":${widgetTypes},"plugins":${plugins}}`);
+ * smoke harness observes renderer console output as its pass condition.
+ *
+ * `stagedPlugins` is P8-D2's law made checkable (P8b-3): `plugins` counts what
+ * REGISTERED, which a dev-bundled fallback satisfies just as well as the real
+ * loader, so the census alone cannot tell the two paths apart. This field can —
+ * it is the number that came through fieldd's approval, the import map, and the
+ * plugin origin, and the canvas smoke asserts on it. */
+export function emitCanvasReadyMarker(
+  widgetTypes: number,
+  plugins: number,
+  stagedPlugins: number,
+): void {
+  console.log(
+    `CANVAS_READY {"widgetTypes":${widgetTypes},"plugins":${plugins},"stagedPlugins":${stagedPlugins}}`,
+  );
 }
 
 /** What the Godview deck currently IS, as one line per settled change.

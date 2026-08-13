@@ -1,6 +1,7 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
 import type { DocManager } from "../doc-manager";
 import type { FieldHost, FieldUserProfile } from "../host";
+import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 
 // The boot machine (ESR §5.4.2; design-03 §4.3 v0.3): explicit states, no
 // scattered nullable globals. Framework-free — BootRoot renders it via
@@ -48,6 +49,10 @@ export interface BootReady {
   client: FielddClient;
   manager: DocManager;
   mod: WorkspaceModule;
+  /** P8b-3 — the staged plugin set, resolved BEFORE the workspace mounts. The
+   * registry is built synchronously in a memo, so this is the last moment an
+   * import can still happen; after this the set is fixed for the mount. */
+  plugins: PreparedRendererPlugins;
 }
 
 /** What the wizard is handed while the boot holds for it (UA-3w). The profile
@@ -129,6 +134,7 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
 
   // resumable checkpoints — retry() re-enters run() and completed steps skip
   let workspacePromise: Promise<WorkspaceModule> | null = null;
+  let pluginsPromise: Promise<PreparedRendererPlugins> | null = null;
   let conn: { port: number; token: string } | null = null;
   let client: FielddClient | null = null;
   let mod: WorkspaceModule | null = null;
@@ -223,6 +229,19 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
         }
       }
 
+      // P8b-3 — the staged plugin load STARTS here and is awaited below, just
+      // before the document opens. Started early so it overlaps the onboarding
+      // hold and costs a cold boot nothing; awaited late because the registry
+      // is built synchronously the moment the workspace mounts. It never
+      // rejects (the loader's own budget answers for an absent daemon), so
+      // there is nothing here that can strand the splash.
+      if (pluginsPromise === null) {
+        const prepareClient = client;
+        pluginsPromise = mod.prepareFieldPlugins({
+          request: async (method, params) => await prepareClient.request(method, params),
+        });
+      }
+
       // UA-3w — the Setup Assistant holds HERE: after the daemon answered and
       // the workspace chunk landed (so the wizard's setting-up pane names two
       // finished stages, not two hopeful ones) and before the document opens
@@ -244,9 +263,11 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
       }
 
       if (ready === null) {
-        patch({ phase: "opening-document", stage: "opening doc", progress: 0 });
+        patch({ phase: "opening-document", stage: "staging plugins" });
+        const plugins = await pluginsPromise;
+        patch({ stage: "opening doc", progress: 0 });
         const manager = new mod.DocManager(client);
-        ready = { client, manager, mod };
+        ready = { client, manager, mod, plugins };
         mark("vf:renderer:document-ready");
         for (const fn of [...listeners]) fn(); // BootRoot mounts the workspace under the splash
       }
