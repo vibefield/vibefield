@@ -55,12 +55,10 @@ export const PLUGIN_SCHEME_PRIVILEGES = {
   allowExtensions: false,
 } as const;
 
-/** Must be called before `app.whenReady()`, beside `registerAppScheme`. */
-export function registerPluginScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    { scheme: PLUGIN_SCHEME, privileges: { ...PLUGIN_SCHEME_PRIVILEGES } },
-  ]);
-}
+// Registration lives in scheme-registration.ts — ONE registerSchemesAsPrivileged
+// call for every shell scheme. This module's own second call is what stripped the
+// app origin's secure context at P8b-2 (standard survived, secure did not — the
+// probe-dated account is in scheme-registration.ts); it exports only constants now.
 
 /** Why a URL never reached the daemon. Every one of these is refused before a
  * token is sent anywhere, so a malformed probe costs no round trip. */

@@ -11,12 +11,17 @@ import { describe, expect, it, vi } from "vitest";
 
 const stub = vi.hoisted(() => ({
   privileged: [] as { scheme: string; privileges?: Record<string, boolean> }[],
+  // Counted, not just collected: the probe showed a SECOND call replaces the
+  // secure-scheme registration while `standard` survives — so the number of
+  // calls is itself a security property, and one is the only correct answer.
+  registerCalls: 0,
   handlers: new Map<string, (request: { url: string }) => Response | Promise<Response>>(),
 }));
 
 vi.mock("electron", () => ({
   protocol: {
     registerSchemesAsPrivileged: (schemes: (typeof stub.privileged)[number][]) => {
+      stub.registerCalls += 1;
       stub.privileged.push(...schemes);
     },
     handle: (scheme: string, handler: (request: { url: string }) => Response) => {
@@ -34,10 +39,12 @@ const {
   installAppProtocol,
   isStrictlyBeneath,
   mimeForPath,
-  registerAppScheme,
   resolveAppAsset,
   serveAppRequest,
 } = await import("../src/main/app-protocol");
+const { registerShellSchemes, shellSchemeRegistrations } = await import(
+  "../src/main/scheme-registration"
+);
 
 /** A packaged renderer root — the only directory this scheme may ever read. */
 const ROOT = "/Applications/VibeField.app/Contents/Resources/app/renderer";
@@ -72,13 +79,27 @@ describe("scheme identity", () => {
   });
 });
 
-describe("registerAppScheme", () => {
-  registerAppScheme();
+describe("registerShellSchemes", () => {
+  registerShellSchemes();
   const registered = stub.privileged.find((entry) => entry.scheme === APP_SCHEME);
 
-  it("registers exactly one scheme", () => {
-    expect(stub.privileged).toHaveLength(1);
+  it("registers EVERY shell scheme in EXACTLY ONE call (the P8b-2 regression's law)", () => {
+    // Two calls is how the app origin silently lost its secure context while
+    // modules kept loading — `secure` is replaced by a later call, `standard`
+    // survives it. The count is the assertion; the rows are the inventory.
+    expect(stub.registerCalls).toBe(1);
+    expect(stub.privileged.map((entry) => entry.scheme).sort()).toEqual(
+      [APP_SCHEME, "vibefield-plugin"].sort(),
+    );
     expect(registered).toBeDefined();
+  });
+
+  it("carries each scheme's own privilege table verbatim", () => {
+    const rows = shellSchemeRegistrations();
+    expect(rows.find((r) => r.scheme === APP_SCHEME)?.privileges).toEqual({
+      ...APP_SCHEME_PRIVILEGES,
+    });
+    expect(rows).toHaveLength(2);
   });
 
   it("declares standard and secure — §8.2's two required privileges", () => {

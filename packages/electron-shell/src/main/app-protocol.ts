@@ -71,12 +71,10 @@ export const APP_SCHEME_PRIVILEGES = {
   allowExtensions: false,
 } as const;
 
-/** Must be called before `app.whenReady()` (§6.1). */
-export function registerAppScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    { scheme: APP_SCHEME, privileges: { ...APP_SCHEME_PRIVILEGES } },
-  ]);
-}
+// Registration lives in scheme-registration.ts — ONE registerSchemesAsPrivileged
+// call for every shell scheme. A per-module register function is exactly how the
+// P8b-2 secure-context clobber happened (a second call replaces the secure-scheme
+// list while `standard` survives), so this module exports only its constants.
 
 /** Every way a request can be refused. Named classes, not a boolean: the
  * refusal reason is evidence — it says which attack shape arrived — while the

@@ -40,7 +40,7 @@ import {
 } from "electron";
 import { applyDevelopmentDockIcon } from "./app-branding";
 import { installAppMenu } from "./app-menu";
-import { installAppProtocol, registerAppScheme } from "./app-protocol";
+import { installAppProtocol } from "./app-protocol";
 import { ArtifactPreviewCapture, isArtifactPreviewSession } from "./artifact-preview-capture";
 import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
@@ -61,7 +61,7 @@ import { installLifecycle } from "./lifecycle";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
 import { isSmokeLike, parseMode } from "./modes";
-import { installPluginProtocol, registerPluginScheme } from "./plugin-protocol";
+import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
 import { installRendererLogging } from "./renderer-logging";
@@ -71,6 +71,7 @@ import {
   resolveDevelopmentResources,
   resolvePackagedResources,
 } from "./resources";
+import { registerShellSchemes } from "./scheme-registration";
 import {
   installCsp,
   installNavigationPolicy,
@@ -1123,8 +1124,10 @@ if (process.platform === "win32") app.setAppUserModelId(DESKTOP_APP_ID);
 // refuses the registration afterwards, and a scheme that is not `standard`
 // cannot host the renderer's ES-module graph. Registered in every mode so the
 // declaration cannot drift from the mode that serves it.
-registerAppScheme();
-registerPluginScheme();
+// ONE call for all shell schemes — a second registerSchemesAsPrivileged call
+// strips `secure` from the first call's schemes while `standard` survives (the
+// P8b-2 smoke:canvas regression; account in scheme-registration.ts).
+registerShellSchemes();
 // ESP-4/§6.1 — process-wide renderer sandboxing, before ready and before any
 // window policy runs. Independent of per-window `sandbox:true` (which stays)
 // and of the RunAsNode fuse: three controls, three surfaces, no substitutes.
