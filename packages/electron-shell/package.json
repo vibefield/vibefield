@@ -32,6 +32,7 @@
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
     "@vibecook/ghosttea-client": "*",
+    "@vibefield/fieldd": "workspace:*",
     "@vitejs/plugin-react": "^6.0.3",
     "electron": "^43.1.1",
     "esbuild": "catalog:",

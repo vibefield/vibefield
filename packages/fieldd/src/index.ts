@@ -51,6 +51,7 @@ export { MeshLaneLink, type MeshLaneLinkOptions } from "./mesh-lane";
 export { NativeLink, RpcCallError } from "./native-link";
 export { computePairingMac } from "./pairing";
 export { PeerLink, type PeerLinkOptions, type PeerLinkState } from "./peer-link";
+export { PluginModuleAuthority, type PluginModuleAuthorityDeps } from "./plugin-modules";
 export {
   contractsRangeSatisfied,
   type PluginRegistryConfig,

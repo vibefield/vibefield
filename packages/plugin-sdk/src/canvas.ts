@@ -1,6 +1,6 @@
 // The canvas RENDER vocabulary, as SDK re-exports — the curated door to ICE
-// (§11.3 forbids raw @vibecook/ice in plugins; §12.7's ctx.canvas mutation
-// tier arrives at P4). This list is the union of what the shipped plugins
+// (§11.3 forbids raw @vibecook/ice in plugins; §12.7's ctx.canvas shipped at P6 as the
+// least-power stopgap that PA-27 retires). This list is the union of what the shipped plugins
 // legitimately use to RENDER and to run their host-invoked commands: component
 // read hooks, the widget component prop contract, island frame plumbing for GL
 // cards, and the core symbols command functions read. The deep target
