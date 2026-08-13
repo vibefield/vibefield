@@ -14,12 +14,17 @@
 // a hash source gets no such mercy).
 
 export class CanonicalJsonError extends Error {
-  constructor(
-    message: string,
-    readonly path: string,
-  ) {
+  // An explicit field, not a parameter property — the erasable-syntax law
+  // build.ts already states: the kit's bins import these modules through Node's
+  // strip-only type removal, which refuses `constructor(readonly x)` outright.
+  // plugin-cli is what made that reach this file (it imports canonicalJson for
+  // the manifest freshness row); build.ts's own bin never did.
+  readonly path: string;
+
+  constructor(message: string, path: string) {
     super(`${message} (at ${path})`);
     this.name = "CanonicalJsonError";
+    this.path = path;
   }
 }
 

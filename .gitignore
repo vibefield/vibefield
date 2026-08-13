@@ -33,6 +33,11 @@ logs/
 # by the `build/` rule above.
 release/
 
+# `.vfplugin` artifacts (plugin spec §5.3.1): `vibefield-plugin pack` writes one
+# beside the plugin by default. It is a RELEASE artifact whose sha256 an index
+# pins — produced from a tag, attached to a release, never committed.
+*.vfplugin
+
 # Xcode / SwiftPM (apps/ios) — user state and local build products only;
 # project.pbxproj and xcshareddata (schemes) are tracked.
 xcuserdata/

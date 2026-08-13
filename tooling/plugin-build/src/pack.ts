@@ -53,12 +53,15 @@ const METHOD_STORE = 0;
 
 /** A refusal or malformed-container failure from {@link unpackVfplugin}. */
 export class VfpluginError extends Error {
-  constructor(
-    message: string,
-    readonly code: VfpluginErrorCode,
-  ) {
+  // Explicit field, not a parameter property: same erasable-syntax law as
+  // build.ts's PluginBuildError — the authoring kit's bins strip types rather
+  // than compile them, and plugin-cli's `pack` imports this module that way.
+  readonly code: VfpluginErrorCode;
+
+  constructor(message: string, code: VfpluginErrorCode) {
     super(message);
     this.name = "VfpluginError";
+    this.code = code;
   }
 }
 

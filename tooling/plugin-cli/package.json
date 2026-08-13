@@ -1,0 +1,28 @@
+{
+  "name": "@vibefield/plugin-cli",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "vibefield-plugin": "./bin/vibefield-plugin.mjs"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibefield/contracts": "workspace:*",
+    "@vibefield/plugin-build": "workspace:*",
+    "@vibefield/plugin-sdk": "workspace:*",
+    "ajv": "^8.17.1",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
