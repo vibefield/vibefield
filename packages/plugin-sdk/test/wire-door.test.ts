@@ -24,3 +24,10 @@ describe("the W1 wire door", () => {
     expect(typeof widgetSpawnInits).toBe("function");
   });
 });
+
+describe("the S3 undo door", () => {
+  it("useUndo is exported — claiming widgets must be able to forward mod-Z", async () => {
+    const { useUndo } = await import("../src/canvas");
+    expect(typeof useUndo).toBe("function");
+  });
+});

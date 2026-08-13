@@ -50,10 +50,38 @@ export {
 
 import type { WidgetType } from "@vibecook/ice";
 import { widgets } from "@vibecook/ice";
+import { useCanvasEngine, useUndoStatus } from "@vibecook/ice/react";
+import { useMemo } from "react";
 
 /** Read-only lookup into the engine's widget catalog (the ShapesCard/TodoList
  * runtime-groups idiom). A read HELPER instead of re-exporting the raw global
  * registry map — plugins never hold the mutable catalog itself. */
 export function getWidgetType(type: string): WidgetType | undefined {
   return widgets.get(type);
+}
+
+/** Engine undo for keyboard-claiming widgets (S3, the mind map pack,
+ * 2026-08-13). Under an exclusive claim the engine keymap cedes EVERY chord —
+ * ⌘Z/⇧⌘Z included (gate 2 of the widget input contract) — so the widget must
+ * forward them itself. This is the sanctioned door: `docs.undo`/`docs.redo`,
+ * the SAME stack every canvas edit rides. A curated wrapper, deliberately not
+ * the raw CanvasEngine facade — plugins never hold the engine. Both triggers
+ * return whether a step actually applied (the engine's own contract). */
+export function useUndo(): {
+  undo: () => boolean;
+  redo: () => boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+} {
+  const engine = useCanvasEngine();
+  const { canUndo, canRedo } = useUndoStatus();
+  return useMemo(
+    () => ({
+      undo: () => engine.docs.undo(),
+      redo: () => engine.docs.redo(),
+      canUndo,
+      canRedo,
+    }),
+    [engine, canUndo, canRedo],
+  );
 }
