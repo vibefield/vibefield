@@ -2091,3 +2091,59 @@ seam suite; serve→import in real Chromium is `smoke:canvas` (positives only); 
 control is witnessed at the Node seam, not inside a live renderer — a renderer-level
 revocation witness would be its own smoke-harness slice if ever wanted. **P8b is closed
 whole — every §8.4 clause has a test on the real mint↔serve seam. Next rung: P8d.**
+
+## P8d-2 — the playground is a verdict, not a bench
+
+**LANDED 2026-08-13** (`0478f08`, opus builder; two P8d slices ran in parallel worktrees and
+joined blind — see P8d-1's coordination note). `apps/plugin-playground` (the spec §5.1 slot,
+placed by the spec over CLAUDE.md's packaging-roots description — the right authority call):
+a Node-runnable harness rendering EVERY declared widget state of a plugin headlessly through
+the REAL host path and answering pass/fail per state in the P8-D8 verdict shape. States live
+at `<plugin>/playground/states.ts` (the design-block convention; absent ⇒ one default state
+from prop defaults; invalid fixture props are their own refusal class, validated BEFORE
+mounting). Witnessed against the repo: note 4/4 · field-tools 5/5 · widgetlab 28 pass +
+**7 `skipped-gl`** (probed, not assumed: jsdom cannot host the GL island — the runner skips
+`surface:"gl"` BY DECLARATION and says why, never a fake pass; the 7 GL fixtures are authored
+anyway for a future GL-capable harness) · browser and kv-service report zero widgets honestly.
+44 states authored across the plugins, typechecked (each plugin's tsconfig includes
+`playground/`). Two narrow production deltas, both anti-copy by law: the 20-line
+`@vibefield/field-app/host-kit` door (exactly `buildWidgetType` + `createFieldEngine`;
+activation deliberately NOT behind it — the SDK mock host is the surface an author may reason
+about) and `RENDERER_SOURCES` promoted to a plugin-build export (two readers, one
+declaration). Recorded calls: captured `console.error` reports on the row but does NOT gate
+(a verdict that flips on a React upgrade isn't a verdict) · R10's exemption NOT widened for
+`playground/` (fixtures are import-free data today; the first fixture needing an import is
+the evidence that widens it) · pre-existing, not this slice: vitest prints
+`THREE.WARNING: Multiple instances of Three.js` on field-app's own suites too. Gates:
+verify VERBATIM exit 0 (worktree AND integrated tree) · runner re-witnessed on main.
+
+## P8d-1 — the kit's front door answers in verdicts, and the docs are the schemas
+
+**LANDED 2026-08-13** (`5cfd0b4`, opus builder). `tooling/plugin-cli` (`vibefield-plugin`,
+root alias `pnpm plugin`): check · inspect · pack · dev-link · submit · release lookup ·
+index sign · docs — every command speaking the P8-D8 contract (`{code, pointer?, expected?,
+detail}`, `--json` NDJSON, exit 0/1/2, zero prompts, zero network), delegating to
+plugin-build/plugin-sdk/contracts rather than re-implementing (pack, canonicalJson, Ed25519,
+singleton predicates, mock host, schemas). **A 39-class refusal catalog in ONE typed table**
+read by both the emitters and the generated refusals.md — an undeclared code is a type error —
+with red-then-green controls across eleven classes (incl. a tampered index → restored).
+**The generated authoring reference** (`docs/plugin-authoring/`, 7 files) is now a gen-pipeline
+artifact: `pnpm gen` emits it and gen-freshness FAILS the gate when it drifts, because these
+docs are the ten-minute-bar agent's ONLY input. Generated, not transcribed: field tables walk
+the live zod objects; refinement rules are quoted by parsing a bad probe AT GENERATION TIME
+(a probe that stops failing fails generation); the 15-row invariant table runs broken
+manifests through `PluginManifestV1`; every worked example is validated before it is written;
+the one hand-written table (ctx present-iff) is anchored to strings proven present in the SDK
+source. Registry commands ship registry-AGNOSTIC against `fixture-registry.ts` per the design
+block (the index repo is James's op). As-built findings, spec-corrected at source: **dev-link
+is a dereferenced COPY, not a symlink** (probed: the registry walk keeps only real
+directories, and EL7's realpath containment refuses linked artifacts — the symlink shape
+could never have worked) · **the spec §5.3 per-user dev root does not exist as built**
+(dev-link resolves `--root` → `FIELDD_PLUGIN_DEV_ROOTS` → the repo default; a real per-user
+root is its own LAYOUT+fieldd slice, dated note at §5.3) · two latent plugin-build parameter-
+property classes fixed (the erasable-syntax law; nothing had imported them through a bin until
+now) · the pack exclusion of `playground/`/`test/`/`scripts/` held by construction and is now
+test-pinned. Cross-slice coordination held blind: `inspect` reads P8d-2's states file
+tolerantly — witnessed on the integrated tree (`"statesSource":"playground","totalStates":4`).
+Gates: verify VERBATIM exit 0 · build exit 0 · 72/72 · combined-tree verify + build exit 0
+with the two root aliases (`pnpm plugin` · `pnpm playground`) added at integration.

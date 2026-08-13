@@ -88,7 +88,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`) | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` | **P8b CLOSED WHOLE** (P8b-3e seam e2e landed `089274c` — every §8.4 clause tested on the real seam) → **P8d, the authoring kit** (ten-minute bar measured on the **mind map pack** — the first prod dogfood product; Rung-3 opens with the DESIGN.md/UI_SYSTEM/design-kit visual-consistency read, James 2026-08-13); P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
+| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`) | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` | **P8b CLOSED WHOLE** (`089274c`) · **P8d 2/4 LANDED same day** — P8d-1 `plugin-cli` + generated authoring docs in gen-freshness (`5cfd0b4`) · P8d-2 playground verdict runner (`0478f08`); remaining: P8d-3 `create-plugin` (dispatching) → **the measured ten-minute bar** on the **mind map pack**'s node widget (pack design PROPOSED — `thinking-mindmap-pack.md` MM-D1…D6 await James; Rung-3 visual-consistency read directive stands); P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -126,8 +126,13 @@ dev-only with dead-branch elimination proven by marker. Witnessed on the final s
 wired STRAIGHT into the real protocol handler over a real on-disk artifact, nothing double'd;
 six rows including the §8.4 disable/re-enable control WITH its own built-in sensitivity check
 (a caching `authorize` serves the disabled plugin at the instant the honest wiring refuses it)
-and the EL7 symlink-after-minting row, mutation-probed. Next: **P8d**, the authoring kit, with
-the ten-minute bar measured on the **mind map pack** (Rung 3 opens with the visual-consistency
+and the EL7 symlink-after-minting row, mutation-probed. **P8d then opened the next morning and
+landed its first two slices in parallel worktrees that joined blind** (`5cfd0b4` + `0478f08`,
+ledger entries §P8d-1/§P8d-2): the `vibefield-plugin` CLI with its 39-class typed refusal
+catalog and the schemas-generated authoring reference under gen-freshness; the playground
+verdict runner with 44 authored states and honest `skipped-gl` rows. Roots: `pnpm plugin` ·
+`pnpm playground`. Remaining in P8d: `create-plugin` (P8d-3), then **the measured
+ten-minute bar** on the **mind map pack** (Rung 3 opens with the visual-consistency
 read — DESIGN.md · UI_SYSTEM · design-kit · existing widgets). P8c rides WP8; P8e gates any
 third-party listing.
 

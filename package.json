@@ -13,6 +13,8 @@
     "dev:onboarding": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --force-onboarding",
     "smoke": "pnpm --filter @vibefield/desktop smoke",
     "smoke:canvas": "pnpm --filter @vibefield/desktop smoke:canvas",
+    "playground": "node apps/plugin-playground/bin/plugin-playground.mjs",
+    "plugin": "node tooling/plugin-cli/bin/vibefield-plugin.mjs",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",
     "bench:logging-baseline": "node scripts/bench-logging-baseline.mjs",
     "bench:logging-native": "cargo test --release -p field-native logging_reference_benchmark -- --ignored --nocapture",
