@@ -1982,3 +1982,68 @@ nobody "fixes" it later by teaching main about roots.
 remains for the artifact to actually load is **P8b-3**: the §11.6 import map (host singleton
 chunks; the map is inline, so it needs a CSP hash), async `activate` with §10.4 deadlines, and
 `BUNDLED` demoted to dev-only.
+
+## P8b-3 — the artifact finally loads (and the probe that redesigned it first)
+
+**LANDED 2026-08-13**, one arc across four commits — `0b8ad13` (rung 0a's yield) · `ded012b`
+(rung 0b) · `39c165a` (the regression fix) · `608e78e` (the rung; **P8b is COMPLETE**).
+Witnessed on the final sha: `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` —
+all four renderer plugins arrive the way a third-party plugin will (fieldd mints, main serves,
+the renderer imports and async-activates) — and `pnpm verify` VERBATIM exit 0.
+
+**The probe ruled before any loader code existed (rung 0a).** thinking-p8 §4 owed one
+empirical check; a standalone Electron harness driving the REAL `serveAppRequest` /
+`servePluginRequest` / production CSP returned four verdicts. (1) **P8-D9/P8-D10 REFUTED**:
+the import map binds bare specifiers to APP-ORIGIN chunks even from inside a plugin-origin
+module — the fetch client is the document — so no singleton serving on the plugin origin and
+no derived-token class exist. (2) **The real blocker was landed at P8b-2**: `corsEnabled:
+false` makes a scheme an illegal CORS *destination*, and module fetches are always CORS-mode —
+ACAO/CORP header variants failed identically, so as shipped NO plugin module could ever load;
+flipped to `true` with the probe row cited at the flip (Electron enforces no response CORS on
+cors-enabled custom schemes — the boundary stays token secrecy + CORP + session isolation).
+(3) The inline-map-under-CSP-hash mechanism was proven end to end before a line of it was
+written. (4) A "no registration clobber" verdict issued that morning was **corrected the same
+day as OVERBROAD** — its control row witnessed only `standard`.
+
+**Because that fourth verdict hid the week's real regression.** Extending the probe with
+`isSecureContext`/`randomUUID` rows showed a SECOND `registerSchemesAsPrivileged` call
+REPLACES the secure-scheme registration while `standard` SURVIVES: since P8b-2 the app origin
+kept serving its module graph and silently stopped being a secure context — ICE died at
+`crypto.randomUUID` and `smoke:canvas` was red from `ad8b804` on, invisible behind a
+verify-only gate. Fixed at `39c165a`: `scheme-registration.ts` — THE one call carrying every
+shell scheme, both per-module register functions DELETED, and the test now COUNTS registration
+calls. Standing lesson, written where it happened: a probe row refutes exactly the property it
+witnesses, never the neighborhood around it.
+
+**Rung 0b made the map's key set registry data** (opus builder): `HOST_SINGLETON_EXTERNALS`
+moved byte-exact to contracts beside the new `HOST_SINGLETON_MODULE_SPECIFIERS` — the 9 plus
+`@vibefield/plugin-sdk/ui` and `/canvas`, MEASURED from all five built artifacts two
+independent ways (es-module-lexer ⋈ rollup `chunk.imports`, exact agreement); plugin-build's
+artifact checks now refuse a renderer bundle emitting any bare specifier outside the list
+(control-run: adding the alien specifier to the list turns the refusal test red).
+
+**The rung itself** (opus builder, integrated with two fixes): eleven singleton facade chunks
+on unhashed app-origin names + the deterministic inline map injected into built index.html
+(vite's `preserveEntrySignatures: false` default emitted export-less chunks — one literally
+zero bytes — caught and fixed with `allow-extension`); the staged loader
+(`plugin-host/staged-loader.ts`) joining `plugins.modules` to registry records; a
+`registerRecord` door in plugin-runtime beside `registerV1` (which genuinely re-parses V1, so
+a record could never pass without fabricated fields); async `activate` under a real §10.4
+deadline race; `ctx.plugin` finally carrying `manifestHash`/`installRevision`; `BUNDLED`
+demoted to dev-only with dead-branch elimination PROVEN by marker strings absent from every
+prod chunk. Boot graph moved 456.2→457.4 KB raw; the singleton chunks (1.6 MB, drei alone
+1.58 MB — a host singleton must export the whole surface) all sit outside it.
+
+**Integration findings, both now law-shaped.** The builder's key file never entered its
+commit: `.gitignore:7 build/` matched `src/build/`, so `git status` read clean while the vite
+plugin sat unadded — and the walls and biome respect the ignore too, so its first genuine lint
+contact came at integration (one real R6 hit: the plugin's own `name` wore the reserved
+IPC-literal prefix; renamed). Relocated to `src/vite/host-singletons.ts`. A worktree gate
+witnesses the DISK, never the COMMIT — completeness is `git show --stat` against the files you
+wrote.
+
+**Remaining, named:** the seam e2e (P8b-3e, in flight — real authority wired into the real
+protocol handler over a real artifact, with the disable/re-enable and symlink controls) ·
+packaged discovery stays P8c/WP8 · and the census smoke sits in NO gate — two silent-red eras
+in one week (the bundle class 2026-08-06→10, the secure-context class 2026-08-11→13) is a
+standing hazard now recorded as a ROADMAP debt row for James's call.
