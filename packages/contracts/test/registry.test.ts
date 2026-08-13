@@ -5,6 +5,8 @@ import { LOCALITIES, METHODS, SURFACES } from "../src/methods";
 import {
   DESKTOP_APP_ID,
   DESKTOP_TRAY_GUID,
+  HOST_SINGLETON_EXTERNALS,
+  HOST_SINGLETON_MODULE_SPECIFIERS,
   LOG_STREAMS,
   MESH_CONTROL_LIMITS,
   PORTS,
@@ -85,6 +87,52 @@ describe("installed desktop identity", () => {
   it("pins the frozen application and status-item identities", () => {
     expect(DESKTOP_APP_ID).toBe("com.jamesyong.vibefield");
     expect(DESKTOP_TRAY_GUID).toBe("c524c40e-05b6-4d89-bbb9-82ba4e97ea91");
+  });
+});
+
+describe("host singleton registries (PA-29 / plugin spec §11.6)", () => {
+  it("pins the externals list byte-exactly", () => {
+    // Every entry is a bundler external at pack time AND an import-map key at
+    // load time, so adding or renaming one moves both halves of PA-29 at once.
+    // The pin is here to make that a deliberate edit against a failing test.
+    expect(HOST_SINGLETON_EXTERNALS).toEqual([
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "three",
+      "@react-three/fiber",
+      "@react-three/drei",
+      "@vibefield/plugin-sdk",
+      "@vibecook/ice",
+      "loro-crdt",
+    ]);
+  });
+
+  it("binds at least every external, and every extra is a subpath of one", () => {
+    for (const external of HOST_SINGLETON_EXTERNALS) {
+      expect(HOST_SINGLETON_MODULE_SPECIFIERS, `${external} must be bindable`).toContain(external);
+    }
+    // The subpath arm is why the two lists differ at all: the bundler
+    // externalizes by prefix, so an artifact emits `@vibefield/plugin-sdk/ui`
+    // while the root list only names `@vibefield/plugin-sdk`. What it must NOT
+    // grow is a specifier rooted outside PA-29 — that would be the host
+    // offering a module no singleton rule covers.
+    const extras = HOST_SINGLETON_MODULE_SPECIFIERS.filter(
+      (spec) => !(HOST_SINGLETON_EXTERNALS as readonly string[]).includes(spec),
+    );
+    expect(extras).toEqual(["@vibefield/plugin-sdk/ui", "@vibefield/plugin-sdk/canvas"]);
+    for (const extra of extras) {
+      expect(
+        HOST_SINGLETON_EXTERNALS.some((root) => extra.startsWith(`${root}/`)),
+        `${extra} is not a subpath of any host singleton`,
+      ).toBe(true);
+    }
+  });
+
+  it("names each module once — an import map key cannot be declared twice", () => {
+    expect(new Set(HOST_SINGLETON_MODULE_SPECIFIERS).size).toBe(
+      HOST_SINGLETON_MODULE_SPECIFIERS.length,
+    );
   });
 });
 

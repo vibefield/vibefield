@@ -223,6 +223,64 @@ export const SOCKETS = {
  * product document. */
 export const PLUGIN_MODULE_SCHEME = "vibefield-plugin" as const;
 
+/** PA-29 / plugin spec §11.6 — the host-singleton externals list. React,
+ * ReactDOM, three, R3F/drei, ICE/strata, Loro, and the SDK runtime are
+ * host-provided singletons; a plugin bundle that carries a second copy of any
+ * of them refuses activation.
+ *
+ * Declared in EXACTLY ONE place: here. `tooling/plugin-build` re-exports it, so
+ * the renderer library-mode bundle, the esbuild service bundle, and the
+ * pack-time duplicate-singleton check (§5.4 item 1, stage "artifact checks")
+ * read THIS constant rather than hand-listing bundler externals. No plugin,
+ * built-in or third-party, configures its own externals list.
+ *
+ * It is registry data rather than build-tool data because the two halves of the
+ * PA-29 contract sit in different processes: pack time externalizes these
+ * specifiers, and load time BINDS them (§11.6 — a host-injected import map in
+ * the renderer, a `module.register` resolve hook in the service worker). The
+ * renderer and Electron main must read the same list without depending on a
+ * Node build tool, and one list hand-copied into two planes is the R4 drift
+ * class. */
+export const HOST_SINGLETON_EXTERNALS = [
+  "react",
+  "react-dom",
+  "react/jsx-runtime",
+  "three",
+  "@react-three/fiber",
+  "@react-three/drei",
+  "@vibefield/plugin-sdk",
+  "@vibecook/ice",
+  "loro-crdt",
+] as const;
+
+export type HostSingletonExternal = (typeof HOST_SINGLETON_EXTERNALS)[number];
+
+/** §11.6 — the EXACT set of bare specifiers the renderer's host-injected import
+ * map binds, and therefore the exact set a built plugin artifact is allowed to
+ * emit.
+ *
+ * A superset of HOST_SINGLETON_EXTERNALS, because the bundler externalizes a
+ * singleton AND its subpaths by prefix: an artifact emits subpath specifiers
+ * the root list never names. The additions below are measured, not guessed —
+ * every one appears bare in a shipping plugin's `dist/renderer.js`.
+ *
+ * ENUMERATED, never prefixed, and that is forced: an import map maps a trailing
+ * slash only across a URL path segment, and PLUGIN_MODULE_SCHEME refuses path
+ * segments. A specifier without its own entry does not resolve.
+ *
+ * The build refuses an artifact that emits anything outside this list ("artifact
+ * checks"), which is §11.6's "unmapped fails loudly" moved from import time to
+ * pack time. Widening the host surface is a deliberate edit HERE — never a
+ * plugin's private decision. Renderer truth only: the service worker's resolve
+ * hook binds the SDK alone, and node builtins are legitimately its own. */
+export const HOST_SINGLETON_MODULE_SPECIFIERS = [
+  ...HOST_SINGLETON_EXTERNALS,
+  "@vibefield/plugin-sdk/ui",
+  "@vibefield/plugin-sdk/canvas",
+] as const;
+
+export type HostSingletonModuleSpecifier = (typeof HOST_SINGLETON_MODULE_SPECIFIERS)[number];
+
 /** File names VibeField owns beneath a daemon's own data directory. A name here
  * is resolved by the plane that OWNS the file and by nobody else — GT-3's
  * `config.ghostty` is field-native's, so the native plane joins it to its data

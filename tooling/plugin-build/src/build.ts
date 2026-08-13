@@ -10,15 +10,22 @@
 // target — so build READS the manifest and refuses if it is missing, naming the
 // command that writes it. Recorded delta from §5.4's four-stages-one-command.
 //
-// The PA-29 externals list is imported, never restated (externals.ts is its one
-// home). A bundle that carries a second copy of a host singleton is refused HERE,
-// at pack time in spec terms — the load-time half (§11.6's import map) and
-// activation refusal are the later lines of the same defence.
+// The PA-29 externals list is imported, never restated (@vibefield/contracts is
+// its one home; externals.ts is this package's door onto it). A bundle that
+// carries a second copy of a host singleton is refused HERE, at pack time in
+// spec terms — the load-time half (§11.6's import map) and activation refusal
+// are the later lines of the same defence. Its mirror image is refused here too:
+// a bundle that emits a specifier the import map has no entry for.
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { builtinModules } from "node:module";
 import { join, relative, resolve } from "node:path";
-import { HOST_SINGLETON_EXTERNALS, type HostSingletonExternal } from "./externals";
+import {
+  HOST_SINGLETON_EXTERNALS,
+  HOST_SINGLETON_MODULE_SPECIFIERS,
+  type HostSingletonExternal,
+} from "./externals";
 
 /** Where a plugin's entry sources live, by convention. The manifest names the
  * built ARTIFACT (`./dist/renderer.js`); these are what produce it. */
@@ -98,6 +105,36 @@ export function findBundledSingletons(modulePaths: Iterable<string>): HostSingle
   );
 }
 
+const NODE_BUILTINS = new Set(builtinModules);
+
+/**
+ * THE OTHER ARTIFACT CHECK: which of this bundle's bare imports can the host's
+ * import map not bind?
+ *
+ * The externals matcher works by PREFIX — every subpath of a singleton stays
+ * bare — while §11.6's import map is an exact enumeration, because
+ * PLUGIN_MODULE_SCHEME refuses the URL path segment a trailing-slash mapping
+ * needs. So the bundler will happily externalize `@vibecook/ice/react` and hand
+ * the renderer a specifier nothing resolves. Catching that here turns an import
+ * that dies inside a loading plugin into a build that never emits it.
+ *
+ * Relative and absolute ids are the bundle's own business. Node builtins are
+ * skipped: they are never the import map's business, and a renderer artifact
+ * reaching for one is broken in a way this check would only mislabel.
+ *
+ * Pure and exported so it is testable without running a build.
+ */
+export function findUnmappableSpecifiers(specifiers: Iterable<string>): string[] {
+  const mappable = new Set<string>(HOST_SINGLETON_MODULE_SPECIFIERS);
+  const unmappable = new Set<string>();
+  for (const id of specifiers) {
+    if (id.startsWith(".") || id.startsWith("/")) continue;
+    if (id.startsWith("node:") || NODE_BUILTINS.has(id)) continue;
+    if (!mappable.has(id)) unmappable.add(id);
+  }
+  return [...unmappable].sort();
+}
+
 function firstExisting(root: string, candidates: readonly string[]): string | undefined {
   return candidates.map((c) => join(root, c)).find((p) => existsSync(p));
 }
@@ -133,7 +170,7 @@ function entryPath(root: string, declared: string): string {
 async function bundleRenderer(
   root: string,
   declared: string,
-): Promise<{ detail: string; modules: string[] }> {
+): Promise<{ detail: string; modules: string[]; specifiers: string[] }> {
   const source = firstExisting(root, RENDERER_SOURCES);
   if (source === undefined) {
     throw new PluginBuildError(
@@ -186,9 +223,21 @@ async function bundleRenderer(
   rmSync(workDir, { recursive: true, force: true });
   const outputs = Array.isArray(result) ? result : [result];
   const modules: string[] = [];
+  // What the artifact actually asks the host for, taken from rollup's own
+  // record of each chunk's imports rather than a text scan — same reason
+  // findBundledSingletons reads the module list. A code-split plugin's chunks
+  // import each OTHER by emitted file name, which is not a bare specifier and
+  // must not be mistaken for one; the emitted names are known here, so subtract
+  // them rather than guess from the shape of the string.
+  const imported: string[] = [];
+  const emittedFiles = new Set<string>();
   for (const bundle of outputs) {
     for (const chunk of "output" in bundle ? bundle.output : []) {
-      if (chunk.type === "chunk") modules.push(...Object.keys(chunk.modules));
+      emittedFiles.add(chunk.fileName);
+      if (chunk.type === "chunk") {
+        modules.push(...Object.keys(chunk.modules));
+        imported.push(...chunk.imports, ...chunk.dynamicImports);
+      }
     }
   }
   if (!existsSync(out)) {
@@ -198,6 +247,7 @@ async function bundleRenderer(
   return {
     detail: `${declared}${existsSync(css) ? " + renderer.css" : " (no stylesheet)"}`,
     modules,
+    specifiers: imported.filter((id) => !emittedFiles.has(id)),
   };
 }
 
@@ -242,7 +292,8 @@ export interface BuildPluginOptions {
 
 /**
  * Build one plugin: read its manifest, produce the artifacts its entries name,
- * then refuse the result if it swallowed a host singleton.
+ * then refuse the result if it swallowed a host singleton — or if it asks the
+ * host for one the host never offered.
  *
  * Throws `PluginBuildError` on the first failing stage — a partially built
  * artifact is never reported as a success.
@@ -254,11 +305,13 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<BuildRep
     { stage: "manifest", ok: true, detail: `${manifest.id} (read; emitted by gen:manifest)` },
   ];
   const linked: string[] = [];
+  const emitted: string[] = [];
 
   const rendererEntry = manifest.entries?.renderer;
   if (rendererEntry !== undefined) {
-    const { detail, modules } = await bundleRenderer(root, rendererEntry);
+    const { detail, modules, specifiers } = await bundleRenderer(root, rendererEntry);
     linked.push(...modules);
+    emitted.push(...specifiers);
     stages.push({ stage: "renderer bundle", ok: true, detail });
   }
 
@@ -282,14 +335,21 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<BuildRep
   const bundled = findBundledSingletons(linked);
   if (bundled.length > 0) {
     throw new PluginBuildError(
-      `bundle carries host singletons that must stay external (PA-29): ${bundled.join(", ")} — the externals list is tooling/plugin-build/src/externals.ts and no plugin configures its own`,
+      `bundle carries host singletons that must stay external (PA-29): ${bundled.join(", ")} — the externals list is HOST_SINGLETON_EXTERNALS in @vibefield/contracts (src/registries.ts) and no plugin configures its own`,
+      "artifact checks",
+    );
+  }
+  const unmappable = findUnmappableSpecifiers(emitted);
+  if (unmappable.length > 0) {
+    throw new PluginBuildError(
+      `renderer bundle imports specifiers the host cannot resolve (§11.6): ${unmappable.join(", ")} — the import map binds exactly HOST_SINGLETON_MODULE_SPECIFIERS in @vibefield/contracts (src/registries.ts), so either add the specifier there and to the host that serves it, or let the plugin bundle the module in`,
       "artifact checks",
     );
   }
   stages.push({
     stage: "artifact checks",
     ok: true,
-    detail: `entries present; no bundled singletons across ${linked.length} linked modules`,
+    detail: `entries present; no bundled singletons across ${linked.length} linked modules; ${emitted.length} emitted specifiers all mappable`,
   });
 
   return { pluginId: manifest.id, stages, ok: true };

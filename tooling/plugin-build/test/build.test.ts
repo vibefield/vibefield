@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPlugin,
   findBundledSingletons,
+  findUnmappableSpecifiers,
   isHostSingletonSpecifier,
   PluginBuildError,
 } from "../src/build";
@@ -21,6 +22,12 @@ import {
 //     plugins, because those CAN be staged truthfully — and the service stage
 //     has no shipping consumer yet (kv-service ships a hand-written entry), so
 //     without a fixture it would be an unexercised code path.
+//
+// P8 rung 0b — the unmappable-specifier check joins the SECOND group, and the
+// asymmetry is the point: the bundler externalizes by PREFIX while §11.6's
+// import map is an exact enumeration, so a fixture can emit a specifier nothing
+// binds without a single list being edited to arrange it. Nothing here builds a
+// real plugin: `pnpm test` must not wait on `pnpm build` (the P8a law).
 
 function fixture(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "plugin-build-"));
@@ -74,6 +81,40 @@ describe("findBundledSingletons (the PA-29 artifact check)", () => {
   });
 });
 
+describe("findUnmappableSpecifiers (the §11.6 artifact check)", () => {
+  it("binds the enumerated specifiers, including the SDK subpaths a real bundle emits", () => {
+    expect(
+      findUnmappableSpecifiers([
+        "react",
+        "react/jsx-runtime",
+        "@vibefield/plugin-sdk",
+        "@vibefield/plugin-sdk/ui",
+        "@vibefield/plugin-sdk/canvas",
+      ]),
+    ).toEqual([]);
+  });
+
+  it("REFUSES a singleton subpath nobody enumerated", () => {
+    // The load-bearing case. `isHostSingletonSpecifier` externalizes this by
+    // prefix and the map has no key for it, so without this check the renderer
+    // meets a specifier at import time that resolves to nothing.
+    expect(isHostSingletonSpecifier("@vibecook/ice/react")).toBe(true);
+    expect(findUnmappableSpecifiers(["@vibecook/ice/react"])).toEqual(["@vibecook/ice/react"]);
+  });
+
+  it("leaves the bundle's own business alone: relative, absolute, and node builtins", () => {
+    expect(
+      findUnmappableSpecifiers([
+        "./chunk.js",
+        "../shared/util.js",
+        "/abs/path.js",
+        "node:fs",
+        "os",
+      ]),
+    ).toEqual([]);
+  });
+});
+
 describe("buildPlugin", () => {
   it("bundles a service entry self-contained, leaving only the SDK external", async () => {
     const root = fixture({
@@ -109,6 +150,46 @@ describe("buildPlugin", () => {
         'import { version } from "../node_modules/react/index.js";\nexport default { version };\n',
     });
     await expect(buildPlugin({ root })).rejects.toThrow(/host singletons.*react|react.*external/s);
+  });
+
+  it("bundles a renderer whose every emitted specifier the host can bind", async () => {
+    // The control's control: a plugin importing the SDK root AND a subpath —
+    // the shape all four shipping renderer plugins have — must sail through.
+    const root = fixture({
+      "vibefield.plugin.json": manifest({ renderer: "./dist/renderer.js" }),
+      "src/renderer.ts":
+        'import { defineRendererPlugin } from "@vibefield/plugin-sdk";\n' +
+        'import { UiButton } from "@vibefield/plugin-sdk/ui";\n' +
+        "export default defineRendererPlugin({ activate: () => UiButton });\n",
+    });
+
+    const report = await buildPlugin({ root });
+    expect(report.ok).toBe(true);
+    // Both stayed bare for the import map to bind, subpath included.
+    const out = readFileSync(join(root, "dist", "renderer.js"), "utf8");
+    expect(out).toMatch(/from\s*"@vibefield\/plugin-sdk"/);
+    expect(out).toMatch(/from\s*"@vibefield\/plugin-sdk\/ui"/);
+    expect(report.stages.at(-1)?.detail).toContain("emitted specifiers all mappable");
+  });
+
+  it("REFUSES a renderer artifact emitting a specifier the host cannot resolve", async () => {
+    // The end-to-end control, and staging it disables nothing: the externals
+    // matcher takes `@vibecook/ice/react` by PREFIX, so the bundler emits it
+    // bare — while the import map is an exact enumeration with no key for it.
+    // That gap is the whole reason this check exists, and it is reachable
+    // without editing a single list to arrange the failure.
+    const root = fixture({
+      "vibefield.plugin.json": manifest({ renderer: "./dist/renderer.js" }),
+      "src/renderer.ts":
+        'import { useIce } from "@vibecook/ice/react";\nexport default { useIce };\n',
+    });
+
+    await expect(buildPlugin({ root })).rejects.toThrow(PluginBuildError);
+    // The message is the interface: it names the specifier that has no home and
+    // the list that would give it one.
+    await expect(buildPlugin({ root })).rejects.toThrow(
+      /@vibecook\/ice\/react[\s\S]*HOST_SINGLETON_MODULE_SPECIFIERS[\s\S]*@vibefield\/contracts/,
+    );
   });
 
   it("refuses when the manifest promises a renderer no source can produce", async () => {
