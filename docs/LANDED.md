@@ -2085,5 +2085,9 @@ code. The never-pipe-the-gate law, rediscovered independently, now proven from b
 
 Gates on the integrated tree: `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}`
 re-witnessed · `pnpm verify` VERBATIM (run recorded in the docs commit that carries this
-entry). **P8b is closed whole — every §8.4 clause now has a test on the real seam. Next rung:
-P8d.**
+entry). **Coverage stated precisely so nobody over-reads it** (builder's own framing): no
+single test spans all four stages — artifact→mint→serve with every negative is the Node-level
+seam suite; serve→import in real Chromium is `smoke:canvas` (positives only); the disable→404
+control is witnessed at the Node seam, not inside a live renderer — a renderer-level
+revocation witness would be its own smoke-harness slice if ever wanted. **P8b is closed
+whole — every §8.4 clause has a test on the real mint↔serve seam. Next rung: P8d.**
