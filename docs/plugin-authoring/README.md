@@ -116,10 +116,15 @@ The renderer module it names:
 
 ```tsx
 import { defineRendererPlugin } from "@vibefield/plugin-sdk";
+import type { WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
 import { CardShell } from "@vibefield/plugin-sdk/ui";
 
-function NoteCard() {
-  return <CardShell><p>hello from a plugin</p></CardShell>;
+function NoteCard({ world, entity }: WidgetComponentProps) {
+  return (
+    <CardShell world={world} entity={entity}>
+      <p>hello from a plugin</p>
+    </CardShell>
+  );
 }
 
 export default defineRendererPlugin({
@@ -195,6 +200,21 @@ pnpm build                        # plugin-build: renderer (+ service) bundles
 vibefield-plugin check .          # the whole suite, as verdicts
 vibefield-plugin dev-link .       # put it where a dev session finds it
 ```
+
+Do not hand-author this layout: the scaffolder emits it working. Start every
+new plugin with
+
+```sh
+create-plugin --id vendor.name --title "My Plugin" --dir plugins/name
+#   (in this repo: pnpm exec create-plugin …; targets under plugins/ or
+#    examples/plugins/ join the workspace — run pnpm install after)
+pnpm plugin check plugins/name    # a fresh scaffold is check-clean from birth
+pnpm playground plugins/name      # its starter states render as verdicts
+```
+
+The scaffold ships `manifest.ts` + its emit script, one working CardShell
+widget, `playground/states.ts` starter states, the manifest conformance test,
+and the build preset — every file already in the shape `check` demands.
 
 ## The rules that catch people first
 

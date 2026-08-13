@@ -113,11 +113,18 @@ The canvas hooks arrive through the SDK's `/canvas` door, never from ICE
 directly:
 
 ```tsx
-import { useWidgetProps, useOps } from "@vibefield/plugin-sdk/canvas";
+import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
 
-function NoteCard() {
-  const props = useWidgetProps();
+const TYPE = "com.example.notes";
+
+function NoteCard({ world, entity }: WidgetComponentProps) {
+  const props = useWidgetProps<{ body: string }>(world, entity, TYPE);
   const ops = useOps();
-  return <textarea value={props.body} onChange={(e) => ops.setProp("body", e.target.value)} />;
+  return (
+    <textarea
+      value={props.body}
+      onChange={(e) => ops.setWidgetProps(entity, { body: e.target.value })}
+    />
+  );
 }
 ```

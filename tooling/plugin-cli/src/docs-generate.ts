@@ -157,12 +157,22 @@ function readme(): string {
       "",
       fence(
         "tsx",
+        // Signatures MIRROR plugins/note/src/widget.tsx (the shipped proof
+        // widget) — docs-anchors.test.ts pins each call against that file, so
+        // an example that drifts from shipping code fails generation review.
+        // The P8d-3 rehearsal caught the previous bare-<CardShell> form: it
+        // did not compile, and these docs are the bar agent's ONLY input.
         [
           'import { defineRendererPlugin } from "@vibefield/plugin-sdk";',
+          'import type { WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";',
           'import { CardShell } from "@vibefield/plugin-sdk/ui";',
           "",
-          "function NoteCard() {",
-          "  return <CardShell><p>hello from a plugin</p></CardShell>;",
+          "function NoteCard({ world, entity }: WidgetComponentProps) {",
+          "  return (",
+          "    <CardShell world={world} entity={entity}>",
+          "      <p>hello from a plugin</p>",
+          "    </CardShell>",
+          "  );",
           "}",
           "",
           "export default defineRendererPlugin({",
@@ -247,6 +257,24 @@ function readme(): string {
           "vibefield-plugin dev-link .       # put it where a dev session finds it",
         ].join("\n"),
       ),
+      "",
+      "Do not hand-author this layout: the scaffolder emits it working. Start every",
+      "new plugin with",
+      "",
+      fence(
+        "sh",
+        [
+          'create-plugin --id vendor.name --title "My Plugin" --dir plugins/name',
+          "#   (in this repo: pnpm exec create-plugin …; targets under plugins/ or",
+          "#    examples/plugins/ join the workspace — run pnpm install after)",
+          "pnpm plugin check plugins/name    # a fresh scaffold is check-clean from birth",
+          "pnpm playground plugins/name      # its starter states render as verdicts",
+        ].join("\n"),
+      ),
+      "",
+      "The scaffold ships `manifest.ts` + its emit script, one working CardShell",
+      "widget, `playground/states.ts` starter states, the manifest conformance test,",
+      "and the build preset — every file already in the shape `check` demands.",
       "",
     ]),
     section("The rules that catch people first", [
@@ -539,13 +567,23 @@ function widgetsDoc(): string {
       "",
       fence(
         "tsx",
+        // Real signatures (mirrors plugins/note/src/widget.tsx; pinned by
+        // docs-anchors.test.ts): useWidgetProps takes (world, entity, type),
+        // and writes go through ops.setWidgetProps(entity, props).
         [
-          'import { useWidgetProps, useOps } from "@vibefield/plugin-sdk/canvas";',
+          'import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";',
           "",
-          "function NoteCard() {",
-          "  const props = useWidgetProps();",
+          'const TYPE = "com.example.notes";',
+          "",
+          "function NoteCard({ world, entity }: WidgetComponentProps) {",
+          "  const props = useWidgetProps<{ body: string }>(world, entity, TYPE);",
           "  const ops = useOps();",
-          '  return <textarea value={props.body} onChange={(e) => ops.setProp("body", e.target.value)} />;',
+          "  return (",
+          "    <textarea",
+          "      value={props.body}",
+          "      onChange={(e) => ops.setWidgetProps(entity, { body: e.target.value })}",
+          "    />",
+          "  );",
           "}",
         ].join("\n"),
       ),
