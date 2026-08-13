@@ -2147,3 +2147,41 @@ test-pinned. Cross-slice coordination held blind: `inspect` reads P8d-2's states
 tolerantly — witnessed on the integrated tree (`"statesSource":"playground","totalStates":4`).
 Gates: verify VERBATIM exit 0 · build exit 0 · 72/72 · combined-tree verify + build exit 0
 with the two root aliases (`pnpm plugin` · `pnpm playground`) added at integration.
+
+## P8d-3 — the scaffold is a working plugin, and its rehearsal caught the docs lying
+
+**LANDED 2026-08-13** (`a3c4897`, opus builder + `a7d434f`, the orchestrator's fix for what
+the rehearsal found — **the P8d kit is COMPLETE**: create → check → playground → pack →
+dev-link, every command answering in P8-D8 verdicts). `tooling/create-plugin`
+(`create-plugin --id vendor.name --title … --dir …`): fully non-interactive, refuses BEFORE
+the first mkdir (byte-identical-target asserted; `target-not-empty` has no `--force` — the
+global scaffolding law as a refusal class), id/title/widget-type validated through contracts'
+own predicates, hostile-title escaping proven by test (quotes/backslashes/`${}`/newline
+round-trip byte-exact). The template is plugins/note's REAL shape with substitution tokens —
+manifest EMITTED at scaffold time by plugin-build's own `emitManifest` (one source of truth;
+check-clean from birth including the freshness row), starter `playground/states.ts`, note's
+manifest-test pattern, a self-contained tsconfig pinned against `tsconfig.base.json` drift.
+**The acceptance was a full bar rehearsal**: scaffold → install → `check` 0 → `playground`
+2/2 → manifest test/typecheck/biome/build all 0 — then deleted traceless (proven absent from
+commit and lockfile). Builder's own red rows: an ownership-check drift from contracts'
+`isOwnedName` (caught by the emit backstop, refiled as a refusal) and the escaping gap.
+One shared-config edit: biome negates the token-bearing `template/` (unparseable by design),
+compensated by a STRONGER gate that reads the scaffold OUTPUT (exact file list, zero
+surviving tokens, unknown token throws).
+
+**The STOP finding that justified the rehearsal** (`a7d434f`): the generated authoring docs
+taught THREE calls that do not compile against the shipped SDK — bare `<CardShell>` (world +
+entity are required), zero-arg `useWidgetProps` (real: `(world, entity, type)`), and
+`ops.setProp` (real: `setWidgetProps(entity, props)`) — while plugins/note used the real
+signatures all along; and the docs never mentioned the scaffolder, so an agent working only
+from them could not discover `create-plugin`. All bar-run failures waiting (the docs are the
+bar agent's ONLY input). Fixed at the generator — both fences now MIRROR
+`plugins/note/src/widget.tsx`, the loop section opens with the scaffolder — and pinned
+durable: `docs-anchors.test.ts` requires every taught call to appear verbatim in BOTH the
+generated docs and note's shipping source, so this drift class can never be silent again.
+Orchestrator's own confession in the same spirit: the integration chain briefly fell into the
+pipe-exit trap the ledger recorded the night before (a piped tail masked a failed pick) —
+caught by the dirty lockfile it caused, resolved unpiped. Gates on the final tree: build
+exit 0 · `pnpm verify` VERBATIM exit 0 · plugin-cli 78/78 with the anchors · scaffold
+witnessed on main and deleted traceless. **Remaining in P8d: the measured ten-minute bar,
+gated on the mind-map pack proposal (MM-D1…D6) awaiting James.**
