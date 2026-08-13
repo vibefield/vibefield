@@ -3,7 +3,17 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-11** — the WIN milestone: the Windows
+> stays in the design docs + specs. Last rewritten: **2026-08-13** — the P8 fold + the dogfood
+> destination: thinking-p8's §7 fold map ran (owed since destination (a) — agents author
+> widgets — was ratified 2026-08-11): the four 2026-08-09 plugin debt rows consolidate into the
+> PLUG track row + one pointer row, a PLUG in-flight paragraph and Next-up bullet are added,
+> `DECISIONS.md`'s PA row gains the P8 note, and the plugin spec gains §21.9, the §11.6 P8-D1′
+> origin delta, and §5.4's retired fence + as-built deltas. James named the four production
+> dogfood packs (`thinking-prod-dogfood-packs.md` — mind map · dev tools/live-surfaces ·
+> essential · microservice; the dev-phase packs are not the final forms) and ratified the
+> **mind map pack** as the first prod dogfood product — P8d's ten-minute bar measures on it.
+> Nothing in the tree changed; `pnpm verify` run verbatim at `ad8b804`, exit 0.
+> Previously **2026-08-11** — the WIN milestone: the Windows
 > port's first wave (WIN-0…4, `5ffd30b`/`85cce04`/`f982d27`) landed on `f98f58a`; this pass adds the WIN
 > track row and its Next-up bullet, the wave's residue named there — and the WIN-6 terminal rung
 > (`03cc648`, WIN-D2 adopted) folded into the same row and ledger. Previously **2026-08-07** — a
@@ -70,7 +80,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE for the prior surface set; AH-3 added `hud.side-panel` at `8c07bf4` | `specs/plugin-architecture.md` | WP8 stages/signs bundled manifests for packaged discovery; other dogfood through AR/GT; public index repo = James's op |
+| PLUG — plugins | P0–P7 COMPLETE; **P8 IN FLIGHT** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804`: the artifact is real, authorized, and served, and NOTHING loads it until P8b-3 (the renderer still rides the static `BUNDLED` list; async `activate` still refused); AH-3's `hud.side-panel` landed `8c07bf4` | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` | P8b-3 (owed first: the UI Bench CORS probe P8-D9/D10 + the externals-list home) → P8d (ten-minute bar measured on the **mind map pack** — the first prod dogfood product, ratified 2026-08-13; `thinking-prod-dogfood-packs.md`); P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -85,6 +95,27 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
 ## In flight now
+
+**PLUG.** The track reopened 2026-08-11 after two dormant weeks: `thinking-p8-loadable-artifact.md`
+named the five seams between "P0–P7 complete" and "a plugin loads from an artifact" — the P7
+chain could deliver a signed `.vfplugin` whose services run and whose widgets cannot load — and
+James ratified the destination the same day: agents author widgets. Three rungs landed in two
+days. P8a built the artifact (plugin-build's `bin` + renderer/service/check stages; all five
+plugins build real `dist/`; unminified on purpose — rung-R1 reviewers read the bytes). P8b-1
+built the authority (path-free `plugins.modules` projection; opaque 128-bit generation-bound
+tokens; the local-only `plugins.serve` scope; **P8-D1 was WITHDRAWN — falsified by ESP §8.4,
+which had already legislated the answer — and P8-D1′ built instead**). P8b-2 built the server
+(`vibefield-plugin://` privileged scheme, `token → bytes` only, `bypassCSP:false`, the CSP
+admitting it on `script-src`/`style-src` alone; the realpath-at-authorize hardening against
+same-uid symlink swaps). The pipeline is built from both ends and meets nowhere: `plugins.modules`
+has zero callers, the renderer still rides the static `BUNDLED` list, and the two landed halves
+are each tested but never yet meet through a real artifact. **P8b-3 is the keystone** — the
+§11.6 import map, async `activate` under §10.4, `BUNDLED` demoted to dev-only, the smoke
+asserting the staged path — owed first: the UI Bench CORS probe (P8-D9/D10) and the
+externals-list home decision. Then **P8d**, the authoring kit, with the ten-minute bar measured
+by an agent building the **mind map pack**'s first widget from generated docs alone — ratified
+2026-08-13 as the first PRODUCTION dogfood product (the four-pack direction:
+`thinking-prod-dogfood-packs.md`). P8c rides WP8; P8e gates any third-party listing.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through
@@ -214,6 +245,13 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
 ## Next up — the options on the table (James's call)
 
+- **PLUG P8 → the mind map pack** — the chosen thread (2026-08-13): the CORS probe + the
+  externals-home decision, then P8b-3 (the artifact finally loads; the smoke asserts the staged
+  path and the first end-to-end artifact→mint→serve→import test lands), then P8d's authoring
+  kit with the ten-minute bar measured by an agent building the **mind map pack**'s first
+  widget — the first production dogfood product. The pack then ships as a signed `.vfplugin`
+  through the P7 chain and joins the smoke census. P8c rides WP8; P8e gates third-party.
+  Plan: `thinking-p8-loadable-artifact.md` · packs: `thinking-prod-dogfood-packs.md`.
 - **AH-4 closeout** — review and land the preview runtime, stage/sign the bundled browser
   plugin through WP8, then run the both-theme/native-picker plus desktop-B preview/refresh,
   Truffle symlink/allow, and cross-origin physical witnesses. AH-5 adds the phone list; the
@@ -275,43 +313,18 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   **The standing hazard is closed:** `pnpm bundle:assert` (renderer build + assert) is wired
   into `pnpm verify` between clippy and the test suites, so this class can no longer regress
   behind a green gate — the reason it survived four days and two ledger entries (2026-08-10).
-- **Install-a-widget-plugin does not exist — HALF CLOSED (P8a, 2026-08-11): the artifact is real
-  now; nothing loads it yet.** The build half is done — `plugin-build` gained its `bin` and its
-  renderer/service/artifact-check stages, all five plugins declare `"build": "plugin-build"`, and
-  every widget-bearing manifest's `entries.renderer` now resolves to a file the desktop build
-  produces. **The loader half (P8b) is what remains**, and it is the whole reason the artifact
-  still does not load: the renderer imports plugins from source through the static `BUNDLED` list
-  (`field-engine.ts:70-76`), async `activate` is still refused (`renderer-harness.ts:184`), and
-  §11.6's import map does not exist — so a signed `.vfplugin` still delivers services that run and
-  widgets that cannot. **P8b-1 landed the AUTHORITY half 2026-08-12** (ESP §8.4): fieldd mints
-  generation-bound opaque module tokens, `plugins.modules` hands the renderer URLs with nowhere to
-  put a path, and `plugins.resolveModule` resolves one token to bytes for the shell principal
-  alone under the new local-only `plugins.serve` scope. **P8b-2 landed the SERVER half the same
-  day**: `vibefield-plugin://` is a registered privileged scheme whose handler knows nothing
-  about plugins — no root, no id, no directory, only `token → bytes` asked of the daemon — with
-  ten named refusal classes, `bypassCSP:false`, and the CSP admitting that origin on `script-src`
-  /`style-src` and nowhere else. Hardening found while building it: fieldd's containment compared
-  path STRINGS, so a same-uid symlink swap after minting would have passed; containment is now
-  re-proven with `realpath` at authorization time (control-run both ways). **Remaining: P8b-3**
-  (the §11.6 import map, async `activate`, `BUNDLED` demoted to dev-only) — the artifact still
-  does not load until it lands. Plan + decisions:
-  `thinking-p8-loadable-artifact.md` — note **P8-D1 was WITHDRAWN 2026-08-12**, falsified by
-  §8.4; P8-D1′ is what shipped (2026-08-09, half-closed 2026-08-11, authority landed 2026-08-12).
-- **The §5.4 authoring kit was never scheduled** — `plugin-cli`, `create-plugin`, and
-  `apps/plugin-playground` are spec-named (the ten-minute bar) and absent from the tree; only
-  `plugin-build` exists. The §21 ladder completed without an authoring rung, so this appeared
-  on no list until now. It becomes critical path the moment anyone but this repo authors a
-  widget — including the four-views Widget Builder character (2026-08-09).
-- **`PluginWidgetProps` (03·A / plugin spec §12.1) is unimplemented — widgets ship on ICE's raw
-  contract** through the curated door, which says so itself (`plugin-sdk/src/canvas.ts:6-8`:
-  "The deep target (PluginWidgetProps — 03·A) replaces most of this"); §12.1's register-time
-  invariants (contiguous migration chains) are unenforced, and plugin code stays coupled to ICE
-  vocabulary — the widgetlab-port V-4 `ValueOf<>` papercut reaches plugins through exactly this
-  coupling. PA-27 retires it together with the already-recorded `ctx.canvas` engine stopgap
-  (P6 delta) (2026-08-09).
-- **`ctx.pool`** — spec'd (plugin spec §12.6 / altitude A3), absent from the SDK by design
-  ("pool arrives with its runtime", `plugin-sdk/src/index.ts:11-12`); with terminals
-  spine-owned (GT), the first real attachment kind now rides AR (2026-08-09).
+- **The plugin platform's remaining seams are P8's rungs — four rows consolidated 2026-08-13**
+  (they were separate debts dated 2026-08-09; the thinking-p8 §7 fold map ran). Compressed:
+  install-a-widget is two-thirds closed (P8a artifact · P8b-1 authority · P8b-2 server) and
+  **P8b-3 remains — the §11.6 import map, async `activate`, `BUNDLED` → dev-only; until it
+  lands a signed `.vfplugin` still delivers widgets that cannot load** · the §5.4 authoring
+  kit = **P8d** (critical path for the ratified agents-author-widgets destination; measured on
+  the mind map pack) · `PluginWidgetProps` §12.1 + PA-27's curated canvas tier = **P8e**
+  (gates any third-party listing) · **`ctx.pool`** stays deferred to its first attachment kind
+  (AR — and the dev-tool pack when its track opens; `thinking-prod-dogfood-packs.md`).
+  History: `LANDED.md` §P8a/§P8b-1/§P8b-2; decisions incl. the P8-D1 withdrawal:
+  `thinking-p8-loadable-artifact.md` §3; live status: the PLUG track row + In-flight §PLUG
+  (2026-08-13).
 - **THE LEDGER LOST TWO WHOLE TRACKS (2026-08-07) — the discipline's own worst failure to
   date, now repaired.** IOS-3 (six commits) and the UI system (ten commits) both landed and
   **neither had a single entry in `LANDED.md`, a mention in this file, or a row in
