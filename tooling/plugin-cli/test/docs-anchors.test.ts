@@ -37,4 +37,14 @@ describe("generated docs teach the shipped API", () => {
   it("the docs name the scaffolder — an agent must be able to discover create-plugin", () => {
     expect(read("docs/plugin-authoring/README.md")).toContain("create-plugin --id");
   });
+
+  it("the interaction vocabulary renders inline — an `object` cell teaches nothing (S2)", () => {
+    // schema-walk's inline-object threshold is calibrated to this exact shape;
+    // if interaction outgrows it again, this reds instead of the table silently
+    // collapsing (which is how keyboard/keyboardEscape nearly shipped invisible).
+    const widgets = read("docs/plugin-authoring/widgets.md");
+    expect(widgets).toContain("sweepContained?: boolean");
+    expect(widgets).toContain("keyboard?: `shared` \\| `exclusive`");
+    expect(widgets).toContain("keyboardEscape?: `release` \\| `widget`");
+  });
 });

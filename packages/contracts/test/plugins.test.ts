@@ -105,6 +105,30 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     );
   });
 
+  it("the keyboard claim is a declared, bounded field (S2 — the mind map's door)", () => {
+    // Declared values parse AND survive typed (before S2 they rode .passthrough()).
+    const m = base();
+    m.contributes.widgets[0] = {
+      ...m.contributes.widgets[0],
+      interaction: { keyboard: "exclusive", keyboardEscape: "release" },
+    } as (typeof m.contributes.widgets)[0];
+    const r = validatePluginManifest(m);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const w = r.manifest.contributes?.widgets?.[0];
+      expect(w?.interaction?.keyboard).toBe("exclusive");
+      expect(w?.interaction?.keyboardEscape).toBe("release");
+    }
+    // A bogus value is REFUSED — the pre-S2 behavior (silent flow to the engine) is the bug.
+    refuse((b) => {
+      b.contributes.widgets[0] = {
+        ...b.contributes.widgets[0],
+        interaction: { keyboard: "bogus" },
+      } as unknown as (typeof b.contributes.widgets)[0];
+      return b;
+    }, /keyboard/i);
+  });
+
   it("groups are named, disjoint, and reference declared props; omitting them is legal", () => {
     const withGroups = (m: ReturnType<typeof base>, groups: Record<string, string[]>) => ({
       ...m,

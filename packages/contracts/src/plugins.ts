@@ -263,7 +263,10 @@ export const WidgetContribution = z
     /** ICE interaction flags — durable contract, host-derived into the prefab.
      * Vocabulary is the engine's WidgetInteraction verbatim: snap
      * source/target/both/none (default target), dragOn press/longPress,
-     * sweepContained = the comment-box drag. */
+     * sweepContained = the comment-box drag, keyboard/keyboardEscape = the
+     * design-007 §3.1/§3.3 keyboard claim (declared 2026-08-13 for the mind map
+     * pack — before this they rode `.passthrough()` with an emit warning, and a
+     * bogus value would have flowed to the engine unvalidated). */
     interaction: z
       .object({
         selectable: z.boolean().optional(),
@@ -273,6 +276,12 @@ export const WidgetContribution = z
         dragOn: z.enum(["press", "longPress"]).optional(),
         solid: z.boolean().optional(),
         sweepContained: z.boolean().optional(),
+        /** "exclusive": while a node inside this widget holds browser focus, the
+         * engine keymap + Space pan stand down; keys flow to the widget. */
+        keyboard: z.enum(["shared", "exclusive"]).optional(),
+        /** Escape under an exclusive claim: "release" (default; Esc blurs the
+         * widget) or "widget" (vim-grade — even Esc flows; release is click-away). */
+        keyboardEscape: z.enum(["release", "widget"]).optional(),
       })
       .passthrough()
       .optional(),
