@@ -10,7 +10,18 @@
     // vibefield.plugin.json: GENERATED canonical artifacts (plugin spec §5.2) —
     // byte-stable key-sorted JSON whose only formatter is the plugin-build
     // emitter; biome's array-collapsing would fight the freshness tests.
-    "includes": ["**", "!packages/contracts/gen", "!**/vibefield.plugin.json"]
+    //
+    // create-plugin/template: the scaffolder's source files, carrying `{{token}}`
+    // placeholders in identifier positions — deliberately not parseable until the
+    // substitution pass has run. What biome DOES check is the output: every
+    // scaffold lands as workspace source, and `test/output-conformance.test.ts`
+    // asserts the substituted tree parses and carries no leftover token.
+    "includes": [
+      "**",
+      "!packages/contracts/gen",
+      "!**/vibefield.plugin.json",
+      "!tooling/create-plugin/template"
+    ]
   },
   "formatter": {
     "enabled": true,

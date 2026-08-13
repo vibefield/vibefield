@@ -1,0 +1,24 @@
+{
+  // SELF-CONTAINED on purpose: a plugin may live outside the repository that
+  // owns tsconfig.base.json, and a scaffold whose `extends` path depends on how
+  // deep it was placed is a scaffold that breaks the moment someone moves it.
+  // These options ARE tsconfig.base.json's, plus the three a DOM plugin adds —
+  // `test/template-tsconfig.test.ts` fails if the two ever drift apart.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "sourceMap": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": ["src", "test", "playground"]
+}

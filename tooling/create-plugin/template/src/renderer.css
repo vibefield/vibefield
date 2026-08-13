@@ -1,0 +1,23 @@
+/* The card's content styling. Chrome — radius, shadow, hairline, lift physics,
+   the selection ring — belongs to CardShell and is never re-implemented here.
+
+   Colours come from tokens, never from hex literals (DESIGN.md): `--vf-card-ink`
+   is the ink that pairs with CardShell's default `--vf-card` surface, so this
+   card stays legible if the surface moves. */
+
+.vf-scaffold-card {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  flex-direction: column;
+  padding: 12px;
+  color: var(--vf-card-ink);
+  font: 13.5px / 1.45 var(--vf-font-sans);
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.vf-scaffold-card__empty {
+  opacity: 0.45;
+}

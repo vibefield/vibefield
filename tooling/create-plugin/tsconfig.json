@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  // `template/` is deliberately absent: its files carry `{{token}}` placeholders
+  // in identifier positions, so they are not parseable TypeScript until the
+  // substitution pass has run. What proves them is the OUTPUT — `test/` scaffolds
+  // to a temp dir and checks what lands there.
+  "include": ["src", "test"]
+}
