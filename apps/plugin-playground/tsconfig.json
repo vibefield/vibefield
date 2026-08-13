@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // vite/client for the same reason electron-shell's renderer config declares
+    // it: this harness loads the product graph THROUGH Vite, so Vite's ambient
+    // module types (`import.meta.env`, `*.css`) are its build-tool ambience —
+    // field-app's own src/env.d.ts is not in this program.
+    "types": ["node", "vite/client"],
+    "noEmit": true,
+    // an app, not a library — same reason field-app sets it: no declaration
+    // emit, so types inferred from ice's transitive strata dep raise no TS2742
+    "declaration": false
+  },
+  "include": ["src", "test"]
+}

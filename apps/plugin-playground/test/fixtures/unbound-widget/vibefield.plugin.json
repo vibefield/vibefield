@@ -1,0 +1,35 @@
+{
+  "manifestVersion": 1,
+  "id": "vibefield.fixture-unbound",
+  "version": "0.1.0",
+  "title": "Unbound fixture",
+  "description": "CONTROL: declares two widgets and registers one. The bound one still runs.",
+  "engines": { "app": ">=0.0.0", "contracts": "^0.1.0" },
+  "entries": { "renderer": "./dist/renderer.js" },
+  "activation": ["onWidget:vibefield.fixture-unbound.bound"],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "type": "vibefield.fixture-unbound.bound",
+        "title": "Bound card",
+        "schemaVersion": 1,
+        "surface": "dom",
+        "sizeMode": "fixed",
+        "defaultSize": { "w": 200, "h": 120 },
+        "props": {},
+        "groups": {}
+      },
+      {
+        "type": "vibefield.fixture-unbound.forgotten",
+        "title": "Forgotten card",
+        "schemaVersion": 1,
+        "surface": "dom",
+        "sizeMode": "fixed",
+        "defaultSize": { "w": 200, "h": 120 },
+        "props": {},
+        "groups": {}
+      }
+    ]
+  }
+}

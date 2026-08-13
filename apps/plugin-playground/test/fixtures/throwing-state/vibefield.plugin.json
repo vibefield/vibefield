@@ -1,0 +1,27 @@
+{
+  "manifestVersion": 1,
+  "id": "vibefield.fixture-throwing",
+  "version": "0.1.0",
+  "title": "Throwing fixture",
+  "description": "CONTROL: one state renders, one state throws. Proves a red row goes red.",
+  "engines": { "app": ">=0.0.0", "contracts": "^0.1.0" },
+  "entries": { "renderer": "./dist/renderer.js" },
+  "activation": ["onWidget:vibefield.fixture-throwing.card"],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "type": "vibefield.fixture-throwing.card",
+        "title": "Throwing card",
+        "schemaVersion": 1,
+        "surface": "dom",
+        "sizeMode": "fixed",
+        "defaultSize": { "w": 200, "h": 120 },
+        "props": {
+          "mode": { "kind": "enum", "options": ["calm", "boom"], "default": "calm" }
+        },
+        "groups": {}
+      }
+    ]
+  }
+}

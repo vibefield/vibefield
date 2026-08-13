@@ -28,8 +28,14 @@ import {
 } from "./externals";
 
 /** Where a plugin's entry sources live, by convention. The manifest names the
- * built ARTIFACT (`./dist/renderer.js`); these are what produce it. */
-const RENDERER_SOURCES = ["src/renderer.tsx", "src/renderer.ts"] as const;
+ * built ARTIFACT (`./dist/renderer.js`); these are what produce it.
+ *
+ * Exported because the convention now has a SECOND reader: the playground
+ * (§5.4 item 5) renders widget states from source, so that a state verdict never
+ * depends on a build having run. Two readers means one declaration — a copy in
+ * the playground would be the same second-source-of-truth the import wall's own
+ * R5 note was written about. */
+export const RENDERER_SOURCES = ["src/renderer.tsx", "src/renderer.ts"] as const;
 const SERVICE_SOURCES = ["src/service.ts", "src/service.tsx", "src/service.js"] as const;
 
 /** Utilities and theme WITHOUT preflight: a plugin's stylesheet loads into a

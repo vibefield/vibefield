@@ -1,0 +1,36 @@
+{
+  "manifestVersion": 1,
+  "id": "vibefield.fixture-invalid",
+  "version": "0.1.0",
+  "title": "Invalid fixture",
+  "description": "CONTROL: the widget is fine and the FIXTURES are wrong. Proves state-invalid is its own class.",
+  "engines": { "app": ">=0.0.0", "contracts": "^0.1.0" },
+  "entries": { "renderer": "./dist/renderer.js" },
+  "activation": ["onWidget:vibefield.fixture-invalid.card"],
+  "capabilities": [],
+  "contributes": {
+    "widgets": [
+      {
+        "type": "vibefield.fixture-invalid.card",
+        "title": "Strict card",
+        "schemaVersion": 1,
+        "surface": "dom",
+        "sizeMode": "fixed",
+        "defaultSize": { "w": 200, "h": 120 },
+        "props": {
+          "count": { "kind": "number", "min": 0, "max": 10, "default": 1 },
+          "label": { "kind": "string", "default": "" },
+          "rows": {
+            "kind": "json",
+            "inner": {
+              "kind": "array",
+              "item": { "kind": "object", "fields": { "id": { "kind": "string" } } }
+            },
+            "default": []
+          }
+        },
+        "groups": {}
+      }
+    ]
+  }
+}

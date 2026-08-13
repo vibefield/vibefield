@@ -1,0 +1,35 @@
+{
+  "name": "@vibefield/plugin-playground",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "plugin-playground": "./bin/plugin-playground.mjs"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibecook/ice": "*",
+    "@vibefield/contracts": "workspace:*",
+    "@vibefield/field-app": "workspace:*",
+    "@vibefield/plugin-build": "workspace:*",
+    "@vibefield/plugin-runtime": "workspace:*",
+    "@vibefield/plugin-sdk": "workspace:*",
+    "happy-dom": "^20.0.0",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "vite": "^8.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

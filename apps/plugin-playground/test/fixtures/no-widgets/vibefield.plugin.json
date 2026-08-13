@@ -1,0 +1,11 @@
+{
+  "manifestVersion": 1,
+  "id": "vibefield.fixture-no-widgets",
+  "version": "0.1.0",
+  "title": "Widget-less fixture",
+  "description": "CONTROL: a complete plugin that contributes no canvas widget. Zero states is a pass.",
+  "engines": { "app": ">=0.0.0", "contracts": "^0.1.0" },
+  "activation": [],
+  "capabilities": [],
+  "contributes": {}
+}
