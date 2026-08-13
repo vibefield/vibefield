@@ -4,17 +4,24 @@
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
 > stays in the design docs + specs. Last rewritten: **2026-08-13** — latest, the LATE pass:
-> **the mind map redirect.** James inverted the pack's form the same day it was proposed: ONE
-> self-contained widget (the whole tree inside one auto-growing card, Tab/Enter keymap, OPML
-> export) — not node/edge/frame entities. `thinking-mindmap-pack.md` is REWRITTEN as v2
-> (MM-D1…D12, PROPOSAL awaiting James) on three research reports condensed into
-> `predesign-mindmap-evidence.md` (XMind product study · web-engine/algorithm survey · in-repo
-> platform audit, audit claims re-verified). The audit named three pre-pack platform slices
-> (S1: the MeasureQueue auto-size pipeline exists in ICE but is UNWIRED in field-app · S2:
-> `interaction.keyboard`/`keyboardEscape` exist in ICE but are undeclared in contracts · S3:
-> an SDK `useUndo` door) plus probe P1 (blob download under production CSP). MM-D12 proposes
-> decoupling P8d's ten-minute bar to a template-toy subject — a gate change, James's call.
-> Docs-only pass; nothing in the tree changed. The EVENING pass —
+> **the mind map redirect, twice, landing ECS-NATIVE.** James redirected the pack's form AM
+> (one contained widget, v2) and again PM to the standing design, `thinking-mindmap-pack.md`
+> **v3** (MM-D1…D14, PROPOSAL awaiting James): each node its own entity, edges on the engine's
+> **Wire** entities as deliberate wire-dogfooding, structure in ordered ChildOf (sibling order
+> IS the relation sequence; cascade delete), a sweep-drag auto-growing frame widget, layout as
+> a pure function run inside the gesture transaction (+ an `{undoable:false}` janitor — the
+> plugin system runtime is manifest-only today and gets routed around, not built), and the
+> engine's shipped drag-to-connect gives cross-link wires (XMind relationships) for free.
+> Research: four reports condensed into `predesign-mindmap-evidence.md` §A–§D (XMind study ·
+> engine survey · two in-repo audit rounds, load-bearing claims re-verified). Pre-pack slices:
+> **W1 the SDK wire door** (Wire/WireFrom/WireTo/WirePorts/WirePrefab + OrderPlace + a
+> spawn-inits helper — the concrete PA-27 evidence) · S1 MeasureQueue wiring (auto-size is a
+> dead declaration) · S2 keyboard-claim contract fields · S3 SDK `useUndo` · probe P1 (blob
+> download under CSP). New: an **upstream ICE demand list** the dogfooding is for — per-wire
+> styling/labels (vs design-004 §6 "wires defer to content"), `ops.glide`, a Hidden story
+> (collapse deferred out of v1), spawn-focus intent. MM-D14 proposes decoupling P8d's bar to
+> a template toy — a gate change, James's call. Docs-only pass; nothing in the tree changed.
+> The EVENING pass —
 > **the P8b milestone: the artifact loads.** Four commits (`0b8ad13` · `ded012b` · `39c165a` ·
 > `608e78e`): the CORS probe's four verdicts (P8-D9/D10 refuted · the corsEnabled blocker ·
 > the CSP-hash proof · one verdict corrected same-day as overbroad), the P8b-2 secure-context
@@ -99,7 +106,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`); **P8b CLOSED WHOLE** (`089274c`) · **P8d KIT COMPLETE 2026-08-13** — CLI + gen-freshness docs (`5cfd0b4`) · playground verdicts (`0478f08`) · create-plugin (`a3c4897`) whose rehearsal caught three non-compiling doc examples, fixed + anchor-pinned (`a7d434f`); create→check→playground→pack→dev-link all speak P8-D8 verdicts | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` | **ONLY the measured ten-minute bar remains in P8d** — and its subject is in motion: the pack REDIRECTED 2026-08-13 to one self-contained widget (`thinking-mindmap-pack.md` v2, MM-D1…D12 await James; MM-D12 proposes the bar decouple to a template toy — a P8d gate change; the Rung-3 visual-consistency read stands; pre-pack slices S1–S3 + probe P1 queued in v2 §4); then P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
+| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`); **P8b CLOSED WHOLE** (`089274c`) · **P8d KIT COMPLETE 2026-08-13** — CLI + gen-freshness docs (`5cfd0b4`) · playground verdicts (`0478f08`) · create-plugin (`a3c4897`) whose rehearsal caught three non-compiling doc examples, fixed + anchor-pinned (`a7d434f`); create→check→playground→pack→dev-link all speak P8-D8 verdicts | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` | **ONLY the measured ten-minute bar remains in P8d** — and its subject is in motion: the pack REDIRECTED twice 2026-08-13, landing ECS-NATIVE (`thinking-mindmap-pack.md` v3, MM-D1…D14 await James; MM-D14 proposes the bar decouple to a template toy — a P8d gate change; the Rung-3 visual-consistency read stands; pre-pack slices W1 + S1–S3 + probe P1 queued in v3 §4, W1 = the SDK wire door = the concrete PA-27 evidence); then P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -144,10 +151,10 @@ catalog and the schemas-generated authoring reference under gen-freshness; the p
 verdict runner with 44 authored states and honest `skipped-gl` rows. Roots: `pnpm plugin` ·
 `pnpm playground`. `create-plugin` closed the kit (`a3c4897`, docs fixed + anchor-pinned
 `a7d434f`, ledger §P8d-3). Remaining in P8d: **the measured ten-minute bar alone**, its
-subject in motion — the pack redirected to one self-contained widget and v2's MM-D12
-proposes the bar decouple to a template toy (`thinking-mindmap-pack.md`, awaits James).
-Rung 3 (the map build) opens with R3-0's platform slices (S1 measurement wiring · S2
-keyboard-claim contract fields · S3 SDK `useUndo` · P1 CSP probe) and the binding
+subject in motion — the pack redirected twice and landed ECS-native; v3's MM-D14 proposes
+the bar decouple to a template toy (`thinking-mindmap-pack.md`, awaits James). Rung 3 (the
+map build) opens with R3-0's platform slices (W1 the SDK wire door · S1 measurement wiring ·
+S2 keyboard-claim contract fields · S3 SDK `useUndo` · P1 CSP probe) and the binding
 visual-consistency read — DESIGN.md · UI_SYSTEM · design-kit · existing widgets. P8c rides
 WP8; P8e gates any third-party listing.
 
@@ -279,17 +286,20 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
 ## Next up — the options on the table (James's call)
 
-- **PLUG → the mind map pack (redirected 2026-08-13)** — the chosen thread. P8b and the P8d
-  kit are COMPLETE; the pack's design is `thinking-mindmap-pack.md` v2 (one self-contained
-  widget: contained tree, auto-growing card, Tab/Enter keymap, OPML export; evidence in
-  `predesign-mindmap-evidence.md`). Once James ratifies MM-D1…D12: R3-0's platform slices
-  (S1 wire the dormant MeasureQueue pipeline · S2 declare the keyboard-claim contract
-  fields · S3 the SDK `useUndo` door · P1 the CSP blob probe), then the pure core
-  (model/layout/opml + suites), then the visible map behind the binding visual-consistency
-  read (James's directive, `thinking-prod-dogfood-packs.md` §3), then interaction, the OPML
-  door, and the signed `.vfplugin` joining the smoke census. MM-D12 (bar → template toy) is
-  a P8d gate change — James's call. Plan: `thinking-p8-loadable-artifact.md` · pack design:
-  `thinking-mindmap-pack.md`.
+- **PLUG → the mind map pack (redirected twice 2026-08-13, ECS-native)** — the chosen
+  thread. P8b and the P8d kit are COMPLETE; the pack's design is `thinking-mindmap-pack.md`
+  v3: node entities + engine Wire edges + ordered-ChildOf structure + a sweep-drag
+  auto-growing frame, layout as a pure function inside the gesture tx (evidence:
+  `predesign-mindmap-evidence.md` §A–§D). Once James ratifies MM-D1…D14: R3-0's platform
+  slices (W1 the SDK wire door — the concrete PA-27 evidence · S1 wire the dormant
+  MeasureQueue pipeline · S2 declare the keyboard-claim contract fields · S3 the SDK
+  `useUndo` door · P1 the CSP blob probe), then the pure core (layout/opml/tx-shape
+  suites), then the visible map behind the binding visual-consistency read (James's
+  directive, `thinking-prod-dogfood-packs.md` §3), then the living map (keyboard, focus
+  store, gesture txs), the OPML door, and the signed `.vfplugin` joining the smoke census —
+  plus the first entries on the upstream ICE demand list (per-wire styling/labels ·
+  `ops.glide` · Hidden). MM-D14 (bar → template toy) is a P8d gate change — James's call.
+  Plan: `thinking-p8-loadable-artifact.md` · pack design: `thinking-mindmap-pack.md`.
 - **AH-4 closeout** — review and land the preview runtime, stage/sign the bundled browser
   plugin through WP8, then run the both-theme/native-picker plus desktop-B preview/refresh,
   Truffle symlink/allow, and cross-origin physical witnesses. AH-5 adds the phone list; the
@@ -356,8 +366,8 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   ~~Install-a-widget~~ **CLOSED the same evening — P8b-3 landed `608e78e`, the artifact
   loads, staged census witnessed; the P8b-3e seam e2e landed hours later (`089274c`), so P8b
   is closed WHOLE** (`LANDED.md` §P8b-3/§P8b-3e) · the §5.4 authoring kit = **P8d** (critical path for the ratified
-  agents-author-widgets destination; bar subject in motion — `thinking-mindmap-pack.md` v2
-  MM-D12) · `PluginWidgetProps`
+  agents-author-widgets destination; bar subject in motion — `thinking-mindmap-pack.md` v3
+  MM-D14) · `PluginWidgetProps`
   §12.1 + PA-27's curated canvas tier = **P8e** (gates any third-party listing) ·
   **`ctx.pool`** stays deferred to its first attachment kind (AR — and the dev-tool pack when
   its track opens; `thinking-prod-dogfood-packs.md`). Decisions incl. the P8-D1 withdrawal:
