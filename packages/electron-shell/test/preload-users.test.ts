@@ -29,6 +29,9 @@ vi.mock("electron", () => ({
     send: vi.fn(),
     invoke: stub.invoke,
   },
+  sharedTexture: {
+    setSharedTextureReceiver: vi.fn(),
+  },
 }));
 vi.mock("@vibecook/ghosttea-electron/preload", () => ({
   forwardGhostteaRendererPorts: vi.fn(),
@@ -63,12 +66,19 @@ describe("preload users door", () => {
   });
 
   it("exposes the whole door and no channel strings with it", () => {
+    expect(typeof bridge().claimLiveSurfacePortBridge).toBe("function");
     expect(typeof bridge().usersUpdate).toBe("function");
     expect(typeof bridge().usersList).toBe("function");
     expect(typeof bridge().usersCreate).toBe("function");
     expect(typeof bridge().usersSwitch).toBe("function");
     // Nothing electron-shaped escapes into the page.
     expect(Object.values(bridge()).some((value) => value === stub.invoke)).toBe(false);
+  });
+
+  it("lets renderer-host claim the Live Surfaces bridge nonce exactly once", () => {
+    const claim = bridge().claimLiveSurfacePortBridge as () => string;
+    expect(claim()).toMatch(/^[a-f0-9]{64}$/u);
+    expect(() => claim()).toThrow(/already claimed/u);
   });
 
   it("asks for the roster with an empty payload and parses the answer", async () => {

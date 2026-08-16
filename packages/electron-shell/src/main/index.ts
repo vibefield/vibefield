@@ -19,7 +19,7 @@ import {
 } from "@vibefield/contracts";
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
-import { resolvePlatformLogRoot } from "@vibefield/logging";
+import { type Logger, resolvePlatformLogRoot } from "@vibefield/logging";
 import {
   createUser,
   ensureUsersRoot,
@@ -34,6 +34,7 @@ import {
   clipboard,
   crashReporter,
   dialog,
+  MessageChannelMain,
   nativeImage,
   session,
   shell,
@@ -58,6 +59,12 @@ import {
   registerWindowBootstrap,
 } from "./ipc";
 import { installLifecycle } from "./lifecycle";
+import { isGuardedBrowserSurfaceSession } from "./live-surfaces/browser-security";
+import { createElectronLiveSurfaceTextureTransferApi } from "./live-surfaces/electron-texture-transfer";
+import type { LiveSurfaceRuntimeAuthority } from "./live-surfaces/runtime";
+import { LiveSurfaceTextureForwarder } from "./live-surfaces/texture-forwarder";
+import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
+import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
 import { isSmokeLike, parseMode } from "./modes";
@@ -102,8 +109,10 @@ const MODE = parseMode(process.argv);
 // Windows has no window station, and over ssh Chromium's GPU init fails outright.
 // Force software rendering for smoke-like modes (harmless when a GPU is present);
 // this is what lets `pnpm smoke` run over ssh and gate the Windows boot in CI.
+// The Live Surfaces lab is smoke-like for isolation but deliberately exercises
+// a real WebGPU device and its loss/replacement path, so it is the sole exception.
 // Must precede `app.whenReady()`, so it lives here at module load.
-if (isSmokeLike(MODE)) app.disableHardwareAcceleration();
+if (isSmokeLike(MODE) && MODE !== "live-surfaces-lab") app.disableHardwareAcceleration();
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 const PRELOAD_PATH = join(__dirname, "..", "preload", "index.cjs");
 const DESKTOP_BOOT_ID = `desktop-${randomBytes(8).toString("hex")}`;
@@ -125,6 +134,8 @@ let primaryWindowOpener: (() => Promise<Electron.BrowserWindow>) | null = null;
 const shellDisposers = new Set<() => void>();
 const getSupervisor = () => supervisor;
 const registry = new WindowRegistry();
+const liveSurfaceTickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>();
+const liveSurfaceWindowHosts = new Map<number, LiveSurfaceWindowHost>();
 const ensureFieldd: FielddSupervisor["ensure"] = (options) => {
   if (fielddHandles !== null) return fielddHandles.ensure(options);
   if (supervisor !== null) return supervisor.ensure(options);
@@ -148,8 +159,33 @@ function disposeShellState(): void {
   primaryWindowOpener = null;
   for (const dispose of shellDisposers) dispose();
   shellDisposers.clear();
+  liveSurfaceWindowHosts.clear();
+  liveSurfaceTickets.clear();
   fielddHandles?.dispose();
   fielddHandles = null;
+}
+
+function installLiveSurfaceHost(window: Electron.BrowserWindow, logger: Logger): void {
+  const host = new LiveSurfaceWindowHost(
+    window,
+    liveSurfaceTickets,
+    () => new MessageChannelMain(),
+    logger.child({ component: "live-surfaces.window", windowId: String(window.id) }),
+    (surfaceId, attachmentId) =>
+      new LiveSurfaceTextureForwarder(
+        surfaceId,
+        attachmentId,
+        createElectronLiveSurfaceTextureTransferApi(window.webContents),
+      ),
+  ).install();
+  liveSurfaceWindowHosts.set(window.id, host);
+  const dispose = (): void => {
+    host.dispose();
+    liveSurfaceWindowHosts.delete(window.id);
+    shellDisposers.delete(dispose);
+  };
+  shellDisposers.add(dispose);
+  window.webContents.once("destroyed", dispose);
 }
 
 const testing = () =>
@@ -375,7 +411,9 @@ async function main(
         { webContentsId: contents.id, type: contents.getType() },
       );
     },
-    (contents) => isArtifactPreviewSession(contents.session),
+    (contents) =>
+      isArtifactPreviewSession(contents.session) ||
+      isGuardedBrowserSurfaceSession(contents.session),
   );
   app.on("child-process-gone", (_event, details) => {
     logger.warn("desktop.process.child_gone", "An Electron child process exited", {
@@ -394,6 +432,16 @@ async function main(
       );
     });
   });
+
+  if (MODE === "live-surfaces-lab") {
+    await (await testing()).runLiveSurfacesLab({
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      beforeExit: closeEvidence,
+    });
+    return;
+  }
 
   if (MODE === "spike-loro") {
     await (await testing()).runSpikeLoro({
@@ -878,6 +926,7 @@ async function main(
       toggleGodview,
       beforeExit: closeEvidence,
       onWindow: (window) => {
+        installLiveSurfaceHost(window, logger);
         installRendererLogging({
           window,
           sink: shellLogging.renderer,
@@ -910,6 +959,7 @@ async function main(
       viteUrl: VITE_URL,
       beforeExit: closeEvidence,
       onWindow: (window) => {
+        installLiveSurfaceHost(window, logger);
         installRendererLogging({
           window,
           sink: shellLogging.renderer,
@@ -949,6 +999,7 @@ async function main(
       return {
         window,
         prepare: async () => {
+          installLiveSurfaceHost(window, logger);
           installRendererLogging({
             window,
             sink: shellLogging.renderer,

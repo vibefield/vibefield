@@ -34,7 +34,11 @@ export default defineConfig(({ mode }) => ({
   // plugin never runs for `design`, and its own `apply: "build"` keeps it out
   // of the dev server, where plugins are bundled and a map would bind
   // specifiers to chunks that were never built.
-  plugins: [tailwindcss(), react(), ...(mode === "design" ? [] : [hostSingletons()])],
+  plugins: [
+    tailwindcss(),
+    react(),
+    ...(mode === "design" || mode === "live-surfaces-lab" ? [] : [hostSingletons()]),
+  ],
   resolve: {
     alias: [{ find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],
     // one copy each of the stateful libs (ICE marks them external in its dist).
@@ -61,7 +65,10 @@ export default defineConfig(({ mode }) => ({
   // Vite 8 a config-hash change so historical mode-dependent caches are
   // invalidated once instead of requiring a manual cache deletion.
   optimizeDeps: {
-    entries: ["index.html", "design-system.html"],
+    entries:
+      mode === "live-surfaces-lab"
+        ? ["spike-live-surfaces-lab.html"]
+        : ["index.html", "design-system.html"],
     include: ["@vibefield/field-app > @react-three/fiber"],
   },
   build: {
@@ -92,24 +99,33 @@ export default defineConfig(({ mode }) => ({
           ? {
               "design-system": designSystemEntry,
             }
-          : {
-              main: mainEntry,
-              // §11.6 — one entry per host singleton, so each has an address the
-              // import map can name (see src/vite/host-singletons.ts).
-              ...singletonInputs(),
-              // test-only entry (ESR-12): built ONLY when the spike is requested —
-              // the production renderer output carries no spike code
-              ...(process.env["VITE_SPIKE"]
-                ? {
-                    "spike-loro": join(
-                      import.meta.dirname,
-                      "src",
-                      "renderer-host",
-                      "spike-loro.html",
-                    ),
-                  }
-                : {}),
-            },
+          : mode === "live-surfaces-lab"
+            ? {
+                "spike-live-surfaces-lab": join(
+                  import.meta.dirname,
+                  "src",
+                  "renderer-host",
+                  "spike-live-surfaces-lab.html",
+                ),
+              }
+            : {
+                main: mainEntry,
+                // §11.6 — one entry per host singleton, so each has an address the
+                // import map can name (see src/vite/host-singletons.ts).
+                ...singletonInputs(),
+                // test-only entry (ESR-12): built ONLY when the spike is requested —
+                // the production renderer output carries no spike code
+                ...(process.env["VITE_SPIKE"]
+                  ? {
+                      "spike-loro": join(
+                        import.meta.dirname,
+                        "src",
+                        "renderer-host",
+                        "spike-loro.html",
+                      ),
+                    }
+                  : {}),
+              },
       output: {
         // The singleton chunks are UNHASHED because the import map naming them
         // is static text whose bytes main hashes for the CSP; everything else

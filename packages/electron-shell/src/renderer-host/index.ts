@@ -1,4 +1,8 @@
 import { mountFieldApp } from "@vibefield/field-app";
+import {
+  type LiveSurfaceWindowMessageTarget,
+  receiveLiveSurfaceRendererTransport,
+} from "@vibefield/live-surfaces/renderer";
 import { createRendererLoggingClient } from "./renderer-logger";
 
 // The one Electron-specific renderer adapter (ESR §5.2.5): read the preload
@@ -8,10 +12,34 @@ import { createRendererLoggingClient } from "./renderer-logger";
 const root = document.getElementById("root");
 if (root === null) throw new Error("renderer host: #root missing from index.html");
 
+// Installed before product/plugin activation. The capability ports stay in
+// this adapter's closure; field-app and plugins receive no generic port/global.
+const liveSurfaceBridgeNonce = window.vibefield.claimLiveSurfacePortBridge();
+const liveSurfaceReceiver = receiveLiveSurfaceRendererTransport<VideoFrame>(
+  window as unknown as LiveSurfaceWindowMessageTarget,
+  liveSurfaceBridgeNonce,
+);
+let liveSurfaceTransport: Awaited<typeof liveSurfaceReceiver.transport> | null = null;
+let pageHidden = false;
+void liveSurfaceReceiver.transport.then((transport) => {
+  if (pageHidden) transport.dispose();
+  else liveSurfaceTransport = transport;
+});
+
 const logging = createRendererLoggingClient({
   send: (serializedBatch) => window.vibefield.submitRendererLogs(serializedBatch),
 });
-window.addEventListener("pagehide", () => logging.close(), { once: true });
+window.addEventListener(
+  "pagehide",
+  () => {
+    pageHidden = true;
+    liveSurfaceReceiver.dispose();
+    liveSurfaceTransport?.dispose();
+    liveSurfaceTransport = null;
+    logging.close();
+  },
+  { once: true },
+);
 
 mountFieldApp({
   container: root,

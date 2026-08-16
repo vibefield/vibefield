@@ -1,4 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
@@ -10,10 +12,35 @@ import {
   TerminalTicket,
 } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
-import { app, BrowserWindow, Menu } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  MessageChannelMain,
+  type WebContents,
+  webContents,
+} from "electron";
 import { CLOSE_WINDOW_ITEM_ID } from "../main/app-menu-model";
+import { APP_ORIGIN } from "../main/app-protocol";
+import { BrowserControlTargetRegistry } from "../main/live-surfaces/browser-control-target";
+import { ElectronBrowserSurfaceNative } from "../main/live-surfaces/browser-electron-native";
+import { BrowserLiveSurfaceRuntime } from "../main/live-surfaces/browser-producer";
+import { createElectronLiveSurfaceTextureTransferApi } from "../main/live-surfaces/electron-texture-transfer";
+import type { LiveSurfaceRuntimeAuthority } from "../main/live-surfaces/runtime";
+import { LiveSurfaceTextureForwarder } from "../main/live-surfaces/texture-forwarder";
+import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
+import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
+import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
+import {
+  LIVE_SURFACE_LAB_BROWSER_SURFACE_IDS,
+  LIVE_SURFACE_LAB_FALLBACK_SURFACE_ID,
+  LIVE_SURFACE_LAB_RESULT_DATASET,
+  LIVE_SURFACE_LAB_TICKET_READY_DATASET,
+  LIVE_SURFACE_LAB_TICKETS,
+  type LiveSurfaceLabRendererResult,
+} from "./live-surface-lab-contract";
 
 // Smoke/spike runners (ESR §5.2.6 / ESR-12): a SEPARATE build artifact
 // (dist/testing/smoke.cjs) that the production main bundle never contains —
@@ -2010,6 +2037,382 @@ export async function runSmokeGodview(opts: {
   rmSync(scratch, { recursive: true, force: true });
   await teardown(opts.supervisor, opts.root, opts.beforeExit);
   app.exit(verdict["ok"] === true ? 0 : 2);
+}
+
+async function waitForLiveSurfaceLabResult(
+  win: BrowserWindow,
+  timeoutMs: number,
+): Promise<LiveSurfaceLabRendererResult> {
+  const resultExpression =
+    `document.documentElement.dataset[${JSON.stringify(LIVE_SURFACE_LAB_RESULT_DATASET)}]` +
+    ` ?? ""`;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const raw = (await win.webContents.executeJavaScript(resultExpression, true)) as unknown;
+    if (typeof raw === "string" && raw !== "") {
+      return JSON.parse(raw) as LiveSurfaceLabRendererResult;
+    }
+    await sleep(25);
+  }
+  throw new Error(`the Live Surfaces renderer did not report within ${timeoutMs}ms`);
+}
+
+async function startLiveSurfacePageServer(): Promise<{
+  readonly origin: string;
+  close(): Promise<void>;
+}> {
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07110d}canvas{width:100%;height:100%;display:block}#probe{position:fixed;z-index:2;left:4px;top:4px;width:100px;height:24px;opacity:.01}</style>
+</head><body><input id="probe" aria-label="input probe"><canvas width="320" height="180"></canvas><script>
+const probe=document.querySelector('#probe');window.__vfInputProof={mouseDown:0,keyDown:0};
+probe.addEventListener('mousedown',()=>window.__vfInputProof.mouseDown++);
+probe.addEventListener('keydown',()=>window.__vfInputProof.keyDown++);
+const canvas=document.querySelector('canvas');const ctx=canvas.getContext('2d');let frame=0;
+function draw(now){frame++;const hue=(frame*3+location.pathname.length*17)%360;
+const gradient=ctx.createLinearGradient(0,0,320,180);gradient.addColorStop(0,'hsl('+hue+' 72% 42%)');gradient.addColorStop(1,'hsl('+((hue+110)%360)+' 78% 18%)');
+ctx.fillStyle=gradient;ctx.fillRect(0,0,320,180);ctx.fillStyle='rgba(255,255,255,.9)';ctx.fillRect((frame*5)%300,28,20,124);
+ctx.font='600 18px system-ui';ctx.fillText(location.pathname.slice(-12),18,28);ctx.font='12px monospace';ctx.fillText(String(Math.round(now)),18,164);requestAnimationFrame(draw)}requestAnimationFrame(draw);
+</script></body></html>`;
+  const server = createServer((_request, response) => {
+    response.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Cross-Origin-Resource-Policy": "same-origin",
+    });
+    response.end(html);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const onError = (error: Error): void => reject(error);
+    server.once("error", onError);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", onError);
+      resolve();
+    });
+  });
+  const address = server.address() as AddressInfo | null;
+  if (address === null) throw new Error("the Browser lab HTTP server did not bind");
+  return {
+    origin: `http://127.0.0.1:${address.port}`,
+    close: async () => {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+interface LiveSurfaceBrowserInputProof {
+  readonly focused: boolean;
+  readonly value: string;
+  readonly mouseDown: number;
+  readonly keyDown: number;
+}
+
+async function proveLiveSurfaceBrowserInput(
+  runtime: BrowserLiveSurfaceRuntime,
+  controlTargets: BrowserControlTargetRegistry,
+  timeoutMs = 15_000,
+): Promise<LiveSurfaceBrowserInputProof> {
+  const deadline = Date.now() + timeoutMs;
+  let lastFailure = "source did not become input-ready";
+  while (Date.now() < deadline) {
+    try {
+      const summary = runtime.summary;
+      const binding = controlTargets.lookupPrivate(runtime.surfaceId);
+      if (summary.state !== "live" || summary.geometry === undefined || binding === null) {
+        await sleep(10);
+        continue;
+      }
+      const contents = binding.contents as WebContents;
+      const probeReady = (await contents.executeJavaScript(
+        `document.querySelector("#probe") !== null`,
+        true,
+      )) as boolean;
+      if (!probeReady) {
+        await sleep(10);
+        continue;
+      }
+      await contents.executeJavaScript(
+        `(() => { const probe = document.querySelector("#probe"); probe.value = ""; window.__vfInputProof = { mouseDown: 0, keyDown: 0 }; })()`,
+        true,
+      );
+      const revision = runtime.summary.geometry?.revision;
+      if (revision === undefined) continue;
+      for (const type of ["down", "up"] as const) {
+        await runtime.dispatchInput({
+          kind: "mouse",
+          geometryRevision: revision,
+          type,
+          x: 12,
+          y: 12,
+          button: "left",
+          clickCount: 1,
+        });
+      }
+      for (const type of ["down", "up"] as const) {
+        await runtime.dispatchInput({
+          kind: "key",
+          geometryRevision: revision,
+          type,
+          key: "Enter",
+          code: "Enter",
+          windowsVirtualKeyCode: 13,
+        });
+      }
+      await runtime.dispatchInput({
+        kind: "text",
+        geometryRevision: revision,
+        text: "vf",
+      });
+      await sleep(20);
+      const proof = (await contents.executeJavaScript(
+        `(() => ({ focused: document.activeElement?.id === "probe", value: document.querySelector("#probe")?.value ?? "", mouseDown: window.__vfInputProof?.mouseDown ?? 0, keyDown: window.__vfInputProof?.keyDown ?? 0 }))()`,
+        true,
+      )) as LiveSurfaceBrowserInputProof;
+      if (proof.focused && proof.value === "vf" && proof.mouseDown >= 1 && proof.keyDown >= 1) {
+        return proof;
+      }
+      lastFailure = JSON.stringify(proof);
+    } catch (error) {
+      lastFailure = error instanceof Error ? error.message : String(error);
+    }
+    await sleep(10);
+  }
+  throw new Error(`Browser target-scoped input proof failed: ${lastFailure}`);
+}
+
+/**
+ * LSF-2/3 standalone lab: retains the CPU/device-loss regression, then proves
+ * real guarded Browser OSR through one surface, observed CPU fallback, and ten
+ * concurrent shared-texture surfaces using the production preload/host/store.
+ */
+export async function runLiveSurfacesLab(opts: {
+  root: string;
+  registry: WindowRegistry;
+  preloadPath: string;
+  beforeExit: () => Promise<void>;
+}): Promise<void> {
+  const monitorUncaught: NodeJS.UncaughtExceptionListener = (error, origin) => {
+    console.error(
+      `LIVE_SURFACES_UNCAUGHT ${JSON.stringify({
+        origin,
+        message: error.message,
+        stack: error.stack,
+      })}`,
+    );
+  };
+  // Electron's default uncaught-exception path is a native modal on macOS.
+  // Observe it without changing that default so a headless lab failure remains
+  // diagnosable instead of looking like a frozen frame deadline.
+  process.on("uncaughtExceptionMonitor", monitorUncaught);
+  const authority = new LiveSurfaceFixtureRuntime();
+  let tokenIndex = 0;
+  const tickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>({
+    randomToken: () => {
+      const ticket = LIVE_SURFACE_LAB_TICKETS[tokenIndex];
+      tokenIndex += 1;
+      if (ticket === undefined) throw new Error("the Browser lab exhausted its ticket tokens");
+      return ticket.token;
+    },
+  });
+  const win = createMainWindow({
+    mode: "live-surfaces-lab",
+    preloadPath: opts.preloadPath,
+    show: process.env["VF_LIVE_SURFACES_LAB_HEADLESS"] !== "1",
+  });
+  opts.registry.adopt(win);
+  const host = new LiveSurfaceWindowHost(
+    win,
+    tickets,
+    () => new MessageChannelMain(),
+    undefined,
+    (surfaceId, attachmentId) =>
+      new LiveSurfaceTextureForwarder(
+        surfaceId,
+        attachmentId,
+        createElectronLiveSurfaceTextureTransferApi(win.webContents),
+      ),
+  ).install();
+  const native = new ElectronBrowserSurfaceNative();
+  const controlTargets = new BrowserControlTargetRegistry({
+    resolveTarget: (targetId) => webContents.fromDevToolsTargetId(targetId),
+  });
+  const browserRuntimes: BrowserLiveSurfaceRuntime[] = [];
+  let fallbackRuntime: BrowserLiveSurfaceRuntime | null = null;
+  let pageServer: Awaited<ReturnType<typeof startLiveSurfacePageServer>> | null = null;
+  let exitCode = 2;
+  let verdict: Record<string, unknown> = { ok: false };
+  try {
+    pageServer = await startLiveSurfacePageServer();
+    for (const [index, surfaceId] of LIVE_SURFACE_LAB_BROWSER_SURFACE_IDS.entries()) {
+      browserRuntimes.push(
+        new BrowserLiveSurfaceRuntime({
+          surfaceId,
+          source: {
+            kind: "browser",
+            initialUrl: `${pageServer.origin}/surface/${index + 1}`,
+            profile: { mode: "memory", ref: "live-surfaces-browser-lab" },
+            logicalViewport: { width: 320, height: 180 },
+            deviceScaleFactor: 1,
+          },
+          native,
+          controlTargets,
+        }),
+      );
+    }
+    fallbackRuntime = new BrowserLiveSurfaceRuntime({
+      surfaceId: LIVE_SURFACE_LAB_FALLBACK_SURFACE_ID,
+      source: {
+        kind: "browser",
+        initialUrl: `${pageServer.origin}/surface/fallback`,
+        profile: { mode: "memory", ref: "live-surfaces-browser-fallback-lab" },
+        logicalViewport: { width: 320, height: 180 },
+        deviceScaleFactor: 1,
+      },
+      native,
+      controlTargets,
+      requestSharedTexture: false,
+    });
+    await win.loadURL(`${APP_ORIGIN}/spike-live-surfaces-lab.html`);
+    const authorities: LiveSurfaceRuntimeAuthority[] = [
+      authority,
+      ...browserRuntimes,
+      fallbackRuntime,
+    ];
+    for (const [index, runtime] of authorities.entries()) {
+      const ticket = host.issue({
+        surfaceId: runtime.surfaceId,
+        // The fixture remains main-private; all other authorities are real
+        // Browser sources. Every token is still one-use and generation-bound.
+        sourceKind: "browser",
+        operations: index === 0 ? ["view"] : ["view", "pointer", "keyboard"],
+        principalId: "live-surfaces-foundation-lab",
+        authority: runtime,
+      });
+      if (ticket.token !== LIVE_SURFACE_LAB_TICKETS[index]?.token) {
+        throw new Error(`test-only ticket ${index} did not match its renderer rendezvous`);
+      }
+    }
+    await win.webContents.executeJavaScript(
+      `document.documentElement.dataset[${JSON.stringify(
+        LIVE_SURFACE_LAB_TICKET_READY_DATASET,
+      )}] = "1"`,
+      true,
+    );
+
+    const browserInputProof = proveLiveSurfaceBrowserInput(browserRuntimes[0]!, controlTargets);
+    const renderer = await waitForLiveSurfaceLabResult(win, 90_000);
+    const browserInput = await browserInputProof;
+    const offeredAtRendererDone = authority.stats.offered;
+    const referenceDeadline = Date.now() + 3_000;
+    while (
+      Date.now() < referenceDeadline &&
+      browserRuntimes.some(
+        (runtime) => runtime.stats.importedReferencesReleased !== runtime.stats.sharedFramesOffered,
+      )
+    ) {
+      await sleep(25);
+    }
+    await sleep(250);
+    const source = authority.stats;
+    const problems: string[] = [];
+    if (!renderer.ok) problems.push(renderer.error ?? "renderer returned a failed verdict");
+    if (source.attachments !== 1) problems.push(`source attached ${source.attachments} times`);
+    if (source.demandUpdates < 2) problems.push("source did not receive live and paused demand");
+    if (source.offered < 12) problems.push(`source offered only ${source.offered} frames`);
+    if (source.accepted !== source.offered) {
+      problems.push(`${source.offered - source.accepted} CPU frame(s) were refused by the host`);
+    }
+    if (source.offered !== offeredAtRendererDone) {
+      problems.push("the fixture kept producing after paused demand");
+    }
+    for (const runtime of browserRuntimes) {
+      const stats = runtime.stats;
+      const summary = runtime.summary;
+      const control = controlTargets.status(runtime.surfaceId);
+      if (stats.producersStarted !== 1) {
+        problems.push(`${runtime.surfaceId} started ${stats.producersStarted} producers`);
+      }
+      if (stats.texturePaints < 3 || stats.sharedFramesAccepted < 3) {
+        problems.push(`${runtime.surfaceId} did not deliver enough shared Browser frames`);
+      }
+      if (stats.producerTextureReleases !== stats.texturePaints) {
+        problems.push(`${runtime.surfaceId} leaked an Electron OSR texture wrapper`);
+      }
+      if (stats.importedReferencesReleased !== stats.sharedFramesOffered) {
+        problems.push(`${runtime.surfaceId} retained imported renderer references`);
+      }
+      if (summary.state !== "hibernated" || summary.transport !== "shared-texture") {
+        problems.push(`${runtime.surfaceId} did not end as hibernated shared transport`);
+      }
+      if (control.bound || control.controlBindingRevision < 2) {
+        problems.push(`${runtime.surfaceId} did not bind and revoke its private control target`);
+      }
+    }
+    if (fallbackRuntime === null) {
+      problems.push("the explicit Browser fallback runtime was not created");
+    } else {
+      const stats = fallbackRuntime.stats;
+      const summary = fallbackRuntime.summary;
+      const control = controlTargets.status(fallbackRuntime.surfaceId);
+      if (stats.cpuPaints < 3 || stats.cpuFramesAccepted < 3) {
+        problems.push("the Browser CPU fallback did not deliver enough observed frames");
+      }
+      if (
+        summary.state !== "hibernated" ||
+        summary.transport !== "cpu-bgra" ||
+        summary.error?.code !== "transport-degraded"
+      ) {
+        problems.push("the Browser CPU fallback was not explicit in its final summary");
+      }
+      if (control.bound || control.controlBindingRevision < 2) {
+        problems.push("the Browser CPU fallback did not bind and revoke its control target");
+      }
+    }
+    if (tickets.size !== 0) problems.push("one or more one-use presentation tickets survived");
+    verdict = {
+      ok: problems.length === 0,
+      renderer,
+      source,
+      browserSources: browserRuntimes.map((runtime) => ({
+        surfaceId: runtime.surfaceId,
+        summary: runtime.summary,
+        stats: runtime.stats,
+        control: controlTargets.status(runtime.surfaceId),
+      })),
+      browserFallback:
+        fallbackRuntime === null
+          ? null
+          : {
+              summary: fallbackRuntime.summary,
+              stats: fallbackRuntime.stats,
+              control: controlTargets.status(fallbackRuntime.surfaceId),
+            },
+      browserInput,
+      rendererGeneration: host.rendererGeneration,
+      ticketTableSize: tickets.size,
+      ...(problems.length === 0 ? {} : { problems }),
+    };
+    exitCode = problems.length === 0 ? 0 : 2;
+  } catch (error) {
+    verdict = {
+      ok: false,
+      reason: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      source: authority.stats,
+    };
+  } finally {
+    process.off("uncaughtExceptionMonitor", monitorUncaught);
+    host.dispose();
+    for (const runtime of browserRuntimes) runtime.dispose();
+    fallbackRuntime?.dispose();
+    controlTargets.clear();
+    await pageServer?.close().catch(() => undefined);
+    if (!win.isDestroyed()) win.destroy();
+    console.log(`LIVE_SURFACES_LAB ${JSON.stringify(verdict)}`);
+    await opts.beforeExit();
+    if (!process.env["FIELDD_DATA_DIR"]) rmSync(opts.root, { recursive: true, force: true });
+    app.exit(exitCode);
+  }
 }
 
 /** B1 spike: load the spike page over file:// in a sandboxed window and report

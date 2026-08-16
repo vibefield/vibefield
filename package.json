@@ -16,6 +16,7 @@
     "playground": "node apps/plugin-playground/bin/plugin-playground.mjs",
     "plugin": "node tooling/plugin-cli/bin/vibefield-plugin.mjs",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",
+    "lab:live-surfaces": "pnpm --filter @vibefield/desktop lab:live-surfaces",
     "bench:logging-baseline": "node scripts/bench-logging-baseline.mjs",
     "bench:logging-native": "cargo test --release -p field-native logging_reference_benchmark -- --ignored --nocapture",
     "build": "nx run @vibefield/desktop:build",

@@ -296,6 +296,9 @@ importers:
       '@vibefield/fieldd-supervisor':
         specifier: workspace:*
         version: link:../fieldd-supervisor
+      '@vibefield/live-surfaces':
+        specifier: workspace:*
+        version: link:../live-surfaces
       '@vibefield/logging':
         specifier: workspace:*
         version: link:../logging

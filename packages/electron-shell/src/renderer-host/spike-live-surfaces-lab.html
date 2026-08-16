@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VibeField Live Surfaces Foundation Lab</title>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">FOUNDATION LAB · LSF-2 + LSF-3</p>
+      <h1>Live Surfaces</h1>
+      <p id="status">Waiting for the window-scoped transport…</p>
+      <canvas id="surface" width="640" height="360" aria-label="Live Surface preview"></canvas>
+      <dl>
+        <div><dt>transport</dt><dd>CPU fallback → transferable VideoFrame</dd></div>
+        <div><dt>renderer</dt><dd>stable WebGPU texture</dd></div>
+        <div><dt>recovery</dt><dd id="recovery">pending device-loss injection</dd></div>
+        <div><dt>browser</dt><dd id="browser">pending one/ten-surface OSR phases</dd></div>
+      </dl>
+    </main>
+    <script type="module" src="./spike-live-surfaces-lab.ts"></script>
+  </body>
+</html>

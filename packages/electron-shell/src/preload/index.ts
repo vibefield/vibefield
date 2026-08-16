@@ -7,6 +7,7 @@ import {
   type GodviewState,
   GodviewState as GodviewStateSchema,
   IPC_CHANNELS,
+  LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
   type ShellCommand,
   ShellPlatform,
   TerminalBackendAttachResult,
@@ -20,10 +21,15 @@ import {
   UsersUpdateParams,
   WindowConnection,
 } from "@vibefield/contracts";
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, sharedTexture } from "electron";
 import { PreloadDesktopStateBridge } from "./desktop-state";
 import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
 import { PreloadGodviewStateBridge } from "./godview";
+import {
+  PreloadLiveSurfaceFrameMux,
+  type PreloadLiveSurfacePort,
+  type PreloadReceivedSharedTexture,
+} from "./live-surfaces";
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
 import { PreloadShellCommandBridge } from "./shell-commands";
 import { PreloadTerminalStatusBridge } from "./terminal";
@@ -36,6 +42,55 @@ import { PreloadTerminalStatusBridge } from "./terminal";
 // channel string, or Electron object escapes into the page.
 
 const logging = new PreloadLogBridge();
+const isolatedWindow = globalThis as unknown as {
+  readonly location: { readonly origin: string };
+  postMessage(message: unknown, targetOrigin: string, transfer: readonly object[]): void;
+};
+const bridgeNonceBytes = new Uint8Array(32);
+(
+  globalThis as unknown as {
+    crypto: { getRandomValues<T extends ArrayBufferView>(array: T): T };
+  }
+).crypto.getRandomValues(bridgeNonceBytes);
+const liveSurfaceBridgeNonce = [...bridgeNonceBytes]
+  .map((byte) => byte.toString(16).padStart(2, "0"))
+  .join("");
+let liveSurfaceBridgeClaimed = false;
+const claimLiveSurfacePortBridge = (): string => {
+  if (liveSurfaceBridgeClaimed) throw new Error("Live Surfaces port bridge was already claimed");
+  liveSurfaceBridgeClaimed = true;
+  return liveSurfaceBridgeNonce;
+};
+const liveSurfaceFrames = new PreloadLiveSurfaceFrameMux({
+  forwardPorts: (bootstrap, controlPort, framePort) => {
+    if (!liveSurfaceBridgeClaimed) {
+      throw new Error("Live Surfaces port bridge was not claimed by the renderer host");
+    }
+    isolatedWindow.postMessage(
+      { type: LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1, bootstrap, bridgeNonce: liveSurfaceBridgeNonce },
+      isolatedWindow.location.origin,
+      [controlPort, framePort],
+    );
+  },
+  onRejected: (reason) => {
+    logging.submit(
+      JSON.stringify({
+        v: 1,
+        records: [
+          {
+            v: 1,
+            time: Date.now(),
+            level: "error",
+            event: "renderer.preload.live_surface_frame_rejected",
+            msg: "Preload rejected a Live Surface frame or port handoff",
+            component: "preload.live-surfaces",
+            attrs: { reason },
+          },
+        ],
+      }),
+    );
+  },
+});
 const diagnostics = new PreloadDiagnosticsBridge();
 const desktopState = new PreloadDesktopStateBridge((issueCount) => {
   logging.submit(
@@ -134,6 +189,15 @@ ipcRenderer.on(IPC_CHANNELS.diagnosticsPort, (event) => {
   const port = event.ports[0] as DiagnosticsRendererPort | undefined;
   if (port !== undefined) diagnostics.attach(port);
 });
+ipcRenderer.on(IPC_CHANNELS.liveSurfacePorts, (event, rawBootstrap: unknown) => {
+  liveSurfaceFrames.bind(rawBootstrap, event.ports as unknown as readonly PreloadLiveSurfacePort[]);
+});
+sharedTexture.setSharedTextureReceiver(async (received, ...args) => {
+  await liveSurfaceFrames.acceptSharedTexture(
+    received as unknown as PreloadReceivedSharedTexture,
+    args[0],
+  );
+});
 ipcRenderer.on(IPC_CHANNELS.shellCommand, (_event, raw: unknown) => {
   shellCommands.accept(raw);
 });
@@ -149,6 +213,10 @@ ipcRenderer.on(IPC_CHANNELS.godviewState, (_event, raw: unknown) => {
 
 contextBridge.exposeInMainWorld("vibefield", {
   platform,
+  // One-shot same-world bridge authentication. renderer-host claims this
+  // synchronously before mounting field-app; later plugin code can neither
+  // recover the nonce nor forge the preload's transferred-port message.
+  claimLiveSurfacePortBridge,
   submitRendererLogs: (serializedBatch: string): boolean => logging.submit(serializedBatch),
   getConnection: async (): Promise<{ port: number; token: string }> =>
     WindowConnection.parse(await ipcRenderer.invoke(IPC_CHANNELS.windowBootstrap)),

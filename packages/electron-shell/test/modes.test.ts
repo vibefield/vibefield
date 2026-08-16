@@ -11,6 +11,7 @@ const ALL_MODES: readonly ShellMode[] = [
   "smoke",
   "smoke-canvas",
   "smoke-godview",
+  "live-surfaces-lab",
   "spike-loro",
 ];
 
@@ -26,6 +27,7 @@ describe("parseMode", () => {
     expect(parseMode(["--smoke"])).toBe("smoke");
     expect(parseMode(["--smoke-canvas"])).toBe("smoke-canvas");
     expect(parseMode(["--smoke-godview"])).toBe("smoke-godview");
+    expect(parseMode(["--live-surfaces-lab"])).toBe("live-surfaces-lab");
     expect(parseMode(["--spike-loro"])).toBe("spike-loro");
   });
 
@@ -35,7 +37,8 @@ describe("parseMode", () => {
     expect(parseMode(["a", "b", "c", "--spike-loro"])).toBe("spike-loro");
   });
 
-  it("honors precedence spike-loro > smoke-godview > smoke > smoke-canvas > dev", () => {
+  it("honors precedence lab > spike-loro > smoke-godview > smoke > smoke-canvas > dev", () => {
+    expect(parseMode(["--spike-loro", "--live-surfaces-lab"])).toBe("live-surfaces-lab");
     expect(parseMode(["--dev", "--smoke-canvas", "--smoke", "--spike-loro"])).toBe("spike-loro");
     expect(parseMode(["--dev", "--smoke-canvas", "--smoke"])).toBe("smoke");
     expect(parseMode(["--dev", "--smoke-canvas"])).toBe("smoke-canvas");
@@ -51,7 +54,13 @@ describe("parseMode", () => {
 
 describe("isSmokeLike", () => {
   // Exactly the transient, port-isolated, never-packaged runs.
-  const smokeLike = new Set<ShellMode>(["smoke", "smoke-canvas", "smoke-godview", "spike-loro"]);
+  const smokeLike = new Set<ShellMode>([
+    "smoke",
+    "smoke-canvas",
+    "smoke-godview",
+    "live-surfaces-lab",
+    "spike-loro",
+  ]);
 
   it.each(ALL_MODES)("classifies %s", (mode) => {
     expect(isSmokeLike(mode)).toBe(smokeLike.has(mode));
@@ -69,6 +78,7 @@ describe("shutdownPolicy", () => {
     smoke: "stop-owned",
     "smoke-canvas": "stop-owned",
     "smoke-godview": "stop-owned",
+    "live-surfaces-lab": "leave-running",
     "spike-loro": "leave-running",
   };
 
