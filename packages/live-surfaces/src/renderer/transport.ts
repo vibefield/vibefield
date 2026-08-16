@@ -109,6 +109,14 @@ export class LiveSurfaceRendererAttachment<
   }
 
   onSummary(listener: (summary: LiveSurfaceRuntimeSummaryV1) => void): () => void {
+    if (this.#closed) {
+      try {
+        listener(this.#summary);
+      } catch {
+        // Closed attachments retain only their terminal snapshot, not observers.
+      }
+      return () => undefined;
+    }
     this.#summaryListeners.add(listener);
     try {
       listener(this.#summary);
