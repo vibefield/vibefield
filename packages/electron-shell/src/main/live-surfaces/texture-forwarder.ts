@@ -40,6 +40,7 @@ export interface LiveSurfaceTextureForwarderStats {
   readonly accepted: number;
   readonly dropped: number;
   readonly outstanding: number;
+  readonly peakOutstanding: number;
   readonly completed: number;
   readonly timedOut: number;
   readonly sendFailures: number;
@@ -60,6 +61,7 @@ export interface LiveSurfaceTextureFrameSink {
 
 export interface LiveSurfaceTextureTransferBudgetStats {
   readonly outstanding: number;
+  readonly peakOutstanding: number;
   readonly maximum: number;
 }
 
@@ -70,6 +72,7 @@ interface LiveSurfaceTextureTransferBudgetLease {
 /** Shared admission cap. One instance is retained per surface across renderer generations. */
 export class LiveSurfaceTextureTransferBudget {
   #outstanding = 0;
+  #peakOutstanding = 0;
 
   constructor(readonly maximum = 2) {
     if (!Number.isSafeInteger(maximum) || maximum <= 0) {
@@ -78,12 +81,17 @@ export class LiveSurfaceTextureTransferBudget {
   }
 
   get stats(): LiveSurfaceTextureTransferBudgetStats {
-    return { outstanding: this.#outstanding, maximum: this.maximum };
+    return {
+      outstanding: this.#outstanding,
+      peakOutstanding: this.#peakOutstanding,
+      maximum: this.maximum,
+    };
   }
 
   tryAcquire(): LiveSurfaceTextureTransferBudgetLease | null {
     if (this.#outstanding >= this.maximum) return null;
     this.#outstanding += 1;
+    this.#peakOutstanding = Math.max(this.#peakOutstanding, this.#outstanding);
     let released = false;
     return {
       release: () => {
@@ -147,6 +155,7 @@ export class LiveSurfaceTextureForwarder implements LiveSurfaceTextureFrameSink 
       accepted: this.#accepted,
       dropped: this.#dropped,
       outstanding: this.#outstanding,
+      peakOutstanding: this.#budget.stats.peakOutstanding,
       completed: this.#completed,
       timedOut: this.#timedOut,
       sendFailures: this.#sendFailures,

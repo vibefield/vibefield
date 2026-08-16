@@ -289,7 +289,11 @@ describe("MacosCaptureHelperSupervisor", () => {
       disposition: "quarantined",
       token: hello["token"],
     });
-    expect(result.supervisor.stats).toMatchObject({ framesReceived: 1, releaseCommands: 1 });
+    expect(result.supervisor.stats).toMatchObject({
+      framesReceived: 1,
+      releaseCommands: 1,
+      nativeOutstandingPeak: 1,
+    });
     await result.supervisor.dispose();
   });
 

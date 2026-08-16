@@ -479,6 +479,17 @@ async function main(
     | undefined;
   const sckFixtureLab = process.env["VF_LIVE_SURFACES_SCK_LAB"] === "1";
   const simulatorLabUdid = process.env["VF_LIVE_SURFACES_SIMULATOR_UDID"];
+  const rawContinuousSoakMs = process.env["VF_LIVE_SURFACES_CONTINUOUS_SOAK_MS"];
+  let continuousSoakMs: number | undefined;
+  if (MODE === "live-surfaces-lab" && rawContinuousSoakMs !== undefined) {
+    const parsed = Number(rawContinuousSoakMs);
+    if (!Number.isSafeInteger(parsed) || parsed < 1_000 || parsed > 30 * 60_000) {
+      throw new Error(
+        "VF_LIVE_SURFACES_CONTINUOUS_SOAK_MS must be an integer from 1000 through 1800000",
+      );
+    }
+    continuousSoakMs = parsed;
+  }
   if (MODE === "live-surfaces-lab" && sckFixtureLab && simulatorLabUdid !== undefined) {
     throw new Error("the SCK fixture and Simulator labs are mutually exclusive");
   }
@@ -513,6 +524,7 @@ async function main(
       registry,
       preloadPath: PRELOAD_PATH,
       beforeExit: closeEvidence,
+      ...(continuousSoakMs === undefined ? {} : { continuousSoakMs }),
       ...(sckLabPaths === undefined ? {} : { sck: sckLabPaths }),
     });
     return;

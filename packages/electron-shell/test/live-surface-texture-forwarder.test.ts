@@ -101,7 +101,7 @@ describe("LiveSurfaceTextureForwarder", () => {
     await forwarder.whenDrained();
     expect(producer.allReferencesReleased).toHaveBeenCalledTimes(1);
     expect(producer.allReferencesReleased).toHaveBeenCalledWith("released");
-    expect(forwarder.stats).toMatchObject({ outstanding: 0, completed: 1 });
+    expect(forwarder.stats).toMatchObject({ outstanding: 0, peakOutstanding: 1, completed: 1 });
   });
 
   it("caps outstanding references at two even after sends resolve", async () => {
@@ -124,7 +124,12 @@ describe("LiveSurfaceTextureForwarder", () => {
     expect(forwarder.offer(third.frame)).toEqual({ kind: "dropped", reason: "transfer-cap" });
     expect(third.releaseSource).toHaveBeenCalledWith("transfer-cap");
     expect(third.allReferencesReleased).toHaveBeenCalledWith("transfer-cap");
-    expect(forwarder.stats).toMatchObject({ accepted: 2, dropped: 1, outstanding: 2 });
+    expect(forwarder.stats).toMatchObject({
+      accepted: 2,
+      dropped: 1,
+      outstanding: 2,
+      peakOutstanding: 2,
+    });
     fake.allReleased[0]?.();
     fake.allReleased[1]?.();
     await forwarder.whenDrained();
@@ -155,7 +160,7 @@ describe("LiveSurfaceTextureForwarder", () => {
       reason: "transfer-cap",
     });
     expect(capped.allReferencesReleased).toHaveBeenCalledWith("transfer-cap");
-    expect(budget.stats).toEqual({ outstanding: 2, maximum: 2 });
+    expect(budget.stats).toEqual({ outstanding: 2, peakOutstanding: 2, maximum: 2 });
     fake.allReleased[0]?.();
     fake.allReleased[1]?.();
     expect(budget.stats.outstanding).toBe(0);

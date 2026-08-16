@@ -118,6 +118,7 @@ function textureSink(): LiveSurfaceTextureFrameSink {
       accepted: 0,
       dropped: 0,
       outstanding: 0,
+      peakOutstanding: 0,
       completed: 0,
       timedOut: 0,
       sendFailures: 0,

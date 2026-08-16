@@ -137,6 +137,29 @@ afterEach(() => {
 });
 
 describe("SckLiveSurfaceRuntime", () => {
+  it("measures complete frame callbacks without letting diagnostics break delivery", async () => {
+    const durations: bigint[] = [];
+    const ticks = [100n, 101n, 103n];
+    const result = setup({
+      monotonicNowUs: () => ticks.shift() ?? 103n,
+      onFrameCallbackDurationUs: (durationUs) => {
+        durations.push(durationUs);
+        throw new Error("diagnostic failed");
+      },
+    });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+
+    const captured = captureFrame();
+    expect(() => result.client.requests[0]?.onFrame(captured.frame)).not.toThrow();
+    expect(durations).toEqual([3n]);
+    expect(renderer.frames).toHaveLength(1);
+    expect(captured.releaseLocal).toHaveBeenCalledOnce();
+    expect(captured.releaseLease).toHaveBeenCalledWith("released");
+    result.runtime.dispose();
+  });
+
   it("starts on live demand, observes the first frame, pauses, and hibernates at the helper", async () => {
     const result = setup();
     const renderer = attach(result.runtime);

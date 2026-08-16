@@ -265,6 +265,24 @@ afterEach(() => {
 });
 
 describe("BrowserLiveSurfaceRuntime", () => {
+  it("measures the full paint callback without letting the observer affect delivery", async () => {
+    const durations: bigint[] = [];
+    const result = setup({
+      onPaintCallbackDurationUs: (durationUs) => {
+        durations.push(durationUs);
+        throw new Error("diagnostic observer fault");
+      },
+    });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    result.native.windows[0]?.paint(sharedPaint(320, 180).paint);
+
+    expect(durations).toEqual([2n]);
+    expect(renderer.textureFrames).toHaveLength(1);
+    expect(result.runtime.summary.state).toBe("live");
+  });
+
   it("observes shared transport, maps logical input, pauses, hibernates, and re-epochs", async () => {
     const result = setup();
     const renderer = attach(result.runtime);

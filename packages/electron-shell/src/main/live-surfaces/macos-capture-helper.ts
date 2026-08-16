@@ -89,6 +89,7 @@ export interface MacosCaptureHelperSupervisorStats {
   readonly framesReceived: number;
   readonly framesRejected: number;
   readonly releaseCommands: number;
+  readonly nativeOutstandingPeak: number;
   readonly native: MacosCaptureNativeAdapterStats | null;
 }
 
@@ -285,6 +286,7 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   #framesReceived = 0;
   #framesRejected = 0;
   #releaseCommands = 0;
+  #nativeOutstandingPeak = 0;
   #disposed = false;
 
   constructor(options: MacosCaptureHelperSupervisorOptions) {
@@ -306,7 +308,7 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   get stats(): MacosCaptureHelperSupervisorStats {
     let native: MacosCaptureNativeAdapterStats | null = null;
     try {
-      if (this.#running !== null) native = this.#adapter.stats();
+      if (this.#running !== null) native = this.observeNativeStats();
     } catch {
       native = null;
     }
@@ -318,6 +320,7 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
       framesReceived: this.#framesReceived,
       framesRejected: this.#framesRejected,
       releaseCommands: this.#releaseCommands,
+      nativeOutstandingPeak: this.#nativeOutstandingPeak,
       native,
     };
   }
@@ -694,7 +697,9 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
     if (helper === null || helper.stopping) return;
     let rawFrames: readonly MacosCaptureNativeFrame[];
     try {
+      this.observeNativeStats();
       rawFrames = this.#adapter.drain(MAX_SESSIONS * 2);
+      this.observeNativeStats();
     } catch (error) {
       this.onHelperExit(helper, error instanceof Error ? error : new Error(String(error)));
       return;
@@ -768,6 +773,12 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
         captureFrame.releaseLease("dropped");
       }
     }
+  }
+
+  private observeNativeStats(): MacosCaptureNativeAdapterStats {
+    const stats = this.#adapter.stats();
+    this.#nativeOutstandingPeak = Math.max(this.#nativeOutstandingPeak, stats.outstanding);
+    return stats;
   }
 
   private sendRelease(

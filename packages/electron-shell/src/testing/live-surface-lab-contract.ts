@@ -32,7 +32,30 @@ export const LIVE_SURFACE_LAB_SCK_TICKET = LIVE_SURFACE_LAB_TICKETS[12]!;
 
 export const LIVE_SURFACE_LAB_TICKET_READY_DATASET = "liveSurfaceLabTicketReady";
 export const LIVE_SURFACE_LAB_RELOAD_READY_DATASET = "liveSurfaceLabReloadReady";
+export const LIVE_SURFACE_LAB_CLOCK_OFFSET_DATASET = "liveSurfaceLabClockOffsetUs";
+export const LIVE_SURFACE_LAB_CLOCK_UNCERTAINTY_DATASET = "liveSurfaceLabClockUncertaintyUs";
+export const LIVE_SURFACE_LAB_CONTINUOUS_ACTIVE_DATASET = "liveSurfaceLabContinuousActive";
 export const LIVE_SURFACE_LAB_RESULT_DATASET = "liveSurfaceLabResult";
+
+export interface LiveSurfaceLabContinuousSoakResult {
+  readonly requestedDurationMs: number;
+  readonly elapsedMs: number;
+  readonly ticks: number;
+  readonly browserPresented: readonly number[];
+  readonly browserMaximumPresentationGapMs: readonly number[];
+  readonly sckPresented: number;
+  readonly sckMaximumPresentationGapMs: number | null;
+  readonly activeFrameAgeSamples: readonly number[];
+  readonly activeFrameAgeP95Ms: readonly number[];
+  readonly worstActiveFrameAgeP95Ms: number;
+  readonly activeRasterSizes: readonly ({
+    readonly width: number;
+    readonly height: number;
+  } | null)[];
+  readonly rendererPendingPerSurfaceMax: number;
+  readonly rendererInFlightPerSurfaceMax: number;
+  readonly rendererSupersededFrames: number;
+}
 
 export interface LiveSurfaceLabRendererResult {
   readonly ok: boolean;
@@ -49,6 +72,7 @@ export interface LiveSurfaceLabRendererResult {
   readonly browserFallbackObserved: boolean;
   readonly tenSurfacePresented: readonly number[];
   readonly tenSurfaceShared: number;
+  readonly continuousSoak: LiveSurfaceLabContinuousSoakResult | null;
   readonly sckEnabled: boolean;
   readonly sckMode?: "fixture" | "simulator";
   readonly sckPresented: number;

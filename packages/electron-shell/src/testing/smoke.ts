@@ -13,6 +13,7 @@ import {
   TerminalTicket,
 } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
+import { LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS } from "@vibefield/live-surfaces/testing";
 import {
   app,
   BrowserWindow,
@@ -44,7 +45,10 @@ import {
   type LiveSurfaceRuntimeSupportSource,
 } from "../main/live-surfaces/runtime-support";
 import { SckLiveSurfaceRuntime } from "../main/live-surfaces/sck-producer";
-import { LiveSurfaceTextureForwarder } from "../main/live-surfaces/texture-forwarder";
+import {
+  LiveSurfaceTextureForwarder,
+  type LiveSurfaceTextureTransferApi,
+} from "../main/live-surfaces/texture-forwarder";
 import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
 import type { WindowRegistry } from "../main/window-policy";
@@ -53,6 +57,9 @@ import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
   LIVE_SURFACE_LAB_ALL_TICKETS,
   LIVE_SURFACE_LAB_BROWSER_SURFACE_IDS,
+  LIVE_SURFACE_LAB_CLOCK_OFFSET_DATASET,
+  LIVE_SURFACE_LAB_CLOCK_UNCERTAINTY_DATASET,
+  LIVE_SURFACE_LAB_CONTINUOUS_ACTIVE_DATASET,
   LIVE_SURFACE_LAB_FALLBACK_SURFACE_ID,
   LIVE_SURFACE_LAB_RELOAD_READY_DATASET,
   LIVE_SURFACE_LAB_RELOAD_TICKET,
@@ -2457,11 +2464,160 @@ async function proveSimulatorRotation(
  * concurrent shared-texture surfaces. The optional macOS phase then drives a
  * deterministic window through the production helper/adapter and same store.
  */
+class LiveSurfaceImportDurationHistogram {
+  static readonly maximumBucketUs = 10_000;
+  readonly #buckets = new Uint32Array(LiveSurfaceImportDurationHistogram.maximumBucketUs + 2);
+  #count = 0;
+  #maximumMs = 0;
+
+  observe(durationNs: bigint): void {
+    const durationMs = Number(durationNs) / 1_000_000;
+    const durationUs = Math.ceil(durationMs * 1_000);
+    const bucket = Math.min(
+      LiveSurfaceImportDurationHistogram.maximumBucketUs + 1,
+      Math.max(0, durationUs),
+    );
+    this.#buckets[bucket] = (this.#buckets[bucket] ?? 0) + 1;
+    this.#count += 1;
+    this.#maximumMs = Math.max(this.#maximumMs, durationMs);
+  }
+
+  snapshot(): {
+    readonly count: number;
+    readonly p95Ms: number | null;
+    readonly p95Overflow: boolean;
+    readonly maximumMs: number;
+  } {
+    if (this.#count === 0) {
+      return { count: 0, p95Ms: null, p95Overflow: false, maximumMs: 0 };
+    }
+    const rank = Math.ceil(this.#count * 0.95);
+    let seen = 0;
+    let p95Bucket = 0;
+    for (const [bucket, count] of this.#buckets.entries()) {
+      seen += count;
+      if (seen >= rank) {
+        p95Bucket = bucket;
+        break;
+      }
+    }
+    const p95Overflow = p95Bucket > LiveSurfaceImportDurationHistogram.maximumBucketUs;
+    return {
+      count: this.#count,
+      p95Ms: p95Bucket / 1_000,
+      p95Overflow,
+      maximumMs: Math.round(this.#maximumMs * 1_000) / 1_000,
+    };
+  }
+}
+
+class LiveSurfaceMainDutyMeter {
+  #active = false;
+  #startedAtUs = 0n;
+  #busyUs = 0n;
+  #maximumWorkItemUs = 0n;
+  #paintCallbacks = 0;
+  #captureCallbacks = 0;
+  #textureSends = 0;
+
+  begin(): void {
+    this.#active = true;
+    this.#startedAtUs = process.hrtime.bigint() / 1_000n;
+    this.#busyUs = 0n;
+    this.#maximumWorkItemUs = 0n;
+    this.#paintCallbacks = 0;
+    this.#captureCallbacks = 0;
+    this.#textureSends = 0;
+  }
+
+  observePaint(durationUs: bigint): void {
+    this.observe(durationUs);
+    if (this.#active && durationUs >= 0n) this.#paintCallbacks += 1;
+  }
+
+  observeCapture(durationUs: bigint): void {
+    this.observe(durationUs);
+    if (this.#active && durationUs >= 0n) this.#captureCallbacks += 1;
+  }
+
+  observeTextureSend(durationUs: bigint): void {
+    this.observe(durationUs);
+    if (this.#active && durationUs >= 0n) this.#textureSends += 1;
+  }
+
+  private observe(durationUs: bigint): void {
+    if (!this.#active || durationUs < 0n) return;
+    this.#busyUs += durationUs;
+    this.#maximumWorkItemUs =
+      durationUs > this.#maximumWorkItemUs ? durationUs : this.#maximumWorkItemUs;
+  }
+
+  finish(): {
+    readonly paintCallbacks: number;
+    readonly captureCallbacks: number;
+    readonly textureSends: number;
+    readonly elapsedMs: number;
+    readonly busyMs: number;
+    readonly ratio: number;
+    readonly maximumWorkItemMs: number;
+  } {
+    if (!this.#active) throw new Error("main callback duty meter was not active");
+    this.#active = false;
+    const elapsedUs = process.hrtime.bigint() / 1_000n - this.#startedAtUs;
+    const elapsedMs = Number(elapsedUs) / 1_000;
+    const busyMs = Number(this.#busyUs) / 1_000;
+    return {
+      paintCallbacks: this.#paintCallbacks,
+      captureCallbacks: this.#captureCallbacks,
+      textureSends: this.#textureSends,
+      elapsedMs: Math.round(elapsedMs),
+      busyMs: Math.round(busyMs * 1_000) / 1_000,
+      ratio: elapsedMs === 0 ? 0 : Math.round((busyMs / elapsedMs) * 100_000) / 100_000,
+      maximumWorkItemMs: Number(this.#maximumWorkItemUs) / 1_000,
+    };
+  }
+}
+
+async function measureLiveSurfaceMainDuty(
+  win: BrowserWindow,
+  meter: LiveSurfaceMainDutyMeter,
+  timeoutMs: number,
+): Promise<ReturnType<LiveSurfaceMainDutyMeter["finish"]>> {
+  const activeExpression = `document.documentElement.dataset[${JSON.stringify(
+    LIVE_SURFACE_LAB_CONTINUOUS_ACTIVE_DATASET,
+  )}] ?? ""`;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const active = await win.webContents.executeJavaScript(activeExpression, true);
+    if (active === "1") {
+      meter.begin();
+      while (Date.now() < deadline) {
+        await sleep(10);
+        const current = await win.webContents.executeJavaScript(activeExpression, true);
+        if (current !== "1") return meter.finish();
+      }
+      break;
+    }
+    await sleep(10);
+  }
+  throw new Error("continuous renderer window did not expose a bounded main-duty interval");
+}
+
+const MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS = 2_000;
+const MINIMUM_CONTINUOUS_BUDGET_SAMPLE_MS = 60_000;
+
+function browserReferenceRasterSize(index: number): { width: number; height: number } {
+  if (index === 0) return { width: 1280, height: 800 };
+  if (index <= 3) return { width: 640, height: 480 };
+  return { width: 320, height: 240 };
+}
+
 export async function runLiveSurfacesLab(opts: {
   root: string;
   registry: WindowRegistry;
   preloadPath: string;
   beforeExit: () => Promise<void>;
+  readonly continuousSoakMs?: number;
   readonly sck?: LiveSurfaceSckLab;
 }): Promise<void> {
   const monitorUncaught: NodeJS.UncaughtExceptionListener = (error, origin) => {
@@ -2494,16 +2650,37 @@ export async function runLiveSurfacesLab(opts: {
   });
   opts.registry.adopt(win);
   const textureForwarders: LiveSurfaceTextureForwarder[] = [];
+  const importDurations = new LiveSurfaceImportDurationHistogram();
+  const mainDutyMeter = new LiveSurfaceMainDutyMeter();
   const host = new LiveSurfaceWindowHost(
     win,
     tickets,
     () => new MessageChannelMain(),
     undefined,
     (surfaceId, attachmentId, budget) => {
+      const transferApi = createElectronLiveSurfaceTextureTransferApi(win.webContents);
+      const measuredTransferApi: LiveSurfaceTextureTransferApi = {
+        importTexture: (textureInfo, allReferencesReleased) => {
+          const startedAt = process.hrtime.bigint();
+          try {
+            return transferApi.importTexture(textureInfo, allReferencesReleased);
+          } finally {
+            importDurations.observe(process.hrtime.bigint() - startedAt);
+          }
+        },
+        sendTexture: (imported, envelope) => {
+          const startedAt = process.hrtime.bigint();
+          try {
+            return transferApi.sendTexture(imported, envelope);
+          } finally {
+            mainDutyMeter.observeTextureSend((process.hrtime.bigint() - startedAt) / 1_000n);
+          }
+        },
+      };
       const forwarder = new LiveSurfaceTextureForwarder(
         surfaceId,
         attachmentId,
-        createElectronLiveSurfaceTextureTransferApi(win.webContents),
+        measuredTransferApi,
         2,
         budget,
       );
@@ -2523,12 +2700,20 @@ export async function runLiveSurfacesLab(opts: {
   let sckSource: MacosCaptureSource | null = null;
   let simulatorResolution: ResolvedIosSimulatorCapture | null = null;
   let simulatorRotation: LiveSurfaceSimulatorRotationProof | null = null;
+  let clockCalibration: {
+    readonly roundTripMs: number;
+    readonly uncertaintyMs: number;
+  } | null = null;
   let pageServer: Awaited<ReturnType<typeof startLiveSurfacePageServer>> | null = null;
   let exitCode = 2;
   let verdict: Record<string, unknown> = { ok: false };
   try {
     pageServer = await startLiveSurfacePageServer();
     for (const [index, surfaceId] of LIVE_SURFACE_LAB_BROWSER_SURFACE_IDS.entries()) {
+      const logicalViewport =
+        opts.continuousSoakMs === undefined
+          ? { width: 320, height: 180 }
+          : browserReferenceRasterSize(index);
       browserRuntimes.push(
         new BrowserLiveSurfaceRuntime({
           surfaceId,
@@ -2536,11 +2721,12 @@ export async function runLiveSurfacesLab(opts: {
             kind: "browser",
             initialUrl: `${pageServer.origin}/surface/${index + 1}`,
             profile: { mode: "memory", ref: "live-surfaces-browser-lab" },
-            logicalViewport: { width: 320, height: 180 },
+            logicalViewport,
             deviceScaleFactor: 1,
           },
           native,
           controlTargets,
+          onPaintCallbackDurationUs: (durationUs) => mainDutyMeter.observePaint(durationUs),
         }),
       );
     }
@@ -2556,6 +2742,7 @@ export async function runLiveSurfacesLab(opts: {
       native,
       controlTargets,
       requestSharedTexture: false,
+      onPaintCallbackDurationUs: (durationUs) => mainDutyMeter.observePaint(durationUs),
     });
     if (opts.sck !== undefined) {
       const captureAdapter = loadMacosCaptureNativeAdapter(opts.sck.adapterPath);
@@ -2576,6 +2763,7 @@ export async function runLiveSurfacesLab(opts: {
             captureCursor: false,
           },
           client: sckSupervisor,
+          onFrameCallbackDurationUs: (durationUs) => mainDutyMeter.observeCapture(durationUs),
         });
       } else {
         const simulatorSource = {
@@ -2601,6 +2789,7 @@ export async function runLiveSurfacesLab(opts: {
           resolver,
           delegate: sckSupervisor,
           revalidateIntervalMs: 250,
+          onFrameCallbackDurationUs: (durationUs) => mainDutyMeter.observeCapture(durationUs),
         });
       }
     }
@@ -2610,7 +2799,10 @@ export async function runLiveSurfacesLab(opts: {
         : `&sck=${opts.sck.kind}${
             opts.sck.kind === "simulator" && opts.sck.rotate ? "&rotate=1" : ""
           }`;
-    await win.loadURL(`${APP_ORIGIN}/spike-live-surfaces-lab.html?phase=reload${sckQuery}`);
+    const soakQuery = opts.continuousSoakMs === undefined ? "" : `&soakMs=${opts.continuousSoakMs}`;
+    await win.loadURL(
+      `${APP_ORIGIN}/spike-live-surfaces-lab.html?phase=reload${sckQuery}${soakQuery}`,
+    );
     const reloadFromGeneration = host.rendererGeneration;
     const reloadTicket = host.issue({
       surfaceId: browserRuntimes[0]!.surfaceId,
@@ -2665,6 +2857,30 @@ export async function runLiveSurfacesLab(opts: {
         0,
       ),
     };
+    if (opts.continuousSoakMs !== undefined) {
+      const hostBeforeUs = process.hrtime.bigint() / 1_000n;
+      const rendererNowMs = await win.webContents.executeJavaScript("performance.now()", true);
+      const hostAfterUs = process.hrtime.bigint() / 1_000n;
+      if (typeof rendererNowMs !== "number" || !Number.isFinite(rendererNowMs)) {
+        throw new Error("renderer did not return a finite monotonic clock sample");
+      }
+      const hostMidpointUs = (hostBeforeUs + hostAfterUs) / 2n;
+      const hostClockOffsetUs = hostMidpointUs - BigInt(Math.round(rendererNowMs * 1_000));
+      const roundTripUs = hostAfterUs - hostBeforeUs;
+      const uncertaintyUs = (roundTripUs + 1n) / 2n;
+      clockCalibration = {
+        roundTripMs: Number(roundTripUs) / 1_000,
+        uncertaintyMs: Number(uncertaintyUs) / 1_000,
+      };
+      await win.webContents.executeJavaScript(
+        `document.documentElement.dataset[${JSON.stringify(
+          LIVE_SURFACE_LAB_CLOCK_OFFSET_DATASET,
+        )}] = ${JSON.stringify(hostClockOffsetUs.toString())}; document.documentElement.dataset[${JSON.stringify(
+          LIVE_SURFACE_LAB_CLOCK_UNCERTAINTY_DATASET,
+        )}] = ${JSON.stringify(uncertaintyUs.toString())}`,
+        true,
+      );
+    }
     const authorities: LiveSurfaceRuntimeAuthority[] = [
       authority,
       ...browserRuntimes,
@@ -2709,22 +2925,66 @@ export async function runLiveSurfacesLab(opts: {
       sckRuntime instanceof IosSimulatorLiveSurfaceRuntime
         ? proveSimulatorRotation(sckRuntime)
         : Promise.resolve(null);
-    const renderer = await waitForLiveSurfaceLabResult(win, 90_000);
+    const mainCpuStartedAt = process.cpuUsage();
+    const mainDutyStartedAt = process.hrtime.bigint();
+    const mainSurfaceDutyPromise =
+      opts.continuousSoakMs === undefined
+        ? Promise.resolve(null)
+        : measureLiveSurfaceMainDuty(win, mainDutyMeter, 90_000 + opts.continuousSoakMs);
+    const renderer = await waitForLiveSurfaceLabResult(win, 90_000 + (opts.continuousSoakMs ?? 0));
+    const mainSurfaceDuty = await mainSurfaceDutyPromise;
+    const mainCpu = process.cpuUsage(mainCpuStartedAt);
+    const mainDutyElapsedMs = Number(process.hrtime.bigint() - mainDutyStartedAt) / 1_000_000;
+    const mainCpuMs = (mainCpu.user + mainCpu.system) / 1_000;
+    const mainProcessCpu = {
+      elapsedMs: Math.round(mainDutyElapsedMs),
+      cpuMs: Math.round(mainCpuMs),
+      ratio:
+        mainDutyElapsedMs === 0
+          ? 0
+          : Math.round((mainCpuMs / mainDutyElapsedMs) * 100_000) / 100_000,
+    };
     const browserInput = await browserInputProof;
     simulatorRotation = await simulatorRotationProof;
     const offeredAtRendererDone = authority.stats.offered;
     const referenceDeadline = Date.now() + 3_000;
     while (
       Date.now() < referenceDeadline &&
-      browserRuntimes.some(
+      (browserRuntimes.some(
         (runtime) => runtime.stats.importedReferencesReleased !== runtime.stats.sharedFramesOffered,
-      )
+      ) ||
+        textureForwarders.some((forwarder) => forwarder.stats.outstanding !== 0))
     ) {
       await sleep(25);
     }
     await sleep(250);
     const source = authority.stats;
     const problems: string[] = [];
+    const textureTransfers = {
+      forwarders: textureForwarders.length,
+      outstanding: textureForwarders.reduce(
+        (total, forwarder) => total + forwarder.stats.outstanding,
+        0,
+      ),
+      peakOutstandingPerSurface: textureForwarders.reduce(
+        (peak, forwarder) => Math.max(peak, forwarder.stats.peakOutstanding),
+        0,
+      ),
+      timedOut: textureForwarders.reduce((total, forwarder) => total + forwarder.stats.timedOut, 0),
+      sendFailures: textureForwarders.reduce(
+        (total, forwarder) => total + forwarder.stats.sendFailures,
+        0,
+      ),
+      releaseFaults: textureForwarders.reduce(
+        (total, forwarder) => total + forwarder.stats.releaseFaults,
+        0,
+      ),
+      importDuration: importDurations.snapshot(),
+    };
+    const primaryCpuPixelConversions = browserRuntimes.reduce(
+      (total, runtime) => total + runtime.stats.cpuFramesOffered,
+      0,
+    );
     let sckEvidence: Record<string, unknown> | null = null;
     if (!renderer.ok) problems.push(renderer.error ?? "renderer returned a failed verdict");
     if (!renderer.rendererReloadObserved)
@@ -2746,6 +3006,87 @@ export async function runLiveSurfacesLab(opts: {
     }
     if (source.offered !== offeredAtRendererDone) {
       problems.push("the fixture kept producing after paused demand");
+    }
+    if (textureTransfers.outstanding !== 0) {
+      problems.push(`${textureTransfers.outstanding} shared texture transfer(s) survived drain`);
+    }
+    if (
+      textureTransfers.peakOutstandingPerSurface >
+      LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS.mainOutstandingTransfersPerSurfaceMax
+    ) {
+      problems.push(
+        `one surface reached ${textureTransfers.peakOutstandingPerSurface} outstanding transfers`,
+      );
+    }
+    if (textureTransfers.sendFailures !== 0 || textureTransfers.releaseFaults !== 0) {
+      problems.push("shared texture transfer faults occurred during the lab");
+    }
+    if (primaryCpuPixelConversions !== 0) {
+      problems.push("a primary Browser source emitted CPU pixels");
+    }
+    if (opts.continuousSoakMs === undefined) {
+      if (renderer.continuousSoak !== null) {
+        problems.push("the renderer ran an unrequested continuous soak");
+      }
+    } else {
+      const soak = renderer.continuousSoak;
+      if (
+        soak === null ||
+        soak.requestedDurationMs !== opts.continuousSoakMs ||
+        soak.elapsedMs < opts.continuousSoakMs ||
+        soak.browserPresented.length !== 10 ||
+        soak.browserPresented.some((count) => count <= 0) ||
+        soak.browserMaximumPresentationGapMs.length !== 10 ||
+        soak.browserMaximumPresentationGapMs.some(
+          (gapMs) => gapMs > MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS,
+        ) ||
+        (opts.sck !== undefined &&
+          (soak.sckPresented <= 0 ||
+            soak.sckMaximumPresentationGapMs === null ||
+            soak.sckMaximumPresentationGapMs > MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS)) ||
+        soak.activeFrameAgeSamples.length !== (opts.sck === undefined ? 10 : 11) ||
+        soak.activeFrameAgeSamples.some((count) => count <= 0) ||
+        soak.activeRasterSizes.length !== (opts.sck === undefined ? 10 : 11) ||
+        soak.activeRasterSizes.slice(0, 10).some((size, index) => {
+          const expected = browserReferenceRasterSize(index);
+          return size?.width !== expected.width || size.height !== expected.height;
+        }) ||
+        soak.rendererPendingPerSurfaceMax >
+          LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS.rendererPendingPerSurfaceMax ||
+        soak.rendererInFlightPerSurfaceMax >
+          LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS.rendererInFlightPerSurfaceMax ||
+        mainSurfaceDuty === null ||
+        mainSurfaceDuty.paintCallbacks <= 0 ||
+        (opts.sck !== undefined && mainSurfaceDuty.captureCallbacks <= 0) ||
+        mainSurfaceDuty.textureSends <= 0 ||
+        clockCalibration === null ||
+        clockCalibration.uncertaintyMs > 5
+      ) {
+        problems.push("the continuous renderer workload did not remain live and bounded");
+      }
+      if (opts.continuousSoakMs >= MINIMUM_CONTINUOUS_BUDGET_SAMPLE_MS) {
+        if (
+          soak !== null &&
+          soak.worstActiveFrameAgeP95Ms >
+            LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS.worstActiveFrameAgeP95Ms
+        ) {
+          problems.push(`active frame-age p95 exceeded 50ms: ${soak.worstActiveFrameAgeP95Ms}`);
+        }
+        if (
+          mainSurfaceDuty !== null &&
+          mainSurfaceDuty.ratio > LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS.electronMainDutyRatioMax
+        ) {
+          problems.push(`Electron main duty exceeded 10%: ${mainSurfaceDuty.ratio}`);
+        }
+        const imports = textureTransfers.importDuration;
+        if (
+          imports.p95Ms === null ||
+          imports.p95Overflow ||
+          imports.p95Ms > LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS.sharedTextureImportP95Ms
+        ) {
+          problems.push(`shared texture import p95 exceeded 0.30ms: ${imports.p95Ms}`);
+        }
+      }
     }
     if (sckRuntime !== null && sckSupervisor !== null) {
       const reconciliationDeadline = Date.now() + 5_000;
@@ -2846,13 +3187,13 @@ export async function runLiveSurfacesLab(opts: {
       }
       const staleSessionFrames = helperStats.framesReceived - runtimeStats.framesReceived;
       const helperFrameAccounting =
-        simulatorLab?.rotate === true
-          ? staleSessionFrames >= 0 &&
-            staleSessionFrames === helperStats.framesRejected &&
-            helperStats.framesRejected <= runtimeStats.sessionsStarted * 2
-          : helperStats.framesRejected === 0 && staleSessionFrames === 0;
+        staleSessionFrames >= 0 &&
+        staleSessionFrames === helperStats.framesRejected &&
+        helperStats.framesRejected <= runtimeStats.sessionsStarted * 2;
       if (
         helperStats.activeSessions !== 0 ||
+        helperStats.nativeOutstandingPeak >
+          LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS.helperOutstandingLeasesPerSessionMax ||
         !helperFrameAccounting ||
         helperStats.releaseCommands !== helperStats.framesReceived ||
         helperStats.native === null ||
@@ -2940,6 +3281,16 @@ export async function runLiveSurfacesLab(opts: {
       browserInput,
       sck: sckEvidence,
       reloadDrain,
+      hardening: {
+        continuousSoakRequestedMs: opts.continuousSoakMs ?? null,
+        clockCalibration,
+        mainSurfaceDuty,
+        mainProcessCpu,
+        textureTransfers,
+        helperOutstandingLeasesPeak: sckSupervisor?.stats.nativeOutstandingPeak ?? 0,
+        primaryCpuPixelConversions,
+        worstActiveFrameAgeP95Ms: renderer.continuousSoak?.worstActiveFrameAgeP95Ms ?? null,
+      },
       runtimeSupport: aggregateLiveSurfaceRuntimeSupport(supportSources),
       rendererGeneration: host.rendererGeneration,
       ticketTableSize: tickets.size,

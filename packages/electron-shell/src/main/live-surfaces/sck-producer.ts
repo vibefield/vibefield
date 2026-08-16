@@ -108,6 +108,8 @@ export interface SckLiveSurfaceRuntimeOptions {
   readonly monotonicNowUs?: () => bigint;
   readonly startupTimeoutMs?: number;
   readonly restartLimit?: number;
+  /** Optional main-private instrumentation; observer faults never affect frames. */
+  readonly onFrameCallbackDurationUs?: (durationUs: bigint) => void;
 }
 
 export interface SckLiveSurfaceRuntimeStats {
@@ -223,6 +225,7 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   readonly source: SckWindowSource;
   readonly #client: SckCaptureClient;
   readonly #monotonicNowUs: () => bigint;
+  readonly #onFrameCallbackDurationUs: ((durationUs: bigint) => void) | undefined;
   readonly #startupTimeoutMs: number;
   readonly #restartLimit: number;
   readonly #lifecycle = new LiveSurfaceLifecycle();
@@ -258,6 +261,7 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.source = LiveSurfaceSckWindowSourceV1.parse(options.source);
     this.#client = options.client;
     this.#monotonicNowUs = options.monotonicNowUs ?? (() => process.hrtime.bigint() / 1_000n);
+    this.#onFrameCallbackDurationUs = options.onFrameCallbackDurationUs;
     this.#startupTimeoutMs = options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS;
     this.#restartLimit = options.restartLimit ?? DEFAULT_RESTART_LIMIT;
     if (!Number.isSafeInteger(this.#startupTimeoutMs) || this.#startupTimeoutMs <= 0) {
@@ -419,7 +423,7 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         producerEpoch: epoch,
         source: this.source,
         demand,
-        onFrame: (frame) => this.acceptFrame(run, frame),
+        onFrame: (frame) => this.acceptFrameObserved(run, frame),
         onFault: (error) => this.handleSessionFault(run, error),
       })
       .then((session) => {
@@ -441,6 +445,22 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
             : sourceError("producer-crashed", "Screen capture helper could not start", "automatic"),
         );
       });
+  }
+
+  private acceptFrameObserved(run: ProducerRun, frame: SckCaptureFrame): void {
+    const observeDuration = this.#onFrameCallbackDurationUs;
+    const startedAtUs = observeDuration === undefined ? null : this.#monotonicNowUs();
+    try {
+      this.acceptFrame(run, frame);
+    } finally {
+      if (observeDuration !== undefined && startedAtUs !== null) {
+        try {
+          observeDuration(this.#monotonicNowUs() - startedAtUs);
+        } catch {
+          // Diagnostics must not become part of the producer's correctness path.
+        }
+      }
+    }
   }
 
   private acceptFrame(run: ProducerRun, frame: SckCaptureFrame): void {

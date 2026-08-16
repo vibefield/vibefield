@@ -174,6 +174,8 @@ export interface BrowserLiveSurfaceRuntimeOptions {
   readonly rasterStabilizationMs?: number;
   readonly cpuFallbackPaints?: number;
   readonly restartLimit?: number;
+  /** Optional main-private instrumentation; observer faults never affect frames. */
+  readonly onPaintCallbackDurationUs?: (durationUs: bigint) => void;
 }
 
 export interface BrowserLiveSurfaceRuntimeStats {
@@ -347,6 +349,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   readonly #rasterStabilizationMs: number;
   readonly #cpuFallbackPaints: number;
   readonly #restartLimit: number;
+  readonly #onPaintCallbackDurationUs: ((durationUs: bigint) => void) | undefined;
   readonly #lifecycle = new LiveSurfaceLifecycle();
   readonly #attachments = new Map<string, BrowserRuntimeAttachmentRecord>();
   #window: BrowserSurfaceNativeWindow | null = null;
@@ -392,6 +395,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#rasterStabilizationMs = options.rasterStabilizationMs ?? DEFAULT_RASTER_STABILIZATION_MS;
     this.#cpuFallbackPaints = options.cpuFallbackPaints ?? DEFAULT_CPU_FALLBACK_PAINTS;
     this.#restartLimit = options.restartLimit ?? DEFAULT_RESTART_LIMIT;
+    this.#onPaintCallbackDurationUs = options.onPaintCallbackDurationUs;
     if (this.#startupTimeoutMs <= 0 || this.#rasterStabilizationMs < 0) {
       throw new RangeError("browser producer timing bounds are invalid");
     }
@@ -723,24 +727,36 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     epoch: number,
     paint: BrowserSurfacePaint,
   ): void {
-    if (!this.isCurrent(window, epoch) || !this.#lifecycle.acceptsFrames) {
-      paint.texture?.release();
-      return;
+    const observeDuration = this.#onPaintCallbackDurationUs;
+    const startedAtUs = observeDuration === undefined ? null : this.#native.monotonicNowUs();
+    try {
+      if (!this.isCurrent(window, epoch) || !this.#lifecycle.acceptsFrames) {
+        paint.texture?.release();
+        return;
+      }
+      const texture = paint.texture;
+      if (texture != null && texture.textureInfo.widgetType !== "frame") {
+        texture.release();
+        return;
+      }
+      if (
+        texture != null &&
+        (texture.textureInfo.pixelFormat === "bgra" || texture.textureInfo.pixelFormat === "rgba")
+      ) {
+        this.acceptSharedPaint(texture, epoch);
+        return;
+      }
+      texture?.release();
+      this.acceptCpuPaint(paint.image, epoch);
+    } finally {
+      if (observeDuration !== undefined && startedAtUs !== null) {
+        try {
+          observeDuration(this.#native.monotonicNowUs() - startedAtUs);
+        } catch {
+          // Diagnostics must not become part of the producer's correctness path.
+        }
+      }
     }
-    const texture = paint.texture;
-    if (texture != null && texture.textureInfo.widgetType !== "frame") {
-      texture.release();
-      return;
-    }
-    if (
-      texture != null &&
-      (texture.textureInfo.pixelFormat === "bgra" || texture.textureInfo.pixelFormat === "rgba")
-    ) {
-      this.acceptSharedPaint(texture, epoch);
-      return;
-    }
-    texture?.release();
-    this.acceptCpuPaint(paint.image, epoch);
   }
 
   private acceptSharedPaint(texture: BrowserSurfacePaintTexture, epoch: number): void {

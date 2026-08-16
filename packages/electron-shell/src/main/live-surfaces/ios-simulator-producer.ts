@@ -492,6 +492,7 @@ export interface IosSimulatorLiveSurfaceRuntimeOptions extends IosSimulatorCaptu
   readonly monotonicNowUs?: () => bigint;
   readonly startupTimeoutMs?: number;
   readonly restartLimit?: number;
+  readonly onFrameCallbackDurationUs?: (durationUs: bigint) => void;
 }
 
 /** Thin specialization: durable Simulator resolution outside, ordinary SCK pixels inside. */
@@ -513,6 +514,9 @@ export class IosSimulatorLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthori
       },
       client,
       ...(options.monotonicNowUs === undefined ? {} : { monotonicNowUs: options.monotonicNowUs }),
+      ...(options.onFrameCallbackDurationUs === undefined
+        ? {}
+        : { onFrameCallbackDurationUs: options.onFrameCallbackDurationUs }),
       ...(options.startupTimeoutMs === undefined
         ? {}
         : { startupTimeoutMs: options.startupTimeoutMs }),

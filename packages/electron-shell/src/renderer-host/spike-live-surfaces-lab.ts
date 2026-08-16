@@ -1,16 +1,22 @@
+import type { LiveSurfaceFrameMetadataV1 } from "@vibefield/contracts";
 import {
   type LiveSurfaceGpuDevice,
   type LiveSurfaceRendererAttachment,
   receiveLiveSurfaceRendererTransport,
   WebGpuLiveSurfaceTextureStore,
 } from "@vibefield/live-surfaces/renderer";
+import { LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS } from "@vibefield/live-surfaces/testing";
 import {
+  LIVE_SURFACE_LAB_CLOCK_OFFSET_DATASET,
+  LIVE_SURFACE_LAB_CLOCK_UNCERTAINTY_DATASET,
+  LIVE_SURFACE_LAB_CONTINUOUS_ACTIVE_DATASET,
   LIVE_SURFACE_LAB_RELOAD_READY_DATASET,
   LIVE_SURFACE_LAB_RELOAD_TICKET,
   LIVE_SURFACE_LAB_RESULT_DATASET,
   LIVE_SURFACE_LAB_SCK_TICKET,
   LIVE_SURFACE_LAB_TICKET_READY_DATASET,
   LIVE_SURFACE_LAB_TICKETS,
+  type LiveSurfaceLabContinuousSoakResult,
   type LiveSurfaceLabRendererResult,
 } from "../testing/live-surface-lab-contract";
 import "./spike-live-surfaces-lab.css";
@@ -75,6 +81,22 @@ const sckMode =
       : null;
 const sckEnabled = sckMode !== null;
 const sckRotate = sckMode === "simulator" && labParameters.get("rotate") === "1";
+const rawContinuousSoakMs = labParameters.get("soakMs");
+const continuousSoakMs = rawContinuousSoakMs === null ? 0 : Number(rawContinuousSoakMs);
+const continuousSoakConfigured = rawContinuousSoakMs !== null;
+const continuousSoakValid =
+  !continuousSoakConfigured ||
+  (Number.isSafeInteger(continuousSoakMs) &&
+    continuousSoakMs >= 1_000 &&
+    continuousSoakMs <= 30 * 60_000);
+const MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS = 2_000;
+const MINIMUM_CONTINUOUS_BUDGET_SAMPLE_MS = 60_000;
+
+function browserReferenceRasterSize(index: number): { width: number; height: number } {
+  if (index === 0) return { width: 1280, height: 800 };
+  if (index <= 3) return { width: 640, height: 480 };
+  return { width: 320, height: 240 };
+}
 
 // Installed synchronously: preload's one-time port handoff can never outrun
 // the lab module while the rest of async setup waits for WebGPU and ticketing.
@@ -185,13 +207,19 @@ async function collectSckFrames(
   presentation: BrowserPresentation,
   target: number,
   timeoutMs: number,
+  requireExactPixels: boolean,
 ): Promise<SckPixelProof> {
   const deadline = performance.now() + timeoutMs;
   let proof: SckPixelProof | null = null;
-  while (presentation.presented < target || proof === null) {
+  while (
+    presentation.presented < target ||
+    proof === null ||
+    (requireExactPixels && !proof.exact)
+  ) {
     const lease = presentation.attachment.takeFrame();
     if (lease !== null) {
-      const sample = proof === null ? lease.frame.value.clone() : null;
+      const sample =
+        proof === null || (requireExactPixels && !proof.exact) ? lease.frame.value.clone() : null;
       const metadata = lease.frame.metadata;
       const result = presentation.store.present(lease);
       if (result.kind === "presented") {
@@ -213,10 +241,12 @@ async function collectSckFrames(
     }
     if (performance.now() >= deadline) {
       throw new Error(
-        `SCK frame deadline: presented=${presentation.presented}, proof=${proof !== null}`,
+        `SCK frame deadline: presented=${presentation.presented}, proof=${proof !== null}, exact=${proof?.exact ?? false}`,
       );
     }
-    if (presentation.presented < target || proof === null) await delay(8);
+    if (presentation.presented < target || proof === null || (requireExactPixels && !proof.exact)) {
+      await delay(8);
+    }
   }
   return proof;
 }
@@ -229,15 +259,21 @@ async function waitForTickets(): Promise<void> {
   }
 }
 
-function presentLatest(presentation: BrowserPresentation, drawPreview: boolean): boolean {
+function presentLatest(
+  presentation: BrowserPresentation,
+  drawPreview: boolean,
+  onPresented?: (metadata: LiveSurfaceFrameMetadataV1) => void,
+): boolean {
   const lease = presentation.attachment.takeFrame();
   if (lease === null) return false;
   const preview = drawPreview ? lease.frame.value.clone() : null;
+  const metadata = lease.frame.metadata;
   const result = presentation.store.present(lease);
   try {
     if (result.kind !== "presented") return false;
     if (preview !== null) context.drawImage(preview, 0, 0, canvas.width, canvas.height);
     presentation.presented += 1;
+    onPresented?.(metadata);
     return true;
   } finally {
     preview?.close();
@@ -261,6 +297,170 @@ async function collectBrowserFrames(
     }
     await delay(8);
   }
+}
+
+function supersededFramesFor(presentations: readonly BrowserPresentation[]): number {
+  return presentations.reduce(
+    (total, presentation) => total + presentation.attachment.frameStats.releases.superseded,
+    0,
+  );
+}
+
+class FrameAgeHistogram {
+  static readonly bucketWidthUs = 100;
+  static readonly maximumBucket = 50_000;
+  readonly #buckets = new Uint32Array(FrameAgeHistogram.maximumBucket + 2);
+  #count = 0;
+
+  observe(ageUs: bigint): void {
+    const nonNegativeAgeUs = ageUs < 0n ? 0n : ageUs;
+    const roundedBucket = Number(
+      (nonNegativeAgeUs + BigInt(FrameAgeHistogram.bucketWidthUs - 1)) /
+        BigInt(FrameAgeHistogram.bucketWidthUs),
+    );
+    const bucket = Math.min(FrameAgeHistogram.maximumBucket + 1, roundedBucket);
+    this.#buckets[bucket] = (this.#buckets[bucket] ?? 0) + 1;
+    this.#count += 1;
+  }
+
+  snapshot(): { readonly samples: number; readonly p95Ms: number } {
+    if (this.#count === 0) return { samples: 0, p95Ms: 0 };
+    const rank = Math.ceil(this.#count * 0.95);
+    let seen = 0;
+    for (const [bucket, count] of this.#buckets.entries()) {
+      seen += count;
+      if (seen >= rank) {
+        return {
+          samples: this.#count,
+          p95Ms: (bucket * FrameAgeHistogram.bucketWidthUs) / 1_000,
+        };
+      }
+    }
+    throw new Error("frame-age histogram did not contain its sample count");
+  }
+}
+
+function readHostClockOffsetUs(): bigint {
+  const rawOffset = document.documentElement.dataset[LIVE_SURFACE_LAB_CLOCK_OFFSET_DATASET];
+  const rawUncertainty =
+    document.documentElement.dataset[LIVE_SURFACE_LAB_CLOCK_UNCERTAINTY_DATASET];
+  if (
+    rawOffset === undefined ||
+    !/^-?(0|[1-9][0-9]*)$/u.test(rawOffset) ||
+    rawUncertainty === undefined ||
+    !/^(0|[1-9][0-9]*)$/u.test(rawUncertainty)
+  ) {
+    throw new Error("main did not provide a valid monotonic clock calibration");
+  }
+  const uncertaintyUs = Number(rawUncertainty);
+  if (!Number.isSafeInteger(uncertaintyUs) || uncertaintyUs > 5_000) {
+    throw new Error(`monotonic clock calibration uncertainty was ${rawUncertainty}us`);
+  }
+  return BigInt(rawOffset);
+}
+
+async function runContinuousSoak(
+  browserPresentations: readonly BrowserPresentation[],
+  sckPresentation: BrowserPresentation | null,
+  durationMs: number,
+  hostClockOffsetUs: bigint,
+): Promise<LiveSurfaceLabContinuousSoakResult> {
+  const allPresentations =
+    sckPresentation === null ? browserPresentations : [...browserPresentations, sckPresentation];
+  const browserBaselines = browserPresentations.map((presentation) => presentation.presented);
+  const sckBaseline = sckPresentation?.presented ?? 0;
+  const supersededBaseline = supersededFramesFor(allPresentations);
+  let rendererPendingPerSurfaceMax = 0;
+  let rendererInFlightPerSurfaceMax = 0;
+  let ticks = 0;
+  const browserLastPresentedAt = browserPresentations.map(() => performance.now());
+  const browserMaximumPresentationGapMs = browserPresentations.map(() => 0);
+  let sckLastPresentedAt = sckPresentation === null ? null : performance.now();
+  let sckMaximumPresentationGapMs = sckPresentation === null ? null : 0;
+  const frameAgeHistograms = allPresentations.map(() => new FrameAgeHistogram());
+  const activeRasterSizes: Array<{ width: number; height: number } | null> = allPresentations.map(
+    () => null,
+  );
+  const observeFrame = (index: number, metadata: LiveSurfaceFrameMetadataV1): void => {
+    const rendererHostNowUs = hostClockOffsetUs + BigInt(Math.round(performance.now() * 1_000));
+    frameAgeHistograms[index]?.observe(rendererHostNowUs - BigInt(metadata.hostReceivedAtUs));
+    activeRasterSizes[index] = {
+      width: metadata.geometry.visibleRect.width,
+      height: metadata.geometry.visibleRect.height,
+    };
+  };
+  const observeQueues = (): void => {
+    for (const presentation of allPresentations) {
+      const stats = presentation.attachment.frameStats;
+      rendererPendingPerSurfaceMax = Math.max(rendererPendingPerSurfaceMax, stats.pending);
+      rendererInFlightPerSurfaceMax = Math.max(rendererInFlightPerSurfaceMax, stats.inFlight);
+    }
+  };
+  const startedAt = performance.now();
+  const deadline = startedAt + durationMs;
+  while (performance.now() < deadline) {
+    observeQueues();
+    for (const [index, presentation] of browserPresentations.entries()) {
+      if (presentLatest(presentation, false, (metadata) => observeFrame(index, metadata))) {
+        const presentedAt = performance.now();
+        browserMaximumPresentationGapMs[index] = Math.max(
+          browserMaximumPresentationGapMs[index] ?? 0,
+          presentedAt - (browserLastPresentedAt[index] ?? startedAt),
+        );
+        browserLastPresentedAt[index] = presentedAt;
+      }
+    }
+    if (
+      sckPresentation !== null &&
+      presentLatest(sckPresentation, false, (metadata) =>
+        observeFrame(browserPresentations.length, metadata),
+      )
+    ) {
+      const presentedAt = performance.now();
+      sckMaximumPresentationGapMs = Math.max(
+        sckMaximumPresentationGapMs ?? 0,
+        presentedAt - (sckLastPresentedAt ?? startedAt),
+      );
+      sckLastPresentedAt = presentedAt;
+    }
+    observeQueues();
+    ticks += 1;
+    const remainingMs = deadline - performance.now();
+    if (remainingMs > 0) await delay(Math.min(8, remainingMs));
+  }
+  observeQueues();
+  const finishedAt = performance.now();
+  for (const index of browserPresentations.keys()) {
+    browserMaximumPresentationGapMs[index] = Math.max(
+      browserMaximumPresentationGapMs[index] ?? 0,
+      finishedAt - (browserLastPresentedAt[index] ?? startedAt),
+    );
+  }
+  if (sckMaximumPresentationGapMs !== null) {
+    sckMaximumPresentationGapMs = Math.max(
+      sckMaximumPresentationGapMs,
+      finishedAt - (sckLastPresentedAt ?? startedAt),
+    );
+  }
+  const frameAge = frameAgeHistograms.map((histogram) => histogram.snapshot());
+  return {
+    requestedDurationMs: durationMs,
+    elapsedMs: finishedAt - startedAt,
+    ticks,
+    browserPresented: browserPresentations.map(
+      (presentation, index) => presentation.presented - (browserBaselines[index] ?? 0),
+    ),
+    browserMaximumPresentationGapMs,
+    sckPresented: (sckPresentation?.presented ?? 0) - sckBaseline,
+    sckMaximumPresentationGapMs,
+    activeFrameAgeSamples: frameAge.map((sample) => sample.samples),
+    activeFrameAgeP95Ms: frameAge.map((sample) => sample.p95Ms),
+    worstActiveFrameAgeP95Ms: frameAge.reduce((worst, sample) => Math.max(worst, sample.p95Ms), 0),
+    activeRasterSizes,
+    rendererPendingPerSurfaceMax,
+    rendererInFlightPerSurfaceMax,
+    rendererSupersededFrames: supersededFramesFor(allPresentations) - supersededBaseline,
+  };
 }
 
 async function runReloadProbe(): Promise<void> {
@@ -287,6 +487,7 @@ async function runReloadProbe(): Promise<void> {
     const nextParameters = new URLSearchParams({ phase: "main" });
     if (sckMode !== null) nextParameters.set("sck", sckMode);
     if (sckRotate) nextParameters.set("rotate", "1");
+    if (continuousSoakConfigured) nextParameters.set("soakMs", String(continuousSoakMs));
     history.replaceState(null, "", `${location.pathname}?${nextParameters.toString()}`);
     document.documentElement.dataset[LIVE_SURFACE_LAB_RELOAD_READY_DATASET] = "1";
     status.textContent = "LSF-2 reload: shared frame held; waiting for main-authorized reload…";
@@ -305,6 +506,7 @@ async function runReloadProbe(): Promise<void> {
       browserFallbackObserved: false,
       tenSurfacePresented: [],
       tenSurfaceShared: 0,
+      continuousSoak: null,
       sckEnabled,
       ...(sckMode === null ? {} : { sckMode }),
       sckPresented: 0,
@@ -330,6 +532,7 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
   let browserFallbackObserved = false;
   let tenSurfacePresented: number[] = [];
   let tenSurfaceShared = 0;
+  let continuousSoak: LiveSurfaceLabContinuousSoakResult | null = null;
   let sckPresented = 0;
   let sckExact = false;
   let sckRebound = false;
@@ -339,6 +542,9 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
   let sckBluePureRatio = 0;
   let sckPresentation: BrowserPresentation | null = null;
   try {
+    if (!continuousSoakValid) {
+      throw new Error("continuous soak duration must be an integer from 1000ms through 1800000ms");
+    }
     const gpu = (navigator as Navigator & { readonly gpu?: LabGpu }).gpu;
     if (gpu === undefined) throw new Error("navigator.gpu is unavailable");
     const adapter = await gpu.requestAdapter();
@@ -482,8 +688,9 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       interactive: false,
     });
 
-    // Ten concurrent shared Browser surfaces. Surface zero resumes; nine new
-    // attachments use tiered FPS/raster demand.
+    // Ten concurrent shared Browser surfaces. A continuous run uses the
+    // ratified 60/30/5 reference tiers; the quick regression keeps its smaller
+    // workload so it remains useful during ordinary development.
     browserStatus.textContent = "ten Browser surfaces: concurrent OSR/shared-texture run…";
     const remaining = await Promise.all(
       LIVE_SURFACE_LAB_TICKETS.slice(2, 11).map((ticket) => transport.attach(ticket)),
@@ -500,9 +707,20 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
     });
     for (const [index, attachment] of tenAttachments.entries()) {
       const tier = index === 0 ? 0 : index <= 3 ? 1 : 2;
-      const targetFps = tier === 0 ? 30 : tier === 1 ? 15 : 5;
-      const targetRasterSize =
-        tier === 0
+      const targetFps = continuousSoakConfigured
+        ? tier === 0
+          ? 60
+          : tier === 1
+            ? 30
+            : 5
+        : tier === 0
+          ? 30
+          : tier === 1
+            ? 15
+            : 5;
+      const targetRasterSize = continuousSoakConfigured
+        ? browserReferenceRasterSize(index)
+        : tier === 0
           ? { width: 640, height: 360 }
           : tier === 1
             ? { width: 320, height: 180 }
@@ -521,16 +739,6 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
     tenSurfaceShared = tenAttachments.filter(
       (attachment) => attachment.summary.transport === "shared-texture",
     ).length;
-    for (const [index, attachment] of tenAttachments.entries()) {
-      attachment.setDemand({
-        revision: index === 0 ? 4 : 2,
-        mode: "hibernated",
-        targetFps: 0,
-        priority: 0,
-        interactive: false,
-      });
-    }
-    await delay(300);
 
     if (sckEnabled) {
       sckStatus.textContent =
@@ -549,7 +757,7 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
         priority: 90,
         interactive: false,
       });
-      const proof = await collectSckFrames(sckPresentation, 3, 20_000);
+      const proof = await collectSckFrames(sckPresentation, 3, 20_000, sckMode === "fixture");
       sckPresented = sckPresentation.presented;
       sckExact = proof.exact;
       sckPixelFormat = proof.pixelFormat;
@@ -584,21 +792,58 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
         }
         sckPresented = sckPresentation.presented;
       }
-      sck.setDemand({
-        revision: 2,
-        mode: "hibernated",
-        targetFps: 0,
-        priority: 0,
-        interactive: false,
-      });
       sckStatus.textContent =
         sckMode === "simulator"
           ? `Simulator viewport · ${sckPresented} frames${sckRebound ? " · rebound" : ""}`
           : proof.exact
             ? `exact BGRA · ${sckPresented} frames`
             : `pixel mismatch · red ${proof.redPureRatio}, blue ${proof.bluePureRatio}`;
-      await delay(300);
     }
+
+    if (continuousSoakConfigured) {
+      browserStatus.textContent = `continuous reference workload · ${Math.round(
+        continuousSoakMs / 1_000,
+      )}s…`;
+      document.documentElement.dataset[LIVE_SURFACE_LAB_CONTINUOUS_ACTIVE_DATASET] = "1";
+      try {
+        // Give the external main-process meter one bounded polling interval to
+        // arm before the timed reference window begins.
+        await delay(50);
+        continuousSoak = await runContinuousSoak(
+          tenPresentations,
+          sckPresentation,
+          continuousSoakMs,
+          readHostClockOffsetUs(),
+        );
+      } finally {
+        document.documentElement.dataset[LIVE_SURFACE_LAB_CONTINUOUS_ACTIVE_DATASET] = "0";
+      }
+      tenSurfacePresented = tenPresentations.map((presentation) => presentation.presented);
+      sckPresented = sckPresentation?.presented ?? sckPresented;
+      browserStatus.textContent = `continuous workload complete · ${continuousSoak.browserPresented.join(
+        ",",
+      )}`;
+    }
+
+    for (const [index, attachment] of tenAttachments.entries()) {
+      attachment.setDemand({
+        revision: index === 0 ? 4 : 2,
+        mode: "hibernated",
+        targetFps: 0,
+        priority: 0,
+        interactive: false,
+      });
+    }
+    if (sckPresentation !== null) {
+      sckPresentation.attachment.setDemand({
+        revision: 2,
+        mode: "hibernated",
+        targetFps: 0,
+        priority: 0,
+        interactive: false,
+      });
+    }
+    await delay(300);
 
     transportProtocolFaults = transport.protocolFaults;
     supersededFrames = fixture.frameStats.releases.superseded;
@@ -615,6 +860,33 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       tenSurfacePresented.length === 10 &&
       tenSurfacePresented.every((count) => count >= 3) &&
       tenSurfaceShared === 10 &&
+      (!continuousSoakConfigured ||
+        (continuousSoak !== null &&
+          continuousSoak.elapsedMs >= continuousSoak.requestedDurationMs &&
+          continuousSoak.ticks > 0 &&
+          continuousSoak.browserPresented.length === 10 &&
+          continuousSoak.browserPresented.every((count) => count > 0) &&
+          continuousSoak.browserMaximumPresentationGapMs.length === 10 &&
+          continuousSoak.browserMaximumPresentationGapMs.every(
+            (gapMs) => gapMs <= MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS,
+          ) &&
+          (!sckEnabled || continuousSoak.sckPresented > 0) &&
+          (!sckEnabled ||
+            (continuousSoak.sckMaximumPresentationGapMs !== null &&
+              continuousSoak.sckMaximumPresentationGapMs <=
+                MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS)) &&
+          continuousSoak.activeFrameAgeSamples.length === (sckEnabled ? 11 : 10) &&
+          continuousSoak.activeFrameAgeSamples.every((count) => count > 0) &&
+          continuousSoak.activeRasterSizes.length === (sckEnabled ? 11 : 10) &&
+          continuousSoak.activeRasterSizes.slice(0, 10).every((size, index) => {
+            const expected = browserReferenceRasterSize(index);
+            return size?.width === expected.width && size.height === expected.height;
+          }) &&
+          (continuousSoak.requestedDurationMs < MINIMUM_CONTINUOUS_BUDGET_SAMPLE_MS ||
+            continuousSoak.worstActiveFrameAgeP95Ms <=
+              LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS.worstActiveFrameAgeP95Ms) &&
+          continuousSoak.rendererPendingPerSurfaceMax <= 1 &&
+          continuousSoak.rendererInFlightPerSurfaceMax <= 1)) &&
       (!sckEnabled ||
         (sckPresented >= (sckRotate ? 6 : 3) &&
           (sckMode !== "fixture" || sckExact) &&
@@ -637,6 +909,7 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       browserFallbackObserved,
       tenSurfacePresented,
       tenSurfaceShared,
+      continuousSoak,
       sckEnabled,
       ...(sckMode === null ? {} : { sckMode }),
       sckPresented,
@@ -676,6 +949,7 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       browserFallbackObserved,
       tenSurfacePresented,
       tenSurfaceShared,
+      continuousSoak,
       sckEnabled,
       ...(sckMode === null ? {} : { sckMode }),
       sckPresented,
