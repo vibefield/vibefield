@@ -37,6 +37,11 @@ function parseArgs(argv) {
   let iterations;
   let timeoutMs;
   let sckFixture = false;
+  let sckSessions;
+  let helperCrashes;
+  let simulatorUdid;
+  let rotateSimulator = false;
+  let requireInactiveSpace = false;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     switch (argument) {
@@ -53,17 +58,62 @@ function parseArgs(argv) {
       case "--sck-fixture":
         sckFixture = true;
         break;
+      case "--sck-sessions":
+        sckSessions = positiveInteger(argv[++index], "--sck-sessions", 4);
+        break;
+      case "--helper-crashes": {
+        const parsed = Number(argv[++index]);
+        if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 2) {
+          fail("--helper-crashes must be an integer from 0 through 2");
+        }
+        helperCrashes = parsed;
+        break;
+      }
+      case "--simulator-udid":
+        simulatorUdid = argv[++index];
+        if (typeof simulatorUdid !== "string" || !/^[A-Fa-f0-9-]{8,64}$/u.test(simulatorUdid)) {
+          fail("--simulator-udid must be a bounded device identifier");
+        }
+        break;
+      case "--rotate-simulator":
+        rotateSimulator = true;
+        break;
+      case "--require-inactive-space":
+        requireInactiveSpace = true;
+        break;
       default:
         fail(`unknown argument: ${argument ?? "<missing>"}`);
     }
   }
   const durationMs = Math.round(minutes * 60_000);
   if (durationMs < 1_000) fail("--minutes must select at least 1000ms");
+  const resolvedSckSessions = sckSessions ?? (sckFixture ? 4 : 1);
+  const resolvedHelperCrashes = helperCrashes ?? (sckFixture && iterations === undefined ? 2 : 0);
+  if (!sckFixture && resolvedSckSessions !== 1) {
+    fail("multiple SCK sessions require --sck-fixture");
+  }
+  if (sckFixture && simulatorUdid !== undefined && resolvedSckSessions < 2) {
+    fail("mixed fixture/Simulator capture requires at least two SCK sessions");
+  }
+  if (!sckFixture && simulatorUdid === undefined && resolvedHelperCrashes !== 0) {
+    fail("helper crash recovery requires an SCK mode");
+  }
+  if (iterations !== undefined && resolvedHelperCrashes !== 0) {
+    fail("helper crash checkpoints require a continuous --minutes run");
+  }
+  if ((rotateSimulator || requireInactiveSpace) && simulatorUdid === undefined) {
+    fail("Simulator options require --simulator-udid");
+  }
   return {
     durationMs,
     iterations,
     timeoutMs: timeoutMs ?? (iterations === undefined ? durationMs + 120_000 : 120_000),
     sckFixture,
+    sckSessions: resolvedSckSessions,
+    helperCrashes: resolvedHelperCrashes,
+    simulatorUdid,
+    rotateSimulator,
+    requireInactiveSpace,
   };
 }
 
@@ -83,15 +133,30 @@ function parseVerdict(stdout) {
   return verdict;
 }
 
-function labEnvironment(sckFixture, continuousSoakMs) {
+function labEnvironment(options, continuousSoakMs) {
   const environment = { ...process.env };
   delete environment.VF_LIVE_SURFACES_CONTINUOUS_SOAK_MS;
   delete environment.VF_LIVE_SURFACES_SCK_LAB;
   delete environment.VF_LIVE_SURFACES_SIMULATOR_UDID;
   delete environment.VF_LIVE_SURFACES_SIMULATOR_ROTATE;
   delete environment.VF_LIVE_SURFACES_SIMULATOR_REQUIRE_INACTIVE_SPACE;
+  delete environment.VF_LIVE_SURFACES_SCK_SESSIONS;
+  delete environment.VF_LIVE_SURFACES_HELPER_CRASHES;
   environment.VF_LIVE_SURFACES_LAB_HEADLESS = "1";
-  if (sckFixture) environment.VF_LIVE_SURFACES_SCK_LAB = "1";
+  if (options.sckFixture) environment.VF_LIVE_SURFACES_SCK_LAB = "1";
+  if (options.simulatorUdid !== undefined) {
+    environment.VF_LIVE_SURFACES_SIMULATOR_UDID = options.simulatorUdid;
+  }
+  if (options.rotateSimulator) environment.VF_LIVE_SURFACES_SIMULATOR_ROTATE = "1";
+  if (options.requireInactiveSpace) {
+    environment.VF_LIVE_SURFACES_SIMULATOR_REQUIRE_INACTIVE_SPACE = "1";
+  }
+  if (options.sckFixture || options.simulatorUdid !== undefined) {
+    environment.VF_LIVE_SURFACES_SCK_SESSIONS = String(options.sckSessions);
+  }
+  if (options.helperCrashes > 0) {
+    environment.VF_LIVE_SURFACES_HELPER_CRASHES = String(options.helperCrashes);
+  }
   if (continuousSoakMs !== undefined) {
     environment.VF_LIVE_SURFACES_CONTINUOUS_SOAK_MS = String(continuousSoakMs);
   }
@@ -102,7 +167,7 @@ async function runIteration({
   desktopRoot,
   electronPath,
   timeoutMs,
-  sckFixture,
+  options,
   continuousSoakMs,
   iteration,
 }) {
@@ -111,7 +176,7 @@ async function runIteration({
     [desktopRoot, "--live-surfaces-lab", "-ApplePersistenceIgnoreState", "YES"],
     {
       cwd: desktopRoot,
-      env: labEnvironment(sckFixture, continuousSoakMs),
+      env: labEnvironment(options, continuousSoakMs),
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -235,7 +300,7 @@ async function main() {
       desktopRoot,
       electronPath,
       timeoutMs: options.timeoutMs,
-      sckFixture: options.sckFixture,
+      options,
       continuousSoakMs: options.durationMs,
       iteration: 1,
     });
@@ -243,7 +308,14 @@ async function main() {
     process.stdout.write(
       `LIVE_SURFACES_SOAK ${JSON.stringify({
         ok: true,
-        mode: options.sckFixture ? "sck-fixture-continuous" : "browser-continuous",
+        mode:
+          options.simulatorUdid !== undefined
+            ? options.sckFixture
+              ? "sck-mixed-continuous"
+              : "simulator-continuous"
+            : options.sckFixture
+              ? "sck-fixture-continuous"
+              : "browser-continuous",
         iterations: 1,
         requestedDurationMs: options.durationMs,
         elapsedMs: Math.round(performance.now() - startedAt),
@@ -262,7 +334,7 @@ async function main() {
       desktopRoot,
       electronPath,
       timeoutMs: options.timeoutMs,
-      sckFixture: options.sckFixture,
+      options,
       continuousSoakMs: undefined,
       iteration: iterations,
     });
@@ -271,7 +343,14 @@ async function main() {
   process.stdout.write(
     `LIVE_SURFACES_SOAK ${JSON.stringify({
       ok: true,
-      mode: options.sckFixture ? "sck-fixture-recovery" : "browser-recovery",
+      mode:
+        options.simulatorUdid !== undefined
+          ? options.sckFixture
+            ? "sck-mixed-recovery"
+            : "simulator-recovery"
+          : options.sckFixture
+            ? "sck-fixture-recovery"
+            : "browser-recovery",
       iterations,
       elapsedMs: Math.round(performance.now() - startedAt),
       runtimeTotals: metrics,

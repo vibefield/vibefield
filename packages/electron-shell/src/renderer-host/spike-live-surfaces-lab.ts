@@ -10,10 +10,12 @@ import {
   LIVE_SURFACE_LAB_CLOCK_OFFSET_DATASET,
   LIVE_SURFACE_LAB_CLOCK_UNCERTAINTY_DATASET,
   LIVE_SURFACE_LAB_CONTINUOUS_ACTIVE_DATASET,
+  LIVE_SURFACE_LAB_HELPER_CRASH_ACK_DATASET,
+  LIVE_SURFACE_LAB_HELPER_CRASH_REQUEST_DATASET,
   LIVE_SURFACE_LAB_RELOAD_READY_DATASET,
   LIVE_SURFACE_LAB_RELOAD_TICKET,
   LIVE_SURFACE_LAB_RESULT_DATASET,
-  LIVE_SURFACE_LAB_SCK_TICKET,
+  LIVE_SURFACE_LAB_SCK_TICKETS,
   LIVE_SURFACE_LAB_TICKET_READY_DATASET,
   LIVE_SURFACE_LAB_TICKETS,
   type LiveSurfaceLabContinuousSoakResult,
@@ -73,14 +75,28 @@ const context = required(canvas.getContext("2d"), "2D preview context");
 const labParameters = new URLSearchParams(location.search);
 const phase = labParameters.get("phase");
 const rawSckMode = labParameters.get("sck");
-const sckMode =
-  rawSckMode === "simulator"
-    ? "simulator"
-    : rawSckMode === "1" || rawSckMode === "fixture"
-      ? "fixture"
-      : null;
-const sckEnabled = sckMode !== null;
-const sckRotate = sckMode === "simulator" && labParameters.get("rotate") === "1";
+const sckMode: "fixture" | "simulator" | "mixed" | null =
+  rawSckMode === "mixed"
+    ? "mixed"
+    : rawSckMode === "simulator"
+      ? "simulator"
+      : rawSckMode === "1" || rawSckMode === "fixture"
+        ? "fixture"
+        : null;
+const rawSckModes = labParameters.get("sckModes");
+const parsedSckModes: string[] =
+  rawSckModes === null
+    ? sckMode === "fixture" || sckMode === "simulator"
+      ? [sckMode]
+      : []
+    : rawSckModes.split(",");
+const sckModes: Array<"fixture" | "simulator"> = parsedSckModes.filter(
+  (mode): mode is "fixture" | "simulator" => mode === "fixture" || mode === "simulator",
+);
+const sckEnabled = sckModes.length > 0;
+const sckRotate = sckModes.includes("simulator") && labParameters.get("rotate") === "1";
+const rawHelperCrashCount = labParameters.get("helperCrashes");
+const helperCrashCount = rawHelperCrashCount === null ? 0 : Number(rawHelperCrashCount);
 const rawContinuousSoakMs = labParameters.get("soakMs");
 const continuousSoakMs = rawContinuousSoakMs === null ? 0 : Number(rawContinuousSoakMs);
 const continuousSoakConfigured = rawContinuousSoakMs !== null;
@@ -89,6 +105,22 @@ const continuousSoakValid =
   (Number.isSafeInteger(continuousSoakMs) &&
     continuousSoakMs >= 1_000 &&
     continuousSoakMs <= 30 * 60_000);
+const sckConfigurationValid =
+  parsedSckModes.length === sckModes.length &&
+  sckModes.length <= LIVE_SURFACE_LAB_SCK_TICKETS.length &&
+  ((sckMode === null && sckModes.length === 0) ||
+    (sckMode === "fixture" &&
+      sckModes.length > 0 &&
+      sckModes.every((mode) => mode === "fixture")) ||
+    (sckMode === "simulator" && sckModes.length === 1 && sckModes[0] === "simulator") ||
+    (sckMode === "mixed" &&
+      sckModes.length >= 2 &&
+      sckModes.filter((mode) => mode === "simulator").length === 1));
+const helperCrashConfigurationValid =
+  Number.isSafeInteger(helperCrashCount) &&
+  helperCrashCount >= 0 &&
+  helperCrashCount <= 2 &&
+  (helperCrashCount === 0 || (sckEnabled && continuousSoakConfigured));
 const MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS = 2_000;
 const MINIMUM_CONTINUOUS_BUDGET_SAMPLE_MS = 60_000;
 
@@ -96,6 +128,10 @@ function browserReferenceRasterSize(index: number): { width: number; height: num
   if (index === 0) return { width: 1280, height: 800 };
   if (index <= 3) return { width: 640, height: 480 };
   return { width: 320, height: 240 };
+}
+
+function simulatorSurfaceIndex(modes: readonly ("fixture" | "simulator")[]): number {
+  return modes.indexOf("simulator");
 }
 
 // Installed synchronously: preload's one-time port handoff can never outrun
@@ -133,10 +169,22 @@ function report(result: LiveSurfaceLabRendererResult): void {
           ? " + exact SCK"
           : result.sckMode === "simulator"
             ? " + Simulator SCK"
-            : ""
+            : result.sckMode === "mixed"
+              ? " + mixed SCK"
+              : ""
       }`
     : `FAIL · ${result.error ?? "unknown error"}`;
 }
+
+const sckConfigurationResult: Pick<
+  LiveSurfaceLabRendererResult,
+  "sckEnabled" | "sckMode" | "sckModes" | "sckSurfaceCount"
+> = {
+  sckEnabled,
+  ...(sckMode === null ? {} : { sckMode }),
+  sckModes,
+  sckSurfaceCount: sckModes.length,
+} as const;
 
 function exactPixelRatio(
   rgba: Uint8Array,
@@ -361,22 +409,23 @@ function readHostClockOffsetUs(): bigint {
 
 async function runContinuousSoak(
   browserPresentations: readonly BrowserPresentation[],
-  sckPresentation: BrowserPresentation | null,
+  sckPresentations: readonly BrowserPresentation[],
   durationMs: number,
   hostClockOffsetUs: bigint,
+  recoverDevice: () => Promise<void>,
+  requestedHelperCrashes: number,
 ): Promise<LiveSurfaceLabContinuousSoakResult> {
-  const allPresentations =
-    sckPresentation === null ? browserPresentations : [...browserPresentations, sckPresentation];
+  const allPresentations = [...browserPresentations, ...sckPresentations];
   const browserBaselines = browserPresentations.map((presentation) => presentation.presented);
-  const sckBaseline = sckPresentation?.presented ?? 0;
+  const sckBaselines = sckPresentations.map((presentation) => presentation.presented);
   const supersededBaseline = supersededFramesFor(allPresentations);
   let rendererPendingPerSurfaceMax = 0;
   let rendererInFlightPerSurfaceMax = 0;
   let ticks = 0;
   const browserLastPresentedAt = browserPresentations.map(() => performance.now());
   const browserMaximumPresentationGapMs = browserPresentations.map(() => 0);
-  let sckLastPresentedAt = sckPresentation === null ? null : performance.now();
-  let sckMaximumPresentationGapMs = sckPresentation === null ? null : 0;
+  const sckLastPresentedAt = sckPresentations.map(() => performance.now());
+  const sckMaximumPresentationGapMsPerSurface = sckPresentations.map(() => 0);
   const frameAgeHistograms = allPresentations.map(() => new FrameAgeHistogram());
   const activeRasterSizes: Array<{ width: number; height: number } | null> = allPresentations.map(
     () => null,
@@ -398,7 +447,77 @@ async function runContinuousSoak(
   };
   const startedAt = performance.now();
   const deadline = startedAt + durationMs;
+  const recoveryTargets = (durationMs >= 30_000 ? [0.25, 0.75] : [0.5]).map(
+    (fraction) => startedAt + durationMs * fraction,
+  );
+  const demandTargets = sckEnabled
+    ? [startedAt + durationMs * 0.15, startedAt + durationMs * 0.55]
+    : [];
+  const crashTargets = Array.from(
+    { length: requestedHelperCrashes },
+    (_, index) => startedAt + durationMs * ((index + 1) / (requestedHelperCrashes + 1)),
+  );
+  let nextRecovery = 0;
+  let nextDemand = 0;
+  let helperCrashRequests = 0;
+  let armingHelperCrash = false;
+  let waitingForHelperCrash = 0;
+  const heldSckSurfaces = new Set<number>();
   while (performance.now() < deadline) {
+    const now = performance.now();
+    if (
+      !armingHelperCrash &&
+      waitingForHelperCrash === 0 &&
+      helperCrashRequests < crashTargets.length &&
+      now >= crashTargets[helperCrashRequests]!
+    ) {
+      armingHelperCrash = true;
+    }
+    if (armingHelperCrash) {
+      for (const [index, presentation] of sckPresentations.entries()) {
+        if (presentation.attachment.frameStats.pending > 0) heldSckSurfaces.add(index);
+      }
+    }
+    if (armingHelperCrash && heldSckSurfaces.size === sckPresentations.length) {
+      armingHelperCrash = false;
+      waitingForHelperCrash = helperCrashRequests + 1;
+      document.documentElement.dataset[LIVE_SURFACE_LAB_HELPER_CRASH_REQUEST_DATASET] =
+        String(waitingForHelperCrash);
+    }
+    if (waitingForHelperCrash > 0) {
+      const acknowledged = Number(
+        document.documentElement.dataset[LIVE_SURFACE_LAB_HELPER_CRASH_ACK_DATASET] ?? "0",
+      );
+      if (acknowledged === waitingForHelperCrash) {
+        helperCrashRequests = waitingForHelperCrash;
+        waitingForHelperCrash = 0;
+        heldSckSurfaces.clear();
+      }
+    }
+    if (
+      !armingHelperCrash &&
+      waitingForHelperCrash === 0 &&
+      nextRecovery < recoveryTargets.length &&
+      now >= recoveryTargets[nextRecovery]!
+    ) {
+      await recoverDevice();
+      nextRecovery += 1;
+    }
+    if (nextDemand < demandTargets.length && now >= demandTargets[nextDemand]!) {
+      const revision = nextDemand + 2;
+      const constrained = nextDemand === 0;
+      for (const presentation of sckPresentations) {
+        presentation.attachment.setDemand({
+          revision,
+          mode: "live",
+          targetFps: constrained ? 15 : 30,
+          targetRasterSize: constrained ? { width: 320, height: 180 } : { width: 390, height: 844 },
+          priority: constrained ? 45 : 90,
+          interactive: false,
+        });
+      }
+      nextDemand += 1;
+    }
     observeQueues();
     for (const [index, presentation] of browserPresentations.entries()) {
       if (presentLatest(presentation, false, (metadata) => observeFrame(index, metadata))) {
@@ -410,18 +529,22 @@ async function runContinuousSoak(
         browserLastPresentedAt[index] = presentedAt;
       }
     }
-    if (
-      sckPresentation !== null &&
-      presentLatest(sckPresentation, false, (metadata) =>
-        observeFrame(browserPresentations.length, metadata),
-      )
-    ) {
-      const presentedAt = performance.now();
-      sckMaximumPresentationGapMs = Math.max(
-        sckMaximumPresentationGapMs ?? 0,
-        presentedAt - (sckLastPresentedAt ?? startedAt),
-      );
-      sckLastPresentedAt = presentedAt;
+    if (waitingForHelperCrash === 0) {
+      for (const [index, presentation] of sckPresentations.entries()) {
+        if (heldSckSurfaces.has(index)) continue;
+        if (
+          presentLatest(presentation, false, (metadata) =>
+            observeFrame(browserPresentations.length + index, metadata),
+          )
+        ) {
+          const presentedAt = performance.now();
+          sckMaximumPresentationGapMsPerSurface[index] = Math.max(
+            sckMaximumPresentationGapMsPerSurface[index] ?? 0,
+            presentedAt - (sckLastPresentedAt[index] ?? startedAt),
+          );
+          sckLastPresentedAt[index] = presentedAt;
+        }
+      }
     }
     observeQueues();
     ticks += 1;
@@ -436,13 +559,16 @@ async function runContinuousSoak(
       finishedAt - (browserLastPresentedAt[index] ?? startedAt),
     );
   }
-  if (sckMaximumPresentationGapMs !== null) {
-    sckMaximumPresentationGapMs = Math.max(
-      sckMaximumPresentationGapMs,
-      finishedAt - (sckLastPresentedAt ?? startedAt),
+  for (const index of sckPresentations.keys()) {
+    sckMaximumPresentationGapMsPerSurface[index] = Math.max(
+      sckMaximumPresentationGapMsPerSurface[index] ?? 0,
+      finishedAt - (sckLastPresentedAt[index] ?? startedAt),
     );
   }
   const frameAge = frameAgeHistograms.map((histogram) => histogram.snapshot());
+  const sckPresentedPerSurface = sckPresentations.map(
+    (presentation, index) => presentation.presented - (sckBaselines[index] ?? 0),
+  );
   return {
     requestedDurationMs: durationMs,
     elapsedMs: finishedAt - startedAt,
@@ -451,8 +577,13 @@ async function runContinuousSoak(
       (presentation, index) => presentation.presented - (browserBaselines[index] ?? 0),
     ),
     browserMaximumPresentationGapMs,
-    sckPresented: (sckPresentation?.presented ?? 0) - sckBaseline,
-    sckMaximumPresentationGapMs,
+    sckPresented: sckPresentedPerSurface.reduce((total, count) => total + count, 0),
+    sckPresentedPerSurface,
+    sckMaximumPresentationGapMs:
+      sckMaximumPresentationGapMsPerSurface.length === 0
+        ? null
+        : Math.max(...sckMaximumPresentationGapMsPerSurface),
+    sckMaximumPresentationGapMsPerSurface,
     activeFrameAgeSamples: frameAge.map((sample) => sample.samples),
     activeFrameAgeP95Ms: frameAge.map((sample) => sample.p95Ms),
     worstActiveFrameAgeP95Ms: frameAge.reduce((worst, sample) => Math.max(worst, sample.p95Ms), 0),
@@ -460,6 +591,9 @@ async function runContinuousSoak(
     rendererPendingPerSurfaceMax,
     rendererInFlightPerSurfaceMax,
     rendererSupersededFrames: supersededFramesFor(allPresentations) - supersededBaseline,
+    activeDeviceRecoveries: nextRecovery,
+    helperCrashRequests,
+    sckDemandChanges: nextDemand,
   };
 }
 
@@ -486,7 +620,9 @@ async function runReloadProbe(): Promise<void> {
     }
     const nextParameters = new URLSearchParams({ phase: "main" });
     if (sckMode !== null) nextParameters.set("sck", sckMode);
+    if (sckModes.length > 0) nextParameters.set("sckModes", sckModes.join(","));
     if (sckRotate) nextParameters.set("rotate", "1");
+    if (helperCrashCount > 0) nextParameters.set("helperCrashes", String(helperCrashCount));
     if (continuousSoakConfigured) nextParameters.set("soakMs", String(continuousSoakMs));
     history.replaceState(null, "", `${location.pathname}?${nextParameters.toString()}`);
     document.documentElement.dataset[LIVE_SURFACE_LAB_RELOAD_READY_DATASET] = "1";
@@ -507,9 +643,9 @@ async function runReloadProbe(): Promise<void> {
       tenSurfacePresented: [],
       tenSurfaceShared: 0,
       continuousSoak: null,
-      sckEnabled,
-      ...(sckMode === null ? {} : { sckMode }),
+      ...sckConfigurationResult,
       sckPresented: 0,
+      sckPresentedPerSurface: [],
       sckExact: false,
       sckRebound: false,
       sckRedPureRatio: 0,
@@ -534,16 +670,21 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
   let tenSurfaceShared = 0;
   let continuousSoak: LiveSurfaceLabContinuousSoakResult | null = null;
   let sckPresented = 0;
+  let sckPresentedPerSurface: number[] = [];
   let sckExact = false;
   let sckRebound = false;
   let sckTransport: "shared-texture" | undefined;
   let sckPixelFormat: "bgra" | undefined;
   let sckRedPureRatio = 0;
   let sckBluePureRatio = 0;
-  let sckPresentation: BrowserPresentation | null = null;
+  const sckPresentations: BrowserPresentation[] = [];
   try {
     if (!continuousSoakValid) {
       throw new Error("continuous soak duration must be an integer from 1000ms through 1800000ms");
+    }
+    if (!sckConfigurationValid) throw new Error("the SCK surface configuration is invalid");
+    if (!helperCrashConfigurationValid) {
+      throw new Error("the helper crash recovery configuration is invalid");
     }
     const gpu = (navigator as Navigator & { readonly gpu?: LabGpu }).gpu;
     if (gpu === undefined) throw new Error("navigator.gpu is unavailable");
@@ -744,38 +885,63 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       sckStatus.textContent =
         sckMode === "simulator"
           ? "capturing the resolved Simulator viewport through the helper…"
-          : "capturing deterministic BGRA stripes through the helper…";
-      const sck = await transport.attach(LIVE_SURFACE_LAB_SCK_TICKET);
-      const store = new WebGpuLiveSurfaceTextureStore<VideoFrame>();
-      store.replaceDevice(device);
-      sckPresentation = { attachment: sck, store, presented: 0 };
-      sck.setDemand({
-        revision: 1,
-        mode: "live",
-        targetFps: 30,
-        targetRasterSize: { width: 390, height: 844 },
-        priority: 90,
-        interactive: false,
-      });
-      const proof = await collectSckFrames(sckPresentation, 3, 20_000, sckMode === "fixture");
-      sckPresented = sckPresentation.presented;
-      sckExact = proof.exact;
-      sckPixelFormat = proof.pixelFormat;
-      sckRedPureRatio = proof.redPureRatio;
-      sckBluePureRatio = proof.bluePureRatio;
-      if (sck.summary.transport === "shared-texture") sckTransport = "shared-texture";
+          : sckMode === "mixed"
+            ? "capturing fixture and Simulator sessions through one helper…"
+            : "capturing deterministic BGRA stripes through the helper…";
+      const attachments = await Promise.all(
+        LIVE_SURFACE_LAB_SCK_TICKETS.slice(0, sckModes.length).map((ticket) =>
+          transport.attach(ticket),
+        ),
+      );
+      for (const attachment of attachments) {
+        const store = new WebGpuLiveSurfaceTextureStore<VideoFrame>();
+        store.replaceDevice(device);
+        const presentation = { attachment, store, presented: 0 };
+        sckPresentations.push(presentation);
+        attachment.setDemand({
+          revision: 1,
+          mode: "live",
+          targetFps: 30,
+          targetRasterSize: { width: 390, height: 844 },
+          priority: 90,
+          interactive: false,
+        });
+      }
+      const proofs: SckPixelProof[] = [];
+      for (const [index, presentation] of sckPresentations.entries()) {
+        proofs.push(await collectSckFrames(presentation, 3, 20_000, sckModes[index] === "fixture"));
+      }
+      sckPresentedPerSurface = sckPresentations.map((presentation) => presentation.presented);
+      sckPresented = sckPresentedPerSurface.reduce((total, count) => total + count, 0);
+      sckExact = proofs.every((proof, index) => sckModes[index] !== "fixture" || proof.exact);
+      if (proofs.every((proof) => proof.pixelFormat === "bgra")) sckPixelFormat = "bgra";
+      const fixtureProofs = proofs.filter((_, index) => sckModes[index] === "fixture");
+      sckRedPureRatio =
+        fixtureProofs.length === 0
+          ? 0
+          : Math.min(...fixtureProofs.map((proof) => proof.redPureRatio));
+      sckBluePureRatio =
+        fixtureProofs.length === 0
+          ? 0
+          : Math.min(...fixtureProofs.map((proof) => proof.bluePureRatio));
+      if (attachments.every((attachment) => attachment.summary.transport === "shared-texture")) {
+        sckTransport = "shared-texture";
+      }
       if (sckRotate) {
-        const firstEpoch = sck.summary.producerEpoch;
-        const firstGeometry = JSON.stringify(sck.summary.geometry?.logicalSize ?? null);
+        const simulatorIndex = simulatorSurfaceIndex(sckModes);
+        const sck = sckPresentations[simulatorIndex];
+        if (sck === undefined) throw new Error("Simulator rotation had no renderer presentation");
+        const firstEpoch = sck.attachment.summary.producerEpoch;
+        const firstGeometry = JSON.stringify(sck.attachment.summary.geometry?.logicalSize ?? null);
         let reboundFrames = 0;
         const deadline = performance.now() + 20_000;
         while (!sckRebound || reboundFrames < 3) {
-          const lease = sck.takeFrame();
+          const lease = sck.attachment.takeFrame();
           if (lease !== null) {
             const metadata = lease.frame.metadata;
-            const result = store.present(lease);
+            const result = sck.store.present(lease);
             if (result.kind === "presented") {
-              sckPresentation.presented += 1;
+              sck.presented += 1;
               const geometry = JSON.stringify(metadata.geometry.logicalSize);
               if (metadata.producerEpoch > firstEpoch && geometry !== firstGeometry) {
                 sckRebound = true;
@@ -790,14 +956,15 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
           }
           if (!sckRebound || reboundFrames < 3) await delay(8);
         }
-        sckPresented = sckPresentation.presented;
+        sckPresentedPerSurface = sckPresentations.map((presentation) => presentation.presented);
+        sckPresented = sckPresentedPerSurface.reduce((total, count) => total + count, 0);
       }
       sckStatus.textContent =
         sckMode === "simulator"
           ? `Simulator viewport · ${sckPresented} frames${sckRebound ? " · rebound" : ""}`
-          : proof.exact
-            ? `exact BGRA · ${sckPresented} frames`
-            : `pixel mismatch · red ${proof.redPureRatio}, blue ${proof.bluePureRatio}`;
+          : sckExact
+            ? `${sckPresentations.length} SCK sessions · ${sckPresented} exact frames`
+            : `pixel mismatch · red ${sckRedPureRatio}, blue ${sckBluePureRatio}`;
     }
 
     if (continuousSoakConfigured) {
@@ -809,17 +976,37 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
         // Give the external main-process meter one bounded polling interval to
         // arm before the timed reference window begins.
         await delay(50);
+        const recoverActiveDevice = async (): Promise<void> => {
+          recovery.textContent = "recovering active Browser/SCK stores after device loss…";
+          device.destroy();
+          await device.lost;
+          await Promise.resolve();
+          const replacementAdapter = await gpu.requestAdapter();
+          if (replacementAdapter === null) {
+            throw new Error("active recovery WebGPU adapter is unavailable");
+          }
+          device = await replacementAdapter.requestDevice();
+          deviceGenerations = fixtureStore.replaceDevice(device);
+          fallbackStore.replaceDevice(device);
+          for (const presentation of [...tenPresentations, ...sckPresentations]) {
+            presentation.store.replaceDevice(device);
+          }
+          recovery.textContent = `active stores recovered on GPU generation ${deviceGenerations}`;
+        };
         continuousSoak = await runContinuousSoak(
           tenPresentations,
-          sckPresentation,
+          sckPresentations,
           continuousSoakMs,
           readHostClockOffsetUs(),
+          recoverActiveDevice,
+          helperCrashCount,
         );
       } finally {
         document.documentElement.dataset[LIVE_SURFACE_LAB_CONTINUOUS_ACTIVE_DATASET] = "0";
       }
       tenSurfacePresented = tenPresentations.map((presentation) => presentation.presented);
-      sckPresented = sckPresentation?.presented ?? sckPresented;
+      sckPresentedPerSurface = sckPresentations.map((presentation) => presentation.presented);
+      sckPresented = sckPresentedPerSurface.reduce((total, count) => total + count, 0);
       browserStatus.textContent = `continuous workload complete · ${continuousSoak.browserPresented.join(
         ",",
       )}`;
@@ -834,9 +1021,9 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
         interactive: false,
       });
     }
-    if (sckPresentation !== null) {
-      sckPresentation.attachment.setDemand({
-        revision: 2,
+    for (const presentation of sckPresentations) {
+      presentation.attachment.setDemand({
+        revision: continuousSoakConfigured ? 4 : 2,
         mode: "hibernated",
         targetFps: 0,
         priority: 0,
@@ -870,14 +1057,19 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
           continuousSoak.browserMaximumPresentationGapMs.every(
             (gapMs) => gapMs <= MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS,
           ) &&
-          (!sckEnabled || continuousSoak.sckPresented > 0) &&
+          continuousSoak.sckPresentedPerSurface.length === sckModes.length &&
+          continuousSoak.sckPresentedPerSurface.every((count) => count > 0) &&
+          continuousSoak.sckMaximumPresentationGapMsPerSurface.length === sckModes.length &&
+          continuousSoak.sckMaximumPresentationGapMsPerSurface.every(
+            (gapMs) => gapMs <= MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS,
+          ) &&
           (!sckEnabled ||
             (continuousSoak.sckMaximumPresentationGapMs !== null &&
               continuousSoak.sckMaximumPresentationGapMs <=
                 MAXIMUM_CONTINUOUS_PRESENTATION_GAP_MS)) &&
-          continuousSoak.activeFrameAgeSamples.length === (sckEnabled ? 11 : 10) &&
+          continuousSoak.activeFrameAgeSamples.length === 10 + sckModes.length &&
           continuousSoak.activeFrameAgeSamples.every((count) => count > 0) &&
-          continuousSoak.activeRasterSizes.length === (sckEnabled ? 11 : 10) &&
+          continuousSoak.activeRasterSizes.length === 10 + sckModes.length &&
           continuousSoak.activeRasterSizes.slice(0, 10).every((size, index) => {
             const expected = browserReferenceRasterSize(index);
             return size?.width === expected.width && size.height === expected.height;
@@ -886,10 +1078,15 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
             continuousSoak.worstActiveFrameAgeP95Ms <=
               LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS.worstActiveFrameAgeP95Ms) &&
           continuousSoak.rendererPendingPerSurfaceMax <= 1 &&
-          continuousSoak.rendererInFlightPerSurfaceMax <= 1)) &&
+          continuousSoak.rendererInFlightPerSurfaceMax <= 1 &&
+          continuousSoak.activeDeviceRecoveries === (continuousSoakMs >= 30_000 ? 2 : 1) &&
+          continuousSoak.helperCrashRequests === helperCrashCount &&
+          continuousSoak.sckDemandChanges === (sckEnabled ? 2 : 0))) &&
       (!sckEnabled ||
-        (sckPresented >= (sckRotate ? 6 : 3) &&
-          (sckMode !== "fixture" || sckExact) &&
+        (sckPresentedPerSurface.length === sckModes.length &&
+          sckPresentedPerSurface.every((count) => count >= 3) &&
+          (!sckRotate || (sckPresentedPerSurface[simulatorSurfaceIndex(sckModes)] ?? 0) >= 6) &&
+          (sckModes.every((mode) => mode !== "fixture") || sckExact) &&
           (!sckRotate || sckRebound) &&
           sckTransport === "shared-texture" &&
           sckPixelFormat === "bgra")) &&
@@ -910,9 +1107,9 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       tenSurfacePresented,
       tenSurfaceShared,
       continuousSoak,
-      sckEnabled,
-      ...(sckMode === null ? {} : { sckMode }),
+      ...sckConfigurationResult,
       sckPresented,
+      sckPresentedPerSurface,
       sckExact,
       sckRebound,
       ...(sckTransport === undefined ? {} : { sckTransport }),
@@ -930,8 +1127,10 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       presentation.attachment.dispose();
       presentation.store.close();
     }
-    sckPresentation?.attachment.dispose();
-    sckPresentation?.store.close();
+    for (const presentation of sckPresentations) {
+      presentation.attachment.dispose();
+      presentation.store.close();
+    }
     transport.dispose();
   } catch (error) {
     report({
@@ -950,9 +1149,9 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       tenSurfacePresented,
       tenSurfaceShared,
       continuousSoak,
-      sckEnabled,
-      ...(sckMode === null ? {} : { sckMode }),
+      ...sckConfigurationResult,
       sckPresented,
+      sckPresentedPerSurface,
       sckExact,
       sckRebound,
       ...(sckTransport === undefined ? {} : { sckTransport }),

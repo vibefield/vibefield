@@ -466,6 +466,7 @@ async function main(
         readonly helperPath: string;
         readonly adapterPath: string;
         readonly fixturePath: string;
+        readonly sessionCount: number;
       }
     | {
         readonly kind: "simulator";
@@ -476,9 +477,22 @@ async function main(
         readonly rotate: boolean;
         readonly requireInactiveSpace: boolean;
       }
+    | {
+        readonly kind: "mixed";
+        readonly helperPath: string;
+        readonly adapterPath: string;
+        readonly fixturePath: string;
+        readonly fixtureCount: number;
+        readonly udid: string;
+        readonly developerDir?: string;
+        readonly rotate: boolean;
+        readonly requireInactiveSpace: boolean;
+      }
     | undefined;
   const sckFixtureLab = process.env["VF_LIVE_SURFACES_SCK_LAB"] === "1";
   const simulatorLabUdid = process.env["VF_LIVE_SURFACES_SIMULATOR_UDID"];
+  const rawSckSessionCount = process.env["VF_LIVE_SURFACES_SCK_SESSIONS"];
+  const rawHelperCrashCount = process.env["VF_LIVE_SURFACES_HELPER_CRASHES"];
   const rawContinuousSoakMs = process.env["VF_LIVE_SURFACES_CONTINUOUS_SOAK_MS"];
   let continuousSoakMs: number | undefined;
   if (MODE === "live-surfaces-lab" && rawContinuousSoakMs !== undefined) {
@@ -490,16 +504,66 @@ async function main(
     }
     continuousSoakMs = parsed;
   }
-  if (MODE === "live-surfaces-lab" && sckFixtureLab && simulatorLabUdid !== undefined) {
-    throw new Error("the SCK fixture and Simulator labs are mutually exclusive");
+  let sckSessionCount = 1;
+  if (MODE === "live-surfaces-lab" && rawSckSessionCount !== undefined) {
+    const parsed = Number(rawSckSessionCount);
+    if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 4) {
+      throw new Error("VF_LIVE_SURFACES_SCK_SESSIONS must be an integer from 1 through 4");
+    }
+    sckSessionCount = parsed;
   }
-  if (MODE === "live-surfaces-lab" && sckFixtureLab) {
+  let helperCrashCount = 0;
+  if (MODE === "live-surfaces-lab" && rawHelperCrashCount !== undefined) {
+    const parsed = Number(rawHelperCrashCount);
+    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 2) {
+      throw new Error("VF_LIVE_SURFACES_HELPER_CRASHES must be an integer from 0 through 2");
+    }
+    helperCrashCount = parsed;
+  }
+  if (
+    MODE === "live-surfaces-lab" &&
+    !sckFixtureLab &&
+    simulatorLabUdid !== undefined &&
+    sckSessionCount !== 1
+  ) {
+    throw new Error("a Simulator-only lab owns exactly one SCK session");
+  }
+  if (MODE === "live-surfaces-lab" && helperCrashCount > 0 && continuousSoakMs === undefined) {
+    throw new Error("helper crash recovery requires a continuous soak interval");
+  }
+  if (
+    MODE === "live-surfaces-lab" &&
+    helperCrashCount > 0 &&
+    !sckFixtureLab &&
+    simulatorLabUdid === undefined
+  ) {
+    throw new Error("helper crash recovery requires an SCK lab mode");
+  }
+  if (MODE === "live-surfaces-lab" && sckFixtureLab && simulatorLabUdid !== undefined) {
+    const capture = resources.macosLiveSurfaceCapture;
+    if (capture === null) throw new Error("the mixed SCK lab is available only on macOS");
+    if (sckSessionCount < 2) throw new Error("a mixed SCK lab requires at least two sessions");
+    sckLabPaths = {
+      kind: "mixed",
+      ...capture,
+      fixturePath: join(dirname(capture.helperPath), "live-surface-capture-fixture"),
+      fixtureCount: sckSessionCount - 1,
+      udid: simulatorLabUdid,
+      ...(process.env["DEVELOPER_DIR"] === undefined
+        ? {}
+        : { developerDir: process.env["DEVELOPER_DIR"] }),
+      rotate: process.env["VF_LIVE_SURFACES_SIMULATOR_ROTATE"] === "1",
+      requireInactiveSpace:
+        process.env["VF_LIVE_SURFACES_SIMULATOR_REQUIRE_INACTIVE_SPACE"] === "1",
+    };
+  } else if (MODE === "live-surfaces-lab" && sckFixtureLab) {
     const capture = resources.macosLiveSurfaceCapture;
     if (capture === null) throw new Error("the ScreenCaptureKit lab is available only on macOS");
     sckLabPaths = {
       kind: "fixture",
       ...capture,
       fixturePath: join(dirname(capture.helperPath), "live-surface-capture-fixture"),
+      sessionCount: sckSessionCount,
     };
   } else if (MODE === "live-surfaces-lab" && simulatorLabUdid !== undefined) {
     const capture = resources.macosLiveSurfaceCapture;
@@ -525,6 +589,7 @@ async function main(
       preloadPath: PRELOAD_PATH,
       beforeExit: closeEvidence,
       ...(continuousSoakMs === undefined ? {} : { continuousSoakMs }),
+      ...(helperCrashCount === 0 ? {} : { helperCrashCount }),
       ...(sckLabPaths === undefined ? {} : { sck: sckLabPaths }),
     });
     return;
