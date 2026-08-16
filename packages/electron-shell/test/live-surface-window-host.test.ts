@@ -6,9 +6,11 @@ import type {
   LiveSurfaceRuntimeAttachContext,
   LiveSurfaceRuntimeAuthority,
 } from "../src/main/live-surfaces/runtime";
+import type { LiveSurfaceTextureFrameSink } from "../src/main/live-surfaces/texture-forwarder";
 import { LiveSurfaceTicketTable } from "../src/main/live-surfaces/ticket-table";
 import {
   type LiveSurfaceMainMessageChannel,
+  type LiveSurfaceTextureSinkFactory,
   LiveSurfaceWindowHost,
 } from "../src/main/live-surfaces/window-host";
 
@@ -84,7 +86,7 @@ class FakeAuthority implements LiveSurfaceRuntimeAuthority {
   }
 }
 
-function setup() {
+function setup(createTextureSink?: LiveSurfaceTextureSinkFactory) {
   const webContents = new FakeWebContents();
   const window = { webContents } as unknown as BrowserWindow;
   const tickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>({
@@ -99,8 +101,33 @@ function setup() {
     channels.push(channel);
     return channel as unknown as LiveSurfaceMainMessageChannel;
   };
-  const host = new LiveSurfaceWindowHost(window, tickets, createChannel).install();
+  const host = new LiveSurfaceWindowHost(
+    window,
+    tickets,
+    createChannel,
+    undefined,
+    createTextureSink,
+  ).install();
   return { webContents, window, tickets, channels, host };
+}
+
+function textureSink(): LiveSurfaceTextureFrameSink {
+  return {
+    stats: {
+      offered: 0,
+      accepted: 0,
+      dropped: 0,
+      outstanding: 0,
+      completed: 0,
+      timedOut: 0,
+      sendFailures: 0,
+      releaseFaults: 0,
+    },
+    offer: vi.fn(() => ({ kind: "dropped" as const, reason: "transfer-cap" as const })),
+    close: vi.fn(),
+    whenDrained: vi.fn(() => Promise.resolve()),
+    closeAndDrain: vi.fn(() => Promise.resolve("drained" as const)),
+  };
 }
 
 function finishLoad(result: ReturnType<typeof setup>): void {
@@ -151,6 +178,22 @@ describe("LiveSurfaceWindowHost", () => {
     control?.receive({ v: 1, type: "attach", requestId: "request_0001", ticket });
     expect(authority.context).not.toBeNull();
     expect(control?.sent.at(-1)).toMatchObject({ type: "attached" });
+    const attachmentId = (
+      control?.sent.at(-1) as { attachment?: { attachmentId?: string } } | undefined
+    )?.attachment?.attachmentId;
+    expect(attachmentId).toBeDefined();
+    control?.receive({
+      v: 1,
+      type: "demand",
+      attachmentId,
+      demand: {
+        revision: 1,
+        mode: "live",
+        targetFps: 30,
+        priority: 50,
+        interactive: false,
+      },
+    });
     const published = authority.context?.publishCpuFrame({
       metadata: {
         v: 1,
@@ -229,6 +272,44 @@ describe("LiveSurfaceWindowHost", () => {
         authority,
       }),
     ).toThrow(/without a live renderer generation/);
+  });
+
+  it("retains one surface transfer budget across renderer generations", () => {
+    const budgets: unknown[] = [];
+    const result = setup((_surfaceId, _attachmentId, budget) => {
+      budgets.push(budget);
+      return textureSink();
+    });
+    finishLoad(result);
+    const authority = new FakeAuthority();
+    const firstTicket = result.host.issue({
+      surfaceId: authority.surfaceId,
+      sourceKind: "browser",
+      operations: ["view"],
+      authority,
+    });
+    result.channels[0]?.port1.receive({
+      v: 1,
+      type: "attach",
+      requestId: "request_0001",
+      ticket: firstTicket,
+    });
+    result.webContents.emit("did-start-navigation", {}, "vibefield-app://shell", false, true);
+    result.webContents.emit("did-finish-load");
+    const secondTicket = result.host.issue({
+      surfaceId: authority.surfaceId,
+      sourceKind: "browser",
+      operations: ["view"],
+      authority,
+    });
+    result.channels[3]?.port1.receive({
+      v: 1,
+      type: "attach",
+      requestId: "request_0002",
+      ticket: secondTicket,
+    });
+    expect(budgets).toHaveLength(2);
+    expect(budgets[1]).toBe(budgets[0]);
   });
 
   it("closes every local port when the renderer handoff throws", () => {

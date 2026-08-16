@@ -179,7 +179,11 @@ export class PreloadLiveSurfaceFrameMux {
     try {
       const envelope = LiveSurfaceFrameEnvelopeV1.safeParse(rawEnvelope);
       const sender = this.#frameSender;
-      if (!envelope.success || sender === null) {
+      if (
+        !envelope.success ||
+        envelope.data.metadata.transport !== "shared-texture" ||
+        sender === null
+      ) {
         this.reject("shared texture arrived without a valid attachment envelope");
         return;
       }

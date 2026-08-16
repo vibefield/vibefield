@@ -25,7 +25,7 @@ class FakePort implements PreloadLiveSurfacePort {
 }
 
 function metadata(transport: "shared-texture" | "cpu-bgra"): LiveSurfaceFrameMetadataV1 {
-  return {
+  const base = {
     v: 1,
     surfaceId: "surface_0123456789abcdef",
     producerEpoch: 1,
@@ -41,9 +41,10 @@ function metadata(transport: "shared-texture" | "cpu-bgra"): LiveSurfaceFrameMet
     pixelFormat: "rgba",
     colorSpace: "srgb",
     alphaMode: "opaque",
-    transport,
-    ...(transport === "cpu-bgra" ? { degradedMode: "cpu-bitmap" as const } : {}),
-  };
+  } as const;
+  return transport === "cpu-bgra"
+    ? { ...base, transport, degradedMode: "cpu-bitmap" }
+    : { ...base, transport };
 }
 
 function envelope(transport: "shared-texture" | "cpu-bgra") {
@@ -145,6 +146,18 @@ describe("PreloadLiveSurfaceFrameMux", () => {
     expect(failed.release).toHaveBeenCalledTimes(1);
     expect(failedFrame.close).toHaveBeenCalledTimes(1);
     expect(result.mux.stats).toMatchObject({ sharedAccepted: 0, dropped: 2 });
+  });
+
+  it("rejects a CPU envelope on the shared-texture receiver", async () => {
+    const result = setup();
+    result.mux.bind({ v: 1, rendererGeneration: 4 }, result.ports);
+    const videoFrame = frame();
+    const imported = { getVideoFrame: vi.fn(() => videoFrame), release: vi.fn() };
+    await result.mux.acceptSharedTexture({ importedSharedTexture: imported }, envelope("cpu-bgra"));
+    expect(imported.getVideoFrame).not.toHaveBeenCalled();
+    expect(imported.release).toHaveBeenCalledTimes(1);
+    expect(result.ports[1].messages).toHaveLength(0);
+    expect(result.mux.stats).toMatchObject({ sharedAccepted: 0, dropped: 1 });
   });
 
   it("normalizes bounded CPU fallback pixels through the same private frame port", () => {

@@ -7,7 +7,10 @@ import {
   validateCpuFrameEnvelope,
 } from "./control-session";
 import type { LiveSurfaceRuntimeAuthority } from "./runtime";
-import type { LiveSurfaceTextureFrameSink } from "./texture-forwarder";
+import {
+  type LiveSurfaceTextureFrameSink,
+  LiveSurfaceTextureTransferBudget,
+} from "./texture-forwarder";
 import type {
   LiveSurfacePresentationOperation,
   LiveSurfaceTicketBinding,
@@ -32,6 +35,7 @@ export type LiveSurfaceMessageChannelFactory = () => LiveSurfaceMainMessageChann
 export type LiveSurfaceTextureSinkFactory = (
   surfaceId: string,
   attachmentId: string,
+  budget: LiveSurfaceTextureTransferBudget,
 ) => LiveSurfaceTextureFrameSink;
 
 /** Owns generation ports and ticket targeting for one shell WebContents. */
@@ -40,6 +44,9 @@ export class LiveSurfaceWindowHost {
   #generation = 0;
   #session: LiveSurfaceControlSession | null = null;
   #fallbackPort: MessagePortMain | null = null;
+  readonly #textureBudgets: Map<string, LiveSurfaceTextureTransferBudget>;
+  readonly #ownsTextureBudgets: boolean;
+  readonly #pendingDrains = new Set<Promise<unknown>>();
   #disposed = false;
 
   constructor(
@@ -48,12 +55,19 @@ export class LiveSurfaceWindowHost {
     readonly createChannel: LiveSurfaceMessageChannelFactory,
     readonly logger?: Logger,
     readonly createTextureSink?: LiveSurfaceTextureSinkFactory,
+    textureBudgets?: Map<string, LiveSurfaceTextureTransferBudget>,
   ) {
     this.#webContents = window.webContents;
+    this.#textureBudgets = textureBudgets ?? new Map();
+    this.#ownsTextureBudgets = textureBudgets === undefined;
   }
 
   get rendererGeneration(): number {
     return this.#generation;
+  }
+
+  async whenDrained(): Promise<void> {
+    await Promise.all([...this.#pendingDrains]);
   }
 
   install(): this {
@@ -109,6 +123,7 @@ export class LiveSurfaceWindowHost {
     this.#disposed = true;
     this.#removeListeners();
     this.closeGeneration();
+    if (this.#ownsTextureBudgets) this.#textureBudgets.clear();
   }
 
   #removeListeners = (): void => {};
@@ -144,7 +159,10 @@ export class LiveSurfaceWindowHost {
       },
       ...(this.createTextureSink === undefined
         ? {}
-        : { createTextureSink: this.createTextureSink }),
+        : {
+            createTextureSink: (surfaceId: string, attachmentId: string) =>
+              this.createTextureSink!(surfaceId, attachmentId, this.textureBudget(surfaceId)),
+          }),
       onProtocolFault: (reason) => {
         this.logger?.warn(
           "desktop.live_surfaces.control_protocol_rejected",
@@ -153,6 +171,7 @@ export class LiveSurfaceWindowHost {
         );
       },
       onClosed: () => {
+        this.trackDrain(session.whenDrained());
         if (this.#session !== session) return;
         this.#session = null;
         this.closePort(this.#fallbackPort);
@@ -197,6 +216,20 @@ export class LiveSurfaceWindowHost {
     session?.dispose();
     this.closePort(this.#fallbackPort);
     this.#fallbackPort = null;
+  }
+
+  private textureBudget(surfaceId: string): LiveSurfaceTextureTransferBudget {
+    const existing = this.#textureBudgets.get(surfaceId);
+    if (existing !== undefined) return existing;
+    const budget = new LiveSurfaceTextureTransferBudget(2);
+    this.#textureBudgets.set(surfaceId, budget);
+    return budget;
+  }
+
+  private trackDrain(raw: Promise<unknown>): void {
+    const drain = raw.catch(() => undefined);
+    this.#pendingDrains.add(drain);
+    void drain.finally(() => this.#pendingDrains.delete(drain));
   }
 
   private closePort(port: MessagePortMain | null): void {

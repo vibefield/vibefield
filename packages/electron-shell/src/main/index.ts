@@ -62,7 +62,10 @@ import { installLifecycle } from "./lifecycle";
 import { isGuardedBrowserSurfaceSession } from "./live-surfaces/browser-security";
 import { createElectronLiveSurfaceTextureTransferApi } from "./live-surfaces/electron-texture-transfer";
 import type { LiveSurfaceRuntimeAuthority } from "./live-surfaces/runtime";
-import { LiveSurfaceTextureForwarder } from "./live-surfaces/texture-forwarder";
+import {
+  LiveSurfaceTextureForwarder,
+  type LiveSurfaceTextureTransferBudget,
+} from "./live-surfaces/texture-forwarder";
 import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
@@ -136,6 +139,7 @@ const getSupervisor = () => supervisor;
 const registry = new WindowRegistry();
 const liveSurfaceTickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>();
 const liveSurfaceWindowHosts = new Map<number, LiveSurfaceWindowHost>();
+const liveSurfaceTextureBudgets = new Map<string, LiveSurfaceTextureTransferBudget>();
 const ensureFieldd: FielddSupervisor["ensure"] = (options) => {
   if (fielddHandles !== null) return fielddHandles.ensure(options);
   if (supervisor !== null) return supervisor.ensure(options);
@@ -160,6 +164,7 @@ function disposeShellState(): void {
   for (const dispose of shellDisposers) dispose();
   shellDisposers.clear();
   liveSurfaceWindowHosts.clear();
+  liveSurfaceTextureBudgets.clear();
   liveSurfaceTickets.clear();
   fielddHandles?.dispose();
   fielddHandles = null;
@@ -171,12 +176,15 @@ function installLiveSurfaceHost(window: Electron.BrowserWindow, logger: Logger):
     liveSurfaceTickets,
     () => new MessageChannelMain(),
     logger.child({ component: "live-surfaces.window", windowId: String(window.id) }),
-    (surfaceId, attachmentId) =>
+    (surfaceId, attachmentId, budget) =>
       new LiveSurfaceTextureForwarder(
         surfaceId,
         attachmentId,
         createElectronLiveSurfaceTextureTransferApi(window.webContents),
+        2,
+        budget,
       ),
+    liveSurfaceTextureBudgets,
   ).install();
   liveSurfaceWindowHosts.set(window.id, host);
   const dispose = (): void => {

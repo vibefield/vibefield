@@ -4,6 +4,7 @@ import {
   type LiveSurfaceProducerTextureFrame,
   LiveSurfaceTextureForwarder,
   type LiveSurfaceTextureTransferApi,
+  LiveSurfaceTextureTransferBudget,
 } from "../src/main/live-surfaces/texture-forwarder";
 
 function metadata(sequence: string): LiveSurfaceFrameMetadataV1 {
@@ -129,6 +130,37 @@ describe("LiveSurfaceTextureForwarder", () => {
     await forwarder.whenDrained();
   });
 
+  it("shares the two-transfer budget across attachments to the same surface", () => {
+    const fake = fakeApi();
+    const budget = new LiveSurfaceTextureTransferBudget(2);
+    const firstAttachment = new LiveSurfaceTextureForwarder(
+      "surface_0123456789abcdef",
+      "attachment_0123456789abcdef",
+      fake.api,
+      2,
+      budget,
+    );
+    const secondAttachment = new LiveSurfaceTextureForwarder(
+      "surface_0123456789abcdef",
+      "attachment_9999999999999999",
+      fake.api,
+      2,
+      budget,
+    );
+    expect(firstAttachment.offer(producerFrame("1").frame).kind).toBe("accepted");
+    expect(secondAttachment.offer(producerFrame("2").frame).kind).toBe("accepted");
+    const capped = producerFrame("3");
+    expect(firstAttachment.offer(capped.frame)).toEqual({
+      kind: "dropped",
+      reason: "transfer-cap",
+    });
+    expect(capped.allReferencesReleased).toHaveBeenCalledWith("transfer-cap");
+    expect(budget.stats).toEqual({ outstanding: 2, maximum: 2 });
+    fake.allReleased[0]?.();
+    fake.allReleased[1]?.();
+    expect(budget.stats.outstanding).toBe(0);
+  });
+
   it("releases the imported main ref after send rejection and waits for renderer refs", async () => {
     const fake = fakeApi();
     const forwarder = new LiveSurfaceTextureForwarder(
@@ -165,5 +197,26 @@ describe("LiveSurfaceTextureForwarder", () => {
     expect(forwarder.offer(closed.frame)).toEqual({ kind: "dropped", reason: "closed" });
     expect(fake.api.importTexture).not.toHaveBeenCalled();
     expect(forwarder.stats).toMatchObject({ offered: 2, accepted: 0, dropped: 2 });
+  });
+
+  it("forces a bounded lease-timeout completion when Electron never drains", async () => {
+    const fake = fakeApi();
+    const forwarder = new LiveSurfaceTextureForwarder(
+      "surface_0123456789abcdef",
+      "attachment_0123456789abcdef",
+      fake.api,
+    );
+    const producer = producerFrame("1");
+    const offered = forwarder.offer(producer.frame);
+    await Promise.resolve();
+    expect(await forwarder.closeAndDrain(0)).toBe("timed-out");
+    expect(fake.imported[0]?.release).toHaveBeenCalledTimes(1);
+    expect(producer.allReferencesReleased).toHaveBeenCalledWith("lease-timeout");
+    expect(forwarder.stats).toMatchObject({ outstanding: 0, timedOut: 1 });
+
+    fake.allReleased[0]?.();
+    fake.sends[0]?.resolve();
+    if (offered.kind === "accepted") await offered.transfer;
+    expect(producer.allReferencesReleased).toHaveBeenCalledTimes(1);
   });
 });

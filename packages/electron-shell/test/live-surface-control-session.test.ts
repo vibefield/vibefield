@@ -6,6 +6,7 @@ import {
   type LiveSurfaceMainMessagePort,
 } from "../src/main/live-surfaces/control-session";
 import type {
+  LiveSurfaceCpuFrame,
   LiveSurfaceRuntimeAttachContext,
   LiveSurfaceRuntimeAuthority,
 } from "../src/main/live-surfaces/runtime";
@@ -58,23 +59,30 @@ class FakeAuthority implements LiveSurfaceRuntimeAuthority {
   readonly demands: LiveSurfaceDemandV1[] = [];
   readonly dispose = vi.fn();
   context: LiveSurfaceRuntimeAttachContext | null = null;
+  initialSummary = summary();
+  onAttach: ((context: LiveSurfaceRuntimeAttachContext) => void) | null = null;
 
   attach(context: LiveSurfaceRuntimeAttachContext) {
     this.context = context;
+    this.onAttach?.(context);
     return {
-      summary: summary(),
+      summary: this.initialSummary,
       setDemand: (demand: LiveSurfaceDemandV1) => this.demands.push(demand),
       dispose: this.dispose,
     };
   }
 }
 
-function setup(createTextureSink?: () => LiveSurfaceTextureFrameSink) {
+function setup(
+  createTextureSink?: () => LiveSurfaceTextureFrameSink,
+  configureAuthority?: (authority: FakeAuthority) => void,
+) {
   const port = new FakeMainPort();
   const tickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>({
     randomToken: () => "ticket_0000000000000000000000000000000000000001",
   });
   const authority = new FakeAuthority();
+  configureAuthority?.(authority);
   const ticket = tickets.issue({
     targetWebContentsId: 17,
     rendererGeneration: 3,
@@ -102,13 +110,16 @@ function setup(createTextureSink?: () => LiveSurfaceTextureFrameSink) {
   return { port, tickets, authority, ticket, session, protocolFaults, cpuFrames };
 }
 
-function textureFrame(): LiveSurfaceProducerTextureFrame {
+function textureFrame(
+  sequence = "1",
+  override: { readonly surfaceId?: string; readonly producerEpoch?: number } = {},
+): LiveSurfaceProducerTextureFrame {
   return {
     metadata: {
       v: 1,
       surfaceId: "surface_0123456789abcdef",
       producerEpoch: 1,
-      sequence: "1",
+      sequence,
       geometry: {
         revision: 1,
         codedSize: { width: 1, height: 1 },
@@ -116,11 +127,12 @@ function textureFrame(): LiveSurfaceProducerTextureFrame {
         logicalSize: { width: 1, height: 1 },
         orientation: 0,
       },
-      hostReceivedAtUs: "1",
+      hostReceivedAtUs: sequence,
       pixelFormat: "bgra",
       colorSpace: "srgb",
       alphaMode: "opaque",
       transport: "shared-texture",
+      ...override,
     },
     textureInfo: { codedSize: { width: 1, height: 1 }, handle: {}, pixelFormat: "bgra" },
     releaseSource: vi.fn(),
@@ -186,15 +198,55 @@ describe("LiveSurfaceControlSession", () => {
     });
   });
 
-  it("does not publish a CPU frame until attach has committed", () => {
+  it("folds synchronous attach summaries into one monotonic attached snapshot", () => {
+    const result = setup(undefined, (authority) => {
+      authority.onAttach = (context) => {
+        context.publishSummary({ ...summary("paused", 1), stateRevision: 2 });
+      };
+    });
+    attach(result);
+    expect(result.port.sent[1]).toMatchObject({
+      type: "attached",
+      attachment: { summary: { state: "paused", stateRevision: 2 } },
+    });
+    expect(
+      result.port.sent.filter((message) => (message as { type?: string }).type === "summary"),
+    ).toHaveLength(0);
+  });
+
+  it("retains the latest coherent attach-time capability update at the same state revision", () => {
+    const result = setup(undefined, (authority) => {
+      authority.onAttach = (context) => {
+        context.publishSummary({
+          ...summary(),
+          transport: "shared-texture",
+          geometry: textureFrame().metadata.geometry,
+        });
+      };
+    });
+    attach(result);
+    expect(result.port.sent[1]).toMatchObject({
+      type: "attached",
+      attachment: {
+        summary: {
+          state: "live",
+          stateRevision: 1,
+          transport: "shared-texture",
+          geometry: { revision: 1 },
+        },
+      },
+    });
+  });
+
+  it("publishes at most one CPU frame until the renderer returns its credit", () => {
     const result = setup();
     attach(result);
-    const accepted = result.authority.context?.publishCpuFrame({
+    const makeFrame = (sequence: string, producerEpoch = 1): LiveSurfaceCpuFrame => ({
       metadata: {
         v: 1,
         surfaceId: result.authority.surfaceId,
-        producerEpoch: 1,
-        sequence: "1",
+        producerEpoch,
+        sequence,
         geometry: {
           revision: 1,
           codedSize: { width: 1, height: 1 },
@@ -202,7 +254,7 @@ describe("LiveSurfaceControlSession", () => {
           logicalSize: { width: 1, height: 1 },
           orientation: 0,
         },
-        hostReceivedAtUs: "1",
+        hostReceivedAtUs: sequence,
         pixelFormat: "rgba",
         colorSpace: "srgb",
         alphaMode: "opaque",
@@ -211,8 +263,52 @@ describe("LiveSurfaceControlSession", () => {
       },
       pixels: new Uint8Array([255, 0, 0, 255]),
     });
-    expect(accepted).toBe(true);
+    expect(result.authority.context?.publishCpuFrame(makeFrame("1"))).toBe(false);
+    result.port.receive({
+      v: 1,
+      type: "demand",
+      attachmentId: "attachment_0123456789abcdef",
+      demand: {
+        revision: 1,
+        mode: "live",
+        targetFps: 30,
+        priority: 50,
+        interactive: false,
+      },
+    });
+    expect(result.authority.context?.publishCpuFrame(makeFrame("2"))).toBe(true);
+    expect(result.authority.context?.publishCpuFrame(makeFrame("3"))).toBe(false);
     expect(result.cpuFrames).toHaveLength(1);
+    result.port.receive({
+      v: 1,
+      type: "cpu-frame-ack",
+      attachmentId: "attachment_0123456789abcdef",
+      producerEpoch: 1,
+      sequence: "2",
+    });
+    expect(result.authority.context?.publishCpuFrame(makeFrame("4"))).toBe(true);
+    expect(result.cpuFrames).toHaveLength(2);
+
+    result.authority.context?.publishSummary(summary("live", 2));
+    expect(result.authority.context?.publishCpuFrame(makeFrame("1", 2))).toBe(true);
+    result.port.receive({
+      v: 1,
+      type: "cpu-frame-ack",
+      attachmentId: "attachment_0123456789abcdef",
+      producerEpoch: 1,
+      sequence: "4",
+    });
+    expect(result.session.closed).toBe(false);
+    expect(result.authority.context?.publishCpuFrame(makeFrame("2", 2))).toBe(false);
+    result.port.receive({
+      v: 1,
+      type: "cpu-frame-ack",
+      attachmentId: "attachment_0123456789abcdef",
+      producerEpoch: 2,
+      sequence: "1",
+    });
+    expect(result.authority.context?.publishCpuFrame(makeFrame("3", 2))).toBe(true);
+    expect(result.cpuFrames).toHaveLength(4);
   });
 
   it("routes owned textures only after commit and closes the attachment sink", () => {
@@ -223,15 +319,34 @@ describe("LiveSurfaceControlSession", () => {
         dropped: 0,
         outstanding: 0,
         completed: 0,
+        timedOut: 0,
         sendFailures: 0,
         releaseFaults: 0,
       },
       offer: vi.fn(() => ({ kind: "dropped" as const, reason: "transfer-cap" as const })),
       close: vi.fn(),
       whenDrained: vi.fn(() => Promise.resolve()),
+      closeAndDrain: vi.fn(() => Promise.resolve("drained" as const)),
     };
     const result = setup(() => sink);
     attach(result);
+    result.port.receive({
+      v: 1,
+      type: "demand",
+      attachmentId: "attachment_0123456789abcdef",
+      demand: {
+        revision: 1,
+        mode: "live",
+        targetFps: 30,
+        priority: 50,
+        interactive: false,
+      },
+    });
+    result.authority.context?.publishSummary({
+      ...summary(),
+      stateRevision: 2,
+      transport: "shared-texture",
+    });
     const frame = textureFrame();
     expect(result.authority.context?.offerTextureFrame(frame)).toEqual({
       kind: "dropped",
@@ -243,7 +358,104 @@ describe("LiveSurfaceControlSession", () => {
       type: "detach",
       attachmentId: "attachment_0123456789abcdef",
     });
-    expect(sink.close).toHaveBeenCalledTimes(1);
+    expect(sink.closeAndDrain).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects absent demand, stale epochs, and non-monotonic texture sequences in main", () => {
+    const sink: LiveSurfaceTextureFrameSink = {
+      stats: {
+        offered: 0,
+        accepted: 0,
+        dropped: 0,
+        outstanding: 0,
+        completed: 0,
+        timedOut: 0,
+        sendFailures: 0,
+        releaseFaults: 0,
+      },
+      offer: vi.fn(() => ({ kind: "dropped" as const, reason: "transfer-cap" as const })),
+      close: vi.fn(),
+      whenDrained: vi.fn(() => Promise.resolve()),
+      closeAndDrain: vi.fn(() => Promise.resolve("drained" as const)),
+    };
+    const result = setup(() => sink);
+    attach(result);
+    result.authority.context?.publishSummary({
+      ...summary(),
+      stateRevision: 2,
+      transport: "shared-texture",
+    });
+    const withoutDemand = textureFrame("1");
+    expect(result.authority.context?.offerTextureFrame(withoutDemand)).toEqual({
+      kind: "dropped",
+      reason: "not-demanded",
+    });
+    result.port.receive({
+      v: 1,
+      type: "demand",
+      attachmentId: "attachment_0123456789abcdef",
+      demand: {
+        revision: 1,
+        mode: "live",
+        targetFps: 30,
+        priority: 50,
+        interactive: false,
+      },
+    });
+    const current = textureFrame("3");
+    expect(result.authority.context?.offerTextureFrame(current)).toEqual({
+      kind: "dropped",
+      reason: "transfer-cap",
+    });
+    expect(sink.offer).toHaveBeenCalledTimes(1);
+    const staleSequence = textureFrame("2");
+    expect(result.authority.context?.offerTextureFrame(staleSequence)).toEqual({
+      kind: "dropped",
+      reason: "stale-sequence",
+    });
+    const staleEpoch = textureFrame("4", { producerEpoch: 0 });
+    expect(result.authority.context?.offerTextureFrame(staleEpoch)).toEqual({
+      kind: "dropped",
+      reason: "stale-epoch",
+    });
+    expect(sink.offer).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes a bounded generation drain without delaying synchronous detach", async () => {
+    let resolveDrain!: (outcome: "drained") => void;
+    const drain = new Promise<"drained">((resolve) => {
+      resolveDrain = resolve;
+    });
+    const sink: LiveSurfaceTextureFrameSink = {
+      stats: {
+        offered: 0,
+        accepted: 0,
+        dropped: 0,
+        outstanding: 1,
+        completed: 0,
+        timedOut: 0,
+        sendFailures: 0,
+        releaseFaults: 0,
+      },
+      offer: vi.fn(() => ({ kind: "dropped" as const, reason: "transfer-cap" as const })),
+      close: vi.fn(),
+      whenDrained: vi.fn(() => drain.then(() => undefined)),
+      closeAndDrain: vi.fn(() => drain),
+    };
+    const result = setup(() => sink);
+    attach(result);
+    result.session.dispose();
+    expect(result.session.closed).toBe(true);
+    expect(sink.closeAndDrain).toHaveBeenCalledWith(2_000);
+    let finished = false;
+    const waiting = result.session.whenDrained().then(() => {
+      finished = true;
+    });
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    resolveDrain("drained");
+    await waiting;
+    expect(finished).toBe(true);
   });
 
   it("releases both texture leases when no renderer transfer sink exists", () => {
