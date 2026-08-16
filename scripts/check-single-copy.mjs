@@ -11,12 +11,21 @@
 // This repo keeps its overrides in the right file, so that exact failure is not
 // live here — which is precisely when a backstop is cheap to add.
 //
-// Why these three: loro-crdt is wasm with instance-identity checks, so a LoroDoc
-// built by one copy fails `expected instance of LoroDoc` in another; ICE and
-// strata each carry a process-global schema registry, so two copies mean two
-// registries at one seam and components that silently do not match. Every one of
-// these surfaces far from its cause, and no unit suite catches any of them —
-// nothing in a single package's tests hands an object across a package seam.
+// Why these: loro-crdt is wasm with instance-identity checks, so a LoroDoc built
+// by one copy fails `expected instance of LoroDoc` in another; ICE and strata
+// each carry a process-global schema registry, so two copies mean two registries
+// at one seam and components that silently do not match; react/react-dom keep
+// hook state in module scope, so a second copy breaks hooks with an error that
+// blames the component. Every one of these surfaces far from its cause, and no
+// unit suite catches any of them — nothing in a single package's tests hands an
+// object across a package seam.
+//
+// react joined 2026-08-16: PRC-4's E10 consumer-feasibility run found a direct
+// sibling `pnpm link` duplicating React, and kept it as a negative control
+// because release evidence has to prove PHYSICAL peer singletons, not declared
+// ones. That is this file's whole job, so it should cover the case that actually
+// bit — and the sibling-link workflow the ice pin comment recommends for
+// co-developing ICE is exactly how a developer reaches it.
 //
 // Do NOT reimplement this by counting `node_modules/.pnpm/<name>@*` directories:
 // that store retains orphaned versions from earlier installs and reports
@@ -27,7 +36,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const TRACKED = ["loro-crdt", "@vibecook/ice", "@vibecook/strata-ecs"];
+const TRACKED = ["loro-crdt", "@vibecook/ice", "@vibecook/strata-ecs", "react", "react-dom"];
 
 /** Workspace member dirs from pnpm-workspace.yaml's `packages:` list, globs expanded. */
 function members() {
