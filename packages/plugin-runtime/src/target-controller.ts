@@ -174,6 +174,9 @@ export class RuntimeTargetController<
   private readonly disposalDeadlineMs: number;
   private readonly historyLimit: number;
   private readonly scopeFactory: (label: string) => ActivationScope;
+  // Plain field assignment: the service worker imports this barrel through Node's strip-only
+  // TypeScript loader, which cannot transform constructor parameter properties.
+  private readonly options: RuntimeTargetControllerOptions<T, C>;
   private desiredValue: T | null = null;
   private desiredReason: ActivationCloseReason = { kind: "target-changed" };
   private desiredRevisionValue = 0;
@@ -188,11 +191,9 @@ export class RuntimeTargetController<
   private forcedCountValue = 0;
   private readonly events: Array<Record<string, unknown>> = [];
 
-  constructor(
-    label: string,
-    private readonly options: RuntimeTargetControllerOptions<T, C>,
-  ) {
+  constructor(label: string, options: RuntimeTargetControllerOptions<T, C>) {
     this.label = label;
+    this.options = options;
     this.activationDeadlineMs = normalizedDeadline(options.activationDeadlineMs);
     this.disposalDeadlineMs = normalizedDeadline(options.disposalDeadlineMs);
     this.historyLimit = positiveInteger(options.historyLimit, 256);
