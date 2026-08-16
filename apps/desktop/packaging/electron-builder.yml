@@ -125,6 +125,15 @@ npmRebuild: false
 mac:
   target: [dmg, zip]
   icon: packaging/icons/app.icon
+  # Explicit nested-code inventory. It is inert while identity remains null,
+  # but becomes the inside-out signing list when WP10 enables signing; the SCK
+  # helper and its Node-API adapter must never be left as unsigned loose code.
+  binaries:
+    - Contents/Resources/bin/fieldd
+    - Contents/Resources/bin/field-native
+    - Contents/Resources/bin/sidecar-slim
+    - Contents/Resources/bin/live-surface-capture-helper
+    - Contents/Resources/bin/live-surface-adapter.node
   # Hardened runtime is on from the first package even though nothing is signed yet, so the
   # entitlement set is exercised from the start rather than discovered at notarization time.
   hardenedRuntime: true
@@ -133,8 +142,8 @@ mac:
   # their keychain — otherwise two developers get materially different artifacts from the same
   # commit. WP10 owns signing and notarization and must replace this whole block with §7.5's
   # shape: forceCodeSigning: true, notarize: true, entitlements/entitlementsInherit pointing at
-  # packaging/entitlements.mac.plist (§9.3), and `binaries:` listing the packaged fieldd and
-  # field-native sidecars for inside-out signing (ESP §10.5). Leaving `identity: null` in place
+  # packaging/entitlements.mac.plist (§9.3), using the `binaries:` inventory above for inside-out
+  # signing (ESP §10.5). Leaving `identity: null` in place
   # then is caught rather than silent: it contradicts forceCodeSigning and electron-builder fails.
   identity: null
 

@@ -48,6 +48,11 @@ export interface DesktopResources {
    * separate again if a launcher ever changes. */
   readonly fielddNeedsNodeMode: boolean;
   readonly fieldNativePath: string;
+  /** macOS-only SCK helper plus the purpose-built IOSurface Mach-right adapter. */
+  readonly macosLiveSurfaceCapture: {
+    readonly helperPath: string;
+    readonly adapterPath: string;
+  } | null;
   /** plugin discovery roots — absolute, never derived by the daemon itself */
   readonly pluginRoots: {
     readonly bundled: readonly string[];
@@ -131,6 +136,29 @@ export function resolveDevelopmentResources(opts: {
     // 145 MB SEA on every edit would be an absurd inner loop.
     fielddNeedsNodeMode: true,
     fieldNativePath: join(opts.repoRoot, "target", "debug", exe("field-native", platform)),
+    macosLiveSurfaceCapture:
+      platform === "darwin"
+        ? {
+            helperPath: join(
+              opts.repoRoot,
+              "apps",
+              "desktop",
+              "build",
+              "native",
+              "macos",
+              "live-surface-capture-helper",
+            ),
+            adapterPath: join(
+              opts.repoRoot,
+              "apps",
+              "desktop",
+              "build",
+              "native",
+              "macos",
+              "live-surface-adapter.node",
+            ),
+          }
+        : null,
     pluginRoots: {
       bundled: [join(opts.repoRoot, "plugins")],
       devLinked: [join(opts.repoRoot, "examples", "plugins")],
@@ -167,6 +195,13 @@ export function resolvePackagedResources(opts: {
     fielddArgs: [],
     fielddNeedsNodeMode: false,
     fieldNativePath: join(bin, exe("field-native", platform)),
+    macosLiveSurfaceCapture:
+      platform === "darwin"
+        ? {
+            helperPath: join(bin, "live-surface-capture-helper"),
+            adapterPath: join(bin, "live-surface-adapter.node"),
+          }
+        : null,
     pluginRoots: {
       bundled: [join(opts.resourcesPath, "plugins", "bundled")],
       devLinked: [],
@@ -179,7 +214,11 @@ export type ResourceProblemCode =
   | "fieldd-bundle-missing"
   | "fieldd-arch-mismatch"
   | "field-native-missing"
-  | "field-native-arch-mismatch";
+  | "field-native-arch-mismatch"
+  | "live-surface-capture-helper-missing"
+  | "live-surface-capture-helper-arch-mismatch"
+  | "live-surface-adapter-missing"
+  | "live-surface-adapter-arch-mismatch";
 
 /** A packaged resource failure is fatal and TYPED — distribution spec §4.3 and
  * §14 both require a doctor code rather than a stack trace, because the user
@@ -251,6 +290,41 @@ export function assertPackagedResources(
       "field-native-arch-mismatch",
       `The packaged field-native executable is ${arch}, but this machine is ${host}.`,
       resources.fieldNativePath,
+    );
+  }
+
+  const capture = resources.macosLiveSurfaceCapture;
+  if (capture === null) return;
+  const helperHead = readHead(capture.helperPath);
+  if (helperHead === null) {
+    throw new ResourceError(
+      "live-surface-capture-helper-missing",
+      "The packaged ScreenCaptureKit helper is missing from this installation.",
+      capture.helperPath,
+    );
+  }
+  const helperArch = identifyExecutable(helperHead).arch;
+  if (!archCompatible(helperArch, host)) {
+    throw new ResourceError(
+      "live-surface-capture-helper-arch-mismatch",
+      `The packaged ScreenCaptureKit helper is ${helperArch}, but this machine is ${host}.`,
+      capture.helperPath,
+    );
+  }
+  const adapterHead = readHead(capture.adapterPath);
+  if (adapterHead === null) {
+    throw new ResourceError(
+      "live-surface-adapter-missing",
+      "The packaged IOSurface adapter is missing from this installation.",
+      capture.adapterPath,
+    );
+  }
+  const adapterArch = identifyExecutable(adapterHead).arch;
+  if (!archCompatible(adapterArch, host)) {
+    throw new ResourceError(
+      "live-surface-adapter-arch-mismatch",
+      `The packaged IOSurface adapter is ${adapterArch}, but this machine is ${host}.`,
+      capture.adapterPath,
     );
   }
 }

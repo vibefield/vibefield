@@ -134,6 +134,29 @@ const PLAN = [
     optional: "the field-native sidecar is absent — the packaged app will have no native plane",
     produce: "cargo build --release -p field-native",
   },
+  ...(process.platform === "darwin"
+    ? [
+        {
+          // LSF4: one accessory helper multiplexes ScreenCaptureKit sessions.
+          // It is a real child executable and remains outside the ASAR so the
+          // package signer can seal it as a nested binary.
+          stage: "bin/live-surface-capture-helper",
+          from: "apps/desktop/build/native/macos/live-surface-capture-helper",
+          kind: "file",
+          mode: EXEC_MODE,
+          produce: "pnpm --filter @vibefield/desktop run build:live-surfaces-native",
+        },
+        {
+          // The least-privilege Node-API adapter receives authenticated
+          // IOSurface Mach rights; it exposes no arbitrary native-call API.
+          stage: "bin/live-surface-adapter.node",
+          from: "apps/desktop/build/native/macos/live-surface-adapter.node",
+          kind: "file",
+          mode: DATA_MODE,
+          produce: "pnpm --filter @vibefield/desktop run build:live-surfaces-native",
+        },
+      ]
+    : []),
   {
     // AH-1b: field-native resolves this exact executable beside itself. The
     // platform packages are optional only so pnpm can install one lockfile on

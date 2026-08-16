@@ -79,6 +79,10 @@ describe("resolvePackagedResources", () => {
     expect(pkg.packaged).toBe(true);
     expect(pkg.developmentDockIconPath).toBeNull();
     expect(pkg.fieldNativePath).toBe(`${RESOURCES}/bin/field-native`);
+    expect(pkg.macosLiveSurfaceCapture).toEqual({
+      helperPath: `${RESOURCES}/bin/live-surface-capture-helper`,
+      adapterPath: `${RESOURCES}/bin/live-surface-adapter.node`,
+    });
     expect(pkg.pluginRoots.bundled).toEqual([`${RESOURCES}/plugins/bundled`]);
   });
 
@@ -102,6 +106,9 @@ describe("resolvePackagedResources", () => {
     const everyPath = [
       ...pkg.fielddArgs,
       pkg.fieldNativePath,
+      ...(pkg.macosLiveSurfaceCapture === null
+        ? []
+        : [pkg.macosLiveSurfaceCapture.helperPath, pkg.macosLiveSurfaceCapture.adapterPath]),
       ...pkg.pluginRoots.bundled,
       ...Object.values(pkg.tray).flatMap((set) => Object.values(set)),
     ].join("\n");
@@ -118,6 +125,7 @@ describe("resolvePackagedResources", () => {
       platform: "win32",
     });
     expect(win.fieldNativePath.endsWith("field-native.exe")).toBe(true);
+    expect(win.macosLiveSurfaceCapture).toBeNull();
     expect(pkg.fieldNativePath.endsWith("field-native")).toBe(true);
   });
 
@@ -223,6 +231,34 @@ describe("assertPackagedResources", () => {
     expect(() =>
       assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: reader(bothOk) }),
     ).not.toThrow();
+  });
+
+  it("requires matching packaged SCK helper and adapter binaries on macOS", () => {
+    const capture = packaged().macosLiveSurfaceCapture!;
+    const read =
+      (missingOrWrong: string | null, wrong = false) =>
+      (path: string) => {
+        if (missingOrWrong !== null && path === missingOrWrong) return wrong ? MACHO_X64 : null;
+        return MACHO_ARM64;
+      };
+    for (const [path, missingCode, mismatchCode] of [
+      [
+        capture.helperPath,
+        "live-surface-capture-helper-missing",
+        "live-surface-capture-helper-arch-mismatch",
+      ],
+      [capture.adapterPath, "live-surface-adapter-missing", "live-surface-adapter-arch-mismatch"],
+    ] as const) {
+      expect(() =>
+        assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: read(path) }),
+      ).toThrow(expect.objectContaining({ code: missingCode }));
+      expect(() =>
+        assertPackagedResources(packaged(), {
+          nodeArch: "arm64",
+          readHead: read(path, true),
+        }),
+      ).toThrow(expect.objectContaining({ code: mismatchCode }));
+    }
   });
 
   it("never silently falls back to a development path when packaged", () => {
