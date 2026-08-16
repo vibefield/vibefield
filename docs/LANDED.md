@@ -2314,3 +2314,33 @@ standing boundary witness. Gates: credential production probe **3/3** · rendere
 · all affected package typechecks · fieldd production build including the worker harness ·
 Biome (only standing advisories) · import walls R1–R18 zero · patch hygiene. PRC-3c now owns
 the real service desired-target adapter and private provider commit.
+
+## PRC-3c — each plugin/device service converges through one exact controller
+
+**LANDED 2026-08-16** (`2df838b`). `ServiceHost` now gives each plugin/device service instance one
+desired/committed controller keyed by install revision, manifest hash, durable device id, projected
+service authority, and grant observation. Startup, enable/disable, reload/install, grant movement,
+crash recovery, and shutdown therefore converge through one serialized authority instead of
+competing `start`/`stop` episodes. A semantic authority change drains and replaces the worker; an
+observation-only grant change retains the worker, invalidates its old product credential, installs
+a freshly minted lease through a correlated worker acknowledgement, and only then revokes the old
+token. Superseded refresh mints are revoked without being sent.
+
+Provider publication now participates in the same candidate protocol. `ServiceRegistry.stage()`
+validates schemas and exposes method kinds as typed `UNAVAILABLE` tombstones while keeping the
+provider out of public snapshots and away from handlers. The worker must provide every declared
+namespace and emit `activated`; only a still-current controller episode commits all providers at
+one synchronous edge. Stale activation, incomplete provision, invalid provision, and reentrant
+target movement cannot resurrect a provider. Exact candidate disposal retains PRC-2's route drain,
+admitted-call deadline, correlated cleanup, and positive worker-termination proof.
+
+The daemon's live grant cascade now distinguishes service authority from registry-wide movement:
+all old plugin tokens/connections still die first, but renderer-only changes rotate the service
+lease without restarting the worker or killing service-owned processes/endpoints. A real daemon +
+real worker fixture opens `ctx.storage`, proves that client remains usable across renderer-only
+revocation with stable worker identity, then proves a service-capability revoke replaces the worker
+and the new product client succeeds. Gates: production-seam probe **3/3** · tracked controller
+matrix **4/4** · real daemon/worker grant cascade **1/1** · real crash-ladder control · full fieldd
+**480 passed + 1 platform skip** across 56 files · plugin-runtime **40/40** · fieldd typecheck ·
+production daemon/service-harness build (1.7 MB / 369.2 KB) · Biome · R1–R18 zero · patch hygiene.
+PRC-3d now owns exact renderer/window controllers and private command/surface publication.
