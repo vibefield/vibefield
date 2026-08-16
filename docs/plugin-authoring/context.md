@@ -23,9 +23,12 @@ export default defineRendererPlugin({
 });
 ```
 
-`activate` may be async, and may return a `Disposable` (or nothing). Whatever it
-returns, plus everything passed to `ctx.track(...)`, is disposed when the
-activation ends — a reload, a disable, or a failed activation half-way through.
+`activate` may be async, and may return a `Disposable` (or nothing). In renderer entries,
+every host-created registration, whatever `activate` returns, and everything passed to
+`ctx.track(...)` is owned by the activation. Cleanup is awaited in reverse acquisition order
+on reload, disable, or a failed activation half-way through. Use
+`ctx.track(label, resource)` when a diagnostic name is useful; tracking the same exact handle
+twice is safe and deduplicated.
 
 ## Deadlines
 
@@ -56,7 +59,19 @@ you ask for something optional.
 | `ctx.canvas` | PluginCanvasAPI (`engine()`) | present iff `canvas.read` or `canvas.write` is granted |
 | `ctx.settings` | PluginSettingsAPI | present iff the manifest requests `storage.self` — absent, not stubbed |
 | `ctx.storage` | PluginStorageAPI (`kv` only) | present iff the manifest requests `storage.self`; files ride a ticketed lane and are deliberately absent |
-| `ctx.track` | `<T extends Disposable>(resource: T) => T` | always; what you track is disposed when the activation ends |
+| `ctx.track` | `(resource) or (label, resource) => resource` | always; exact handles are deduplicated and disposed when the activation ends |
+| `ctx.effect` | `(label, acquire(childContext)) => Promise<result>` | always; partial child acquisitions roll back without closing the outer activation |
+
+Use `ctx.effect(label, acquire)` for optional or replaceable setup. `acquire` receives a
+child-bound context; registrations made through that context roll back together if setup
+fails, while registrations deliberately made through the outer `ctx` keep root lifetime.
+
+```ts
+await ctx.effect("optional-index", async (fx) => {
+  fx.commands?.register("com.example.notes.reindex", reindex);
+  fx.track("index-listener", listenForIndexChanges());
+});
+```
 
 ## The service context
 
@@ -69,8 +84,10 @@ provider API instead.
 | `ctx.process` | PluginProcessAPI | present iff `process.spawn` is granted |
 | `ctx.endpoints` | PluginEndpointAPI | present iff `services.provide` is granted |
 
-`ctx.plugin`, `ctx.signal`, `ctx.logger`, `ctx.client`, `ctx.settings`,
-`ctx.storage` and `ctx.track` are the same as the renderer's.
+`ctx.plugin`, `ctx.signal`, `ctx.logger`, `ctx.client`, `ctx.settings`, and
+`ctx.storage` share the renderer shapes. Service entries currently expose the compatible
+`ctx.track(resource)` form; the labeled overload and child-bound `ctx.effect` are renderer
+entry surfaces.
 
 ## Commands and surfaces
 
@@ -98,7 +115,7 @@ const sub = await ctx.client.subscribe(
   {},
   (event) => ctx.logger.info("registry moved", { event }),
 );
-ctx.track({ dispose: sub.unsubscribe });
+ctx.track({ dispose: sub.unsubscribe }); // safe even when a host adapter auto-owns it
 ```
 
 A method the plugin lacks the capability for is refused by the daemon, not by a

@@ -90,6 +90,11 @@ export interface RendererPluginContext {
   readonly settings?: PluginSettingsAPI;
   readonly storage?: PluginStorageAPI;
   track<T extends Disposable>(resource: T): T;
+  track<T extends Disposable>(label: string, resource: T): T;
+  /** Run one optional/replaceable acquisition inside a pre-owned child lifetime.
+   * Every capability on `fx` is bound to that child; retaining it after the
+   * effect closes cannot reopen authority. */
+  effect<T>(label: string, acquire: (fx: RendererPluginContext) => T | Promise<T>): Promise<T>;
 }
 
 /** §10.1 — the one activation shape. Module top-level code MUST NOT perform

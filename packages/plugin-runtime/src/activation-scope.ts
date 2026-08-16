@@ -229,6 +229,7 @@ export class ActivationScope {
   private omittedErrors = 0;
   private closeReason?: ActivationCloseReason;
   private currentState: ActivationScopeState = "open";
+  private cleanupStarted = false;
 
   constructor(label: string, options: ActivationScopeOptions = {}) {
     this.maxLabelLength = positiveInteger(options.maxLabelLength, DEFAULT_MAX_LABEL_LENGTH);
@@ -310,9 +311,17 @@ export class ActivationScope {
   /** Closes authority synchronously and starts one cleanup chain. The first reason wins. */
   close(reason: ActivationCloseReason): void {
     if (this.currentState !== "open") return;
-    this.closeReason = Object.freeze({ ...reason });
-    this.currentState = "closing";
-    this.controller.abort(this.closeReason);
+    const sealed: ActivationScope[] = [];
+    this.sealTree(reason, sealed);
+    // Every existing descendant is gated before the first abort listener runs. A callback in
+    // one child therefore cannot acquire through a sibling that merely had not been visited yet.
+    for (const scope of sealed) scope.controller.abort(scope.closeReason);
+    this.startCleanup();
+  }
+
+  private startCleanup(): void {
+    if (this.currentState === "closed" || this.cleanupStarted) return;
+    this.cleanupStarted = true;
     const initial = [...this.records].reverse();
     void this.runCleanup(initial);
   }
@@ -471,6 +480,9 @@ export class ActivationScope {
       childLabel,
       async () => {
         child.close({ kind: "parent-close", detail: this.label });
+        // An ancestor's phase-one tree seal deliberately does not start descendant cleanup.
+        // Reaching this ownership record is the LIFO permission to begin it.
+        child.startCleanup();
         await child.whenQuiescent();
       },
       "scope",
@@ -478,6 +490,9 @@ export class ActivationScope {
     );
     child.onClosed(() => this.retireClosedChild(record));
     if (this.currentState !== "open") {
+      const sealed: ActivationScope[] = [];
+      child.sealTree({ kind: "parent-close", detail: this.label }, sealed);
+      for (const scope of sealed) scope.controller.abort(scope.closeReason);
       this.startLateCleanup(record);
       if (!internalLate) this.assertOpen();
     }
@@ -501,6 +516,9 @@ export class ActivationScope {
 
   private disposeRecord(record: OwnershipRecord): Promise<void> {
     if (record.task !== undefined) return record.task;
+    // A child can finish and compact while an earlier LIFO record keeps its parent's captured
+    // cleanup list waiting. Do not execute or count that already-retired ownership edge again.
+    if (record.status === "disposed") return Promise.resolve();
     record.status = "disposing";
     // Defer invocation by one microtask so record.task exists before a reentrant disposer can call
     // close/observe again.
@@ -550,6 +568,18 @@ export class ActivationScope {
       const work = [...this.pendingSetups, ...this.lateCleanups];
       if (work.length === 0) return;
       await Promise.allSettled(work);
+    }
+  }
+
+  /** Phase one of close: mark the whole existing ownership tree before emitting any abort event.
+   * Cleanup is deliberately not started here; the owning records still invoke it in LIFO order. */
+  private sealTree(reason: ActivationCloseReason, sealed: ActivationScope[]): void {
+    if (this.currentState !== "open") return;
+    this.closeReason = Object.freeze({ ...reason });
+    this.currentState = "closing";
+    sealed.push(this);
+    for (const record of [...this.records]) {
+      record.child?.sealTree({ kind: "parent-close", detail: this.label }, sealed);
     }
   }
 

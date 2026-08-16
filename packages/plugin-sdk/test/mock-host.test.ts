@@ -19,7 +19,8 @@ describe("activateWithMockHost", () => {
       declaredWidgets: ["vibefield.mock.a", "vibefield.mock.b"],
     });
     expect([...session.bindings.keys()]).toEqual(["vibefield.mock.a"]);
-    expect(session.disposables).toHaveLength(1);
+    // Host-created registrations are owned too; explicit tracking remains compatible.
+    expect(session.disposables).toHaveLength(3);
     expect(session.logs).toEqual([{ level: "info", message: "hello" }]);
   });
 
@@ -143,5 +144,86 @@ describe("activateWithMockHost", () => {
     expect(() =>
       escaped?.widgets.register({ type: "vibefield.mock.a", binding: { component: 1 } }),
     ).toThrow(/after abort/);
+  });
+
+  it("binds effect capabilities to a rollback child while outer registrations survive", async () => {
+    const Comp = (): null => null;
+    let escapedChild: Parameters<Parameters<typeof defineRendererPlugin>[0]["activate"]>[0] | null =
+      null;
+    let childDisposed = 0;
+    const mod = defineRendererPlugin({
+      async activate(ctx) {
+        ctx.commands?.register("vibefield.mock.keep", () => {});
+        await ctx
+          .effect("optional-panel", async (fx) => {
+            escapedChild = fx;
+            fx.surfaces?.register("vibefield.mock.panel", Comp);
+            fx.track("panel-listener", {
+              dispose() {
+                childDisposed += 1;
+              },
+            });
+            throw new Error("optional setup failed");
+          })
+          .catch(() => undefined);
+      },
+    });
+
+    const session = await activateWithMockHost(mod, {
+      declaredCommands: ["vibefield.mock.keep"],
+      declaredSurfaces: ["vibefield.mock.panel"],
+    });
+    expect([...session.commands.keys()]).toEqual(["vibefield.mock.keep"]);
+    expect(session.surfaces.size).toBe(0);
+    expect(childDisposed).toBe(1);
+    expect(() => escapedChild?.surfaces?.register("vibefield.mock.panel", Comp)).toThrow(
+      /after abort/,
+    );
+    await session.close();
+    expect(session.commands.size).toBe(0);
+  });
+
+  it("deduplicates one exact resource across labeled track and the activate return", async () => {
+    let disposeCalls = 0;
+    const shared = {
+      dispose() {
+        disposeCalls += 1;
+      },
+    };
+    const session = await activateWithMockHost(
+      defineRendererPlugin({
+        activate(ctx) {
+          ctx.track("shared", shared);
+          ctx.track(shared);
+          return shared;
+        },
+      }),
+    );
+    await session.close();
+    expect(disposeCalls).toBe(1);
+  });
+
+  it("rolls back partial mock activation before rethrowing the primary error", async () => {
+    let disposeCalls = 0;
+    const activation = activateWithMockHost(
+      defineRendererPlugin({
+        activate(ctx) {
+          ctx.widgets.register({
+            type: "vibefield.mock.a",
+            binding: { component: () => null },
+          });
+          ctx.track("partial", {
+            dispose() {
+              disposeCalls += 1;
+            },
+          });
+          throw new Error("primary failure");
+        },
+      }),
+      { declaredWidgets: ["vibefield.mock.a"] },
+    );
+
+    await expect(activation).rejects.toThrow("primary failure");
+    expect(disposeCalls).toBe(1);
   });
 });

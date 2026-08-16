@@ -88,6 +88,93 @@ describe("ActivationScope", () => {
     ]);
   });
 
+  it("gates the whole child tree synchronously without starting child cleanup out of LIFO order", async () => {
+    const events: string[] = [];
+    const scope = new ActivationScope("renderer");
+    const child = scope.child("activate");
+    const childResource = handle("child", events);
+    child.track(childResource);
+    scope.track("later-root-resource", handle("root", events));
+
+    scope.close({ kind: "disable" });
+    expect(scope.signal.aborted).toBe(true);
+    expect(child.signal.aborted).toBe(true);
+    expect(child.state).toBe("closing");
+    expect(childResource.disposeCalls).toBe(0);
+
+    await scope.whenQuiescent();
+    expect(events).toEqual(["acquire:child", "acquire:root", "dispose:root", "dispose:child"]);
+  });
+
+  it("does not let a descendant close bypass an ancestor's stalled LIFO edge", async () => {
+    const releaseRoot = deferred<void>();
+    const scope = new ActivationScope("renderer");
+    const child = scope.child("activate");
+    const childResource = handle("child", []);
+    child.track(childResource);
+    scope.track("later-root-resource", {
+      async dispose() {
+        await releaseRoot.promise;
+      },
+    });
+
+    scope.close({ kind: "disable" });
+    child.close({ kind: "manual" });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(childResource.disposeCalls).toBe(0);
+
+    releaseRoot.resolve();
+    await scope.whenQuiescent();
+    expect(childResource.disposeCalls).toBe(1);
+  });
+
+  it("does not recount a child that compacts while its parent's captured cleanup waits", async () => {
+    const releaseRoot = deferred<void>();
+    const scope = new ActivationScope("renderer");
+    const child = scope.child("optional");
+    const childResource = handle("child", []);
+    child.track(childResource);
+    scope.track("later-root-resource", {
+      async dispose() {
+        await releaseRoot.promise;
+      },
+    });
+
+    child.close({ kind: "manual" });
+    scope.close({ kind: "disable" });
+    await child.whenQuiescent();
+    expect(childResource.disposeCalls).toBe(1);
+
+    releaseRoot.resolve();
+    const report = await scope.whenQuiescent();
+    expect(report.stats).toMatchObject({ acquired: 3, disposed: 3 });
+  });
+
+  it("gates siblings before the first child abort listener can acquire through them", async () => {
+    const scope = new ActivationScope("renderer");
+    const first = scope.child("first");
+    const sibling = scope.child("sibling");
+    let lateDisposeCalls = 0;
+    let siblingStateDuringAbort = sibling.state;
+
+    first.signal.addEventListener("abort", () => {
+      siblingStateDuringAbort = sibling.state;
+      expect(() =>
+        sibling.track("cross-child-late", {
+          dispose() {
+            lateDisposeCalls += 1;
+          },
+        }),
+      ).toThrow(InactiveActivationScopeError);
+    });
+    scope.close({ kind: "disable" });
+
+    expect(siblingStateDuringAbort).toBe("closing");
+    await scope.whenQuiescent();
+    expect(lateDisposeCalls).toBe(1);
+  });
+
   it("rolls back partial setup and preserves the primary error", async () => {
     const events: string[] = [];
     const scope = new ActivationScope("renderer");

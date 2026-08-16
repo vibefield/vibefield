@@ -45,7 +45,8 @@ function buildWidgets(
   activation: ActivatedRenderer,
 ): Record<string, WidgetType> {
   const owner = { pluginId, pluginTitle: title };
-  const activationError = activation.state === "failed" ? (activation.error ?? "failed") : null;
+  const activationError =
+    activation.state === "active" ? null : (activation.error ?? activation.state);
   return Object.fromEntries(
     contributions.map((w) => {
       const bound = activationError === null ? activation.bindings.get(w.type) : undefined;
@@ -134,7 +135,7 @@ export function buildRegistry(
   const registry = new PluginRegistry<WidgetType>();
   const log = getRendererLogger().child({ component: "plugin.host" });
   for (const staged of prepared.staged) {
-    if (staged.activation.state === "failed") {
+    if (staged.activation.state !== "active") {
       log.error(
         "renderer.plugins.activation_failed",
         "A staged renderer plugin failed activation",
@@ -154,7 +155,7 @@ export function buildRegistry(
     const bundled = prepared.bundled.length > 0 ? prepared.bundled : (devBundled ?? []);
     for (const { manifest, mod } of bundled) {
       const activation = activateRenderer(manifest, mod);
-      if (activation.state === "failed") {
+      if (activation.state !== "active") {
         log.error(
           "renderer.plugins.activation_failed",
           "A bundled renderer plugin failed activation",

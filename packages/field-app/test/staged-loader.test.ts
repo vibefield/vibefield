@@ -309,7 +309,7 @@ describe("staged activation under the §10.4 deadline", () => {
       });
       await vi.advanceTimersByTimeAsync(PLUGIN_LIMITS.RENDERER_ACTIVATE_DEADLINE_MS + 1);
       const activation = await pending;
-      expect(activation.state).toBe("failed");
+      expect(activation.state).toBe("non-quiescent");
       expect(activation.error).toMatch(/§10.4/);
       // The registrations it managed to make are gone and its resources are
       // released — a half-activated plugin must not leave live bindings behind.

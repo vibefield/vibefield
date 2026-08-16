@@ -89,9 +89,15 @@ export const RENDERER_CTX_FACES: readonly CtxFaceRow[] = [
   },
   {
     face: "ctx.track",
-    type: "<T extends Disposable>(resource: T) => T",
-    presence: "always; what you track is disposed when the activation ends",
+    type: "(resource) or (label, resource) => resource",
+    presence: "always; exact handles are deduplicated and disposed when the activation ends",
     anchor: "track<T extends Disposable>(resource: T): T",
+  },
+  {
+    face: "ctx.effect",
+    type: "(label, acquire(childContext)) => Promise<result>",
+    presence: "always; partial child acquisitions roll back without closing the outer activation",
+    anchor: "acquire: (fx: RendererPluginContext) => T | Promise<T>",
   },
 ];
 

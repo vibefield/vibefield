@@ -32,6 +32,8 @@ export interface MockActivation {
   disposables: Disposable[];
   /** abort the mock session (fires ctx.signal; further registers throw) */
   abort(): void;
+  /** Abort and await every owned inverse in reverse acquisition order. */
+  close(): Promise<void>;
 }
 
 export interface MockPluginHostOptions {
@@ -51,6 +53,91 @@ export interface MockPluginHostOptions {
   canvasEngine?: unknown;
 }
 
+function isDisposable(value: unknown): value is Disposable {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { dispose?: unknown }).dispose === "function"
+  );
+}
+
+/** A deliberately small authoring twin of the production ownership contract. Host runtime code
+ * still lives in plugin-runtime; the SDK testing door models the observable author semantics
+ * without taking a dependency on host implementation. */
+class MockOwnership {
+  readonly signal: AbortSignal;
+
+  private readonly controller = new AbortController();
+  private readonly records: Disposable[] = [];
+  private readonly children: MockOwnership[] = [];
+  private readonly owned = new WeakSet<object>();
+  private readonly all: Disposable[];
+  private readonly errors: unknown[];
+  private closeTask?: Promise<void>;
+  private open = true;
+
+  constructor(all: Disposable[], errors: unknown[]) {
+    this.all = all;
+    this.errors = errors;
+    this.signal = this.controller.signal;
+  }
+
+  assertOpen(): void {
+    if (!this.open) throw new Error("mock host: capability used after abort");
+  }
+
+  track<T extends Disposable>(resource: T): T {
+    if (this.owned.has(resource)) {
+      this.assertOpen();
+      return resource;
+    }
+    this.owned.add(resource);
+    this.records.push(resource);
+    this.all.push(resource);
+    if (!this.open) {
+      void this.dispose(resource);
+      this.assertOpen();
+    }
+    return resource;
+  }
+
+  child(): MockOwnership {
+    this.assertOpen();
+    const child = new MockOwnership(this.all, this.errors);
+    this.children.push(child);
+    this.track({ dispose: () => child.close() });
+    return child;
+  }
+
+  close(): Promise<void> {
+    if (this.open) {
+      const sealed: MockOwnership[] = [];
+      this.sealTree(sealed);
+      for (const scope of sealed) scope.controller.abort();
+    }
+    if (this.closeTask !== undefined) return this.closeTask;
+    this.closeTask = (async () => {
+      for (const resource of [...this.records].reverse()) await this.dispose(resource);
+    })();
+    return this.closeTask;
+  }
+
+  private async dispose(resource: Disposable): Promise<void> {
+    try {
+      await resource.dispose();
+    } catch (error) {
+      this.errors.push(error);
+    }
+  }
+
+  private sealTree(sealed: MockOwnership[]): void {
+    if (!this.open) return;
+    this.open = false;
+    sealed.push(this);
+    for (const child of this.children) child.sealTree(sealed);
+  }
+}
+
 /** Activate a module against a mock context; returns the collected surface.
  * Async activates are awaited — the mock has no deadline (tests own timing). */
 export async function activateWithMockHost(
@@ -60,101 +147,179 @@ export async function activateWithMockHost(
   const declared = opts.declaredWidgets;
   const declaredCommands = opts.declaredCommands;
   const declaredSurfaces = opts.declaredSurfaces;
-  const controller = new AbortController();
   const bindings = new Map<string, WidgetBinding>();
   const commands = new Map<string, MockCommandHandler>();
   const surfaces = new Map<string, MockSurfaceComponent>();
+  const widgetGenerations = new Map<string, symbol>();
+  const commandGenerations = new Map<string, symbol>();
+  const surfaceGenerations = new Map<string, symbol>();
   const logs: MockActivation["logs"] = [];
   const disposables: Disposable[] = [];
+  const cleanupErrors: unknown[] = [];
+  const root = new MockOwnership(disposables, cleanupErrors);
   const log =
     (level: "debug" | "info" | "warn" | "error") =>
     (message: string): void => {
       logs.push({ level, message });
     };
-  const logger: PluginLogger = {
-    debug: log("debug"),
-    info: log("info"),
-    warn: log("warn"),
-    error: log("error"),
-  };
-  const ctx: RendererPluginContext = {
-    plugin: { id: opts.id ?? "vibefield.mock", version: opts.version ?? "0.0.0" },
-    signal: controller.signal,
-    logger,
-    widgets: {
-      register(registration: WidgetRegistration): Disposable {
-        if (controller.signal.aborted) throw new Error("mock host: register after abort");
-        if (declared !== undefined && !declared.includes(registration.type))
-          throw new Error(`mock host: ${registration.type} is not declared by this plugin`);
-        if (bindings.has(registration.type))
-          throw new Error(`mock host: ${registration.type} already bound in this entry`);
-        bindings.set(registration.type, registration.binding);
-        return {
-          dispose() {
-            bindings.delete(registration.type);
-          },
-        };
+  const contextFor = (ownedBy: MockOwnership): RendererPluginContext => {
+    const assertOpen = (): void => ownedBy.assertOpen();
+    const logger: PluginLogger = {
+      debug(message) {
+        assertOpen();
+        log("debug")(message);
       },
-    },
-    client: {
-      request() {
-        return Promise.reject(new Error("mock host: no product connection"));
+      info(message) {
+        assertOpen();
+        log("info")(message);
       },
-      subscribe() {
-        return Promise.reject(new Error("mock host: no product connection"));
+      warn(message) {
+        assertOpen();
+        log("warn")(message);
       },
-    },
-    // §10.2 absent-API law: the three P6 surfaces are present iff their
-    // contribution/capability is declared (mirrors the real renderer harness).
-    ...(declaredCommands !== undefined
-      ? {
-          commands: {
-            register(commandId: string, handler: MockCommandHandler): Disposable {
-              if (controller.signal.aborted) throw new Error("mock host: register after abort");
-              if (!declaredCommands.includes(commandId))
-                throw new Error(`mock host: ${commandId} is not declared by this plugin`);
-              if (commands.has(commandId))
-                throw new Error(`mock host: ${commandId} already bound in this entry`);
-              commands.set(commandId, handler);
-              return {
-                dispose() {
-                  commands.delete(commandId);
-                },
-              };
+      error(message) {
+        assertOpen();
+        log("error")(message);
+      },
+    };
+
+    function track<T extends Disposable>(resource: T): T;
+    function track<T extends Disposable>(label: string, resource: T): T;
+    function track<T extends Disposable>(labelOrResource: string | T, resource?: T): T {
+      return ownedBy.track(typeof labelOrResource === "string" ? (resource as T) : labelOrResource);
+    }
+
+    return {
+      plugin: { id: opts.id ?? "vibefield.mock", version: opts.version ?? "0.0.0" },
+      signal: ownedBy.signal,
+      logger,
+      widgets: {
+        register(registration: WidgetRegistration): Disposable {
+          assertOpen();
+          if (declared !== undefined && !declared.includes(registration.type))
+            throw new Error(`mock host: ${registration.type} is not declared by this plugin`);
+          if (bindings.has(registration.type))
+            throw new Error(`mock host: ${registration.type} already bound in this entry`);
+          const generation = Symbol(registration.type);
+          widgetGenerations.set(registration.type, generation);
+          bindings.set(registration.type, registration.binding);
+          return ownedBy.track({
+            dispose() {
+              if (widgetGenerations.get(registration.type) !== generation) return;
+              widgetGenerations.delete(registration.type);
+              bindings.delete(registration.type);
             },
-          },
-        }
-      : {}),
-    ...(declaredSurfaces !== undefined
-      ? {
-          surfaces: {
-            register(surfaceId: string, component: MockSurfaceComponent): Disposable {
-              if (controller.signal.aborted) throw new Error("mock host: register after abort");
-              if (!declaredSurfaces.includes(surfaceId))
-                throw new Error(`mock host: ${surfaceId} is not declared by this plugin`);
-              if (surfaces.has(surfaceId))
-                throw new Error(`mock host: ${surfaceId} already bound in this entry`);
-              surfaces.set(surfaceId, component);
-              return {
-                dispose() {
-                  surfaces.delete(surfaceId);
-                },
-              };
+          });
+        },
+      },
+      client: {
+        request() {
+          assertOpen();
+          return Promise.reject(new Error("mock host: no product connection"));
+        },
+        subscribe() {
+          assertOpen();
+          return Promise.reject(new Error("mock host: no product connection"));
+        },
+      },
+      ...(declaredCommands !== undefined
+        ? {
+            commands: {
+              register(commandId: string, handler: MockCommandHandler): Disposable {
+                assertOpen();
+                if (!declaredCommands.includes(commandId))
+                  throw new Error(`mock host: ${commandId} is not declared by this plugin`);
+                if (commands.has(commandId))
+                  throw new Error(`mock host: ${commandId} already bound in this entry`);
+                const generation = Symbol(commandId);
+                commandGenerations.set(commandId, generation);
+                commands.set(commandId, handler);
+                return ownedBy.track({
+                  dispose() {
+                    if (commandGenerations.get(commandId) !== generation) return;
+                    commandGenerations.delete(commandId);
+                    commands.delete(commandId);
+                  },
+                });
+              },
             },
-          },
+          }
+        : {}),
+      ...(declaredSurfaces !== undefined
+        ? {
+            surfaces: {
+              register(surfaceId: string, component: MockSurfaceComponent): Disposable {
+                assertOpen();
+                if (!declaredSurfaces.includes(surfaceId))
+                  throw new Error(`mock host: ${surfaceId} is not declared by this plugin`);
+                if (surfaces.has(surfaceId))
+                  throw new Error(`mock host: ${surfaceId} already bound in this entry`);
+                const generation = Symbol(surfaceId);
+                surfaceGenerations.set(surfaceId, generation);
+                surfaces.set(surfaceId, component);
+                return ownedBy.track({
+                  dispose() {
+                    if (surfaceGenerations.get(surfaceId) !== generation) return;
+                    surfaceGenerations.delete(surfaceId);
+                    surfaces.delete(surfaceId);
+                  },
+                });
+              },
+            },
+          }
+        : {}),
+      ...(opts.canvasEngine !== undefined
+        ? {
+            canvas: {
+              engine() {
+                assertOpen();
+                return opts.canvasEngine ?? null;
+              },
+            },
+          }
+        : {}),
+      track,
+      async effect<T>(
+        _label: string,
+        acquire: (fx: RendererPluginContext) => T | Promise<T>,
+      ): Promise<T> {
+        assertOpen();
+        const child = ownedBy.child();
+        try {
+          const value = await acquire(contextFor(child));
+          if (isDisposable(value)) child.track(value);
+          return value;
+        } catch (error) {
+          await child.close();
+          throw error;
         }
-      : {}),
-    ...(opts.canvasEngine !== undefined
-      ? { canvas: { engine: () => opts.canvasEngine ?? null } }
-      : {}),
-    track<T extends Disposable>(resource: T): T {
-      disposables.push(resource);
-      return resource;
-    },
+      },
+    };
   };
-  const result = await mod.activate(ctx);
-  if (result !== undefined && result !== null) disposables.push(result);
-  return { bindings, commands, surfaces, logs, disposables, abort: () => controller.abort() };
+
+  const activation = root.child();
+  try {
+    const result = await mod.activate(contextFor(activation));
+    if (isDisposable(result)) activation.track(result);
+  } catch (error) {
+    await activation.close();
+    await root.close();
+    throw error;
+  }
+  const close = async (): Promise<void> => {
+    await root.close();
+    if (cleanupErrors.length > 0)
+      throw new AggregateError(cleanupErrors, "mock host cleanup failed");
+  };
+  return {
+    bindings,
+    commands,
+    surfaces,
+    logs,
+    disposables,
+    abort: () => void root.close(),
+    close,
+  };
 }
 
 // --- the service-side twin (P4) ----------------------------------------------

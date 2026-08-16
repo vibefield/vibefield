@@ -162,24 +162,20 @@ export async function checkActivation(
     ...exactMatch("surface", declaredSurfaces, [...session.surfaces.keys()]),
   );
 
-  // Deactivation, the host's own sequence (§18.1): abort the context, then
-  // dispose everything the plugin handed back. The mock's registration handles
-  // are the host's business — a plugin that never tracks its own registration
-  // is not leaking, because `endActivation` clears that map either way.
+  // Deactivation uses the mock host's scope twin: synchronous abort followed by awaited reverse
+  // ownership cleanup, including host-created registrations and returned/explicit disposables.
   session.abort();
-  for (const disposable of session.disposables) {
-    try {
-      await disposable.dispose();
-    } catch (error) {
-      verdicts.push(
-        refuse(
-          "activation",
-          "activation-leak",
-          `a disposable threw during deactivation: ${error instanceof Error ? error.message : String(error)}`,
-          { pointer: entry },
-        ),
-      );
-    }
+  try {
+    await session.close();
+  } catch (error) {
+    verdicts.push(
+      refuse(
+        "activation",
+        "activation-leak",
+        `a disposable threw during deactivation: ${error instanceof Error ? error.message : String(error)}`,
+        { pointer: entry },
+      ),
+    );
   }
 
   const after = timerCensus();
