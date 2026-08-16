@@ -66,7 +66,15 @@ const sckStatus = required(document.querySelector<HTMLElement>("#sck"), "SCK sta
 const context = required(canvas.getContext("2d"), "2D preview context");
 const labParameters = new URLSearchParams(location.search);
 const phase = labParameters.get("phase");
-const sckEnabled = labParameters.get("sck") === "1";
+const rawSckMode = labParameters.get("sck");
+const sckMode =
+  rawSckMode === "simulator"
+    ? "simulator"
+    : rawSckMode === "1" || rawSckMode === "fixture"
+      ? "fixture"
+      : null;
+const sckEnabled = sckMode !== null;
+const sckRotate = sckMode === "simulator" && labParameters.get("rotate") === "1";
 
 // Installed synchronously: preload's one-time port handoff can never outrun
 // the lab module while the rest of async setup waits for WebGPU and ticketing.
@@ -99,7 +107,11 @@ function report(result: LiveSurfaceLabRendererResult): void {
   document.documentElement.dataset[LIVE_SURFACE_LAB_RESULT_DATASET] = JSON.stringify(result);
   status.textContent = result.ok
     ? `PASS · CPU recovery + ${result.browserOnePresented} one-surface + 10-way Browser OSR${
-        result.sckEnabled ? " + exact SCK" : ""
+        result.sckMode === "fixture"
+          ? " + exact SCK"
+          : result.sckMode === "simulator"
+            ? " + Simulator SCK"
+            : ""
       }`
     : `FAIL · ${result.error ?? "unknown error"}`;
 }
@@ -273,7 +285,8 @@ async function runReloadProbe(): Promise<void> {
       if (heldReloadLease === null) await delay(8);
     }
     const nextParameters = new URLSearchParams({ phase: "main" });
-    if (sckEnabled) nextParameters.set("sck", "1");
+    if (sckMode !== null) nextParameters.set("sck", sckMode);
+    if (sckRotate) nextParameters.set("rotate", "1");
     history.replaceState(null, "", `${location.pathname}?${nextParameters.toString()}`);
     document.documentElement.dataset[LIVE_SURFACE_LAB_RELOAD_READY_DATASET] = "1";
     status.textContent = "LSF-2 reload: shared frame held; waiting for main-authorized reload…";
@@ -293,8 +306,10 @@ async function runReloadProbe(): Promise<void> {
       tenSurfacePresented: [],
       tenSurfaceShared: 0,
       sckEnabled,
+      ...(sckMode === null ? {} : { sckMode }),
       sckPresented: 0,
       sckExact: false,
+      sckRebound: false,
       sckRedPureRatio: 0,
       sckBluePureRatio: 0,
       error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
@@ -317,6 +332,7 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
   let tenSurfaceShared = 0;
   let sckPresented = 0;
   let sckExact = false;
+  let sckRebound = false;
   let sckTransport: "shared-texture" | undefined;
   let sckPixelFormat: "bgra" | undefined;
   let sckRedPureRatio = 0;
@@ -517,7 +533,10 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
     await delay(300);
 
     if (sckEnabled) {
-      sckStatus.textContent = "capturing deterministic BGRA stripes through the helper…";
+      sckStatus.textContent =
+        sckMode === "simulator"
+          ? "capturing the resolved Simulator viewport through the helper…"
+          : "capturing deterministic BGRA stripes through the helper…";
       const sck = await transport.attach(LIVE_SURFACE_LAB_SCK_TICKET);
       const store = new WebGpuLiveSurfaceTextureStore<VideoFrame>();
       store.replaceDevice(device);
@@ -537,6 +556,34 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       sckRedPureRatio = proof.redPureRatio;
       sckBluePureRatio = proof.bluePureRatio;
       if (sck.summary.transport === "shared-texture") sckTransport = "shared-texture";
+      if (sckRotate) {
+        const firstEpoch = sck.summary.producerEpoch;
+        const firstGeometry = JSON.stringify(sck.summary.geometry?.logicalSize ?? null);
+        let reboundFrames = 0;
+        const deadline = performance.now() + 20_000;
+        while (!sckRebound || reboundFrames < 3) {
+          const lease = sck.takeFrame();
+          if (lease !== null) {
+            const metadata = lease.frame.metadata;
+            const result = store.present(lease);
+            if (result.kind === "presented") {
+              sckPresentation.presented += 1;
+              const geometry = JSON.stringify(metadata.geometry.logicalSize);
+              if (metadata.producerEpoch > firstEpoch && geometry !== firstGeometry) {
+                sckRebound = true;
+                reboundFrames += 1;
+              }
+            }
+          }
+          if (performance.now() >= deadline) {
+            throw new Error(
+              `Simulator orientation rebound deadline: rebound=${sckRebound}, frames=${reboundFrames}`,
+            );
+          }
+          if (!sckRebound || reboundFrames < 3) await delay(8);
+        }
+        sckPresented = sckPresentation.presented;
+      }
       sck.setDemand({
         revision: 2,
         mode: "hibernated",
@@ -544,9 +591,12 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
         priority: 0,
         interactive: false,
       });
-      sckStatus.textContent = proof.exact
-        ? `exact BGRA · ${sckPresented} frames`
-        : `pixel mismatch · red ${proof.redPureRatio}, blue ${proof.bluePureRatio}`;
+      sckStatus.textContent =
+        sckMode === "simulator"
+          ? `Simulator viewport · ${sckPresented} frames${sckRebound ? " · rebound" : ""}`
+          : proof.exact
+            ? `exact BGRA · ${sckPresented} frames`
+            : `pixel mismatch · red ${proof.redPureRatio}, blue ${proof.bluePureRatio}`;
       await delay(300);
     }
 
@@ -566,8 +616,9 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       tenSurfacePresented.every((count) => count >= 3) &&
       tenSurfaceShared === 10 &&
       (!sckEnabled ||
-        (sckPresented >= 3 &&
-          sckExact &&
+        (sckPresented >= (sckRotate ? 6 : 3) &&
+          (sckMode !== "fixture" || sckExact) &&
+          (!sckRotate || sckRebound) &&
           sckTransport === "shared-texture" &&
           sckPixelFormat === "bgra")) &&
       transportProtocolFaults === 0;
@@ -587,8 +638,10 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       tenSurfacePresented,
       tenSurfaceShared,
       sckEnabled,
+      ...(sckMode === null ? {} : { sckMode }),
       sckPresented,
       sckExact,
+      sckRebound,
       ...(sckTransport === undefined ? {} : { sckTransport }),
       ...(sckPixelFormat === undefined ? {} : { sckPixelFormat }),
       sckRedPureRatio,
@@ -624,8 +677,10 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       tenSurfacePresented,
       tenSurfaceShared,
       sckEnabled,
+      ...(sckMode === null ? {} : { sckMode }),
       sckPresented,
       sckExact,
+      sckRebound,
       ...(sckTransport === undefined ? {} : { sckTransport }),
       ...(sckPixelFormat === undefined ? {} : { sckPixelFormat }),
       sckRedPureRatio,

@@ -461,14 +461,49 @@ async function main(
   assertPackagedResources(resources);
 
   let sckLabPaths:
-    | { readonly helperPath: string; readonly adapterPath: string; readonly fixturePath: string }
+    | {
+        readonly kind: "fixture";
+        readonly helperPath: string;
+        readonly adapterPath: string;
+        readonly fixturePath: string;
+      }
+    | {
+        readonly kind: "simulator";
+        readonly helperPath: string;
+        readonly adapterPath: string;
+        readonly udid: string;
+        readonly developerDir?: string;
+        readonly rotate: boolean;
+        readonly requireInactiveSpace: boolean;
+      }
     | undefined;
-  if (MODE === "live-surfaces-lab" && process.env["VF_LIVE_SURFACES_SCK_LAB"] === "1") {
+  const sckFixtureLab = process.env["VF_LIVE_SURFACES_SCK_LAB"] === "1";
+  const simulatorLabUdid = process.env["VF_LIVE_SURFACES_SIMULATOR_UDID"];
+  if (MODE === "live-surfaces-lab" && sckFixtureLab && simulatorLabUdid !== undefined) {
+    throw new Error("the SCK fixture and Simulator labs are mutually exclusive");
+  }
+  if (MODE === "live-surfaces-lab" && sckFixtureLab) {
     const capture = resources.macosLiveSurfaceCapture;
     if (capture === null) throw new Error("the ScreenCaptureKit lab is available only on macOS");
     sckLabPaths = {
+      kind: "fixture",
       ...capture,
       fixturePath: join(dirname(capture.helperPath), "live-surface-capture-fixture"),
+    };
+  } else if (MODE === "live-surfaces-lab" && simulatorLabUdid !== undefined) {
+    const capture = resources.macosLiveSurfaceCapture;
+    if (capture === null)
+      throw new Error("the Simulator Live Surface lab is available only on macOS");
+    sckLabPaths = {
+      kind: "simulator",
+      ...capture,
+      udid: simulatorLabUdid,
+      ...(process.env["DEVELOPER_DIR"] === undefined
+        ? {}
+        : { developerDir: process.env["DEVELOPER_DIR"] }),
+      rotate: process.env["VF_LIVE_SURFACES_SIMULATOR_ROTATE"] === "1",
+      requireInactiveSpace:
+        process.env["VF_LIVE_SURFACES_SIMULATOR_REQUIRE_INACTIVE_SPACE"] === "1",
     };
   }
 

@@ -50,8 +50,10 @@ export interface LiveSurfaceLabRendererResult {
   readonly tenSurfacePresented: readonly number[];
   readonly tenSurfaceShared: number;
   readonly sckEnabled: boolean;
+  readonly sckMode?: "fixture" | "simulator";
   readonly sckPresented: number;
   readonly sckExact: boolean;
+  readonly sckRebound: boolean;
   readonly sckTransport?: "shared-texture";
   readonly sckPixelFormat?: "bgra";
   readonly sckRedPureRatio: number;

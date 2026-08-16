@@ -315,6 +315,8 @@ describe("IosSimulatorCaptureClient", () => {
       geometry: { logicalSize: { width: 402, height: 874 }, cropState: "applied" },
     });
     await vi.advanceTimersByTimeAsync(50);
+    expect(onFault).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(50);
     expect(onFault).toHaveBeenCalledOnce();
     expect(onFault).toHaveBeenCalledWith({
       code: "source-closed",

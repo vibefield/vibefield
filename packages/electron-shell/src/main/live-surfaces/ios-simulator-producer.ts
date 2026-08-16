@@ -411,6 +411,7 @@ export class IosSimulatorCaptureClient implements SckCaptureClient {
     let live = request.demand.mode === "live";
     let timer: ReturnType<typeof setTimeout> | null = null;
     let checking = false;
+    let pendingFingerprint: string | null = null;
     const clearTimer = (): void => {
       if (timer !== null) clearTimeout(timer);
       timer = null;
@@ -434,7 +435,13 @@ export class IosSimulatorCaptureClient implements SckCaptureClient {
         void this.#resolver
           .resolve(this.#source)
           .then((current) => {
-            if (current.fingerprint !== resolved.fingerprint) {
+            if (current.fingerprint === resolved.fingerprint) {
+              pendingFingerprint = null;
+            } else if (pendingFingerprint !== current.fingerprint) {
+              // Simulator animates its outer window during rotation. Rebinding
+              // on the first transient frame can capture an intermediate crop.
+              pendingFingerprint = current.fingerprint;
+            } else {
               fault({
                 code: "source-closed",
                 message: "Simulator window geometry changed and will be rebound",

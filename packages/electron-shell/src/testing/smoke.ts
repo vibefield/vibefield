@@ -28,6 +28,12 @@ import { ElectronBrowserSurfaceNative } from "../main/live-surfaces/browser-elec
 import { BrowserLiveSurfaceRuntime } from "../main/live-surfaces/browser-producer";
 import { createElectronLiveSurfaceTextureTransferApi } from "../main/live-surfaces/electron-texture-transfer";
 import {
+  IosSimulatorLiveSurfaceRuntime,
+  IosSimulatorSourceResolver,
+  type ResolvedIosSimulatorCapture,
+  SimctlDeviceCatalog,
+} from "../main/live-surfaces/ios-simulator-producer";
+import {
   MacosCaptureHelperSupervisor,
   type MacosCaptureSource,
 } from "../main/live-surfaces/macos-capture-helper";
@@ -2192,11 +2198,25 @@ async function proveLiveSurfaceBrowserInput(
   throw new Error(`Browser target-scoped input proof failed: ${lastFailure}`);
 }
 
-interface LiveSurfaceSckLabPaths {
+interface LiveSurfaceSckLabBase {
   readonly helperPath: string;
   readonly adapterPath: string;
+}
+
+interface LiveSurfaceSckFixtureLab extends LiveSurfaceSckLabBase {
+  readonly kind: "fixture";
   readonly fixturePath: string;
 }
+
+interface LiveSurfaceSimulatorLab extends LiveSurfaceSckLabBase {
+  readonly kind: "simulator";
+  readonly udid: string;
+  readonly developerDir?: string;
+  readonly rotate: boolean;
+  readonly requireInactiveSpace: boolean;
+}
+
+type LiveSurfaceSckLab = LiveSurfaceSckFixtureLab | LiveSurfaceSimulatorLab;
 
 interface LiveSurfaceSckFixture {
   readonly pid: number;
@@ -2317,6 +2337,115 @@ async function findSckFixtureSource(
   throw new Error(`SCK fixture window was not enumerated among ${lastSourceCount} sources`);
 }
 
+async function clickSimulatorRotate(): Promise<void> {
+  const script = [
+    'tell application "Simulator" to activate',
+    "delay 0.5",
+    'tell application "System Events"',
+    '  tell process "Simulator"',
+    "    repeat with candidate in windows",
+    "      try",
+    '        set controls to (every button of toolbar 1 of candidate whose description is "Rotate")',
+    "        if (count of controls) > 0 then",
+    "          click item 1 of controls",
+    "          return",
+    "        end if",
+    "      end try",
+    "    end repeat",
+    "  end tell",
+    "end tell",
+    'error "Simulator rotate control was unavailable"',
+  ];
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      "/usr/bin/osascript",
+      script.flatMap((line) => ["-e", line]),
+      { stdio: ["ignore", "ignore", "pipe"] },
+    );
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      if (stderr.length < 4_096) stderr += String(chunk).slice(0, 4_096 - stderr.length);
+    });
+    let settled = false;
+    const finish = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error === undefined) resolve();
+      else reject(error);
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(new Error("Simulator rotation command timed out"));
+    }, 5_000);
+    child.once("error", (error) => finish(error));
+    child.once("exit", (code, signal) => {
+      if (code === 0) finish();
+      else {
+        finish(
+          new Error(
+            `Simulator rotation command failed (${code ?? signal ?? "unknown"})${
+              stderr.length === 0 ? "" : `: ${stderr.trim()}`
+            }`,
+          ),
+        );
+      }
+    });
+  });
+}
+
+interface LiveSurfaceSimulatorRotationProof {
+  readonly initialEpoch: number;
+  readonly finalEpoch: number;
+  readonly initialLogicalSize: { readonly width: number; readonly height: number };
+  readonly finalLogicalSize: { readonly width: number; readonly height: number };
+  readonly sessionRestarts: number;
+}
+
+async function proveSimulatorRotation(
+  runtime: IosSimulatorLiveSurfaceRuntime,
+): Promise<LiveSurfaceSimulatorRotationProof> {
+  const readyDeadline = Date.now() + 90_000;
+  while (
+    (runtime.stats.framesReceived < 3 || runtime.summary.geometry === undefined) &&
+    Date.now() < readyDeadline
+  ) {
+    await sleep(25);
+  }
+  const initial = runtime.summary;
+  if (runtime.stats.framesReceived < 3 || initial.geometry === undefined) {
+    throw new Error("Simulator runtime produced no stable pre-rotation geometry");
+  }
+  await clickSimulatorRotate();
+  const changedDeadline = Date.now() + 20_000;
+  let final = runtime.summary;
+  while (
+    (final.producerEpoch <= initial.producerEpoch ||
+      final.geometry === undefined ||
+      (final.geometry.logicalSize.width === initial.geometry.logicalSize.width &&
+        final.geometry.logicalSize.height === initial.geometry.logicalSize.height)) &&
+    Date.now() < changedDeadline
+  ) {
+    await sleep(25);
+    final = runtime.summary;
+  }
+  if (
+    final.producerEpoch <= initial.producerEpoch ||
+    final.geometry === undefined ||
+    (final.geometry.logicalSize.width === initial.geometry.logicalSize.width &&
+      final.geometry.logicalSize.height === initial.geometry.logicalSize.height)
+  ) {
+    throw new Error("Simulator runtime did not rebind after orientation changed");
+  }
+  return {
+    initialEpoch: initial.producerEpoch,
+    finalEpoch: final.producerEpoch,
+    initialLogicalSize: initial.geometry.logicalSize,
+    finalLogicalSize: final.geometry.logicalSize,
+    sessionRestarts: runtime.stats.sessionRestarts,
+  };
+}
+
 /**
  * LSF-2/3/4 standalone lab: retains the CPU/device-loss regression, then proves
  * real guarded Browser OSR through one surface, observed CPU fallback, and ten
@@ -2328,7 +2457,7 @@ export async function runLiveSurfacesLab(opts: {
   registry: WindowRegistry;
   preloadPath: string;
   beforeExit: () => Promise<void>;
-  readonly sck?: LiveSurfaceSckLabPaths;
+  readonly sck?: LiveSurfaceSckLab;
 }): Promise<void> {
   const monitorUncaught: NodeJS.UncaughtExceptionListener = (error, origin) => {
     console.error(
@@ -2385,8 +2514,10 @@ export async function runLiveSurfacesLab(opts: {
   let fallbackRuntime: BrowserLiveSurfaceRuntime | null = null;
   let sckFixture: LiveSurfaceSckFixture | null = null;
   let sckSupervisor: MacosCaptureHelperSupervisor | null = null;
-  let sckRuntime: SckLiveSurfaceRuntime | null = null;
+  let sckRuntime: SckLiveSurfaceRuntime | IosSimulatorLiveSurfaceRuntime | null = null;
   let sckSource: MacosCaptureSource | null = null;
+  let simulatorResolution: ResolvedIosSimulatorCapture | null = null;
+  let simulatorRotation: LiveSurfaceSimulatorRotationProof | null = null;
   let pageServer: Awaited<ReturnType<typeof startLiveSurfacePageServer>> | null = null;
   let exitCode = 2;
   let verdict: Record<string, unknown> = { ok: false };
@@ -2422,27 +2553,59 @@ export async function runLiveSurfacesLab(opts: {
       requestSharedTexture: false,
     });
     if (opts.sck !== undefined) {
-      sckFixture = await startLiveSurfaceSckFixture(opts.sck.fixturePath);
+      const captureAdapter = loadMacosCaptureNativeAdapter(opts.sck.adapterPath);
       sckSupervisor = new MacosCaptureHelperSupervisor({
         helperPath: opts.sck.helperPath,
-        adapter: loadMacosCaptureNativeAdapter(opts.sck.adapterPath),
+        adapter: captureAdapter,
         onDiagnostic: (message) => console.error(`LIVE_SURFACES_SCK_HELPER ${message}`),
       });
-      sckSource = await findSckFixtureSource(sckSupervisor, sckFixture);
-      sckRuntime = new SckLiveSurfaceRuntime({
-        surfaceId: LIVE_SURFACE_LAB_SCK_SURFACE_ID,
-        source: {
-          kind: "sck-window",
-          sourceRef: sckSource.sourceRef,
-          crop: { mode: "none" },
-          captureCursor: false,
-        },
-        client: sckSupervisor,
-      });
+      if (opts.sck.kind === "fixture") {
+        sckFixture = await startLiveSurfaceSckFixture(opts.sck.fixturePath);
+        sckSource = await findSckFixtureSource(sckSupervisor, sckFixture);
+        sckRuntime = new SckLiveSurfaceRuntime({
+          surfaceId: LIVE_SURFACE_LAB_SCK_SURFACE_ID,
+          source: {
+            kind: "sck-window",
+            sourceRef: sckSource.sourceRef,
+            crop: { mode: "none" },
+            captureCursor: false,
+          },
+          client: sckSupervisor,
+        });
+      } else {
+        const simulatorSource = {
+          kind: "ios-simulator" as const,
+          udid: opts.sck.udid,
+          crop: { mode: "auto" as const },
+        };
+        const resolver = new IosSimulatorSourceResolver({
+          devices: new SimctlDeviceCatalog({
+            ...(opts.sck.developerDir === undefined ? {} : { developerDir: opts.sck.developerDir }),
+          }),
+          windows: sckSupervisor,
+          viewport: captureAdapter,
+        });
+        simulatorResolution = await resolver.resolve(simulatorSource);
+        sckSource = simulatorResolution.window;
+        if (opts.sck.requireInactiveSpace && sckSource.onScreen) {
+          throw new Error("Simulator window must begin the cross-Space lab off the active Space");
+        }
+        sckRuntime = new IosSimulatorLiveSurfaceRuntime({
+          surfaceId: LIVE_SURFACE_LAB_SCK_SURFACE_ID,
+          source: simulatorSource,
+          resolver,
+          delegate: sckSupervisor,
+          revalidateIntervalMs: 250,
+        });
+      }
     }
-    await win.loadURL(
-      `${APP_ORIGIN}/spike-live-surfaces-lab.html?phase=reload${sckRuntime === null ? "" : "&sck=1"}`,
-    );
+    const sckQuery =
+      sckRuntime === null || opts.sck === undefined
+        ? ""
+        : `&sck=${opts.sck.kind}${
+            opts.sck.kind === "simulator" && opts.sck.rotate ? "&rotate=1" : ""
+          }`;
+    await win.loadURL(`${APP_ORIGIN}/spike-live-surfaces-lab.html?phase=reload${sckQuery}`);
     const reloadFromGeneration = host.rendererGeneration;
     const reloadTicket = host.issue({
       surfaceId: browserRuntimes[0]!.surfaceId,
@@ -2506,9 +2669,14 @@ export async function runLiveSurfacesLab(opts: {
     for (const [index, runtime] of authorities.entries()) {
       const ticket = host.issue({
         surfaceId: runtime.surfaceId,
-        // The fixture remains main-private; all other authorities are real
-        // Browser sources. Every token is still one-use and generation-bound.
-        sourceKind: runtime === sckRuntime ? "sck-window" : "browser",
+        // Native source identity remains main-private. Every token is still
+        // one-use and generation-bound regardless of the source specialization.
+        sourceKind:
+          runtime === sckRuntime
+            ? opts.sck?.kind === "simulator"
+              ? "ios-simulator"
+              : "sck-window"
+            : "browser",
         operations:
           index === 0
             ? ["view"]
@@ -2530,8 +2698,15 @@ export async function runLiveSurfacesLab(opts: {
     );
 
     const browserInputProof = proveLiveSurfaceBrowserInput(browserRuntimes[0]!, controlTargets);
+    const simulatorRotationProof =
+      opts.sck?.kind === "simulator" &&
+      opts.sck.rotate &&
+      sckRuntime instanceof IosSimulatorLiveSurfaceRuntime
+        ? proveSimulatorRotation(sckRuntime)
+        : Promise.resolve(null);
     const renderer = await waitForLiveSurfaceLabResult(win, 90_000);
     const browserInput = await browserInputProof;
+    simulatorRotation = await simulatorRotationProof;
     const offeredAtRendererDone = authority.stats.offered;
     const referenceDeadline = Date.now() + 3_000;
     while (
@@ -2586,7 +2761,10 @@ export async function runLiveSurfacesLab(opts: {
       const runtimeStats = sckRuntime.stats;
       const helperStats = sckSupervisor.stats;
       const summary = sckRuntime.summary;
+      const sckKind = opts.sck?.kind ?? "fixture";
+      const simulatorLab = opts.sck?.kind === "simulator" ? opts.sck : null;
       sckEvidence = {
+        kind: sckKind,
         source:
           sckSource === null
             ? null
@@ -2594,10 +2772,22 @@ export async function runLiveSurfacesLab(opts: {
                 applicationName: sckSource.applicationName,
                 title: sckSource.title,
                 ownerPid: sckSource.ownerPid,
-                logicalSize: {
-                  width: sckSource.frame.width,
-                  height: sckSource.frame.height,
-                },
+                onScreen: sckSource.onScreen,
+                logicalSize:
+                  simulatorResolution?.geometry.logicalSize ??
+                  ({
+                    width: sckSource.frame.width,
+                    height: sckSource.frame.height,
+                  } as const),
+              },
+        simulator:
+          simulatorResolution === null
+            ? null
+            : {
+                device: simulatorResolution.device,
+                resolvedSource: simulatorResolution.source,
+                resolvedGeometry: simulatorResolution.geometry,
+                rotation: simulatorRotation,
               },
         summary,
         runtime: runtimeStats,
@@ -2605,23 +2795,42 @@ export async function runLiveSurfacesLab(opts: {
       };
       if (
         !renderer.sckEnabled ||
-        renderer.sckPresented < 3 ||
-        !renderer.sckExact ||
+        renderer.sckMode !== sckKind ||
+        renderer.sckPresented < (simulatorLab?.rotate ? 6 : 3) ||
         renderer.sckTransport !== "shared-texture" ||
         renderer.sckPixelFormat !== "bgra" ||
-        renderer.sckRedPureRatio !== 1 ||
-        renderer.sckBluePureRatio !== 1
+        (sckKind === "fixture" &&
+          (!renderer.sckExact ||
+            renderer.sckRedPureRatio !== 1 ||
+            renderer.sckBluePureRatio !== 1)) ||
+        (simulatorLab?.rotate === true && !renderer.sckRebound)
       ) {
-        problems.push("the renderer did not prove exact SCK BGRA stripes");
+        problems.push(
+          sckKind === "fixture"
+            ? "the renderer did not prove exact SCK BGRA stripes"
+            : "the renderer did not present the resolved Simulator viewport",
+        );
       }
+      const sessionsMatch =
+        simulatorLab?.rotate === true
+          ? runtimeStats.sessionsStarted >= 2 && runtimeStats.sessionRestarts >= 1
+          : runtimeStats.sessionsStarted === 1 && runtimeStats.sessionRestarts === 0;
       if (
         summary.state !== "hibernated" ||
         summary.transport !== "shared-texture" ||
-        runtimeStats.sessionsStarted !== 1 ||
-        runtimeStats.sessionRestarts !== 0 ||
+        !sessionsMatch ||
         runtimeStats.framesReceived < 3
       ) {
-        problems.push("the SCK runtime did not complete one clean shared-texture session");
+        problems.push("the SCK runtime did not complete its bounded shared-texture session(s)");
+      }
+      if (
+        simulatorLab !== null &&
+        (simulatorResolution === null ||
+          simulatorResolution.geometry.cropState !== "applied" ||
+          summary.geometry?.cropState !== "applied" ||
+          (simulatorLab.rotate && simulatorRotation === null))
+      ) {
+        problems.push("the Simulator runtime did not preserve proven cropped geometry");
       }
       if (
         runtimeStats.framesReceived !== runtimeStats.localReferencesReleased ||
@@ -2630,10 +2839,16 @@ export async function runLiveSurfacesLab(opts: {
       ) {
         problems.push("the SCK runtime did not reconcile every local/helper frame lease");
       }
+      const staleSessionFrames = helperStats.framesReceived - runtimeStats.framesReceived;
+      const helperFrameAccounting =
+        simulatorLab?.rotate === true
+          ? staleSessionFrames >= 0 &&
+            staleSessionFrames === helperStats.framesRejected &&
+            helperStats.framesRejected <= runtimeStats.sessionsStarted * 2
+          : helperStats.framesRejected === 0 && staleSessionFrames === 0;
       if (
         helperStats.activeSessions !== 0 ||
-        helperStats.framesRejected !== 0 ||
-        helperStats.framesReceived !== runtimeStats.framesReceived ||
+        !helperFrameAccounting ||
         helperStats.releaseCommands !== helperStats.framesReceived ||
         helperStats.native === null ||
         helperStats.native.accepted !== helperStats.framesReceived ||
