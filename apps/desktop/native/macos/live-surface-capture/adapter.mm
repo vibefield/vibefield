@@ -1,3 +1,4 @@
+#include <ApplicationServices/ApplicationServices.h>
 #include <CoreVideo/CoreVideo.h>
 #include <IOSurface/IOSurface.h>
 #include <bsm/libbsm.h>
@@ -16,6 +17,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 #include "protocol.h"
 
@@ -292,6 +294,231 @@ bool SetNumber(napi_env env, napi_value object, const char* name, double value) 
   return napi_create_double(env, value, &number) == napi_ok && SetNamed(env, object, name, number);
 }
 
+bool GetNamedNumber(napi_env env, napi_value object, const char* name, double* output) {
+  napi_value value;
+  double number = 0;
+  if (napi_get_named_property(env, object, name, &value) != napi_ok ||
+      napi_get_value_double(env, value, &number) != napi_ok || !std::isfinite(number)) {
+    return false;
+  }
+  *output = number;
+  return true;
+}
+
+bool CopyAxFrame(AXUIElementRef element, CGRect* output) {
+  CFTypeRef raw_position = nullptr;
+  CFTypeRef raw_size = nullptr;
+  CGPoint position{};
+  CGSize size{};
+  const bool valid =
+      AXUIElementCopyAttributeValue(element, kAXPositionAttribute, &raw_position) == kAXErrorSuccess &&
+      AXUIElementCopyAttributeValue(element, kAXSizeAttribute, &raw_size) == kAXErrorSuccess &&
+      raw_position != nullptr && raw_size != nullptr &&
+      CFGetTypeID(raw_position) == AXValueGetTypeID() &&
+      CFGetTypeID(raw_size) == AXValueGetTypeID() &&
+      AXValueGetType(static_cast<AXValueRef>(raw_position)) == kAXValueCGPointType &&
+      AXValueGetType(static_cast<AXValueRef>(raw_size)) == kAXValueCGSizeType &&
+      AXValueGetValue(static_cast<AXValueRef>(raw_position),
+                      static_cast<AXValueType>(kAXValueCGPointType), &position) &&
+      AXValueGetValue(static_cast<AXValueRef>(raw_size),
+                      static_cast<AXValueType>(kAXValueCGSizeType), &size) &&
+      std::isfinite(position.x) && std::isfinite(position.y) && std::isfinite(size.width) &&
+      std::isfinite(size.height) && size.width > 0 && size.height > 0;
+  if (raw_position != nullptr) CFRelease(raw_position);
+  if (raw_size != nullptr) CFRelease(raw_size);
+  if (!valid) return false;
+  *output = CGRectMake(position.x, position.y, size.width, size.height);
+  return true;
+}
+
+bool AxStringEquals(AXUIElementRef element, CFStringRef attribute, CFStringRef wanted) {
+  CFTypeRef raw = nullptr;
+  const bool matches =
+      AXUIElementCopyAttributeValue(element, attribute, &raw) == kAXErrorSuccess && raw != nullptr &&
+      CFGetTypeID(raw) == CFStringGetTypeID() &&
+      CFStringCompare(static_cast<CFStringRef>(raw), wanted, 0) == kCFCompareEqualTo;
+  if (raw != nullptr) CFRelease(raw);
+  return matches;
+}
+
+std::string CopyAxString(AXUIElementRef element, CFStringRef attribute) {
+  CFTypeRef raw = nullptr;
+  if (AXUIElementCopyAttributeValue(element, attribute, &raw) != kAXErrorSuccess ||
+      raw == nullptr || CFGetTypeID(raw) != CFStringGetTypeID()) {
+    if (raw != nullptr) CFRelease(raw);
+    return {};
+  }
+  const CFStringRef string = static_cast<CFStringRef>(raw);
+  const CFIndex length = CFStringGetLength(string);
+  const CFIndex maximum =
+      CFStringGetMaximumSizeForEncoding(std::min<CFIndex>(length, 1024), kCFStringEncodingUTF8) + 1;
+  std::string output(static_cast<size_t>(std::max<CFIndex>(maximum, 1)), '\0');
+  if (!CFStringGetCString(string, output.data(), maximum, kCFStringEncodingUTF8)) output.clear();
+  else output.resize(std::strlen(output.c_str()));
+  CFRelease(raw);
+  return output;
+}
+
+void AddAxCandidate(std::vector<AXUIElementRef>* output, AXUIElementRef candidate) {
+  if (candidate == nullptr) return;
+  for (const AXUIElementRef existing : *output) {
+    if (CFEqual(existing, candidate)) return;
+  }
+  CFRetain(candidate);
+  output->push_back(candidate);
+}
+
+void AddAxAttributeCandidates(AXUIElementRef application, CFStringRef attribute,
+                              std::vector<AXUIElementRef>* output) {
+  CFTypeRef raw = nullptr;
+  if (AXUIElementCopyAttributeValue(application, attribute, &raw) != kAXErrorSuccess || raw == nullptr)
+    return;
+  if (CFGetTypeID(raw) == AXUIElementGetTypeID()) {
+    AddAxCandidate(output, static_cast<AXUIElementRef>(raw));
+  } else if (CFGetTypeID(raw) == CFArrayGetTypeID()) {
+    const CFArrayRef array = static_cast<CFArrayRef>(raw);
+    const CFIndex count = std::min<CFIndex>(CFArrayGetCount(array), 64);
+    for (CFIndex index = 0; index < count; ++index) {
+      CFTypeRef value = static_cast<CFTypeRef>(CFArrayGetValueAtIndex(array, index));
+      if (value != nullptr && CFGetTypeID(value) == AXUIElementGetTypeID()) {
+        AddAxCandidate(output, static_cast<AXUIElementRef>(value));
+      }
+    }
+  }
+  CFRelease(raw);
+}
+
+void FindIosContentGroups(AXUIElementRef element, size_t depth, size_t* visited,
+                          std::vector<AXUIElementRef>* output) {
+  if (element == nullptr || depth > 8 || *visited >= 512) return;
+  *visited += 1;
+  if (AxStringEquals(element, kAXSubroleAttribute, CFSTR("iOSContentGroup"))) {
+    AddAxCandidate(output, element);
+  }
+  CFTypeRef raw_children = nullptr;
+  if (AXUIElementCopyAttributeValue(element, kAXChildrenAttribute, &raw_children) != kAXErrorSuccess ||
+      raw_children == nullptr || CFGetTypeID(raw_children) != CFArrayGetTypeID()) {
+    if (raw_children != nullptr) CFRelease(raw_children);
+    return;
+  }
+  const CFArrayRef children = static_cast<CFArrayRef>(raw_children);
+  const CFIndex count = std::min<CFIndex>(CFArrayGetCount(children), 128);
+  for (CFIndex index = 0; index < count && *visited < 512; ++index) {
+    CFTypeRef value = static_cast<CFTypeRef>(CFArrayGetValueAtIndex(children, index));
+    if (value != nullptr && CFGetTypeID(value) == AXUIElementGetTypeID()) {
+      FindIosContentGroups(static_cast<AXUIElementRef>(value), depth + 1, visited, output);
+    }
+  }
+  CFRelease(raw_children);
+}
+
+napi_value ViewportStatus(napi_env env, const char* status) {
+  napi_value result;
+  napi_create_object(env, &result);
+  if (!SetString(env, result, "status", status)) {
+    Throw(env, "could not materialize Simulator viewport status");
+    return nullptr;
+  }
+  return result;
+}
+
+/**
+ * Low-rate, purpose-specific Simulator geometry query. It never performs input or exposes a
+ * general accessibility bridge: callers supply one already-enumerated process/window frame and
+ * receive only the declared iOSContentGroup rectangle relative to that exact outer window.
+ */
+napi_value ResolveSimulatorViewport(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  int32_t pid = 0;
+  double wanted_x = 0;
+  double wanted_y = 0;
+  double wanted_width = 0;
+  double wanted_height = 0;
+  napi_valuetype frame_type = napi_undefined;
+  if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok || argc != 2 ||
+      napi_get_value_int32(env, argv[0], &pid) != napi_ok || pid <= 0 ||
+      napi_typeof(env, argv[1], &frame_type) != napi_ok || frame_type != napi_object ||
+      !GetNamedNumber(env, argv[1], "x", &wanted_x) ||
+      !GetNamedNumber(env, argv[1], "y", &wanted_y) ||
+      !GetNamedNumber(env, argv[1], "width", &wanted_width) ||
+      !GetNamedNumber(env, argv[1], "height", &wanted_height) || wanted_width <= 0 ||
+      wanted_height <= 0 || wanted_width > 32768 || wanted_height > 32768 ||
+      std::abs(wanted_x) > 131072 || std::abs(wanted_y) > 131072) {
+    Throw(env, "resolveSimulatorViewport requires a positive PID and bounded outer frame");
+    return nullptr;
+  }
+  if (!AXIsProcessTrusted()) return ViewportStatus(env, "permission-denied");
+
+  AXUIElementRef application = AXUIElementCreateApplication(static_cast<pid_t>(pid));
+  if (application == nullptr) return ViewportStatus(env, "window-not-found");
+  std::vector<AXUIElementRef> windows;
+  AddAxAttributeCandidates(application, kAXWindowsAttribute, &windows);
+  AddAxAttributeCandidates(application, kAXChildrenAttribute, &windows);
+  AddAxAttributeCandidates(application, kAXMainWindowAttribute, &windows);
+  AddAxAttributeCandidates(application, kAXFocusedWindowAttribute, &windows);
+  CFRelease(application);
+
+  AXUIElementRef matched_window = nullptr;
+  CGRect matched_frame = CGRectZero;
+  size_t match_count = 0;
+  for (const AXUIElementRef window : windows) {
+    CGRect frame = CGRectZero;
+    if (!AxStringEquals(window, kAXRoleAttribute, kAXWindowRole) || !CopyAxFrame(window, &frame))
+      continue;
+    constexpr double kFrameTolerance = 1.5;
+    if (std::abs(frame.origin.x - wanted_x) <= kFrameTolerance &&
+        std::abs(frame.origin.y - wanted_y) <= kFrameTolerance &&
+        std::abs(frame.size.width - wanted_width) <= kFrameTolerance &&
+        std::abs(frame.size.height - wanted_height) <= kFrameTolerance) {
+      matched_window = window;
+      matched_frame = frame;
+      match_count += 1;
+    }
+  }
+  if (match_count != 1 || matched_window == nullptr) {
+    for (const AXUIElementRef window : windows) CFRelease(window);
+    return ViewportStatus(env, "window-not-found");
+  }
+
+  std::vector<AXUIElementRef> content_groups;
+  size_t visited = 0;
+  FindIosContentGroups(matched_window, 0, &visited, &content_groups);
+  CGRect content_frame = CGRectZero;
+  const bool exactly_one = content_groups.size() == 1 && CopyAxFrame(content_groups[0], &content_frame);
+  for (const AXUIElementRef group : content_groups) CFRelease(group);
+  const std::string window_title = CopyAxString(matched_window, kAXTitleAttribute);
+  for (const AXUIElementRef window : windows) CFRelease(window);
+  if (!exactly_one) return ViewportStatus(env, "viewport-not-found");
+
+  CGRect relative = CGRectOffset(content_frame, -matched_frame.origin.x, -matched_frame.origin.y);
+  constexpr double kContainmentTolerance = 1.5;
+  if (relative.origin.x < -kContainmentTolerance || relative.origin.y < -kContainmentTolerance ||
+      CGRectGetMaxX(relative) > matched_frame.size.width + kContainmentTolerance ||
+      CGRectGetMaxY(relative) > matched_frame.size.height + kContainmentTolerance ||
+      relative.size.width <= 0 || relative.size.height <= 0 || relative.size.width > 32768 ||
+      relative.size.height > 32768) {
+    return ViewportStatus(env, "viewport-not-found");
+  }
+  relative.origin.x = std::max<CGFloat>(0, relative.origin.x);
+  relative.origin.y = std::max<CGFloat>(0, relative.origin.y);
+
+  napi_value result = ViewportStatus(env, "resolved");
+  if (result == nullptr) return nullptr;
+  napi_value source_rect;
+  if (napi_create_object(env, &source_rect) != napi_ok ||
+      !SetNumber(env, source_rect, "x", relative.origin.x) ||
+      !SetNumber(env, source_rect, "y", relative.origin.y) ||
+      !SetNumber(env, source_rect, "width", relative.size.width) ||
+      !SetNumber(env, source_rect, "height", relative.size.height) ||
+      !SetNamed(env, result, "sourceRect", source_rect) ||
+      !SetString(env, result, "windowTitle", window_title)) {
+    Throw(env, "could not materialize Simulator viewport geometry");
+    return nullptr;
+  }
+  return result;
+}
+
 napi_value Start(napi_env env, napi_callback_info info) {
   size_t argc = 2;
   napi_value argv[2];
@@ -507,6 +734,8 @@ NAPI_MODULE_INIT() {
       {"drain", nullptr, Drain, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"release", nullptr, Release, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"stats", nullptr, Stats, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"resolveSimulatorViewport", nullptr, ResolveSimulatorViewport, nullptr, nullptr, nullptr,
+       napi_default, nullptr},
       {"stop", nullptr, Stop, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   if (napi_define_properties(env, exports, sizeof(properties) / sizeof(properties[0]), properties) !=

@@ -112,6 +112,8 @@ try {
       "-framework",
       "Foundation",
       "-framework",
+      "ApplicationServices",
+      "-framework",
       "IOSurface",
       "-framework",
       "CoreVideo",
