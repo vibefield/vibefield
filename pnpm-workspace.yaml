@@ -43,7 +43,24 @@ overrides:
   # the design-008 in-band prefab rename migration. Consumption retires the
   # ChromeLayer C-key capture trap, note's wheel stopPropagation pair, and the
   # C2 offline rename surgery (renamedFrom declarations replace it).
-  "@vibecook/ice": 0.4.0
+  # 2026-08-16 bumped 0.4.0 → 0.6.0. The registry skips 0.5.0: it was cut as a
+  # release point but never published (0.6.0 landed the same day and superseded
+  # it; a late publish would demote 0.6.0, since npm sets `latest` by publish
+  # ORDER). Two of our petitions land in it — I14 `engine.guests` (the guest
+  # runtime + the PA-28 circuit breaker, host-injectable ledger) and I15
+  # `GuardedTx.move` (animation-integrated writes; closes the undo-mid-glide
+  # PERMANENT-divergence hole at both chokepoints) — plus ICE's second product
+  # surface, `defineBehavior` (design-009): declared schema + a REQUIRED store
+  # class routing sync/undo/write-vocabulary/cadence. It also carries three
+  # standing ICE bug fixes this field wants regardless of any of that: a
+  # throwing publish hook no longer kills the rAF loop permanently,
+  # self-removing publish hooks and reflectors no longer skip their neighbours,
+  # and the devtools "reflect" lane reports for the first time. Strata rides to
+  # 0.12.0 transitively (petitions #9 per-commit `meta`, #10 `valueEquals` +
+  # `resourceStamp`). Additive on both sides — neither changelog has a Changed
+  # or Breaking section. Unblocks PRC-4 (the `defineBehavior` generation
+  # adapter) and the mind-map pack's layout behavior.
+  "@vibecook/ice": 0.6.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -97,8 +114,8 @@ catalog:
   typescript: ^5.6.0
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
-  - '@vibecook/strata-ecs@0.11.0'
-  - '@vibecook/ice@0.4.0'
+  - '@vibecook/strata-ecs@0.12.0'
+  - '@vibecook/ice@0.6.0'
   - '@vibecook/ghosttea-client@0.9.3'
   - '@vibecook/ghosttea-protocol@0.9.3'
   - '@vibecook/chopsticks-adapter-acp@0.1.4'

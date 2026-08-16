@@ -45,8 +45,20 @@ try {
 // names; when they did not, the resolver refused outright (GT-4a) rather than
 // silently splitting the Arc<Node> type. That refusal is this table's whole point,
 // enforced one layer earlier.
+// This table asserts what the manifests SAY. The runtime half — what Node will
+// actually RESOLVE — is `pnpm check:deps` (scripts/check-single-copy.mjs), which
+// runs beside this in `verify`. Both are needed: an override can read correctly
+// and still be inert (pnpm >=10 ignores a `pnpm` key in package.json, which is
+// how upstream strata's loro override went silently unapplied for a window).
+// @vibecook/ice was absent from this table until 2026-08-16 — the one pin that
+// drags loro-crdt AND strata-ecs behind it was the one nothing here checked.
 const PIN_EXPECTATIONS = [
   { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.12"/m, label: 'truffle-core = "=0.7.12"' },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/ice":\s*0\.6\.0/,
+    label: '"@vibecook/ice": 0.6.0',
+  },
   { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.9\.3"/m, label: 'ghosttea = "=0.9.3"' },
   {
     file: "Cargo.toml",
