@@ -8,6 +8,13 @@ import { fileURLToPath } from "node:url";
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = join(desktopRoot, "native", "macos", "live-surface-capture");
 const outputRoot = join(desktopRoot, "build", "native", "macos");
+const allowedArguments = new Set(["--with-fixture"]);
+for (const argument of process.argv.slice(2)) {
+  if (!allowedArguments.has(argument)) {
+    throw new Error(`unknown native capture build option: ${argument}`);
+  }
+}
+const withFixture = process.argv.includes("--with-fixture");
 
 if (process.platform !== "darwin") {
   process.stdout.write("ScreenCaptureKit native build skipped — darwin only\n");
@@ -21,7 +28,12 @@ const nodeInclude = resolve(dirname(process.execPath), "..", "include", "node");
 if (!existsSync(join(nodeInclude, "node_api.h"))) {
   throw new Error(`Node-API headers are missing at ${nodeInclude}`);
 }
-for (const source of ["protocol.h", "helper.mm", "adapter.mm"]) {
+for (const source of [
+  "protocol.h",
+  "helper.mm",
+  "adapter.mm",
+  ...(withFixture ? ["fixture.mm"] : []),
+]) {
   if (!existsSync(join(sourceRoot, source)))
     throw new Error(`native capture source missing: ${source}`);
 }
@@ -30,8 +42,10 @@ mkdirSync(outputRoot, { recursive: true });
 const architecture = process.arch === "arm64" ? "arm64" : "x86_64";
 const helper = join(outputRoot, "live-surface-capture-helper");
 const adapter = join(outputRoot, "live-surface-adapter.node");
+const fixture = join(outputRoot, "live-surface-capture-fixture");
 const helperTemporary = `${helper}.building`;
 const adapterTemporary = `${adapter}.building`;
+const fixtureTemporary = `${fixture}.building`;
 
 const common = [
   "clang++",
@@ -106,13 +120,35 @@ try {
     ],
     adapterTemporary,
   );
+  if (withFixture) {
+    compile(
+      "ScreenCaptureKit pixel fixture",
+      [
+        ...common,
+        join(sourceRoot, "fixture.mm"),
+        "-framework",
+        "AppKit",
+        "-framework",
+        "Foundation",
+        "-framework",
+        "CoreGraphics",
+        "-o",
+        fixtureTemporary,
+      ],
+      fixtureTemporary,
+    );
+  }
   renameSync(helperTemporary, helper);
   renameSync(adapterTemporary, adapter);
+  if (withFixture) renameSync(fixtureTemporary, fixture);
+  else rmSync(fixture, { force: true });
 } finally {
   rmSync(helperTemporary, { force: true });
   rmSync(adapterTemporary, { force: true });
+  rmSync(fixtureTemporary, { force: true });
 }
 
 process.stdout.write(
-  `ScreenCaptureKit native boundary built for ${process.arch}:\n${helper}\n${adapter}\n`,
+  `ScreenCaptureKit native boundary built for ${process.arch}:\n${helper}\n${adapter}` +
+    `${withFixture ? `\n${fixture}` : ""}\n`,
 );

@@ -11,6 +11,7 @@ export const LIVE_SURFACE_LAB_BROWSER_SURFACE_IDS = Array.from(
   (_, index) => `live_surface_lab_browser_${String(index + 1).padStart(2, "0")}`,
 );
 export const LIVE_SURFACE_LAB_FALLBACK_SURFACE_ID = "live_surface_lab_browser_fallback";
+export const LIVE_SURFACE_LAB_SCK_SURFACE_ID = "live_surface_lab_sck_fixture_01";
 
 function ticket(index: number): LiveSurfaceAttachTicketV1 {
   return {
@@ -19,14 +20,15 @@ function ticket(index: number): LiveSurfaceAttachTicketV1 {
   };
 }
 
-/** Reload probe, then fixture, ten shared Browser sources, and one CPU fallback. */
-export const LIVE_SURFACE_LAB_ALL_TICKETS = Array.from({ length: 13 }, (_, index) =>
+/** Reload, CPU fixture, ten Browser sources, CPU fallback, then the optional SCK fixture. */
+export const LIVE_SURFACE_LAB_ALL_TICKETS = Array.from({ length: 14 }, (_, index) =>
   ticket(index + 1),
 );
 export const LIVE_SURFACE_LAB_RELOAD_TICKET = LIVE_SURFACE_LAB_ALL_TICKETS[0]!;
 export const LIVE_SURFACE_LAB_TICKETS = LIVE_SURFACE_LAB_ALL_TICKETS.slice(1);
 export const LIVE_SURFACE_LAB_TICKET_TOKEN = LIVE_SURFACE_LAB_TICKETS[0]?.token ?? "";
 export const LIVE_SURFACE_LAB_TICKET = LIVE_SURFACE_LAB_TICKETS[0] as LiveSurfaceAttachTicketV1;
+export const LIVE_SURFACE_LAB_SCK_TICKET = LIVE_SURFACE_LAB_TICKETS[12]!;
 
 export const LIVE_SURFACE_LAB_TICKET_READY_DATASET = "liveSurfaceLabTicketReady";
 export const LIVE_SURFACE_LAB_RELOAD_READY_DATASET = "liveSurfaceLabReloadReady";
@@ -47,5 +49,12 @@ export interface LiveSurfaceLabRendererResult {
   readonly browserFallbackObserved: boolean;
   readonly tenSurfacePresented: readonly number[];
   readonly tenSurfaceShared: number;
+  readonly sckEnabled: boolean;
+  readonly sckPresented: number;
+  readonly sckExact: boolean;
+  readonly sckTransport?: "shared-texture";
+  readonly sckPixelFormat?: "bgra";
+  readonly sckRedPureRatio: number;
+  readonly sckBluePureRatio: number;
   readonly error?: string;
 }

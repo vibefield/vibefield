@@ -8,6 +8,7 @@ import {
   LIVE_SURFACE_LAB_RELOAD_READY_DATASET,
   LIVE_SURFACE_LAB_RELOAD_TICKET,
   LIVE_SURFACE_LAB_RESULT_DATASET,
+  LIVE_SURFACE_LAB_SCK_TICKET,
   LIVE_SURFACE_LAB_TICKET_READY_DATASET,
   LIVE_SURFACE_LAB_TICKETS,
   type LiveSurfaceLabRendererResult,
@@ -33,6 +34,19 @@ interface BrowserPresentation {
   presented: number;
 }
 
+interface SckPixelProof {
+  readonly exact: boolean;
+  readonly pixelFormat: "bgra";
+  readonly redPureRatio: number;
+  readonly bluePureRatio: number;
+}
+
+interface SckPixelMetadata {
+  readonly width: number;
+  readonly height: number;
+  readonly pixelFormat: string;
+}
+
 function required<T>(value: T | null, description: string): T {
   if (value === null) throw new Error(`${description} is unavailable`);
   return value;
@@ -48,7 +62,11 @@ const browserStatus = required(
   document.querySelector<HTMLElement>("#browser"),
   "browser status element",
 );
+const sckStatus = required(document.querySelector<HTMLElement>("#sck"), "SCK status element");
 const context = required(canvas.getContext("2d"), "2D preview context");
+const labParameters = new URLSearchParams(location.search);
+const phase = labParameters.get("phase");
+const sckEnabled = labParameters.get("sck") === "1";
 
 // Installed synchronously: preload's one-time port handoff can never outrun
 // the lab module while the rest of async setup waits for WebGPU and ticketing.
@@ -80,8 +98,115 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 function report(result: LiveSurfaceLabRendererResult): void {
   document.documentElement.dataset[LIVE_SURFACE_LAB_RESULT_DATASET] = JSON.stringify(result);
   status.textContent = result.ok
-    ? `PASS · CPU recovery + ${result.browserOnePresented} one-surface + 10-way Browser OSR`
+    ? `PASS · CPU recovery + ${result.browserOnePresented} one-surface + 10-way Browser OSR${
+        result.sckEnabled ? " + exact SCK" : ""
+      }`
     : `FAIL · ${result.error ?? "unknown error"}`;
+}
+
+function exactPixelRatio(
+  rgba: Uint8Array,
+  stride: number,
+  offset: number,
+  region: { x0: number; y0: number; x1: number; y1: number },
+  expected: readonly [number, number, number, number],
+): number {
+  let exact = 0;
+  let total = 0;
+  for (let y = region.y0; y < region.y1; y += 1) {
+    for (let x = region.x0; x < region.x1; x += 1) {
+      const index = offset + y * stride + x * 4;
+      if (
+        rgba[index] === expected[0] &&
+        rgba[index + 1] === expected[1] &&
+        rgba[index + 2] === expected[2] &&
+        rgba[index + 3] === expected[3]
+      ) {
+        exact += 1;
+      }
+      total += 1;
+    }
+  }
+  return total === 0 ? 0 : exact / total;
+}
+
+async function inspectSckPixels(
+  frame: VideoFrame,
+  metadata: SckPixelMetadata,
+): Promise<SckPixelProof> {
+  if (metadata.pixelFormat !== "bgra") throw new Error("SCK frame did not declare BGRA pixels");
+  const rgba = new Uint8Array(frame.allocationSize({ format: "RGBA" }));
+  const layouts = await frame.copyTo(rgba, { format: "RGBA" });
+  const layout = layouts[0];
+  if (layout === undefined) throw new Error("SCK VideoFrame returned no RGBA plane layout");
+  const xMargin = Math.max(8, Math.floor(metadata.width / 8));
+  const yMargin = Math.max(8, Math.floor(metadata.height / 16));
+  const midpoint = Math.floor(metadata.height / 2);
+  const redPureRatio = exactPixelRatio(
+    rgba,
+    layout.stride,
+    layout.offset,
+    { x0: xMargin, y0: yMargin, x1: metadata.width - xMargin, y1: midpoint - yMargin },
+    [255, 0, 0, 255],
+  );
+  const bluePureRatio = exactPixelRatio(
+    rgba,
+    layout.stride,
+    layout.offset,
+    {
+      x0: xMargin,
+      y0: midpoint + yMargin,
+      x1: metadata.width - xMargin,
+      y1: metadata.height - yMargin,
+    },
+    [0, 0, 255, 255],
+  );
+  return {
+    exact: redPureRatio === 1 && bluePureRatio === 1,
+    pixelFormat: "bgra",
+    redPureRatio,
+    bluePureRatio,
+  };
+}
+
+async function collectSckFrames(
+  presentation: BrowserPresentation,
+  target: number,
+  timeoutMs: number,
+): Promise<SckPixelProof> {
+  const deadline = performance.now() + timeoutMs;
+  let proof: SckPixelProof | null = null;
+  while (presentation.presented < target || proof === null) {
+    const lease = presentation.attachment.takeFrame();
+    if (lease !== null) {
+      const sample = proof === null ? lease.frame.value.clone() : null;
+      const metadata = lease.frame.metadata;
+      const result = presentation.store.present(lease);
+      if (result.kind === "presented") {
+        presentation.presented += 1;
+        if (sample !== null) {
+          try {
+            proof = await inspectSckPixels(sample, {
+              width: metadata.geometry.visibleRect.width,
+              height: metadata.geometry.visibleRect.height,
+              pixelFormat: metadata.pixelFormat,
+            });
+          } finally {
+            sample.close();
+          }
+        }
+      } else {
+        sample?.close();
+      }
+    }
+    if (performance.now() >= deadline) {
+      throw new Error(
+        `SCK frame deadline: presented=${presentation.presented}, proof=${proof !== null}`,
+      );
+    }
+    if (presentation.presented < target || proof === null) await delay(8);
+  }
+  return proof;
 }
 
 async function waitForTickets(): Promise<void> {
@@ -147,7 +272,9 @@ async function runReloadProbe(): Promise<void> {
       if (performance.now() >= deadline) throw new Error("reload probe frame deadline");
       if (heldReloadLease === null) await delay(8);
     }
-    history.replaceState(null, "", `${location.pathname}?phase=main`);
+    const nextParameters = new URLSearchParams({ phase: "main" });
+    if (sckEnabled) nextParameters.set("sck", "1");
+    history.replaceState(null, "", `${location.pathname}?${nextParameters.toString()}`);
     document.documentElement.dataset[LIVE_SURFACE_LAB_RELOAD_READY_DATASET] = "1";
     status.textContent = "LSF-2 reload: shared frame held; waiting for main-authorized reload…";
   } catch (error) {
@@ -165,6 +292,11 @@ async function runReloadProbe(): Promise<void> {
       browserFallbackObserved: false,
       tenSurfacePresented: [],
       tenSurfaceShared: 0,
+      sckEnabled,
+      sckPresented: 0,
+      sckExact: false,
+      sckRedPureRatio: 0,
+      sckBluePureRatio: 0,
       error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
     });
   }
@@ -183,6 +315,13 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
   let browserFallbackObserved = false;
   let tenSurfacePresented: number[] = [];
   let tenSurfaceShared = 0;
+  let sckPresented = 0;
+  let sckExact = false;
+  let sckTransport: "shared-texture" | undefined;
+  let sckPixelFormat: "bgra" | undefined;
+  let sckRedPureRatio = 0;
+  let sckBluePureRatio = 0;
+  let sckPresentation: BrowserPresentation | null = null;
   try {
     const gpu = (navigator as Navigator & { readonly gpu?: LabGpu }).gpu;
     if (gpu === undefined) throw new Error("navigator.gpu is unavailable");
@@ -377,6 +516,40 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
     }
     await delay(300);
 
+    if (sckEnabled) {
+      sckStatus.textContent = "capturing deterministic BGRA stripes through the helper…";
+      const sck = await transport.attach(LIVE_SURFACE_LAB_SCK_TICKET);
+      const store = new WebGpuLiveSurfaceTextureStore<VideoFrame>();
+      store.replaceDevice(device);
+      sckPresentation = { attachment: sck, store, presented: 0 };
+      sck.setDemand({
+        revision: 1,
+        mode: "live",
+        targetFps: 30,
+        targetRasterSize: { width: 390, height: 844 },
+        priority: 90,
+        interactive: false,
+      });
+      const proof = await collectSckFrames(sckPresentation, 3, 20_000);
+      sckPresented = sckPresentation.presented;
+      sckExact = proof.exact;
+      sckPixelFormat = proof.pixelFormat;
+      sckRedPureRatio = proof.redPureRatio;
+      sckBluePureRatio = proof.bluePureRatio;
+      if (sck.summary.transport === "shared-texture") sckTransport = "shared-texture";
+      sck.setDemand({
+        revision: 2,
+        mode: "hibernated",
+        targetFps: 0,
+        priority: 0,
+        interactive: false,
+      });
+      sckStatus.textContent = proof.exact
+        ? `exact BGRA · ${sckPresented} frames`
+        : `pixel mismatch · red ${proof.redPureRatio}, blue ${proof.bluePureRatio}`;
+      await delay(300);
+    }
+
     transportProtocolFaults = transport.protocolFaults;
     supersededFrames = fixture.frameStats.releases.superseded;
     const ok =
@@ -392,6 +565,11 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       tenSurfacePresented.length === 10 &&
       tenSurfacePresented.every((count) => count >= 3) &&
       tenSurfaceShared === 10 &&
+      (!sckEnabled ||
+        (sckPresented >= 3 &&
+          sckExact &&
+          sckTransport === "shared-texture" &&
+          sckPixelFormat === "bgra")) &&
       transportProtocolFaults === 0;
     report({
       ok,
@@ -408,6 +586,13 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       browserFallbackObserved,
       tenSurfacePresented,
       tenSurfaceShared,
+      sckEnabled,
+      sckPresented,
+      sckExact,
+      ...(sckTransport === undefined ? {} : { sckTransport }),
+      ...(sckPixelFormat === undefined ? {} : { sckPixelFormat }),
+      sckRedPureRatio,
+      sckBluePureRatio,
       ...(ok ? {} : { error: "one or more renderer invariants did not hold" }),
     });
 
@@ -419,6 +604,8 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       presentation.attachment.dispose();
       presentation.store.close();
     }
+    sckPresentation?.attachment.dispose();
+    sckPresentation?.store.close();
     transport.dispose();
   } catch (error) {
     report({
@@ -436,12 +623,18 @@ async function run(rendererReloadObserved: boolean): Promise<void> {
       browserFallbackObserved,
       tenSurfacePresented,
       tenSurfaceShared,
+      sckEnabled,
+      sckPresented,
+      sckExact,
+      ...(sckTransport === undefined ? {} : { sckTransport }),
+      ...(sckPixelFormat === undefined ? {} : { sckPixelFormat }),
+      sckRedPureRatio,
+      sckBluePureRatio,
       error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
     });
   }
 }
 
-const phase = new URLSearchParams(location.search).get("phase");
 if (phase === "reload") {
   void runReloadProbe();
 } else {

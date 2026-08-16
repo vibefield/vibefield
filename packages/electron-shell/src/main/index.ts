@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { homedir, release, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { GhostteaElectronBackend } from "@vibecook/ghosttea-electron/main";
 import {
   APP_PREFERENCE_KEYS,
@@ -441,28 +441,8 @@ async function main(
     });
   });
 
-  if (MODE === "live-surfaces-lab") {
-    await (await testing()).runLiveSurfacesLab({
-      root,
-      registry,
-      preloadPath: PRELOAD_PATH,
-      beforeExit: closeEvidence,
-    });
-    return;
-  }
-
-  if (MODE === "spike-loro") {
-    await (await testing()).runSpikeLoro({
-      root,
-      beforeExit: closeEvidence,
-    });
-    return;
-  }
-
-  // §4.3 — two explicit constructors, chosen by app.isPackaged, never a single
-  // "find it somehow" path. app.getAppPath()/../.. is a SOURCE-CHECKOUT
-  // assumption (a packaged app.asar is not a repo), so it stays on the
-  // development branch where it is true.
+  // §4.3 — resolve paths once, without discovery. Development points at the
+  // checkout; a packaged app hangs every resource directly off Resources.
   const resources = app.isPackaged
     ? resolvePackagedResources({
         resourcesPath: process.resourcesPath,
@@ -479,6 +459,38 @@ async function main(
   // sidecar must read as a packaging failure with a doctor code, not as an exec
   // error later that looks like a missing file (§4.3, §14).
   assertPackagedResources(resources);
+
+  let sckLabPaths:
+    | { readonly helperPath: string; readonly adapterPath: string; readonly fixturePath: string }
+    | undefined;
+  if (MODE === "live-surfaces-lab" && process.env["VF_LIVE_SURFACES_SCK_LAB"] === "1") {
+    const capture = resources.macosLiveSurfaceCapture;
+    if (capture === null) throw new Error("the ScreenCaptureKit lab is available only on macOS");
+    sckLabPaths = {
+      ...capture,
+      fixturePath: join(dirname(capture.helperPath), "live-surface-capture-fixture"),
+    };
+  }
+
+  if (MODE === "live-surfaces-lab") {
+    await (await testing()).runLiveSurfacesLab({
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      beforeExit: closeEvidence,
+      ...(sckLabPaths === undefined ? {} : { sck: sckLabPaths }),
+    });
+    return;
+  }
+
+  if (MODE === "spike-loro") {
+    await (await testing()).runSpikeLoro({
+      root,
+      beforeExit: closeEvidence,
+    });
+    return;
+  }
+
   try {
     const dockIcon = applyDevelopmentDockIcon(resources, {
       platform: process.platform,

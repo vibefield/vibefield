@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -26,7 +27,13 @@ import { BrowserControlTargetRegistry } from "../main/live-surfaces/browser-cont
 import { ElectronBrowserSurfaceNative } from "../main/live-surfaces/browser-electron-native";
 import { BrowserLiveSurfaceRuntime } from "../main/live-surfaces/browser-producer";
 import { createElectronLiveSurfaceTextureTransferApi } from "../main/live-surfaces/electron-texture-transfer";
+import {
+  MacosCaptureHelperSupervisor,
+  type MacosCaptureSource,
+} from "../main/live-surfaces/macos-capture-helper";
+import { loadMacosCaptureNativeAdapter } from "../main/live-surfaces/macos-capture-native";
 import type { LiveSurfaceRuntimeAuthority } from "../main/live-surfaces/runtime";
+import { SckLiveSurfaceRuntime } from "../main/live-surfaces/sck-producer";
 import { LiveSurfaceTextureForwarder } from "../main/live-surfaces/texture-forwarder";
 import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
@@ -40,6 +47,7 @@ import {
   LIVE_SURFACE_LAB_RELOAD_READY_DATASET,
   LIVE_SURFACE_LAB_RELOAD_TICKET,
   LIVE_SURFACE_LAB_RESULT_DATASET,
+  LIVE_SURFACE_LAB_SCK_SURFACE_ID,
   LIVE_SURFACE_LAB_TICKET_READY_DATASET,
   LIVE_SURFACE_LAB_TICKETS,
   type LiveSurfaceLabRendererResult,
@@ -2184,16 +2192,143 @@ async function proveLiveSurfaceBrowserInput(
   throw new Error(`Browser target-scoped input proof failed: ${lastFailure}`);
 }
 
+interface LiveSurfaceSckLabPaths {
+  readonly helperPath: string;
+  readonly adapterPath: string;
+  readonly fixturePath: string;
+}
+
+interface LiveSurfaceSckFixture {
+  readonly pid: number;
+  readonly title: string;
+  dispose(): Promise<void>;
+}
+
+async function startLiveSurfaceSckFixture(path: string): Promise<LiveSurfaceSckFixture> {
+  const child = spawn(path, [], { stdio: ["pipe", "pipe", "pipe"] });
+  child.stdin.end();
+  let stderr = "";
+  child.stderr.on("data", (chunk: Buffer | string) => {
+    if (stderr.length < 4_096) stderr += String(chunk).slice(0, 4_096 - stderr.length);
+  });
+  const ready = await new Promise<{ pid: number; title: string }>((resolve, reject) => {
+    let stdout = Buffer.alloc(0);
+    let settled = false;
+    const finish = (error?: Error, value?: { pid: number; title: string }): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.stdout.off("data", onData);
+      child.off("error", onError);
+      child.off("exit", onExit);
+      if (error !== undefined) reject(error);
+      else if (value !== undefined) resolve(value);
+    };
+    const onData = (chunk: Buffer | string): void => {
+      stdout = Buffer.concat([stdout, Buffer.from(chunk)]);
+      if (stdout.byteLength > 4_096) {
+        finish(new Error("SCK fixture readiness output exceeded its bound"));
+        return;
+      }
+      const newline = stdout.indexOf(0x0a);
+      if (newline < 0) return;
+      try {
+        const value: unknown = JSON.parse(stdout.subarray(0, newline).toString("utf8"));
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          !("ok" in value) ||
+          value.ok !== true ||
+          !("pid" in value) ||
+          !Number.isSafeInteger(value.pid) ||
+          value.pid !== child.pid ||
+          !("title" in value) ||
+          typeof value.title !== "string" ||
+          value.title.length === 0 ||
+          value.title.length > 512
+        ) {
+          throw new Error("SCK fixture returned invalid readiness metadata");
+        }
+        finish(undefined, { pid: value.pid as number, title: value.title });
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
+    };
+    const onError = (error: Error): void => finish(error);
+    const onExit = (code: number | null, signal: NodeJS.Signals | null): void =>
+      finish(
+        new Error(
+          `SCK fixture exited before ready (${code ?? signal ?? "unknown"})${
+            stderr.length === 0 ? "" : `: ${stderr.trim()}`
+          }`,
+        ),
+      );
+    const timer = setTimeout(
+      () => finish(new Error("SCK fixture did not become ready within 5s")),
+      5_000,
+    );
+    child.stdout.on("data", onData);
+    child.once("error", onError);
+    child.once("exit", onExit);
+  }).catch((error) => {
+    if (child.exitCode === null) child.kill("SIGTERM");
+    throw error;
+  });
+
+  return {
+    ...ready,
+    dispose: async () => {
+      if (child.exitCode !== null) return;
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = (): void => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(forceTimer);
+          clearTimeout(finalTimer);
+          resolve();
+        };
+        const forceTimer = setTimeout(() => child.kill("SIGKILL"), 2_000);
+        const finalTimer = setTimeout(finish, 3_000);
+        child.once("exit", () => {
+          finish();
+        });
+        if (!child.kill("SIGTERM") && child.exitCode !== null) finish();
+      });
+    },
+  };
+}
+
+async function findSckFixtureSource(
+  supervisor: MacosCaptureHelperSupervisor,
+  fixture: LiveSurfaceSckFixture,
+): Promise<MacosCaptureSource> {
+  const deadline = Date.now() + 10_000;
+  let lastSourceCount = 0;
+  while (Date.now() < deadline) {
+    const sources = await supervisor.enumerateWindows(true);
+    lastSourceCount = sources.length;
+    const source = sources.find(
+      (candidate) => candidate.ownerPid === fixture.pid && candidate.title === fixture.title,
+    );
+    if (source !== undefined) return source;
+    await sleep(50);
+  }
+  throw new Error(`SCK fixture window was not enumerated among ${lastSourceCount} sources`);
+}
+
 /**
- * LSF-2/3 standalone lab: retains the CPU/device-loss regression, then proves
+ * LSF-2/3/4 standalone lab: retains the CPU/device-loss regression, then proves
  * real guarded Browser OSR through one surface, observed CPU fallback, and ten
- * concurrent shared-texture surfaces using the production preload/host/store.
+ * concurrent shared-texture surfaces. The optional macOS phase then drives a
+ * deterministic window through the production helper/adapter and same store.
  */
 export async function runLiveSurfacesLab(opts: {
   root: string;
   registry: WindowRegistry;
   preloadPath: string;
   beforeExit: () => Promise<void>;
+  readonly sck?: LiveSurfaceSckLabPaths;
 }): Promise<void> {
   const monitorUncaught: NodeJS.UncaughtExceptionListener = (error, origin) => {
     console.error(
@@ -2248,6 +2383,10 @@ export async function runLiveSurfacesLab(opts: {
   });
   const browserRuntimes: BrowserLiveSurfaceRuntime[] = [];
   let fallbackRuntime: BrowserLiveSurfaceRuntime | null = null;
+  let sckFixture: LiveSurfaceSckFixture | null = null;
+  let sckSupervisor: MacosCaptureHelperSupervisor | null = null;
+  let sckRuntime: SckLiveSurfaceRuntime | null = null;
+  let sckSource: MacosCaptureSource | null = null;
   let pageServer: Awaited<ReturnType<typeof startLiveSurfacePageServer>> | null = null;
   let exitCode = 2;
   let verdict: Record<string, unknown> = { ok: false };
@@ -2282,7 +2421,28 @@ export async function runLiveSurfacesLab(opts: {
       controlTargets,
       requestSharedTexture: false,
     });
-    await win.loadURL(`${APP_ORIGIN}/spike-live-surfaces-lab.html?phase=reload`);
+    if (opts.sck !== undefined) {
+      sckFixture = await startLiveSurfaceSckFixture(opts.sck.fixturePath);
+      sckSupervisor = new MacosCaptureHelperSupervisor({
+        helperPath: opts.sck.helperPath,
+        adapter: loadMacosCaptureNativeAdapter(opts.sck.adapterPath),
+        onDiagnostic: (message) => console.error(`LIVE_SURFACES_SCK_HELPER ${message}`),
+      });
+      sckSource = await findSckFixtureSource(sckSupervisor, sckFixture);
+      sckRuntime = new SckLiveSurfaceRuntime({
+        surfaceId: LIVE_SURFACE_LAB_SCK_SURFACE_ID,
+        source: {
+          kind: "sck-window",
+          sourceRef: sckSource.sourceRef,
+          crop: { mode: "none" },
+          captureCursor: false,
+        },
+        client: sckSupervisor,
+      });
+    }
+    await win.loadURL(
+      `${APP_ORIGIN}/spike-live-surfaces-lab.html?phase=reload${sckRuntime === null ? "" : "&sck=1"}`,
+    );
     const reloadFromGeneration = host.rendererGeneration;
     const reloadTicket = host.issue({
       surfaceId: browserRuntimes[0]!.surfaceId,
@@ -2342,13 +2502,19 @@ export async function runLiveSurfacesLab(opts: {
       ...browserRuntimes,
       fallbackRuntime,
     ];
+    if (sckRuntime !== null) authorities.push(sckRuntime);
     for (const [index, runtime] of authorities.entries()) {
       const ticket = host.issue({
         surfaceId: runtime.surfaceId,
         // The fixture remains main-private; all other authorities are real
         // Browser sources. Every token is still one-use and generation-bound.
-        sourceKind: "browser",
-        operations: index === 0 ? ["view"] : ["view", "pointer", "keyboard"],
+        sourceKind: runtime === sckRuntime ? "sck-window" : "browser",
+        operations:
+          index === 0
+            ? ["view"]
+            : runtime === sckRuntime
+              ? ["view", "crop"]
+              : ["view", "pointer", "keyboard"],
         principalId: "live-surfaces-foundation-lab",
         authority: runtime,
       });
@@ -2379,6 +2545,7 @@ export async function runLiveSurfacesLab(opts: {
     await sleep(250);
     const source = authority.stats;
     const problems: string[] = [];
+    let sckEvidence: Record<string, unknown> | null = null;
     if (!renderer.ok) problems.push(renderer.error ?? "renderer returned a failed verdict");
     if (!renderer.rendererReloadObserved)
       problems.push("renderer did not observe its reload phase");
@@ -2399,6 +2566,88 @@ export async function runLiveSurfacesLab(opts: {
     }
     if (source.offered !== offeredAtRendererDone) {
       problems.push("the fixture kept producing after paused demand");
+    }
+    if (sckRuntime !== null && sckSupervisor !== null) {
+      const reconciliationDeadline = Date.now() + 5_000;
+      while (Date.now() < reconciliationDeadline) {
+        const runtimeStats = sckRuntime.stats;
+        const helperStats = sckSupervisor.stats;
+        if (
+          helperStats.activeSessions === 0 &&
+          helperStats.native?.outstanding === 0 &&
+          runtimeStats.framesReceived === runtimeStats.localReferencesReleased &&
+          runtimeStats.framesReceived ===
+            runtimeStats.helperLeasesReleased + runtimeStats.helperLeasesQuarantined
+        ) {
+          break;
+        }
+        await sleep(25);
+      }
+      const runtimeStats = sckRuntime.stats;
+      const helperStats = sckSupervisor.stats;
+      const summary = sckRuntime.summary;
+      sckEvidence = {
+        source:
+          sckSource === null
+            ? null
+            : {
+                applicationName: sckSource.applicationName,
+                title: sckSource.title,
+                ownerPid: sckSource.ownerPid,
+                logicalSize: {
+                  width: sckSource.frame.width,
+                  height: sckSource.frame.height,
+                },
+              },
+        summary,
+        runtime: runtimeStats,
+        helper: helperStats,
+      };
+      if (
+        !renderer.sckEnabled ||
+        renderer.sckPresented < 3 ||
+        !renderer.sckExact ||
+        renderer.sckTransport !== "shared-texture" ||
+        renderer.sckPixelFormat !== "bgra" ||
+        renderer.sckRedPureRatio !== 1 ||
+        renderer.sckBluePureRatio !== 1
+      ) {
+        problems.push("the renderer did not prove exact SCK BGRA stripes");
+      }
+      if (
+        summary.state !== "hibernated" ||
+        summary.transport !== "shared-texture" ||
+        runtimeStats.sessionsStarted !== 1 ||
+        runtimeStats.sessionRestarts !== 0 ||
+        runtimeStats.framesReceived < 3
+      ) {
+        problems.push("the SCK runtime did not complete one clean shared-texture session");
+      }
+      if (
+        runtimeStats.framesReceived !== runtimeStats.localReferencesReleased ||
+        runtimeStats.framesReceived !== runtimeStats.helperLeasesReleased ||
+        runtimeStats.helperLeasesQuarantined !== 0
+      ) {
+        problems.push("the SCK runtime did not reconcile every local/helper frame lease");
+      }
+      if (
+        helperStats.activeSessions !== 0 ||
+        helperStats.framesRejected !== 0 ||
+        helperStats.framesReceived !== runtimeStats.framesReceived ||
+        helperStats.releaseCommands !== helperStats.framesReceived ||
+        helperStats.native === null ||
+        helperStats.native.accepted !== helperStats.framesReceived ||
+        helperStats.native.outstanding !== 0 ||
+        helperStats.native.rejectedIdentity !== 0 ||
+        helperStats.native.rejectedCapability !== 0 ||
+        helperStats.native.rejectedProtocol !== 0
+      ) {
+        problems.push("the SCK helper/native ownership counters did not reconcile");
+      }
+    } else if (opts.sck !== undefined) {
+      problems.push("the requested SCK lab did not create its capture runtime");
+    } else if (renderer.sckEnabled) {
+      problems.push("the renderer enabled SCK without a main-process capture authority");
     }
     for (const [index, runtime] of browserRuntimes.entries()) {
       const stats = runtime.stats;
@@ -2464,6 +2713,7 @@ export async function runLiveSurfacesLab(opts: {
               control: controlTargets.status(fallbackRuntime.surfaceId),
             },
       browserInput,
+      sck: sckEvidence,
       reloadDrain,
       rendererGeneration: host.rendererGeneration,
       ticketTableSize: tickets.size,
@@ -2485,6 +2735,14 @@ export async function runLiveSurfacesLab(opts: {
         attachmentId: forwarder.attachmentId,
         stats: forwarder.stats,
       })),
+      sck:
+        sckRuntime === null || sckSupervisor === null
+          ? null
+          : {
+              summary: sckRuntime.summary,
+              runtime: sckRuntime.stats,
+              helper: sckSupervisor.stats,
+            },
       rendererGeneration: host.rendererGeneration,
     };
   } finally {
@@ -2492,6 +2750,9 @@ export async function runLiveSurfacesLab(opts: {
     host.dispose();
     for (const runtime of browserRuntimes) runtime.dispose();
     fallbackRuntime?.dispose();
+    sckRuntime?.dispose();
+    await sckSupervisor?.dispose().catch(() => undefined);
+    await sckFixture?.dispose().catch(() => undefined);
     controlTargets.clear();
     await pageServer?.close().catch(() => undefined);
     if (!win.isDestroyed()) win.destroy();

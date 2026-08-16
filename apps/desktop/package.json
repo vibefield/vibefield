@@ -15,6 +15,7 @@
     "smoke": "pnpm build:shell && electron . --smoke",
     "spike:loro": "pnpm build:shell && VITE_SPIKE=1 pnpm build:renderer && electron . --spike-loro",
     "lab:live-surfaces": "pnpm build:shell && pnpm --filter @vibefield/electron-shell build:live-surfaces-lab && electron . --live-surfaces-lab -ApplePersistenceIgnoreState YES",
+    "lab:live-surfaces:sck": "pnpm build:shell && node packaging/build-live-surface-capture.mjs --with-fixture && pnpm --filter @vibefield/electron-shell build:live-surfaces-lab && VF_LIVE_SURFACES_SCK_LAB=1 electron . --live-surfaces-lab -ApplePersistenceIgnoreState YES",
     "smoke:godview": "pnpm build:all && electron . --smoke-godview",
     "smoke:canvas": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-canvas",
     "icons:generate": "node packaging/generate-icons.mjs",
