@@ -60,7 +60,17 @@ overrides:
   # `resourceStamp`). Additive on both sides — neither changelog has a Changed
   # or Breaking section. Unblocks PRC-4 (the `defineBehavior` generation
   # adapter) and the mind-map pack's layout behavior.
-  "@vibecook/ice": 0.6.0
+  # 2026-08-16 bumped 0.6.0 → 0.7.0 — petitions I16 + I17 land upstream: the
+  # defineBehavior HOST contract (register(B, {orderKey?, ledger?}) with the
+  # keyed lane; facade onGuestFault/onGuestNotice/onBehaviorFault/onBehaviorLog;
+  # describeBehavior as the one definition-identity surface; thenable hooks as
+  # attributed, frame-bounded faults) and ephemeral facet WITHDRAWAL on every
+  # producer-stops edge (unregister / suspension / quarantine, deferred past
+  # the tick when needed; BehaviorStatus.quarantined keeps the doctor honest).
+  # Review-hardened pre-publish: six findings incl. a mid-tick-unregister
+  # strand, all fixed + pinned. This is the release PRC-4b/4c gate on — the
+  # behaviors adapter now builds against released types, not the scratch patch.
+  "@vibecook/ice": 0.7.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -115,7 +125,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.12.0'
-  - '@vibecook/ice@0.6.0'
+  - '@vibecook/ice@0.7.0'
   - '@vibecook/ghosttea-client@0.9.3'
   - '@vibecook/ghosttea-protocol@0.9.3'
   - '@vibecook/chopsticks-adapter-acp@0.1.4'
