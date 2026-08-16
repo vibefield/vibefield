@@ -89,6 +89,10 @@ export interface MacosCaptureHelperSupervisorStats {
   readonly framesReceived: number;
   readonly framesRejected: number;
   readonly releaseCommands: number;
+  readonly helperLeasesOutstanding: number;
+  readonly helperLeasesPeakPerSession: number;
+  readonly helperLeasesReleasedByTeardown: number;
+  readonly nativeReferencesReleasedByTeardown: number;
   readonly nativeOutstandingPeak: number;
   readonly native: MacosCaptureNativeAdapterStats | null;
 }
@@ -276,6 +280,11 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   readonly #pending = new Map<string, PendingRequest>();
   readonly #sessions = new Map<string, ActiveSession>();
   readonly #sourceAliases = new Map<string, SourceAlias>();
+  readonly #helperLeases = new Map<
+    string,
+    { readonly generation: number; readonly session: string }
+  >();
+  readonly #helperLeaseCounts = new Map<string, number>();
   #running: RunningHelper | null = null;
   #starting: Promise<RunningHelper> | null = null;
   #pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -286,7 +295,20 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   #framesReceived = 0;
   #framesRejected = 0;
   #releaseCommands = 0;
+  #helperLeasesPeakPerSession = 0;
+  #helperLeasesReleasedByTeardown = 0;
+  #nativeReferencesReleasedByTeardown = 0;
   #nativeOutstandingPeak = 0;
+  #nativeBaseline: MacosCaptureNativeAdapterStats | null = null;
+  #nativeTotals: MacosCaptureNativeAdapterStats = {
+    received: 0,
+    accepted: 0,
+    rejectedIdentity: 0,
+    rejectedCapability: 0,
+    rejectedProtocol: 0,
+    outstanding: 0,
+  };
+  #nativeObserved = false;
   #disposed = false;
 
   constructor(options: MacosCaptureHelperSupervisorOptions) {
@@ -306,7 +328,9 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   }
 
   get stats(): MacosCaptureHelperSupervisorStats {
-    let native: MacosCaptureNativeAdapterStats | null = null;
+    let native: MacosCaptureNativeAdapterStats | null = this.#nativeObserved
+      ? this.#nativeTotals
+      : null;
     try {
       if (this.#running !== null) native = this.observeNativeStats();
     } catch {
@@ -320,6 +344,10 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
       framesReceived: this.#framesReceived,
       framesRejected: this.#framesRejected,
       releaseCommands: this.#releaseCommands,
+      helperLeasesOutstanding: this.#helperLeases.size,
+      helperLeasesPeakPerSession: this.#helperLeasesPeakPerSession,
+      helperLeasesReleasedByTeardown: this.#helperLeasesReleasedByTeardown,
+      nativeReferencesReleasedByTeardown: this.#nativeReferencesReleasedByTeardown,
       nativeOutstandingPeak: this.#nativeOutstandingPeak,
       native,
     };
@@ -454,6 +482,12 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
     if (helper !== null) {
       helper.stopping = true;
       try {
+        this.finishNativeGeneration();
+      } catch {
+        this.#nativeBaseline = null;
+      }
+      this.releaseHelperLeasesByTeardown(helper.generation);
+      try {
         this.writeCommand(helper, { v: 1, type: "shutdown", token: helper.capabilityHex });
       } catch {
         // The private pipe is already gone.
@@ -491,15 +525,23 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
       throw new Error("capture helper capability generator returned invalid material");
     }
     this.#adapter.start(serviceName, capabilityHex);
+    try {
+      this.beginNativeGeneration();
+    } catch (error) {
+      this.#adapter.stop();
+      throw error;
+    }
     let child: ChildProcessWithoutNullStreams;
     try {
       child = this.#spawnHelper(this.#helperPath, ["--mach-service", serviceName]);
     } catch (error) {
+      this.finishNativeGeneration();
       this.#adapter.stop();
       throw error;
     }
     if (!safeInteger(child.pid, 1, 0x7fff_ffff)) {
       child.kill("SIGKILL");
+      this.finishNativeGeneration();
       this.#adapter.stop();
       throw new Error("capture helper did not receive a process identity");
     }
@@ -731,6 +773,22 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
       }
       let localReleased = false;
       let leaseReleased = false;
+      const helperLeaseKey = `${helper.generation}:${frame.sessionKey}:${frame.producerEpoch}:${frame.sequence}:${frame.slot}`;
+      if (this.#helperLeases.has(helperLeaseKey)) {
+        this.protocolFailure(helper, "native capture adapter repeated a live helper lease");
+        return;
+      }
+      const helperSessionKey = `${helper.generation}:${frame.sessionKey}`;
+      this.#helperLeases.set(helperLeaseKey, {
+        generation: helper.generation,
+        session: helperSessionKey,
+      });
+      const helperLeaseCount = (this.#helperLeaseCounts.get(helperSessionKey) ?? 0) + 1;
+      this.#helperLeaseCounts.set(helperSessionKey, helperLeaseCount);
+      this.#helperLeasesPeakPerSession = Math.max(
+        this.#helperLeasesPeakPerSession,
+        helperLeaseCount,
+      );
       const captureFrame: SckCaptureFrame = {
         producerEpoch: frame.producerEpoch,
         sequence: BigInt(frame.sequence),
@@ -760,6 +818,7 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
         releaseLease: (disposition) => {
           if (leaseReleased) return;
           leaseReleased = true;
+          this.releaseTrackedHelperLease(helperLeaseKey);
           const current = this.#running;
           if (current !== null && current.generation === session.generation) {
             this.sendRelease(current, frame, disposition);
@@ -776,9 +835,84 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   }
 
   private observeNativeStats(): MacosCaptureNativeAdapterStats {
-    const stats = this.#adapter.stats();
-    this.#nativeOutstandingPeak = Math.max(this.#nativeOutstandingPeak, stats.outstanding);
-    return stats;
+    const raw = this.#adapter.stats();
+    const baseline = this.#nativeBaseline;
+    if (baseline === null) throw new Error("native capture stats have no active generation");
+    const delta = this.nativeDelta(raw, baseline);
+    this.#nativeOutstandingPeak = Math.max(this.#nativeOutstandingPeak, raw.outstanding);
+    return this.addNativeStats(this.#nativeTotals, delta, raw.outstanding);
+  }
+
+  private beginNativeGeneration(): void {
+    const baseline = this.#adapter.stats();
+    if (baseline.outstanding !== 0) {
+      throw new Error("native capture adapter began with outstanding frame rights");
+    }
+    this.#nativeBaseline = baseline;
+    this.#nativeObserved = true;
+  }
+
+  private finishNativeGeneration(): void {
+    if (this.#nativeBaseline === null) return;
+    const raw = this.#adapter.stats();
+    const delta = this.nativeDelta(raw, this.#nativeBaseline);
+    this.#nativeOutstandingPeak = Math.max(this.#nativeOutstandingPeak, raw.outstanding);
+    this.#nativeReferencesReleasedByTeardown += raw.outstanding;
+    this.#nativeTotals = this.addNativeStats(this.#nativeTotals, delta, 0);
+    this.#nativeBaseline = null;
+  }
+
+  private nativeDelta(
+    current: MacosCaptureNativeAdapterStats,
+    baseline: MacosCaptureNativeAdapterStats,
+  ): MacosCaptureNativeAdapterStats {
+    const subtract = (name: keyof Omit<MacosCaptureNativeAdapterStats, "outstanding">): number => {
+      const value = current[name] - baseline[name];
+      if (!Number.isSafeInteger(value) || value < 0) {
+        throw new Error(`native capture ${name} counter regressed`);
+      }
+      return value;
+    };
+    return {
+      received: subtract("received"),
+      accepted: subtract("accepted"),
+      rejectedIdentity: subtract("rejectedIdentity"),
+      rejectedCapability: subtract("rejectedCapability"),
+      rejectedProtocol: subtract("rejectedProtocol"),
+      outstanding: current.outstanding,
+    };
+  }
+
+  private addNativeStats(
+    total: MacosCaptureNativeAdapterStats,
+    delta: MacosCaptureNativeAdapterStats,
+    outstanding: number,
+  ): MacosCaptureNativeAdapterStats {
+    return {
+      received: total.received + delta.received,
+      accepted: total.accepted + delta.accepted,
+      rejectedIdentity: total.rejectedIdentity + delta.rejectedIdentity,
+      rejectedCapability: total.rejectedCapability + delta.rejectedCapability,
+      rejectedProtocol: total.rejectedProtocol + delta.rejectedProtocol,
+      outstanding,
+    };
+  }
+
+  private releaseTrackedHelperLease(key: string): void {
+    const lease = this.#helperLeases.get(key);
+    if (lease === undefined) return;
+    this.#helperLeases.delete(key);
+    const count = this.#helperLeaseCounts.get(lease.session) ?? 0;
+    if (count <= 1) this.#helperLeaseCounts.delete(lease.session);
+    else this.#helperLeaseCounts.set(lease.session, count - 1);
+  }
+
+  private releaseHelperLeasesByTeardown(generation: number): void {
+    for (const [key, lease] of this.#helperLeases) {
+      if (lease.generation !== generation) continue;
+      this.releaseTrackedHelperLease(key);
+      this.#helperLeasesReleasedByTeardown += 1;
+    }
   }
 
   private sendRelease(
@@ -819,6 +953,12 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   private onHelperExit(helper: RunningHelper, error: Error): void {
     if (this.#running !== helper) return;
     const wasStopping = helper.stopping;
+    try {
+      this.finishNativeGeneration();
+    } catch {
+      this.#nativeBaseline = null;
+    }
+    this.releaseHelperLeasesByTeardown(helper.generation);
     this.#running = null;
     helper.stopping = true;
     this.stopPolling();

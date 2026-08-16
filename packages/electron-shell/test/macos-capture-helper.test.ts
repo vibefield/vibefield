@@ -354,6 +354,54 @@ describe("MacosCaptureHelperSupervisor", () => {
     await result.supervisor.dispose();
   });
 
+  it("accounts held helper leases and native counters across process teardown", async () => {
+    vi.useFakeTimers();
+    const result = setup((index) => ({ sourceRef: sourceRef(index + 2) }));
+    const original = (await result.supervisor.enumerateWindows())[0]!;
+    const frames: SckCaptureFrame[] = [];
+    await result.supervisor.startSession(
+      request(original.sourceRef, (frame) => frames.push(frame)),
+    );
+    const firstStart = result.helpers[0]!.commands.find((command) => command["type"] === "start")!;
+    result.adapter.queue.push(nativeFrame(firstStart["sessionKey"] as string));
+    await vi.advanceTimersByTimeAsync(4);
+    frames[0]?.releaseLocal();
+    expect(result.supervisor.stats).toMatchObject({
+      helperLeasesOutstanding: 1,
+      helperLeasesPeakPerSession: 1,
+    });
+
+    result.adapter.queue.push(nativeFrame(firstStart["sessionKey"] as string, { frameId: "99" }));
+    result.helpers[0]?.crash();
+    expect(result.supervisor.stats).toMatchObject({
+      helperLeasesOutstanding: 0,
+      helperLeasesReleasedByTeardown: 1,
+      nativeReferencesReleasedByTeardown: 1,
+      native: { accepted: 2, outstanding: 0 },
+    });
+    frames[0]?.releaseLease("released");
+    expect(result.supervisor.stats.releaseCommands).toBe(0);
+
+    const recoveredFrames: SckCaptureFrame[] = [];
+    await result.supervisor.startSession(
+      request(original.sourceRef, (frame) => recoveredFrames.push(frame)),
+    );
+    const secondStart = result.helpers[1]!.commands.find((command) => command["type"] === "start")!;
+    result.adapter.queue.push(nativeFrame(secondStart["sessionKey"] as string, { frameId: "2" }));
+    await vi.advanceTimersByTimeAsync(4);
+    recoveredFrames[0]?.releaseLocal();
+    recoveredFrames[0]?.releaseLease("released");
+    expect(result.supervisor.stats).toMatchObject({
+      framesReceived: 2,
+      releaseCommands: 1,
+      helperLeasesOutstanding: 0,
+      helperLeasesReleasedByTeardown: 1,
+      nativeReferencesReleasedByTeardown: 1,
+      native: { received: 3, accepted: 3, outstanding: 0 },
+    });
+    await result.supervisor.dispose();
+  });
+
   it("releases and rejects a native frame for an unknown session", async () => {
     vi.useFakeTimers();
     const result = setup();
