@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type BootedSimulatorDevice,
   IosSimulatorCaptureClient,
+  IosSimulatorLiveSurfaceRuntime,
   type IosSimulatorResolutionProvider,
   IosSimulatorSourceResolver,
   parseBootedSimulatorDevices,
@@ -359,5 +360,25 @@ describe("IosSimulatorCaptureClient", () => {
     await vi.advanceTimersByTimeAsync(50);
     expect(resolve).toHaveBeenCalledTimes(2);
     await session.dispose();
+  });
+});
+
+describe("IosSimulatorLiveSurfaceRuntime", () => {
+  it("reports Simulator-specialized support evidence without exposing its UDID", () => {
+    const runtime = new IosSimulatorLiveSurfaceRuntime({
+      surfaceId: "surface_simulator_0123456789",
+      source: source(),
+      resolver: resolverSetup(() => viewportResolved()).resolver,
+      delegate: new FakeDelegate(),
+    });
+    const snapshot = runtime.supportSnapshot();
+    expect(snapshot).toMatchObject({
+      v: 1,
+      sourceKind: "ios-simulator",
+      summary: { surfaceId: "surface_simulator_0123456789", state: "created" },
+      metrics: { attachmentsCreated: 0, framesObserved: 0 },
+    });
+    expect(JSON.stringify(snapshot)).not.toContain(UDID);
+    runtime.dispose();
   });
 });

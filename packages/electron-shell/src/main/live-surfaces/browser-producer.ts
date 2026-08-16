@@ -21,6 +21,10 @@ import type {
   LiveSurfaceRuntimeAttachment,
   LiveSurfaceRuntimeAuthority,
 } from "./runtime";
+import {
+  createLiveSurfaceRuntimeSupportSnapshot,
+  type LiveSurfaceRuntimeSupportSnapshot,
+} from "./runtime-support";
 import type { LiveSurfaceProducerTextureFrame } from "./texture-forwarder";
 
 const DEFAULT_STARTUP_TIMEOUT_MS = 5_000;
@@ -432,6 +436,31 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       importedReferencesReleased: this.#importedReferencesReleased,
       effectiveDemand: this.#effectiveDemand === null ? null : copyDemand(this.#effectiveDemand),
     };
+  }
+
+  supportSnapshot(): LiveSurfaceRuntimeSupportSnapshot {
+    const stats = this.stats;
+    return createLiveSurfaceRuntimeSupportSnapshot({
+      sourceKind: "browser",
+      summary: this.summary,
+      effectiveDemand: stats.effectiveDemand,
+      metrics: {
+        attachmentsCreated: stats.attachmentsCreated,
+        activeAttachments: stats.activeAttachments,
+        producerStarts: stats.producersStarted,
+        producerRestarts: stats.producerRestarts,
+        framesObserved: stats.texturePaints + stats.cpuPaints,
+        framesOffered: stats.sharedFramesOffered + stats.cpuFramesOffered,
+        framesAccepted: stats.sharedFramesAccepted + stats.cpuFramesAccepted,
+        framesDropped:
+          stats.sharedFramesDropped + Math.max(0, stats.cpuFramesOffered - stats.cpuFramesAccepted),
+        sharedFramesObserved: stats.texturePaints,
+        cpuFramesObserved: stats.cpuPaints,
+        localReferencesReleased: stats.producerTextureReleases,
+        downstreamReferencesReleased: stats.importedReferencesReleased,
+        referencesQuarantined: 0,
+      },
+    });
   }
 
   attach(context: LiveSurfaceRuntimeAttachContext): LiveSurfaceRuntimeAttachment {

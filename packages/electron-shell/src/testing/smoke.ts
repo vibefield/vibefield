@@ -39,6 +39,10 @@ import {
 } from "../main/live-surfaces/macos-capture-helper";
 import { loadMacosCaptureNativeAdapter } from "../main/live-surfaces/macos-capture-native";
 import type { LiveSurfaceRuntimeAuthority } from "../main/live-surfaces/runtime";
+import {
+  aggregateLiveSurfaceRuntimeSupport,
+  type LiveSurfaceRuntimeSupportSource,
+} from "../main/live-surfaces/runtime-support";
 import { SckLiveSurfaceRuntime } from "../main/live-surfaces/sck-producer";
 import { LiveSurfaceTextureForwarder } from "../main/live-surfaces/texture-forwarder";
 import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
@@ -491,6 +495,7 @@ async function focusReport(win: BrowserWindow): Promise<string> {
   try {
     return String(
       await win.webContents.executeJavaScript(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: this is renderer-side source text.
         "`hasFocus=${document.hasFocus()} active=${document.activeElement?.tagName}.${document.activeElement?.className}`",
       ),
     );
@@ -2909,6 +2914,11 @@ export async function runLiveSurfacesLab(opts: {
       }
     }
     if (tickets.size !== 0) problems.push("one or more one-use presentation tickets survived");
+    const supportSources: LiveSurfaceRuntimeSupportSource[] = [
+      ...browserRuntimes,
+      ...(fallbackRuntime === null ? [] : [fallbackRuntime]),
+      ...(sckRuntime === null ? [] : [sckRuntime]),
+    ];
     verdict = {
       ok: problems.length === 0,
       renderer,
@@ -2930,6 +2940,7 @@ export async function runLiveSurfacesLab(opts: {
       browserInput,
       sck: sckEvidence,
       reloadDrain,
+      runtimeSupport: aggregateLiveSurfaceRuntimeSupport(supportSources),
       rendererGeneration: host.rendererGeneration,
       ticketTableSize: tickets.size,
       ...(problems.length === 0 ? {} : { problems }),

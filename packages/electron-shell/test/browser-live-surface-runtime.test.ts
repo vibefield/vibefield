@@ -426,6 +426,18 @@ describe("BrowserLiveSurfaceRuntime", () => {
       producerTextureReleases: 1,
       importedReferencesReleased: 2,
     });
+    expect(result.runtime.supportSnapshot()).toMatchObject({
+      v: 1,
+      sourceKind: "browser",
+      metrics: {
+        framesObserved: 1,
+        framesOffered: 2,
+        framesAccepted: 2,
+        framesDropped: 0,
+        localReferencesReleased: 1,
+        downstreamReferencesReleased: 2,
+      },
+    });
     firstRenderer.attachment.setDemand(demand(2, "hibernated"));
     expect(result.runtime.summary.state).toBe("live");
     secondRenderer.attachment.setDemand(demand(2, "hibernated"));

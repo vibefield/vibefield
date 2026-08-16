@@ -18,6 +18,11 @@ import type {
   LiveSurfaceRuntimeAttachment,
   LiveSurfaceRuntimeAuthority,
 } from "./runtime";
+import {
+  createLiveSurfaceRuntimeSupportSnapshot,
+  type LiveSurfaceRuntimeSourceKind,
+  type LiveSurfaceRuntimeSupportSnapshot,
+} from "./runtime-support";
 import type {
   LiveSurfaceMainFrameDropReason,
   LiveSurfaceProducerTextureFrame,
@@ -293,6 +298,32 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       helperLeasesQuarantined: this.#helperLeasesQuarantined,
       effectiveDemand: this.#effectiveDemand === null ? null : copyDemand(this.#effectiveDemand),
     };
+  }
+
+  supportSnapshot(
+    sourceKind: LiveSurfaceRuntimeSourceKind = "sck-window",
+  ): LiveSurfaceRuntimeSupportSnapshot {
+    const stats = this.stats;
+    return createLiveSurfaceRuntimeSupportSnapshot({
+      sourceKind,
+      summary: this.summary,
+      effectiveDemand: stats.effectiveDemand,
+      metrics: {
+        attachmentsCreated: stats.attachmentsCreated,
+        activeAttachments: stats.activeAttachments,
+        producerStarts: stats.sessionsStarted,
+        producerRestarts: stats.sessionRestarts,
+        framesObserved: stats.framesReceived,
+        framesOffered: stats.framesOffered,
+        framesAccepted: stats.framesAccepted,
+        framesDropped: stats.framesDropped,
+        sharedFramesObserved: stats.framesReceived,
+        cpuFramesObserved: 0,
+        localReferencesReleased: stats.localReferencesReleased,
+        downstreamReferencesReleased: stats.helperLeasesReleased,
+        referencesQuarantined: stats.helperLeasesQuarantined,
+      },
+    });
   }
 
   attach(context: LiveSurfaceRuntimeAttachContext): LiveSurfaceRuntimeAttachment {

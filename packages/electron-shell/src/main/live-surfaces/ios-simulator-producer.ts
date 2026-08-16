@@ -17,6 +17,7 @@ import type {
   LiveSurfaceRuntimeAttachment,
   LiveSurfaceRuntimeAuthority,
 } from "./runtime";
+import type { LiveSurfaceRuntimeSupportSnapshot } from "./runtime-support";
 import {
   type SckCaptureClient,
   SckCaptureClientError,
@@ -526,6 +527,10 @@ export class IosSimulatorLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthori
 
   get stats(): SckLiveSurfaceRuntimeStats {
     return this.#runtime.stats;
+  }
+
+  supportSnapshot(): LiveSurfaceRuntimeSupportSnapshot {
+    return this.#runtime.supportSnapshot("ios-simulator");
   }
 
   attach(context: LiveSurfaceRuntimeAttachContext): LiveSurfaceRuntimeAttachment {

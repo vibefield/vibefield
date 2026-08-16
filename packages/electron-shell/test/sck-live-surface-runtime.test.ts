@@ -246,6 +246,19 @@ describe("SckLiveSurfaceRuntime", () => {
       localReferencesReleased: 1,
       helperLeasesReleased: 1,
     });
+    expect(result.runtime.supportSnapshot()).toMatchObject({
+      v: 1,
+      sourceKind: "sck-window",
+      metrics: {
+        framesObserved: 1,
+        framesOffered: 2,
+        framesAccepted: 2,
+        framesDropped: 0,
+        localReferencesReleased: 1,
+        downstreamReferencesReleased: 1,
+        referencesQuarantined: 0,
+      },
+    });
     result.runtime.dispose();
   });
 
