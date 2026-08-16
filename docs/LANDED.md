@@ -2261,3 +2261,28 @@ service matrix **35/35** · plugin SDK **17/17** · plugin runtime **28/28** · 
 package typechecks · generated docs current · fieldd/service-harness build (347.8 KB worker bundle)
 · Biome (only the standing `void`-union advisories) · import boundaries R1–R18 zero · patch
 hygiene. PRC-3 now owns serialized exact-target convergence across lifecycle triggers.
+
+## PRC-3a — exact targets now have one convergence calculus
+
+**LANDED 2026-08-15** (`4c4755c`). `@vibefield/plugin-runtime` now owns the serialized
+desired/committed controller every service/device and renderer/window adapter will consume. It
+separates semantic equality (artifact + exact instance + projected authority + runtime generation)
+from observation equality (semantic target + broad grant provenance): a grant change invalidates an
+in-flight credential episode, while a committed semantic-equal face refreshes its stable authority
+proxy without rerunning activation. Refresh failure withdraws the old candidate and makes one fresh
+activation attempt.
+
+Activation adapters prepare a private, scope-owned candidate and receive one synchronous commit
+edge only after the target episode is still current. A→B→A cannot resurrect the first A; a
+synchronous publication listener cannot resurrect what it superseded; async commit is refused.
+Same-realm non-quiescence blocks replacement. Worker/process force advances only after a real
+`terminated:true` report—callback completion and failed kill are not proof. Controller errors and
+history are bounded.
+
+The same slice adds canonical face authority projection from contracts' one
+`PLUGIN_CAPABILITY_ELIGIBILITY` table, including custom capabilities, and explicitly keeps the
+registry-global module-token generation out of semantic identity until an artifact-specific
+approval epoch exists. Gates: production-shaped draft probe **9/9** · plugin-runtime **40/40**
+including 16×40 seeded churn · plugin-runtime/field-app/fieldd typechecks · Biome · import walls
+R1–R18 zero · patch hygiene. PRC-3b next makes product credentials rotatable and race-fenced;
+PRC-3c/3d then bind this controller to the real service and renderer instances.
