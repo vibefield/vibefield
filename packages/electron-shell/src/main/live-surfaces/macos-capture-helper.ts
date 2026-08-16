@@ -13,6 +13,7 @@ import {
 const PROTOCOL_VERSION = 1;
 const MAX_LINE_BYTES = 1024 * 1024;
 const MAX_SOURCES = 2_048;
+const MAX_SOURCE_ALIASES = MAX_SOURCES * 2;
 const MAX_SESSIONS = 16;
 const U64_MAX = 0xffff_ffff_ffff_ffffn;
 
@@ -119,6 +120,7 @@ interface ActiveSession {
   readonly generation: number;
   disposed: boolean;
   lastActuationRevision: number;
+  actuationTail: Promise<void>;
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -334,7 +336,7 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
         throw this.protocolFailure(helper, "capture helper returned invalid source metadata");
       }
       sources.push(source);
-      this.#sourceAliases.set(source.sourceRef, {
+      this.rememberSourceAlias(source.sourceRef, {
         generation: helper.generation,
         descriptor: source,
       });
@@ -352,6 +354,12 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   }
 
   async startSession(request: SckCaptureClientStartRequest): Promise<SckCaptureSession> {
+    const helper = await this.ensureRunning();
+    const sessionKey = this.uniqueSessionKey();
+    const sourceRef = await this.currentSourceRef(helper, request.source.sourceRef);
+    // Capacity is checked after every asynchronous source/helper operation and
+    // immediately before reservation. Concurrent starts therefore cannot all
+    // pass a stale pre-await size check and overrun the native fixed bound.
     if (this.#sessions.size >= MAX_SESSIONS) {
       throw new SckCaptureClientError({
         code: "unsupported",
@@ -359,9 +367,6 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
         recovery: "automatic",
       });
     }
-    const helper = await this.ensureRunning();
-    const sessionKey = this.uniqueSessionKey();
-    const sourceRef = await this.currentSourceRef(helper, request.source.sourceRef);
     const active: ActiveSession = {
       sessionKey,
       producerEpoch: request.producerEpoch,
@@ -369,6 +374,7 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
       generation: helper.generation,
       disposed: false,
       lastActuationRevision: request.demand.revision,
+      actuationTail: Promise.resolve(),
     };
     this.#sessions.set(sessionKey, active);
     try {
@@ -397,21 +403,27 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
           throw new Error("SCK helper demand revision must increase");
         }
         active.lastActuationRevision = demand.revision;
-        const current = this.#running;
-        if (current === null || current.generation !== active.generation) {
-          throw new Error("SCK helper generation ended");
-        }
-        await this.request(current, "demand", "demand-applied", {
-          sessionKey,
-          producerEpoch: request.producerEpoch,
-          demand,
+        const operation = active.actuationTail.then(async () => {
+          if (disposed || active.disposed) return;
+          const current = this.#running;
+          if (current === null || current.generation !== active.generation) {
+            throw new Error("SCK helper generation ended");
+          }
+          await this.request(current, "demand", "demand-applied", {
+            sessionKey,
+            producerEpoch: request.producerEpoch,
+            demand,
+          });
         });
+        active.actuationTail = operation.catch(() => undefined);
+        await operation;
       },
       dispose: async () => {
         if (disposed) return;
         disposed = true;
         active.disposed = true;
         this.#sessions.delete(sessionKey);
+        await active.actuationTail.catch(() => undefined);
         const current = this.#running;
         if (current === null || current.generation !== active.generation) return;
         try {
@@ -543,7 +555,10 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
         recovery: "user-action",
       });
     }
-    this.#sourceAliases.set(sourceRef, { generation: helper.generation, descriptor: rebound });
+    this.rememberSourceAlias(sourceRef, {
+      generation: helper.generation,
+      descriptor: rebound,
+    });
     return rebound.sourceRef;
   }
 
@@ -647,7 +662,13 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
     if (message["event"] === "session-fault" && hex(message["sessionKey"], 16)) {
       const session = this.#sessions.get(message["sessionKey"]);
       if (session === undefined || session.generation !== helper.generation) return;
-      session.request.onFault(surfaceError(message["error"], "Screen capture session failed"));
+      try {
+        session.request.onFault(surfaceError(message["error"], "Screen capture session failed"));
+      } catch (error) {
+        this.#onDiagnostic?.(
+          `Screen capture fault observer failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       return;
     }
     if (message["event"] === "helper-fault") {
@@ -792,11 +813,19 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
       if (session.generation !== helper.generation) continue;
       this.#sessions.delete(sessionKey);
       session.disposed = true;
-      session.request.onFault({
-        code: "producer-crashed",
-        message: "Screen capture helper exited",
-        recovery: "automatic",
-      });
+      try {
+        session.request.onFault({
+          code: "producer-crashed",
+          message: "Screen capture helper exited",
+          recovery: "automatic",
+        });
+      } catch (callbackError) {
+        this.#onDiagnostic?.(
+          `Screen capture exit observer failed: ${
+            callbackError instanceof Error ? callbackError.message : String(callbackError)
+          }`,
+        );
+      }
     }
     if (!wasStopping && helper.child.exitCode === null) helper.child.kill("SIGTERM");
   }
@@ -825,6 +854,14 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
       if (hex(candidate, 16) && !this.#sessions.has(candidate)) return candidate;
     }
     throw new Error("could not mint a unique capture session identity");
+  }
+
+  private rememberSourceAlias(sourceRef: string, alias: SourceAlias): void {
+    if (!this.#sourceAliases.has(sourceRef) && this.#sourceAliases.size >= MAX_SOURCE_ALIASES) {
+      const oldest = this.#sourceAliases.keys().next().value as string | undefined;
+      if (oldest !== undefined) this.#sourceAliases.delete(oldest);
+    }
+    this.#sourceAliases.set(sourceRef, alias);
   }
 }
 

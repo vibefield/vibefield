@@ -600,6 +600,10 @@ bool ParseCrop(id raw, CaptureCrop* output) {
 - (void)acceptCommand:(NSDictionary<NSString*, id>*)command {
   dispatch_async(_controlQueue, ^{
     if (self->_shuttingDown) return;
+    if (![command[@"v"] isEqual:@(VF_CAPTURE_PROTOCOL_VERSION)]) {
+      [self fatalProtocol:@"Capture command protocol version did not match"];
+      return;
+    }
     id type = command[@"type"];
     if (![type isKindOfClass:[NSString class]]) {
       [self fatalProtocol:@"Capture command omitted its type"];
@@ -686,7 +690,16 @@ bool ParseCrop(id raw, CaptureCrop* output) {
                                         @"automatic"));
         return;
       }
-      [self->_sources removeAllObjects];
+      NSMutableDictionary<NSString*, NSString*>* prior_refs = [[NSMutableDictionary alloc] init];
+      for (NSString* source_ref in self->_sources) {
+        NSDictionary* record = self->_sources[source_ref];
+        NSString* identity = [NSString
+            stringWithFormat:@"%d:%u", [record[@"ownerPid"] intValue],
+                             [record[@"windowId"] unsignedIntValue]];
+        prior_refs[identity] = source_ref;
+      }
+      NSMutableDictionary<NSString*, NSDictionary<NSString*, id>*>* current_sources =
+          [[NSMutableDictionary alloc] init];
       NSMutableArray* output = [[NSMutableArray alloc] init];
       for (SCWindow* window in content.windows) {
         if (output.count >= kMaximumSources) break;
@@ -697,14 +710,16 @@ bool ParseCrop(id raw, CaptureCrop* output) {
             [owner.bundleIdentifier isEqualToString:@"com.jamesyong.vibefield"]) {
           continue;
         }
-        NSString* source_ref = RandomSourceRef();
+        NSString* identity =
+            [NSString stringWithFormat:@"%d:%u", owner.processID, window.windowID];
+        NSString* source_ref = prior_refs[identity] ?: RandomSourceRef();
         NSDictionary* record = @{
           @"sourceRef" : source_ref,
           @"window" : window,
           @"windowId" : @(window.windowID),
           @"ownerPid" : @(owner.processID),
         };
-        self->_sources[source_ref] = record;
+        current_sources[source_ref] = record;
         NSString* application_name = CleanText(owner.applicationName, @"Unknown application");
         NSString* bundle_identifier = CleanText(owner.bundleIdentifier, @"-");
         NSString* title = CleanText(window.title, @"Untitled window");
@@ -722,6 +737,7 @@ bool ParseCrop(id raw, CaptureCrop* output) {
           @"onScreen" : @(window.isOnScreen),
         }];
       }
+      self->_sources = current_sources;
       Emit(@{ @"v" : @1, @"event" : @"sources", @"requestId" : request_id,
               @"sources" : output });
     });

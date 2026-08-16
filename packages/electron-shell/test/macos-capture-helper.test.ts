@@ -349,4 +349,44 @@ describe("MacosCaptureHelperSupervisor", () => {
     expect(result.supervisor.stats.helperExits).toBe(1);
     await result.supervisor.dispose();
   });
+
+  it("reserves the fixed session capacity after concurrent helper/source awaits", async () => {
+    const result = setup();
+    const source = (await result.supervisor.enumerateWindows())[0]!;
+    const starts = await Promise.allSettled(
+      Array.from({ length: 17 }, () => result.supervisor.startSession(request(source.sourceRef))),
+    );
+    expect(starts.filter((entry) => entry.status === "fulfilled")).toHaveLength(16);
+    const rejected = starts.find((entry) => entry.status === "rejected");
+    expect(rejected).toMatchObject({
+      status: "rejected",
+      reason: expect.objectContaining({
+        surfaceError: expect.objectContaining({ code: "unsupported" }),
+      }),
+    });
+    expect(result.supervisor.stats.activeSessions).toBe(16);
+    await result.supervisor.dispose();
+  });
+
+  it("continues notifying sessions when one fault observer throws", async () => {
+    const result = setup();
+    const source = (await result.supervisor.enumerateWindows())[0]!;
+    const observed = vi.fn();
+    await result.supervisor.startSession(
+      request(
+        source.sourceRef,
+        () => undefined,
+        () => {
+          throw new Error("observer failed");
+        },
+      ),
+    );
+    await result.supervisor.startSession(request(source.sourceRef, () => undefined, observed));
+    result.helpers[0]?.crash();
+    expect(observed).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "producer-crashed", recovery: "automatic" }),
+    );
+    expect(result.supervisor.stats.activeSessions).toBe(0);
+    await result.supervisor.dispose();
+  });
 });
