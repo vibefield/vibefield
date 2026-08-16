@@ -2185,3 +2185,24 @@ caught by the dirty lockfile it caused, resolved unpiped. Gates on the final tre
 exit 0 · `pnpm verify` VERBATIM exit 0 · plugin-cli 78/78 with the anchors · scaffold
 witnessed on main and deleted traceless. **Remaining in P8d: the measured ten-minute bar,
 gated on the mind-map pack proposal (MM-D1…D6) awaiting James.**
+
+## PRC-0 — one ownership calculus, with honest targets
+
+**LANDED 2026-08-15** (`7e0a0e8`; PRC-D1…D13 ratified by James: “go ahead”).
+`@vibefield/plugin-runtime` now owns the dependency-free activation lifecycle core shared by the
+future renderer, worker, and process adapters: synchronous single-flight close, child scopes with
+pre-registered setup ownership, awaited sequential LIFO cleanup, partial-failure rollback, late
+self-cleanup, exact-handle dedupe, closed-child compaction, bounded diagnostics, and a report that
+never mistakes abort for quiescence. Exact structured runtime targets compare artifact, instance,
+projected authority, and runtime generation while retaining broad grant generation as provenance
+rather than reload identity.
+
+The production translation caught one last semantic edge: an illegal handle transferred after a
+scope is already closed briefly makes that scope non-quiescent again while its disposer runs;
+`whenQuiescent()` observes that work instead of equating the monotonic `closed` authority state
+with an empty cleanup queue. The package's tests consume its public barrel and pin LIFO ordering,
+pre-registration, cleanup-error separation, late results, independent observer deadlines,
+never-settling same-realm honesty, dedupe, compaction, bounded text/cardinality, and target equality.
+Gates: plugin-runtime **24/24** · typecheck · Biome · import boundaries R1–R18 · patch hygiene.
+The detailed experiment and ratified spec remain dev-local under
+`draft/thinking-plugin-runtime-composability.md` and `draft/specs/plugin-architecture.md`.
