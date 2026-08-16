@@ -77,6 +77,13 @@ export interface SckCaptureClient {
   startSession(request: SckCaptureClientStartRequest): Promise<SckCaptureSession>;
 }
 
+export class SckCaptureClientError extends Error {
+  constructor(readonly surfaceError: LiveSurfaceErrorV1) {
+    super(surfaceError.message);
+    this.name = "SckCaptureClientError";
+  }
+}
+
 export interface SckLiveSurfaceRuntimeOptions {
   readonly surfaceId: string;
   readonly source: SckWindowSource;
@@ -382,11 +389,13 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         this.#lastDemandShape = demandShape(this.#effectiveDemand!);
         this.reconcileDemand();
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!this.isCurrentRun(run)) return;
         this.handleSessionFault(
           run,
-          sourceError("producer-crashed", "Screen capture helper could not start", "automatic"),
+          error instanceof SckCaptureClientError
+            ? error.surfaceError
+            : sourceError("producer-crashed", "Screen capture helper could not start", "automatic"),
         );
       });
   }
