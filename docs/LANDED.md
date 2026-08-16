@@ -2286,3 +2286,31 @@ approval epoch exists. Gates: production-shaped draft probe **9/9** · plugin-ru
 including 16×40 seeded churn · plugin-runtime/field-app/fieldd typechecks · Biome · import walls
 R1–R18 zero · patch hygiene. PRC-3b next makes product credentials rotatable and race-fenced;
 PRC-3c/3d then bind this controller to the real service and renderer instances.
+
+## PRC-3b — credentials rotate in place and stale leases cannot install
+
+**LANDED 2026-08-16** (`2dbb359` + `22a4f71`; worker import correction `dbb5423`). A
+`FielddClient` can now cross a credential-authority edge without changing object identity: the old
+connection closes synchronously, terminal unauthorized state becomes recoverable only through an
+explicit rotation, and owned subscriptions replay and re-snapshot on the new connection. Explicit
+user close remains terminal. The renderer's lazy plugin-client proxy and its underlying client are
+therefore stable across grant renewal rather than leaving plugin code with a dead cached object.
+
+Lease creation and installation now carry separate observation and backend epochs. The renderer
+broker converges out-of-order mint results and rejections onto the newest episode, refuses a
+lifecycle-controlled response that cannot prove its grant generation, and rotates the stable
+client only after the result is still current. The daemon compares manifest hash and grant
+generation before and at the exact audited mint edge and returns the observed generation. Service
+startup performs the same checks before and after minting; a superseded token is revoked, and a
+stale episode cannot construct a worker. Both faces consume contracts' canonical authority
+projection rather than maintaining another capability list.
+
+The real service-worker integration gate found a separate PRC-3a compatibility defect: Node's
+strip-only TypeScript loader cannot import constructor parameter properties. `dbb5423` rewrote the
+controller field as ordinary strip-safe TypeScript, then the production worker bundle became the
+standing boundary witness. Gates: credential production probe **3/3** · renderer broker probe
+**7/7** · service lease-fence probe **1/1** · fieldd-client **16/16** · field-app **444/444**
+· contracts **226/226** · fieldd **473 passed + 1 platform skip** · plugin-runtime **40/40**
+· all affected package typechecks · fieldd production build including the worker harness ·
+Biome (only standing advisories) · import walls R1–R18 zero · patch hygiene. PRC-3c now owns
+the real service desired-target adapter and private provider commit.
