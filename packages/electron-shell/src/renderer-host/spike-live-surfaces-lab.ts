@@ -5,6 +5,8 @@ import {
   WebGpuLiveSurfaceTextureStore,
 } from "@vibefield/live-surfaces/renderer";
 import {
+  LIVE_SURFACE_LAB_RELOAD_READY_DATASET,
+  LIVE_SURFACE_LAB_RELOAD_TICKET,
   LIVE_SURFACE_LAB_RESULT_DATASET,
   LIVE_SURFACE_LAB_TICKET_READY_DATASET,
   LIVE_SURFACE_LAB_TICKETS,
@@ -53,6 +55,25 @@ const context = required(canvas.getContext("2d"), "2D preview context");
 const portReceiver = receiveLiveSurfaceRendererTransport<VideoFrame>(
   window,
   window.vibefield.claimLiveSurfacePortBridge(),
+);
+let activeTransport: Awaited<typeof portReceiver.transport> | null = null;
+let heldReloadLease: { release(): void } | null = null;
+let pageHidden = false;
+void portReceiver.transport.then((transport) => {
+  if (pageHidden) transport.dispose();
+  else activeTransport = transport;
+});
+window.addEventListener(
+  "pagehide",
+  () => {
+    pageHidden = true;
+    portReceiver.dispose();
+    activeTransport?.dispose();
+    activeTransport = null;
+    heldReloadLease?.release();
+    heldReloadLease = null;
+  },
+  { once: true },
 );
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -105,7 +126,51 @@ async function collectBrowserFrames(
   }
 }
 
-async function run(): Promise<void> {
+async function runReloadProbe(): Promise<void> {
+  try {
+    await waitForTickets();
+    const transport = await portReceiver.transport;
+    await transport.ready;
+    const attachment = await transport.attach(LIVE_SURFACE_LAB_RELOAD_TICKET);
+    attachment.setDemand({
+      revision: 1,
+      mode: "live",
+      targetFps: 30,
+      targetRasterSize: { width: 320, height: 180 },
+      priority: 100,
+      interactive: false,
+    });
+    status.textContent = "LSF-2 reload: holding one shared frame across document teardown…";
+    const deadline = performance.now() + 15_000;
+    while (heldReloadLease === null) {
+      heldReloadLease = attachment.takeFrame();
+      if (performance.now() >= deadline) throw new Error("reload probe frame deadline");
+      if (heldReloadLease === null) await delay(8);
+    }
+    history.replaceState(null, "", `${location.pathname}?phase=main`);
+    document.documentElement.dataset[LIVE_SURFACE_LAB_RELOAD_READY_DATASET] = "1";
+    status.textContent = "LSF-2 reload: shared frame held; waiting for main-authorized reload…";
+  } catch (error) {
+    report({
+      ok: false,
+      presented: 0,
+      presentedAfterRecovery: 0,
+      deviceGenerations: 0,
+      deviceLossObserved: false,
+      rendererReloadObserved: false,
+      transportProtocolFaults: 0,
+      supersededFrames: 0,
+      browserOnePresented: 0,
+      browserFallbackPresented: 0,
+      browserFallbackObserved: false,
+      tenSurfacePresented: [],
+      tenSurfaceShared: 0,
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    });
+  }
+}
+
+async function run(rendererReloadObserved: boolean): Promise<void> {
   let presented = 0;
   let presentedAfterRecovery = 0;
   let deviceLossObserved = false;
@@ -319,6 +384,7 @@ async function run(): Promise<void> {
       presentedAfterRecovery >= 6 &&
       deviceGenerations >= 2 &&
       deviceLossObserved &&
+      rendererReloadObserved &&
       browserOnePresented >= 6 &&
       browserOneTransport === "shared-texture" &&
       browserFallbackPresented >= 3 &&
@@ -333,6 +399,7 @@ async function run(): Promise<void> {
       presentedAfterRecovery,
       deviceGenerations,
       deviceLossObserved,
+      rendererReloadObserved,
       transportProtocolFaults,
       supersededFrames,
       browserOnePresented,
@@ -360,6 +427,7 @@ async function run(): Promise<void> {
       presentedAfterRecovery,
       deviceGenerations,
       deviceLossObserved,
+      rendererReloadObserved,
       transportProtocolFaults,
       supersededFrames,
       browserOnePresented,
@@ -373,4 +441,9 @@ async function run(): Promise<void> {
   }
 }
 
-void run();
+const phase = new URLSearchParams(location.search).get("phase");
+if (phase === "reload") {
+  void runReloadProbe();
+} else {
+  void run(phase === "main");
+}

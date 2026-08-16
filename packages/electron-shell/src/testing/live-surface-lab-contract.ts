@@ -19,12 +19,17 @@ function ticket(index: number): LiveSurfaceAttachTicketV1 {
   };
 }
 
-/** Fixture, ten shared Browser sources, then one forced-observation fallback source. */
-export const LIVE_SURFACE_LAB_TICKETS = Array.from({ length: 12 }, (_, index) => ticket(index + 1));
+/** Reload probe, then fixture, ten shared Browser sources, and one CPU fallback. */
+export const LIVE_SURFACE_LAB_ALL_TICKETS = Array.from({ length: 13 }, (_, index) =>
+  ticket(index + 1),
+);
+export const LIVE_SURFACE_LAB_RELOAD_TICKET = LIVE_SURFACE_LAB_ALL_TICKETS[0]!;
+export const LIVE_SURFACE_LAB_TICKETS = LIVE_SURFACE_LAB_ALL_TICKETS.slice(1);
 export const LIVE_SURFACE_LAB_TICKET_TOKEN = LIVE_SURFACE_LAB_TICKETS[0]?.token ?? "";
 export const LIVE_SURFACE_LAB_TICKET = LIVE_SURFACE_LAB_TICKETS[0] as LiveSurfaceAttachTicketV1;
 
 export const LIVE_SURFACE_LAB_TICKET_READY_DATASET = "liveSurfaceLabTicketReady";
+export const LIVE_SURFACE_LAB_RELOAD_READY_DATASET = "liveSurfaceLabReloadReady";
 export const LIVE_SURFACE_LAB_RESULT_DATASET = "liveSurfaceLabResult";
 
 export interface LiveSurfaceLabRendererResult {
@@ -33,6 +38,7 @@ export interface LiveSurfaceLabRendererResult {
   readonly presentedAfterRecovery: number;
   readonly deviceGenerations: number;
   readonly deviceLossObserved: boolean;
+  readonly rendererReloadObserved: boolean;
   readonly transportProtocolFaults: number;
   readonly supersededFrames: number;
   readonly browserOnePresented: number;

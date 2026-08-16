@@ -34,8 +34,11 @@ import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
+  LIVE_SURFACE_LAB_ALL_TICKETS,
   LIVE_SURFACE_LAB_BROWSER_SURFACE_IDS,
   LIVE_SURFACE_LAB_FALLBACK_SURFACE_ID,
+  LIVE_SURFACE_LAB_RELOAD_READY_DATASET,
+  LIVE_SURFACE_LAB_RELOAD_TICKET,
   LIVE_SURFACE_LAB_RESULT_DATASET,
   LIVE_SURFACE_LAB_TICKET_READY_DATASET,
   LIVE_SURFACE_LAB_TICKETS,
@@ -2209,7 +2212,7 @@ export async function runLiveSurfacesLab(opts: {
   let tokenIndex = 0;
   const tickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>({
     randomToken: () => {
-      const ticket = LIVE_SURFACE_LAB_TICKETS[tokenIndex];
+      const ticket = LIVE_SURFACE_LAB_ALL_TICKETS[tokenIndex];
       tokenIndex += 1;
       if (ticket === undefined) throw new Error("the Browser lab exhausted its ticket tokens");
       return ticket.token;
@@ -2221,17 +2224,23 @@ export async function runLiveSurfacesLab(opts: {
     show: process.env["VF_LIVE_SURFACES_LAB_HEADLESS"] !== "1",
   });
   opts.registry.adopt(win);
+  const textureForwarders: LiveSurfaceTextureForwarder[] = [];
   const host = new LiveSurfaceWindowHost(
     win,
     tickets,
     () => new MessageChannelMain(),
     undefined,
-    (surfaceId, attachmentId) =>
-      new LiveSurfaceTextureForwarder(
+    (surfaceId, attachmentId, budget) => {
+      const forwarder = new LiveSurfaceTextureForwarder(
         surfaceId,
         attachmentId,
         createElectronLiveSurfaceTextureTransferApi(win.webContents),
-      ),
+        2,
+        budget,
+      );
+      textureForwarders.push(forwarder);
+      return forwarder;
+    },
   ).install();
   const native = new ElectronBrowserSurfaceNative();
   const controlTargets = new BrowserControlTargetRegistry({
@@ -2273,7 +2282,61 @@ export async function runLiveSurfacesLab(opts: {
       controlTargets,
       requestSharedTexture: false,
     });
-    await win.loadURL(`${APP_ORIGIN}/spike-live-surfaces-lab.html`);
+    await win.loadURL(`${APP_ORIGIN}/spike-live-surfaces-lab.html?phase=reload`);
+    const reloadFromGeneration = host.rendererGeneration;
+    const reloadTicket = host.issue({
+      surfaceId: browserRuntimes[0]!.surfaceId,
+      sourceKind: "browser",
+      operations: ["view"],
+      principalId: "live-surfaces-foundation-reload-lab",
+      authority: browserRuntimes[0]!,
+    });
+    if (reloadTicket.token !== LIVE_SURFACE_LAB_RELOAD_TICKET.token) {
+      throw new Error("test-only reload ticket did not match its renderer rendezvous");
+    }
+    await win.webContents.executeJavaScript(
+      `document.documentElement.dataset[${JSON.stringify(
+        LIVE_SURFACE_LAB_TICKET_READY_DATASET,
+      )}] = "1"`,
+      true,
+    );
+    const reloadReadyDeadline = Date.now() + 15_000;
+    let reloadReady = false;
+    while (!reloadReady && Date.now() < reloadReadyDeadline) {
+      reloadReady =
+        (await win.webContents.executeJavaScript(
+          `document.documentElement.dataset[${JSON.stringify(
+            LIVE_SURFACE_LAB_RELOAD_READY_DATASET,
+          )}] === "1"`,
+          true,
+        )) === true;
+      if (!reloadReady) await sleep(10);
+    }
+    if (!reloadReady) throw new Error("renderer never held a frame for the reload probe");
+    win.webContents.reload();
+    const reloadDeadline = Date.now() + 20_000;
+    while (host.rendererGeneration <= reloadFromGeneration && Date.now() < reloadDeadline) {
+      await sleep(10);
+    }
+    if (host.rendererGeneration <= reloadFromGeneration) {
+      throw new Error("renderer reload did not finish within 20s");
+    }
+    await host.whenDrained();
+    const reloadForwarders = textureForwarders.filter(
+      (forwarder) => forwarder.surfaceId === browserRuntimes[0]!.surfaceId,
+    );
+    const reloadDrain = {
+      forwarders: reloadForwarders.length,
+      outstanding: reloadForwarders.reduce(
+        (total, forwarder) => total + forwarder.stats.outstanding,
+        0,
+      ),
+      timedOut: reloadForwarders.reduce((total, forwarder) => total + forwarder.stats.timedOut, 0),
+      completed: reloadForwarders.reduce(
+        (total, forwarder) => total + forwarder.stats.completed,
+        0,
+      ),
+    };
     const authorities: LiveSurfaceRuntimeAuthority[] = [
       authority,
       ...browserRuntimes,
@@ -2317,6 +2380,17 @@ export async function runLiveSurfacesLab(opts: {
     const source = authority.stats;
     const problems: string[] = [];
     if (!renderer.ok) problems.push(renderer.error ?? "renderer returned a failed verdict");
+    if (!renderer.rendererReloadObserved)
+      problems.push("renderer did not observe its reload phase");
+    if (
+      reloadDrain.forwarders !== 1 ||
+      reloadDrain.outstanding !== 0 ||
+      reloadDrain.completed + reloadDrain.timedOut < 1
+    ) {
+      problems.push(
+        `renderer reload did not reconcile its held texture within the bounded drain: ${JSON.stringify(reloadDrain)}`,
+      );
+    }
     if (source.attachments !== 1) problems.push(`source attached ${source.attachments} times`);
     if (source.demandUpdates < 2) problems.push("source did not receive live and paused demand");
     if (source.offered < 12) problems.push(`source offered only ${source.offered} frames`);
@@ -2326,11 +2400,12 @@ export async function runLiveSurfacesLab(opts: {
     if (source.offered !== offeredAtRendererDone) {
       problems.push("the fixture kept producing after paused demand");
     }
-    for (const runtime of browserRuntimes) {
+    for (const [index, runtime] of browserRuntimes.entries()) {
       const stats = runtime.stats;
       const summary = runtime.summary;
       const control = controlTargets.status(runtime.surfaceId);
-      if (stats.producersStarted !== 1) {
+      const expectedStarts = index === 0 ? 2 : 1;
+      if (stats.producersStarted !== expectedStarts) {
         problems.push(`${runtime.surfaceId} started ${stats.producersStarted} producers`);
       }
       if (stats.texturePaints < 3 || stats.sharedFramesAccepted < 3) {
@@ -2389,6 +2464,7 @@ export async function runLiveSurfacesLab(opts: {
               control: controlTargets.status(fallbackRuntime.surfaceId),
             },
       browserInput,
+      reloadDrain,
       rendererGeneration: host.rendererGeneration,
       ticketTableSize: tickets.size,
       ...(problems.length === 0 ? {} : { problems }),
@@ -2399,6 +2475,17 @@ export async function runLiveSurfacesLab(opts: {
       ok: false,
       reason: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
       source: authority.stats,
+      browserSources: browserRuntimes.map((runtime) => ({
+        surfaceId: runtime.surfaceId,
+        summary: runtime.summary,
+        stats: runtime.stats,
+      })),
+      textureForwarders: textureForwarders.map((forwarder) => ({
+        surfaceId: forwarder.surfaceId,
+        attachmentId: forwarder.attachmentId,
+        stats: forwarder.stats,
+      })),
+      rendererGeneration: host.rendererGeneration,
     };
   } finally {
     process.off("uncaughtExceptionMonitor", monitorUncaught);
