@@ -189,8 +189,10 @@ The runtime-composability amendment underneath that work is now ratified
 `7e0a0e8`: a shared activation-ownership core and exact structured runtime targets. **PRC-1 LANDED
 `4831b0a`**: the renderer now uses child-bound ownership,
 withdraws publications synchronously, awaits LIFO cleanup, blocks overlap while same-realm work is
-non-quiescent, and teaches the authoring API from generated docs. PRC-2's common service drain is
-next; it must land before W2 depends on lifecycle behavior.
+non-quiescent, and teaches the authoring API from generated docs. **PRC-2 LANDED `96fcd81`**: the
+service worker shares that ownership tree, and every disable/reload/revocation/crash/shutdown path
+uses one typed route-drain protocol with exact generations and correlated cleanup. PRC-3 exact
+target controllers are next; they must land before W2 depends on lifecycle behavior.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through

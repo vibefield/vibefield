@@ -2231,3 +2231,33 @@ Biome (only the standing `void`-union advisories) · import boundaries R1–R18 
 **432/439** in the restricted sandbox, with all seven Unix-socket permission refusals covered by a
 permitted **9/9** rerun. PRC-2 now owns the common service route-drain edge and correlated worker
 deactivation acknowledgement; PRC-3 owns full window/reload/revocation target-controller wiring.
+
+## PRC-2 — service drain and ownership share one protocol
+
+**LANDED 2026-08-15** (`96fcd81`). Every service transition now enters one synchronous route edge:
+public availability disappears, method-kind tombstones return typed `UNAVAILABLE`, new calls and
+subscriptions are refused, live subscriptions receive exactly one terminal, and already-admitted
+calls retain their exact worker generation for one bounded drain window. Disable no longer depends
+on an incidental registry listener while reload stays callable. Worker deactivation carries a
+request id plus generation, so result/log/delta/unprovide traffic cannot consume its waiter; call
+drain and cooperative cleanup share one absolute deadline, followed by real worker termination.
+
+The worker harness now consumes `ActivationScope` itself. Its product connection owner is
+pre-registered before the activation child, so provider publications, client/settings
+subscriptions, processes, endpoints, and inbound provider subscriptions clean in LIFO order while
+exact host-issued inverses can still use the raw connection. Labeled `ctx.track` and child-bound
+`ctx.effect` now have the same SDK/testing/generated-doc contract for service and renderer entries.
+Process/endpoint releases and in-flight settings subscription cleanup are awaited rather than
+reported complete while their inverse is pending.
+
+Production translation found two load-bearing distinctions. A worker's synchronous `unprovide`
+during drain confirms ownership cleanup but must not retire the router tombstone; final host
+withdrawal does that after teardown. And route tests synchronize on the observable publication
+edge, not a fixed sleep: a parallel regression run proved durable disable can take longer than a
+40 ms sample to reach that edge without violating the protocol.
+
+Gates on the landed tree: full fieldd **471 passed + 1 platform skip** across 53 files · focused
+service matrix **35/35** · plugin SDK **17/17** · plugin runtime **28/28** · plugin CLI **79/79** ·
+package typechecks · generated docs current · fieldd/service-harness build (347.8 KB worker bundle)
+· Biome (only the standing `void`-union advisories) · import boundaries R1–R18 zero · patch
+hygiene. PRC-3 now owns serialized exact-target convergence across lifecycle triggers.
