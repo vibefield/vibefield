@@ -348,6 +348,8 @@ export const IPC_CHANNELS = {
   rendererLogPort: "vibefield:logging:renderer-port",
   /** main ↔ preload, one host-only diagnostics MessagePort per generation */
   diagnosticsPort: "vibefield:diagnostics:host-port",
+  /** main → preload, exactly four Live Surfaces ports per renderer generation */
+  liveSurfacePorts: "vibefield:live-surfaces:host-ports",
   /** main → renderer: validated, presentation-only shell commands */
   shellCommand: "vibefield:shell:command",
   /** main → renderer: native tray/background capability truth */

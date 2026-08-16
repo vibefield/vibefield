@@ -395,6 +395,21 @@ const RULES = [
       SOURCE_EXT.test(p) && !underAny(p, ["packages/audit", "packages/fieldd"]) && !isTestPath(p),
     importTest: (s) => importsModule(s, "@vibefield/audit") && s !== "@vibefield/audit/verify",
   },
+  {
+    id: "R18",
+    // LSF-1: the common runtime is the seam beneath plugin/document/ICE and
+    // Electron adapters. Keeping its production source on contracts + relative
+    // imports makes that independence executable rather than aspirational.
+    enforce: true,
+    description:
+      "@vibefield/live-surfaces stays independent of Electron, Node, ICE, plugins, and field-app",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/live-surfaces/src"),
+    importTest: (s) =>
+      s.startsWith("node:") ||
+      s.startsWith("@vibecook/") ||
+      (s.startsWith("@vibefield/") && s !== "@vibefield/contracts") ||
+      ["electron", "react", "react-dom", "ws"].includes(s),
+  },
 ];
 
 // Enforce map (spec §8.3 slice 2): --enforce gates ONLY on enforce-true rules.
@@ -718,6 +733,11 @@ function runSelfTest() {
       file: "packages/electron-shell/src/main/audit-writer.ts",
       body: 'import { AuditLedgerWriter } from "@vibefield/audit";\n',
     },
+    {
+      id: "R18",
+      file: "packages/live-surfaces/src/uses-electron.ts",
+      body: 'import { sharedTexture } from "electron";\n',
+    },
   ];
   const cleans = [
     // react + a DECLARED entry import + plain code: proves R1/R2/R9 don't
@@ -829,6 +849,10 @@ function runSelfTest() {
     {
       file: "packages/electron-shell/src/main/audit-reader.ts",
       body: 'import { verifyAuditSegment } from "@vibefield/audit/verify";\nexport const verify = verifyAuditSegment;\n',
+    },
+    {
+      file: "packages/live-surfaces/src/clean-core.ts",
+      body: 'import type { LiveSurfaceDemandV1 } from "@vibefield/contracts";\nexport type Demand = LiveSurfaceDemandV1;\n',
     },
   ];
 

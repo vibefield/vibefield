@@ -11,6 +11,7 @@ export * from "./docsync";
 export * from "./endpoints";
 export * from "./envelope";
 export * from "./errors";
+export * from "./live-surfaces";
 export * from "./meshdata";
 export * from "./methods";
 export * from "./mgmt";

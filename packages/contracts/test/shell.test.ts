@@ -160,13 +160,14 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the fifteen channel keys, in order", () => {
+  it("exposes exactly the sixteen channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
       "closeResult",
       "rendererLogPort",
       "diagnosticsPort",
+      "liveSurfacePorts",
       "shellCommand",
       "desktopState",
       "terminalConnect",
@@ -187,6 +188,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       closeResult: "vibefield:shell:close-result",
       rendererLogPort: "vibefield:logging:renderer-port",
       diagnosticsPort: "vibefield:diagnostics:host-port",
+      liveSurfacePorts: "vibefield:live-surfaces:host-ports",
       shellCommand: "vibefield:shell:command",
       desktopState: "vibefield:shell:desktop-state",
       terminalConnect: "vibefield:terminal:connect",
