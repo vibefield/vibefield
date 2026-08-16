@@ -130,7 +130,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`); **P8b CLOSED WHOLE** (`089274c`) · **P8d KIT COMPLETE 2026-08-13** — CLI + gen-freshness docs (`5cfd0b4`) · playground verdicts (`0478f08`) · create-plugin (`a3c4897`) whose rehearsal caught three non-compiling doc examples, fixed + anchor-pinned (`a7d434f`); create→check→playground→pack→dev-link all speak P8-D8 verdicts | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` · `thinking-plugin-runtime-composability.md` | **ONLY the measured ten-minute bar remains in P8d** — and its subject is in motion: the pack REDIRECTED twice 2026-08-13, landing ECS-NATIVE (`thinking-mindmap-pack.md` v3, MM-D1…D14 await James; MM-D14 proposes the bar decouple to a template toy — a P8d gate change; the Rung-3 visual-consistency read stands). R3-0 platform prep: **S2 `e66143a` + W1 `30fd403` + S3 `57c4720` LANDED** (keyboard-claim contract fields · the SDK wire door = the concrete PA-27 evidence · `useUndo`); S1 + P1 in builder worktrees; **W2a–W2d (the ECS door, `thinking-plugin-ecs-door.md` ED-D1…D12) designed and awaiting James** — plugins get real declared systems (PA-28 scheduler, generation replay, runtime schema, `ctx.canvas.tx`, `ops.glide`). **PRC-D1…D13 RATIFIED; PRC-0 `7e0a0e8` · PRC-1 `4831b0a` · PRC-2 `96fcd81` · PRC-3a exact controller `4c4755c` · PRC-3b credential seam `2dbb359`+`22a4f71` · PRC-3c service controller `2df838b` · PRC-3d renderer/window controller `e747af3` LANDED; PRC-4a behavior design/proof COMPLETE 2026-08-16** — released ICE/React controls plus an isolated upstream 5/5-red→6/6-green candidate establish a sealed renderer intent catalog and synchronous document-generation batch. **E10 consumer feasibility GREEN:** the installed-shape ICE 0.6 + strata 0.12 pair passes singleton resolution, five typechecks, SDK/shell/all non-socket field-app controls, production builds, and bundle gates with an unchanged eager graph. ICE petition I16/release and a real registry lockfile now gate PRC-4b/4c before contract/SDK/document-host work; lifecycle-heavy W2 waits there; P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
+| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`); **P8b CLOSED WHOLE** (`089274c`) · **P8d KIT COMPLETE 2026-08-13** — CLI + gen-freshness docs (`5cfd0b4`) · playground verdicts (`0478f08`) · create-plugin (`a3c4897`) whose rehearsal caught three non-compiling doc examples, fixed + anchor-pinned (`a7d434f`); create→check→playground→pack→dev-link all speak P8-D8 verdicts | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` · `thinking-plugin-runtime-composability.md` | **ONLY the measured ten-minute bar remains in P8d** — and its subject is in motion: the pack REDIRECTED twice 2026-08-13, landing ECS-NATIVE (`thinking-mindmap-pack.md` v3, MM-D1…D14 await James; MM-D14 proposes the bar decouple to a template toy — a P8d gate change; the Rung-3 visual-consistency read stands). R3-0 platform prep: **S2 `e66143a` + W1 `30fd403` + S3 `57c4720` LANDED** (keyboard-claim contract fields · the SDK wire door = the concrete PA-27 evidence · `useUndo`); S1 + P1 in builder worktrees; **W2a–W2d (the ECS door, `thinking-plugin-ecs-door.md` ED-D1…D12) designed and awaiting James** — plugins get real declared systems (PA-28 scheduler, generation replay, runtime schema, `ctx.canvas.tx`, `ops.glide`). **PRC-D1…D13 RATIFIED; PRC-0 `7e0a0e8` · PRC-1 `4831b0a` · PRC-2 `96fcd81` · PRC-3a exact controller `4c4755c` · PRC-3b credential seam `2dbb359`+`22a4f71` · PRC-3c service controller `2df838b` · PRC-3d renderer/window controller `e747af3` LANDED; PRC-4a behavior design/proof COMPLETE 2026-08-16** — released ICE/React controls plus an isolated upstream 5/5-red→6/6-green candidate establish a sealed renderer intent catalog and synchronous document-generation batch. **E10 consumer feasibility GREEN:** the installed-shape ICE 0.6 + strata 0.12 pair passes singleton resolution, five typechecks, SDK/shell/all non-socket field-app controls, production builds, and bundle gates with an unchanged eager graph. **E11 projection GREEN:** the signed manifest carries one complete inline ICE descriptor, full canonical compare catches 23 mutation families, widget attachments validate headlessly, every behavior requests `canvas.write`, and inert binding stays separate from grant-gated execution. **E12 dormant policy GREEN:** durable survives true code absence and migrates on return; runtime is World-scoped; ephemeral must tombstone when execution stops, exposing I17's unregister/suspend/quarantine gap. **E13 generation host GREEN 7/7:** canonical initial/close order, grant churn, ledger replacement, rollback, and validation pass; create/open cannot supply behavior-visible presence, so I18/product room transport are explicit. **E15 contract thread GREEN 6/6 + typecheck:** typed projection fixes the current declaration/rider split; strict deep semantics, effective-grant authorization, stable ephemeral refusal, and exact SDK-subpath mapping are pinned. **E16 dependency/control floor LANDED `0b8d009` + `5e6cb16`:** the real registry lockfile/preflight resolves stock ICE 0.6 / strata 0.12 with physical Loro/ICE/strata/React/React DOM singleton guards; installed controls are 10/10. Those same controls prove stock 0.6 still lacks I16, so an I16 release + exact-pin follow-up gates PRC-4b before durable/runtime contract/host work. I17 + I18 + a document-scoped presence lane independently gate the later ephemeral profile; lifecycle-heavy W2 waits on the base; P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -210,14 +210,57 @@ separate passive registration owner. An isolated upstream candidate moved the co
 red to 6/6 green, preserved 546/546 core tests, built through the public facade, and passed 5/5
 consumer controls. The revised design seals complete behavior intent with the renderer and gives
 the document layout owner one synchronous, sorted registration batch keyed by exact runtime
-generation. Petition I16/release is the next gate; field-app remains on ICE 0.4 and no production
-behavior adapter is claimed yet. PRC4-E10 nevertheless closes the compatibility assumption: an
+generation. Petition I16/release remains the adapter gate and no production behavior contract is
+claimed yet. PRC4-E10 closes the compatibility assumption: an
 installed-package-shaped scratch consumer on patched ICE 0.6 + strata 0.12 passes five typechecks,
 SDK **17/17**, shell **560 + 1 skip**, all **453** non-socket field-app controls, production builds,
 and bundle assert. The eager graph remains **473.1 KB raw / 126.1 KB gzip**; total renderer output
 adds **50,111 bytes (0.534%)**. A direct sibling link duplicated React and is retained as the
-negative control—release evidence must prove physical peer singletons. I16 publication and a real
-registry lockfile/preflight remain gates.
+negative control—release evidence must prove physical peer singletons. PRC4-E16 closes that
+production-install caveat: `0b8d009` lands stock ICE 0.6 / strata 0.12 through the real registry
+lockfile/preflight, and `5e6cb16` extends the resolver guard across Loro, ICE, strata, React, and
+React DOM. I16 publication still gates the durable/runtime base; I17/I18 plus product presence
+gate only the later ephemeral profile.
+PRC4-E11 closes the manifest-shape question: one inline full descriptor costs 39,576 bytes for the
+16-row realistic fixture (15.1% of the cap), while digest + sidecar saves only 2,705 bytes and
+loses atomic headless truth. A 23-family mutation matrix and real patched-package round trip pass;
+fieldd can validate widget pre-attachment ids/data without code. Real ICE controls also refute
+`writes:[]` as read-only and prove an unregistered handle can construct dormant rider data with no
+guest/hook. PRC-4d therefore binds every declaration inertly, requires requested `canvas.write`,
+and lets only the effectively granted subset enter a document-generation batch.
+PRC4-E12 closes the dormant-data product choice with a 5/5 policy model and 6/6 real-package
+matrix. Durable v1 bytes survive a fresh process that imports no behavior, remain writable, and
+later migrate 41→42 under v2. Runtime values re-adopt only in the same World; a new engine reapplies
+declared defaults and drops ad-hoc riders. Ephemeral facets are publication effects: current ICE
+leaves them stale on unregister, guest suspension, and singleton quarantine (which has no ledger
+edge), while presence-writer removal sends a real remote component tombstone. Petition I17 assigns
+that inverse to ICE rather than a VibeField status poller; E13 then isolates its production gate.
+PRC4-E13 closes the generation-host mechanism at 7/7: initial sorted registration precedes
+create/open, cleanup reverse-unregisters before document close, grant loss/regrant preserves
+dormant runtime data and unaffected peers, breaker state survives engine replacement, and failed
+or invalid candidate batches cannot disturb authority. The same run exposes the production
+presence boundary: create/open plus standalone `attachPresence(world)` leave authorized ephemeral
+intent blocked with no guest, while `docs.join({presence})` activates it once. Renderer intent now
+carries authorization and the document host derives execution from generation coeffects. The base
+profile explicitly refuses plugin ephemeral manifests; I16 alone gates durable/runtime, while
+I17/I18 plus a document-room fieldd presence lane gate the later ephemeral profile.
+PRC4-E14's bounded stress is 2/2 green: 64 live authority cycles preserve one unaffected init;
+128 engine generations each end with zero guests/subscribers and share one chronic breaker row.
+The 24-hour heap/fd/port/log/presence soak remains PRC-6 and is not inferred from this fast loop.
+PRC4-E15 closes the production contract-thread assumptions at 6/6 plus strict typecheck. Current
+passthrough parsing accepts unknown behavior bytes, but fieldd drops the top-level declarations
+while copied widget riders survive—an inconsistent half-contract. The public record reader already
+preserves a projected row, so PRC-4d needs typed verbatim projection, not a manifest fetch or daemon
+code load. The candidate also pins strict descriptor/attachment semantics beneath the tolerant
+outer reader, stable `behavior-store-unsupported`, inert binding under denied grants, staged
+authorization from effective grants, and exact host mapping for the new SDK behavior subpath.
+PRC4-E16's installed release matrix is 10/10 green. `defineBehavior`, the harness, lifecycle, and
+dormant runtime mechanics work through field-app's actual package resolution. The same matrix
+refutes the assumption that the bump carried I16: `describeBehavior` and registration options are
+absent, and live order, cross-engine behavior-ledger seed, facade diagnostics, and thenable
+rejection remain red. Focused singleton, field-app/plugin-sdk typecheck, SDK 17/17, and E15 6/6 +
+strict typecheck gates pass. PRC-4c is therefore landed ahead of PRC-4b; the next base move is the
+bounded I16 release and exact-pin follow-up, not a VibeField-owned descriptor or partial contract.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through
