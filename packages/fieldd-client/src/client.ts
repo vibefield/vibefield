@@ -87,6 +87,9 @@ interface Pending {
   resolve: (v: unknown) => void;
   reject: (e: FielddRpcError) => void;
   subKey?: number;
+  /** Initial subscribe has a waiting caller that cannot receive a replacement handle after a
+   * disconnect. Replay already has an established owner and must preserve its entry. */
+  dropSubOnFailure?: boolean;
 }
 
 export class FielddClient {
@@ -106,6 +109,7 @@ export class FielddClient {
   private notificationListeners = new Map<string, Set<(params: unknown) => void>>();
   private readyWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
   private closedByUser = false;
+  private credential: string;
 
   // no TS parameter property: the worker harness imports this file under
   // Node's strip-only type erasure, which cannot rewrite ctor sugar (P5)
@@ -113,6 +117,7 @@ export class FielddClient {
 
   constructor(opts: FielddClientOptions) {
     this.opts = opts;
+    this.credential = opts.token;
   }
 
   /** The dial target — P3b: plugin-bound sibling clients connect to the same
@@ -125,7 +130,44 @@ export class FielddClient {
   connect(): void {
     if (this.closedByUser || this.status === "failed") return;
     if (this.ws || this.reconnectTimer) return;
-    this.dial();
+    this.dial(false);
+  }
+
+  /**
+   * Rebinds this exact client to a fresh bearer credential.
+   *
+   * The authority edge is synchronous: old granted scopes disappear and the old socket detaches
+   * before this returns. Established subscriptions remain owned and replay with fresh snapshots
+   * after the new hello. Pending unary calls and not-yet-established subscriptions reject against
+   * the retired connection. A user-closed client is terminal and cannot be reopened by rotation.
+   */
+  rotateCredential(credential: string): void {
+    if (this.closedByUser || credential === this.credential) return;
+    this.credential = credential;
+    this.grantedScopes = [];
+    this.lastError = null;
+
+    const reconnecting =
+      this.ws !== null ||
+      this.reconnectTimer !== null ||
+      this.status === "connecting" ||
+      this.status === "ready" ||
+      this.status === "reconnecting" ||
+      this.status === "failed";
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    const ws = this.ws;
+    this.ws = null;
+    ws?.close(1000, "credential rotated");
+    this.failPending();
+    this.subRoutes.clear();
+    this.attempts = 0;
+
+    if (!reconnecting) return;
+    this.setStatus("reconnecting");
+    this.dial(true);
   }
 
   /** Resolves when hello has succeeded; rejects if the client is dead. */
@@ -178,7 +220,7 @@ export class FielddClient {
     this.subs.set(key, entry);
     try {
       await this.ready();
-      const res = (await this.sendRequest(method, params, key)) as {
+      const res = (await this.sendRequest(method, params, key, true)) as {
         subId: string;
         snapshot: unknown;
       };
@@ -203,6 +245,8 @@ export class FielddClient {
     this.ws = null;
     ws?.close();
     this.failPending();
+    this.subs.clear();
+    this.subRoutes.clear();
     this.notificationListeners.clear();
     this.setStatus("closed");
     this.flushReadyWaiters(new FielddRpcError("UNAVAILABLE", "client closed"));
@@ -210,13 +254,13 @@ export class FielddClient {
 
   // ---- internals ----
 
-  private dial(): void {
+  private dial(reconnecting: boolean): void {
     const WS = this.opts.webSocket ?? (globalThis as { WebSocket?: WsCtor }).WebSocket;
     if (!WS) {
       this.fail(new FielddRpcError("UNAVAILABLE", "no WebSocket implementation in this host"));
       return;
     }
-    this.setStatus(this.attempts === 0 ? "connecting" : "reconnecting");
+    this.setStatus(reconnecting ? "reconnecting" : "connecting");
     const ws = new WS(this.opts.url);
     this.ws = ws;
     ws.addEventListener("open", () => {
@@ -237,7 +281,7 @@ export class FielddClient {
         contractsVersion: CONTRACTS_VERSION,
         minCompatible: CONTRACTS_VERSION,
         clientKind: this.opts.clientKind ?? "renderer",
-        ...(this.opts.token !== "" ? { credential: this.opts.token } : {}),
+        ...(this.credential !== "" ? { credential: this.credential } : {}),
         ...(this.opts.deviceId !== undefined ? { deviceId: this.opts.deviceId } : {}),
         ...(this.opts.userId !== undefined ? { userId: this.opts.userId } : {}),
       })) as { grantedScopes?: string[] };
@@ -340,7 +384,7 @@ export class FielddClient {
     this.setStatus("reconnecting");
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.dial();
+      this.dial(true);
     }, delay);
   }
 
@@ -362,7 +406,12 @@ export class FielddClient {
     }
   }
 
-  private sendRequest(method: string, params: unknown, subKey?: number): Promise<unknown> {
+  private sendRequest(
+    method: string,
+    params: unknown,
+    subKey?: number,
+    dropSubOnFailure = false,
+  ): Promise<unknown> {
     const ws = this.ws;
     if (!ws) return Promise.reject(new FielddRpcError("UNAVAILABLE", "not connected", true));
     if (subKey !== undefined) {
@@ -371,7 +420,7 @@ export class FielddClient {
     }
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      const entry: Pending = { resolve, reject };
+      const entry: Pending = { resolve, reject, ...(dropSubOnFailure ? { dropSubOnFailure } : {}) };
       if (subKey !== undefined) entry.subKey = subKey;
       this.pending.set(id, entry);
       ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
@@ -380,7 +429,7 @@ export class FielddClient {
 
   private failPending(): void {
     for (const [, p] of this.pending) {
-      if (p.subKey !== undefined) this.subs.delete(p.subKey); // its caller saw the rejection
+      if (p.subKey !== undefined && p.dropSubOnFailure === true) this.subs.delete(p.subKey);
       p.reject(new FielddRpcError("UNAVAILABLE", "connection closed", true));
     }
     this.pending.clear();
