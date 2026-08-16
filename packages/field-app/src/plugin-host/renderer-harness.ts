@@ -88,6 +88,7 @@ interface ActivationSpec {
   readonly capabilities: readonly string[];
   readonly manifestHash?: string;
   readonly installRevision?: string;
+  readonly grantGeneration?: number;
 }
 
 export interface RendererActivationDeps {
@@ -118,6 +119,7 @@ function specFromRecord(record: PluginRecord, module: PluginModuleUrls): Activat
     capabilities: record.requestedCapabilities,
     manifestHash: module.manifestHash,
     installRevision: module.installRevision,
+    grantGeneration: record.grantGeneration,
   };
 }
 
@@ -236,7 +238,12 @@ function buildActivation(spec: ActivationSpec, deps: RendererActivationDeps = {}
   // honest v1 signal (recorded — the curated PA-27 tier will gate on grants).
   const hasCanvas =
     spec.capabilities.includes("canvas.read") || spec.capabilities.includes("canvas.write");
-  const rawClient = deps.productClient ?? createPluginProductClient(spec.id);
+  const rawClient =
+    deps.productClient ??
+    createPluginProductClient(spec.id, {
+      ...(spec.manifestHash !== undefined ? { manifestHash: spec.manifestHash } : {}),
+      ...(spec.grantGeneration !== undefined ? { grantGeneration: spec.grantGeneration } : {}),
+    });
   const rawStorage = spec.capabilities.includes("storage.self")
     ? createStorageSurfaces(rawClient)
     : undefined;

@@ -7,10 +7,12 @@ import {
   PLUGIN_LIMITS,
   type PluginManifestV1,
   type PublicEntryState,
+  SCOPES,
   type Scope,
   validatePluginManifest,
 } from "@vibefield/contracts";
 import { createBoundedLineFramer, createNoopLogger, type Logger } from "@vibefield/logging";
+import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import type { PluginRegistryService } from "./plugin-registry";
 import type { ServiceCallerInfo, ServiceRegistry } from "./service-registry";
 import type { TokenGrant, TokenService } from "./token-service";
@@ -26,27 +28,11 @@ import type { TokenGrant, TokenService } from "./token-service";
 // public row and deliberately carries no entry paths — the host is
 // daemon-internal and may know them.
 
-/** §15.2 entry-kind eligibility — the core scopes a SERVICE token may carry.
- * Renderer/shell powers (shell.*, terminal.attach, tokens.mint, plugins.*,
- * native.admin, agent.bless) never enter service principals. */
-const SERVICE_ELIGIBLE_SCOPES: readonly Scope[] = [
-  "services.provide",
-  "process.spawn",
-  "background",
-  "net.outbound",
-  "storage.self",
-  "mcp.consume",
-  "mcp.contribute",
-  "canvas.read",
-  "canvas.write",
-  "doc.read",
-  "doc.write",
-  "workspace.read",
-  "index.read",
-  "artifact.publish",
-  "agent.observe",
-  "approval.respond",
-] as const;
+export interface ServiceLeaseObservation {
+  readonly manifestHash: string;
+  readonly grantGeneration: number;
+  readonly authorityFingerprint: string;
+}
 
 export interface ServiceHostConfig {
   registry: ServiceRegistry;
@@ -63,7 +49,11 @@ export interface ServiceHostConfig {
   /** test seam — production defaults are the §18.3 ladder constants */
   ladder?: { baseMs?: number; maxMs?: number; windowMs?: number; quarantineAt?: number };
   /** LOG-L6 authority seam: production mints service leases through audit. */
-  mintServiceLease?: (pluginId: string, scopes: Scope[]) => Promise<TokenGrant>;
+  mintServiceLease?: (
+    pluginId: string,
+    scopes: Scope[],
+    observation: ServiceLeaseObservation,
+  ) => Promise<TokenGrant>;
   /** LOG-L6 authority seam: crash/stop revocation is audited by safe token ID. */
   revokeServiceLease?: (pluginId: string, tokenId: string, reason: string) => Promise<void>;
   logger?: Logger;
@@ -99,6 +89,8 @@ interface Entry {
   routeState: "withdrawn" | "activating" | "active" | "draining";
   stopTask: Promise<void> | null;
   pendingChanged: Set<() => void>;
+  /** Invalidates async start work before a worker generation exists (manifest read / lease mint). */
+  startEpoch: number;
   generation: number;
   detachOutput: (() => void) | null;
   leaseTokenId: string | null;
@@ -131,6 +123,7 @@ export class ServiceHost {
         routeState: "withdrawn",
         stopTask: null,
         pendingChanged: new Set(),
+        startEpoch: 0,
         generation: 0,
         detachOutput: null,
         leaseTokenId: null,
@@ -182,11 +175,14 @@ export class ServiceHost {
     if (this.disposed) return;
     if (e.worker !== null || e.state === "activating") return; // idempotent
     if (e.state === "quarantined" && e.crashTimes.length > 0) return; // §18.3 — user clear required
+    const startEpoch = ++e.startEpoch;
+    e.stopping = false;
 
     const record = this.cfg.plugins.get(pluginId);
     if (record === undefined || !record.enabled) return;
     const root = this.cfg.plugins.rootPath(pluginId);
     const manifest = await this.readManifest(pluginId);
+    if (e.startEpoch !== startEpoch || e.stopping || this.disposed) return;
     const entryRel = manifest?.entries?.service;
     if (root === undefined || manifest === null || entryRel === undefined) return;
     const entryPath = resolve(join(root, entryRel));
@@ -202,27 +198,40 @@ export class ServiceHost {
     }
 
     const generation = ++e.generation;
-    e.stopping = false;
     e.routeState = "activating";
     this.setState(pluginId, e, "activating");
 
-    const scopes = record.grantedCapabilities.filter((c): c is Scope =>
-      (SERVICE_ELIGIBLE_SCOPES as readonly string[]).includes(c),
+    const authority = projectPluginAuthority("service", record.grantedCapabilities);
+    const scopes = authority.capabilities.filter((capability): capability is Scope =>
+      // TokenService accepts only contract core scopes. Custom x.* authority remains in the
+      // target fingerprint and is enforced by the service fabric rather than the bearer.
+      (SCOPES as readonly string[]).includes(capability),
     );
+    const leaseObservation: ServiceLeaseObservation = {
+      manifestHash: record.manifestHash,
+      grantGeneration: record.grantGeneration,
+      authorityFingerprint: authority.fingerprint,
+    };
     await e.leaseRelease;
     e.leaseRelease = null;
+    if (!this.isCurrentStart(pluginId, e, startEpoch, generation, leaseObservation)) return;
     let lease: TokenGrant;
     try {
       lease =
         this.cfg.mintServiceLease !== undefined
-          ? await this.cfg.mintServiceLease(pluginId, scopes)
+          ? await this.cfg.mintServiceLease(pluginId, scopes, leaseObservation)
           : this.cfg.tokens.mint(scopes, `plugin:${pluginId}:service`, { pluginId });
-      e.leaseTokenId = lease.tokenId;
     } catch (error) {
+      if (!this.isCurrentStart(pluginId, e, startEpoch, generation, leaseObservation)) return;
       e.routeState = "withdrawn";
       this.setState(pluginId, e, "degraded");
       throw error;
     }
+    if (!this.isCurrentStart(pluginId, e, startEpoch, generation, leaseObservation)) {
+      await this.releaseLeaseToken(pluginId, lease.tokenId, "service-start-superseded");
+      return;
+    }
+    e.leaseTokenId = lease.tokenId;
 
     const harness =
       // fileURLToPath, not `.pathname`: on Windows `.pathname` is `/C:/…/harness.mjs`
@@ -491,6 +500,7 @@ export class ServiceHost {
       this.cfg.registry.beginDrainPlugin(pluginId);
       return;
     }
+    e.startEpoch += 1;
     e.stopping = true;
     this.beginRouteDrain(pluginId, e);
   }
@@ -507,6 +517,7 @@ export class ServiceHost {
       e.restartTimer = null;
     }
     if (e.stopTask !== null) return e.stopTask;
+    e.startEpoch += 1;
     e.stopping = true;
     this.beginRouteDrain(pluginId, e);
     const task = this.stopEntry(pluginId, e);
@@ -668,11 +679,31 @@ export class ServiceHost {
     this.cfg.plugins.setServiceEntryState(pluginId, state);
   }
 
-  private releaseServiceLease(pluginId: string, e: Entry, reason: string): Promise<void> {
-    const tokenId = e.leaseTokenId;
-    if (tokenId === null) return e.leaseRelease ?? Promise.resolve();
-    e.leaseTokenId = null;
-    const release = Promise.resolve(
+  private isCurrentStart(
+    pluginId: string,
+    e: Entry,
+    startEpoch: number,
+    generation: number,
+    observation: ServiceLeaseObservation,
+  ): boolean {
+    if (this.disposed || e.stopping || e.startEpoch !== startEpoch || e.generation !== generation)
+      return false;
+    const record = this.cfg.plugins.get(pluginId);
+    if (
+      record === undefined ||
+      !record.enabled ||
+      record.manifestHash !== observation.manifestHash ||
+      record.grantGeneration !== observation.grantGeneration
+    )
+      return false;
+    return (
+      projectPluginAuthority("service", record.grantedCapabilities).fingerprint ===
+      observation.authorityFingerprint
+    );
+  }
+
+  private releaseLeaseToken(pluginId: string, tokenId: string, reason: string): Promise<void> {
+    return Promise.resolve(
       this.cfg.revokeServiceLease !== undefined
         ? this.cfg.revokeServiceLease(pluginId, tokenId, reason)
         : this.cfg.tokens.revoke(tokenId),
@@ -686,6 +717,13 @@ export class ServiceHost {
           { pluginId, tokenId, reason },
         );
       });
+  }
+
+  private releaseServiceLease(pluginId: string, e: Entry, reason: string): Promise<void> {
+    const tokenId = e.leaseTokenId;
+    if (tokenId === null) return e.leaseRelease ?? Promise.resolve();
+    e.leaseTokenId = null;
+    const release = this.releaseLeaseToken(pluginId, tokenId, reason);
     e.leaseRelease = release;
     return release;
   }

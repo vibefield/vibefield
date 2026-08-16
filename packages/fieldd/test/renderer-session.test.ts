@@ -60,7 +60,7 @@ async function setupWithPlugins(): Promise<{ daemon: FielddDaemon; dataDir: stri
     // the custom x.* capability must be granted registry-side yet NEVER become
     // a bearer-token scope (daemon core-scope filter — §15.1 custom caps ride
     // the service fabric, not tokens)
-    manifest(ALPHA, ["canvas.read", "doc.read", `x.${ALPHA}.probe`]),
+    manifest(ALPHA, ["canvas.read", "doc.read", "services.provide", `x.${ALPHA}.probe`]),
   );
   writeFileSync(join(root, "beta", "vibefield.plugin.json"), manifest(BETA, []));
   const daemon = await bootstrap({ dataDir, controlPort: 0, pluginRoots: { bundled: [root] } });
@@ -100,6 +100,7 @@ describe("plugins.openRendererSession (renderer principal lease, §11.2)", () =>
       token: string;
       scopes: string[];
       pluginId: string;
+      grantGeneration: number;
       expiresAt: number;
     };
     const now = Date.now();
@@ -114,6 +115,7 @@ describe("plugins.openRendererSession (renderer principal lease, §11.2)", () =>
     // the result mirrors that grant and names the plugin
     expect(res.scopes).toEqual(["canvas.read", "doc.read"]);
     expect(res.pluginId).toBe(ALPHA);
+    expect(res.grantGeneration).toBe(0);
 
     // short-lived: in the future, no more than 15 minutes out
     expect(res.expiresAt - now).toBeGreaterThan(0);
@@ -176,6 +178,43 @@ describe("plugins.openRendererSession (renderer principal lease, §11.2)", () =>
       manifestHash: rec.manifestHash,
     })) as { token: string };
     expect(daemon.tokens.verify(ok.token)).not.toBeNull();
+  });
+
+  it("compare-and-mint refuses a stale grant generation and names the accepted one", async () => {
+    const { daemon } = await setupWithPlugins();
+    const rpc = await principal(daemon, ["plugins.read", "plugins.manage"]);
+    const before = (await rpc.call("plugins.get", { id: ALPHA })) as {
+      manifestHash: string;
+      grantGeneration: number;
+    };
+
+    await rpc.call("plugins.grants.set", {
+      id: ALPHA,
+      capability: "doc.read",
+      granted: false,
+    });
+    const stale = await rpc.callErr("plugins.openRendererSession", {
+      pluginId: ALPHA,
+      manifestHash: before.manifestHash,
+      grantGeneration: before.grantGeneration,
+    });
+    expect(stale.data?.kind).toBe("CONFLICT");
+    expect((stale.data?.details as { pluginKind?: string })?.pluginKind).toBe(
+      "PLUGIN_GRANT_GENERATION_MISMATCH",
+    );
+
+    const after = (await rpc.call("plugins.get", { id: ALPHA })) as {
+      manifestHash: string;
+      grantGeneration: number;
+    };
+    const fresh = (await rpc.call("plugins.openRendererSession", {
+      pluginId: ALPHA,
+      manifestHash: after.manifestHash,
+      grantGeneration: after.grantGeneration,
+    })) as { grantGeneration: number; scopes: string[]; token: string };
+    expect(fresh.grantGeneration).toBe(after.grantGeneration);
+    expect(fresh.scopes).toEqual(["canvas.read"]);
+    expect(daemon.tokens.verify(fresh.token)?.scopes).toEqual(["canvas.read"]);
   });
 
   it("FORBIDDEN_SCOPE for a non-window principal even carrying plugins.read", async () => {

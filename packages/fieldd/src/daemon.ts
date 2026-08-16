@@ -73,6 +73,7 @@ import {
   PluginLogRouter,
   pluginLogProvenance,
 } from "@vibefield/logging";
+import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import {
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
@@ -102,7 +103,11 @@ import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
 import { ProcessService, pluginChildEnv } from "./process-service";
 import { ProductApi } from "./product-api";
-import { type PluginServiceLogRecord, ServiceHost } from "./service-host";
+import {
+  type PluginServiceLogRecord,
+  ServiceHost,
+  type ServiceLeaseObservation,
+} from "./service-host";
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { shimSpawn } from "./spawn-shim";
@@ -1380,7 +1385,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { pluginId, manifestHash? }",
+          "expected { pluginId, manifestHash?, grantGeneration? }",
           false,
         );
       if (
@@ -1395,40 +1400,48 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           "renderer sessions open only for local renderer/shell principals (§11.2)",
           false,
         );
-      const record = plugins.get(parsed.data.pluginId);
-      if (!record)
-        throw new RpcCallError("NOT_FOUND", `no such plugin: ${parsed.data.pluginId}`, false);
-      if (record.state === "invalid")
-        throw new RpcCallError("PRECONDITION_FAILED", `${record.id} failed validation`, false, {
-          pluginKind: "PLUGIN_INVALID",
-        });
-      if (record.state === "incompatible")
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          `${record.id} is incompatible with this device`,
-          false,
-          { pluginKind: "PLUGIN_INCOMPATIBLE" },
-        );
-      if (!record.enabled)
-        throw new RpcCallError("PRECONDITION_FAILED", `${record.id} is disabled`, false, {
-          pluginKind: "PLUGIN_DISABLED",
-        });
-      if (
-        parsed.data.manifestHash !== undefined &&
-        parsed.data.manifestHash !== record.manifestHash
-      )
-        throw new RpcCallError("CONFLICT", `manifest hash mismatch for ${record.id}`, false, {
-          pluginKind: "PLUGIN_ARTIFACT_MISMATCH",
-        });
-      // token scopes = the plugin's granted CORE capabilities (custom x.* ids
-      // are service-fabric grants, never bearer-token scopes)
-      const scopes = record.grantedCapabilities.filter((c): c is Scope =>
-        (SCOPES as readonly string[]).includes(c),
-      );
+      const currentRecord = () => {
+        const record = plugins.get(parsed.data.pluginId);
+        if (!record)
+          throw new RpcCallError("NOT_FOUND", `no such plugin: ${parsed.data.pluginId}`, false);
+        if (record.state === "invalid")
+          throw new RpcCallError("PRECONDITION_FAILED", `${record.id} failed validation`, false, {
+            pluginKind: "PLUGIN_INVALID",
+          });
+        if (record.state === "incompatible")
+          throw new RpcCallError(
+            "PRECONDITION_FAILED",
+            `${record.id} is incompatible with this device`,
+            false,
+            { pluginKind: "PLUGIN_INCOMPATIBLE" },
+          );
+        if (!record.enabled)
+          throw new RpcCallError("PRECONDITION_FAILED", `${record.id} is disabled`, false, {
+            pluginKind: "PLUGIN_DISABLED",
+          });
+        if (
+          parsed.data.manifestHash !== undefined &&
+          parsed.data.manifestHash !== record.manifestHash
+        )
+          throw new RpcCallError("CONFLICT", `manifest hash mismatch for ${record.id}`, false, {
+            pluginKind: "PLUGIN_ARTIFACT_MISMATCH",
+          });
+        if (
+          parsed.data.grantGeneration !== undefined &&
+          parsed.data.grantGeneration !== record.grantGeneration
+        )
+          throw new RpcCallError("CONFLICT", `grant generation mismatch for ${record.id}`, false, {
+            pluginKind: "PLUGIN_GRANT_GENERATION_MISMATCH",
+            expected: parsed.data.grantGeneration,
+            actual: record.grantGeneration,
+          });
+        return record;
+      };
+      const record = currentRecord();
       // P4: the lease is a PLUGIN-BOUND grant — hello with it derives the
       // {kind:"plugin"} principal, so custom-capability gates bind (D20).
       const tokenId = tokens.reserveTokenId();
-      const grant = await audit.required(
+      const minted = await audit.required(
         ctx,
         {
           action: "token.plugin_renderer.mint",
@@ -1436,32 +1449,49 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: {
             pluginId: record.id,
             manifestHash: record.manifestHash,
-            scopeCount: scopes.length,
+            grantGeneration: record.grantGeneration,
             ttlMs: LEASE_TTL_MS,
           },
         },
-        () =>
-          tokens.mint(scopes, `plugin:${record.id}`, {
-            ttlMs: LEASE_TTL_MS,
-            pluginId: record.id,
-            tokenId,
-          }),
-        (minted) => ({
+        () => {
+          // The mandatory audit attempt above is asynchronous. Recheck the caller's observation
+          // at the exact mint edge so a grant/artifact move during that write cannot mint from a
+          // record the caller did not ask for.
+          const observed = currentRecord();
+          const scopes = projectPluginAuthority(
+            "renderer",
+            observed.grantedCapabilities,
+          ).capabilities.filter((capability): capability is Scope =>
+            (SCOPES as readonly string[]).includes(capability),
+          );
+          return {
+            grant: tokens.mint(scopes, `plugin:${observed.id}`, {
+              ttlMs: LEASE_TTL_MS,
+              pluginId: observed.id,
+              tokenId,
+            }),
+            observed,
+          };
+        },
+        ({ grant, observed }) => ({
           attrs: {
-            grantId: minted.tokenId,
-            pluginId: record.id,
-            expiresAt: minted.expiresAt ?? Date.now() + LEASE_TTL_MS,
+            grantId: grant.tokenId,
+            pluginId: observed.id,
+            grantGeneration: observed.grantGeneration,
+            scopeCount: grant.scopes.length,
+            expiresAt: grant.expiresAt ?? Date.now() + LEASE_TTL_MS,
           },
         }),
-        (minted) => {
-          tokens.revoke(minted.tokenId);
+        ({ grant }) => {
+          tokens.revoke(grant.tokenId);
         },
       );
       const result: PluginsOpenRendererSessionResult = {
-        token: grant.token,
-        scopes: grant.scopes,
-        pluginId: record.id,
-        expiresAt: grant.expiresAt ?? Date.now() + LEASE_TTL_MS,
+        token: minted.grant.token,
+        scopes: minted.grant.scopes,
+        pluginId: minted.observed.id,
+        grantGeneration: minted.observed.grantGeneration,
+        expiresAt: minted.grant.expiresAt ?? Date.now() + LEASE_TTL_MS,
       };
       return result;
     });
@@ -2291,7 +2321,35 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.serviceHarnessPath !== undefined
         ? { harnessPath: config.serviceHarnessPath }
         : {}),
-      mintServiceLease: async (pluginId, scopes) => {
+      mintServiceLease: async (
+        pluginId: string,
+        _scopes: Scope[],
+        observation: ServiceLeaseObservation,
+      ) => {
+        const currentScopes = (): Scope[] => {
+          const record = plugins.get(pluginId);
+          const authority =
+            record === undefined
+              ? undefined
+              : projectPluginAuthority("service", record.grantedCapabilities);
+          if (
+            record === undefined ||
+            !record.enabled ||
+            record.manifestHash !== observation.manifestHash ||
+            record.grantGeneration !== observation.grantGeneration ||
+            authority?.fingerprint !== observation.authorityFingerprint
+          )
+            throw new RpcCallError(
+              "CONFLICT",
+              `service lease observation superseded for ${pluginId}`,
+              false,
+              { pluginKind: "PLUGIN_GRANT_GENERATION_MISMATCH" },
+            );
+          return authority.capabilities.filter((capability): capability is Scope =>
+            (SCOPES as readonly string[]).includes(capability),
+          );
+        };
+        const scopes = currentScopes();
         const tokenId = tokens.reserveTokenId();
         return await audit.requiredSystem(
           {
@@ -2300,7 +2358,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             attrs: { pluginId, scopeCount: scopes.length },
           },
           () =>
-            tokens.mint(scopes, `plugin:${pluginId}:service`, {
+            tokens.mint(currentScopes(), `plugin:${pluginId}:service`, {
               pluginId,
               tokenId,
             }),

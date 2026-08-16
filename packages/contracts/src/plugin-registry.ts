@@ -265,8 +265,9 @@ export type PluginModuleResolution = z.infer<typeof PluginModuleResolution>;
 
 // --- the renderer principal lease (§11.2, P3b) --------------------------------
 
-/** The trusted renderer spine asks for a plugin-bound session. manifestHash,
- * when supplied, must match the registered record (artifact-mismatch law). */
+/** The trusted renderer spine asks for a plugin-bound session. Optional artifact and grant
+ * observations are compare-and-mint fences: when supplied, both must still match the registered
+ * record. Older clients may omit them; lifecycle-controlled hosts always send both. */
 export const PluginsOpenRendererSessionParams = z
   .object({
     pluginId: PluginId,
@@ -274,6 +275,7 @@ export const PluginsOpenRendererSessionParams = z
       .string()
       .regex(/^sha256:[0-9a-f]{64}$/)
       .optional(),
+    grantGeneration: z.number().int().nonnegative().optional(),
   })
   .passthrough();
 export type PluginsOpenRendererSessionParams = z.infer<typeof PluginsOpenRendererSessionParams>;
@@ -285,6 +287,10 @@ export const PluginsOpenRendererSessionResult = z
     token: z.string().min(1),
     scopes: z.array(z.string()),
     pluginId: PluginId,
+    /** The exact registry observation from which this credential was minted. Current servers
+     * always return it; optional parsing keeps older peers readable, while lifecycle-controlled
+     * clients explicitly refuse its absence when they supplied an expectation. */
+    grantGeneration: z.number().int().nonnegative().optional(),
     /** epoch ms; the client re-leases before this passes */
     expiresAt: z.number().int().positive(),
   })
