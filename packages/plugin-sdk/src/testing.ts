@@ -330,6 +330,8 @@ export interface MockServiceActivation {
   logs: Array<{ level: "debug" | "info" | "warn" | "error"; message: string }>;
   disposables: Disposable[];
   abort(): void;
+  /** Abort and await every service-owned inverse in reverse acquisition order. */
+  close(): Promise<void>;
 }
 
 export interface MockServiceHostOptions {
@@ -346,51 +348,119 @@ export async function activateServiceWithMockHost(
   opts: MockServiceHostOptions = {},
 ): Promise<MockServiceActivation> {
   const id = opts.id ?? "vibefield.mock";
-  const controller = new AbortController();
   const provided = new Map<string, Map<string, DynamicMethodHandler>>();
+  const providerGenerations = new Map<string, symbol>();
   const logs: MockServiceActivation["logs"] = [];
   const disposables: Disposable[] = [];
+  const cleanupErrors: unknown[] = [];
+  const root = new MockOwnership(disposables, cleanupErrors);
   const log =
     (level: "debug" | "info" | "warn" | "error") =>
     (message: string): void => {
       logs.push({ level, message });
     };
-  const ctx: ServicePluginContext = {
-    plugin: { id, version: opts.version ?? "0.0.0" },
-    signal: controller.signal,
-    logger: {
-      debug: log("debug"),
-      info: log("info"),
-      warn: log("warn"),
-      error: log("error"),
-    },
-    client: {
-      request: () => Promise.reject(new Error("mock host: no product connection")),
-      subscribe: () => Promise.reject(new Error("mock host: no product connection")),
-    },
-    services: {
-      provide(registration) {
-        if (controller.signal.aborted) throw new Error("mock host: provide after abort");
-        if (registration.namespace !== `x.${id}`)
-          throw new Error(
-            `mock host: ${registration.namespace} is not this plugin's namespace (x.${id})`,
-          );
-        if (provided.has(registration.namespace))
-          throw new Error(`mock host: ${registration.namespace} already provided in this entry`);
-        provided.set(registration.namespace, new Map(Object.entries(registration.methods)));
-        return {
-          dispose() {
-            provided.delete(registration.namespace);
-          },
-        };
+  const contextFor = (ownedBy: MockOwnership): ServicePluginContext => {
+    const assertOpen = (): void => ownedBy.assertOpen();
+    const logger: PluginLogger = {
+      debug(message) {
+        assertOpen();
+        log("debug")(message);
       },
-    },
-    track<T extends Disposable>(resource: T): T {
-      disposables.push(resource);
-      return resource;
-    },
+      info(message) {
+        assertOpen();
+        log("info")(message);
+      },
+      warn(message) {
+        assertOpen();
+        log("warn")(message);
+      },
+      error(message) {
+        assertOpen();
+        log("error")(message);
+      },
+    };
+
+    function track<T extends Disposable>(resource: T): T;
+    function track<T extends Disposable>(label: string, resource: T): T;
+    function track<T extends Disposable>(labelOrResource: string | T, resource?: T): T {
+      return ownedBy.track(typeof labelOrResource === "string" ? (resource as T) : labelOrResource);
+    }
+
+    return {
+      plugin: { id, version: opts.version ?? "0.0.0" },
+      signal: ownedBy.signal,
+      logger,
+      client: {
+        request() {
+          assertOpen();
+          return Promise.reject(new Error("mock host: no product connection"));
+        },
+        subscribe() {
+          assertOpen();
+          return Promise.reject(new Error("mock host: no product connection"));
+        },
+      },
+      services: {
+        provide(registration) {
+          assertOpen();
+          if (registration.namespace !== `x.${id}`)
+            throw new Error(
+              `mock host: ${registration.namespace} is not this plugin's namespace (x.${id})`,
+            );
+          if (provided.has(registration.namespace))
+            throw new Error(`mock host: ${registration.namespace} already provided in this entry`);
+          const generation = Symbol(registration.namespace);
+          providerGenerations.set(registration.namespace, generation);
+          provided.set(registration.namespace, new Map(Object.entries(registration.methods)));
+          let live = true;
+          const withdraw = (): void => {
+            if (!live) return;
+            live = false;
+            if (providerGenerations.get(registration.namespace) !== generation) return;
+            providerGenerations.delete(registration.namespace);
+            provided.delete(registration.namespace);
+          };
+          ownedBy.signal.addEventListener("abort", withdraw, { once: true });
+          return ownedBy.track({
+            dispose() {
+              ownedBy.signal.removeEventListener("abort", withdraw);
+              withdraw();
+            },
+          });
+        },
+      },
+      track,
+      async effect<T>(
+        _label: string,
+        acquire: (fx: ServicePluginContext) => T | Promise<T>,
+      ): Promise<T> {
+        assertOpen();
+        const child = ownedBy.child();
+        try {
+          const value = await acquire(contextFor(child));
+          if (isDisposable(value)) child.track(value);
+          return value;
+        } catch (error) {
+          await child.close();
+          throw error;
+        }
+      },
+    };
   };
-  const result = await mod.activate(ctx);
-  if (result !== undefined && result !== null) disposables.push(result);
-  return { provided, logs, disposables, abort: () => controller.abort() };
+
+  const activation = root.child();
+  try {
+    const result = await mod.activate(contextFor(activation));
+    if (isDisposable(result)) activation.track(result);
+  } catch (error) {
+    await activation.close();
+    await root.close();
+    throw error;
+  }
+  const close = async (): Promise<void> => {
+    await root.close();
+    if (cleanupErrors.length > 0)
+      throw new AggregateError(cleanupErrors, "mock service host cleanup failed");
+  };
+  return { provided, logs, disposables, abort: () => void root.close(), close };
 }

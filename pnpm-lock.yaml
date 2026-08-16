@@ -454,6 +454,9 @@ importers:
       '@vibefield/plugin-build':
         specifier: workspace:*
         version: link:../../tooling/plugin-build
+      '@vibefield/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
       '@vibefield/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk

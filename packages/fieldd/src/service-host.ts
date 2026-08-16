@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Worker } from "node:worker_threads";
+import { Worker, type WorkerOptions } from "node:worker_threads";
 import {
   LOG_TRANSPORT_LIMITS,
   PLUGIN_LIMITS,
@@ -58,6 +58,8 @@ export interface ServiceHostConfig {
   harnessPath?: string;
   /** test seams — production defaults are the §10.4 PLUGIN_LIMITS */
   deadlines?: { activateMs?: number; deactivateMs?: number };
+  /** PRC-2 protocol seam: production constructs a real worker thread. */
+  workerFactory?: (harnessPath: string, options: WorkerOptions) => Worker;
   /** test seam — production defaults are the §18.3 ladder constants */
   ladder?: { baseMs?: number; maxMs?: number; windowMs?: number; quarantineAt?: number };
   /** LOG-L6 authority seam: production mints service leases through audit. */
@@ -94,6 +96,9 @@ interface Entry {
   restartTimer: NodeJS.Timeout | null;
   /** deliberate teardown in progress — an exit is not a crash */
   stopping: boolean;
+  routeState: "withdrawn" | "activating" | "active" | "draining";
+  stopTask: Promise<void> | null;
+  pendingChanged: Set<() => void>;
   generation: number;
   detachOutput: (() => void) | null;
   leaseTokenId: string | null;
@@ -103,6 +108,7 @@ interface Entry {
 export class ServiceHost {
   private readonly entries = new Map<string, Entry>();
   private nextCallId = 1;
+  private nextDeactivationId = 1;
   private disposed = false;
   private readonly logger: Logger;
 
@@ -122,6 +128,9 @@ export class ServiceHost {
         crashTimes: [],
         restartTimer: null,
         stopping: false,
+        routeState: "withdrawn",
+        stopTask: null,
+        pendingChanged: new Set(),
         generation: 0,
         detachOutput: null,
         leaseTokenId: null,
@@ -169,6 +178,8 @@ export class ServiceHost {
   async start(pluginId: string): Promise<void> {
     if (this.disposed) return;
     const e = this.entry(pluginId);
+    if (e.stopTask !== null) await e.stopTask;
+    if (this.disposed) return;
     if (e.worker !== null || e.state === "activating") return; // idempotent
     if (e.state === "quarantined" && e.crashTimes.length > 0) return; // §18.3 — user clear required
 
@@ -192,6 +203,7 @@ export class ServiceHost {
 
     const generation = ++e.generation;
     e.stopping = false;
+    e.routeState = "activating";
     this.setState(pluginId, e, "activating");
 
     const scopes = record.grantedCapabilities.filter((c): c is Scope =>
@@ -207,6 +219,7 @@ export class ServiceHost {
           : this.cfg.tokens.mint(scopes, `plugin:${pluginId}:service`, { pluginId });
       e.leaseTokenId = lease.tokenId;
     } catch (error) {
+      e.routeState = "withdrawn";
       this.setState(pluginId, e, "degraded");
       throw error;
     }
@@ -220,7 +233,7 @@ export class ServiceHost {
       fileURLToPath(new URL("./service-worker-harness.mjs", import.meta.url));
     let worker: Worker;
     try {
-      worker = new Worker(harness, {
+      const options: WorkerOptions = {
         workerData: {
           pluginId,
           version: record.version,
@@ -246,8 +259,10 @@ export class ServiceHost {
         // last words must never vanish into a parent runner's void (§23)
         stdout: true,
         stderr: true,
-      });
+      };
+      worker = this.cfg.workerFactory?.(harness, options) ?? new Worker(harness, options);
     } catch (error) {
+      e.routeState = "withdrawn";
       await this.releaseServiceLease(pluginId, e, "worker-construction-failed");
       this.setState(pluginId, e, "degraded");
       throw error;
@@ -271,6 +286,7 @@ export class ServiceHost {
       const timer = setTimeout(() => {
         // §10.4 — a hung activation is terminated, honestly failed
         finish(() => {
+          this.beginRouteDrain(pluginId, e);
           void worker.terminate();
           this.setState(pluginId, e, "degraded");
           rejectActivate(new Error(`${pluginId}: activate exceeded ${activateDeadline}ms`));
@@ -281,7 +297,12 @@ export class ServiceHost {
         if (e.generation !== generation) return; // a stale worker's echo
         switch (msg["t"]) {
           case "activated":
+            if (e.stopping || e.routeState === "draining") {
+              finish(() => rejectActivate(new Error(`${pluginId}: deactivated during activation`)));
+              return;
+            }
             finish(() => {
+              e.routeState = "active";
               this.setState(pluginId, e, "active");
               this.logger.info(
                 "fieldd.plugin_service.activated",
@@ -293,6 +314,7 @@ export class ServiceHost {
             return;
           case "activate-failed":
             finish(() => {
+              this.beginRouteDrain(pluginId, e);
               void worker.terminate();
               this.setState(pluginId, e, "degraded");
               rejectActivate(
@@ -303,6 +325,7 @@ export class ServiceHost {
             });
             return;
           case "provide": {
+            if (e.stopping || e.routeState === "draining" || e.routeState === "withdrawn") return;
             try {
               const namespace = String(msg["namespace"]);
               const nsDecls = declarations.filter((s) => s.namespace === namespace);
@@ -314,7 +337,7 @@ export class ServiceHost {
                   name: string;
                   kind: "query" | "mutation" | "subscription";
                 }>,
-                handlers: this.portHandlers(pluginId, e, namespace),
+                handlers: this.portHandlers(pluginId, e, namespace, worker, generation),
               });
               e.unregisters.set(namespace, unregister);
             } catch (err) {
@@ -329,7 +352,10 @@ export class ServiceHost {
           }
           case "unprovide": {
             const namespace = String(msg["namespace"]);
-            e.unregisters.get(namespace)?.();
+            // A draining generation has already withdrawn public ingress while retaining a typed
+            // tombstone. Its worker-side ownership inverse is cleanup confirmation, not a second
+            // route transition; final withdrawPlugin retires the tombstone after teardown.
+            if (e.routeState !== "draining") e.unregisters.get(namespace)?.();
             e.unregisters.delete(namespace);
             return;
           }
@@ -337,6 +363,7 @@ export class ServiceHost {
             const id = msg["id"] as number;
             const waiter = e.pending.get(id);
             e.pending.delete(id);
+            this.notifyPendingChanged(e);
             if (waiter === undefined) return;
             if (msg["ok"] === true) waiter.resolve(msg["value"]);
             else {
@@ -390,6 +417,7 @@ export class ServiceHost {
 
       worker.on("error", (err) => {
         if (e.generation !== generation) return;
+        this.beginRouteDrain(pluginId, e);
         this.logger.error(
           "fieldd.plugin_service.worker_failed",
           "Plugin service worker emitted an error",
@@ -408,7 +436,11 @@ export class ServiceHost {
         this.failAllInflight(e, "provider gone");
         this.cfg.registry.withdrawPlugin(pluginId);
         e.unregisters.clear();
-        if (e.stopping || this.disposed) return;
+        e.routeState = "withdrawn";
+        if (e.stopping || this.disposed) {
+          finish(() => rejectActivate(new Error(`${pluginId}: deactivated during activation`)));
+          return;
+        }
         finish(() =>
           rejectActivate(new Error(`${pluginId}: worker exited (${code}) during activation`)),
         );
@@ -450,40 +482,173 @@ export class ServiceHost {
     }, backoff);
   }
 
-  /** §18.2 deactivation: signal → bounded wait → force-terminate → inactive */
+  /** Synchronous PRC-2 ingress edge used by registry-driven disable before its async stop joins. */
+  beginDrain(pluginId: string): void {
+    const e = this.entries.get(pluginId);
+    if (e === undefined) {
+      // A test/alternate host may have registered a provider without a worker entry. It still
+      // participates in the common route edge; stop() below can retire it immediately.
+      this.cfg.registry.beginDrainPlugin(pluginId);
+      return;
+    }
+    e.stopping = true;
+    this.beginRouteDrain(pluginId, e);
+  }
+
+  /** §18.2 deactivation: route drain → admitted-call window → correlated worker cleanup → force. */
   async stop(pluginId: string): Promise<void> {
     const e = this.entries.get(pluginId);
-    if (e === undefined) return;
+    if (e === undefined) {
+      this.cfg.registry.withdrawPlugin(pluginId);
+      return;
+    }
     if (e.restartTimer !== null) {
       clearTimeout(e.restartTimer);
       e.restartTimer = null;
     }
-    const worker = e.worker;
+    if (e.stopTask !== null) return e.stopTask;
     e.stopping = true;
+    this.beginRouteDrain(pluginId, e);
+    const task = this.stopEntry(pluginId, e);
+    e.stopTask = task;
+    try {
+      await task;
+    } finally {
+      if (e.stopTask === task) e.stopTask = null;
+    }
+  }
+
+  private async stopEntry(pluginId: string, e: Entry): Promise<void> {
+    const worker = e.worker;
+    const generation = e.generation;
+    const deadlineMs = this.cfg.deadlines?.deactivateMs ?? PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS;
+    const deadlineAt = Date.now() + deadlineMs;
+
     if (worker !== null) {
-      const deadline = this.cfg.deadlines?.deactivateMs ?? PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS;
-      await new Promise<void>((done) => {
-        const timer = setTimeout(() => done(), deadline);
-        worker.once("message", function onMsg(msg: Record<string, unknown>) {
-          if (msg["t"] === "deactivated") {
-            clearTimeout(timer);
-            done();
-          }
-        });
-        worker.postMessage({ t: "deactivate" });
-      });
-      await worker.terminate();
+      const callsDrained = await this.waitForPendingCalls(e, deadlineAt);
+      if (!callsDrained) this.failPendingCalls(e, "provider drain deadline exceeded");
+
+      if (e.worker === worker && e.generation === generation) {
+        const remaining = Math.max(0, deadlineAt - Date.now());
+        if (callsDrained && remaining > 0)
+          await this.waitForDeactivation(worker, generation, remaining);
+        if (e.worker === worker && e.generation === generation) await worker.terminate();
+      }
       e.detachOutput?.();
       e.detachOutput = null;
-      e.worker = null;
+      if (e.worker === worker) e.worker = null;
     }
+
     await this.releaseServiceLease(pluginId, e, "service-stop");
     this.failAllInflight(e, "provider deactivated");
     this.cfg.registry.withdrawPlugin(pluginId);
     e.unregisters.clear();
+    e.routeState = "withdrawn";
     this.setState(pluginId, e, "inactive");
     this.logger.info("fieldd.plugin_service.deactivated", "Plugin service worker deactivated", {
       pluginId,
+    });
+  }
+
+  /** One idempotent synchronous route transition for disable/reload/revocation/crash/shutdown. */
+  private beginRouteDrain(pluginId: string, e: Entry): void {
+    if (e.routeState !== "withdrawn") e.routeState = "draining";
+    this.cfg.registry.beginDrainPlugin(pluginId);
+
+    // Established router subscriptions were ended by beginDrainPlugin and their identity-bound
+    // releases removed these sink rows. Anything left is a setup race not yet published by the
+    // router; terminalize it here and send its exact worker-generation release.
+    const worker = e.worker;
+    for (const [id, sink] of [...e.sinks]) {
+      try {
+        sink.end({ kind: "UNAVAILABLE", message: "provider draining" });
+      } catch (error) {
+        this.logger.warn(
+          "fieldd.plugin_service.subscription_terminal_failed",
+          "A service subscription sink rejected its drain terminal",
+          {
+            pluginId,
+            subscriptionId: id,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+      } finally {
+        e.sinks.delete(id);
+        try {
+          worker?.postMessage({ t: "unsubscribe", id });
+        } catch {
+          // The worker boundary is already gone; exit/terminate is the release.
+        }
+      }
+    }
+  }
+
+  private waitForPendingCalls(e: Entry, deadlineAt: number): Promise<boolean> {
+    if (e.pending.size === 0) return Promise.resolve(true);
+    const remaining = Math.max(0, deadlineAt - Date.now());
+    if (remaining === 0) return Promise.resolve(false);
+    return new Promise<boolean>((resolveWait) => {
+      let finished = false;
+      const finish = (drained: boolean): void => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        e.pendingChanged.delete(check);
+        resolveWait(drained);
+      };
+      const check = (): void => {
+        if (e.pending.size === 0) finish(true);
+      };
+      const timer = setTimeout(() => finish(false), remaining);
+      e.pendingChanged.add(check);
+      check();
+    });
+  }
+
+  private notifyPendingChanged(e: Entry): void {
+    for (const notify of [...e.pendingChanged]) notify();
+  }
+
+  private failPendingCalls(e: Entry, reason: string): void {
+    for (const [, waiter] of e.pending) waiter.reject(new Error(reason));
+    e.pending.clear();
+    this.notifyPendingChanged(e);
+  }
+
+  /** A result/log/delta cannot consume this waiter: only the exact worker and request id can. */
+  private waitForDeactivation(
+    worker: Worker,
+    generation: number,
+    deadlineMs: number,
+  ): Promise<void> {
+    const requestId = this.nextDeactivationId++;
+    return new Promise<void>((resolveWait) => {
+      let finished = false;
+      const finish = (): void => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        worker.off("message", onMessage);
+        worker.off("exit", onExit);
+        resolveWait();
+      };
+      const onMessage = (msg: Record<string, unknown>): void => {
+        if (
+          msg["t"] === "deactivated" &&
+          msg["requestId"] === requestId &&
+          msg["generation"] === generation
+        )
+          finish();
+      };
+      const onExit = (): void => finish();
+      const timer = setTimeout(finish, deadlineMs);
+      worker.on("message", onMessage);
+      worker.on("exit", onExit);
+      try {
+        worker.postMessage({ t: "deactivate", requestId, generation });
+      } catch {
+        finish();
+      }
     });
   }
 
@@ -493,8 +658,7 @@ export class ServiceHost {
   }
 
   private failAllInflight(e: Entry, reason: string): void {
-    for (const [, waiter] of e.pending) waiter.reject(new Error(reason));
-    e.pending.clear();
+    this.failPendingCalls(e, reason);
     for (const [, sink] of e.sinks) sink.end({ kind: "UNAVAILABLE", message: reason });
     e.sinks.clear();
   }
@@ -572,15 +736,31 @@ export class ServiceHost {
   }
 
   /** the port bridge the ServiceRegistry invokes — handlers stay worker-side */
-  private portHandlers(_pluginId: string, e: Entry, namespace: string) {
+  private portHandlers(
+    _pluginId: string,
+    e: Entry,
+    namespace: string,
+    worker: Worker,
+    generation: number,
+  ) {
+    const acceptsBusinessWork = (): boolean =>
+      e.worker === worker &&
+      e.generation === generation &&
+      e.routeState !== "draining" &&
+      e.routeState !== "withdrawn";
     return {
       call: (name: string, params: unknown, caller: ServiceCallerInfo): Promise<unknown> => {
-        const worker = e.worker;
-        if (worker === null) return Promise.reject(new Error("provider gone"));
+        if (!acceptsBusinessWork()) return Promise.reject(new Error("provider draining"));
         const id = this.nextCallId++;
         return new Promise((resolveCall, rejectCall) => {
           e.pending.set(id, { resolve: resolveCall, reject: rejectCall });
-          worker.postMessage({ t: "call", id, namespace, name, params, caller });
+          try {
+            worker.postMessage({ t: "call", id, namespace, name, params, caller });
+          } catch (error) {
+            e.pending.delete(id);
+            this.notifyPendingChanged(e);
+            rejectCall(error instanceof Error ? error : new Error(String(error)));
+          }
         });
       },
       subscribe: async (
@@ -593,14 +773,25 @@ export class ServiceHost {
           end(err?: { kind: string; message: string }): void;
         },
       ): Promise<() => void> => {
-        const worker = e.worker;
-        if (worker === null) throw new Error("provider gone");
+        if (!acceptsBusinessWork()) throw new Error("provider draining");
         const id = this.nextCallId++;
         e.sinks.set(id, sink);
-        worker.postMessage({ t: "subscribe", id, namespace, name, params, caller });
-        return () => {
+        try {
+          worker.postMessage({ t: "subscribe", id, namespace, name, params, caller });
+        } catch (error) {
           e.sinks.delete(id);
-          e.worker?.postMessage({ t: "unsubscribe", id });
+          throw error;
+        }
+        let released = false;
+        return () => {
+          if (released) return;
+          released = true;
+          if (e.sinks.get(id) === sink) e.sinks.delete(id);
+          try {
+            worker.postMessage({ t: "unsubscribe", id });
+          } catch {
+            // Exact old-generation worker already exited; there is nothing left to release.
+          }
         };
       },
     };

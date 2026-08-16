@@ -216,6 +216,14 @@ function pluginCtx(id: string, scopes: string[] = []): CallerContext {
   };
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolvePromise: ((value: T) => void) | undefined;
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return { promise, resolve: (value) => resolvePromise?.(value) };
+}
+
 /** call() rejects with a RpcCallError; return its .kind. */
 async function callErrKind(
   reg: ServiceRegistry,
@@ -530,6 +538,76 @@ describe("dynamic subscriptions (§14.5, via daemon + WS)", () => {
     provider.emitDelta({ n: 2 }); // the upstream is gone; nothing more may arrive
     await new Promise((r) => setTimeout(r, 150));
     expect(deltasOf(rpc, sub.subId).length).toBe(before);
+  });
+});
+
+describe("provider route drain (PRC-2 / §18.2)", () => {
+  it("withdraws publication, refuses typed new work, then retires the tombstone", async () => {
+    const reg = registry();
+    reg.register(makeProvider().binding);
+
+    expect(reg.providerUp(NS)).toBe(true);
+    expect(reg.snapshot().providers).toHaveLength(1);
+    reg.beginDrainPlugin(PROVIDER);
+
+    expect(reg.providerUp(NS)).toBe(false);
+    expect(reg.snapshot().providers).toEqual([]);
+    expect(reg.kindOf(`${NS}.get`)).toBe("call");
+    expect(await callErrKind(reg, localCtx(["workspace.read"]), `${NS}.get`, { k: "x" })).toBe(
+      "UNAVAILABLE",
+    );
+
+    reg.withdrawPlugin(PROVIDER);
+    expect(reg.kindOf(`${NS}.get`)).toBeUndefined();
+    expect(await callErrKind(reg, localCtx(["workspace.read"]), `${NS}.get`, { k: "x" })).toBe(
+      "NOT_FOUND",
+    );
+  });
+
+  it("gives a live subscription one terminal outcome at the drain edge", async () => {
+    const reg = registry();
+    const provider = makeProvider();
+    reg.register(provider.binding);
+    const events: DynamicSubEvent[] = [];
+    const sub = await reg.subscribe(localCtx(["workspace.read"]), `${NS}.watch`, {}, (event) =>
+      events.push(event),
+    );
+
+    reg.beginDrainPlugin(PROVIDER);
+    reg.beginDrainPlugin(PROVIDER);
+    provider.emitDelta({ n: 1 });
+    sub.dispose();
+
+    expect(events).toEqual([
+      { kind: "unavailable", error: { kind: "UNAVAILABLE", message: "provider draining" } },
+    ]);
+  });
+
+  it("refuses and releases a subscription whose setup crosses the drain edge", async () => {
+    const reg = registry();
+    const releaseSetup = deferred<() => void>();
+    let releaseCalls = 0;
+    const provider = makeProvider();
+    reg.register({
+      ...provider.binding,
+      handlers: {
+        ...provider.binding.handlers,
+        async subscribe(_name, _params, _caller, sink) {
+          const release = await releaseSetup.promise;
+          sink.snapshot({ n: 0 });
+          return release;
+        },
+      },
+    });
+    const pending = reg.subscribe(localCtx(["workspace.read"]), `${NS}.watch`, {}, () => undefined);
+    await Promise.resolve();
+    reg.beginDrainPlugin(PROVIDER);
+    releaseSetup.resolve(() => {
+      releaseCalls += 1;
+    });
+
+    await expect(pending).rejects.toMatchObject({ kind: "UNAVAILABLE" });
+    expect(releaseCalls).toBe(1);
   });
 });
 

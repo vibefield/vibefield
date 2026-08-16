@@ -1,0 +1,89 @@
+{
+  "activation": ["onStartup"],
+  "backgroundReason": "PRC-2 conformance: hold cleanup open for route-drain probes",
+  "capabilities": ["services.provide", "background"],
+  "contributes": {
+    "capabilities": [
+      {
+        "description": "Call the PRC-2 drain-control fixture",
+        "id": "x.vibefield.prc.drain-control.use",
+        "risk": "read",
+        "title": "Use PRC-2 drain control"
+      }
+    ],
+    "services": [
+      {
+        "methods": [
+          {
+            "idempotent": true,
+            "input": {
+              "additionalProperties": false,
+              "properties": { "msg": { "type": "string" } },
+              "required": ["msg"],
+              "type": "object"
+            },
+            "kind": "query",
+            "locality": "local",
+            "name": "echo",
+            "output": {
+              "additionalProperties": false,
+              "properties": { "echo": { "type": "string" } },
+              "required": ["echo"],
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.prc.drain-control.use"
+          },
+          {
+            "idempotent": true,
+            "input": {
+              "additionalProperties": false,
+              "properties": {
+                "delayMs": { "maximum": 1000, "minimum": 0, "type": "number" },
+                "msg": { "type": "string" }
+              },
+              "required": ["delayMs", "msg"],
+              "type": "object"
+            },
+            "kind": "query",
+            "locality": "local",
+            "name": "slow",
+            "output": {
+              "additionalProperties": false,
+              "properties": { "echo": { "type": "string" } },
+              "required": ["echo"],
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.prc.drain-control.use"
+          },
+          {
+            "delta": {
+              "additionalProperties": false,
+              "properties": { "n": { "type": "number" } },
+              "required": ["n"],
+              "type": "object"
+            },
+            "idempotent": true,
+            "input": { "additionalProperties": false, "type": "object" },
+            "kind": "subscription",
+            "locality": "local",
+            "name": "ticks",
+            "requiredCapability": "x.vibefield.prc.drain-control.use",
+            "snapshot": {
+              "additionalProperties": false,
+              "properties": { "n": { "type": "number" } },
+              "required": ["n"],
+              "type": "object"
+            }
+          }
+        ],
+        "namespace": "x.vibefield.prc.drain-control"
+      }
+    ]
+  },
+  "engines": { "app": ">=0.0.0", "contracts": "^0.1.0" },
+  "entries": { "service": "./service.js" },
+  "id": "vibefield.prc.drain-control",
+  "manifestVersion": 1,
+  "title": "PRC-2 drain control",
+  "version": "0.1.0"
+}

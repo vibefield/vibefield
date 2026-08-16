@@ -44,6 +44,12 @@ registerHooks({
   },
 });
 
+// Load the shared host runtime only after the dev-source resolution hook is active. Its workspace
+// package exports TypeScript with extensionless relatives; the production bundle inlines it.
+const { ActivationEffectSetupError, ActivationScope, InactiveActivationScopeError } = await import(
+  "@vibefield/plugin-runtime"
+);
+
 const port = parentPort;
 if (port === null) throw new Error("service harness must run as a worker");
 
@@ -64,11 +70,10 @@ const {
   },
 } = workerData;
 
-const controller = new AbortController();
-const tracked = [];
+const root = new ActivationScope(`service:${pluginId}`);
 /** namespace → { name → handler } */
 const providedHandlers = new Map();
-/** live subscription id → un-subscribe fn */
+/** live subscription id → identity-bound child lifetime */
 const liveSubs = new Map();
 
 const encoder = new TextEncoder();
@@ -211,66 +216,263 @@ async function productClient() {
   return clientPromise;
 }
 
-const ctx = {
-  plugin: { id: pluginId, version },
-  signal: controller.signal,
-  logger,
-  client: {
-    request: async (method, params) => (await productClient()).request(method, params),
-    subscribe: async (method, params, onEvent) => {
-      const client = await productClient();
-      const sub = await client.subscribe(method, params, (payload) => onEvent(payload));
-      return { snapshot: sub.snapshot, unsubscribe: sub.unsubscribe };
-    },
+// Register the lazy connection owner BEFORE the activation child. The activation and all of its
+// descendants therefore clean up first; exact host-issued inverses may still use the raw product
+// client, and the connection closes last. Merely closing an idle activation never opens a socket.
+root.track("product-client", {
+  async dispose() {
+    const pending = clientPromise;
+    if (pending === null) return;
+    const client = await pending;
+    client.close();
   },
-  services: {
-    provide(registration) {
-      if (controller.signal.aborted) throw new Error(`${pluginId}: provide after deactivation`);
-      const { namespace, methods } = registration;
-      if (providedHandlers.has(namespace))
-        throw new Error(`${namespace} already provided in this entry`);
-      const handlerMap = new Map(Object.entries(methods));
-      providedHandlers.set(namespace, handlerMap);
-      post({
-        t: "provide",
-        namespace,
-        implemented: [...handlerMap].map(([name, h]) => ({ name, kind: h.kind })),
-      });
-      return {
-        dispose() {
-          providedHandlers.delete(namespace);
-          post({ t: "unprovide", namespace });
-        },
-      };
-    },
-  },
-  track(resource) {
-    tracked.push(resource);
-    return resource;
-  },
-};
+});
 
-// P5 — ctx.settings/ctx.storage: present iff the lease carries storage.self
-// (§10.2 absent-API law). One shared implementation from the SDK, riding the
-// plugin's own product client — the daemon's caller matrix is the authority.
+const rawClient = Object.freeze({
+  request: async (method, params) => (await productClient()).request(method, params),
+  subscribe: async (method, params, onEvent) => {
+    const client = await productClient();
+    const sub = await client.subscribe(method, params, onEvent);
+    return { snapshot: sub.snapshot, unsubscribe: sub.unsubscribe };
+  },
+});
+
+// Build shared SDK veneers over the raw client once. Context-specific wrappers below gate all new
+// business work and own every returned lifetime in the exact child that acquired it.
+let rawStorage;
 if (scopes.includes("storage.self")) {
   const { createStorageSurfaces } = await import("@vibefield/plugin-sdk");
-  const surfaces = createStorageSurfaces(ctx.client);
-  ctx.settings = surfaces.settings;
-  ctx.storage = surfaces.storage;
+  rawStorage = createStorageSurfaces(rawClient);
 }
 
-// P6 — ctx.process (§17.1) iff process.spawn; ctx.endpoints (§17.3) iff
-// services.provide. Same law, same one shared SDK implementation.
+let rawProcesses;
 if (scopes.includes("process.spawn") || scopes.includes("services.provide")) {
   const { createProcessSurfaces } = await import("@vibefield/plugin-sdk");
-  const surfaces = createProcessSurfaces(ctx.client);
-  if (scopes.includes("process.spawn")) ctx.process = surfaces.process;
-  if (scopes.includes("services.provide")) ctx.endpoints = surfaces.endpoints;
+  rawProcesses = createProcessSurfaces(rawClient);
+}
+
+function assertScopeOpen(scope) {
+  if (scope.state !== "open") throw new InactiveActivationScopeError(scope.label);
+}
+
+/** Publication withdrawal is synchronous at the close edge; its exact inverse remains an awaited
+ * ownership record at the normal LIFO position. */
+function ownPublication(scope, label, publication) {
+  let withdrawal;
+  const withdraw = () => {
+    if (withdrawal !== undefined) return;
+    let resolveWithdrawal;
+    let rejectWithdrawal;
+    withdrawal = new Promise((resolve, reject) => {
+      resolveWithdrawal = resolve;
+      rejectWithdrawal = reject;
+    });
+    void withdrawal.catch(() => undefined);
+    try {
+      Promise.resolve(publication.dispose()).then(resolveWithdrawal, rejectWithdrawal);
+    } catch (error) {
+      rejectWithdrawal(error);
+    }
+  };
+  const onAbort = () => withdraw();
+  scope.signal.addEventListener("abort", onAbort, { once: true });
+  return scope.track(label, {
+    dispose() {
+      scope.signal.removeEventListener("abort", onAbort);
+      withdraw();
+      return withdrawal ?? Promise.resolve();
+    },
+  });
+}
+
+function contextFor(ownedBy) {
+  const assertOpen = () => assertScopeOpen(ownedBy);
+  const guardedLogger = Object.freeze({
+    debug(message, fields) {
+      assertOpen();
+      logger.debug(message, fields);
+    },
+    info(message, fields) {
+      assertOpen();
+      logger.info(message, fields);
+    },
+    warn(message, fields) {
+      assertOpen();
+      logger.warn(message, fields);
+    },
+    error(message, fields) {
+      assertOpen();
+      logger.error(message, fields);
+    },
+  });
+
+  const client = Object.freeze({
+    request(method, params) {
+      assertOpen();
+      return rawClient.request(method, params);
+    },
+    async subscribe(method, params, onEvent) {
+      assertOpen();
+      const subscription = await rawClient.subscribe(method, params, (payload) => {
+        if (ownedBy.state === "open") onEvent(payload);
+      });
+      let live = true;
+      const release = {
+        dispose() {
+          if (!live) return;
+          live = false;
+          subscription.unsubscribe();
+        },
+      };
+      ownedBy.track(`client.subscribe:${method}`, release);
+      return Object.freeze({
+        snapshot: subscription.snapshot,
+        unsubscribe() {
+          void release.dispose();
+        },
+      });
+    },
+  });
+
+  const settings =
+    rawStorage === undefined
+      ? undefined
+      : Object.freeze({
+          get(key) {
+            assertOpen();
+            return rawStorage.settings.get(key);
+          },
+          set(key, value) {
+            assertOpen();
+            return rawStorage.settings.set(key, value);
+          },
+          reset(key) {
+            assertOpen();
+            return rawStorage.settings.reset(key);
+          },
+          subscribe(key, observer) {
+            assertOpen();
+            const resource = rawStorage.settings.subscribe(key, (value) => {
+              if (ownedBy.state === "open") observer(value);
+            });
+            return ownedBy.track(`settings.subscribe:${key}`, resource);
+          },
+        });
+
+  const storage =
+    rawStorage === undefined
+      ? undefined
+      : Object.freeze({
+          kv: Object.freeze({
+            get(key) {
+              assertOpen();
+              return rawStorage.storage.kv.get(key);
+            },
+            set(key, value) {
+              assertOpen();
+              return rawStorage.storage.kv.set(key, value);
+            },
+            delete(key) {
+              assertOpen();
+              return rawStorage.storage.kv.delete(key);
+            },
+            list(prefix) {
+              assertOpen();
+              return rawStorage.storage.kv.list(prefix);
+            },
+          }),
+        });
+
+  function track(labelOrResource, resource) {
+    return typeof labelOrResource === "string"
+      ? ownedBy.track(labelOrResource, resource)
+      : ownedBy.track(labelOrResource);
+  }
+
+  return Object.freeze({
+    plugin: Object.freeze({ id: pluginId, version }),
+    signal: ownedBy.signal,
+    logger: guardedLogger,
+    client,
+    services: Object.freeze({
+      provide(registration) {
+        assertOpen();
+        const { namespace, methods } = registration;
+        if (providedHandlers.has(namespace))
+          throw new Error(`${namespace} already provided in this entry`);
+        const generation = Symbol(namespace);
+        const handlerMap = new Map(Object.entries(methods));
+        providedHandlers.set(namespace, { generation, methods: handlerMap });
+        post({
+          t: "provide",
+          namespace,
+          implemented: [...handlerMap].map(([name, handler]) => ({
+            name,
+            kind: handler.kind,
+          })),
+        });
+        let live = true;
+        return ownPublication(ownedBy, `service:${namespace}`, {
+          dispose() {
+            if (!live) return;
+            live = false;
+            if (providedHandlers.get(namespace)?.generation !== generation) return;
+            providedHandlers.delete(namespace);
+            post({ t: "unprovide", namespace });
+          },
+        });
+      },
+    }),
+    ...(settings === undefined ? {} : { settings }),
+    ...(storage === undefined ? {} : { storage }),
+    ...(scopes.includes("process.spawn") && rawProcesses !== undefined
+      ? {
+          process: Object.freeze({
+            async spawn(request) {
+              assertOpen();
+              const handle = await rawProcesses.process.spawn(request);
+              const resource = {
+                procId: handle.procId,
+                signal(sig) {
+                  assertOpen();
+                  return handle.signal(sig);
+                },
+                stat() {
+                  assertOpen();
+                  return handle.stat();
+                },
+                dispose: () => handle.dispose(),
+              };
+              return ownedBy.track(`process:${handle.procId}`, resource);
+            },
+          }),
+        }
+      : {}),
+    ...(scopes.includes("services.provide") && rawProcesses !== undefined
+      ? {
+          endpoints: Object.freeze({
+            async register(request) {
+              assertOpen();
+              const resource = await rawProcesses.endpoints.register(request);
+              return ownedBy.track(`endpoint:${request.serviceId}`, resource);
+            },
+          }),
+        }
+      : {}),
+    track,
+    effect(label, acquire) {
+      assertOpen();
+      return ownedBy.effect(label, (child) => acquire(contextFor(child)));
+    },
+  });
 }
 
 function errorShape(e) {
-  return { kind: "INTERNAL", message: e instanceof Error ? e.message : String(e) };
+  const primary = e instanceof ActivationEffectSetupError ? e.cause : e;
+  return {
+    kind: "INTERNAL",
+    message: primary instanceof Error ? primary.message : String(primary),
+  };
 }
 
 async function activate() {
@@ -284,38 +486,34 @@ async function activate() {
     const plugin = mod.default ?? mod;
     if (typeof plugin?.activate !== "function")
       throw new Error(`${entryPath} does not export an activate(ctx) module`);
-    const result = await plugin.activate(ctx);
-    if (result !== undefined && result !== null) tracked.push(result);
+    await root.effect("activate", (activation) => plugin.activate(contextFor(activation)));
+    if (root.state !== "open") return;
     post({ t: "activated" });
   } catch (e) {
-    post({ t: "activate-failed", error: errorShape(e) });
+    root.close({ kind: "activation-failed", detail: pluginId });
+    const cleanup = await root.whenQuiescent();
+    post({ t: "activate-failed", error: errorShape(e), cleanup });
   }
 }
 
-async function deactivate() {
-  // §18.2 — abort, dispose activation-returned + tracked in REVERSE, report.
-  controller.abort();
-  for (const [id, stop] of [...liveSubs]) {
-    try {
-      stop();
-    } catch {}
-    liveSubs.delete(id);
-  }
-  for (const resource of tracked.reverse()) {
-    try {
-      await resource.dispose?.();
-    } catch (e) {
-      logger.warn(`dispose failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-  try {
-    (await clientPromise)?.close();
-  } catch {}
-  post({ t: "deactivated" });
+let deactivationTask = null;
+async function runDeactivation() {
+  // §18.2/PRC-D2 — close authority synchronously, then prove cooperative scope quiescence. The
+  // parent host owns the deadline and the only honest worker-thread force boundary.
+  root.close({ kind: "manual", detail: "service-host-stop" });
+  const cleanup = await root.whenQuiescent();
+  liveSubs.clear();
+  return cleanup;
+}
+
+async function deactivate(requestId, generation) {
+  deactivationTask ??= runDeactivation();
+  const cleanup = await deactivationTask;
+  post({ t: "deactivated", requestId, generation, cleanup });
 }
 
 function handlerFor(namespace, name) {
-  return providedHandlers.get(namespace)?.get(name);
+  return providedHandlers.get(namespace)?.methods.get(name);
 }
 
 port.on("message", (msg) => {
@@ -350,28 +548,48 @@ port.on("message", (msg) => {
           });
           return;
         }
-        const sink = {
-          snapshot: (value) => post({ t: "sub-snapshot", id: msg.id, value }),
-          delta: (value) => post({ t: "sub-delta", id: msg.id, value }),
-        };
+        let lifetime;
         try {
-          const disposable = await handler.subscribe(msg.params, { caller: msg.caller }, sink);
-          liveSubs.set(msg.id, () => disposable?.dispose?.());
+          await root.effect(`provider.subscribe:${msg.id}`, (subscription) => {
+            let stopped = false;
+            lifetime = {
+              scope: subscription,
+              get stopped() {
+                return stopped;
+              },
+              stop() {
+                if (stopped) return;
+                stopped = true;
+                subscription.close({ kind: "manual", detail: `unsubscribe:${msg.id}` });
+              },
+            };
+            liveSubs.set(msg.id, lifetime);
+            const sink = {
+              snapshot(value) {
+                if (subscription.state === "open") post({ t: "sub-snapshot", id: msg.id, value });
+              },
+              delta(value) {
+                if (subscription.state === "open") post({ t: "sub-delta", id: msg.id, value });
+              },
+            };
+            return handler.subscribe(msg.params, { caller: msg.caller }, sink);
+          });
+          if (lifetime?.scope.state !== "open" && liveSubs.get(msg.id) === lifetime)
+            liveSubs.delete(msg.id);
         } catch (e) {
-          post({ t: "sub-end", id: msg.id, error: errorShape(e) });
+          if (liveSubs.get(msg.id) === lifetime) liveSubs.delete(msg.id);
+          if (lifetime?.stopped !== true) post({ t: "sub-end", id: msg.id, error: errorShape(e) });
         }
         return;
       }
       case "unsubscribe": {
-        const stop = liveSubs.get(msg.id);
+        const lifetime = liveSubs.get(msg.id);
         liveSubs.delete(msg.id);
-        try {
-          stop?.();
-        } catch {}
+        lifetime?.stop();
         return;
       }
       case "deactivate":
-        await deactivate();
+        await deactivate(msg.requestId, msg.generation);
         return;
       default:
         return;

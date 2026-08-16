@@ -1942,10 +1942,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           const { record, changed } = await plugins.setGrant(id, capability, granted);
           let revoked = { count: 0, tokenIds: [] as string[] };
           if (changed) {
+            serviceHost?.beginDrain(id);
             revoked = tokens.revokeByPlugin(id);
             api.dropPluginConnections(id);
-            await processes.killPlugin(id);
             await serviceHost?.stop(id);
+            await processes.killPlugin(id);
             endpoints.withdrawPlugin(id); // §15.4 — endpoints/MCP tools withdraw
             mcp.refreshContributed();
             if (record.enabled) void serviceHost?.restartFresh(id).catch(() => undefined);
@@ -1985,10 +1986,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       services.on("changed", fn);
       return { snapshot: services.snapshot(), dispose: () => services.off("changed", fn) };
     });
-    // §16.5 — disable deactivates providers (data untouched); the service host
-    // adds worker teardown when it attaches (bootstrap tail).
+    // §16.5 / PRC-2 — durable disable enters the SAME synchronous host-owned route drain as
+    // reload/revocation/shutdown. The command path then joins it for worker teardown.
     plugins.on("changed", () => {
-      for (const record of plugins.list()) if (!record.enabled) services.withdrawPlugin(record.id);
+      for (const record of plugins.list()) if (!record.enabled) serviceHost?.beginDrain(record.id);
     });
 
     // -- PeerLink (C5, design-04 D32): the device?-routing substrate --

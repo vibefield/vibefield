@@ -74,9 +74,9 @@ interface MethodEntry {
 
 interface LiveSub {
   namespace: string;
-  emit: (payload: DynamicSubEvent) => void;
   stop: () => void;
   ended: boolean;
+  end(error: { kind: string; message: string }, stopUpstream: boolean): void;
 }
 
 const FIRST_SNAPSHOT_DEADLINE_MS = 5_000;
@@ -85,6 +85,9 @@ export class ServiceRegistry extends EventEmitter {
   private readonly ajv = new Ajv({ allErrors: false, strict: false });
   private readonly methods = new Map<string, MethodEntry>();
   private readonly providers = new Map<string, ServiceProviderBinding>();
+  /** A draining provider remains as a method-kind tombstone so new work gets typed UNAVAILABLE
+   * until the worker generation is actually withdrawn. It is absent from public availability. */
+  private readonly drainingNamespaces = new Set<string>();
   private readonly subs = new Set<LiveSub>();
   private readonly logger: Logger;
   private generation = 0;
@@ -186,27 +189,41 @@ export class ServiceRegistry extends EventEmitter {
       if (p.pluginId === pluginId) this.withdrawNamespace(ns);
   }
 
+  /** PRC-2's synchronous route edge. Existing calls already hold their MethodEntry; new calls and
+   * subscriptions see UNAVAILABLE, live subscriptions receive one terminal, and replacement still
+   * collides until withdrawPlugin retires the exact old provider generation. */
+  beginDrainPlugin(pluginId: string): void {
+    let changed = false;
+    for (const [namespace, provider] of this.providers) {
+      if (provider.pluginId !== pluginId || this.drainingNamespaces.has(namespace)) continue;
+      this.drainingNamespaces.add(namespace);
+      changed = true;
+      for (const sub of [...this.subs]) {
+        if (sub.namespace !== namespace) continue;
+        sub.end({ kind: "UNAVAILABLE", message: "provider draining" }, true);
+      }
+    }
+    if (changed) this.publish();
+  }
+
   private withdrawNamespace(namespace: string): void {
     if (!this.providers.delete(namespace)) return;
+    this.drainingNamespaces.delete(namespace);
     for (const [full, entry] of [...this.methods])
       if (entry.namespace === namespace) this.methods.delete(full);
     // §14.5 — provider loss terminates upstream subscriptions with UNAVAILABLE
     for (const sub of [...this.subs]) {
-      if (sub.namespace !== namespace || sub.ended) continue;
-      sub.ended = true;
-      sub.emit({
-        kind: "unavailable",
-        error: { kind: "UNAVAILABLE", message: "provider withdrawn" },
-      });
-      sub.stop();
-      this.subs.delete(sub);
+      if (sub.namespace === namespace)
+        sub.end({ kind: "UNAVAILABLE", message: "provider withdrawn" }, true);
     }
     this.publish();
   }
 
   resolve(fullMethod: string): { pluginId: string; decl: ServiceMethodContribution } | undefined {
     const entry = this.methods.get(fullMethod);
-    return entry === undefined ? undefined : { pluginId: entry.pluginId, decl: entry.decl };
+    return entry === undefined || this.drainingNamespaces.has(entry.namespace)
+      ? undefined
+      : { pluginId: entry.pluginId, decl: entry.decl };
   }
 
   /** what ProductApi asks before dispatching an x.* method */
@@ -218,6 +235,7 @@ export class ServiceRegistry extends EventEmitter {
 
   snapshot(): ServicesSnapshot {
     const providers: ServiceProviderRecord[] = [...this.providers.values()]
+      .filter((provider) => !this.drainingNamespaces.has(provider.namespace))
       .map((p) => ({
         pluginId: p.pluginId,
         namespace: p.namespace,
@@ -272,7 +290,7 @@ export class ServiceRegistry extends EventEmitter {
 
   /** P6 §17.4 — is a namespace's provider live right now (MCP availability)? */
   providerUp(namespace: string): boolean {
-    return this.providers.has(namespace);
+    return this.providers.has(namespace) && !this.drainingNamespaces.has(namespace);
   }
 
   /** P6 §17.4 — an MCP tool projection invoking its declared method. The
@@ -285,6 +303,10 @@ export class ServiceRegistry extends EventEmitter {
     const entry = this.methods.get(method);
     if (entry === undefined)
       throw new RpcCallError("NOT_FOUND", `no live provider for ${method}`, false, {
+        pluginKind: "PLUGIN_PROVIDER_GONE",
+      });
+    if (this.drainingNamespaces.has(entry.namespace))
+      throw new RpcCallError("UNAVAILABLE", `${method}: provider is draining`, true, {
         pluginKind: "PLUGIN_PROVIDER_GONE",
       });
     if (entry.decl.kind === "subscription")
@@ -323,18 +345,69 @@ export class ServiceRegistry extends EventEmitter {
     if (entry.decl.kind !== "subscription")
       throw new RpcCallError("PRECONDITION_FAILED", `${method} is not a subscription`, false);
 
-    const sub: LiveSub = { namespace: entry.namespace, emit, stop: () => {}, ended: false };
     let settleFirst: ((v: DynamicSubEvent) => void) | null = null;
     let rejectFirst: ((e: Error) => void) | null = null;
+    let terminalError: { kind: string; message: string } | null = null;
+    let published = false;
     const first = new Promise<DynamicSubEvent>((resolve, reject) => {
       settleFirst = resolve;
       rejectFirst = reject;
     });
+    // Provider setup may itself be async. Mark early rejection handled while this method is still
+    // awaiting the provider's release handle; awaiting `first` below still observes the error.
+    void first.catch(() => undefined);
     const timer = setTimeout(() => {
       rejectFirst?.(
         new RpcCallError("TIMEOUT", `${method}: no initial snapshot within 5s`, true) as Error,
       );
     }, FIRST_SNAPSHOT_DEADLINE_MS);
+
+    const sub: LiveSub = {
+      namespace: entry.namespace,
+      stop: () => {},
+      ended: false,
+      end: (error, stopUpstream) => {
+        if (sub.ended) return;
+        sub.ended = true;
+        terminalError = error;
+        clearTimeout(timer);
+        if (!published) {
+          if (settleFirst !== null) {
+            rejectFirst?.(new RpcCallError("UNAVAILABLE", error.message, true));
+            settleFirst = null;
+            rejectFirst = null;
+          }
+        } else {
+          try {
+            emit({ kind: "unavailable", error });
+          } catch (deliveryError) {
+            this.logger.warn(
+              "fieldd.plugin_service.subscription_terminal_delivery_failed",
+              "A subscription consumer rejected its provider terminal event",
+              {
+                namespace: sub.namespace,
+                error:
+                  deliveryError instanceof Error ? deliveryError.message : String(deliveryError),
+              },
+            );
+          }
+        }
+        try {
+          if (stopUpstream) sub.stop();
+        } catch (releaseError) {
+          this.logger.warn(
+            "fieldd.plugin_service.subscription_release_failed",
+            "A provider subscription release failed during route withdrawal",
+            {
+              namespace: sub.namespace,
+              error: releaseError instanceof Error ? releaseError.message : String(releaseError),
+            },
+          );
+        } finally {
+          this.subs.delete(sub);
+        }
+      },
+    };
 
     const sink = {
       snapshot: (value: unknown) => {
@@ -372,13 +445,7 @@ export class ServiceRegistry extends EventEmitter {
         emit({ kind: "delta", value });
       },
       end: (error?: { kind: string; message: string }) => {
-        if (sub.ended) return;
-        sub.ended = true;
-        emit({
-          kind: "unavailable",
-          error: error ?? { kind: "UNAVAILABLE", message: "provider ended the stream" },
-        });
-        this.subs.delete(sub);
+        sub.end(error ?? { kind: "UNAVAILABLE", message: "provider ended the stream" }, false);
       },
     };
 
@@ -394,10 +461,39 @@ export class ServiceRegistry extends EventEmitter {
         false,
       );
     }
-    sub.stop = () => unsubscribe();
+    let stopped = false;
+    sub.stop = () => {
+      if (stopped) return;
+      stopped = true;
+      unsubscribe();
+    };
+    if (sub.ended || this.drainingNamespaces.has(entry.namespace)) {
+      try {
+        sub.stop();
+      } finally {
+        clearTimeout(timer);
+      }
+      const error = terminalError ?? { kind: "UNAVAILABLE", message: "provider draining" };
+      throw new RpcCallError("UNAVAILABLE", error.message, true);
+    }
     this.subs.add(sub);
 
-    const snapshot = await first.finally(() => clearTimeout(timer));
+    let snapshot: DynamicSubEvent;
+    try {
+      snapshot = await first;
+      if (sub.ended) {
+        const error = terminalError ?? { kind: "UNAVAILABLE", message: "provider ended" };
+        throw new RpcCallError("UNAVAILABLE", error.message, true);
+      }
+      published = true;
+    } catch (error) {
+      sub.ended = true;
+      sub.stop();
+      this.subs.delete(sub);
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
     return {
       snapshot,
       dispose: () => {
@@ -414,7 +510,11 @@ export class ServiceRegistry extends EventEmitter {
     for (const sub of [...this.subs]) {
       if (!sub.ended) {
         sub.ended = true;
-        sub.stop();
+        try {
+          sub.stop();
+        } catch {
+          // Registry shutdown continues across an ill-behaved provider release.
+        }
       }
     }
     this.subs.clear();
@@ -426,6 +526,10 @@ export class ServiceRegistry extends EventEmitter {
     const entry = this.methods.get(method);
     if (entry === undefined)
       throw new RpcCallError("NOT_FOUND", `no provider for ${method}`, false);
+    if (this.drainingNamespaces.has(entry.namespace))
+      throw new RpcCallError("UNAVAILABLE", `${method}: provider is draining`, true, {
+        pluginKind: "PLUGIN_PROVIDER_GONE",
+      });
     if (ctx.transport !== "ws-loopback")
       throw new RpcCallError(
         "FORBIDDEN_SCOPE",

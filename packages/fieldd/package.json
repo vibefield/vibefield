@@ -19,6 +19,7 @@
     "@vibefield/fieldd-client": "workspace:*",
     "@vibefield/logging": "workspace:*",
     "@vibefield/plugin-build": "workspace:*",
+    "@vibefield/plugin-runtime": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*",
     "@vibefield/users": "workspace:*",
     "ajv": "^8.17.1",

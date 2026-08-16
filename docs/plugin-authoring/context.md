@@ -23,8 +23,8 @@ export default defineRendererPlugin({
 });
 ```
 
-`activate` may be async, and may return a `Disposable` (or nothing). In renderer entries,
-every host-created registration, whatever `activate` returns, and everything passed to
+`activate` may be async, and may return a `Disposable` (or nothing). In either entry kind,
+every host-created lifetime, whatever `activate` returns, and everything passed to
 `ctx.track(...)` is owned by the activation. Cleanup is awaited in reverse acquisition order
 on reload, disable, or a failed activation half-way through. Use
 `ctx.track(label, resource)` when a diagnostic name is useful; tracking the same exact handle
@@ -83,11 +83,20 @@ provider API instead.
 | `ctx.services` | PluginServiceProviderAPI (`provide`) | always in a service entry; registration is accepted only on an exact declaration match |
 | `ctx.process` | PluginProcessAPI | present iff `process.spawn` is granted |
 | `ctx.endpoints` | PluginEndpointAPI | present iff `services.provide` is granted |
+| `ctx.track` | `(resource) or (label, resource) => resource` | always; exact handles are deduplicated and disposed when the activation ends |
+| `ctx.effect` | `(label, acquire(childContext)) => Promise<result>` | always; partial child acquisitions roll back without closing the outer activation |
 
 `ctx.plugin`, `ctx.signal`, `ctx.logger`, `ctx.client`, `ctx.settings`, and
-`ctx.storage` share the renderer shapes. Service entries currently expose the compatible
-`ctx.track(resource)` form; the labeled overload and child-bound `ctx.effect` are renderer
-entry surfaces.
+`ctx.storage` share the renderer shapes. Provider publications, client/settings
+subscriptions, processes, and endpoints are owned automatically. Labeled `ctx.track` and
+child-bound `ctx.effect` use the same rollback and exact-handle rules as renderer entries.
+
+```ts
+await ctx.effect("optional-provider", async (fx) => {
+  fx.services.provide({ namespace, methods });
+  fx.track("provider-cache", openProviderCache());
+});
+```
 
 ## Commands and surfaces
 

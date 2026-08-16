@@ -121,6 +121,18 @@ export const SERVICE_CTX_FACES: readonly CtxFaceRow[] = [
     presence: "present iff `services.provide` is granted",
     anchor: "present iff services.provide is granted",
   },
+  {
+    face: "ctx.track",
+    type: "(resource) or (label, resource) => resource",
+    presence: "always; exact handles are deduplicated and disposed when the activation ends",
+    anchor: "track<T extends Disposable>(label: string, resource: T): T",
+  },
+  {
+    face: "ctx.effect",
+    type: "(label, acquire(childContext)) => Promise<result>",
+    presence: "always; partial child acquisitions roll back without closing the outer activation",
+    anchor: "acquire: (fx: ServicePluginContext) => T | Promise<T>",
+  },
 ];
 
 // --- cross-field invariants ----------------------------------------------------

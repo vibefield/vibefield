@@ -162,6 +162,10 @@ export interface ServicePluginContext {
   /** P6 — present iff services.provide is granted (§17.3) */
   readonly endpoints?: PluginEndpointAPI;
   track<T extends Disposable>(resource: T): T;
+  track<T extends Disposable>(label: string, resource: T): T;
+  /** Run one optional/replaceable acquisition inside a pre-owned child lifetime.
+   * Every service capability on `fx` is bound to that child. */
+  effect<T>(label: string, acquire: (fx: ServicePluginContext) => T | Promise<T>): Promise<T>;
 }
 
 export interface ServicePluginModule {
@@ -230,8 +234,8 @@ export function createProcessSurfaces(client: PluginProductClient): {
           };
           return stat.processes[0];
         },
-        dispose() {
-          void client.request("process.signal", { procId, signal: "term" }).catch(() => {
+        async dispose() {
+          await client.request("process.signal", { procId, signal: "term" }).catch(() => {
             // already gone — dispose is best-effort by contract (§18.1)
           });
         },
@@ -243,8 +247,8 @@ export function createProcessSurfaces(client: PluginProductClient): {
       await client.request("services.registerEndpoint", request);
       const serviceId = request.serviceId;
       return {
-        dispose() {
-          void client.request("services.unregisterEndpoint", { serviceId }).catch(() => {
+        async dispose() {
+          await client.request("services.unregisterEndpoint", { serviceId }).catch(() => {
             // withdrawal on disable already removed it — best-effort (§18.1)
           });
         },
@@ -300,7 +304,12 @@ export function createStorageSurfaces(client: PluginProductClient): {
     subscribe(key, observer) {
       let cancelled = false;
       let unsubscribe: (() => void) | null = null;
-      void client
+      const release = (): void => {
+        const stop = unsubscribe;
+        unsubscribe = null;
+        stop?.();
+      };
+      const ready = client
         .subscribe("storage.settings.subscribe", {}, (payload) => {
           if (cancelled) return;
           const snap = payload as { values?: Record<string, unknown> } | null;
@@ -317,9 +326,11 @@ export function createStorageSurfaces(client: PluginProductClient): {
         })
         .catch(() => undefined); // daemon away — the observer simply never fires
       return {
-        dispose() {
+        async dispose() {
           cancelled = true;
-          unsubscribe?.();
+          release();
+          await ready;
+          release();
         },
       };
     },
