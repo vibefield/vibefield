@@ -43,6 +43,10 @@ int main() {
     signal(SIGPIPE, SIG_IGN);
     NSApplication* application = NSApplication.sharedApplication;
     [application setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    id<NSObject> activity = [NSProcessInfo.processInfo
+        beginActivityWithOptions:(NSActivityUserInitiatedAllowingIdleSystemSleep |
+                                  NSActivityLatencyCritical)
+                         reason:@"VibeField deterministic ScreenCaptureKit fixture"];
 
     NSWindow* window = [[NSWindow alloc]
         initWithContentRect:NSMakeRect(0, 0, kFixtureWidth, kFixtureHeight)
@@ -61,12 +65,14 @@ int main() {
     [window orderFrontRegardless];
 
     VfLiveSurfaceFixtureView* view = (VfLiveSurfaceFixtureView*)window.contentView;
-    [NSTimer scheduledTimerWithTimeInterval:1.0 / 30.0
-                                    repeats:YES
-                                      block:^(__unused NSTimer* timer) {
+    NSTimer* timer = [NSTimer timerWithTimeInterval:1.0 / 30.0
+                                           repeats:YES
+                                             block:^(__unused NSTimer* timer) {
       view.phase = !view.phase;
       [view setNeedsDisplayInRect:NSMakeRect(0, 0, 8, 8)];
     }];
+    timer.tolerance = 0;
+    [NSRunLoop.mainRunLoop addTimer:timer forMode:NSRunLoopCommonModes];
 
     NSDictionary* ready = @{
       @"ok" : @YES,
@@ -80,6 +86,7 @@ int main() {
     [[NSFileHandle fileHandleWithStandardOutput]
         writeData:[@"\n" dataUsingEncoding:NSUTF8StringEncoding]];
     [application run];
+    [NSProcessInfo.processInfo endActivity:activity];
     return 0;
   }
 }

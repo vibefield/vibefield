@@ -301,6 +301,7 @@ bool ParseCrop(id raw, CaptureCrop* output) {
   std::array<uint8_t, VF_CAPTURE_CAPABILITY_BYTES> _capability;
   dispatch_queue_t _sampleQueue;
   SCStream* _stream;
+  id<NSObject> _captureActivity;
   BOOL _capturing;
   BOOL _stopping;
   BOOL _faulted;
@@ -316,6 +317,20 @@ bool ParseCrop(id raw, CaptureCrop* output) {
 }
 
 @synthesize faultHandler = _faultHandler;
+
+- (void)beginCaptureActivity {
+  if (_captureActivity != nil) return;
+  _captureActivity = [NSProcessInfo.processInfo
+      beginActivityWithOptions:(NSActivityUserInitiatedAllowingIdleSystemSleep |
+                                NSActivityLatencyCritical)
+                       reason:@"VibeField live window capture"];
+}
+
+- (void)endCaptureActivity {
+  if (_captureActivity == nil) return;
+  [NSProcessInfo.processInfo endActivity:_captureActivity];
+  _captureActivity = nil;
+}
 
 - (instancetype)initWithSessionKey:(NSString*)session_key
                        sessionBytes:(const uint8_t*)session_bytes
@@ -378,6 +393,7 @@ bool ParseCrop(id raw, CaptureCrop* output) {
 }
 
 - (void)startWithCompletion:(void (^)(NSError* _Nullable error))completion {
+  [self beginCaptureActivity];
   SCContentFilter* filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:_window];
   _stream = [[SCStream alloc] initWithFilter:filter
                                configuration:[self configurationForDemand:_demand]
@@ -387,12 +403,14 @@ bool ParseCrop(id raw, CaptureCrop* output) {
                            type:SCStreamOutputTypeScreen
              sampleHandlerQueue:_sampleQueue
                           error:&output_error]) {
+    [self endCaptureActivity];
     completion(output_error ?: [NSError errorWithDomain:@"VfCapture" code:1 userInfo:nil]);
     return;
   }
   [_stream startCaptureWithCompletionHandler:^(NSError* error) {
     dispatch_async(self->_sampleQueue, ^{
       self->_capturing = error == nil;
+      if (error != nil) [self endCaptureActivity];
       completion(error);
     });
   }];
@@ -409,12 +427,14 @@ bool ParseCrop(id raw, CaptureCrop* output) {
     self->_demand = demand;
     if (![demand.mode isEqualToString:@"live"]) {
       if (!self->_capturing) {
+        [self endCaptureActivity];
         completion(nil);
         return;
       }
       [self->_stream stopCaptureWithCompletionHandler:^(NSError* error) {
         dispatch_async(self->_sampleQueue, ^{
           self->_capturing = NO;
+          [self endCaptureActivity];
           completion(error);
         });
       }];
@@ -432,9 +452,11 @@ bool ParseCrop(id raw, CaptureCrop* output) {
           completion(nil);
           return;
         }
+        [self beginCaptureActivity];
         [self->_stream startCaptureWithCompletionHandler:^(NSError* start_error) {
           dispatch_async(self->_sampleQueue, ^{
             self->_capturing = start_error == nil;
+            if (start_error != nil) [self endCaptureActivity];
             completion(start_error);
           });
         }];
@@ -501,6 +523,7 @@ bool ParseCrop(id raw, CaptureCrop* output) {
   (void)stream;
   dispatch_async(_sampleQueue, ^{
     self->_capturing = NO;
+    [self endCaptureActivity];
     if (!self->_stopping) {
       [self fault:SurfaceError(@"source-closed", @"The captured window stream stopped",
                                @"automatic")];
@@ -538,6 +561,7 @@ bool ParseCrop(id raw, CaptureCrop* output) {
     void (^finish)(void) = ^{
       dispatch_async(self->_sampleQueue, ^{
         self->_capturing = NO;
+        [self endCaptureActivity];
         for (auto& slot : self->_slots) {
           if (slot.sample != nullptr) CFRelease(slot.sample);
           slot = {nullptr, 0, false, false};
@@ -557,6 +581,7 @@ bool ParseCrop(id raw, CaptureCrop* output) {
 }
 
 - (void)dealloc {
+  [self endCaptureActivity];
   for (auto& slot : _slots) {
     if (slot.sample != nullptr) CFRelease(slot.sample);
     slot.sample = nullptr;
@@ -898,11 +923,13 @@ bool ParseCrop(id raw, CaptureCrop* output) {
 }
 
 - (void)release:(NSDictionary<NSString*, id>*)command {
-  VfCaptureSession* session = [self sessionForCommand:command requestId:nil];
+  NSString* session_key = command[@"sessionKey"];
+  std::array<uint8_t, VF_CAPTURE_SESSION_KEY_BYTES> session_scratch{};
   id sequence = command[@"sequence"];
   id slot = command[@"slot"];
   id disposition = command[@"disposition"];
-  if (session == nil || !BoundedString(sequence, 20) ||
+  if (!DecodeHex(session_key, session_scratch.data(), session_scratch.size()) ||
+      !SafeInteger(command[@"producerEpoch"]) || !BoundedString(sequence, 20) ||
       !SafeInteger(slot, 0, 1) || ![disposition isKindOfClass:[NSString class]] ||
       ![@[ @"released", @"dropped", @"quarantined" ] containsObject:disposition]) {
     [self fatalProtocol:@"Capture release provenance was invalid"];
@@ -920,6 +947,11 @@ bool ParseCrop(id raw, CaptureCrop* output) {
     [self fatalProtocol:@"Capture release sequence was invalid"];
     return;
   }
+  VfCaptureSession* session = [self sessionForCommand:command requestId:nil];
+  // Stop is the stronger ownership boundary and clears both native slots. A
+  // valid renderer release can race the asynchronous stop acknowledgement;
+  // once that exact session is gone, the late release is an idempotent no-op.
+  if (session == nil) return;
   [session releaseSlot:[slot unsignedIntegerValue]
               sequence:parsed
            disposition:disposition];
