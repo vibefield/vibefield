@@ -96,6 +96,18 @@ describe("LSF-1 Live Surfaces contracts", () => {
     expect(LIVE_SURFACE_MAX_PIXELS).toBe(67_108_864);
   });
 
+  it("reports proven and deliberately degraded source-side crop state", () => {
+    expect(LiveSurfaceGeometryV1.parse({ ...geometry, cropState: "applied" }).cropState).toBe(
+      "applied",
+    );
+    expect(LiveSurfaceGeometryV1.parse({ ...geometry, cropState: "degraded" }).cropState).toBe(
+      "degraded",
+    );
+    expect(LiveSurfaceGeometryV1.safeParse({ ...geometry, cropState: "guessed" }).success).toBe(
+      false,
+    );
+  });
+
   it("enforces coherent revisioned demand", () => {
     expect(
       LiveSurfaceDemandV1.safeParse({

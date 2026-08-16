@@ -293,6 +293,33 @@ describe("MacosCaptureHelperSupervisor", () => {
     await result.supervisor.dispose();
   });
 
+  it("applies a main-proven logical Simulator geometry without changing native pixels", async () => {
+    vi.useFakeTimers();
+    const result = setup();
+    const sources = await result.supervisor.enumerateWindows(true);
+    const frames: SckCaptureFrame[] = [];
+    await result.supervisor.startSession({
+      ...request(sources[0]!.sourceRef, (frame) => frames.push(frame)),
+      geometry: {
+        logicalSize: { width: 402, height: 874 },
+        orientation: 0,
+        cropState: "applied",
+      },
+    });
+    const start = result.helpers[0]!.commands.find((command) => command["type"] === "start")!;
+    result.adapter.queue.push(nativeFrame(start["sessionKey"] as string));
+    await vi.advanceTimersByTimeAsync(4);
+    expect(frames[0]).toMatchObject({
+      codedSize: { width: 640, height: 360 },
+      logicalSize: { width: 402, height: 874 },
+      orientation: 0,
+      cropState: "applied",
+    });
+    frames[0]?.releaseLocal();
+    frames[0]?.releaseLease("released");
+    await result.supervisor.dispose();
+  });
+
   it("rejects a helper whose ready identity does not match the spawned PID", async () => {
     const result = setup((_index, pid) => ({ readyPid: pid + 1 }));
     await expect(result.supervisor.enumerateWindows()).rejects.toThrow(/identity handshake/);

@@ -182,6 +182,41 @@ describe("SckLiveSurfaceRuntime", () => {
     result.runtime.dispose();
   });
 
+  it("publishes source crop state and revisions geometry when its logical mapping changes", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    const first = captureFrame();
+    result.client.requests[0]?.onFrame({
+      ...first.frame,
+      logicalSize: { width: 402, height: 874 },
+      orientation: 0,
+      cropState: "applied",
+    });
+    expect(result.runtime.summary.geometry).toMatchObject({
+      revision: 1,
+      logicalSize: { width: 402, height: 874 },
+      orientation: 0,
+      cropState: "applied",
+    });
+
+    const second = captureFrame(1, 2n, 360, 640);
+    result.client.requests[0]?.onFrame({
+      ...second.frame,
+      logicalSize: { width: 874, height: 402 },
+      orientation: 90,
+      cropState: "applied",
+    });
+    expect(result.runtime.summary.geometry).toMatchObject({
+      revision: 2,
+      logicalSize: { width: 874, height: 402 },
+      orientation: 90,
+      cropState: "applied",
+    });
+    result.runtime.dispose();
+  });
+
   it("fans out one local IOSurface and releases each ownership tier exactly once", async () => {
     const result = setup();
     const firstRenderer = attach(result.runtime, "attachment_sck_00000001", "hold");

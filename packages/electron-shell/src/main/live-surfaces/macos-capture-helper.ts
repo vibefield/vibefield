@@ -730,7 +730,16 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
         producerEpoch: frame.producerEpoch,
         sequence: BigInt(frame.sequence),
         codedSize: { width: frame.width, height: frame.height },
-        logicalSize: { width: frame.logicalWidth, height: frame.logicalHeight },
+        logicalSize: session.request.geometry?.logicalSize ?? {
+          width: frame.logicalWidth,
+          height: frame.logicalHeight,
+        },
+        ...(session.request.geometry === undefined
+          ? {}
+          : {
+              orientation: session.request.geometry.orientation,
+              cropState: session.request.geometry.cropState,
+            }),
         ...(frame.timestampUs === undefined ? {} : { timestampUs: BigInt(frame.timestampUs) }),
         textureInfo: {
           codedSize: { width: frame.width, height: frame.height },

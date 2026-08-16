@@ -1,10 +1,12 @@
 import {
+  type LiveSurfaceCropStateV1,
   type LiveSurfaceDemandV1,
   type LiveSurfaceErrorV1,
   type LiveSurfaceFrameMetadataV1,
   LiveSurfaceGeometryV1,
   LiveSurfaceIdV1,
   type LiveSurfaceLogicalSizeV1,
+  type LiveSurfaceOrientationV1,
   type LiveSurfacePixelSizeV1,
   type LiveSurfaceRuntimeSummaryV1,
   LiveSurfaceSckWindowSourceV1,
@@ -44,12 +46,21 @@ export interface SckCaptureFrame {
   readonly sequence: bigint;
   readonly codedSize: LiveSurfacePixelSizeV1;
   readonly logicalSize: LiveSurfaceLogicalSizeV1;
+  readonly orientation?: LiveSurfaceOrientationV1;
+  readonly cropState?: LiveSurfaceCropStateV1;
   readonly timestampUs?: bigint;
   readonly textureInfo: Electron.SharedTextureImportTextureInfo;
   /** Releases only Electron main's IOSurfaceRef, after every synchronous import/drop. */
   releaseLocal(): void;
   /** Completes or quarantines the helper's retained sample-buffer slot. */
   releaseLease(disposition: SckHelperLeaseDisposition): void;
+}
+
+export interface SckCaptureGeometryOverride {
+  readonly logicalSize: LiveSurfaceLogicalSizeV1;
+  /** SCK pixels are normally already upright, so Simulator capture currently resolves to 0. */
+  readonly orientation: LiveSurfaceOrientationV1;
+  readonly cropState: LiveSurfaceCropStateV1;
 }
 
 export interface SckCaptureSessionDemand {
@@ -68,6 +79,7 @@ export interface SckCaptureClientStartRequest {
   readonly producerEpoch: number;
   readonly source: SckWindowSource;
   readonly demand: SckCaptureSessionDemand;
+  readonly geometry?: SckCaptureGeometryOverride;
   readonly onFrame: (frame: SckCaptureFrame) => void;
   readonly onFault: (error: LiveSurfaceErrorV1) => void;
 }
@@ -415,7 +427,12 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.failProtocol(run, "Screen capture helper reused or regressed a frame sequence");
       return;
     }
-    const geometry = this.updateGeometry(frame.codedSize, frame.logicalSize);
+    const geometry = this.updateGeometry(
+      frame.codedSize,
+      frame.logicalSize,
+      frame.orientation ?? 0,
+      frame.cropState,
+    );
     if (geometry === null || frame.textureInfo.pixelFormat !== "bgra") {
       this.releaseFrame(frame, "dropped");
       this.failProtocol(run, "Screen capture helper supplied invalid frame metadata");
@@ -529,8 +546,10 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   private updateGeometry(
     codedSize: LiveSurfacePixelSizeV1,
     logicalSize: LiveSurfaceLogicalSizeV1,
+    orientation: LiveSurfaceOrientationV1,
+    cropState?: LiveSurfaceCropStateV1,
   ): LiveSurfaceGeometryV1 | null {
-    const key = `${codedSize.width}:${codedSize.height}:${logicalSize.width}:${logicalSize.height}`;
+    const key = `${codedSize.width}:${codedSize.height}:${logicalSize.width}:${logicalSize.height}:${orientation}:${cropState ?? "-"}`;
     const revision =
       key === this.#geometryKey ? this.#geometryRevision : this.#geometryRevision + 1;
     const parsed = LiveSurfaceGeometryV1.safeParse({
@@ -538,7 +557,8 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       codedSize,
       visibleRect: { x: 0, y: 0, width: codedSize.width, height: codedSize.height },
       logicalSize,
-      orientation: 0,
+      orientation,
+      ...(cropState === undefined ? {} : { cropState }),
     });
     if (!parsed.success) return null;
     if (key !== this.#geometryKey) {

@@ -115,6 +115,10 @@ export const LiveSurfaceOrientationV1 = z.union([
 ]);
 export type LiveSurfaceOrientationV1 = z.infer<typeof LiveSurfaceOrientationV1>;
 
+/** Whether source-side cropping is absent, proven and applied, or deliberately degraded. */
+export const LiveSurfaceCropStateV1 = z.enum(["none", "applied", "degraded"]);
+export type LiveSurfaceCropStateV1 = z.infer<typeof LiveSurfaceCropStateV1>;
+
 export const LiveSurfaceGeometryV1 = z
   .object({
     revision: LiveSurfaceRevisionV1,
@@ -122,6 +126,7 @@ export const LiveSurfaceGeometryV1 = z
     visibleRect: LiveSurfacePixelRectV1,
     logicalSize: LiveSurfaceLogicalSizeV1,
     orientation: LiveSurfaceOrientationV1,
+    cropState: LiveSurfaceCropStateV1.optional(),
   })
   .passthrough()
   .superRefine((geometry, context) => {
