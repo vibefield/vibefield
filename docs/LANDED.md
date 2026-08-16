@@ -2206,3 +2206,28 @@ never-settling same-realm honesty, dedupe, compaction, bounded text/cardinality,
 Gates: plugin-runtime **24/24** · typecheck · Biome · import boundaries R1–R18 · patch hygiene.
 The detailed experiment and ratified spec remain dev-local under
 `draft/thinking-plugin-runtime-composability.md` and `draft/specs/plugin-architecture.md`.
+
+## PRC-1 — renderer ownership is one tree now
+
+**LANDED 2026-08-15** (`4831b0a`). The real renderer harness now binds every capability context to
+its exact activation/effect scope. Host-created widget, command, surface, client-subscription, and
+settings-subscription handles are owned automatically; exact repeated handles dedupe; labeled
+`ctx.track` and child-bound `ctx.effect` ship in the SDK, its mock host, CLI activation check, and
+generated authoring reference. Successful staged activation carries a host close lifetime. Failure
+and timeout withdraw all publications, preserve the primary error separately from cleanup errors,
+and await cleanup only to the observer's deadline.
+
+The production integration sharpened the model twice. Close first seals the whole existing child
+tree before any abort listener runs, while each descendant's cleanup still waits for its owning
+LIFO record. Publication withdrawal is a separate synchronous edge: widgets, commands, and surfaces
+disappear for new callers even when a later disposer is intentionally stalled; the same
+identity-bound inverse is awaited once at its normal LIFO position. A timed-out same-realm setup is
+reported `non-quiescent`, blocks an overlapping replacement, self-cleans a late result, and admits a
+retry only after quiescence.
+
+Gates on the landed tree: plugin-runtime **28/28** · renderer lifecycle + staged loader **20/20** ·
+plugin SDK **12/12** · plugin CLI **79/79** · all four package typechecks · generated docs current ·
+Biome (only the standing `void`-union advisories) · import boundaries R1–R18 zero · full field-app
+**432/439** in the restricted sandbox, with all seven Unix-socket permission refusals covered by a
+permitted **9/9** rerun. PRC-2 now owns the common service route-drain edge and correlated worker
+deactivation acknowledgement; PRC-3 owns full window/reload/revocation target-controller wiring.
