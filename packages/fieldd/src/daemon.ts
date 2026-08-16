@@ -1949,9 +1949,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
 
     // -- per-capability grants (PLUG-P6, §15.2/§15.4): one device-local
-    // decision, then the LIVE cascade — old leases die at the mint table,
-    // plugin connections sever, children die, the service restarts fresh so
-    // its new lease carries exactly the post-decision scopes. --
+    // decision, then the LIVE cascade — old leases die at the mint table and
+    // plugin connections sever. The service controller replaces only when its
+    // projected authority changes; observation-only movement rotates its lease. --
     api.register("plugins.grants.set", async (ctx, params) => {
       const parsed = PluginsGrantsSetParams.safeParse(params);
       if (!parsed.success)
@@ -1969,17 +1969,37 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: { pluginId: id, granted },
         },
         async () => {
+          const previous = plugins.get(id);
           const { record, changed } = await plugins.setGrant(id, capability, granted);
           let revoked = { count: 0, tokenIds: [] as string[] };
           if (changed) {
-            serviceHost?.beginDrain(id);
             revoked = tokens.revokeByPlugin(id);
             api.dropPluginConnections(id);
-            await serviceHost?.stop(id);
-            await processes.killPlugin(id);
-            endpoints.withdrawPlugin(id); // §15.4 — endpoints/MCP tools withdraw
+            const priorServiceAuthority =
+              previous === undefined
+                ? undefined
+                : projectPluginAuthority("service", previous.grantedCapabilities).fingerprint;
+            const nextServiceAuthority = projectPluginAuthority(
+              "service",
+              record.grantedCapabilities,
+            ).fingerprint;
+            const serviceAuthorityChanged = priorServiceAuthority !== nextServiceAuthority;
+            const serviceReconcile = serviceHost?.start(id).catch((error) => {
+              logger
+                .child({ component: "plugin.service.host" })
+                .error(
+                  "fieldd.plugin_service.grant_reconcile_failed",
+                  "Plugin service could not converge after a grant change",
+                  error,
+                  { pluginId: id, grantGeneration: record.grantGeneration },
+                );
+            });
+            if (serviceAuthorityChanged) {
+              await processes.killPlugin(id);
+              endpoints.withdrawPlugin(id); // §15.4 — service-owned endpoints withdraw
+            }
             mcp.refreshContributed();
-            if (record.enabled) void serviceHost?.restartFresh(id).catch(() => undefined);
+            await serviceReconcile;
             logger
               .child({ component: "plugin.grants" })
               .info("fieldd.plugin_grants.changed", "Plugin grant changed; principals recycled", {
@@ -2318,6 +2338,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       plugins,
       tokens,
       controlPort: () => controlPort,
+      deviceId: () => devices.currentDeviceId(),
       ...(config.serviceHarnessPath !== undefined
         ? { harnessPath: config.serviceHarnessPath }
         : {}),

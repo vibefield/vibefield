@@ -53,9 +53,9 @@ async function createHarness(callDelayMs: number | null): Promise<{
   let handlers: ServiceProviderHandlers | undefined;
   let drainCount = 0;
   const registry = {
-    register(binding: ServiceProviderBinding) {
+    stage(binding: ServiceProviderBinding) {
       handlers = binding.handlers;
-      return () => undefined;
+      return { commit() {}, dispose() {} };
     },
     beginDrainPlugin() {
       drainCount += 1;

@@ -58,7 +58,7 @@ const {
   version,
   entryPath,
   leaseUrl,
-  leaseToken,
+  leaseToken: initialLeaseToken,
   scopes = [],
   logLimits = {
     recordBytes: 16 * 1024,
@@ -69,6 +69,7 @@ const {
     arrayItems: 50,
   },
 } = workerData;
+let currentLeaseToken = initialLeaseToken;
 
 const root = new ActivationScope(`service:${pluginId}`);
 /** namespace → { name → handler } */
@@ -206,7 +207,7 @@ async function productClient() {
       const { FielddClient } = await import("@vibefield/fieldd-client");
       const client = new FielddClient({
         url: leaseUrl,
-        token: leaseToken,
+        token: currentLeaseToken,
         clientKind: "plugin-worker",
       });
       client.connect();
@@ -214,6 +215,21 @@ async function productClient() {
     })();
   }
   return clientPromise;
+}
+
+// Credential messages are authority edges, not ordinary plugin work. Preserve parent-port order
+// even when the lazy FielddClient import/construction is concurrently in flight.
+let credentialTask = Promise.resolve();
+function updateCredential(token) {
+  const update = async () => {
+    currentLeaseToken = token;
+    const pending = clientPromise;
+    if (pending === null) return;
+    const client = await pending;
+    client.rotateCredential(token);
+  };
+  credentialTask = credentialTask.then(update, update);
+  return credentialTask;
 }
 
 // Register the lazy connection owner BEFORE the activation child. The activation and all of its
@@ -519,6 +535,17 @@ function handlerFor(namespace, name) {
 port.on("message", (msg) => {
   void (async () => {
     switch (msg.t) {
+      case "credential-invalidate":
+        await updateCredential("");
+        return;
+      case "credential":
+        await updateCredential(msg.token);
+        post({
+          t: "credential-rotated",
+          requestId: msg.requestId,
+          grantGeneration: msg.grantGeneration,
+        });
+        return;
       case "call": {
         const handler = handlerFor(msg.namespace, msg.name);
         if (handler === undefined || handler.kind === "subscription") {

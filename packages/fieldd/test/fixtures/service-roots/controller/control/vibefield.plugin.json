@@ -1,0 +1,67 @@
+{
+  "activation": ["onStartup"],
+  "backgroundReason": "PRC-3c controller and credential-rotation integration fixture",
+  "capabilities": [
+    "services.provide",
+    "background",
+    "storage.self",
+    "process.spawn",
+    "shell.open"
+  ],
+  "contributes": {
+    "capabilities": [
+      {
+        "description": "Call the PRC-3c controller fixture",
+        "id": "x.vibefield.prc.controller.use",
+        "risk": "read",
+        "title": "Use PRC-3c controller fixture"
+      }
+    ],
+    "services": [
+      {
+        "methods": [
+          {
+            "idempotent": true,
+            "input": { "additionalProperties": false, "type": "object" },
+            "kind": "query",
+            "locality": "local",
+            "name": "instance",
+            "output": {
+              "additionalProperties": false,
+              "properties": { "id": { "type": "string" } },
+              "required": ["id"],
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.prc.controller.use"
+          },
+          {
+            "idempotent": false,
+            "input": {
+              "additionalProperties": false,
+              "properties": { "value": { "type": "string" } },
+              "required": ["value"],
+              "type": "object"
+            },
+            "kind": "mutation",
+            "locality": "local",
+            "name": "touch",
+            "output": {
+              "additionalProperties": false,
+              "properties": { "value": { "type": "string" } },
+              "required": ["value"],
+              "type": "object"
+            },
+            "requiredCapability": "x.vibefield.prc.controller.use"
+          }
+        ],
+        "namespace": "x.vibefield.prc.controller"
+      }
+    ]
+  },
+  "engines": { "app": ">=0.0.0", "contracts": "^0.1.0" },
+  "entries": { "renderer": "./renderer.js", "service": "./service.js" },
+  "id": "vibefield.prc.controller",
+  "manifestVersion": 1,
+  "title": "PRC-3c Controller Fixture",
+  "version": "0.1.0"
+}

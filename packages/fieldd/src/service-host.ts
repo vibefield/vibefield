@@ -12,9 +12,22 @@ import {
   validatePluginManifest,
 } from "@vibefield/contracts";
 import { createBoundedLineFramer, createNoopLogger, type Logger } from "@vibefield/logging";
-import { projectPluginAuthority } from "@vibefield/plugin-runtime";
+import {
+  type ActivationCloseReason,
+  type ActivationScope,
+  projectPluginAuthority,
+  type RuntimeTargetCandidate,
+  RuntimeTargetController,
+  type ServiceRuntimeTarget,
+  samePluginRuntimeObservation,
+  samePluginRuntimeTarget,
+} from "@vibefield/plugin-runtime";
 import type { PluginRegistryService } from "./plugin-registry";
-import type { ServiceCallerInfo, ServiceRegistry } from "./service-registry";
+import type {
+  ServiceCallerInfo,
+  ServiceProviderCandidate,
+  ServiceRegistry,
+} from "./service-registry";
 import type { TokenGrant, TokenService } from "./token-service";
 
 // ServiceHost (plugin spec §14.2/§18, P4): one worker thread per plugin
@@ -40,6 +53,8 @@ export interface ServiceHostConfig {
   tokens: TokenService;
   /** the bound product port (workers dial loopback with their lease) */
   controlPort: () => number;
+  /** exact service-instance key; production supplies the durable local device id */
+  deviceId?: () => string;
   /** override for the bundled daemon (bin.cjs cannot use import.meta) */
   harnessPath?: string;
   /** test seams — production defaults are the §10.4 PLUGIN_LIMITS */
@@ -73,6 +88,8 @@ interface Entry {
   worker: Worker | null;
   /** registry unregister fns for this plugin's live providers */
   unregisters: Map<string, () => void>;
+  /** declaration-validated provider bindings stay unavailable until the worker activation commit */
+  providerCandidates: Map<string, ServiceProviderCandidate>;
   pending: Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>;
   sinks: Map<
     number,
@@ -95,12 +112,32 @@ interface Entry {
   detachOutput: (() => void) | null;
   leaseTokenId: string | null;
   leaseRelease: Promise<void> | null;
+  controller: RuntimeTargetController<ServiceRuntimeTarget, ServiceWorkerCandidate>;
+  credentialWaiters: Map<
+    number,
+    {
+      worker: Worker;
+      generation: number;
+      grantGeneration: number;
+      resolve(): void;
+      reject(error: Error): void;
+    }
+  >;
+}
+
+interface ServiceWorkerCandidate extends RuntimeTargetCandidate {
+  readonly target: ServiceRuntimeTarget;
+  readonly worker: Worker;
+  readonly generation: number;
+  leaseTokenId: string | null;
+  invalidateCredential(grantGeneration: number): void;
 }
 
 export class ServiceHost {
   private readonly entries = new Map<string, Entry>();
   private nextCallId = 1;
   private nextDeactivationId = 1;
+  private nextCredentialId = 1;
   private disposed = false;
   private readonly logger: Logger;
 
@@ -111,10 +148,31 @@ export class ServiceHost {
   private entry(pluginId: string): Entry {
     let e = this.entries.get(pluginId);
     if (e === undefined) {
-      e = {
+      let created!: Entry;
+      const controller = new RuntimeTargetController<ServiceRuntimeTarget, ServiceWorkerCandidate>(
+        `service:${pluginId}:${this.cfg.deviceId?.() ?? "local"}`,
+        {
+          activate: (target, scope, signal) =>
+            this.activateTarget(pluginId, created, target, scope, signal),
+          refresh: (candidate, _previous, next, signal) =>
+            this.refreshCandidate(pluginId, created, candidate, next, signal),
+          termination: {
+            kind: "worker",
+            force: (reason) => this.forceEntry(created, reason),
+          },
+          activationDeadlineMs:
+            this.cfg.deadlines?.activateMs ?? PLUGIN_LIMITS.SERVICE_ACTIVATE_DEADLINE_MS,
+          // Candidate disposal owns PRC-2's exact route/call/cleanup deadline. Give that disposer
+          // one scheduling turn to report before the outer controller asks for boundary force.
+          disposalDeadlineMs:
+            (this.cfg.deadlines?.deactivateMs ?? PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS) + 25,
+        },
+      );
+      created = {
         state: "none",
         worker: null,
         unregisters: new Map(),
+        providerCandidates: new Map(),
         pending: new Map(),
         sinks: new Map(),
         crashTimes: [],
@@ -128,7 +186,10 @@ export class ServiceHost {
         detachOutput: null,
         leaseTokenId: null,
         leaseRelease: null,
+        controller,
+        credentialWaiters: new Map(),
       };
+      e = created;
       this.entries.set(pluginId, e);
     }
     return e;
@@ -165,6 +226,8 @@ export class ServiceHost {
       clearTimeout(e.restartTimer);
       e.restartTimer = null;
     }
+    if (e.controller.state === "failed")
+      e.controller.retry({ kind: "manual", detail: "explicit service restart" });
     await this.start(pluginId);
   }
 
@@ -173,18 +236,72 @@ export class ServiceHost {
     const e = this.entry(pluginId);
     if (e.stopTask !== null) await e.stopTask;
     if (this.disposed) return;
-    if (e.worker !== null || e.state === "activating") return; // idempotent
     if (e.state === "quarantined" && e.crashTimes.length > 0) return; // §18.3 — user clear required
+    const target = this.serviceTarget(pluginId);
+    if (target === null) {
+      e.controller.setDesired(null);
+      await e.controller.settle({ deadlineMs: this.controllerSettleDeadline() });
+      return;
+    }
+
+    const committed = e.controller.committed;
+    if (
+      committed !== null &&
+      samePluginRuntimeTarget(committed, target) &&
+      !samePluginRuntimeObservation(committed, target)
+    ) {
+      // The registry observation is already authoritative. Prevent the old product credential from
+      // doing new work while the serialized refresh mints and acknowledges its replacement.
+      e.controller.activeCandidate?.invalidateCredential(target.observedGrantGeneration);
+    }
+    e.stopping = false;
+    e.controller.setDesired(target);
+    const snapshot = await e.controller.settle({ deadlineMs: this.controllerSettleDeadline() });
+    if (!samePluginRuntimeObservation(e.controller.desired, target)) return;
+    if (samePluginRuntimeObservation(snapshot.committed, target)) return;
+    if (snapshot.state === "non-quiescent") {
+      this.setState(pluginId, e, "degraded");
+      throw new Error(`${pluginId}: prior service target did not quiesce`);
+    }
+    if (snapshot.state === "failed") {
+      this.setState(pluginId, e, "degraded");
+      throw new Error(`${pluginId}: ${snapshot.error ?? "service activation failed"}`);
+    }
+  }
+
+  private async activateTarget(
+    pluginId: string,
+    e: Entry,
+    target: ServiceRuntimeTarget,
+    _scope: ActivationScope,
+    signal: AbortSignal,
+  ): Promise<ServiceWorkerCandidate> {
+    if (this.disposed || signal.aborted) throw new Error(`${pluginId}: service target superseded`);
     const startEpoch = ++e.startEpoch;
     e.stopping = false;
+    let boundaryWorker: Worker | null = null;
+    let candidateReturned = false;
+    signal.addEventListener(
+      "abort",
+      () => {
+        e.startEpoch += 1;
+        e.stopping = true;
+        this.beginRouteDrain(pluginId, e);
+        if (!candidateReturned && boundaryWorker !== null) void boundaryWorker.terminate();
+      },
+      { once: true },
+    );
 
     const record = this.cfg.plugins.get(pluginId);
-    if (record === undefined || !record.enabled) return;
+    if (record === undefined || !record.enabled)
+      throw new Error(`${pluginId}: service target is no longer enabled`);
     const root = this.cfg.plugins.rootPath(pluginId);
     const manifest = await this.readManifest(pluginId);
-    if (e.startEpoch !== startEpoch || e.stopping || this.disposed) return;
+    if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal))
+      throw new Error(`${pluginId}: service target superseded while reading its manifest`);
     const entryRel = manifest?.entries?.service;
-    if (root === undefined || manifest === null || entryRel === undefined) return;
+    if (root === undefined || manifest === null || entryRel === undefined)
+      throw new Error(`${pluginId}: service entry is unavailable`);
     const entryPath = resolve(join(root, entryRel));
     if (!entryPath.startsWith(resolve(root))) {
       this.setState(pluginId, e, "quarantined");
@@ -194,7 +311,7 @@ export class ServiceHost {
         undefined,
         { pluginId },
       );
-      return;
+      throw new Error(`${pluginId}: service entry escaped its plugin root`);
     }
 
     const generation = ++e.generation;
@@ -208,13 +325,14 @@ export class ServiceHost {
       (SCOPES as readonly string[]).includes(capability),
     );
     const leaseObservation: ServiceLeaseObservation = {
-      manifestHash: record.manifestHash,
-      grantGeneration: record.grantGeneration,
-      authorityFingerprint: authority.fingerprint,
+      manifestHash: target.artifact.manifestHash,
+      grantGeneration: target.observedGrantGeneration,
+      authorityFingerprint: target.authorityFingerprint,
     };
     await e.leaseRelease;
     e.leaseRelease = null;
-    if (!this.isCurrentStart(pluginId, e, startEpoch, generation, leaseObservation)) return;
+    if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal))
+      throw new Error(`${pluginId}: service target superseded before lease mint`);
     let lease: TokenGrant;
     try {
       lease =
@@ -222,14 +340,15 @@ export class ServiceHost {
           ? await this.cfg.mintServiceLease(pluginId, scopes, leaseObservation)
           : this.cfg.tokens.mint(scopes, `plugin:${pluginId}:service`, { pluginId });
     } catch (error) {
-      if (!this.isCurrentStart(pluginId, e, startEpoch, generation, leaseObservation)) return;
+      if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal))
+        throw new Error(`${pluginId}: service target superseded during lease mint`);
       e.routeState = "withdrawn";
       this.setState(pluginId, e, "degraded");
       throw error;
     }
-    if (!this.isCurrentStart(pluginId, e, startEpoch, generation, leaseObservation)) {
+    if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal)) {
       await this.releaseLeaseToken(pluginId, lease.tokenId, "service-start-superseded");
-      return;
+      throw new Error(`${pluginId}: service target superseded after lease mint`);
     }
     e.leaseTokenId = lease.tokenId;
 
@@ -279,28 +398,18 @@ export class ServiceHost {
     e.detachOutput?.();
     e.detachOutput = this.capturePluginOutput(worker, pluginId);
     e.worker = worker;
+    boundaryWorker = worker;
 
     const declarations = manifest.contributes?.services ?? [];
-    const activateDeadline =
-      this.cfg.deadlines?.activateMs ?? PLUGIN_LIMITS.SERVICE_ACTIVATE_DEADLINE_MS;
 
     await new Promise<void>((resolveActivate, rejectActivate) => {
       let settled = false;
+      let providerError: unknown;
       const finish = (fn: () => void) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
         fn();
       };
-      const timer = setTimeout(() => {
-        // §10.4 — a hung activation is terminated, honestly failed
-        finish(() => {
-          this.beginRouteDrain(pluginId, e);
-          void worker.terminate();
-          this.setState(pluginId, e, "degraded");
-          rejectActivate(new Error(`${pluginId}: activate exceeded ${activateDeadline}ms`));
-        });
-      }, activateDeadline);
 
       worker.on("message", (msg: Record<string, unknown>) => {
         if (e.generation !== generation) return; // a stale worker's echo
@@ -310,16 +419,26 @@ export class ServiceHost {
               finish(() => rejectActivate(new Error(`${pluginId}: deactivated during activation`)));
               return;
             }
-            finish(() => {
-              e.routeState = "active";
-              this.setState(pluginId, e, "active");
-              this.logger.info(
-                "fieldd.plugin_service.activated",
-                "Plugin service worker activated",
-                { pluginId },
-              );
-              resolveActivate();
-            });
+            if (
+              providerError !== undefined ||
+              new Set(declarations.map((declaration) => declaration.namespace)).size !==
+                e.providerCandidates.size
+            ) {
+              finish(() => {
+                this.beginRouteDrain(pluginId, e);
+                void worker.terminate();
+                this.setState(pluginId, e, "degraded");
+                rejectActivate(
+                  providerError instanceof Error
+                    ? providerError
+                    : new Error(
+                        `${pluginId}: service activation did not provide every declaration`,
+                      ),
+                );
+              });
+              return;
+            }
+            finish(resolveActivate);
             return;
           case "activate-failed":
             finish(() => {
@@ -338,7 +457,7 @@ export class ServiceHost {
             try {
               const namespace = String(msg["namespace"]);
               const nsDecls = declarations.filter((s) => s.namespace === namespace);
-              const unregister = this.cfg.registry.register({
+              const candidate = this.cfg.registry.stage({
                 pluginId,
                 namespace,
                 declarations: nsDecls.flatMap((s) => s.methods),
@@ -348,8 +467,9 @@ export class ServiceHost {
                 }>,
                 handlers: this.portHandlers(pluginId, e, namespace, worker, generation),
               });
-              e.unregisters.set(namespace, unregister);
+              e.providerCandidates.set(namespace, candidate);
             } catch (err) {
+              providerError ??= err;
               this.logger.error(
                 "fieldd.plugin_service.provide_rejected",
                 "Plugin service provider registration was refused",
@@ -364,7 +484,10 @@ export class ServiceHost {
             // A draining generation has already withdrawn public ingress while retaining a typed
             // tombstone. Its worker-side ownership inverse is cleanup confirmation, not a second
             // route transition; final withdrawPlugin retires the tombstone after teardown.
-            if (e.routeState !== "draining") e.unregisters.get(namespace)?.();
+            if (e.routeState !== "draining") {
+              e.providerCandidates.get(namespace)?.dispose();
+              e.providerCandidates.delete(namespace);
+            }
             e.unregisters.delete(namespace);
             return;
           }
@@ -391,6 +514,20 @@ export class ServiceHost {
             const id = msg["id"] as number;
             e.sinks.get(id)?.end(msg["error"] as { kind: string; message: string } | undefined);
             e.sinks.delete(id);
+            return;
+          }
+          case "credential-rotated": {
+            const requestId = msg["requestId"] as number;
+            const waiter = e.credentialWaiters.get(requestId);
+            if (
+              waiter === undefined ||
+              waiter.worker !== worker ||
+              waiter.generation !== generation ||
+              waiter.grantGeneration !== msg["grantGeneration"]
+            )
+              return;
+            e.credentialWaiters.delete(requestId);
+            waiter.resolve();
             return;
           }
           case "log": {
@@ -441,8 +578,11 @@ export class ServiceHost {
         e.detachOutput?.();
         e.detachOutput = null;
         e.worker = null;
+        this.rejectCredentialWaiters(e, worker, generation, "service worker exited");
         void this.releaseServiceLease(pluginId, e, "worker-exit");
         this.failAllInflight(e, "provider gone");
+        for (const provider of e.providerCandidates.values()) provider.dispose();
+        e.providerCandidates.clear();
         this.cfg.registry.withdrawPlugin(pluginId);
         e.unregisters.clear();
         e.routeState = "withdrawn";
@@ -456,10 +596,46 @@ export class ServiceHost {
         this.onCrash(pluginId, e);
       });
     });
+
+    const candidate: ServiceWorkerCandidate = {
+      target,
+      worker,
+      generation,
+      leaseTokenId: lease.tokenId,
+      commit: () => {
+        if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal))
+          throw new Error(`${pluginId}: stale service candidate cannot commit`);
+        // Handlers must accept work before the registry emits its synchronous availability event.
+        // Until this exact edge every staged method answers typed UNAVAILABLE.
+        e.routeState = "active";
+        for (const [namespace, provider] of e.providerCandidates) {
+          provider.commit();
+          e.unregisters.set(namespace, () => provider.dispose());
+        }
+        if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal))
+          throw new Error(`${pluginId}: service candidate changed during provider commit`);
+        this.setState(pluginId, e, "active");
+        this.logger.info("fieldd.plugin_service.activated", "Plugin service worker activated", {
+          pluginId,
+        });
+      },
+      dispose: () => this.stopCandidate(pluginId, e, candidate),
+      invalidateCredential: (grantGeneration) => {
+        if (e.worker !== worker || e.generation !== generation) return;
+        try {
+          worker.postMessage({ t: "credential-invalidate", grantGeneration });
+        } catch {
+          // The controller's refresh/termination paths will observe the lost worker boundary.
+        }
+      },
+    };
+    candidateReturned = true;
+    return candidate;
   }
 
   /** §18.3 — degraded → backoff restart; 3 crashes in the window → quarantine */
   private onCrash(pluginId: string, e: Entry): void {
+    e.controller.setDesired(null, { reason: { kind: "crash", detail: pluginId } });
     const now = Date.now();
     const windowMs = this.cfg.ladder?.windowMs ?? 600_000;
     const quarantineAt = this.cfg.ladder?.quarantineAt ?? 3;
@@ -492,7 +668,10 @@ export class ServiceHost {
   }
 
   /** Synchronous PRC-2 ingress edge used by registry-driven disable before its async stop joins. */
-  beginDrain(pluginId: string): void {
+  beginDrain(
+    pluginId: string,
+    reason: ActivationCloseReason = { kind: "disable", detail: pluginId },
+  ): void {
     const e = this.entries.get(pluginId);
     if (e === undefined) {
       // A test/alternate host may have registered a provider without a worker entry. It still
@@ -502,7 +681,8 @@ export class ServiceHost {
     }
     e.startEpoch += 1;
     e.stopping = true;
-    this.beginRouteDrain(pluginId, e);
+    e.controller.setDesired(null, { reason });
+    if (e.controller.activeCandidate === undefined) this.beginRouteDrain(pluginId, e);
   }
 
   /** §18.2 deactivation: route drain → admitted-call window → correlated worker cleanup → force. */
@@ -517,10 +697,18 @@ export class ServiceHost {
       e.restartTimer = null;
     }
     if (e.stopTask !== null) return e.stopTask;
-    e.startEpoch += 1;
-    e.stopping = true;
-    this.beginRouteDrain(pluginId, e);
-    const task = this.stopEntry(pluginId, e);
+    this.beginDrain(pluginId);
+    const task = (async () => {
+      await e.controller.settle({ deadlineMs: this.controllerSettleDeadline() });
+      if (e.controller.desired === null) {
+        for (const provider of e.providerCandidates.values()) provider.dispose();
+        e.providerCandidates.clear();
+        this.cfg.registry.withdrawPlugin(pluginId);
+        e.unregisters.clear();
+        e.routeState = "withdrawn";
+        this.setState(pluginId, e, "inactive");
+      }
+    })();
     e.stopTask = task;
     try {
       await task;
@@ -529,13 +717,17 @@ export class ServiceHost {
     }
   }
 
-  private async stopEntry(pluginId: string, e: Entry): Promise<void> {
-    const worker = e.worker;
-    const generation = e.generation;
+  private async stopCandidate(
+    pluginId: string,
+    e: Entry,
+    candidate: ServiceWorkerCandidate,
+  ): Promise<void> {
+    const worker = candidate.worker;
+    const generation = candidate.generation;
     const deadlineMs = this.cfg.deadlines?.deactivateMs ?? PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS;
     const deadlineAt = Date.now() + deadlineMs;
 
-    if (worker !== null) {
+    if (e.worker === worker && e.generation === generation) {
       const callsDrained = await this.waitForPendingCalls(e, deadlineAt);
       if (!callsDrained) this.failPendingCalls(e, "provider drain deadline exceeded");
 
@@ -550,15 +742,21 @@ export class ServiceHost {
       if (e.worker === worker) e.worker = null;
     }
 
-    await this.releaseServiceLease(pluginId, e, "service-stop");
+    await this.releaseCandidateLease(pluginId, e, candidate, "service-stop");
     this.failAllInflight(e, "provider deactivated");
+    for (const provider of e.providerCandidates.values()) provider.dispose();
+    e.providerCandidates.clear();
     this.cfg.registry.withdrawPlugin(pluginId);
     e.unregisters.clear();
     e.routeState = "withdrawn";
-    this.setState(pluginId, e, "inactive");
-    this.logger.info("fieldd.plugin_service.deactivated", "Plugin service worker deactivated", {
-      pluginId,
-    });
+    // A crash already moved the public entry into restarting/quarantined and owns that state until
+    // its backoff or explicit recovery. Cooperative/manual teardown lands inactive instead.
+    if (e.state !== "restarting" && e.state !== "quarantined") {
+      this.setState(pluginId, e, "inactive");
+      this.logger.info("fieldd.plugin_service.deactivated", "Plugin service worker deactivated", {
+        pluginId,
+      });
+    }
   }
 
   /** One idempotent synchronous route transition for disable/reload/revocation/crash/shutdown. */
@@ -679,27 +877,190 @@ export class ServiceHost {
     this.cfg.plugins.setServiceEntryState(pluginId, state);
   }
 
-  private isCurrentStart(
+  private serviceTarget(pluginId: string): ServiceRuntimeTarget | null {
+    const record = this.cfg.plugins.get(pluginId);
+    if (record === undefined || !record.enabled || record.service === "none") return null;
+    const authority = projectPluginAuthority("service", record.grantedCapabilities);
+    return {
+      face: "service",
+      pluginId,
+      artifact: {
+        // Production PluginRecord always carries both fields. Fallbacks keep narrow host fakes
+        // source-compatible without weakening the daemon's real target identity.
+        installRevision: record.installRevision ?? `${record.version}:legacy`,
+        manifestHash: record.manifestHash ?? `legacy:${pluginId}:${record.version}`,
+      },
+      instanceKey: { deviceId: this.cfg.deviceId?.() ?? "local" },
+      authorityFingerprint: authority.fingerprint,
+      observedGrantGeneration: record.grantGeneration ?? 0,
+    };
+  }
+
+  private isCurrentTarget(
     pluginId: string,
     e: Entry,
     startEpoch: number,
-    generation: number,
-    observation: ServiceLeaseObservation,
+    target: ServiceRuntimeTarget,
+    signal: AbortSignal,
   ): boolean {
-    if (this.disposed || e.stopping || e.startEpoch !== startEpoch || e.generation !== generation)
-      return false;
-    const record = this.cfg.plugins.get(pluginId);
-    if (
-      record === undefined ||
-      !record.enabled ||
-      record.manifestHash !== observation.manifestHash ||
-      record.grantGeneration !== observation.grantGeneration
-    )
-      return false;
     return (
-      projectPluginAuthority("service", record.grantedCapabilities).fingerprint ===
-      observation.authorityFingerprint
+      !this.disposed &&
+      !signal.aborted &&
+      !e.stopping &&
+      e.startEpoch === startEpoch &&
+      samePluginRuntimeObservation(this.serviceTarget(pluginId), target)
     );
+  }
+
+  private controllerSettleDeadline(): number {
+    const activate = this.cfg.deadlines?.activateMs ?? PLUGIN_LIMITS.SERVICE_ACTIVATE_DEADLINE_MS;
+    const deactivate = this.cfg.deadlines?.deactivateMs ?? PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS;
+    return activate + deactivate * 2 + 100;
+  }
+
+  private async refreshCandidate(
+    pluginId: string,
+    e: Entry,
+    candidate: ServiceWorkerCandidate,
+    target: ServiceRuntimeTarget,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const current = (): boolean =>
+      !signal.aborted &&
+      e.worker === candidate.worker &&
+      e.generation === candidate.generation &&
+      e.controller.activeCandidate === candidate &&
+      samePluginRuntimeTarget(candidate.target, target) &&
+      samePluginRuntimeObservation(this.serviceTarget(pluginId), target);
+    if (!current()) return;
+
+    await e.leaseRelease;
+    e.leaseRelease = null;
+    if (!current()) return;
+    const record = this.cfg.plugins.get(pluginId);
+    if (record === undefined) return;
+    const authority = projectPluginAuthority("service", record.grantedCapabilities);
+    const scopes = authority.capabilities.filter((capability): capability is Scope =>
+      (SCOPES as readonly string[]).includes(capability),
+    );
+    const observation: ServiceLeaseObservation = {
+      manifestHash: target.artifact.manifestHash,
+      grantGeneration: target.observedGrantGeneration,
+      authorityFingerprint: target.authorityFingerprint,
+    };
+    let lease: TokenGrant;
+    try {
+      lease =
+        this.cfg.mintServiceLease !== undefined
+          ? await this.cfg.mintServiceLease(pluginId, scopes, observation)
+          : this.cfg.tokens.mint(scopes, `plugin:${pluginId}:service`, { pluginId });
+    } catch (error) {
+      if (!current()) return;
+      throw error;
+    }
+    if (!current()) {
+      await this.releaseLeaseToken(pluginId, lease.tokenId, "service-refresh-superseded");
+      return;
+    }
+
+    try {
+      await this.rotateWorkerCredential(e, candidate, lease, target, signal);
+    } catch (error) {
+      await this.releaseLeaseToken(pluginId, lease.tokenId, "service-refresh-failed");
+      if (!current()) return;
+      throw error;
+    }
+    if (!current()) {
+      candidate.invalidateCredential(target.observedGrantGeneration);
+      await this.releaseLeaseToken(pluginId, lease.tokenId, "service-refresh-superseded");
+      return;
+    }
+
+    const previousTokenId = candidate.leaseTokenId;
+    candidate.leaseTokenId = lease.tokenId;
+    e.leaseTokenId = lease.tokenId;
+    if (previousTokenId !== null)
+      await this.releaseLeaseToken(pluginId, previousTokenId, "service-credential-rotated");
+  }
+
+  private rotateWorkerCredential(
+    e: Entry,
+    candidate: ServiceWorkerCandidate,
+    lease: TokenGrant,
+    target: ServiceRuntimeTarget,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const requestId = this.nextCredentialId++;
+    const deadlineMs = this.cfg.deadlines?.activateMs ?? PLUGIN_LIMITS.SERVICE_ACTIVATE_DEADLINE_MS;
+    return new Promise<void>((resolveRotation, rejectRotation) => {
+      let settled = false;
+      const finish = (error?: Error): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        signal.removeEventListener("abort", onAbort);
+        e.credentialWaiters.delete(requestId);
+        if (error === undefined) resolveRotation();
+        else rejectRotation(error);
+      };
+      const onAbort = (): void => finish(new Error("service credential refresh aborted"));
+      const timer = setTimeout(
+        () => finish(new Error("service worker did not acknowledge credential refresh")),
+        deadlineMs,
+      );
+      signal.addEventListener("abort", onAbort, { once: true });
+      e.credentialWaiters.set(requestId, {
+        worker: candidate.worker,
+        generation: candidate.generation,
+        grantGeneration: target.observedGrantGeneration,
+        resolve: () => finish(),
+        reject: (error) => finish(error),
+      });
+      try {
+        candidate.worker.postMessage({
+          t: "credential",
+          requestId,
+          token: lease.token,
+          grantGeneration: target.observedGrantGeneration,
+        });
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  private rejectCredentialWaiters(
+    e: Entry,
+    worker: Worker,
+    generation: number,
+    reason: string,
+  ): void {
+    for (const waiter of [...e.credentialWaiters.values()]) {
+      if (waiter.worker === worker && waiter.generation === generation)
+        waiter.reject(new Error(reason));
+    }
+  }
+
+  private async forceEntry(
+    e: Entry,
+    reason: ActivationCloseReason,
+  ): Promise<{ terminated: boolean; forced: boolean; detail: string }> {
+    const worker = e.worker;
+    if (worker === null)
+      return { terminated: false, forced: false, detail: `${reason.kind}: no boundary to force` };
+    const generation = e.generation;
+    try {
+      await worker.terminate();
+      this.rejectCredentialWaiters(e, worker, generation, "service worker force-terminated");
+      if (e.worker === worker) e.worker = null;
+      return { terminated: true, forced: true, detail: reason.kind };
+    } catch (error) {
+      return {
+        terminated: false,
+        forced: true,
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   private releaseLeaseToken(pluginId: string, tokenId: string, reason: string): Promise<void> {
@@ -722,6 +1083,23 @@ export class ServiceHost {
   private releaseServiceLease(pluginId: string, e: Entry, reason: string): Promise<void> {
     const tokenId = e.leaseTokenId;
     if (tokenId === null) return e.leaseRelease ?? Promise.resolve();
+    e.leaseTokenId = null;
+    const release = this.releaseLeaseToken(pluginId, tokenId, reason);
+    e.leaseRelease = release;
+    return release;
+  }
+
+  private releaseCandidateLease(
+    pluginId: string,
+    e: Entry,
+    candidate: ServiceWorkerCandidate,
+    reason: string,
+  ): Promise<void> {
+    const tokenId = candidate.leaseTokenId;
+    candidate.leaseTokenId = null;
+    if (tokenId === null) return e.leaseRelease ?? Promise.resolve();
+    // The exact worker exit path may already have detached and started releasing this token.
+    if (e.leaseTokenId !== tokenId) return e.leaseRelease ?? Promise.resolve();
     e.leaseTokenId = null;
     const release = this.releaseLeaseToken(pluginId, tokenId, reason);
     e.leaseRelease = release;

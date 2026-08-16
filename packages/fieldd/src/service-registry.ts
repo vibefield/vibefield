@@ -61,6 +61,13 @@ export interface ServiceProviderBinding {
   handlers: ServiceProviderHandlers;
 }
 
+/** A declaration-validated provider whose method kinds are known to the router but whose handlers
+ * cannot receive work until one synchronous commit edge. Disposal is exact-binding and idempotent. */
+export interface ServiceProviderCandidate {
+  commit(): void;
+  dispose(): void;
+}
+
 interface MethodEntry {
   pluginId: string;
   namespace: string;
@@ -85,9 +92,9 @@ export class ServiceRegistry extends EventEmitter {
   private readonly ajv = new Ajv({ allErrors: false, strict: false });
   private readonly methods = new Map<string, MethodEntry>();
   private readonly providers = new Map<string, ServiceProviderBinding>();
-  /** A draining provider remains as a method-kind tombstone so new work gets typed UNAVAILABLE
-   * until the worker generation is actually withdrawn. It is absent from public availability. */
-  private readonly drainingNamespaces = new Set<string>();
+  /** Activating and draining providers remain method-kind tombstones. Both are absent from public
+   * availability and answer typed UNAVAILABLE; only the active state has no map entry. */
+  private readonly unavailableNamespaces = new Map<string, "activating" | "draining">();
   private readonly subs = new Set<LiveSub>();
   private readonly logger: Logger;
   private generation = 0;
@@ -107,6 +114,14 @@ export class ServiceRegistry extends EventEmitter {
    * unregister function. The NEWER registration fails on collision — a live
    * provider is never replaced. */
   register(binding: ServiceProviderBinding): () => void {
+    const candidate = this.stage(binding);
+    candidate.commit();
+    return () => candidate.dispose();
+  }
+
+  /** PRC-3c private activation stage. Validation and method-kind installation happen now, but the
+   * provider stays out of snapshots and no handler can run until candidate.commit(). */
+  stage(binding: ServiceProviderBinding): ServiceProviderCandidate {
     const { pluginId, namespace, declarations, implemented, handlers } = binding;
     if (namespace !== `${NAMESPACES.DYNAMIC_PREFIX}${pluginId}`)
       throw new RpcCallError(
@@ -180,8 +195,34 @@ export class ServiceRegistry extends EventEmitter {
 
     this.providers.set(namespace, binding);
     for (const [full, entry] of entries) this.methods.set(full, entry);
-    this.publish();
-    return () => this.withdrawNamespace(namespace);
+    this.unavailableNamespaces.set(namespace, "activating");
+
+    let candidateState: "staged" | "active" | "disposed" = "staged";
+    return Object.freeze({
+      commit: () => {
+        if (candidateState === "active") return;
+        if (
+          candidateState === "disposed" ||
+          this.providers.get(namespace) !== binding ||
+          this.unavailableNamespaces.get(namespace) !== "activating"
+        ) {
+          throw new RpcCallError(
+            "UNAVAILABLE",
+            `${namespace} activation candidate is no longer current`,
+            true,
+          );
+        }
+        candidateState = "active";
+        this.unavailableNamespaces.delete(namespace);
+        this.publish();
+      },
+      dispose: () => {
+        if (candidateState === "disposed") return;
+        const wasStaged = candidateState === "staged";
+        candidateState = "disposed";
+        this.withdrawNamespace(namespace, binding, !wasStaged);
+      },
+    });
   }
 
   withdrawPlugin(pluginId: string): void {
@@ -195,9 +236,14 @@ export class ServiceRegistry extends EventEmitter {
   beginDrainPlugin(pluginId: string): void {
     let changed = false;
     for (const [namespace, provider] of this.providers) {
-      if (provider.pluginId !== pluginId || this.drainingNamespaces.has(namespace)) continue;
-      this.drainingNamespaces.add(namespace);
-      changed = true;
+      if (
+        provider.pluginId !== pluginId ||
+        this.unavailableNamespaces.get(namespace) === "draining"
+      )
+        continue;
+      const wasActive = !this.unavailableNamespaces.has(namespace);
+      this.unavailableNamespaces.set(namespace, "draining");
+      changed ||= wasActive;
       for (const sub of [...this.subs]) {
         if (sub.namespace !== namespace) continue;
         sub.end({ kind: "UNAVAILABLE", message: "provider draining" }, true);
@@ -206,9 +252,14 @@ export class ServiceRegistry extends EventEmitter {
     if (changed) this.publish();
   }
 
-  private withdrawNamespace(namespace: string): void {
+  private withdrawNamespace(
+    namespace: string,
+    expected?: ServiceProviderBinding,
+    publish = this.unavailableNamespaces.get(namespace) !== "activating",
+  ): void {
+    if (expected !== undefined && this.providers.get(namespace) !== expected) return;
     if (!this.providers.delete(namespace)) return;
-    this.drainingNamespaces.delete(namespace);
+    this.unavailableNamespaces.delete(namespace);
     for (const [full, entry] of [...this.methods])
       if (entry.namespace === namespace) this.methods.delete(full);
     // §14.5 — provider loss terminates upstream subscriptions with UNAVAILABLE
@@ -216,12 +267,12 @@ export class ServiceRegistry extends EventEmitter {
       if (sub.namespace === namespace)
         sub.end({ kind: "UNAVAILABLE", message: "provider withdrawn" }, true);
     }
-    this.publish();
+    if (publish) this.publish();
   }
 
   resolve(fullMethod: string): { pluginId: string; decl: ServiceMethodContribution } | undefined {
     const entry = this.methods.get(fullMethod);
-    return entry === undefined || this.drainingNamespaces.has(entry.namespace)
+    return entry === undefined || this.unavailableNamespaces.has(entry.namespace)
       ? undefined
       : { pluginId: entry.pluginId, decl: entry.decl };
   }
@@ -235,7 +286,7 @@ export class ServiceRegistry extends EventEmitter {
 
   snapshot(): ServicesSnapshot {
     const providers: ServiceProviderRecord[] = [...this.providers.values()]
-      .filter((provider) => !this.drainingNamespaces.has(provider.namespace))
+      .filter((provider) => !this.unavailableNamespaces.has(provider.namespace))
       .map((p) => ({
         pluginId: p.pluginId,
         namespace: p.namespace,
@@ -290,7 +341,7 @@ export class ServiceRegistry extends EventEmitter {
 
   /** P6 §17.4 — is a namespace's provider live right now (MCP availability)? */
   providerUp(namespace: string): boolean {
-    return this.providers.has(namespace) && !this.drainingNamespaces.has(namespace);
+    return this.providers.has(namespace) && !this.unavailableNamespaces.has(namespace);
   }
 
   /** P6 §17.4 — an MCP tool projection invoking its declared method. The
@@ -305,8 +356,9 @@ export class ServiceRegistry extends EventEmitter {
       throw new RpcCallError("NOT_FOUND", `no live provider for ${method}`, false, {
         pluginKind: "PLUGIN_PROVIDER_GONE",
       });
-    if (this.drainingNamespaces.has(entry.namespace))
-      throw new RpcCallError("UNAVAILABLE", `${method}: provider is draining`, true, {
+    const unavailable = this.unavailableNamespaces.get(entry.namespace);
+    if (unavailable !== undefined)
+      throw new RpcCallError("UNAVAILABLE", `${method}: provider is ${unavailable}`, true, {
         pluginKind: "PLUGIN_PROVIDER_GONE",
       });
     if (entry.decl.kind === "subscription")
@@ -467,7 +519,7 @@ export class ServiceRegistry extends EventEmitter {
       stopped = true;
       unsubscribe();
     };
-    if (sub.ended || this.drainingNamespaces.has(entry.namespace)) {
+    if (sub.ended || this.unavailableNamespaces.has(entry.namespace)) {
       try {
         sub.stop();
       } finally {
@@ -526,8 +578,9 @@ export class ServiceRegistry extends EventEmitter {
     const entry = this.methods.get(method);
     if (entry === undefined)
       throw new RpcCallError("NOT_FOUND", `no provider for ${method}`, false);
-    if (this.drainingNamespaces.has(entry.namespace))
-      throw new RpcCallError("UNAVAILABLE", `${method}: provider is draining`, true, {
+    const unavailable = this.unavailableNamespaces.get(entry.namespace);
+    if (unavailable !== undefined)
+      throw new RpcCallError("UNAVAILABLE", `${method}: provider is ${unavailable}`, true, {
         pluginKind: "PLUGIN_PROVIDER_GONE",
       });
     if (ctx.transport !== "ws-loopback")

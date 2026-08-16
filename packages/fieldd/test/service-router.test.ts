@@ -375,6 +375,46 @@ describe("ServiceRegistry registration (§14.4 / §14.6)", () => {
     const bad = { ...p.binding, implemented };
     expect(registerKind(registry(), bad)).toBe("PRECONDITION_FAILED");
   });
+
+  it("stages method kinds behind UNAVAILABLE without publishing or invoking handlers", async () => {
+    const reg = registry();
+    const provider = makeProvider();
+    const generationBefore = reg.snapshot().generation;
+
+    const candidate = reg.stage(provider.binding);
+
+    expect(reg.snapshot()).toEqual({ generation: generationBefore, providers: [] });
+    expect(reg.kindOf(`${NS}.get`)).toBe("call");
+    await expect(
+      reg.call(localCtx(["workspace.read"]), `${NS}.get`, { k: "early" }),
+    ).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+    });
+    expect(provider.calls).toEqual([]);
+
+    candidate.commit();
+    expect(reg.snapshot().providers.map((row) => row.namespace)).toEqual([NS]);
+    expect(await reg.call(localCtx(["workspace.read"]), `${NS}.get`, { k: "live" })).toEqual({
+      v: "val:live",
+    });
+
+    candidate.dispose();
+    expect(reg.kindOf(`${NS}.get`)).toBeUndefined();
+    expect(reg.snapshot().providers).toEqual([]);
+  });
+
+  it("disposes an uncommitted stage without emitting a public generation", () => {
+    const reg = registry();
+    const candidate = reg.stage(makeProvider().binding);
+    const generation = reg.snapshot().generation;
+
+    candidate.dispose();
+    candidate.dispose();
+
+    expect(reg.snapshot()).toEqual({ generation, providers: [] });
+    expect(reg.kindOf(`${NS}.get`)).toBeUndefined();
+    expect(() => candidate.commit()).toThrowError(/no longer current/);
+  });
 });
 
 describe("dynamic call pipeline (§14.4, via daemon + WS)", () => {
