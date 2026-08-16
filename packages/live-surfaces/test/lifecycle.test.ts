@@ -1,5 +1,48 @@
+import type { LiveSurfaceLifecycleStateV1 } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { LiveSurfaceLifecycle, LiveSurfaceTransitionError } from "../src/lifecycle";
+
+const states: readonly LiveSurfaceLifecycleStateV1[] = [
+  "created",
+  "starting",
+  "live",
+  "paused",
+  "hibernated",
+  "reconnecting",
+  "failed",
+  "closed",
+];
+
+const transitions: Readonly<
+  Record<LiveSurfaceLifecycleStateV1, readonly LiveSurfaceLifecycleStateV1[]>
+> = {
+  created: ["starting", "closed"],
+  starting: ["live", "failed", "closed"],
+  live: ["paused", "reconnecting", "failed", "closed"],
+  paused: ["live", "hibernated", "failed", "closed"],
+  hibernated: ["starting", "closed"],
+  reconnecting: ["live", "failed", "closed"],
+  failed: ["starting", "closed"],
+  closed: [],
+};
+
+const paths: Readonly<Record<LiveSurfaceLifecycleStateV1, readonly LiveSurfaceLifecycleStateV1[]>> =
+  {
+    created: [],
+    starting: ["starting"],
+    live: ["starting", "live"],
+    paused: ["starting", "live", "paused"],
+    hibernated: ["starting", "live", "paused", "hibernated"],
+    reconnecting: ["starting", "live", "reconnecting"],
+    failed: ["starting", "failed"],
+    closed: ["closed"],
+  };
+
+function lifecycleAt(state: LiveSurfaceLifecycleStateV1): LiveSurfaceLifecycle {
+  const lifecycle = new LiveSurfaceLifecycle();
+  for (const next of paths[state]) lifecycle.transition(next);
+  return lifecycle;
+}
 
 describe("LiveSurfaceLifecycle", () => {
   it("advances the producer epoch before starts and reconnects", () => {
@@ -39,5 +82,22 @@ describe("LiveSurfaceLifecycle", () => {
     expect(lifecycle.acceptsFrames).toBe(false);
     expect(lifecycle.transition("closed").changed).toBe(false);
     expect(() => lifecycle.transition("starting")).toThrow(LiveSurfaceTransitionError);
+  });
+
+  it("accepts every declared edge and rejects every other state pair", () => {
+    for (const from of states) {
+      for (const to of states) {
+        const lifecycle = lifecycleAt(from);
+        if (to === from) {
+          expect(lifecycle.transition(to).changed, `${from} -> ${to}`).toBe(false);
+        } else if (transitions[from].includes(to)) {
+          expect(lifecycle.transition(to).current.state, `${from} -> ${to}`).toBe(to);
+        } else {
+          expect(() => lifecycle.transition(to), `${from} -> ${to}`).toThrow(
+            LiveSurfaceTransitionError,
+          );
+        }
+      }
+    }
   });
 });

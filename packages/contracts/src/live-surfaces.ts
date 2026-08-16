@@ -267,29 +267,44 @@ export type LiveSurfaceColorSpaceV1 = z.infer<typeof LiveSurfaceColorSpaceV1>;
 export const LiveSurfaceAlphaModeV1 = z.enum(["opaque", "premultiplied"]);
 export type LiveSurfaceAlphaModeV1 = z.infer<typeof LiveSurfaceAlphaModeV1>;
 
-export const LiveSurfaceFrameMetadataV1 = z
-  .object({
-    v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
-    surfaceId: LiveSurfaceIdV1,
-    producerEpoch: LiveSurfaceRevisionV1,
-    sequence: LiveSurfaceSequenceV1,
-    geometry: LiveSurfaceGeometryV1,
-    /** Monotonic host clock. This is the authoritative local frame-age origin. */
-    hostReceivedAtUs: LiveSurfaceSequenceV1,
-    producerTimestamp: z
-      .object({
-        clockDomain: LiveSurfaceBoundedTextV1,
-        timestampUs: LiveSurfaceSequenceV1,
-      })
-      .passthrough()
-      .optional(),
-    pixelFormat: LiveSurfacePixelFormatV1,
-    colorSpace: LiveSurfaceColorSpaceV1,
-    alphaMode: LiveSurfaceAlphaModeV1,
-    transport: LiveSurfaceTransportV1,
-    degradedMode: z.enum(["cpu-bitmap", "software-decode"]).optional(),
-  })
-  .passthrough();
+const LiveSurfaceFrameMetadataFieldsV1 = {
+  v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+  surfaceId: LiveSurfaceIdV1,
+  producerEpoch: LiveSurfaceRevisionV1,
+  sequence: LiveSurfaceSequenceV1,
+  geometry: LiveSurfaceGeometryV1,
+  /** Monotonic host clock. This is the authoritative local frame-age origin. */
+  hostReceivedAtUs: LiveSurfaceSequenceV1,
+  producerTimestamp: z
+    .object({
+      clockDomain: LiveSurfaceBoundedTextV1,
+      timestampUs: LiveSurfaceSequenceV1,
+    })
+    .passthrough()
+    .optional(),
+  colorSpace: LiveSurfaceColorSpaceV1,
+  alphaMode: LiveSurfaceAlphaModeV1,
+} as const;
+
+/** Transport capability and degradation state are one coherent observation. */
+export const LiveSurfaceFrameMetadataV1 = z.discriminatedUnion("transport", [
+  z
+    .object({
+      ...LiveSurfaceFrameMetadataFieldsV1,
+      transport: z.literal("shared-texture"),
+      pixelFormat: LiveSurfacePixelFormatV1,
+      degradedMode: z.never().optional(),
+    })
+    .passthrough(),
+  z
+    .object({
+      ...LiveSurfaceFrameMetadataFieldsV1,
+      transport: z.literal("cpu-bgra"),
+      pixelFormat: z.enum(["bgra", "rgba"]),
+      degradedMode: z.literal("cpu-bitmap"),
+    })
+    .passthrough(),
+]);
 export type LiveSurfaceFrameMetadataV1 = z.infer<typeof LiveSurfaceFrameMetadataV1>;
 
 /**
@@ -416,6 +431,15 @@ export const LiveSurfaceRendererControlMessageV1 = z.discriminatedUnion("type", 
       v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
       type: z.literal("detach"),
       attachmentId: LiveSurfaceAttachmentIdV1,
+    })
+    .passthrough(),
+  z
+    .object({
+      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+      type: z.literal("cpu-frame-ack"),
+      attachmentId: LiveSurfaceAttachmentIdV1,
+      producerEpoch: LiveSurfaceRevisionV1,
+      sequence: LiveSurfaceSequenceV1,
     })
     .passthrough(),
 ]);

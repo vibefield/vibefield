@@ -136,6 +136,26 @@ describe("WebGpuLiveSurfaceTextureStore", () => {
     expect(failed.close).toHaveBeenCalledTimes(1);
   });
 
+  it("destroys an uncommitted texture when view allocation fails", () => {
+    const gpu = makeDevice();
+    const store = new WebGpuLiveSurfaceTextureStore<FakeFrame>();
+    store.replaceDevice(gpu.device);
+    const candidate = new FakeTexture();
+    vi.spyOn(candidate, "createView").mockImplementation(() => {
+      throw new Error("device lost during view allocation");
+    });
+    vi.mocked(gpu.device.createTexture).mockReturnValueOnce(candidate);
+    const source = frame("allocation-failed");
+
+    expect(store.present(lease(source, metadata("1")))).toEqual({
+      kind: "dropped",
+      reason: "allocation-failed",
+    });
+    expect(candidate.destroy).toHaveBeenCalledTimes(1);
+    expect(source.close).toHaveBeenCalledTimes(1);
+    expect(store.snapshot).toBeNull();
+  });
+
   it("drops during recovery and accepts the next frame on a new device generation", async () => {
     const firstGpu = makeDevice();
     const secondGpu = makeDevice();

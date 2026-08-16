@@ -50,13 +50,14 @@ function channel(): [MemoryPort, MemoryPort] {
 function summary(
   producerEpoch = 1,
   state: LiveSurfaceRuntimeSummaryV1["state"] = "live",
+  stateRevision = producerEpoch,
 ): LiveSurfaceRuntimeSummaryV1 {
   return {
     v: 1,
     surfaceId: "surface_0123456789abcdef",
     state,
     producerEpoch,
-    stateRevision: producerEpoch,
+    stateRevision,
     capabilities: {
       pointer: true,
       wheel: true,
@@ -69,6 +70,15 @@ function summary(
       crop: false,
     },
     transport: "shared-texture",
+  };
+}
+
+function cpuMetadata(sequence: string, producerEpoch = 1): LiveSurfaceFrameMetadataV1 {
+  return {
+    ...metadata(sequence, producerEpoch),
+    transport: "cpu-bgra",
+    pixelFormat: "bgra",
+    degradedMode: "cpu-bitmap",
   };
 }
 
@@ -213,6 +223,63 @@ describe("LiveSurfaceRendererTransport", () => {
     lease?.release();
     expect(frame.close).toHaveBeenCalledTimes(1);
     expect(attachment.summary.producerEpoch).toBe(2);
+  });
+
+  it("rejects stale summaries and isolates observers while closing", async () => {
+    const { transport, attachment, hostControl } = await attachedTransport();
+    const observed: string[] = [];
+    attachment.onSummary(() => {
+      throw new Error("observer failed");
+    });
+    attachment.onSummary((next) => observed.push(`${next.state}:${next.stateRevision}`));
+
+    hostControl.postMessage({
+      v: 1,
+      type: "summary",
+      attachmentId: attachment.attachmentId,
+      summary: summary(1, "paused", 3),
+    });
+    hostControl.postMessage({
+      v: 1,
+      type: "summary",
+      attachmentId: attachment.attachmentId,
+      summary: summary(1, "paused", 2),
+    });
+    expect(attachment.summary).toMatchObject({ state: "paused", stateRevision: 3 });
+    expect(transport.protocolFaults).toBe(1);
+
+    expect(() =>
+      hostControl.postMessage({
+        v: 1,
+        type: "summary",
+        attachmentId: attachment.attachmentId,
+        summary: summary(1, "closed", 4),
+      }),
+    ).not.toThrow();
+    expect(attachment.closed).toBe(true);
+    expect(observed).toEqual(["live:1", "paused:3", "closed:4"]);
+  });
+
+  it("returns one CPU credit after the renderer inbox incorporates the frame", async () => {
+    const { attachment, hostControl, preloadFrames } = await attachedTransport();
+    const delivered = fakeFrame();
+    preloadFrames.postMessage({
+      type: "frame",
+      envelope: {
+        v: 1,
+        attachmentId: attachment.attachmentId,
+        metadata: cpuMetadata("1"),
+      },
+      frame: delivered,
+    });
+    expect(hostControl.peer?.sent).toContainEqual({
+      v: 1,
+      type: "cpu-frame-ack",
+      attachmentId: attachment.attachmentId,
+      producerEpoch: 1,
+      sequence: "1",
+    });
+    expect(attachment.frameStats.pending).toBe(1);
   });
 
   it("closes malformed, unknown, and cross-surface frames without queueing them", async () => {

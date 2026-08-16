@@ -45,6 +45,40 @@ describe("LSF-1 Live Surfaces contracts", () => {
     expect(LiveSurfaceSequenceV1.safeParse("18446744073709551616").success).toBe(false);
   });
 
+  it("makes transport metadata coherent by construction", () => {
+    const base = {
+      v: 1,
+      surfaceId: "surface_0123456789abcdef",
+      producerEpoch: 2,
+      sequence: "7",
+      geometry,
+      hostReceivedAtUs: "123456",
+      pixelFormat: "bgra",
+      colorSpace: "srgb",
+      alphaMode: "opaque",
+    } as const;
+    expect(
+      LiveSurfaceFrameMetadataV1.safeParse({
+        ...base,
+        transport: "cpu-bgra",
+      }).success,
+    ).toBe(false);
+    expect(
+      LiveSurfaceFrameMetadataV1.safeParse({
+        ...base,
+        transport: "shared-texture",
+        degradedMode: "cpu-bitmap",
+      }).success,
+    ).toBe(false);
+    expect(
+      LiveSurfaceFrameMetadataV1.safeParse({
+        ...base,
+        transport: "cpu-bgra",
+        degradedMode: "cpu-bitmap",
+      }).success,
+    ).toBe(true);
+  });
+
   it("rejects visible rectangles outside the coded frame and oversized allocations", () => {
     expect(
       LiveSurfaceGeometryV1.safeParse({
@@ -144,6 +178,15 @@ describe("LSF-1 Live Surfaces contracts", () => {
         ticket,
       }),
     ).toMatchObject({ type: "attach", ticket });
+    expect(
+      LiveSurfaceRendererControlMessageV1.parse({
+        v: 1,
+        type: "cpu-frame-ack",
+        attachmentId: "attachment_0123456789abcdef",
+        producerEpoch: 2,
+        sequence: "7",
+      }),
+    ).toMatchObject({ type: "cpu-frame-ack", producerEpoch: 2, sequence: "7" });
     expect(
       LiveSurfaceHostControlMessageV1.parse({
         v: 1,

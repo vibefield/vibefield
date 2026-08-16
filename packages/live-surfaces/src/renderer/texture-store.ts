@@ -38,7 +38,10 @@ export interface LiveSurfaceTextureSnapshot {
 
 export type LiveSurfacePresentResult =
   | { readonly kind: "presented"; readonly snapshot: LiveSurfaceTextureSnapshot }
-  | { readonly kind: "dropped"; readonly reason: "device-unavailable" | "copy-failed" };
+  | {
+      readonly kind: "dropped";
+      readonly reason: "device-unavailable" | "allocation-failed" | "copy-failed";
+    };
 
 interface TextureRecord {
   readonly width: number;
@@ -121,18 +124,28 @@ export class WebGpuLiveSurfaceTextureStore<
         existing === null || existing.width !== rect.width || existing.height !== rect.height;
       let candidate = existing;
       if (replacementNeeded) {
-        const texture = this.#device.createTexture({
-          label: `vibefield-live-surface-${metadata.surfaceId}`,
-          size: { width: rect.width, height: rect.height },
-          format: "rgba8unorm",
-          usage: this.usage,
-        });
-        candidate = {
-          width: rect.width,
-          height: rect.height,
-          texture,
-          view: texture.createView(),
-        };
+        let texture: LiveSurfaceGpuTexture | null = null;
+        try {
+          texture = this.#device.createTexture({
+            label: `vibefield-live-surface-${metadata.surfaceId}`,
+            size: { width: rect.width, height: rect.height },
+            format: "rgba8unorm",
+            usage: this.usage,
+          });
+          candidate = {
+            width: rect.width,
+            height: rect.height,
+            texture,
+            view: texture.createView(),
+          };
+        } catch {
+          try {
+            texture?.destroy();
+          } catch {
+            // A device-lost allocation may already be invalid.
+          }
+          return { kind: "dropped", reason: "allocation-failed" };
+        }
       }
       if (candidate === null) throw new Error("live surface texture candidate is unavailable");
       try {
@@ -142,7 +155,13 @@ export class WebGpuLiveSurfaceTextureStore<
           { width: rect.width, height: rect.height },
         );
       } catch {
-        if (candidate !== existing) candidate.texture.destroy();
+        if (candidate !== existing) {
+          try {
+            candidate.texture.destroy();
+          } catch {
+            // The copy failure may have invalidated the device too.
+          }
+        }
         return { kind: "dropped", reason: "copy-failed" };
       }
       if (candidate !== existing) {

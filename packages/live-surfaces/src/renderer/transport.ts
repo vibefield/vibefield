@@ -110,7 +110,11 @@ export class LiveSurfaceRendererAttachment<
 
   onSummary(listener: (summary: LiveSurfaceRuntimeSummaryV1) => void): () => void {
     this.#summaryListeners.add(listener);
-    listener(this.#summary);
+    try {
+      listener(this.#summary);
+    } catch {
+      // A presentation observer cannot break attachment ownership or delivery.
+    }
     return () => this.#summaryListeners.delete(listener);
   }
 
@@ -122,7 +126,11 @@ export class LiveSurfaceRendererAttachment<
 
   acceptFrame(frame: TFrame, envelope: LiveSurfaceFrameEnvelopeV1): void {
     if (this.#closed || envelope.metadata.surfaceId !== this.#summary.surfaceId) {
-      frame.close();
+      try {
+        frame.close();
+      } catch {
+        // Invalid arrivals still leave queue ownership empty.
+      }
       return;
     }
     this.#queue.offer({ value: frame, metadata: envelope.metadata });
@@ -130,14 +138,36 @@ export class LiveSurfaceRendererAttachment<
 
   acceptSummary(summary: LiveSurfaceRuntimeSummaryV1): boolean {
     if (this.#closed || summary.surfaceId !== this.#summary.surfaceId) return false;
+    if (summary.stateRevision < this.#summary.stateRevision) return false;
     if (summary.producerEpoch < this.#summary.producerEpoch) return false;
+    if (
+      summary.stateRevision === this.#summary.stateRevision &&
+      (summary.state !== this.#summary.state ||
+        summary.producerEpoch !== this.#summary.producerEpoch)
+    ) {
+      return false;
+    }
+    if (
+      summary.geometry !== undefined &&
+      this.#summary.geometry !== undefined &&
+      summary.geometry.revision < this.#summary.geometry.revision
+    ) {
+      return false;
+    }
     if (summary.producerEpoch > this.#summary.producerEpoch) {
       this.#queue.resetEpoch(summary.producerEpoch);
     }
     this.#summary = summary;
     this.#queue.setAccepting(PRESENTATION_STATES.has(summary.state));
-    for (const listener of this.#summaryListeners) listener(summary);
+    const listeners = [...this.#summaryListeners];
     if (summary.state === "closed") this.closeFromHost();
+    for (const listener of listeners) {
+      try {
+        listener(summary);
+      } catch {
+        // Observers are isolated so one faulty consumer cannot skip cleanup.
+      }
+    }
     return true;
   }
 
@@ -336,7 +366,23 @@ export class LiveSurfaceRendererTransport<
       frame.close();
       return;
     }
-    attachment.acceptFrame(frame, envelope.data);
+    try {
+      attachment.acceptFrame(frame, envelope.data);
+    } finally {
+      if (envelope.data.metadata.transport === "cpu-bgra") {
+        try {
+          this.postControl({
+            v: 1,
+            type: "cpu-frame-ack",
+            attachmentId: envelope.data.attachmentId,
+            producerEpoch: envelope.data.metadata.producerEpoch,
+            sequence: envelope.data.metadata.sequence,
+          });
+        } catch {
+          // postControl already closed the disconnected generation.
+        }
+      }
+    }
   }
 
   private postControl(message: unknown): void {
