@@ -130,7 +130,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`); **P8b CLOSED WHOLE** (`089274c`) · **P8d KIT COMPLETE 2026-08-13** — CLI + gen-freshness docs (`5cfd0b4`) · playground verdicts (`0478f08`) · create-plugin (`a3c4897`) whose rehearsal caught three non-compiling doc examples, fixed + anchor-pinned (`a7d434f`); create→check→playground→pack→dev-link all speak P8-D8 verdicts | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` | **ONLY the measured ten-minute bar remains in P8d** — and its subject is in motion: the pack REDIRECTED twice 2026-08-13, landing ECS-NATIVE (`thinking-mindmap-pack.md` v3, MM-D1…D14 await James; MM-D14 proposes the bar decouple to a template toy — a P8d gate change; the Rung-3 visual-consistency read stands). R3-0 platform prep: **S2 `e66143a` + W1 `30fd403` + S3 `57c4720` LANDED** (keyboard-claim contract fields · the SDK wire door = the concrete PA-27 evidence · `useUndo`); S1 + P1 in builder worktrees; **W2a–W2d (the ECS door, `thinking-plugin-ecs-door.md` ED-D1…D12) designed and awaiting James** — plugins get real declared systems (PA-28 scheduler, generation replay, runtime schema, `ctx.canvas.tx`, `ops.glide`); then P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
+| PLUG — plugins | P0–P7 COMPLETE; **P8b COMPLETE 2026-08-13** — P8a `acc272d` · P8b-1 `08f19c5` · P8b-2 `ad8b804` · P8b-3 `0b8ad13`+`ded012b`+`39c165a`+`608e78e`: **the artifact LOADS** — `SMOKE_CANVAS {"widgetTypes":21,"plugins":4,"stagedPlugins":4}` witnessed on the final sha; `BUNDLED` is dev-only; async `activate` real; the P8b-2 secure-context regression found and fixed en route (`39c165a`); **P8b CLOSED WHOLE** (`089274c`) · **P8d KIT COMPLETE 2026-08-13** — CLI + gen-freshness docs (`5cfd0b4`) · playground verdicts (`0478f08`) · create-plugin (`a3c4897`) whose rehearsal caught three non-compiling doc examples, fixed + anchor-pinned (`a7d434f`); create→check→playground→pack→dev-link all speak P8-D8 verdicts | `specs/plugin-architecture.md` §21.9 · `thinking-p8-loadable-artifact.md` · `thinking-plugin-runtime-composability.md` | **ONLY the measured ten-minute bar remains in P8d** — and its subject is in motion: the pack REDIRECTED twice 2026-08-13, landing ECS-NATIVE (`thinking-mindmap-pack.md` v3, MM-D1…D14 await James; MM-D14 proposes the bar decouple to a template toy — a P8d gate change; the Rung-3 visual-consistency read stands). R3-0 platform prep: **S2 `e66143a` + W1 `30fd403` + S3 `57c4720` LANDED** (keyboard-claim contract fields · the SDK wire door = the concrete PA-27 evidence · `useUndo`); S1 + P1 in builder worktrees; **W2a–W2d (the ECS door, `thinking-plugin-ecs-door.md` ED-D1…D12) designed and awaiting James** — plugins get real declared systems (PA-28 scheduler, generation replay, runtime schema, `ctx.canvas.tx`, `ops.glide`). **PRC-D1…D13 RATIFIED 2026-08-15; PRC-0 shared ownership/target core is CODE COMPLETE (24/24), then PRC-1 renderer + PRC-2 service adapters gate lifecycle-heavy W2 integration**; then P8c rides WP8; P8e before any third-party listing; public index repo = James's op |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -183,6 +183,12 @@ R3-0 platform prep is underway: S2 `e66143a` · W1 `30fd403` · S3 `57c4720` LAN
 lands, then the build rungs open behind the binding visual-consistency read — DESIGN.md ·
 UI_SYSTEM · design-kit · existing widgets. P8c rides WP8; P8e gates any third-party
 listing.
+
+The runtime-composability amendment underneath that work is now ratified
+(`thinking-plugin-runtime-composability.md`, PRC-D1…D13, 2026-08-15). PRC-0 is CODE COMPLETE:
+a shared activation-ownership core, exact structured runtime targets, and 24/24 focused package
+tests. PRC-1 renderer and PRC-2 service adapters come next; those integrations must land before W2
+depends on lifecycle behavior.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through
@@ -317,7 +323,9 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   entities + engine Wire edges + ordered-ChildOf structure + a sweep-drag auto-growing
   frame + geometry as DERIVED state maintained by a declared layout system; evidence
   §A–§E). R3-0 is underway: S2/W1/S3 LANDED (`e66143a`/`30fd403`/`57c4720`), S1 + P1 in
-  builder worktrees. **Gating now: two ratifications** — `thinking-plugin-ecs-door.md`
+  builder worktrees. **PRC-D1…D13 are RATIFIED and PRC-0 is CODE COMPLETE (24/24)**;
+  PRC-1/PRC-2 adapters must land before W2 consumes lifecycle semantics. **Gating now: two
+  ratifications** — `thinking-plugin-ecs-door.md`
   (ED-D1…D12; James's redline made the systems gap a proper design: `ctx.canvas.systems.
   bind` at the publish seam, PA-28 scheduler + suspension, generation replay, namespaced
   runtime schema, `ctx.canvas.tx`, `ops.glide` on public surfaces) and
