@@ -2344,3 +2344,39 @@ matrix **4/4** · real daemon/worker grant cascade **1/1** · real crash-ladder 
 **480 passed + 1 platform skip** across 56 files · plugin-runtime **40/40** · fieldd typecheck ·
 production daemon/service-harness build (1.7 MB / 369.2 KB) · Biome · R1–R18 zero · patch hygiene.
 PRC-3d now owns exact renderer/window controllers and private command/surface publication.
+
+## PRC-3d — each plugin/window renderer converges through one exact controller
+
+**LANDED 2026-08-16** (`e747af3`). Every approved staged artifact now has one
+`RuntimeTargetController` per plugin/window, keyed by install revision, manifest hash, window id,
+projected renderer authority, and grant observation. Disable and relevant-authority changes close
+the exact scope synchronously; observation-only movement refreshes the stable plugin credential in
+place. A registry record naming different artifact bytes withdraws the old target and refuses to
+run the boot-static module under the new identity—artifact replacement remains PRC-5's disruptive
+barrier.
+
+Renderer setup is private until a still-current activation commits. Commands and surfaces reserve
+exact batch candidates; CSS is a detached, identity-bound candidate; stale setup cannot publish any
+of them. The root publication owner withdraws the complete mutable set at one synchronous close
+edge, while an open context may still acquire or release declared widgets, commands, and surfaces
+later. ICE's process-global widget catalog receives one stable component facade whose implementation
+follows the committed activation; fixed chrome/animation/preview metadata is checked across
+replacement.
+
+The window adapter fans every registry observation into all exact controllers before awaiting any
+one of them, tracks in-flight convergence, and makes prepare-close await real quiescence before
+document, engine, and product-client teardown. Same-realm work that misses cleanup remains honestly
+non-quiescent and blocks close; an abort signal is never called termination. Boot installs the
+plugin-client backend before behind-splash activation and owns a pre-ready close barrier, so early
+window shutdown cannot strand a staged runtime. The design review also found and fixed the
+late-acquisition counterexample: post-activation bindings publish through the same candidate owner
+instead of remaining silently private.
+
+Gates: disposable production-seam probe **3/3** · tracked renderer/window matrix **9/9** · changed
+renderer/loader/client/boot matrix **82/82** · plugin-runtime **40/40** · field-app and
+plugin-runtime typechecks · production renderer build (**39 files / 9,376,795 bytes**) · Biome
+(only standing `void`-union advisories) · R1–R18 zero · patch hygiene. The restricted full
+field-app run is **453/460**, with exactly the seven known Unix-socket `EPERM` cases; the last
+permitted full run before the final close-barrier/late-binding additions was **458/458**, and those
+additions are covered by the focused matrix above. PRC-4 now owns the behavior target keyed by
+document and engine generation.
