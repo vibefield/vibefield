@@ -545,12 +545,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     ) {
       throw new Error("Browser pointer input is outside the logical viewport");
     }
-    const x =
-      geometry.visibleRect.x +
-      (request.x / geometry.logicalSize.width) * geometry.visibleRect.width;
-    const y =
-      geometry.visibleRect.y +
-      (request.y / geometry.logicalSize.height) * geometry.visibleRect.height;
+    // CDP Input coordinates are CSS pixels in the main-frame viewport. The
+    // presentation adapter has already supplied Browser logical coordinates;
+    // backing-raster pixels and visibleRect offsets are presentation-only.
+    const x = request.x;
+    const y = request.y;
     if (request.kind === "wheel") {
       if (
         !Number.isFinite(request.deltaX) ||
@@ -605,6 +604,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         this.startProducer();
         return;
       }
+      if (state === "reconnecting" && this.#window === null) {
+        this.scheduleReconnect();
+        return;
+      }
       if (state === "paused") {
         this.#lifecycle.transition("live");
         this.#window?.startPainting();
@@ -630,12 +633,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.clearSourceTimers();
     this.destroyWindow();
     this.#lifecycle.transition("starting");
-    this.#transport = undefined;
+    this.resetProducerObservations();
     this.#error = undefined;
-    this.#geometry = undefined;
-    this.#geometryKey = "";
-    this.#sequence = 0n;
-    this.#cpuPaintStreak = 0;
     const epoch = this.#lifecycle.snapshot.producerEpoch;
     const demandRaster = this.#effectiveDemand?.targetRasterSize;
     const initialRaster = demandRaster ?? defaultRaster(this.source);
@@ -751,6 +750,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       alphaMode: "premultiplied",
       transport: "shared-texture",
     };
+    this.publishSummary();
     const targets = this.liveAttachments();
     if (targets.length === 0) {
       texture.release();
@@ -802,7 +802,6 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       }
     }
     if (capabilityChanged) this.applyFrameRate();
-    this.publishSummary();
     if (becameLive && this.#effectiveDemand?.mode !== "live") this.reconcileDemand();
   }
 
@@ -851,6 +850,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       },
       pixels,
     };
+    this.publishSummary();
     for (const target of this.liveAttachments()) {
       this.#cpuFramesOffered += 1;
       if (target.context.publishCpuFrame(frame)) this.#cpuFramesAccepted += 1;
@@ -859,7 +859,6 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.applyFrameRate();
       this.scheduleRasterActuation();
     }
-    this.publishSummary();
     if (becameLive && this.#effectiveDemand?.mode !== "live") this.reconcileDemand();
   }
 
@@ -927,6 +926,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
 
   private pauseProducer(): void {
     if (this.#lifecycle.snapshot.state !== "live") return;
+    if (this.#rasterTimer !== null) {
+      clearTimeout(this.#rasterTimer);
+      this.#rasterTimer = null;
+    }
     this.#window?.stopPainting();
     this.#lifecycle.transition("paused");
     this.publishSummary();
@@ -959,11 +962,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const bounded = this.#transport === "cpu-bgra" ? clampCpuRaster(requested) : requested;
     this.#rasterTimer = setTimeout(() => {
       this.#rasterTimer = null;
-      if (!this.isCurrent(window, epoch)) return;
+      if (!this.isCurrent(window, epoch) || this.#effectiveDemand?.mode !== "live") return;
       void window
         .setBackingRaster(bounded, this.source.logicalViewport, this.source.deviceScaleFactor ?? 1)
         .then(() => {
-          if (this.isCurrent(window, epoch)) window.invalidate();
+          if (this.isCurrent(window, epoch) && this.#effectiveDemand?.mode === "live") {
+            window.invalidate();
+          }
         })
         .catch(() => undefined);
     }, this.#rasterStabilizationMs);
@@ -972,9 +977,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   private handleStartupTimeout(window: BrowserSurfaceNativeWindow, epoch: number): void {
     this.#startupTimer = null;
     if (!this.isCurrent(window, epoch)) return;
-    this.failSource(
-      sourceError("frame-stalled", "Browser source produced no usable paint", "automatic"),
+    const error = sourceError(
+      "frame-stalled",
+      "Browser source produced no usable paint",
+      "automatic",
     );
+    if (this.retryFailedProducer(error)) return;
+    this.failSource(error);
   }
 
   private handleProducerGone(
@@ -982,7 +991,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     epoch: number,
     _reason: string,
   ): void {
-    if (!this.isCurrent(window, epoch) || this.#closed) return;
+    if (!this.ownsProducer(window, epoch) || this.#closed) return;
     const state = this.#lifecycle.snapshot.state;
     if (
       state === "live" &&
@@ -993,20 +1002,21 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.#producerRestarts += 1;
       this.#lifecycle.transition("reconnecting");
       this.destroyWindow();
+      this.resetProducerObservations();
       this.#error = sourceError(
         "producer-crashed",
         "Browser renderer exited; reconnecting the source",
         "automatic",
       );
       this.publishSummary();
-      this.#restartTimer = setTimeout(() => {
-        this.#restartTimer = null;
-        if (this.#closed || this.#effectiveDemand?.mode !== "live") return;
-        this.createReconnectingProducer();
-      }, 0);
+      this.scheduleReconnect();
       return;
     }
-    this.failSource(sourceError("producer-crashed", "Browser renderer exited", "automatic"));
+    const error = sourceError("producer-crashed", "Browser renderer exited", "automatic");
+    if ((state === "starting" || state === "reconnecting") && this.retryFailedProducer(error)) {
+      return;
+    }
+    this.failSource(error);
   }
 
   private createReconnectingProducer(): void {
@@ -1014,11 +1024,6 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // Reconnecting already advanced producerEpoch. Reuse the normal constructor
     // path without a second lifecycle transition.
     const epoch = this.#lifecycle.snapshot.producerEpoch;
-    this.#transport = undefined;
-    this.#geometry = undefined;
-    this.#geometryKey = "";
-    this.#sequence = 0n;
-    this.#cpuPaintStreak = 0;
     const initialRaster = this.#effectiveDemand?.targetRasterSize ?? defaultRaster(this.source);
     try {
       const window = this.#native.createWindow({
@@ -1117,12 +1122,74 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   private isCurrent(window: BrowserSurfaceNativeWindow, epoch: number): boolean {
+    return this.ownsProducer(window, epoch) && !window.isDestroyed();
+  }
+
+  private ownsProducer(window: BrowserSurfaceNativeWindow, epoch: number): boolean {
     return (
-      !this.#closed &&
-      this.#window === window &&
-      !window.isDestroyed() &&
-      this.#lifecycle.snapshot.producerEpoch === epoch
+      !this.#closed && this.#window === window && this.#lifecycle.snapshot.producerEpoch === epoch
     );
+  }
+
+  private resetProducerObservations(): void {
+    this.#transport = undefined;
+    this.#geometry = undefined;
+    this.#geometryKey = "";
+    this.#sequence = 0n;
+    this.#cpuPaintStreak = 0;
+  }
+
+  private scheduleReconnect(): void {
+    if (
+      this.#restartTimer !== null ||
+      this.#closed ||
+      this.#lifecycle.snapshot.state !== "reconnecting" ||
+      this.#effectiveDemand?.mode !== "live"
+    ) {
+      return;
+    }
+    this.#restartTimer = setTimeout(() => {
+      this.#restartTimer = null;
+      if (this.#closed || this.#effectiveDemand?.mode !== "live") return;
+      this.createReconnectingProducer();
+    }, 0);
+  }
+
+  private retryFailedProducer(error: LiveSurfaceErrorV1): boolean {
+    if (
+      this.#closed ||
+      this.#effectiveDemand?.mode !== "live" ||
+      this.#restartAttempts >= this.#restartLimit
+    ) {
+      return false;
+    }
+    this.#restartAttempts += 1;
+    this.#producerRestarts += 1;
+    this.failSource(error);
+    this.scheduleFailedRestart();
+    return true;
+  }
+
+  private scheduleFailedRestart(): void {
+    if (
+      this.#restartTimer !== null ||
+      this.#closed ||
+      this.#lifecycle.snapshot.state !== "failed" ||
+      this.#effectiveDemand?.mode !== "live"
+    ) {
+      return;
+    }
+    this.#restartTimer = setTimeout(() => {
+      this.#restartTimer = null;
+      if (
+        this.#closed ||
+        this.#lifecycle.snapshot.state !== "failed" ||
+        this.#effectiveDemand?.mode !== "live"
+      ) {
+        return;
+      }
+      this.startProducer();
+    }, 0);
   }
 
   private clearSourceTimers(): void {

@@ -166,17 +166,23 @@ function attach(runtime: BrowserLiveSurfaceRuntime, attachmentId = "attachment_b
   const cpuFrames: Array<Parameters<LiveSurfaceRuntimeAttachContext["publishCpuFrame"]>[0]> = [];
   const textureFrames: Array<Parameters<LiveSurfaceRuntimeAttachContext["offerTextureFrame"]>[0]> =
     [];
+  const events: string[] = [];
   const context: LiveSurfaceRuntimeAttachContext = {
     attachmentId,
     rendererGeneration: 1,
     operations: ["view", "pointer", "keyboard"],
-    publishSummary: (summary) => summaries.push(summary),
+    publishSummary: (summary) => {
+      summaries.push(summary);
+      events.push(`summary:${summary.state}:${summary.transport ?? "unknown"}`);
+    },
     publishCpuFrame: (frame) => {
       cpuFrames.push(frame);
+      events.push("cpu-frame");
       return true;
     },
     offerTextureFrame: (frame) => {
       textureFrames.push(frame);
+      events.push("texture-frame");
       frame.releaseSource("imported");
       frame.allReferencesReleased("released");
       return { kind: "accepted", transfer: Promise.resolve() };
@@ -187,6 +193,7 @@ function attach(runtime: BrowserLiveSurfaceRuntime, attachmentId = "attachment_b
     summaries,
     cpuFrames,
     textureFrames,
+    events,
   };
 }
 
@@ -302,12 +309,13 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(first?.mouseInputs).toEqual([
       {
         type: "mousePressed",
-        x: 320,
-        y: 180,
+        x: 160,
+        y: 90,
         button: "left",
         clickCount: 1,
       },
     ]);
+    expect(renderer.events.slice(-2)).toEqual(["summary:live:shared-texture", "texture-frame"]);
     await result.runtime.dispatchInput({
       kind: "key",
       geometryRevision: revision,
@@ -375,6 +383,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     window?.paint(third.paint);
     expect(third.toBitmap).toHaveBeenCalledOnce();
     expect(renderer.cpuFrames).toHaveLength(1);
+    expect(renderer.events.slice(-2)).toEqual(["summary:live:cpu-bgra", "cpu-frame"]);
     expect(third.toBitmap).toHaveBeenCalledWith(renderer.cpuFrames[0]?.metadata.geometry.codedSize);
     const emittedSize = renderer.cpuFrames[0]?.metadata.geometry.codedSize;
     expect((emittedSize?.width ?? 0) * (emittedSize?.height ?? 0)).toBeLessThanOrEqual(1280 * 720);
@@ -426,7 +435,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
 
   it("fails a stalled producer within the bounded startup deadline", () => {
     vi.useFakeTimers();
-    const result = setup({ startupTimeoutMs: 250 });
+    const result = setup({ startupTimeoutMs: 250, restartLimit: 0 });
     const renderer = attach(result.runtime);
     renderer.attachment.setDemand(demand(1, "live"));
     vi.advanceTimersByTime(250);
@@ -436,6 +445,37 @@ describe("BrowserLiveSurfaceRuntime", () => {
     });
     expect(result.native.windows[0]?.destroyed).toBe(true);
     expect(result.controlTargets.status(SURFACE_ID).bound).toBe(false);
+    result.runtime.dispose();
+  });
+
+  it("retries a stalled startup within the bounded restart budget", async () => {
+    vi.useFakeTimers();
+    const result = setup({ startupTimeoutMs: 250, restartLimit: 1 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await vi.advanceTimersByTimeAsync(250);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(result.native.windows).toHaveLength(2);
+    expect(result.native.windows[0]?.destroyed).toBe(true);
+    expect(result.runtime.summary).toMatchObject({ state: "starting", producerEpoch: 2 });
+    expect(result.runtime.stats.producerRestarts).toBe(1);
+    result.runtime.dispose();
+  });
+
+  it("retries a producer that crashes before its first usable frame", async () => {
+    vi.useFakeTimers();
+    const result = setup({ restartLimit: 1 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    result.native.windows[0]?.crash();
+    expect(result.runtime.summary).toMatchObject({
+      state: "failed",
+      producerEpoch: 1,
+      error: { code: "producer-crashed", recovery: "automatic" },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.native.windows).toHaveLength(2);
+    expect(result.runtime.summary).toMatchObject({ state: "starting", producerEpoch: 2 });
     result.runtime.dispose();
   });
 
@@ -451,6 +491,8 @@ describe("BrowserLiveSurfaceRuntime", () => {
       producerEpoch: 2,
       error: { code: "producer-crashed" },
     });
+    expect(result.runtime.summary.transport).toBeUndefined();
+    expect(result.runtime.summary.geometry).toBeUndefined();
     expect(result.controlTargets.status(SURFACE_ID).bound).toBe(false);
     await vi.advanceTimersByTimeAsync(0);
     expect(result.native.windows).toHaveLength(2);
@@ -466,6 +508,44 @@ describe("BrowserLiveSurfaceRuntime", () => {
       transport: "shared-texture",
     });
     expect(result.runtime.stats.producerRestarts).toBe(1);
+    result.runtime.dispose();
+  });
+
+  it("recovers when the owned WebContents is destroyed directly", async () => {
+    vi.useFakeTimers();
+    const result = setup({ restartLimit: 1 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    const first = result.native.windows[0];
+    first?.paint(sharedPaint().paint);
+    first?.destroy();
+    expect(result.runtime.summary).toMatchObject({
+      state: "reconnecting",
+      producerEpoch: 2,
+      error: { code: "producer-crashed" },
+    });
+    expect(result.controlTargets.status(SURFACE_ID).bound).toBe(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.native.windows).toHaveLength(2);
+    result.runtime.dispose();
+  });
+
+  it("resumes a reconnect that was suspended by non-live demand", async () => {
+    vi.useFakeTimers();
+    const result = setup({ restartLimit: 1 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    result.native.windows[0]?.paint(sharedPaint().paint);
+    result.native.windows[0]?.crash();
+    renderer.attachment.setDemand(demand(2, "paused"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.native.windows).toHaveLength(1);
+    expect(result.runtime.summary.state).toBe("reconnecting");
+
+    renderer.attachment.setDemand(demand(3, "live"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.native.windows).toHaveLength(2);
+    expect(result.runtime.summary).toMatchObject({ state: "reconnecting", producerEpoch: 2 });
     result.runtime.dispose();
   });
 
@@ -485,6 +565,20 @@ describe("BrowserLiveSurfaceRuntime", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(result.native.windows[0]?.backingRasters.at(-1)).toEqual({ width: 960, height: 540 });
     expect(result.runtime.summary.geometry?.logicalSize).toEqual({ width: 320, height: 180 });
+    result.runtime.dispose();
+  });
+
+  it("cancels stabilized raster work when live demand pauses", async () => {
+    vi.useFakeTimers();
+    const result = setup({ rasterStabilizationMs: 300 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+    result.native.windows[0]?.paint(sharedPaint().paint);
+    renderer.attachment.setDemand(demand(2, "live", 30, { width: 960, height: 540 }));
+    renderer.attachment.setDemand(demand(3, "paused"));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(result.native.windows[0]?.backingRasters).toEqual([{ width: 640, height: 360 }]);
+    expect(result.native.windows[0]?.invalidate).not.toHaveBeenCalled();
     result.runtime.dispose();
   });
 });
