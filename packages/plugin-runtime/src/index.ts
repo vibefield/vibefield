@@ -25,9 +25,22 @@ export { createRendererContext, type PluginRendererContext } from "./context";
 export { PluginRegistry, type RegisteredPlugin, safePreviewToCss } from "./registry";
 export {
   type BehaviorRuntimeTarget,
+  type PluginRuntimeFace,
   type PluginRuntimeTarget,
+  type ProjectedPluginAuthority,
+  projectPluginAuthority,
   type RendererRuntimeTarget,
   type RuntimeArtifactIdentity,
   type ServiceRuntimeTarget,
+  samePluginRuntimeObservation,
   samePluginRuntimeTarget,
 } from "./runtime-target";
+export {
+  type RuntimeTargetCandidate,
+  RuntimeTargetController,
+  type RuntimeTargetControllerBlocked,
+  type RuntimeTargetControllerOptions,
+  type RuntimeTargetControllerSnapshot,
+  type RuntimeTargetControllerState,
+  type RuntimeTargetDesiredOptions,
+} from "./target-controller";

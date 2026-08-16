@@ -1,3 +1,9 @@
+import {
+  isCustomCapabilityId,
+  PLUGIN_CAPABILITY_ELIGIBILITY,
+  type Scope,
+} from "@vibefield/contracts";
+
 export interface RuntimeArtifactIdentity {
   readonly installRevision: string;
   readonly manifestHash: string;
@@ -39,6 +45,35 @@ export type PluginRuntimeTarget =
   | RendererRuntimeTarget
   | BehaviorRuntimeTarget;
 
+export type PluginRuntimeFace = PluginRuntimeTarget["face"];
+
+export interface ProjectedPluginAuthority {
+  /** Canonical, unique, sorted capabilities visible to this face. */
+  readonly capabilities: readonly string[];
+  /** Stable semantic target input. Raw grant generations never enter this value. */
+  readonly fingerprint: string;
+}
+
+/** Canonicalizes effective grants through contracts' one entry-kind eligibility table. Behavior
+ * runs in the renderer entry and therefore uses renderer eligibility. Custom x.* capabilities are
+ * eligible to both entry kinds by contract. */
+export function projectPluginAuthority(
+  face: PluginRuntimeFace,
+  grantedCapabilities: readonly string[],
+): ProjectedPluginAuthority {
+  const entry = face === "behavior" ? "renderer" : face;
+  const capabilities = [...new Set(grantedCapabilities)]
+    .filter((capability) => {
+      if (isCustomCapabilityId(capability)) return true;
+      return PLUGIN_CAPABILITY_ELIGIBILITY[capability as Scope]?.[entry] === true;
+    })
+    .sort();
+  return Object.freeze({
+    capabilities: Object.freeze(capabilities),
+    fingerprint: JSON.stringify(["v1", face, capabilities]),
+  });
+}
+
 function sameArtifact(left: RuntimeArtifactIdentity, right: RuntimeArtifactIdentity): boolean {
   return (
     left.installRevision === right.installRevision &&
@@ -77,4 +112,19 @@ export function samePluginRuntimeTarget(
         left.instanceKey.behaviorDeclarationId === right.instanceKey.behaviorDeclarationId
       );
   }
+}
+
+/** A broad grant counter is excluded from semantic target equality but included in observation
+ * equality. The latter fences in-flight credential episodes and decides whether a committed
+ * stable authority proxy needs a fresh lease. */
+export function samePluginRuntimeObservation(
+  left: PluginRuntimeTarget | null,
+  right: PluginRuntimeTarget | null,
+): boolean {
+  return (
+    samePluginRuntimeTarget(left, right) &&
+    (left === null ||
+      right === null ||
+      left.observedGrantGeneration === right.observedGrantGeneration)
+  );
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   type BehaviorRuntimeTarget,
+  projectPluginAuthority,
   type RendererRuntimeTarget,
+  samePluginRuntimeObservation,
   samePluginRuntimeTarget,
 } from "../src/index";
 
@@ -26,6 +28,41 @@ describe("samePluginRuntimeTarget", () => {
     expect(samePluginRuntimeTarget(renderer(), renderer({ observedGrantGeneration: 8 }))).toBe(
       true,
     );
+    expect(samePluginRuntimeObservation(renderer(), renderer({ observedGrantGeneration: 8 }))).toBe(
+      false,
+    );
+  });
+
+  it("projects canonical per-entry authority from the contracts eligibility table", () => {
+    const grants = [
+      "process.spawn",
+      "terminal.attach",
+      "canvas.read",
+      "x.com.example.provider.consume",
+      "canvas.read",
+      "plugins.manage",
+    ];
+    const rendererProjection = projectPluginAuthority("renderer", grants);
+    const reordered = projectPluginAuthority("renderer", [...grants].reverse());
+    expect(rendererProjection).toEqual({
+      capabilities: ["canvas.read", "terminal.attach", "x.com.example.provider.consume"],
+      fingerprint: JSON.stringify([
+        "v1",
+        "renderer",
+        ["canvas.read", "terminal.attach", "x.com.example.provider.consume"],
+      ]),
+    });
+    expect(reordered.fingerprint).toBe(rendererProjection.fingerprint);
+    expect(projectPluginAuthority("service", grants).capabilities).toEqual([
+      "canvas.read",
+      "process.spawn",
+      "x.com.example.provider.consume",
+    ]);
+    expect(projectPluginAuthority("behavior", grants).capabilities).toEqual([
+      "canvas.read",
+      "terminal.attach",
+      "x.com.example.provider.consume",
+    ]);
   });
 
   it("changes for authority, artifact, instance, and runtime generations", () => {
