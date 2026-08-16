@@ -7,8 +7,12 @@ import {
 } from "@vibefield/contracts";
 import type { RendererPluginModule } from "@vibefield/plugin-sdk";
 import { getRendererLogger, type RendererLogger } from "../logging";
+import { type PluginClientBackend, setPluginClientBackend } from "./plugin-client";
 import { getPluginRegistrySnapshot } from "./plugin-registry-store";
-import { type ActivatedRenderer, activateStagedRenderer } from "./renderer-harness";
+import { RendererPluginController, RendererWindowController } from "./renderer-controller";
+import type { ActivatedRenderer } from "./renderer-harness";
+
+export { ensureStyleLink } from "./plugin-style";
 
 // THE STAGED RENDERER LOADER (plugin spec §11.6/§10.4/§19.2, P8b-3) — the
 // consumer half of the pipeline P8b-1 and P8b-2 built.
@@ -44,6 +48,8 @@ export interface PreparedStagedPlugin {
   /** the approved module row this activation belongs to (§11.4 identity) */
   readonly module: PluginModuleUrls;
   readonly activation: ActivatedRenderer;
+  /** Exact plugin/window lifecycle controller for this imported artifact. */
+  readonly controller?: RendererPluginController;
 }
 
 /** What the boot phase hands buildRegistry. `bundled` is the DEV-ONLY fallback
@@ -54,6 +60,9 @@ export interface PreparedRendererPlugins {
   readonly generation: number;
   readonly staged: readonly PreparedStagedPlugin[];
   readonly bundled: readonly BundledRendererPlugin[];
+  /** Present for a staged production set; attached to registry observations after mount and closed
+   * at the window's prepare-close barrier. */
+  readonly runtime?: RendererWindowController;
 }
 
 /** A dev-bundled pair, kept structural so field-engine owns the imports. */
@@ -71,6 +80,8 @@ export const EMPTY_PREPARED: PreparedRendererPlugins = {
 export interface StagedLoaderDeps {
   /** One-shot RPC against the window's own fieldd connection. */
   request(method: string, params?: unknown): Promise<unknown>;
+  /** Makes ctx.client usable during activate, before FieldView effects mount. */
+  pluginClientBackend?: PluginClientBackend;
   /** The registry snapshot, if the renderer already holds one. At BOOT it does
    * not — `usePluginRegistryFeed` mounts inside FieldView, which is downstream
    * of this call — so the default returns null and the loader reads
@@ -81,6 +92,8 @@ export interface StagedLoaderDeps {
   importModule?(url: string): Promise<unknown>;
   /** Where stylesheet links land. Defaults to the live document. */
   document?: Document;
+  /** Exact renderer instance identity. V1 has one honest window named `field`. */
+  windowId?: string;
   budgetMs?: number;
 }
 
@@ -90,6 +103,7 @@ export interface StagedLoaderDeps {
 export async function prepareRendererPlugins(
   deps: StagedLoaderDeps,
 ): Promise<PreparedRendererPlugins> {
+  if (deps.pluginClientBackend !== undefined) setPluginClientBackend(deps.pluginClientBackend);
   const log = getRendererLogger().child({ component: "plugin.host" });
   const budgetMs = deps.budgetMs ?? STAGED_MODULES_BUDGET_MS;
   const approved = await withBudget(readApproved(deps), budgetMs);
@@ -104,18 +118,20 @@ export async function prepareRendererPlugins(
   if (approved === null) return EMPTY_PREPARED;
   const { generation, modules, records } = approved;
   if (modules.length === 0) return { generation, staged: [], bundled: [] };
+  const runtime = new RendererWindowController(deps.windowId);
 
   // Imports run in parallel and one plugin's failure is its own (§11.4): a
   // module that will not load leaves the others staged rather than emptying the
   // set. The activation the harness returns for a failure is a `failed` row,
   // which is what buildRegistry needs to draw honest failed faces.
   const staged = await Promise.all(
-    modules.map(async (module) => await stageOne(module, records, deps, log)),
+    modules.map(async (module) => await stageOne(module, records, deps, log, runtime)),
   );
   return {
     generation,
     staged: staged.filter((entry): entry is PreparedStagedPlugin => entry !== null),
     bundled: [],
+    runtime,
   };
 }
 
@@ -158,6 +174,7 @@ async function stageOne(
   records: ReadonlyMap<string, PluginRecord>,
   deps: StagedLoaderDeps,
   log: RendererLogger,
+  runtime: RendererWindowController,
 ): Promise<PreparedStagedPlugin | null> {
   const record = records.get(module.pluginId);
   if (record === undefined) {
@@ -171,31 +188,10 @@ async function stageOne(
     );
     return null;
   }
-  const doc = deps.document ?? (typeof document === "undefined" ? undefined : document);
-  if (module.styleUrl !== undefined && doc !== undefined) {
-    ensureStyleLink(doc, module.pluginId, module.installRevision, module.styleUrl);
-  }
   const importModule = deps.importModule ?? defaultImport;
+  let imported: unknown;
   try {
-    const mod = asRendererModule(await importModule(module.moduleUrl));
-    if (mod === null) {
-      log.error(
-        "renderer.plugins.staged_module_shape",
-        "A staged plugin module exports no activate (§10.1)",
-        undefined,
-        { pluginId: module.pluginId },
-      );
-      return {
-        record,
-        module,
-        activation: {
-          state: "failed",
-          bindings: new Map(),
-          error: "the module exports no activate (§10.1)",
-        },
-      };
-    }
-    return { record, module, activation: await activateStagedRenderer(record, module, mod) };
+    imported = await importModule(module.moduleUrl);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     log.error(
@@ -208,6 +204,51 @@ async function stageOne(
       record,
       module,
       activation: { state: "failed", bindings: new Map(), error: detail },
+    };
+  }
+  const mod = asRendererModule(imported);
+  if (mod === null) {
+    log.error(
+      "renderer.plugins.staged_module_shape",
+      "A staged plugin module exports no activate (§10.1)",
+      undefined,
+      { pluginId: module.pluginId },
+    );
+    return {
+      record,
+      module,
+      activation: {
+        state: "failed",
+        bindings: new Map(),
+        error: "the module exports no activate (§10.1)",
+      },
+    };
+  }
+  const doc = deps.document ?? (typeof document === "undefined" ? undefined : document);
+  const controller = new RendererPluginController(record, module, mod, runtime.windowId, {
+    ...(module.styleUrl === undefined || doc === undefined
+      ? {}
+      : { style: { document: doc, href: module.styleUrl } }),
+  });
+  runtime.add(controller);
+  try {
+    const activation =
+      (await controller.reconcile(record)) ??
+      ({ state: "failed", bindings: new Map(), error: "renderer target is unavailable" } as const);
+    return { record, module, activation, controller };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    log.error(
+      "renderer.plugins.staged_activation_failed",
+      "A staged plugin module could not be activated",
+      error,
+      { pluginId: module.pluginId },
+    );
+    return {
+      record,
+      module,
+      activation: { state: "failed", bindings: new Map(), error: detail },
+      controller,
     };
   }
 }
@@ -238,34 +279,6 @@ function asRendererModule(imported: unknown): RendererPluginModule | null {
  * build-time specifier and try to resolve a chunk for it. */
 async function defaultImport(url: string): Promise<unknown> {
   return await import(/* @vite-ignore */ url);
-}
-
-/** The plugin's compiled stylesheet, linked once per (plugin, install
- * revision). Idempotent because this can run again — a retried boot phase must
- * not stack duplicate links — and revision-keyed because a REINSTALLED plugin's
- * stylesheet is a different file at a URL that no longer resolves. */
-export function ensureStyleLink(
-  doc: Document,
-  pluginId: string,
-  installRevision: string,
-  href: string,
-): void {
-  // Matched by reading the attribute rather than by interpolating the id into a
-  // selector: the id is daemon data, and a selector built from data is the
-  // injection shape even when today's ids happen to be selector-safe.
-  const existing = [...doc.querySelectorAll<HTMLLinkElement>("link[data-vf-plugin-style]")].find(
-    (link) => link.dataset["vfPluginStyle"] === pluginId,
-  );
-  if (existing !== undefined) {
-    if (existing.dataset["vfInstallRevision"] === installRevision) return;
-    existing.remove();
-  }
-  const link = doc.createElement("link");
-  link.rel = "stylesheet";
-  link.href = href;
-  link.dataset["vfPluginStyle"] = pluginId;
-  link.dataset["vfInstallRevision"] = installRevision;
-  doc.head.appendChild(link);
 }
 
 /** Resolve with the work's answer, or the string "overdue" once the budget is

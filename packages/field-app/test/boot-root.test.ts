@@ -53,6 +53,7 @@ function fakeMachine() {
     },
     start: () => {},
     retry: () => {},
+    closePlugins: async () => undefined,
     completeOnboarding: () => {},
   };
   const set = (patch: Partial<BootView>): void => {

@@ -36,6 +36,9 @@ export function mountFieldApp(opts: { container: HTMLElement; host: FieldHost })
   opts.host.onPrepareClose((requestId) => {
     void (async () => {
       try {
+        // PRC-3d: seal every plugin/window authority before document/engine and product-client
+        // teardown. Cleanup may still need those host doors, so the exact renderer targets go first.
+        await machine.closePlugins();
         await machine.ready?.manager.shutdown();
         machine.client?.close();
         opts.host.completeClose({ requestId, ok: true });

@@ -299,6 +299,54 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     ]);
   });
 
+  it("hands plugin activation the exact window client before FieldView mounts", async () => {
+    const h = harness();
+    const prepareFieldPlugins = vi.fn(async () => ({
+      generation: -1,
+      staged: [],
+      bundled: [],
+    }));
+    const mod = { ...workspaceModule, prepareFieldPlugins } as unknown as WorkspaceModule;
+    h.getConnection.mockResolvedValue({ port: 4242, token: "abc" });
+    h.importWorkspace.mockResolvedValue(mod);
+
+    h.machine.start();
+    await flush();
+
+    expect(prepareFieldPlugins).toHaveBeenCalledWith({
+      request: expect.any(Function),
+      pluginClientBackend: { windowClient: h.clientStub },
+    });
+  });
+
+  it("closes a staged plugin runtime even before the document-ready checkpoint", async () => {
+    const h = harness();
+    const prepared = deferred<Awaited<ReturnType<WorkspaceModule["prepareFieldPlugins"]>>>();
+    const close = vi.fn(async () => undefined);
+    const mod = {
+      ...workspaceModule,
+      prepareFieldPlugins: () => prepared.promise,
+    } as unknown as WorkspaceModule;
+    h.getConnection.mockResolvedValue({ port: 4242, token: "abc" });
+    h.importWorkspace.mockResolvedValue(mod);
+    h.machine.start();
+    await flush();
+    expect(h.machine.ready).toBeNull();
+
+    const closing = h.machine.closePlugins();
+    prepared.resolve({
+      generation: 7,
+      staged: [],
+      bundled: [],
+      runtime: { close } as unknown as Awaited<
+        ReturnType<WorkspaceModule["prepareFieldPlugins"]>
+      >["runtime"] &
+        object,
+    });
+    await closing;
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   it("emits the boot performance marks in order (bootstrap before the later workspace resolve)", async () => {
     const h = harness();
     const conn = deferred<{ port: number; token: string }>();

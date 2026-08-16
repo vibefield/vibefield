@@ -20,7 +20,11 @@ import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import { getRendererLogger } from "./logging";
 import { setPluginClientBackend } from "./plugin-host/plugin-client";
-import { usePluginRegistryFeed } from "./plugin-host/plugin-registry-store";
+import {
+  getPluginRegistrySnapshot,
+  subscribePluginRegistry,
+  usePluginRegistryFeed,
+} from "./plugin-host/plugin-registry-store";
 import type { PreparedRendererPlugins } from "./plugin-host/staged-loader";
 import { useTheme } from "./theme";
 
@@ -67,6 +71,25 @@ export function FieldView({
     setPluginClientBackend({ windowClient: fielddClient });
     return () => setPluginClientBackend(null);
   }, [fielddClient]);
+  useEffect(() => {
+    const runtime = plugins?.runtime;
+    if (runtime === undefined) return;
+    const reconcile = (): void => {
+      const snapshot = getPluginRegistrySnapshot();
+      if (snapshot === null) return;
+      void runtime.reconcile(snapshot).catch((error) => {
+        getRendererLogger()
+          .child({ component: "plugin.host" })
+          .error(
+            "renderer.plugins.reconcile_failed",
+            "Renderer plugin targets could not converge on the registry observation",
+            error,
+          );
+      });
+    };
+    reconcile();
+    return subscribePluginRegistry(reconcile);
+  }, [plugins]);
 
   const { ce, registry, generation, docState } = useWorkspaceSession(
     manager,

@@ -71,6 +71,29 @@ function sameObservation(left: PluginLeaseObservation, right: PluginLeaseObserva
   return left.manifestHash === right.manifestHash && left.grantGeneration === right.grantGeneration;
 }
 
+function untilAbort<T>(
+  task: Promise<T>,
+  signal: AbortSignal | undefined,
+  label: string,
+): Promise<T> {
+  if (signal === undefined) return task;
+  if (signal.aborted) return Promise.reject(new Error(`${label} aborted`));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(new Error(`${label} aborted`));
+    signal.addEventListener("abort", onAbort, { once: true });
+    void task.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 /** One renderer realm's plugin-credential authority. The class form is intentional: production
  * uses the singleton below, while deterministic tests can own an isolated clock and transport. */
 export class PluginClientLeaseBroker {
@@ -95,7 +118,12 @@ export class PluginClientLeaseBroker {
   }
 
   setBackend(next: PluginClientBackend | null): void {
-    if (next === this.backend) return;
+    if (
+      next === this.backend ||
+      (next !== null && this.backend !== null && next.windowClient === this.backend.windowClient)
+    ) {
+      return;
+    }
     this.backend = next;
     this.backendEpoch += 1;
     for (const state of this.states.values()) {
@@ -133,14 +161,19 @@ export class PluginClientLeaseBroker {
   /** Update provenance without replacing the plugin-visible proxy or its live connection.
    * A completely lazy client has nothing to rotate; an active or minting client must acknowledge
    * the fresh credential before this resolves. */
-  async refresh(pluginId: string, observation: PluginLeaseObservation): Promise<void> {
+  async refresh(
+    pluginId: string,
+    observation: PluginLeaseObservation,
+    signal?: AbortSignal,
+  ): Promise<void> {
     const state = this.stateFor(pluginId);
     const hadCredentialWork = state.client !== null || state.inflight !== null;
     this.observe(state, observation);
     if (!hadCredentialWork) return;
-    const client = await this.leasedClient(state);
+    const label = `plugin ${pluginId}: credential refresh`;
+    const client = await untilAbort(this.leasedClient(state), signal, label);
     try {
-      await client.ready();
+      await untilAbort(client.ready(), signal, label);
     } catch (error) {
       if (state.client === client) state.expiresAt = 0;
       throw error;
@@ -316,8 +349,9 @@ export function setPluginClientBackend(next: PluginClientBackend | null): void {
 export function refreshPluginProductClient(
   pluginId: string,
   observation: PluginLeaseObservation,
+  signal?: AbortSignal,
 ): Promise<void> {
-  return defaultBroker.refresh(pluginId, observation);
+  return defaultBroker.refresh(pluginId, observation, signal);
 }
 
 export function retirePluginProductClient(pluginId: string): void {

@@ -137,6 +137,24 @@ describe("PluginClientLeaseBroker", () => {
     expect(h.clients[0]?.requests).toEqual(["doc.get", "doc.list"]);
   });
 
+  it("keeps the plugin connection when boot and FieldView name the same window client", async () => {
+    const h = harness();
+    h.backend.push(lease("token-1", 1));
+    h.broker.setBackend({ windowClient: h.backend });
+    const client = h.broker.createProductClient(PLUGIN_ID, observation(1));
+    await client.request("doc.get");
+
+    // The wrapper object is new, as it is across boot preparation and the React effect; the
+    // underlying window principal is the same and must not churn every plugin credential.
+    h.broker.setBackend({ windowClient: h.backend });
+    await client.request("doc.list");
+
+    expect(h.requests).toHaveLength(1);
+    expect(h.clients).toHaveLength(1);
+    expect(h.clients[0]?.closes).toBe(0);
+    expect(h.clients[0]?.requests).toEqual(["doc.get", "doc.list"]);
+  });
+
   it("refreshes a semantic-equal observation by rotating the exact client", async () => {
     const h = harness();
     h.backend.push(lease("token-1", 1));
@@ -172,6 +190,30 @@ describe("PluginClientLeaseBroker", () => {
     expect(h.clients).toHaveLength(1);
     expect(h.clients[0]?.initialToken).toBe("token-2");
     expect(h.clients[0]?.rotations).toEqual([]);
+  });
+
+  it("lets renderer close stop waiting on a credential refresh without admitting its late mint", async () => {
+    const h = harness();
+    const lateMint = deferred<unknown>();
+    h.backend.push(lease("token-1", 1));
+    h.backend.push(lateMint.promise);
+    h.broker.setBackend({ windowClient: h.backend });
+    const proxy = h.broker.createProductClient(PLUGIN_ID, observation(1));
+    await proxy.request("doc.get");
+
+    const close = new AbortController();
+    const refreshing = h.broker.refresh(PLUGIN_ID, observation(2), close.signal);
+    await Promise.resolve();
+    close.abort();
+    await expect(refreshing).rejects.toThrow("credential refresh aborted");
+    h.broker.retire(PLUGIN_ID);
+
+    lateMint.resolve(lease("token-2", 2));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.clients).toHaveLength(1);
+    expect(h.clients[0]?.rotations).toEqual([]);
+    expect(h.clients[0]?.closes).toBe(1);
   });
 
   it("cannot resurrect a lease minted by a detached daemon backend", async () => {

@@ -34,7 +34,23 @@ export interface SurfaceEntry {
   seq: number;
 }
 
+export interface StagedSurfaceBinding {
+  surfaceId: string;
+  slot: string;
+  component: ComponentType<PluginSurfaceProps>;
+  order?: number;
+  title?: string;
+  icon?: string;
+}
+
+export interface SurfaceBindingCandidate extends Disposable {
+  bind(row: StagedSurfaceBinding): void;
+  commit(): void;
+  withdraw(surfaceId: string): void;
+}
+
 const entries = new Map<string, SurfaceEntry>();
+const reservations = new Map<string, { token: symbol; slot: string }>();
 const listeners = new Set<() => void>();
 let seqCounter = 0;
 let snapshot: readonly SurfaceEntry[] = [];
@@ -63,40 +79,117 @@ export function register(
   title = surfaceId,
   icon?: string,
 ): Disposable {
-  if (!surfaceId.startsWith(`${pluginId}.`))
-    throw new Error(`surface ${surfaceId} is not owned by ${pluginId} (§6.2)`);
-  if (FORWARD_SLOTS.has(slot))
-    throw new Error(
-      `surface ${surfaceId} targets ${slot}: godview lands later — declaration is forward-compatible, binding is not yet (§8.4)`,
-    );
-  if (!LIVE_SLOTS.has(slot))
-    throw new Error(`surface ${surfaceId} targets unknown slot ${slot} (§8.4)`);
-  if (slot === "hud.side-panel" && [...entries.values()].some((entry) => entry.slot === slot))
-    throw new Error("hud.side-panel already has its one v1 contribution (§8.4/A7)");
-  if (entries.has(surfaceId))
-    throw new Error(`surface ${surfaceId} already bound in this entry (§13.2)`);
-  const seq = seqCounter++;
-  entries.set(surfaceId, {
-    surfaceId,
-    pluginId,
-    slot: slot as LiveSurfaceSlot,
-    title,
-    ...(icon !== undefined ? { icon } : {}),
-    component,
-    order,
-    seq,
-  });
-  rebuild();
-  return {
-    dispose() {
-      // Identity-guarded: a re-bind under the same id must survive a late
-      // dispose from the prior binding.
-      if (entries.get(surfaceId)?.seq === seq) {
+  const candidate = stageBindings(pluginId, [
+    { surfaceId, slot, component, order, title, ...(icon === undefined ? {} : { icon }) },
+  ]);
+  candidate.commit();
+  return candidate;
+}
+
+/** PRC-3d private surface batch. Slot/collision checks and reservations happen before commit;
+ * observers receive one rebuilt snapshot containing the whole batch or none of it. */
+export function stageBindings(
+  pluginId: string,
+  rows: readonly StagedSurfaceBinding[],
+): SurfaceBindingCandidate {
+  const token = Symbol(`surfaces:${pluginId}`);
+  const prepared = new Map<string, SurfaceEntry>();
+  let state: "staged" | "active" | "disposed" = "staged";
+
+  const bind = (row: StagedSurfaceBinding): void => {
+    if (state === "disposed")
+      throw new Error(`surface candidate for ${pluginId} is no longer current (§13.2)`);
+    const { surfaceId, slot } = row;
+    if (!surfaceId.startsWith(`${pluginId}.`))
+      throw new Error(`surface ${surfaceId} is not owned by ${pluginId} (§6.2)`);
+    if (FORWARD_SLOTS.has(slot))
+      throw new Error(
+        `surface ${surfaceId} targets ${slot}: godview lands later — declaration is forward-compatible, binding is not yet (§8.4)`,
+      );
+    if (!LIVE_SLOTS.has(slot))
+      throw new Error(`surface ${surfaceId} targets unknown slot ${slot} (§8.4)`);
+    if (prepared.has(surfaceId))
+      throw new Error(`surface ${surfaceId} is bound twice in this candidate (§13.2)`);
+    if (entries.has(surfaceId) || reservations.has(surfaceId))
+      throw new Error(`surface ${surfaceId} already bound in this entry (§13.2)`);
+    if (
+      slot === "hud.side-panel" &&
+      ([...entries.values()].some((entry) => entry.slot === slot) ||
+        [...reservations.values()].some((reservation) => reservation.slot === slot))
+    ) {
+      throw new Error("hud.side-panel already has its one v1 contribution (§8.4/A7)");
+    }
+    const entry: SurfaceEntry = {
+      surfaceId,
+      pluginId,
+      slot: slot as LiveSurfaceSlot,
+      title: row.title ?? surfaceId,
+      ...(row.icon === undefined ? {} : { icon: row.icon }),
+      component: row.component,
+      order: row.order ?? 0,
+      seq: seqCounter++,
+    };
+    prepared.set(surfaceId, entry);
+    if (state === "staged") reservations.set(surfaceId, { token, slot });
+    else {
+      entries.set(surfaceId, entry);
+      rebuild();
+    }
+  };
+  try {
+    for (const row of rows) bind(row);
+  } catch (error) {
+    for (const surfaceId of prepared.keys()) {
+      if (reservations.get(surfaceId)?.token === token) reservations.delete(surfaceId);
+    }
+    throw error;
+  }
+
+  return Object.freeze({
+    bind,
+    commit(): void {
+      if (state === "active") return;
+      if (
+        state === "disposed" ||
+        [...prepared.keys()].some(
+          (surfaceId) => reservations.get(surfaceId)?.token !== token || entries.has(surfaceId),
+        )
+      ) {
+        throw new Error(`surface candidate for ${pluginId} is no longer current (§13.2)`);
+      }
+      state = "active";
+      for (const [surfaceId, row] of prepared) {
+        reservations.delete(surfaceId);
+        entries.set(surfaceId, row);
+      }
+      if (prepared.size > 0) rebuild();
+    },
+    withdraw(surfaceId: string): void {
+      const row = prepared.get(surfaceId);
+      if (row === undefined) return;
+      prepared.delete(surfaceId);
+      if (reservations.get(surfaceId)?.token === token) reservations.delete(surfaceId);
+      if (entries.get(surfaceId)?.seq === row.seq) {
         entries.delete(surfaceId);
         rebuild();
       }
     },
-  };
+    dispose(): void {
+      if (state === "disposed") return;
+      const prior = state;
+      state = "disposed";
+      let changed = false;
+      for (const [surfaceId, row] of prepared) {
+        if (prior === "staged" && reservations.get(surfaceId)?.token === token)
+          reservations.delete(surfaceId);
+        if (prior === "active" && entries.get(surfaceId)?.seq === row.seq) {
+          entries.delete(surfaceId);
+          changed = true;
+        }
+      }
+      if (changed) rebuild();
+    },
+  });
 }
 
 export function subscribeSurfaces(fn: () => void): () => void {

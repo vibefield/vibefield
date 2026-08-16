@@ -17,6 +17,7 @@ import type { WidgetBinding } from "@vibefield/plugin-sdk";
 import { getRendererLogger } from "./logging";
 import { buildWidgetType } from "./plugin-host/build-widget";
 import { failedFaceComponent } from "./plugin-host/faces";
+import type { RendererPluginController } from "./plugin-host/renderer-controller";
 import { type ActivatedRenderer, activateRenderer } from "./plugin-host/renderer-harness";
 import {
   type BundledRendererPlugin,
@@ -33,23 +34,28 @@ import {
 // blind-seed). `seedField` is the first-run payload — and the persistence
 // tests' named census.
 
-/** Build every declared prefab from DECLARATION data with its code-side
- * binding (§12.2). P3c: every owned component is wrapped in the face policy
- * (live disabled-placeholder + the §11.4 boundary), and a declared type the
- * activation did NOT bind gets a failed face instead of failing the plugin —
- * the schema always registers, so boards stay writable and honest. */
+/** Build every declared prefab from DECLARATION data with its code-side binding (§12.2). Every
+ * owned component is wrapped in the face policy (live disabled-placeholder + §11.4 boundary).
+ * Staged targets receive a stable controller facade so ICE's build-once catalog can follow later
+ * authority generations; legacy/uncontrolled missing bindings receive an honest failed face. */
 function buildWidgets(
   title: string,
   pluginId: string,
   contributions: readonly WidgetContribution[],
   activation: ActivatedRenderer,
+  controller?: RendererPluginController,
 ): Record<string, WidgetType> {
   const owner = { pluginId, pluginTitle: title };
   const activationError =
     activation.state === "active" ? null : (activation.error ?? activation.state);
   return Object.fromEntries(
     contributions.map((w) => {
-      const bound = activationError === null ? activation.bindings.get(w.type) : undefined;
+      const bound =
+        controller !== undefined
+          ? controller.widgetBinding(w.type, w.surface)
+          : activationError === null
+            ? activation.bindings.get(w.type)
+            : undefined;
       const binding =
         bound ??
         ({
@@ -83,10 +89,11 @@ function registerStaged(
   registry: PluginRegistry<WidgetType>,
   record: PluginRecord,
   activation: ActivatedRenderer,
+  controller?: RendererPluginController,
 ): void {
   registry.registerRecord(
     record,
-    buildWidgets(record.title, record.id, record.contributions.widgets, activation),
+    buildWidgets(record.title, record.id, record.contributions.widgets, activation, controller),
   );
 }
 
@@ -145,7 +152,7 @@ export function buildRegistry(
     }
     // §11.4: a failed plugin registers face-only widgets — its boards render
     // honest failed faces; peers and the canvas are untouched.
-    registerStaged(registry, staged.record, staged.activation);
+    registerStaged(registry, staged.record, staged.activation, staged.controller);
   }
   if (prepared.staged.length === 0) {
     // `devBundled` is the fallback's fallback, for a caller with no prepared set

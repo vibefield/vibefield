@@ -25,9 +25,23 @@ import { getPluginRegistrySnapshot } from "./plugin-registry-store";
 // handler — no silent fake. The message names the declared-schema case
 // specifically so the deferred path is legible.
 
+export type CommandHandler = (args: unknown, invocation: CommandInvocation) => void | Promise<void>;
+
 interface Binding {
   pluginId: string;
-  handler: (args: unknown, invocation: CommandInvocation) => void | Promise<void>;
+  handler: CommandHandler;
+  token: symbol;
+}
+
+export interface StagedCommandBinding {
+  commandId: string;
+  handler: CommandHandler;
+}
+
+export interface CommandBindingCandidate extends Disposable {
+  bind(row: StagedCommandBinding): void;
+  commit(): void;
+  withdraw(commandId: string): void;
 }
 
 /** The result of an invoke attempt — never a throw. The palette and the
@@ -41,6 +55,7 @@ export type CommandOutcome =
     };
 
 const bindings = new Map<string, Binding>();
+const reservations = new Map<string, symbol>();
 
 function log() {
   return getRendererLogger().child({ component: "plugin.host" });
@@ -86,32 +101,88 @@ function pluginEnabled(pluginId: string): boolean | "unknown" {
  * plugin does not own, ids the snapshot positively says it did not declare, and
  * double-binds. Throws on refusal (a registration-time programmer error, like
  * widget register); the honest-outcome path is invoke's, not register's. */
-export function register(
+export function register(pluginId: string, commandId: string, handler: CommandHandler): Disposable {
+  const candidate = stageBindings(pluginId, [{ commandId, handler }]);
+  candidate.commit();
+  return candidate;
+}
+
+/** PRC-3d private command batch. Every row is validated and reserved now, but invocation cannot
+ * observe any handler until one synchronous commit. Disposal is exact-batch and idempotent. */
+export function stageBindings(
   pluginId: string,
-  commandId: string,
-  handler: Binding["handler"],
-): Disposable {
-  // Structural ownership (§6.2, always enforceable without fieldd): a command
-  // id is `<pluginId>.<name>`. The manifest validator already proved this at
-  // emit time; re-checking keeps a mis-wired harness honest.
-  if (!commandId.startsWith(`${pluginId}.`))
-    throw new Error(`command ${commandId} is not owned by ${pluginId} (§6.2)`);
-  // Snapshot declared-gate: when fieldd's truth is available AND names this
-  // plugin, the command MUST be in its declared set. A "unknown" verdict
-  // (snapshot absent) does not gate — bundled plugins bind at boot before the
-  // first snapshot lands (P3c), exactly as their widgets do.
-  if (snapshotDeclares(pluginId, commandId) === false)
-    throw new Error(`command ${commandId} is not declared by ${pluginId} (§8.3)`);
-  if (bindings.has(commandId))
-    throw new Error(`command ${commandId} already bound in this entry (§8.3)`);
-  bindings.set(commandId, { pluginId, handler });
-  return {
-    dispose() {
-      // Idempotent + identity-guarded: a re-bind under the same id must not be
-      // clobbered by a late dispose from the prior binding.
-      if (bindings.get(commandId)?.handler === handler) bindings.delete(commandId);
-    },
+  rows: readonly StagedCommandBinding[],
+): CommandBindingCandidate {
+  const token = Symbol(`commands:${pluginId}`);
+  const ids = new Set<string>();
+  const handlers = new Map<string, CommandHandler>();
+  let state: "staged" | "active" | "disposed" = "staged";
+
+  const bind = ({ commandId, handler }: StagedCommandBinding): void => {
+    if (state === "disposed")
+      throw new Error(`command candidate for ${pluginId} is no longer current (§8.3)`);
+    // Structural ownership (§6.2, always enforceable without fieldd): a command id is
+    // `<pluginId>.<name>`. The manifest validator already proved this at emit time; re-checking
+    // keeps a mis-wired harness honest.
+    if (!commandId.startsWith(`${pluginId}.`))
+      throw new Error(`command ${commandId} is not owned by ${pluginId} (§6.2)`);
+    // Snapshot declared-gate: an absent snapshot cannot refute a bundled boot declaration.
+    if (snapshotDeclares(pluginId, commandId) === false)
+      throw new Error(`command ${commandId} is not declared by ${pluginId} (§8.3)`);
+    if (ids.has(commandId))
+      throw new Error(`command ${commandId} is bound twice in this candidate (§8.3)`);
+    if (bindings.has(commandId) || reservations.has(commandId))
+      throw new Error(`command ${commandId} already bound in this entry (§8.3)`);
+    ids.add(commandId);
+    handlers.set(commandId, handler);
+    if (state === "staged") reservations.set(commandId, token);
+    else bindings.set(commandId, { pluginId, handler, token });
   };
+  try {
+    for (const row of rows) bind(row);
+  } catch (error) {
+    for (const commandId of ids) {
+      if (reservations.get(commandId) === token) reservations.delete(commandId);
+    }
+    throw error;
+  }
+
+  return Object.freeze({
+    bind,
+    commit(): void {
+      if (state === "active") return;
+      if (
+        state === "disposed" ||
+        [...ids].some(
+          (commandId) => reservations.get(commandId) !== token || bindings.has(commandId),
+        )
+      ) {
+        throw new Error(`command candidate for ${pluginId} is no longer current (§8.3)`);
+      }
+      state = "active";
+      for (const commandId of ids) {
+        reservations.delete(commandId);
+        bindings.set(commandId, { pluginId, handler: handlers.get(commandId)!, token });
+      }
+    },
+    withdraw(commandId: string): void {
+      if (!ids.delete(commandId)) return;
+      handlers.delete(commandId);
+      if (reservations.get(commandId) === token) reservations.delete(commandId);
+      if (bindings.get(commandId)?.token === token) bindings.delete(commandId);
+    },
+    dispose(): void {
+      if (state === "disposed") return;
+      const prior = state;
+      state = "disposed";
+      for (const commandId of ids) {
+        if (prior === "staged" && reservations.get(commandId) === token)
+          reservations.delete(commandId);
+        if (prior === "active" && bindings.get(commandId)?.token === token)
+          bindings.delete(commandId);
+      }
+    },
+  });
 }
 
 /** Is a handler currently bound for `commandId`? The palette marks a declared
@@ -145,10 +216,9 @@ export async function invoke(
     return { ok: false, reason, message };
   }
 
-  // Enablement gate (P5 / §8.3): a DISABLED plugin's handler stays bound
-  // (P3c — disable swaps faces, never unregisters), but it must not ACT — the
-  // same rule that stops the tray offering new spawns of a disabled plugin. A
-  // null/unknown snapshot does not gate (honest degraded default).
+  // Defensive enablement gate (P5 / §8.3): PRC-3d normally withdraws this binding at the same
+  // synchronous observation edge. The snapshot check still covers legacy bundled activation and
+  // any caller already holding an invocation turn. A null/unknown snapshot does not gate.
   if (pluginEnabled(binding.pluginId) === false) {
     log().warn("renderer.commands.unavailable", "A disabled plugin's command was not run", {
       commandId,

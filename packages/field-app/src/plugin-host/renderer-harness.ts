@@ -94,6 +94,13 @@ interface ActivationSpec {
 export interface RendererActivationDeps {
   /** Test/alternate transport seam. Production uses the plugin-principal client factory. */
   readonly productClient?: PluginProductClient;
+  /** PRC-3d controller seam. The attempt keeps its own scope, but this owner closes it at the
+   * controller's synchronous authority edge and awaits its quiescence during adapter cleanup. */
+  readonly ownerScope?: ActivationScope;
+  /** Controller-only hooks that keep ICE's stable facade honest when an open activation acquires
+   * or releases a widget binding after its initial publication commit. */
+  readonly validateWidgetBinding?: (type: string, binding: WidgetBinding) => void;
+  readonly onWidgetBindingsChanged?: () => void;
 }
 
 function specFromManifest(manifest: PluginManifestV1): ActivationSpec {
@@ -145,9 +152,27 @@ function isThenable(v: unknown): v is PromiseLike<unknown> {
 interface Activation {
   readonly contextFor: (scope: ActivationScope) => RendererPluginContext;
   readonly bindings: Map<string, WidgetBinding>;
+  readonly commandBindings: Map<string, { token: symbol; handler: commandRegistry.CommandHandler }>;
+  readonly surfaceBindings: Map<
+    string,
+    {
+      token: symbol;
+      component: ComponentType<PluginSurfaceProps>;
+      slot: string;
+      order: number;
+      title: string;
+      icon?: string;
+    }
+  >;
   readonly scope: ActivationScope;
   readonly lifetime: RendererActivationLifetime;
   readonly logger: PluginLogger;
+  stagePublications(): RendererPublicationCandidate;
+}
+
+interface RendererPublicationCandidate extends Disposable {
+  commit(): void;
+  dispose(): void;
 }
 
 function assertScopeOpen(scope: ActivationScope): void {
@@ -213,7 +238,11 @@ function primaryErrorMessage(error: unknown): string {
   return primary instanceof Error ? primary.message : String(primary);
 }
 
-function buildActivation(spec: ActivationSpec, deps: RendererActivationDeps = {}): Activation {
+function buildActivation(
+  spec: ActivationSpec,
+  deps: RendererActivationDeps = {},
+  suppliedScope?: ActivationScope,
+): Activation {
   const declared = new Set(spec.widgets.map((w) => w.type));
   // §8.3/§8.4 declared contributions — the DECLARATION is the always-available
   // authority (the fieldd snapshot may be null at boot; two-plane law). Commands
@@ -249,9 +278,28 @@ function buildActivation(spec: ActivationSpec, deps: RendererActivationDeps = {}
     : undefined;
   const bindings = new Map<string, WidgetBinding>();
   const widgetGenerations = new Map<string, symbol>();
-  const scope = new ActivationScope(`renderer:${spec.id}`, {
-    failureCleanupDeadlineMs: PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS,
-  });
+  const commandBindings = new Map<
+    string,
+    { token: symbol; handler: commandRegistry.CommandHandler }
+  >();
+  const surfaceBindings = new Map<
+    string,
+    {
+      token: symbol;
+      component: ComponentType<PluginSurfaceProps>;
+      slot: string;
+      order: number;
+      title: string;
+      icon?: string;
+    }
+  >();
+  let stagedCommands: commandRegistry.CommandBindingCandidate | undefined;
+  let stagedSurfaces: surfaceRegistry.SurfaceBindingCandidate | undefined;
+  const scope =
+    suppliedScope ??
+    new ActivationScope(`renderer:${spec.id}`, {
+      failureCleanupDeadlineMs: PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS,
+    });
   const logger = makeLogger(spec.id);
 
   const contextFor = (ownedBy: ActivationScope): RendererPluginContext => {
@@ -378,14 +426,17 @@ function buildActivation(spec: ActivationSpec, deps: RendererActivationDeps = {}
             throw new Error(`${registration.type} is not declared by ${spec.id} (§12.1)`);
           if (bindings.has(registration.type))
             throw new Error(`${registration.type} already bound in this entry (§12.1)`);
+          deps.validateWidgetBinding?.(registration.type, registration.binding);
           const generation = Symbol(registration.type);
           widgetGenerations.set(registration.type, generation);
           bindings.set(registration.type, registration.binding);
+          deps.onWidgetBindingsChanged?.();
           const resource: Disposable = {
             dispose() {
               if (widgetGenerations.get(registration.type) !== generation) return;
               widgetGenerations.delete(registration.type);
               bindings.delete(registration.type);
+              deps.onWidgetBindingsChanged?.();
             },
           };
           return ownPublication(ownedBy, `widget:${registration.type}`, resource);
@@ -408,7 +459,26 @@ function buildActivation(spec: ActivationSpec, deps: RendererActivationDeps = {}
                   assertOpen();
                   return handler(args, invocation);
                 };
-                const resource = commandRegistry.register(spec.id, commandId, guardedHandler);
+                if (commandBindings.has(commandId))
+                  throw new Error(`command ${commandId} already bound in this entry (§8.3)`);
+                const token = Symbol(commandId);
+                commandBindings.set(commandId, { token, handler: guardedHandler });
+                try {
+                  stagedCommands?.bind({ commandId, handler: guardedHandler });
+                } catch (error) {
+                  commandBindings.delete(commandId);
+                  throw error;
+                }
+                const resource: Disposable = {
+                  dispose() {
+                    if (commandBindings.get(commandId)?.token === token) {
+                      commandBindings.delete(commandId);
+                      // Explicit disposal while live withdraws one row. During a scope close the
+                      // root publication candidate withdraws the whole batch atomically below.
+                      if (ownedBy.state === "open") stagedCommands?.withdraw(commandId);
+                    }
+                  },
+                };
                 return ownPublication(ownedBy, `command:${commandId}`, resource);
               },
             }),
@@ -425,15 +495,38 @@ function buildActivation(spec: ActivationSpec, deps: RendererActivationDeps = {}
                 const decl = declaredSurfaces.get(surfaceId);
                 if (decl === undefined)
                   throw new Error(`${surfaceId} is not declared by ${spec.id} (§8.4)`);
-                const resource = surfaceRegistry.register(
-                  spec.id,
-                  surfaceId,
-                  decl.slot,
+                if (surfaceBindings.has(surfaceId))
+                  throw new Error(`surface ${surfaceId} already bound in this entry (§13.2)`);
+                const token = Symbol(surfaceId);
+                surfaceBindings.set(surfaceId, {
+                  token,
                   component,
-                  decl.order,
-                  decl.title,
-                  decl.icon,
-                );
+                  slot: decl.slot,
+                  order: decl.order,
+                  title: decl.title,
+                  ...(decl.icon === undefined ? {} : { icon: decl.icon }),
+                });
+                try {
+                  stagedSurfaces?.bind({
+                    surfaceId,
+                    component,
+                    slot: decl.slot,
+                    order: decl.order,
+                    title: decl.title,
+                    ...(decl.icon === undefined ? {} : { icon: decl.icon }),
+                  });
+                } catch (error) {
+                  surfaceBindings.delete(surfaceId);
+                  throw error;
+                }
+                const resource: Disposable = {
+                  dispose() {
+                    if (surfaceBindings.get(surfaceId)?.token === token) {
+                      surfaceBindings.delete(surfaceId);
+                      if (ownedBy.state === "open") stagedSurfaces?.withdraw(surfaceId);
+                    }
+                  },
+                };
                 return ownPublication(ownedBy, `surface:${surfaceId}`, resource);
               },
             }),
@@ -460,7 +553,89 @@ function buildActivation(spec: ActivationSpec, deps: RendererActivationDeps = {}
     return ctx;
   };
 
-  return { contextFor, bindings, scope, lifetime: lifetimeFor(scope, bindings), logger };
+  const stagePublications = (): RendererPublicationCandidate => {
+    assertScopeOpen(scope);
+    const commands = commandRegistry.stageBindings(
+      spec.id,
+      [...commandBindings].map(([commandId, binding]) => ({
+        commandId,
+        handler: binding.handler,
+      })),
+    );
+    let surfaces: surfaceRegistry.SurfaceBindingCandidate;
+    try {
+      surfaces = surfaceRegistry.stageBindings(
+        spec.id,
+        [...surfaceBindings].map(([surfaceId, binding]) => ({
+          surfaceId,
+          slot: binding.slot,
+          component: binding.component,
+          order: binding.order,
+          title: binding.title,
+          ...(binding.icon === undefined ? {} : { icon: binding.icon }),
+        })),
+      );
+    } catch (error) {
+      commands.dispose();
+      throw error;
+    }
+    stagedCommands = commands;
+    stagedSurfaces = surfaces;
+
+    let state: "staged" | "active" | "disposed" = "staged";
+    const wasDisposedReentrantly = (): boolean => state === "disposed";
+    const candidate: RendererPublicationCandidate = Object.freeze({
+      commit(): void {
+        if (state === "active") return;
+        if (state === "disposed" || scope.state !== "open")
+          throw new Error(`renderer publication candidate for ${spec.id} is no longer current`);
+        commands.commit();
+        try {
+          surfaces.commit();
+          if (wasDisposedReentrantly())
+            throw new Error(`renderer publication candidate for ${spec.id} changed during commit`);
+          state = "active";
+        } catch (error) {
+          commands.dispose();
+          throw error;
+        }
+      },
+      dispose(): void {
+        if (state === "disposed") return;
+        state = "disposed";
+        let failure: unknown;
+        try {
+          surfaces.dispose();
+        } catch (error) {
+          failure = error;
+        }
+        try {
+          commands.dispose();
+        } catch (error) {
+          failure ??= error;
+        } finally {
+          if (stagedSurfaces === surfaces) stagedSurfaces = undefined;
+          if (stagedCommands === commands) stagedCommands = undefined;
+        }
+        if (failure !== undefined) throw failure;
+      },
+    });
+    // One root-owned batch is the synchronous authority inverse. Per-registration handles remain
+    // exact for explicit live disposal, but cannot expose partial teardown snapshots on close.
+    ownPublication(scope, "host:publications", candidate);
+    return candidate;
+  };
+
+  return {
+    contextFor,
+    bindings,
+    commandBindings,
+    surfaceBindings,
+    scope,
+    lifetime: lifetimeFor(scope, bindings),
+    logger,
+    stagePublications,
+  };
 }
 
 interface StartedActivation {
@@ -474,6 +649,9 @@ interface StartedActivation {
  * promise. Capturing that immediate result preserves the dev-only bundled API's synchronous
  * thenable refusal while both paths still get the same pre-registered setup marker. */
 function beginActivation(attempt: Activation, mod: RendererPluginModule): StartedActivation {
+  // Explicit initialization is required for the outer return path: ActivationScope.effect can
+  // reject before invoking the acquisition callback, even though the ordinary open-scope path
+  // assigns synchronously.
   let syncValue: void | Disposable | Promise<void | Disposable> = undefined;
   let syncThrew = false;
   let syncError: unknown;
@@ -558,6 +736,25 @@ export function activateRenderer(
     return failed;
   }
 
+  try {
+    attempt.stagePublications().commit();
+  } catch (error) {
+    attempt.lifetime.close({ kind: "activation-failed", detail: manifest.id });
+    void started.task.catch(() => undefined);
+    const cleanup = attempt.lifetime.snapshot();
+    const message = primaryErrorMessage(error);
+    const failed: ActivatedRenderer = {
+      state: cleanup.quiescent ? "failed" : "non-quiescent",
+      bindings: attempt.bindings,
+      error: message,
+      cleanup,
+      lifetime: attempt.lifetime,
+    };
+    if (!cleanup.quiescent) activated.set(manifest.id, failed);
+    attempt.logger.error(`activation publication failed: ${message}`);
+    return failed;
+  }
+
   const elapsed = performance.now() - startedAt;
   if (elapsed > PLUGIN_LIMITS.RENDERER_ACTIVATE_DEADLINE_MS)
     attempt.logger.warn(`activate took ${Math.round(elapsed)}ms — over the §10.4 deadline`);
@@ -584,6 +781,130 @@ type RacedActivation =
   | { readonly settled: true; readonly value: void | Disposable }
   | { readonly settled: false };
 
+export interface RendererActivationCandidate extends Disposable {
+  readonly activation: ActivatedRenderer;
+  commit(): void;
+  dispose(): Promise<void>;
+}
+
+export class RendererActivationStageError extends Error {
+  readonly activation: ActivatedRenderer;
+
+  constructor(activation: ActivatedRenderer) {
+    super(activation.error ?? "renderer activation failed");
+    this.name = "RendererActivationStageError";
+    this.activation = activation;
+  }
+}
+
+function bindAttemptOwner(attempt: Activation, owner: ActivationScope | undefined): void {
+  if (owner === undefined) return;
+  const close = (): void => {
+    const reason = owner.signal.reason;
+    attempt.lifetime.close(
+      typeof reason === "object" && reason !== null && "kind" in reason
+        ? (reason as ActivationCloseReason)
+        : { kind: "parent-close", detail: owner.label },
+    );
+  };
+  owner.signal.addEventListener("abort", close, { once: true });
+  owner.track("renderer:attempt", {
+    async dispose() {
+      owner.signal.removeEventListener("abort", close);
+      attempt.lifetime.close({ kind: "parent-close", detail: owner.label });
+      await attempt.lifetime.whenQuiescent();
+    },
+  });
+}
+
+/** Prepare one staged renderer privately. This is the PRC-3d controller adapter: successful
+ * setup returns an exact candidate whose command/surface batch is still reserved, not public. */
+export async function stageStagedRenderer(
+  record: PluginRecord,
+  module: PluginModuleUrls,
+  mod: RendererPluginModule,
+  deps: RendererActivationDeps = {},
+): Promise<RendererActivationCandidate> {
+  const attempt = buildActivation(specFromRecord(record, module), deps);
+  bindAttemptOwner(attempt, deps.ownerScope);
+  const started = beginActivation(attempt, mod);
+  const deadlineMs = PLUGIN_LIMITS.RENDERER_ACTIVATE_DEADLINE_MS;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const raced = await Promise.race<RacedActivation>([
+      started.task.then((value) => ({ settled: true, value }) as const),
+      new Promise<RacedActivation>((resolve) => {
+        timer = setTimeout(() => resolve({ settled: false }), deadlineMs);
+      }),
+    ]);
+    if (!raced.settled) {
+      attempt.lifetime.close({ kind: "activation-timeout", detail: record.id });
+      const cleanup = await attempt.lifetime.observe(0);
+      const error = `activate exceeded the §10.4 renderer deadline (${deadlineMs}ms)`;
+      attempt.logger.error(error);
+      throw new RendererActivationStageError({
+        state: cleanup.quiescent ? "failed" : "non-quiescent",
+        bindings: attempt.bindings,
+        error,
+        cleanup,
+        lifetime: attempt.lifetime,
+      });
+    }
+    const publications = attempt.stagePublications();
+    const activation: ActivatedRenderer = {
+      state: "active",
+      bindings: attempt.bindings,
+      lifetime: attempt.lifetime,
+    };
+    let state: "staged" | "active" | "disposed" = "staged";
+    let disposeTask: Promise<void> | undefined;
+    const candidate: RendererActivationCandidate = Object.freeze({
+      activation,
+      commit(): void {
+        if (state === "active") return;
+        if (state === "disposed" || attempt.scope.state !== "open")
+          throw new Error(`renderer candidate for ${record.id} is no longer current`);
+        publications.commit();
+        if (attempt.scope.state !== "open")
+          throw new Error(`renderer candidate for ${record.id} changed during commit`);
+        state = "active";
+      },
+      dispose(): Promise<void> {
+        if (disposeTask !== undefined) return disposeTask;
+        state = "disposed";
+        let resolveDispose!: () => void;
+        let rejectDispose!: (error: unknown) => void;
+        disposeTask = new Promise<void>((resolve, reject) => {
+          resolveDispose = resolve;
+          rejectDispose = reject;
+        });
+        attempt.lifetime.close({ kind: "target-changed", detail: record.id });
+        void attempt.lifetime.whenQuiescent().then(
+          () => resolveDispose(),
+          (error) => rejectDispose(error),
+        );
+        return disposeTask;
+      },
+    });
+    return candidate;
+  } catch (error) {
+    if (error instanceof RendererActivationStageError) throw error;
+    attempt.lifetime.close({ kind: "activation-failed", detail: record.id });
+    const cleanup = await attempt.lifetime.observe(PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS);
+    const message = primaryErrorMessage(error);
+    attempt.logger.error(`activation failed: ${message}`);
+    throw new RendererActivationStageError({
+      state: cleanup.quiescent ? "failed" : "non-quiescent",
+      bindings: attempt.bindings,
+      error: message,
+      cleanup,
+      lifetime: attempt.lifetime,
+    });
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 /** THE STAGED PATH (§19.2 + §10.4): the module came from the plugin's own
  * approved artifact, so `activate` may be async and this awaits it under the
  * deadline rather than merely measuring it.
@@ -604,56 +925,21 @@ export async function activateStagedRenderer(
 ): Promise<ActivatedRenderer> {
   const cached = cachedActivation(record.id);
   if (cached !== undefined) return cached;
-
-  const attempt = buildActivation(specFromRecord(record, module), deps);
-  const started = beginActivation(attempt, mod);
-  const deadlineMs = PLUGIN_LIMITS.RENDERER_ACTIVATE_DEADLINE_MS;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let candidate: RendererActivationCandidate | undefined;
   try {
-    const raced = await Promise.race<RacedActivation>([
-      started.task.then((value) => ({ settled: true, value }) as const),
-      new Promise<RacedActivation>((resolve) => {
-        timer = setTimeout(() => resolve({ settled: false }), deadlineMs);
-      }),
-    ]);
-    if (!raced.settled) {
-      attempt.lifetime.close({ kind: "activation-timeout", detail: record.id });
-      const cleanup = await attempt.lifetime.observe(0);
-      const error = `activate exceeded the §10.4 renderer deadline (${deadlineMs}ms)`;
-      attempt.logger.error(error);
-      const overdue: ActivatedRenderer = {
-        state: cleanup.quiescent ? "failed" : "non-quiescent",
-        bindings: attempt.bindings,
-        error,
-        cleanup,
-        lifetime: attempt.lifetime,
-      };
-      if (!cleanup.quiescent) activated.set(record.id, overdue);
-      return overdue;
-    }
-    const ok: ActivatedRenderer = {
-      state: "active",
-      bindings: attempt.bindings,
-      lifetime: attempt.lifetime,
-    };
+    candidate = await stageStagedRenderer(record, module, mod, deps);
+    candidate.commit();
+    const ok = candidate.activation;
     activated.set(record.id, ok);
     return ok;
   } catch (error) {
-    attempt.lifetime.close({ kind: "activation-failed", detail: record.id });
-    const cleanup = await attempt.lifetime.observe(PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS);
-    const message = primaryErrorMessage(error);
-    attempt.logger.error(`activation failed: ${message}`);
-    const failed: ActivatedRenderer = {
-      state: cleanup.quiescent ? "failed" : "non-quiescent",
-      bindings: attempt.bindings,
-      error: message,
-      cleanup,
-      lifetime: attempt.lifetime,
-    };
-    if (!cleanup.quiescent) activated.set(record.id, failed);
+    await candidate?.dispose();
+    const failed: ActivatedRenderer =
+      error instanceof RendererActivationStageError
+        ? error.activation
+        : { state: "failed" as const, bindings: new Map(), error: primaryErrorMessage(error) };
+    if (failed.cleanup !== undefined && !failed.cleanup.quiescent) activated.set(record.id, failed);
     return failed;
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
   }
 }
 

@@ -645,6 +645,7 @@ describe("BootRoot during onboarding", () => {
       },
       start: () => {},
       retry: () => {},
+      closePlugins: async () => undefined,
       completeOnboarding,
     };
     return { machine, completeOnboarding };

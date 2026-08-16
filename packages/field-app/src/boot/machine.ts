@@ -96,6 +96,9 @@ export interface BootMachine {
   start(): void;
   /** re-runs from the failed step; no-op unless unavailable */
   retry(): void;
+  /** Prevents any not-yet-started plugin preparation and closes a staged runtime even before the
+   * document-ready checkpoint exists. Single-flight for the window prepare-close barrier. */
+  closePlugins(): Promise<void>;
   /** UA-3w — the wizard is finished; release the hold and boot on. Idempotent,
    * and inert when nothing is holding. The wizard calls it only after the
    * durable `onboarded` write lands, so a later retry() re-reads a record that
@@ -143,6 +146,8 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
   let started = false;
   let onboarding: BootOnboarding | null = null;
   let releaseOnboarding: (() => void) | null = null;
+  let pluginCloseRequested = false;
+  let pluginCloseTask: Promise<void> | null = null;
 
   /** The §6 gate (UA-3w). The ONE outcome that opens the wizard is a record
    * this build can read that says `onboarded: false`. Everything else — no
@@ -236,10 +241,17 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
       // rejects (the loader's own budget answers for an absent daemon), so
       // there is nothing here that can strand the splash.
       if (pluginsPromise === null) {
-        const prepareClient = client;
-        pluginsPromise = mod.prepareFieldPlugins({
-          request: async (method, params) => await prepareClient.request(method, params),
-        });
+        if (pluginCloseRequested) {
+          pluginsPromise = Promise.resolve({ generation: -1, staged: [], bundled: [] });
+        } else {
+          const prepareClient = client;
+          pluginsPromise = mod.prepareFieldPlugins({
+            request: async (method, params) => await prepareClient.request(method, params),
+            // Renderer modules activate behind the splash, before FieldView can install its
+            // effect. Hand the same exact window client to the lazy lease broker at that edge.
+            pluginClientBackend: { windowClient: prepareClient },
+          });
+        }
       }
 
       // UA-3w — the Setup Assistant holds HERE: after the daemon answered and
@@ -369,6 +381,15 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
     },
     completeOnboarding: () => {
       releaseOnboarding?.();
+    },
+    closePlugins: () => {
+      if (pluginCloseTask !== null) return pluginCloseTask;
+      pluginCloseRequested = true;
+      pluginCloseTask = (async () => {
+        const prepared = ready?.plugins ?? (pluginsPromise === null ? null : await pluginsPromise);
+        await prepared?.runtime?.close();
+      })();
+      return pluginCloseTask;
     },
     start: () => {
       if (started) return;

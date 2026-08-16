@@ -1,12 +1,14 @@
 import { PLUGIN_LIMITS, type PluginRecord, PluginRegistrySnapshot } from "@vibefield/contracts";
 import type { RendererPluginContext } from "@vibefield/plugin-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { isCommandBound } from "../src/plugin-host/command-registry";
 import { activateStagedRenderer } from "../src/plugin-host/renderer-harness";
 import {
   ensureStyleLink,
   prepareRendererPlugins,
   type StagedLoaderDeps,
 } from "../src/plugin-host/staged-loader";
+import { getSurfacesSnapshot } from "../src/plugin-host/surface-registry";
 
 // P8b-3 — the staged loader and the async activation path it feeds.
 //
@@ -72,9 +74,8 @@ const moduleRow = (id: string) => ({
   installRevision: "rev-1",
 });
 
-/** One approved plugin, end to end. The id varies per test because the harness
- * memoizes one activation per plugin id per renderer process (§10.3) — two rows
- * sharing an id would have the second silently reading the first's answer. */
+/** One approved plugin, end to end. IDs stay unique so live controller scopes and their exact
+ * host publications cannot collide across independent test cases. */
 function deps(id: string, over: Partial<StagedLoaderDeps> = {}): StagedLoaderDeps {
   return {
     request: async (method) => {
@@ -112,6 +113,55 @@ describe("the staged loader", () => {
     expect(entry?.record.id).toBe("alpha");
     expect(entry?.activation.state).toBe("active");
     expect([...(entry?.activation.bindings.keys() ?? [])]).toEqual(["alpha.card"]);
+    expect(prepared.runtime?.windowId).toBe("field");
+    await prepared.runtime?.close();
+  });
+
+  it("wires the imported artifact into its window controller and live registry observations", async () => {
+    const id = "controlled";
+    const contributions = {
+      ...record(id).contributions,
+      commands: [{ id: `${id}.run`, title: "Run", placements: ["palette"] }],
+      surfaces: [{ id: `${id}.panel`, title: "Panel", slot: "hud.attention" }],
+    };
+    const active = record(id, { contributions });
+    const disabled = record(id, {
+      contributions,
+      enabled: false,
+      state: "disabled",
+      grantGeneration: 1,
+    });
+    let signal: AbortSignal | undefined;
+    const prepared = await prepareRendererPlugins(
+      deps(id, {
+        windowId: "loader-window",
+        request: async (method) =>
+          method === "plugins.modules"
+            ? { generation: 7, modules: [moduleRow(id)] }
+            : snapshotOf(active),
+        importModule: async () => ({
+          activate(ctx: RendererPluginContext) {
+            signal = ctx.signal;
+            ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
+            ctx.commands?.register(`${id}.run`, () => undefined);
+            ctx.surfaces?.register(`${id}.panel`, () => null);
+          },
+        }),
+      }),
+    );
+    expect(prepared.runtime?.windowId).toBe("loader-window");
+    expect(prepared.staged[0]?.controller?.windowId).toBe("loader-window");
+    expect(isCommandBound(`${id}.run`)).toBe(true);
+    expect(getSurfacesSnapshot().some((surface) => surface.surfaceId === `${id}.panel`)).toBe(true);
+
+    const reconciling = prepared.runtime?.reconcile(snapshotOf(disabled));
+    expect(signal?.aborted).toBe(true);
+    expect(isCommandBound(`${id}.run`)).toBe(false);
+    expect(getSurfacesSnapshot().some((surface) => surface.surfaceId === `${id}.panel`)).toBe(
+      false,
+    );
+    await reconciling;
+    await prepared.runtime?.close();
   });
 
   it("hands the plugin its approved identity through ctx.plugin (§11.4)", async () => {

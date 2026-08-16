@@ -186,8 +186,9 @@ describe("renderer activation ownership", () => {
       quiescent = true;
       return report;
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    // The root publication batch is the newest owned resource and drains first. Wait for strict
+    // LIFO to reach the plugin's held disposer without assuming an exact microtask count.
+    for (let turn = 0; turn < 20 && disposeCalls === 0; turn += 1) await Promise.resolve();
     expect(quiescent).toBe(false);
     expect(disposeCalls).toBe(1);
     // Publication withdrawal is synchronous even while later LIFO resource cleanup is stalled.
