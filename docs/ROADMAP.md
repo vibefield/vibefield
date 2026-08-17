@@ -3,7 +3,7 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-17 — PRC-5b LANDED.** PRC-E18's
+> stays in the design docs + specs. Last rewritten: **2026-08-17 — PRC-5c LANDED.** PRC-E18's
 > exact participant/commit-epoch model is green **7/7** beside E13's **6/6** controls. Commit
 > `c5dcca9` gives every production renderer a shell-minted stable-window/exact-document identity,
 > binds it into fieldd's window bearer and `CallerContext`, threads the stable id into renderer
@@ -11,8 +11,10 @@
 > PRC-5b `6817116` gives each complete signed package an immutable SHA-256 revision slot, keeps old
 > and candidate roots distinct, and exposes bytes only through a fail-closed compare-and-swap
 > current pointer. Its real signed-registry v0.1→v0.2 test proves discovery remains old until
-> commit. **Now:** PRC-5c gives renderer modules and service workers explicit candidate authority
-> without moving that pointer. PRC-4g2
+> commit. PRC-5c `3fa514f` + `1602654` now gives candidate inspection, renderer module grants,
+> and service workers explicit episode-bound authority over that immutable root without moving the
+> live registry during preparation; publication requires the exact candidate row. **Now:** PRC-5d
+> replaces a live renderer controller/module namespace behind the held route. PRC-4g2
 > landed bounded plugin presence in `ce92023` on ICE 0.9.0 / strata 0.13.0 (exact dependency
 > consumption `1fecb94`): identity-bearing complete-cell claims, claim +256-byte aggregate charge
 > under 48 KiB, plugin-atomic canonical allocation, a separate 64 KiB guard, and packaged remote
@@ -131,7 +133,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
 | PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-D1…D13 ratified; PRC-0 through PRC-3d landed; **PRC-4 COMPLETE**: PRC-4d binding `95da1b8`, PRC-4e document host `6289795`, PRC-4f packaged conformance `9fc2de6`, PRC-4g1 room/native code `43929e7` + `81c21fd` with its real-tailnet witness green, and PRC-4g2 bounded ephemeral admission `ce92023` on ICE 0.9.0 / strata 0.13.0. | `specs/plugin-architecture.md` §8.8/§12.7/§21.9 · `thinking-plugin-runtime-composability.md` · `thinking-prc4-behavior-adapter.md` | PRC-5 owns disruptive artifact replacement and PRC-6 owns bounded diagnostics/soak. P8c rides WP8; P8e gates third-party listing. |
-| PLUG — PRC-5 update coordinator | **IN FLIGHT.** PRC-D14 added from E18; E18 7/7 + E13 6/6 green; **PRC-5a identity/contracts LANDED `c5dcca9`; PRC-5b immutable artifact slots LANDED `6817116`**. | plugin-architecture §18.5 · `thinking-prc5-update-coordinator.md` | **PRC-5c now:** explicit candidate renderer/service authority without current-pointer movement; then renderer replacement, coordinator, shell death witness, physical acceptance. |
+| PLUG — PRC-5 update coordinator | **IN FLIGHT.** PRC-D14 added from E18; E18 7/7 + E13 6/6 + E19 5/5 green; **PRC-5a identity/contracts `c5dcca9`; PRC-5b immutable slots `6817116`; PRC-5c candidate authority `3fa514f` + `1602654` LANDED**. | plugin-architecture §18.5 · `thinking-prc5-update-coordinator.md` | **PRC-5d now:** replace one live renderer controller/module namespace behind closed publication; then coordinator, shell death witness, physical acceptance. |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -359,8 +361,17 @@ implemented RPC surface. **PRC-5b LANDED `6817116`:** immutable full-artifact-SH
 durable private staging, base-slot CAS pointer publication, fail-closed registry resolution, legacy
 adoption, and conservative orphan recovery pass 7 new cases plus 13 registry regressions. The
 compatibility installer still prepares/commits back-to-back, so reload coordination is unchanged.
-**Now:** PRC-5c gives module/service activation an explicit candidate record and root without
-changing live registry authority.
+**PRC-5c LANDED `3fa514f` + `1602654`.** Registry preparation now returns a code-free candidate
+record/manifest/root without moving live maps, and registry runtime identity is the full signed
+artifact slot so same-manifest code changes remain distinct. Episode-bound path-free module grants
+resolve only the explicit candidate root and require exact-current promotion. The common target
+controller can hold a fully activated target in `prepared`; service replacement drains old
+providers, starts from the explicit root, keeps typed handlers unavailable, and requires the exact
+candidate row at one synchronous commit edge. Base/grant/disable movement and discard revoke the
+candidate; retained old authority can restart. E19 is **5/5**, the focused production gates are
+fieldd **40/40**, plugin-runtime **42/42**, and Electron staged-serving **6/6**, with four dependent
+typechecks green. **Now:** PRC-5d makes the renderer controller/module namespace replaceable behind
+the same held-target law.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through

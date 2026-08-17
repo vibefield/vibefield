@@ -2615,5 +2615,35 @@ legacy adoption, candidate discard/current protection, an injected interruption 
 sync but before rename, stale-writer CAS, traversal/malformed-pointer refusal, and conservative boot
 cleanup. Focused fieldd typecheck, Biome, and patch hygiene pass. The existing daemon socket e2e
 remains physically gated because this sandbox refuses temporary listeners with `EPERM`; actual
-power-loss and Windows no-directory-fsync behavior remain PRC-5g acceptance. **PRC-5c is next:**
-candidate-bound renderer module and service-worker authority without changing the live pointer.
+power-loss and Windows no-directory-fsync behavior remain PRC-5g acceptance.
+
+## PRC-E19 + PRC-5c — candidate authority without premature discovery
+
+**LANDED 2026-08-17** (`3fa514f`, `1602654`). Candidate preparation can now cross the old/live
+registry boundary without borrowing live authority. The installer returns a code-free validated
+candidate record, manifest, explicit immutable root, and complete signed-artifact identity while
+live registry rows/root paths/service declarations remain unchanged. Registry-installed
+`installRevision` is now the full 64-hex artifact slot rather than the manifest-hash prefix; this
+distinguishes changed code/assets under an unchanged manifest.
+
+Renderer candidate URLs remain path-free opaque grants. Each is owned by one update/plugin episode,
+fenced to the exact base observation and candidate artifact/grants, and resolves only the explicit
+immutable candidate root. Exact-current promotion is required; base/grant/disable movement and
+disposal revoke the candidate without erasing retained live grants. Live generation rebuilds no
+longer erase in-flight candidate authority.
+
+`RuntimeTargetController` now has a generic manual publication seam: `prepareDesired()` preserves
+the existing break-before-make and scope disposal laws but stops with a fully activated candidate
+in `prepared`; `commitPrepared()` is synchronous and stale checked. `ServiceHost` uses it to drain
+old providers, activate a worker from the explicit candidate record/root, and keep typed provider
+declarations unavailable until the exact candidate row is current. Commit before pointer movement
+or against a changed authority observation is refused. Discard terminates the private worker and
+retained old authority can restart. Review also corrected the observation boundary: service entry
+state (`active`, `inactive`, etc.) is lifecycle output, so normal drain movement is normalized out;
+artifact, manifest, enablement, and grants remain fenced.
+
+Acceptance: PRC-E19 **5/5** beside E18 **7/7** and E13 **6/6**; focused fieldd **40/40**,
+plugin-runtime **42/42**, and Electron staged-serving **6/6**; fieldd, plugin-runtime, field-app,
+and electron-shell typechecks; Biome and patch hygiene. No product update RPC or pointer interval was
+widened. **PRC-5d is next:** replace a live renderer controller/module namespace behind the held
+route before PRC-5e wires the coordinator.
