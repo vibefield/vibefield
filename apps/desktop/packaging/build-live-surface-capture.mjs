@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -46,6 +46,11 @@ const fixture = join(outputRoot, "live-surface-capture-fixture");
 const helperTemporary = `${helper}.building`;
 const adapterTemporary = `${adapter}.building`;
 const fixtureTemporary = `${fixture}.building`;
+const signingIdentifiers = {
+  helper: "com.jamesyong.vibefield.live-surface-capture-helper",
+  adapter: "com.jamesyong.vibefield.live-surface-adapter",
+  fixture: "com.jamesyong.vibefield.live-surface-capture-fixture",
+};
 
 const common = [
   "clang++",
@@ -70,6 +75,17 @@ function compile(label, args, output) {
   if (result.error) throw result.error;
   if (result.status !== 0)
     throw new Error(`${label} compilation failed with status ${result.status}`);
+}
+
+function applyStableAdHocSignature(label, path, identifier) {
+  const result = spawnSync(
+    "xcrun",
+    ["codesign", "--force", "--sign", "-", "--identifier", identifier, path],
+    { cwd: desktopRoot, stdio: "inherit" },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw new Error(`${label} ad-hoc signing failed with status ${result.status}`);
 }
 
 try {
@@ -144,6 +160,20 @@ try {
   renameSync(adapterTemporary, adapter);
   if (withFixture) renameSync(fixtureTemporary, fixture);
   else rmSync(fixture, { force: true });
+
+  // Apple Silicon's linker emits an ad-hoc signature before these atomic
+  // renames, so the implicit code identifier otherwise ends in `.building`.
+  // Give every artifact a stable identifier now; the release signer preserves
+  // the identity while replacing this local signature with Developer ID.
+  applyStableAdHocSignature("ScreenCaptureKit helper", helper, signingIdentifiers.helper);
+  applyStableAdHocSignature("IOSurface Node-API adapter", adapter, signingIdentifiers.adapter);
+  if (withFixture) {
+    applyStableAdHocSignature(
+      "ScreenCaptureKit pixel fixture",
+      fixture,
+      signingIdentifiers.fixture,
+    );
+  }
 } finally {
   rmSync(helperTemporary, { force: true });
   rmSync(adapterTemporary, { force: true });

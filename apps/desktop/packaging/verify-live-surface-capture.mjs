@@ -12,19 +12,14 @@ if (process.platform !== "darwin") {
 }
 
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const nativeRoot = join(desktopRoot, "build", "native", "macos");
+const options = parseArguments(process.argv.slice(2));
+const nativeRoot = options.nativeRoot ?? join(desktopRoot, "build", "native", "macos");
 const helperPath = join(nativeRoot, "live-surface-capture-helper");
 const adapterPath = join(nativeRoot, "live-surface-adapter.node");
-const adapter = createRequire(import.meta.url)(adapterPath);
 const token = randomBytes(32).toString("hex");
 const serviceName = `com.jamesyong.vibefield.capture.${process.pid}.${randomBytes(16).toString("hex")}`;
 const sessionKey = randomBytes(16).toString("hex");
-const matchIndex = process.argv.indexOf("--match");
-const match = matchIndex >= 0 ? process.argv[matchIndex + 1] : undefined;
-const matchAppIndex = process.argv.indexOf("--match-app");
-const matchApp = matchAppIndex >= 0 ? process.argv[matchAppIndex + 1] : undefined;
-const matchTitleIndex = process.argv.indexOf("--match-title");
-const matchTitle = matchTitleIndex >= 0 ? process.argv[matchTitleIndex + 1] : undefined;
+const { match, matchApp, matchTitle } = options;
 const pending = new Map();
 let requestSequence = 0;
 let stdoutBuffer = "";
@@ -33,6 +28,56 @@ let finished = false;
 let adapterStarted = false;
 let terminalError;
 let child;
+let adapter;
+
+function parseArguments(args) {
+  const parsed = {
+    enumerateOnly: false,
+    match: undefined,
+    matchApp: undefined,
+    matchTitle: undefined,
+    nativeRoot: undefined,
+  };
+  const valueOptions = new Map([
+    ["--match", "match"],
+    ["--match-app", "matchApp"],
+    ["--match-title", "matchTitle"],
+    ["--native-root", "nativeRoot"],
+  ]);
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--enumerate-only") {
+      if (parsed.enumerateOnly) throw new Error("duplicate --enumerate-only option");
+      parsed.enumerateOnly = true;
+      continue;
+    }
+    const key = valueOptions.get(argument);
+    if (key === undefined) throw new Error(`unknown capture verification option: ${argument}`);
+    const value = args[index + 1];
+    if (value === undefined || value.length === 0 || value.startsWith("--")) {
+      throw new Error(`${argument} requires a value`);
+    }
+    if (parsed[key] !== undefined) throw new Error(`duplicate ${argument} option`);
+    parsed[key] = value;
+    index += 1;
+  }
+
+  if (
+    parsed.match !== undefined &&
+    (parsed.matchApp !== undefined || parsed.matchTitle !== undefined)
+  ) {
+    throw new Error("--match cannot be combined with --match-app or --match-title");
+  }
+  if (
+    parsed.enumerateOnly &&
+    (parsed.match !== undefined || parsed.matchApp !== undefined || parsed.matchTitle !== undefined)
+  ) {
+    throw new Error("capture match options cannot be combined with --enumerate-only");
+  }
+  if (parsed.nativeRoot !== undefined) parsed.nativeRoot = resolve(parsed.nativeRoot);
+  return parsed;
+}
 
 function fail(message) {
   throw new Error(message);
@@ -132,6 +177,7 @@ async function cleanup() {
 }
 
 try {
+  adapter = createRequire(import.meta.url)(adapterPath);
   adapter.start(serviceName, token);
   adapterStarted = true;
   child = spawn(helperPath, ["--mach-service", serviceName], {
@@ -171,7 +217,7 @@ try {
     fail("capture helper identity mismatch");
   const listed = await request("enumerate", "sources", { allSpaces: true });
   if (!Array.isArray(listed.sources)) fail("capture helper returned invalid sources");
-  if (process.argv.includes("--enumerate-only")) {
+  if (options.enumerateOnly) {
     process.stdout.write(
       `${JSON.stringify({ ok: true, handshake: true, sourceCount: listed.sources.length })}\n`,
     );
