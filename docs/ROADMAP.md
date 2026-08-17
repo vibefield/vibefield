@@ -3,15 +3,20 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-17 — PRC-4 COMPLETE.** PRC-4g2
+> stays in the design docs + specs. Last rewritten: **2026-08-17 — PRC-5a LANDED.** PRC-E18's
+> exact participant/commit-epoch model is green **7/7** beside E13's **6/6** controls. Commit
+> `c5dcca9` gives every production renderer a shell-minted stable-window/exact-document identity,
+> binds it into fieldd's window bearer and `CallerContext`, threads the stable id into renderer
+> targets, and pins strict update state/command/ack contracts with no caller-supplied identity.
+> **Now:** PRC-5b builds immutable old/candidate revision slots and a crash-consistent current
+> pointer before reload sequencing changes. PRC-4g2
 > landed bounded plugin presence in `ce92023` on ICE 0.9.0 / strata 0.13.0 (exact dependency
 > consumption `1fecb94`): identity-bearing complete-cell claims, claim +256-byte aggregate charge
 > under 48 KiB, plugin-atomic canonical allocation, a separate 64 KiB guard, and packaged remote
 > withdrawal. PRC-4g1 is now physically closed too: the ignored production witness passed **1/1 in
 > 35.11 s** across two ephemeral nodes on the real tailnet, including reliable records, a 4,242-byte
 > fragmented presence snapshot, terminal replay deduplication, receiver STOP/reopen, and vanished-
-> peer repair. **Now:** PRC-5 owns disruptive artifact replacement; PRC-6 follows with bounded
-> diagnostics and soak.
+> peer repair. PRC-6 follows PRC-5 with bounded diagnostics and soak.
 > Earlier milestone context follows for continuity: R3-0 landed three slices
 > on main, each behind a verbatim green gate: **S2**
 > `e66143a` (keyboard claim declared in contracts; + the docs-generator inline-object
@@ -123,6 +128,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
 | PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-D1…D13 ratified; PRC-0 through PRC-3d landed; **PRC-4 COMPLETE**: PRC-4d binding `95da1b8`, PRC-4e document host `6289795`, PRC-4f packaged conformance `9fc2de6`, PRC-4g1 room/native code `43929e7` + `81c21fd` with its real-tailnet witness green, and PRC-4g2 bounded ephemeral admission `ce92023` on ICE 0.9.0 / strata 0.13.0. | `specs/plugin-architecture.md` §8.8/§12.7/§21.9 · `thinking-plugin-runtime-composability.md` · `thinking-prc4-behavior-adapter.md` | PRC-5 owns disruptive artifact replacement and PRC-6 owns bounded diagnostics/soak. P8c rides WP8; P8e gates third-party listing. |
+| PLUG — PRC-5 update coordinator | **IN FLIGHT.** PRC-D14 added from E18; E18 7/7 + E13 6/6 green; **PRC-5a identity/contracts LANDED `c5dcca9`**. | plugin-architecture §18.5 · `thinking-prc5-update-coordinator.md` | **PRC-5b now:** immutable artifact slots + crash-consistent current pointer; then candidate authority, renderer replacement, coordinator, shell death witness, physical acceptance. |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -333,7 +339,21 @@ producer and the second engine observes I17's tombstone. E23 is **8/8** against 
 artifact; all **23/23** typecheck targets, changed suites, **61 field-app files / 473 non-socket
 tests**, preflight/single-copy, generated artifacts, targeted lint, and the production bundle wall
 pass. The broad sandbox run's remaining failures are only pre-existing local socket binds refused
-with `EPERM`. **PRC-4 is complete. Next:** PRC-5 and PRC-6 remain distinct.
+with `EPERM`. **PRC-4 is complete.**
+
+**PRC-E18 / PRC-5a LANDED `c5dcca9`.** The evidence model freezes one service plus two exact
+renderer incarnations at ingress close, holds newcomers outside the vote, advances the current
+revision once at a logical epoch, and keeps routes closed through commit or retained-old recovery
+acknowledgements. Orderly close, positive renderer death, and control disconnect have distinct
+outcomes; update-id/incarnation replay, concurrent update, and post-commit rollback are refused.
+The production seam gives Electron main one stable participant id per logical window and one
+incarnation per cross-document generation. fieldd requires that tuple when minting a window token,
+stores a defensive copy, and derives it into the local-token principal; renderer update acks have
+no participant field to forge. The boot path uses the stable id for exact renderer targets while
+browser harnesses retain an identity-less fallback. Strict bounded contracts pin update artifacts,
+snapshots, commands, epochs, participants, and acknowledgements without registering a half-
+implemented RPC surface. **Now:** PRC-5b replaces in-place installed-directory overwrite with
+immutable revision slots and a tested current-pointer commit/recovery protocol.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through

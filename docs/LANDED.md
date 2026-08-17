@@ -2558,3 +2558,34 @@ field-app **61 files / 473 tests**; preflight; one-copy resolution (Loro 1.13.8,
 renderer/bundle wall; and patch hygiene. The broad workspace run reached only pre-existing local
 TCP/Unix socket tests that this sandbox refuses with `EPERM`; no changed-surface failure occurred.
 Together with PRC-4g1's physical closeout, **PRC-4 is complete**. PRC-5/PRC-6 follow.
+
+## PRC-E18 + PRC-5a — exact renderer identity precedes update coordination
+
+**LANDED 2026-08-17** (`c5dcca9`). The E18 semantic model makes the multi-realm boundary
+executable before changing reload: one service and two exact renderer incarnations freeze at the
+synchronous ingress-close edge; a newcomer stays held; all remaining members prepare before one
+logical commit epoch; and ingress stays closed through exact commit or retained-old recovery
+acknowledgements. Normal host-drained close leaves without recovery, positive renderer-process
+death retires only the dead incarnation and creates candidate-only forward recovery, and WebSocket
+disconnect does neither. Concurrent updates, stale update ids/incarnations, replacement behind an
+unproven disconnect, and every post-commit old-recovery attempt are refused. Failed candidate
+external history remains visible.
+
+Production now has the identity needed to enforce that model. Electron main mints one stable
+participant id per logical window and a new incarnation for every cross-document renderer
+generation. Retry in the same document preserves the tuple; navigation preserves only the stable
+id; destruction retires both. fieldd requires and stores the tuple when minting the window bearer,
+returns an exact echo, and ProductAPI derives it into the local-token `CallerContext`—future
+participant handlers must never trust identity params. A missing/mismatched echo fails closed and
+the undisclosed bearer is revoked. field-app threads the stable id into its existing renderer
+target and retains the exact tuple in boot state; browser harnesses may omit it. Bounded strict
+contracts pin immutable artifact identity, update phase/snapshot, frozen participant state,
+prepare/commit/recover commands, and identity-free acknowledgements without advertising methods
+whose handlers do not exist yet.
+
+Acceptance: E18 **7/7** plus E13 **6/6**; contracts **45**, Electron bootstrap **10**, field-app
+boot **21**, and TokenService **5** focused tests; contracts, fieldd, field-app, Electron main, and
+Electron renderer typechecks; changed-file Biome and patch hygiene. The daemon product-surface
+integration row was attempted but this sandbox refused every temporary Unix socket at `listen`
+with `EPERM` before test logic; its changed mint cases remain a required physical/local gate.
+PRC-5b now owns immutable revision slots and crash-consistent current-pointer recovery.
