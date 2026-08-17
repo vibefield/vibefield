@@ -70,7 +70,14 @@ overrides:
   # Review-hardened pre-publish: six findings incl. a mid-tick-unregister
   # strand, all fixed + pinned. This is the release PRC-4b/4c gate on — the
   # behaviors adapter now builds against released types, not the scratch patch.
-  "@vibecook/ice": 0.7.0
+  # 2026-08-16 bumped 0.7.0 → 0.8.1 — petition I18 adds identity-bound
+  # docs.attachPresence() after docs.open/create, including wake, teardown, and
+  # tombstone inverses. 0.8.1 (not the intermediate 0.8.0) declares the exact
+  # strata 0.13.0 edge and retires ICE's projection-unsafe-context cast against
+  # strata's newly public getter. The exact npm pair passes the released I16–I18
+  # matrix 10/10 and our Bundler-mode type consumer. ICE's emitted relative d.ts
+  # specifiers remain non-NodeNext-portable; VibeField does not use NodeNext.
+  "@vibecook/ice": 0.8.1
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -124,8 +131,8 @@ catalog:
   typescript: ^5.6.0
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
-  - '@vibecook/strata-ecs@0.12.0'
-  - '@vibecook/ice@0.7.0'
+  - '@vibecook/strata-ecs@0.13.0'
+  - '@vibecook/ice@0.8.1'
   - '@vibecook/ghosttea-client@0.9.3'
   - '@vibecook/ghosttea-protocol@0.9.3'
   - '@vibecook/chopsticks-adapter-acp@0.1.4'
