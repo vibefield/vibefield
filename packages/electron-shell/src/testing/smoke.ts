@@ -13,7 +13,6 @@ import {
   TerminalTicket,
 } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
-import { LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS } from "@vibefield/live-surfaces/testing";
 import {
   app,
   BrowserWindow,
@@ -2735,6 +2734,7 @@ export async function runLiveSurfacesLab(opts: {
   readonly helperCrashCount?: number;
   readonly sck?: LiveSurfaceSckLab;
 }): Promise<void> {
+  const { LIVE_SURFACE_FOUNDATION_SOAK_BUDGETS } = await import("@vibefield/live-surfaces/testing");
   const monitorUncaught: NodeJS.UncaughtExceptionListener = (error, origin) => {
     console.error(
       `LIVE_SURFACES_UNCAUGHT ${JSON.stringify({
