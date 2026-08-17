@@ -2588,4 +2588,32 @@ boot **21**, and TokenService **5** focused tests; contracts, fieldd, field-app,
 Electron renderer typechecks; changed-file Biome and patch hygiene. The daemon product-surface
 integration row was attempted but this sandbox refused every temporary Unix socket at `listen`
 with `EPERM` before test logic; its changed mint cases remain a required physical/local gate.
-PRC-5b now owns immutable revision slots and crash-consistent current-pointer recovery.
+PRC-5b landed below; PRC-5c now owns explicit candidate authority.
+
+## PRC-5b — immutable artifact slots before disruptive coordination
+
+**LANDED 2026-08-17** (`6817116`). Registry installation no longer deletes the live plugin root
+before publishing new bytes. Each complete signed `.vfplugin` SHA-256 owns an immutable
+`revisions/<sha256>/` root. Preparation privately unpacks, validates manifest id/version, replaces
+artifact-supplied provenance with fieldd's verified sidecar, syncs the complete tree, and renames it
+into that slot while discovery still follows the old pointer. Commit compare-and-swaps a small
+versioned `.vf-current.json` against the base slot captured before preparation, then refreshes the
+registry from the exact selected root. A malformed/mismatched/missing pointer fails closed rather
+than falling back to stale legacy bytes.
+
+P7 flat installs migrate without a destructive rewrite: fieldd copies the exact provenance-pinned
+tree into its first revision, commits the pointer, and retains the flat bytes as an ignored recovery
+copy. Boot recovery deletes only hidden staging and pointer-temp state; it never guesses that an
+unreferenced revision is disposable. The public installer is now factored into `prepare`, `commit`,
+and `discard`, with the old `install` behavior preserved as a back-to-back compatibility wrapper
+until the PRC-5 coordinator owns the interval.
+
+Acceptance: **7/7 new PRC-5b cases + 13/13 registry regressions**. The production signed-registry
+probe packs v0.1 and v0.2, proves v0.2 is fully durable while registry/module roots remain v0.1,
+commits one pointer, then proves v0.2 is selected and v0.1 remains readable. Store controls cover
+legacy adoption, candidate discard/current protection, an injected interruption after pointer-file
+sync but before rename, stale-writer CAS, traversal/malformed-pointer refusal, and conservative boot
+cleanup. Focused fieldd typecheck, Biome, and patch hygiene pass. The existing daemon socket e2e
+remains physically gated because this sandbox refuses temporary listeners with `EPERM`; actual
+power-loss and Windows no-directory-fsync behavior remain PRC-5g acceptance. **PRC-5c is next:**
+candidate-bound renderer module and service-worker authority without changing the live pointer.
