@@ -2380,3 +2380,28 @@ field-app run is **453/460**, with exactly the seven known Unix-socket `EPERM` c
 permitted full run before the final close-barrier/late-binding additions was **458/458**, and those
 additions are covered by the focused matrix above. PRC-4 now owns the behavior target keyed by
 document and engine generation.
+
+## PRC-4d — signed behavior intent reaches the renderer, still inert
+
+**LANDED 2026-08-16** (`95da1b8`) on ICE 0.8.1 / strata 0.13.0. The never-consumed
+`contributes.systems` row is now a stable structured tombstone. Signed plugin manifests instead
+carry strict complete ICE behavior descriptors plus typed widget riders; fieldd projects both
+verbatim into the public plugin record, including additive empty defaults for older snapshots.
+Ephemeral declarations remain explicitly refused until the product presence lane exists.
+
+`@vibefield/plugin-sdk/behavior` is a React-free authoring and binding door backed by ICE's own
+`defineBehavior` and `describeBehavior`. Each private renderer candidate must bind every declared
+behavior exactly once, with the exact id and canonical descriptor, before sealing. Binding remains
+inert under denied grants so dormant widgets can still construct real handles and initial rider
+data; only an effective `canvas.write` grant marks a row authorized for later document execution.
+Missing, duplicate, undeclared, drifted, and late bindings fail closed. The activation root owns
+the exact inverse, so child effects and author disposers cannot withdraw sealed catalog truth.
+
+The same contract is enforced by the SDK mock, CLI activation check, plugin-build artifact wall,
+host singleton/import map, generated author reference, inspect/refusal output, and scaffold example.
+The production bundle contains the exact behavior singleton chunk. Acceptance: workspace tests
+**22/22 targets**; contracts **230**, field-app **464**, Electron **564**, fieldd **481 + 1
+intentional skip**, SDK/CLI/plugin-build/create-plugin **22/81/49/75**; workspace typecheck
+**22/22**; preflight, one-copy dependency graph, lint, bundle assert, generated freshness, and
+patch hygiene all green. PRC-4e owns the observable window catalog and synchronous sorted
+durable/runtime registration batch; PRC-4f owns production conformance and lifecycle churn.
