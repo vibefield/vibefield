@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { CanvasEngine, WidgetType } from "@vibecook/ice";
+import { type CanvasEngine, defineQuery, type WidgetType } from "@vibecook/ice";
 import type { PluginRecord, PluginRegistrySnapshot } from "@vibefield/contracts";
 import { buildPlugin } from "@vibefield/plugin-build/build";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
@@ -16,6 +16,8 @@ type StagedLoaderModule =
   typeof import("../../../packages/field-app/src/plugin-host/staged-loader");
 type BehaviorHostModule =
   typeof import("../../../packages/field-app/src/plugin-host/behavior-generation-host");
+type DocumentPresenceModule =
+  typeof import("../../../packages/field-app/src/field/document-presence");
 type LoggingModule = typeof import("../../../packages/field-app/src/logging");
 type FielddModule = typeof import("../../../packages/fieldd/src/plugin-registry");
 type RendererLogger = import("../../../packages/field-app/src/logging").RendererLogger;
@@ -29,6 +31,7 @@ const WIDGET_TYPE = `${PLUGIN_ID}.card`;
 const DURABLE_ID = `${PLUGIN_ID}:durable`;
 const RUNTIME_ID = `${PLUGIN_ID}:runtime`;
 const BREAKER_ID = `${PLUGIN_ID}:breaker`;
+const PRESENCE_ID = `${PLUGIN_ID}:presence`;
 const PLUGIN_ROOT = join(REPO, "examples", "plugins", "behavior-conformance");
 const ARTIFACT = join(PLUGIN_ROOT, "dist", "renderer.js");
 const V1_AUTHOR = join(PLUGIN_ROOT, "test", "author-v1.mjs");
@@ -114,10 +117,41 @@ function guest(engine: CanvasEngine, behaviorId: string) {
   return engine.engine.guests.list().find((candidate) => candidate.id === `behavior:${behaviorId}`);
 }
 
+class InMemoryPresenceLane {
+  peer: InMemoryPresenceLane | undefined;
+  readonly listeners = new Set<(payload: Uint8Array) => void>();
+
+  constructor(private readonly frameSizes: number[]) {}
+
+  onPresence(fn: (payload: Uint8Array) => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  sendPresence(payload: Uint8Array): void {
+    this.frameSizes.push(payload.byteLength);
+    for (const listener of [...(this.peer?.listeners ?? [])]) listener(payload.slice());
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+async function eventually(check: () => boolean, message: string): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  for (;;) {
+    if (check()) return;
+    if (Date.now() >= deadline) throw new Error(message);
+    await delay(8);
+  }
+}
+
 let harness: Harness;
 let fieldEngine: FieldEngineModule;
 let stagedLoader: StagedLoaderModule;
 let behaviorHost: BehaviorHostModule;
+let documentPresence: DocumentPresenceModule;
 let logging: LoggingModule;
 let fieldd: FielddModule;
 let artifact: Record<string, unknown>;
@@ -128,32 +162,36 @@ beforeAll(async () => {
   // author/release build would, so this witness is valid from a clean checkout.
   await buildPlugin({ root: PLUGIN_ROOT });
   harness = await createHarness([PLUGIN_ROOT]);
-  [fieldEngine, stagedLoader, behaviorHost, logging, fieldd, artifact] = await Promise.all([
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "field-engine.ts"),
-    ) as Promise<FieldEngineModule>,
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "plugin-host", "staged-loader.ts"),
-    ) as Promise<StagedLoaderModule>,
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "plugin-host", "behavior-generation-host.ts"),
-    ) as Promise<BehaviorHostModule>,
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "logging.ts"),
-    ) as Promise<LoggingModule>,
-    harness.load(
-      join(REPO, "packages", "fieldd", "src", "plugin-registry.ts"),
-    ) as Promise<FielddModule>,
-    // Exact emitted bytes. Loading src/renderer.ts here would make A9 fail.
-    harness.load(ARTIFACT),
-  ]);
+  [fieldEngine, stagedLoader, behaviorHost, documentPresence, logging, fieldd, artifact] =
+    await Promise.all([
+      harness.load(
+        join(REPO, "packages", "field-app", "src", "field-engine.ts"),
+      ) as Promise<FieldEngineModule>,
+      harness.load(
+        join(REPO, "packages", "field-app", "src", "plugin-host", "staged-loader.ts"),
+      ) as Promise<StagedLoaderModule>,
+      harness.load(
+        join(REPO, "packages", "field-app", "src", "plugin-host", "behavior-generation-host.ts"),
+      ) as Promise<BehaviorHostModule>,
+      harness.load(
+        join(REPO, "packages", "field-app", "src", "field", "document-presence.ts"),
+      ) as Promise<DocumentPresenceModule>,
+      harness.load(
+        join(REPO, "packages", "field-app", "src", "logging.ts"),
+      ) as Promise<LoggingModule>,
+      harness.load(
+        join(REPO, "packages", "fieldd", "src", "plugin-registry.ts"),
+      ) as Promise<FielddModule>,
+      // Exact emitted bytes. Loading src/renderer.ts here would make A9 fail.
+      harness.load(ARTIFACT),
+    ]);
 }, 120_000);
 
 afterAll(async () => {
   await harness?.close();
 });
 
-describe("PRC4-E21 packaged behavior conformance", () => {
+describe("packaged behavior conformance", () => {
   it("preserves migration, riders, diagnostics, breaker state, and exact cleanup through churn", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "vibefield-prc4f-"));
     const registryService = new fieldd.PluginRegistryService({
@@ -180,6 +218,7 @@ describe("PRC4-E21 packaged behavior conformance", () => {
         DURABLE_ID,
         RUNTIME_ID,
         BREAKER_ID,
+        PRESENCE_ID,
       ]);
 
       const moduleRow = {
@@ -208,6 +247,7 @@ describe("PRC4-E21 packaged behavior conformance", () => {
         [DURABLE_ID, "durable", true],
         [RUNTIME_ID, "runtime", true],
         [BREAKER_ID, "runtime", true],
+        [PRESENCE_ID, "ephemeral", true],
       ]);
 
       const handles = new Map(catalog.map((row) => [row.id, row.handle]));
@@ -298,6 +338,7 @@ describe("PRC4-E21 packaged behavior conformance", () => {
           { declarationId: DURABLE_ID, reason: "canvas-write-denied" },
           { declarationId: RUNTIME_ID, reason: "canvas-write-denied" },
           { declarationId: BREAKER_ID, reason: "canvas-write-denied" },
+          { declarationId: PRESENCE_ID, reason: "canvas-write-denied" },
         ]);
         expect(engine.behaviors.read(oldEntity, durable)).toEqual({ count: 42 });
         expect(engine.behaviors.read(widget, runtimeProbe)).toEqual({ count: 9 });
@@ -377,6 +418,159 @@ describe("PRC4-E21 packaged behavior conformance", () => {
     } finally {
       await runtime?.close();
       logging.setRendererLogger(previousLogger);
+      registryService.dispose();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("carries a packaged bounded facet across two engines and applies its authority tombstone", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vibefield-prc4g2-"));
+    const registryService = new fieldd.PluginRegistryService({
+      dataDir,
+      roots: { bundled: [], devLinked: [join(REPO, "examples", "plugins")] },
+    });
+    let runtime:
+      | Awaited<ReturnType<StagedLoaderModule["prepareRendererPlugins"]>>["runtime"]
+      | undefined;
+    let engineA: CanvasEngine | undefined;
+    let engineB: CanvasEngine | undefined;
+    let connection: ReturnType<BehaviorHostModule["connectBehaviorGenerationHost"]> | undefined;
+    let detachA = (): void => undefined;
+    let detachB = (): void => undefined;
+    try {
+      await registryService.refresh();
+      const authoritySnapshot = registryService.snapshot();
+      const record = authoritySnapshot.plugins.find((candidate) => candidate.id === PLUGIN_ID);
+      if (record === undefined) throw new Error("fieldd did not discover the conformance plugin");
+      const moduleRow = {
+        pluginId: PLUGIN_ID,
+        moduleUrl: `vibefield-plugin://${"f".repeat(32)}`,
+        manifestHash: record.manifestHash,
+        installRevision: record.installRevision,
+      };
+      const prepared = await stagedLoader.prepareRendererPlugins({
+        windowId: "field",
+        request: async (method) => {
+          if (method === "plugins.modules") {
+            return { generation: authoritySnapshot.generation, modules: [moduleRow] };
+          }
+          if (method === "plugins.list") return authoritySnapshot;
+          throw new Error(`unexpected request ${method}`);
+        },
+        snapshot: () => null,
+        importModule: async () => artifact,
+      });
+      runtime = prepared.runtime;
+      if (runtime === undefined) throw new Error("staged loader did not create a window runtime");
+      const presenceRow = runtime.behaviorCatalog
+        .snapshot()
+        .find((candidate) => candidate.id === PRESENCE_ID);
+      if (presenceRow === undefined) throw new Error("packaged presence declaration is missing");
+      expect(presenceRow.definition.maxFacetBytes).toBe(128);
+
+      const pluginRegistry = fieldEngine.buildRegistry(prepared) as PluginRegistry<WidgetType>;
+      engineA = fieldEngine.createFieldEngine(pluginRegistry);
+      engineB = fieldEngine.createFieldEngine(pluginRegistry);
+      await engineA.docs.create();
+      await engineB.docs.create();
+      const frameSizes: number[] = [];
+      const laneA = new InMemoryPresenceLane(frameSizes);
+      const laneB = new InMemoryPresenceLane(frameSizes);
+      laneA.peer = laneB;
+      laneB.peer = laneA;
+      detachA = documentPresence.attachDocumentPresence({
+        ce: engineA,
+        lane: laneA as unknown as Parameters<
+          DocumentPresenceModule["attachDocumentPresence"]
+        >[0]["lane"],
+        profile: {
+          userId: "packaged-presence-a",
+          fuid: 1,
+          name: "A",
+          color: "#111111",
+          resident: true,
+          onboarded: true,
+        },
+        docId: "prc4g2",
+      });
+      detachB = documentPresence.attachDocumentPresence({
+        ce: engineB,
+        lane: laneB as unknown as Parameters<
+          DocumentPresenceModule["attachDocumentPresence"]
+        >[0]["lane"],
+        profile: {
+          userId: "packaged-presence-b",
+          fuid: 2,
+          name: "B",
+          color: "#222222",
+          resident: true,
+          onboarded: true,
+        },
+        docId: "prc4g2",
+      });
+      const presenceA = engineA.docs.presence();
+      const presenceB = engineB.docs.presence();
+      if (presenceA === undefined || presenceB === undefined) {
+        throw new Error("two-engine presence did not attach");
+      }
+      const host = new behaviorHost.BehaviorGenerationHost({
+        engine: engineA,
+        target: {
+          windowId: "field",
+          documentId: "prc4g2",
+          runtimeGeneration: "engine-a",
+        },
+        ledger: runtime.behaviorLedger,
+        presenceAvailable: () => engineA?.docs.presence() !== undefined,
+      });
+      connection = behaviorHost.connectBehaviorGenerationHost(host, runtime.behaviorCatalog);
+      expect(host.lastReport).toMatchObject({
+        state: "active",
+        installed: [DURABLE_ID, RUNTIME_ID, BREAKER_ID, PRESENCE_ID],
+        blocked: [],
+      });
+
+      const query = defineQuery([presenceRow.handle.component]);
+      const remoteFacetCount = (): number => {
+        if (engineB === undefined) return 0;
+        engineB.world.sync();
+        let count = 0;
+        engineB.world.query(query).each((batch) => {
+          for (const _row of batch) count += 1;
+        });
+        return count;
+      };
+      engineA.step(16);
+      await eventually(
+        () => remoteFacetCount() === 1,
+        "engine B never observed the packaged ephemeral facet",
+      );
+
+      const deniedGeneration = authoritySnapshot.generation + 1;
+      await runtime.reconcile(
+        snapshot(deniedGeneration, withGrant(record, deniedGeneration, false)),
+      );
+      expect(host.lastReport.blocked).toEqual([
+        { declarationId: DURABLE_ID, reason: "canvas-write-denied" },
+        { declarationId: RUNTIME_ID, reason: "canvas-write-denied" },
+        { declarationId: BREAKER_ID, reason: "canvas-write-denied" },
+        { declarationId: PRESENCE_ID, reason: "canvas-write-denied" },
+      ]);
+      await eventually(
+        () => remoteFacetCount() === 0,
+        "engine B retained the packaged facet after authority withdrawal",
+      );
+      expect(frameSizes.length).toBeGreaterThan(0);
+      expect(Math.max(...frameSizes)).toBeLessThanOrEqual(64 * 1_024);
+    } finally {
+      connection?.close("test-close");
+      detachA();
+      detachB();
+      engineA?.docs.close();
+      engineB?.docs.close();
+      engineA?.dispose();
+      engineB?.dispose();
+      await runtime?.close();
       registryService.dispose();
       rmSync(dataDir, { recursive: true, force: true });
     }

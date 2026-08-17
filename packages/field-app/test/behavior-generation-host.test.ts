@@ -6,7 +6,7 @@ import {
   p,
   type WidgetType,
 } from "@vibecook/ice";
-import type { BehaviorDefinition } from "@vibefield/contracts";
+import { type BehaviorDefinition, PLUGIN_LIMITS } from "@vibefield/contracts";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
 import { describe, expect, it } from "vitest";
 import { createFieldEngine } from "../src/field-engine";
@@ -87,6 +87,14 @@ function target(runtimeGeneration: string, documentId = "doc-a") {
 
 function guest(engine: ReturnType<typeof createCanvasEngine>, behaviorName: string) {
   return engine.engine.guests.list().find((entry) => entry.id === `behavior:${behaviorName}`);
+}
+
+async function eventually(check: () => boolean, message: string): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (!check()) {
+    if (Date.now() >= deadline) throw new Error(message);
+    await new Promise((resolve) => setTimeout(resolve, 8));
+  }
 }
 
 function recordingLogger(
@@ -302,6 +310,23 @@ describe("document behavior generation host", () => {
     expect(() => host.reconcile(invalid)).toThrow(/non-canonical order key/);
     expect(host.lastReport.installed).toEqual([Stable.name]);
 
+    const Facet = defineBehavior(`${pluginId}:facet`, {
+      store: "ephemeral",
+      maxFacetBytes: 128,
+    });
+    const facetBinding = rendererBinding(pluginId, Facet, 1);
+    const unattested = [
+      base,
+      {
+        ...facetBinding,
+        definition: { ...facetBinding.definition, maxFacetBytes: undefined },
+        candidateToken: {},
+        rendererTarget: rendererTarget(pluginId),
+      },
+    ] as BehaviorCatalogBinding[];
+    expect(() => host.reconcile(unattested)).toThrow(/lacks a valid maxFacetBytes claim/);
+    expect(host.lastReport.installed).toEqual([Stable.name]);
+
     host.close();
     removeCollision();
     engine.dispose();
@@ -325,6 +350,7 @@ describe("document behavior generation host", () => {
     const pluginId = "com.example.host-presence";
     const Facet = defineBehavior(`${pluginId}:facet`, {
       store: "ephemeral",
+      maxFacetBytes: 1_024,
       schema: { mode: p.string({ default: "active" }) },
       on: { init: () => inits++ },
     });
@@ -368,6 +394,117 @@ describe("document behavior generation host", () => {
     detachPresence();
     engine.docs.close();
     engine.dispose();
+  });
+
+  it("allocates one plugin-atomic ephemeral window in canonical plugin order", () => {
+    const facet = (pluginId: string, local: string, chargedBytes: number) =>
+      defineBehavior(`${pluginId}:${local}`, {
+        store: "ephemeral",
+        maxFacetBytes: chargedBytes - PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_ENVELOPE_BYTES,
+      });
+    const aId = "com.example.budget-a";
+    const bId = "com.example.budget-b";
+    const cId = "com.example.budget-c";
+    const A = facet(aId, "facet", 32 * 1_024);
+    const B1 = facet(bId, "facet-one", 10 * 1_024);
+    const B2 = facet(bId, "facet-two", 10 * 1_024);
+    const BDurable = defineBehavior(`${bId}:durable`, { store: "runtime" });
+    const C = facet(cId, "facet", 8 * 1_024);
+    const catalog = new BehaviorBindingCatalog();
+    const aToken = publish(catalog, aId, [A]);
+    publish(catalog, bId, [B1, B2, BDurable]);
+    publish(catalog, cId, [C]);
+    const engine = createCanvasEngine();
+    const host = new BehaviorGenerationHost({
+      engine,
+      target: target("engine-budget"),
+      presenceAvailable: () => true,
+    });
+    const connection = connectBehaviorGenerationHost(host, catalog);
+
+    expect(host.lastReport).toMatchObject({
+      state: "active",
+      installed: [A.name, BDurable.name, C.name],
+      blocked: [
+        { declarationId: B1.name, reason: "presence-budget-exceeded" },
+        { declarationId: B2.name, reason: "presence-budget-exceeded" },
+      ],
+    });
+    expect(guest(engine, A.name)).toBeDefined();
+    expect(guest(engine, B1.name)).toBeUndefined();
+    expect(guest(engine, B2.name)).toBeUndefined();
+    expect(guest(engine, BDurable.name)).toBeDefined();
+    expect(guest(engine, C.name)).toBeDefined();
+
+    catalog.withdrawCandidate(aId, aToken);
+    expect(host.lastReport).toMatchObject({
+      state: "active",
+      installed: [B1.name, B2.name, BDurable.name, C.name],
+      blocked: [],
+    });
+
+    connection.close();
+    engine.dispose();
+  });
+
+  it("keeps an exact fully charged plugin below the independent transport ceiling", async () => {
+    const pluginId = `a.${"b".repeat(62)}`;
+    const claim =
+      PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_WINDOW_BYTES / PLUGIN_LIMITS.BEHAVIORS_MAX -
+      PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_ENVELOPE_BYTES;
+    const emptyCellBytes = new TextEncoder().encode(JSON.stringify({ payload: "" })).byteLength;
+    const payload = "x".repeat(claim - emptyCellBytes);
+    expect(new TextEncoder().encode(JSON.stringify({ payload })).byteLength).toBe(claim);
+    const facets = Array.from({ length: PLUGIN_LIMITS.BEHAVIORS_MAX }, (_, index) => {
+      const local = `${index.toString().padStart(2, "0")}${"x".repeat(61)}`;
+      return defineBehavior(`${pluginId}:${local}`, {
+        store: "ephemeral",
+        maxFacetBytes: claim,
+        schema: { payload: p.string({ default: payload }) },
+      });
+    });
+    const catalog = new BehaviorBindingCatalog();
+    publish(catalog, pluginId, facets);
+    const engine = createCanvasEngine();
+    let detachPresence = (): void => undefined;
+    let stopOutbound = (): void => undefined;
+    let connection: ReturnType<typeof connectBehaviorGenerationHost> | undefined;
+    const frameSizes: number[] = [];
+    try {
+      await engine.docs.create();
+      detachPresence = engine.docs.attachPresence({
+        peerId: "behavior-host-budget",
+        name: "Behavior budget",
+        color: "#111111",
+      });
+      const presence = engine.docs.presence();
+      if (presence === undefined) throw new Error("presence did not attach");
+      stopOutbound = presence.onOutbound((bytes) => frameSizes.push(bytes.byteLength));
+      const host = new BehaviorGenerationHost({
+        engine,
+        target: target("engine-budget-wire"),
+        presenceAvailable: () => engine.docs.presence() !== undefined,
+      });
+      connection = connectBehaviorGenerationHost(host, catalog);
+      expect(host.lastReport).toMatchObject({
+        state: "active",
+        installed: facets.map((facet) => facet.name),
+        blocked: [],
+      });
+
+      engine.step(16);
+      await eventually(
+        () => frameSizes.some((bytes) => bytes >= claim * facets.length),
+        "ICE did not publish the fully charged aggregate facet frame",
+      );
+      expect(Math.max(...frameSizes)).toBeLessThanOrEqual(64 * 1_024);
+    } finally {
+      connection?.close("test-close");
+      detachPresence();
+      stopOutbound();
+      engine.docs.close();
+      engine.dispose();
+    }
   });
 
   it("contains a throwing diagnostic sink", () => {

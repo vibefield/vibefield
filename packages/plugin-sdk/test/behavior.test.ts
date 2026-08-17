@@ -60,6 +60,21 @@ describe("React-free behavior authoring door", () => {
     expect(() => declareBehavior(Tick)).toThrow(/tick behavior requires/);
   });
 
+  it("preserves an ephemeral facet claim and refuses an unattested producer", () => {
+    const Bounded = defineBehavior("com.example.sdk:bounded-facet", {
+      store: "ephemeral",
+      maxFacetBytes: 1_024,
+      schema: { mode: p.string({ default: "active" }) },
+    });
+    const Unattested = defineBehavior("com.example.sdk:unattested-facet", {
+      store: "ephemeral",
+      schema: { mode: p.string({ default: "active" }) },
+    });
+
+    expect(declareBehavior(Bounded).definition.maxFacetBytes).toBe(1_024);
+    expect(() => declareBehavior(Unattested)).toThrow(/must attest/);
+  });
+
   it("has no React-bearing source edge", () => {
     const source = readFileSync(new URL("../src/behavior.ts", import.meta.url), "utf8");
     expect(source).not.toMatch(/from\s+["']react(?:\/|["'])/);

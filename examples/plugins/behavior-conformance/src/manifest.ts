@@ -5,6 +5,7 @@ import {
   DurableProbe,
   durableContribution,
   PLUGIN_ID,
+  presenceContribution,
   RuntimeProbe,
   runtimeContribution,
   WIDGET_TYPE,
@@ -25,12 +26,17 @@ export const behaviorConformanceManifest: PluginManifestV1 = {
   activation: [`onWidget:${WIDGET_TYPE}`],
   capabilities: ["canvas.write"],
   contributes: {
-    behaviors: [durableContribution, runtimeContribution, breakerContribution],
+    behaviors: [
+      durableContribution,
+      runtimeContribution,
+      breakerContribution,
+      presenceContribution,
+    ],
     widgets: [
       {
         type: WIDGET_TYPE,
         title: "Behavior conformance card",
-        description: "Exercises durable and runtime behavior riders through the packaged host",
+        description: "Exercises durable/runtime riders and bounded presence through the host",
         category: "Tools",
         schemaVersion: 1,
         surface: "dom",

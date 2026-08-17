@@ -59,8 +59,27 @@ export const BreakerProbe = defineBehavior(`${PLUGIN_ID}:breaker`, {
   },
 });
 
+/** Bounded per-peer state used by PRC-4g2's packaged two-engine tombstone witness. */
+export const PresenceProbe: BehaviorHandle<{ readonly mode: string }> = defineBehavior(
+  `${PLUGIN_ID}:presence`,
+  {
+    store: "ephemeral",
+    maxFacetBytes: 128,
+    schema: { mode: p.string({ default: "active" }) },
+    on: {
+      init(_entity, data, ctx) {
+        ctx.log("presence.init", data.mode);
+      },
+      dispose(_entity, ctx) {
+        ctx.log("presence.dispose");
+      },
+    },
+  },
+);
+
 export const durableContribution = declareBehavior(DurableProbe);
 export const runtimeContribution = declareBehavior(RuntimeProbe);
 export const breakerContribution = declareBehavior(BreakerProbe, {
   reason: "Exercise the host breaker, fault provenance, and chronic-ledger carryover",
 });
+export const presenceContribution = declareBehavior(PresenceProbe);

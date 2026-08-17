@@ -83,6 +83,34 @@
         },
         "id": "vibefield.behavior-conformance:breaker",
         "reason": "Exercise the host breaker, fault provenance, and chronic-ledger carryover"
+      },
+      {
+        "definition": {
+          "deriveDuringGesture": false,
+          "derived": false,
+          "hooks": [
+            "init",
+            "dispose"
+          ],
+          "maxFacetBytes": 128,
+          "migrationFrom": [],
+          "phase": "publish",
+          "reads": [],
+          "schema": [
+            {
+              "name": "mode",
+              "spec": {
+                "default": "active",
+                "kind": "string"
+              }
+            }
+          ],
+          "store": "ephemeral",
+          "tickWhile": "all",
+          "version": 1,
+          "writes": []
+        },
+        "id": "vibefield.behavior-conformance:presence"
       }
     ],
     "widgets": [
@@ -109,7 +137,7 @@
           "h": 120,
           "w": 220
         },
-        "description": "Exercises durable and runtime behavior riders through the packaged host",
+        "description": "Exercises durable/runtime riders and bounded presence through the host",
         "groups": {},
         "interaction": {
           "movable": true,

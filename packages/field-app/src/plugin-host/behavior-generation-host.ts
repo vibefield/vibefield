@@ -1,4 +1,5 @@
 import type { CanvasEngine, GuestLedgerRecord } from "@vibecook/ice";
+import { ephemeralBehaviorPresenceCharge, PLUGIN_LIMITS } from "@vibefield/contracts";
 import type { BehaviorBindingCatalog, BehaviorCatalogBinding } from "./behavior-binding-catalog";
 
 export const BEHAVIOR_LEDGER_MAX_ENTRIES = 4_096;
@@ -48,7 +49,10 @@ export interface BehaviorGenerationTarget {
   readonly runtimeGeneration: string;
 }
 
-export type BehaviorBlockedReason = "canvas-write-denied" | "presence-unavailable";
+export type BehaviorBlockedReason =
+  | "canvas-write-denied"
+  | "presence-unavailable"
+  | "presence-budget-exceeded";
 
 export interface BehaviorGenerationError {
   readonly operation: "register" | "unregister" | "rollback";
@@ -140,6 +144,15 @@ function normalizeSnapshot(
     if (!(["durable", "runtime", "ephemeral"] as const).includes(binding.definition.store)) {
       throw new TypeError(`behavior ${binding.id} has an invalid store descriptor`);
     }
+    if (binding.definition.store === "ephemeral") {
+      try {
+        ephemeralBehaviorPresenceCharge(binding.definition);
+      } catch {
+        throw new TypeError(`ephemeral behavior ${binding.id} lacks a valid maxFacetBytes claim`);
+      }
+    } else if (binding.definition.maxFacetBytes !== undefined) {
+      throw new TypeError(`behavior ${binding.id} has an ephemeral-only maxFacetBytes claim`);
+    }
     if (binding.candidateToken === null || typeof binding.candidateToken !== "object") {
       throw new TypeError(`behavior ${binding.id} lacks candidate identity`);
     }
@@ -169,7 +182,7 @@ function sameExecution(current: InstalledBehavior, desired: BehaviorCatalogBindi
   );
 }
 
-function blockedReason(
+function environmentalBlockedReason(
   binding: BehaviorCatalogBinding,
   presenceAvailable: boolean,
 ): BehaviorBlockedReason | undefined {
@@ -178,6 +191,56 @@ function blockedReason(
     return "presence-unavailable";
   }
   return undefined;
+}
+
+/** Allocate the window-owned presence budget in canonical plugin order. A
+ * plugin's eligible ephemeral declarations are admitted or refused together:
+ * partial presence APIs are harder to reason about than deterministic scarcity. */
+function eligibility(
+  desired: readonly BehaviorCatalogBinding[],
+  presenceAvailable: boolean,
+): {
+  readonly eligible: ReadonlyMap<string, BehaviorCatalogBinding>;
+  readonly blocked: readonly {
+    readonly declarationId: string;
+    readonly reason: BehaviorBlockedReason;
+  }[];
+} {
+  const reasonById = new Map<string, BehaviorBlockedReason>();
+  const ephemeralByPlugin = new Map<string, BehaviorCatalogBinding[]>();
+  for (const binding of desired) {
+    const reason = environmentalBlockedReason(binding, presenceAvailable);
+    if (reason !== undefined) {
+      reasonById.set(binding.id, reason);
+      continue;
+    }
+    if (binding.definition.store !== "ephemeral") continue;
+    const rows = ephemeralByPlugin.get(binding.pluginId) ?? [];
+    rows.push(binding);
+    ephemeralByPlugin.set(binding.pluginId, rows);
+  }
+
+  let remaining = PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_WINDOW_BYTES;
+  for (const rows of ephemeralByPlugin.values()) {
+    const charge = rows.reduce(
+      (total, binding) => total + ephemeralBehaviorPresenceCharge(binding.definition),
+      0,
+    );
+    if (charge <= remaining) {
+      remaining -= charge;
+      continue;
+    }
+    for (const binding of rows) reasonById.set(binding.id, "presence-budget-exceeded");
+  }
+
+  const eligible = new Map<string, BehaviorCatalogBinding>();
+  const blocked: Array<{ declarationId: string; reason: BehaviorBlockedReason }> = [];
+  for (const binding of desired) {
+    const reason = reasonById.get(binding.id);
+    if (reason === undefined) eligible.set(binding.id, binding);
+    else blocked.push({ declarationId: binding.id, reason });
+  }
+  return { eligible, blocked };
 }
 
 function report(
@@ -287,16 +350,7 @@ export class BehaviorGenerationHost {
 
   private applyDesired(): BehaviorGenerationReport {
     const presenceAvailable = this.options.presenceAvailable?.() ?? false;
-    const blocked: Array<{
-      declarationId: string;
-      reason: BehaviorBlockedReason;
-    }> = [];
-    const eligible = new Map<string, BehaviorCatalogBinding>();
-    for (const binding of this.desired) {
-      const reason = blockedReason(binding, presenceAvailable);
-      if (reason === undefined) eligible.set(binding.id, binding);
-      else blocked.push({ declarationId: binding.id, reason });
-    }
+    const { eligible, blocked } = eligibility(this.desired, presenceAvailable);
 
     const errors: BehaviorGenerationError[] = [];
     const withdrawals = [...this.installed.values()]

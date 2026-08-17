@@ -119,12 +119,46 @@ describe("check — manifest-invalid (the control run)", () => {
         ],
       },
     });
-    const ephemeral = makePlugin({ rawManifest: `${JSON.stringify(withEphemeral, null, 2)}\n` });
-    const ephemeralVerdict = (await checkPlugin({ dir: ephemeral })).find(
-      (v) => v.code === "behavior-store-unsupported",
+    const unattested = makePlugin({
+      rawManifest: `${JSON.stringify(withEphemeral, null, 2)}\n`,
+    });
+    const unattestedVerdict = (await checkPlugin({ dir: unattested })).find(
+      (v) =>
+        v.code === "manifest-invalid" &&
+        v.pointer === "/contributes/behaviors/0/definition/maxFacetBytes",
     );
-    expect(ephemeralVerdict?.pointer).toBe("/contributes/behaviors/0/definition/store");
-    expect(ephemeralVerdict?.expected).toContain("runtime behavior");
+    expect(unattestedVerdict?.detail).toContain("must attest");
+
+    const behaviors = (withEphemeral["contributes"] as Record<string, unknown>)[
+      "behaviors"
+    ] as Array<Record<string, unknown>>;
+    const definition = behaviors[0]?.["definition"] as Record<string, unknown>;
+    definition["maxFacetBytes"] = 1_024;
+    const bounded = makePlugin({
+      rawManifest: `${JSON.stringify(withEphemeral, null, 2)}\n`,
+    });
+    const boundedVerdicts = await checkPlugin({ dir: bounded });
+    expect(
+      boundedVerdicts.some(
+        (verdict) =>
+          verdict.code === "behavior-store-unsupported" ||
+          verdict.code === "behavior-presence-budget-exceeded",
+      ),
+    ).toBe(false);
+
+    definition["maxFacetBytes"] = 24_321;
+    behaviors.push({
+      ...structuredClone(behaviors[0]!),
+      id: `${FIXTURE_ID}:presence-two`,
+    });
+    const overBudget = makePlugin({
+      rawManifest: `${JSON.stringify(withEphemeral, null, 2)}\n`,
+    });
+    const budgetVerdict = (await checkPlugin({ dir: overBudget })).find(
+      (verdict) => verdict.code === "behavior-presence-budget-exceeded",
+    );
+    expect(budgetVerdict?.pointer).toBe("/contributes/behaviors");
+    expect(budgetVerdict?.expected).toContain("reduce maxFacetBytes");
   });
 });
 

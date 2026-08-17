@@ -16,7 +16,8 @@ column is the general one.
 | `artifact-hash-mismatch` | registry | `the artifact's sha256 is not what the index pins (PLUGIN_ARTIFACT_MISMATCH)` | re-pack and re-pin: the index pins the bytes, and a mismatch is never installed |
 | `artifact-missing` | artifact | the manifest declares an entry module that is not on disk | run `plugin-build`, or fix entries.<renderer\|service> to name what it builds |
 | `artifact-unmappable-specifier` | artifact | the bundle imports a bare specifier the host import map cannot bind (§11.6) | `import only HOST_SINGLETON_MODULE_SPECIFIERS, or let the plugin bundle it in` |
-| `behavior-store-unsupported` | manifest | the behavior store has no enforceable plugin facet budget in this release | use a durable or runtime behavior; ephemeral awaits an ICE facet bound and aggregate host budget |
+| `behavior-presence-budget-exceeded` | manifest | the plugin's charged ephemeral facets exceed one renderer presence window | reduce maxFacetBytes claims or remove optional presence producers; the whole plugin set must fit 48 KiB including per-facet envelopes |
+| `behavior-store-unsupported` | manifest | a legacy host release does not admit this behavior store | upgrade the host; current releases admit bounded ephemeral behaviors and no longer emit this code |
 | `binding-missing` | activation | the manifest declares a widget type that activate never bound (§12.1) | bind every declared type: ctx.widgets.register({ type, binding }) |
 | `binding-undeclared` | activation | activate registered a widget type the manifest does not declare (§12.1) | declare the type under contributes.widgets, or register the declared type |
 | `dev-root-unknown` | dev-link | no dev-linked plugin root could be resolved for this machine | `pass --root <dir>, or run inside the repo whose dev session watches examples/plugins` |

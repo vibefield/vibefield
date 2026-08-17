@@ -1,5 +1,5 @@
 import { defineRendererPlugin } from "@vibefield/plugin-sdk";
-import { BreakerProbe, DurableProbe, RuntimeProbe, WIDGET_TYPE } from "./behaviors";
+import { BreakerProbe, DurableProbe, PresenceProbe, RuntimeProbe, WIDGET_TYPE } from "./behaviors";
 
 function ConformanceCard(): null {
   return null;
@@ -11,5 +11,6 @@ export default defineRendererPlugin({
     ctx.canvas?.behaviors.bind(DurableProbe.name, DurableProbe);
     ctx.canvas?.behaviors.bind(RuntimeProbe.name, RuntimeProbe);
     ctx.canvas?.behaviors.bind(BreakerProbe.name, BreakerProbe);
+    ctx.canvas?.behaviors.bind(PresenceProbe.name, PresenceProbe);
   },
 });

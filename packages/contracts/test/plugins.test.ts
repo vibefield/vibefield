@@ -3,6 +3,7 @@ import {
   findUnknownManifestKeys,
   isDistributablePluginId,
   isSafeRelativePath,
+  PLUGIN_LIMITS,
   PluginManifestV1,
   validatePluginManifest,
 } from "../src/plugins";
@@ -259,7 +260,7 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     });
   });
 
-  it("requires requested canvas.write and reports ephemeral admission at the exact store path", () => {
+  it("requires requested canvas.write and admits only bounded ephemeral descriptors", () => {
     const withoutWrite = structuredClone(behaviorBase());
     withoutWrite.capabilities = ["doc.write"];
     const denied = validatePluginManifest(withoutWrite);
@@ -269,13 +270,52 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     const ephemeral = structuredClone(behaviorBase());
     ephemeral.contributes.behaviors[0]!.definition.store = "ephemeral";
     ephemeral.contributes.behaviors[0]!.definition.phase = "publish";
-    const gated = validatePluginManifest(ephemeral);
-    expect(gated.ok).toBe(false);
-    if (gated.ok) return;
-    expect(gated.issueDetails).toContainEqual({
-      code: "behavior-store-unsupported",
-      path: ["contributes", "behaviors", 0, "definition", "store"],
-      message: "ephemeral plugin behaviors await an enforceable facet byte budget",
+    ephemeral.contributes.widgets[0]!.behaviors = [];
+    const unattested = validatePluginManifest(ephemeral);
+    expect(unattested.ok).toBe(false);
+    if (!unattested.ok) {
+      expect(unattested.issues.join("\n")).toMatch(/maxFacetBytes.*must attest/);
+    }
+
+    Object.assign(ephemeral.contributes.behaviors[0]!.definition, { maxFacetBytes: 1_024 });
+    expect(validatePluginManifest(ephemeral).ok).toBe(true);
+
+    const wrongStore = structuredClone(behaviorBase());
+    Object.assign(wrongStore.contributes.behaviors[0]!.definition, { maxFacetBytes: 1_024 });
+    const wrongStoreResult = validatePluginManifest(wrongStore);
+    expect(wrongStoreResult.ok).toBe(false);
+    if (!wrongStoreResult.ok) {
+      expect(wrongStoreResult.issues.join("\n")).toMatch(/maxFacetBytes is ephemeral-only/);
+    }
+  });
+
+  it("charges a plugin's ephemeral declarations including measured per-facet envelopes", () => {
+    const manifest = structuredClone(behaviorBase());
+    manifest.contributes.widgets[0]!.behaviors = [];
+    const first = manifest.contributes.behaviors[0]!;
+    first.definition.store = "ephemeral";
+    first.definition.phase = "publish";
+    const second = structuredClone(first);
+    second.id = "com.example.demo:counter-two";
+    manifest.contributes.behaviors = [first, second];
+
+    const exactClaim =
+      PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_WINDOW_BYTES / 2 -
+      PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_ENVELOPE_BYTES;
+    Object.assign(first.definition, { maxFacetBytes: exactClaim });
+    Object.assign(second.definition, { maxFacetBytes: exactClaim });
+    expect(validatePluginManifest(manifest).ok).toBe(true);
+
+    Object.assign(second.definition, { maxFacetBytes: exactClaim + 1 });
+    const over = validatePluginManifest(manifest);
+    expect(over.ok).toBe(false);
+    if (over.ok) return;
+    expect(over.issueDetails).toContainEqual({
+      code: "behavior-presence-budget-exceeded",
+      path: ["contributes", "behaviors"],
+      message: `plugin ephemeral behavior charge is ${
+        PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_WINDOW_BYTES + 1
+      } bytes, over the ${PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_WINDOW_BYTES}-byte window`,
     });
   });
 

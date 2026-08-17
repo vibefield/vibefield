@@ -41,9 +41,16 @@ export const REFUSAL_CATALOG = {
   "behavior-store-unsupported": {
     check: "manifest",
     level: "refuse",
-    meaning: "the behavior store has no enforceable plugin facet budget in this release",
+    meaning: "a legacy host release does not admit this behavior store",
     guidance:
-      "use a durable or runtime behavior; ephemeral awaits an ICE facet bound and aggregate host budget",
+      "upgrade the host; current releases admit bounded ephemeral behaviors and no longer emit this code",
+  },
+  "behavior-presence-budget-exceeded": {
+    check: "manifest",
+    level: "refuse",
+    meaning: "the plugin's charged ephemeral facets exceed one renderer presence window",
+    guidance:
+      "reduce maxFacetBytes claims or remove optional presence producers; the whole plugin set must fit 48 KiB including per-facet envelopes",
   },
   "systems-contribution-superseded": {
     check: "manifest",

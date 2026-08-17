@@ -38,6 +38,15 @@ export const PLUGIN_LIMITS = {
   BEHAVIOR_WRITES_MAX: 64,
   BEHAVIOR_MIGRATIONS_MAX: 64,
   WIDGET_BEHAVIORS_MAX: 16,
+  /** PRC4-E23: host charge per admitted ephemeral declaration. The exact ICE
+   * 0.9 wire adds 139 bytes for a maximal 128-byte id; 256 leaves format drift
+   * room and prevents many tiny facets from escaping a claims-only sum. */
+  BEHAVIOR_EPHEMERAL_ENVELOPE_BYTES: 256,
+  /** Plugin-owned portion of the 64 KiB lossy presence message. The remaining
+   * 16 KiB belongs to core presence, encoding drift, and the final hard guard. */
+  BEHAVIOR_EPHEMERAL_WINDOW_BYTES: 48 * 1024,
+  /** One facet must fit after paying its declaration envelope charge. */
+  BEHAVIOR_EPHEMERAL_FACET_BYTES_MAX: 48 * 1024 - 256,
   SERVICE_METHODS_MAX: 64,
   SETTINGS_MAX: 64,
   CAPABILITIES_MAX: 32,
@@ -414,6 +423,12 @@ export const BehaviorDefinition = z
     version: z.number().int().positive(),
     phase: z.enum(["simulate", "derive", "present", "publish"]),
     budgetMs: z.number().finite().positive().max(PLUGIN_LIMITS.BEHAVIOR_BUDGET_MS_MAX).optional(),
+    maxFacetBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_FACET_BYTES_MAX)
+      .optional(),
     tickWhile: z.enum(["all", "visible"]),
     schema: z
       .array(
@@ -462,6 +477,16 @@ export const BehaviorDefinition = z
     }
     if (definition.store === "ephemeral" && definition.writes.length > 0) {
       addBehaviorIssue(ctx, ["writes"], "ephemeral behaviors cannot declare component writes");
+    }
+    if (definition.store === "ephemeral" && definition.maxFacetBytes === undefined) {
+      addBehaviorIssue(
+        ctx,
+        ["maxFacetBytes"],
+        "ephemeral behaviors must attest a finite facet byte bound",
+      );
+    }
+    if (definition.store !== "ephemeral" && definition.maxFacetBytes !== undefined) {
+      addBehaviorIssue(ctx, ["maxFacetBytes"], "maxFacetBytes is ephemeral-only");
     }
     if (definition.deriveDuringGesture && !definition.derived) {
       addBehaviorIssue(ctx, ["deriveDuringGesture"], "deriveDuringGesture requires derived=true");
@@ -559,6 +584,24 @@ export const BehaviorDefinition = z
   });
 export type BehaviorDefinition = z.infer<typeof BehaviorDefinition>;
 
+/** Deterministic host charge for one plugin presence producer. ICE owns the
+ * complete-cell claim; VibeField adds a measured per-declaration wire envelope. */
+export function ephemeralBehaviorPresenceCharge(
+  definition: Pick<BehaviorDefinition, "store" | "maxFacetBytes">,
+): number {
+  if (definition.store !== "ephemeral") return 0;
+  const claim = definition.maxFacetBytes;
+  if (
+    claim === undefined ||
+    !Number.isSafeInteger(claim) ||
+    claim <= 0 ||
+    claim > PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_FACET_BYTES_MAX
+  ) {
+    throw new TypeError("ephemeral behavior lacks a valid maxFacetBytes claim");
+  }
+  return claim + PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_ENVELOPE_BYTES;
+}
+
 export const BehaviorContribution = z
   .object({
     id: z
@@ -590,6 +633,7 @@ export type WidgetBehaviorAttachment = z.infer<typeof WidgetBehaviorAttachment>;
 export type PluginManifestIssueCode =
   | "manifest-invalid"
   | "behavior-store-unsupported"
+  | "behavior-presence-budget-exceeded"
   | "systems-contribution-superseded";
 
 export interface PluginManifestIssue {
@@ -984,6 +1028,7 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
         issue(`surface ${x.id} must be ${m.id}.<name>`, ["contributes", "surfaces"]);
     const behaviorLocalName = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
     const behaviorIds = new Set<string>();
+    let ephemeralPresenceBytes = 0;
     for (const [index, behavior] of (c.behaviors ?? []).entries()) {
       const prefix = `${m.id}:`;
       const local = behavior.id.startsWith(prefix) ? behavior.id.slice(prefix.length) : "";
@@ -995,12 +1040,18 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       }
       behaviorIds.add(behavior.id);
       if (behavior.definition.store === "ephemeral") {
-        issue(
-          "ephemeral plugin behaviors await an enforceable facet byte budget",
-          ["contributes", "behaviors", index, "definition", "store"],
-          "behavior-store-unsupported",
-        );
+        const claim = behavior.definition.maxFacetBytes;
+        if (claim !== undefined) {
+          ephemeralPresenceBytes += claim + PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_ENVELOPE_BYTES;
+        }
       }
+    }
+    if (ephemeralPresenceBytes > PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_WINDOW_BYTES) {
+      issue(
+        `plugin ephemeral behavior charge is ${ephemeralPresenceBytes} bytes, over the ${PLUGIN_LIMITS.BEHAVIOR_EPHEMERAL_WINDOW_BYTES}-byte window`,
+        ["contributes", "behaviors"],
+        "behavior-presence-budget-exceeded",
+      );
     }
     for (const x of c.capabilities ?? [])
       if (!isOwnedName(`x.${m.id}`, x.id, false))

@@ -186,4 +186,26 @@ describe("renderer behavior candidate", () => {
       });
     }
   });
+
+  it("treats the ephemeral byte claim as signed handle identity", async () => {
+    const id = "com.example.renderer-facet-drift";
+    const Facet = defineBehavior(`${id}:presence`, {
+      store: "ephemeral",
+      maxFacetBytes: 128,
+      schema: { mode: p.string({ default: "active" }) },
+    });
+    const declared = declareBehavior(Facet);
+    const drifted: BehaviorContribution = {
+      ...declared,
+      definition: { ...declared.definition, maxFacetBytes: 129 },
+    };
+
+    await expect(
+      stageStagedRenderer(record(id, drifted), moduleRow(id), {
+        activate(ctx) {
+          ctx.canvas?.behaviors.bind(Facet.name, Facet);
+        },
+      }),
+    ).rejects.toThrow(/descriptor does not match/);
+  });
 });
