@@ -52,9 +52,14 @@ export { MeshLaneLink, type MeshLaneLinkOptions } from "./mesh-lane";
 export { NativeLink, RpcCallError } from "./native-link";
 export { computePairingMac } from "./pairing";
 export { PeerLink, type PeerLinkOptions, type PeerLinkState } from "./peer-link";
-export { PluginModuleAuthority, type PluginModuleAuthorityDeps } from "./plugin-modules";
+export {
+  PluginModuleAuthority,
+  type PluginModuleAuthorityDeps,
+  type PreparedCandidateModules,
+} from "./plugin-modules";
 export {
   contractsRangeSatisfied,
+  type PluginRegistryCandidate,
   type PluginRegistryConfig,
   type PluginRegistryHealth,
   PluginRegistryService,
@@ -66,7 +71,11 @@ export {
   type PresenceRoomRouterOptions,
 } from "./presence-room";
 export { ProductApi } from "./product-api";
-export { ServiceHost, type ServiceHostConfig } from "./service-host";
+export {
+  type PreparedServiceCandidate,
+  ServiceHost,
+  type ServiceHostConfig,
+} from "./service-host";
 export {
   type ServiceCallerInfo,
   type ServiceProviderBinding,

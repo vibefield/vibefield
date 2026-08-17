@@ -1,8 +1,15 @@
 import { EventEmitter } from "node:events";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Worker, WorkerOptions } from "node:worker_threads";
-import type { CallerContext } from "@vibefield/contracts";
+import type {
+  CallerContext,
+  PluginManifestV1,
+  PluginRecord,
+  PublicEntryState,
+} from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import type { PluginRegistryService } from "../src/plugin-registry";
 import { ServiceHost } from "../src/service-host";
@@ -98,7 +105,7 @@ interface TestRecord {
   manifestHash: string;
   grantGeneration: number;
   enabled: boolean;
-  service: "inactive";
+  service: PublicEntryState;
   grantedCapabilities: string[];
 }
 
@@ -116,7 +123,10 @@ function createRig(
   workers: ControllerWorker[];
   minted: number[];
   revoked: string[];
+  states: string[];
+  workerOptions: WorkerOptions[];
   firstWorker: Promise<ControllerWorker>;
+  record(): TestRecord;
   update(change: (record: TestRecord) => TestRecord): void;
 } {
   let record: TestRecord = {
@@ -129,6 +139,8 @@ function createRig(
     service: "inactive",
     grantedCapabilities: ["services.provide", "background"],
   };
+  const states: string[] = [];
+  const workerOptions: WorkerOptions[] = [];
   const plugins = {
     get(id: string) {
       return id === pluginId ? record : undefined;
@@ -139,7 +151,10 @@ function createRig(
     rootPath(id: string) {
       return id === pluginId ? fixtureRoot : undefined;
     },
-    setServiceEntryState() {},
+    setServiceEntryState(id: string, state: PublicEntryState) {
+      states.push(state);
+      if (id === pluginId) record = { ...record, service: state };
+    },
   };
   const registry = new ServiceRegistry({ grantedCapabilities: () => [] });
   const workers: ControllerWorker[] = [];
@@ -152,9 +167,10 @@ function createRig(
     tokens: {} as TokenService,
     controlPort: () => 1,
     deviceId: () => "device-prc3c",
-    workerFactory: (_path: string, _options: WorkerOptions): Worker => {
+    workerFactory: (_path: string, options: WorkerOptions): Worker => {
       const worker = new ControllerWorker();
       workers.push(worker);
+      workerOptions.push(options);
       if (workers.length === 1) firstWorker.resolve(worker);
       onWorker(worker, workers.length - 1);
       return worker as unknown as Worker;
@@ -181,7 +197,10 @@ function createRig(
     workers,
     minted,
     revoked,
+    states,
+    workerOptions,
     firstWorker: firstWorker.promise,
+    record: () => record,
     update(change) {
       record = change(record);
     },
@@ -193,6 +212,32 @@ function localCaller(): CallerContext {
     principal: { kind: "local-token", tokenId: "tk_prc3c", scopes: [] },
     transport: "ws-loopback",
     receivedAt: Date.now(),
+  };
+}
+
+function candidateRecord(base: TestRecord, slot: string): PluginRecord {
+  return {
+    ...base,
+    installRevision: slot,
+    source: "registry",
+    title: base.id,
+    state: "enabled",
+    compatible: true,
+    requestedCapabilities: [...base.grantedCapabilities],
+    deniedCapabilities: [],
+    contributions: {
+      widgets: [],
+      behaviors: [],
+      commands: [],
+      surfaces: [],
+      capabilities: [],
+    },
+    renderer: "none",
+    registry: {
+      indexRef: "file:///registry/index.json",
+      artifactSha256: `sha256:${slot}`,
+      publisher: "service-candidate-test",
+    },
   };
 }
 
@@ -337,5 +382,126 @@ describe("ServiceHost exact target controller (PRC-3c)", () => {
         .map((message) => message["grantGeneration"]),
     ).toEqual([3]);
     await rig.host.stop(pluginId);
+  });
+
+  it("activates an explicit immutable service candidate without publishing or moving live", async () => {
+    const rig = createRig();
+    await rig.host.start(pluginId);
+    const candidateRoot = mkdtempSync(join(tmpdir(), "vf-service-candidate-"));
+    try {
+      cpSync(fixtureRoot, candidateRoot, { recursive: true });
+      writeFileSync(join(candidateRoot, "service.js"), "// distinct candidate bytes\n");
+      const candidateManifest = JSON.parse(
+        readFileSync(join(candidateRoot, "vibefield.plugin.json"), "utf8"),
+      ) as PluginManifestV1;
+      const nextRecord = candidateRecord(rig.record(), "b".repeat(64));
+      const stateMark = rig.states.length;
+      const prepared = await rig.host.prepareCandidate({
+        updateId: "pupd_service_candidate",
+        baseInstallRevision: rig.record().installRevision,
+        candidate: {
+          record: nextRecord,
+          manifest: candidateManifest,
+          root: candidateRoot,
+          artifactSha256: `sha256:${nextRecord.installRevision}`,
+        },
+      });
+      expect(prepared).not.toBeNull();
+
+      // Old provider is drained. Candidate declarations are typed but handlers
+      // remain unavailable, and candidate entry state never impersonates live.
+      expect(rig.registry.snapshot().providers).toEqual([]);
+      expect(rig.registry.kindOf(method)).toBe("call");
+      await expect(
+        rig.registry.call(localCaller(), method, { msg: "early" }),
+      ).rejects.toMatchObject({ kind: "UNAVAILABLE" });
+      expect(rig.record().installRevision).toBe("prc3c-a");
+      expect(rig.states.slice(stateMark)).toEqual(["inactive"]);
+      expect(
+        (rig.workerOptions[1]?.workerData as { entryPath?: string } | undefined)?.entryPath,
+      ).toBe(join(candidateRoot, "service.js"));
+      expect(() => prepared!.commit()).toThrow(/stale service candidate/);
+
+      // Pointer/registry movement is simulated only now; the exact prepared
+      // worker publishes synchronously and becomes the controller's live face.
+      rig.update(() => nextRecord as TestRecord);
+      prepared!.commit();
+      expect(rig.registry.snapshot().providers.map((provider) => provider.namespace)).toEqual([
+        namespace,
+      ]);
+      await expect(rig.registry.call(localCaller(), method, { msg: "after" })).resolves.toEqual({
+        echo: "worker-ran",
+      });
+      expect(rig.states.at(-1)).toBe("active");
+      prepared!.release();
+      await rig.host.stop(pluginId);
+    } finally {
+      rmSync(candidateRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("discards a private service candidate and can restart retained old authority", async () => {
+    const rig = createRig();
+    await rig.host.start(pluginId);
+    const candidateRoot = mkdtempSync(join(tmpdir(), "vf-service-candidate-discard-"));
+    try {
+      cpSync(fixtureRoot, candidateRoot, { recursive: true });
+      const nextRecord = candidateRecord(rig.record(), "c".repeat(64));
+      const prepared = await rig.host.prepareCandidate({
+        updateId: "pupd_service_discard",
+        baseInstallRevision: rig.record().installRevision,
+        candidate: {
+          record: nextRecord,
+          manifest: JSON.parse(
+            readFileSync(join(candidateRoot, "vibefield.plugin.json"), "utf8"),
+          ) as PluginManifestV1,
+          root: candidateRoot,
+          artifactSha256: `sha256:${nextRecord.installRevision}`,
+        },
+      });
+      await prepared!.discard();
+
+      expect(rig.record().installRevision).toBe("prc3c-a");
+      expect(rig.registry.snapshot().providers).toEqual([]);
+      expect(rig.workers[1]?.terminateCalls).toBe(1);
+
+      await rig.host.start(pluginId);
+      expect(rig.workers).toHaveLength(3);
+      expect(rig.registry.snapshot().providers.map((provider) => provider.namespace)).toEqual([
+        namespace,
+      ]);
+      await rig.host.stop(pluginId);
+    } finally {
+      rmSync(candidateRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses candidate commit when the current row is not the prepared authority observation", async () => {
+    const rig = createRig();
+    await rig.host.start(pluginId);
+    const candidateRoot = mkdtempSync(join(tmpdir(), "vf-service-candidate-stale-"));
+    try {
+      cpSync(fixtureRoot, candidateRoot, { recursive: true });
+      const nextRecord = candidateRecord(rig.record(), "e".repeat(64));
+      const prepared = await rig.host.prepareCandidate({
+        updateId: "pupd_service_stale",
+        baseInstallRevision: rig.record().installRevision,
+        candidate: {
+          record: nextRecord,
+          manifest: JSON.parse(
+            readFileSync(join(candidateRoot, "vibefield.plugin.json"), "utf8"),
+          ) as PluginManifestV1,
+          root: candidateRoot,
+          artifactSha256: `sha256:${nextRecord.installRevision}`,
+        },
+      });
+      rig.update(() => ({ ...nextRecord, grantGeneration: 2 }) as TestRecord);
+
+      expect(() => prepared!.commit()).toThrow(/stale service candidate/);
+      expect(rig.registry.snapshot().providers).toEqual([]);
+      await prepared!.discard();
+    } finally {
+      rmSync(candidateRoot, { recursive: true, force: true });
+    }
   });
 });

@@ -16,6 +16,7 @@ import {
 export type RuntimeTargetControllerState =
   | "inactive"
   | "loading"
+  | "prepared"
   | "active"
   | "refreshing"
   | "unloading"
@@ -82,6 +83,11 @@ interface Loading<T extends PluginRuntimeTarget> {
   readonly target: T;
   readonly revision: number;
   readonly scope: ActivationScope;
+}
+
+interface Prepared<T extends PluginRuntimeTarget, C extends RuntimeTargetCandidate>
+  extends Loading<T> {
+  readonly candidate: C;
 }
 
 interface Blocked<T extends PluginRuntimeTarget> extends RuntimeTargetControllerBlocked<T> {
@@ -162,7 +168,8 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
  * Desired changes coalesce behind one inertia promise. Different semantic targets close active
  * ingress synchronously and unload before replacement. A newer grant observation closes an
  * in-flight candidate but refreshes a semantic-equal committed candidate. Candidate publication
- * happens only at one synchronous, stale-checked commit edge.
+ * happens only at one synchronous, stale-checked commit edge. Normal targets commit automatically;
+ * disruptive participants may stop at `prepared` for a coordinator-owned commitPrepared().
  */
 export class RuntimeTargetController<
   T extends PluginRuntimeTarget,
@@ -179,10 +186,12 @@ export class RuntimeTargetController<
   private readonly options: RuntimeTargetControllerOptions<T, C>;
   private desiredValue: T | null = null;
   private desiredReason: ActivationCloseReason = { kind: "target-changed" };
+  private desiredCommitMode: "automatic" | "manual" = "automatic";
   private desiredRevisionValue = 0;
   private committedValue: T | null = null;
   private activeValue: Active<T, C> | null = null;
   private loadingValue: Loading<T> | null = null;
+  private preparedValue: Prepared<T, C> | null = null;
   private failedRevision: number | undefined;
   private loop: Promise<void> | undefined;
   private blockedValue: Blocked<T> | undefined;
@@ -221,6 +230,10 @@ export class RuntimeTargetController<
     return this.activeValue?.candidate;
   }
 
+  get preparedCandidate(): C | undefined {
+    return this.preparedValue?.candidate;
+  }
+
   get desiredRevision(): number {
     return this.desiredRevisionValue;
   }
@@ -233,11 +246,31 @@ export class RuntimeTargetController<
    * committed ingress before this method returns; a loading attempt closes on every new
    * observation so credentials minted before an intervening grant event can never commit. */
   setDesired(target: T | null, options: RuntimeTargetDesiredOptions = {}): number {
-    if (!options.retry && samePluginRuntimeObservation(this.desiredValue, target)) {
+    return this.setDesiredWithMode(target, "automatic", options);
+  }
+
+  /** PRC-5c disruptive participant seam. It performs the same break-before-make
+   * reconciliation but holds a fully activated candidate private until
+   * commitPrepared() is called at the coordinator's logical commit edge. */
+  prepareDesired(target: T, options: RuntimeTargetDesiredOptions = {}): number {
+    return this.setDesiredWithMode(target, "manual", options);
+  }
+
+  private setDesiredWithMode(
+    target: T | null,
+    commitMode: "automatic" | "manual",
+    options: RuntimeTargetDesiredOptions,
+  ): number {
+    if (
+      !options.retry &&
+      this.desiredCommitMode === commitMode &&
+      samePluginRuntimeObservation(this.desiredValue, target)
+    ) {
       return this.desiredRevisionValue;
     }
 
     this.desiredValue = target;
+    this.desiredCommitMode = commitMode;
     this.desiredReason = options.reason ?? { kind: "target-changed" };
     this.desiredRevisionValue += 1;
     this.failedRevision = undefined;
@@ -245,6 +278,7 @@ export class RuntimeTargetController<
     this.record("desired", { revision: this.desiredRevisionValue, target });
 
     if (this.loadingValue !== null) this.loadingValue.scope.close(this.desiredReason);
+    if (this.preparedValue !== null) this.preparedValue.scope.close(this.desiredReason);
     if (
       this.activeValue !== null &&
       (options.retry || !samePluginRuntimeTarget(this.activeValue.target, target))
@@ -261,6 +295,73 @@ export class RuntimeTargetController<
 
   retry(reason: ActivationCloseReason = { kind: "manual" }): number {
     return this.setDesired(this.desiredValue, { reason, retry: true });
+  }
+
+  /** One synchronous publication edge for a manually prepared candidate. */
+  commitPrepared(): RuntimeTargetControllerSnapshot<T> {
+    const prepared = this.preparedValue;
+    if (
+      prepared === null ||
+      this.desiredCommitMode !== "manual" ||
+      prepared.revision !== this.desiredRevisionValue ||
+      prepared.scope.state !== "open" ||
+      !samePluginRuntimeObservation(prepared.target, this.desiredValue)
+    ) {
+      throw new Error(`${this.label}: no current prepared target to commit`);
+    }
+
+    try {
+      const commitResult = prepared.candidate.commit() as unknown;
+      if (isThenable(commitResult)) {
+        void Promise.resolve(commitResult).catch(() => undefined);
+        throw new TypeError("target candidate commit must be synchronous");
+      }
+    } catch (error) {
+      this.errorValue = errorMessage(error);
+      this.failedRevision = prepared.revision;
+      prepared.scope.close({ kind: "activation-failed", detail: "candidate commit failed" });
+      this.stateValue = "unloading";
+      this.record("prepared-commit-failed", {
+        target: prepared.target,
+        revision: prepared.revision,
+        error: this.errorValue,
+      });
+      this.ensureLoop();
+      throw error;
+    }
+
+    // Publication callbacks may synchronously supersede the target. The scope
+    // close withdraws the just-published candidate before this method returns.
+    if (
+      this.preparedValue !== prepared ||
+      prepared.revision !== this.desiredRevisionValue ||
+      !samePluginRuntimeObservation(prepared.target, this.desiredValue) ||
+      prepared.scope.state !== "open"
+    ) {
+      prepared.scope.close({ kind: "target-changed", detail: "changed-during-commit" });
+      this.stateValue = "unloading";
+      this.record("prepared-commit-stale", {
+        target: prepared.target,
+        revision: prepared.revision,
+      });
+      this.ensureLoop();
+      throw new Error(`${this.label}: prepared target changed during commit`);
+    }
+
+    this.preparedValue = null;
+    this.activeValue = {
+      target: prepared.target,
+      candidate: prepared.candidate,
+      scope: prepared.scope,
+    };
+    this.committedValue = prepared.target;
+    this.errorValue = undefined;
+    this.stateValue = "active";
+    this.record("prepared-commit", {
+      target: prepared.target,
+      revision: prepared.revision,
+    });
+    return this.snapshot();
   }
 
   async settle(options: { deadlineMs?: number } = {}): Promise<RuntimeTargetControllerSnapshot<T>> {
@@ -290,7 +391,8 @@ export class RuntimeTargetController<
               target: this.blockedValue.target,
               report: this.blockedValue.report,
             },
-      activeScope: this.activeValue?.scope.snapshot() ?? null,
+      activeScope:
+        this.activeValue?.scope.snapshot() ?? this.preparedValue?.scope.snapshot() ?? null,
       history: this.events.map((event) => ({ ...event })),
     };
   }
@@ -304,6 +406,14 @@ export class RuntimeTargetController<
 
   private stable(): boolean {
     if (this.blockedValue !== undefined) return true;
+    if (
+      this.preparedValue !== null &&
+      this.preparedValue.scope.state === "open" &&
+      this.desiredCommitMode === "manual" &&
+      samePluginRuntimeObservation(this.preparedValue.target, this.desiredValue)
+    ) {
+      return true;
+    }
     if (this.activeValue !== null && this.activeValue.scope.state === "open") {
       return samePluginRuntimeObservation(this.activeValue.target, this.desiredValue);
     }
@@ -363,6 +473,7 @@ export class RuntimeTargetController<
       if (this.blockedValue?.token !== token) return;
       if (this.activeValue?.scope === scope) this.activeValue = null;
       if (this.loadingValue?.scope === scope) this.loadingValue = null;
+      if (this.preparedValue?.scope === scope) this.preparedValue = null;
       this.blockedValue = undefined;
       this.stateValue = "inactive";
       this.record("late-quiescence", { phase, target });
@@ -390,6 +501,27 @@ export class RuntimeTargetController<
     if (this.activeValue === active) this.activeValue = null;
     this.stateValue = "inactive";
     this.record("unloaded", { target: active.target, report });
+    return true;
+  }
+
+  private async unloadPrepared(): Promise<boolean> {
+    const prepared = this.preparedValue;
+    if (prepared === null) return true;
+    this.stateValue = "unloading";
+    prepared.scope.close(this.desiredReason);
+    const report = await prepared.scope.observe(this.disposalDeadlineMs);
+    const closeReason = report.reason ?? this.desiredReason;
+    const mayContinue = await this.allowAfterClose(
+      prepared.scope,
+      prepared.target,
+      report,
+      "unload-prepared",
+      closeReason,
+    );
+    if (!mayContinue) return false;
+    if (this.preparedValue === prepared) this.preparedValue = null;
+    this.stateValue = "inactive";
+    this.record("prepared-unloaded", { target: prepared.target, report });
     return true;
   }
 
@@ -505,6 +637,15 @@ export class RuntimeTargetController<
       return mayContinue;
     }
 
+    if (this.desiredCommitMode === "manual") {
+      this.loadingValue = null;
+      this.preparedValue = { target, revision, scope, candidate };
+      this.errorValue = undefined;
+      this.stateValue = "prepared";
+      this.record("load-prepared", { target, revision });
+      return true;
+    }
+
     try {
       const commitResult = candidate.commit() as unknown;
       if (isThenable(commitResult)) {
@@ -550,6 +691,21 @@ export class RuntimeTargetController<
 
   private async reconcile(): Promise<void> {
     while (this.blockedValue === undefined) {
+      const prepared = this.preparedValue;
+      if (prepared !== null) {
+        if (
+          prepared.scope.state !== "open" ||
+          this.desiredCommitMode !== "manual" ||
+          !samePluginRuntimeObservation(prepared.target, this.desiredValue)
+        ) {
+          if (!(await this.unloadPrepared())) return;
+          continue;
+        }
+        this.committedValue = null;
+        this.stateValue = "prepared";
+        return;
+      }
+
       const active = this.activeValue;
       if (active !== null) {
         if (active.scope.state !== "open") {

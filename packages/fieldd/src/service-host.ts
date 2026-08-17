@@ -1,11 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker, type WorkerOptions } from "node:worker_threads";
 import {
   LOG_TRANSPORT_LIMITS,
   PLUGIN_LIMITS,
   type PluginManifestV1,
+  type PluginRecord,
   type PublicEntryState,
   SCOPES,
   type Scope,
@@ -22,7 +23,7 @@ import {
   samePluginRuntimeObservation,
   samePluginRuntimeTarget,
 } from "@vibefield/plugin-runtime";
-import type { PluginRegistryService } from "./plugin-registry";
+import type { PluginRegistryCandidate, PluginRegistryService } from "./plugin-registry";
 import type {
   ServiceCallerInfo,
   ServiceProviderCandidate,
@@ -130,11 +131,42 @@ interface ServiceWorkerCandidate extends RuntimeTargetCandidate {
   readonly worker: Worker;
   readonly generation: number;
   leaseTokenId: string | null;
+  readonly updateEpisode?: ServiceCandidateEpisode;
   invalidateCredential(grantGeneration: number): void;
+}
+
+interface ServiceActivationSource {
+  readonly record: PluginRecord;
+  readonly manifest: PluginManifestV1;
+  readonly root: string;
+  readonly updateEpisode?: ServiceCandidateEpisode;
+}
+
+interface ServiceCandidateEpisode {
+  readonly updateId: string;
+  readonly pluginId: string;
+  readonly baseInstallRevision: string | null;
+  readonly baseObservationFingerprint: string;
+  readonly source: ServiceActivationSource;
+  readonly target: ServiceRuntimeTarget;
+  state: "prepared" | "committed" | "disposed";
+}
+
+export interface PreparedServiceCandidate {
+  readonly updateId: string;
+  readonly pluginId: string;
+  readonly target: ServiceRuntimeTarget;
+  /** Synchronous provider publication at the logical commit edge. */
+  commit(): void;
+  /** Pre-commit candidate teardown. */
+  discard(): Promise<void>;
+  /** Drop episode authority after a committed worker has been adopted live. */
+  release(): void;
 }
 
 export class ServiceHost {
   private readonly entries = new Map<string, Entry>();
+  private readonly candidateEpisodes = new Map<string, ServiceCandidateEpisode>();
   private nextCallId = 1;
   private nextDeactivationId = 1;
   private nextCredentialId = 1;
@@ -231,8 +263,106 @@ export class ServiceHost {
     await this.start(pluginId);
   }
 
+  /** PRC-5c: break from the live service target, activate the explicit
+   * immutable candidate, and hold every provider behind its private commit
+   * edge. The live registry pointer may still name the old artifact. */
+  async prepareCandidate(input: {
+    updateId: string;
+    baseInstallRevision: string | null;
+    candidate: PluginRegistryCandidate;
+  }): Promise<PreparedServiceCandidate | null> {
+    if (!/^pupd_[A-Za-z0-9_-]+$/.test(input.updateId) || input.updateId.length > 128)
+      throw new Error("invalid plugin update id");
+    const { record, manifest, root, artifactSha256 } = input.candidate;
+    if (
+      !/^sha256:[0-9a-f]{64}$/.test(artifactSha256) ||
+      manifest.id !== record.id ||
+      record.installRevision !== artifactSha256.slice("sha256:".length)
+    ) {
+      throw new Error(`${record.id}: candidate service identity does not match its artifact`);
+    }
+    if (!record.enabled || record.service === "none") return null;
+    if (manifest.entries?.service === undefined)
+      throw new Error(`${record.id}: candidate service row has no service manifest entry`);
+    if (this.candidateEpisodes.has(record.id))
+      throw new Error(`${record.id}: a candidate service episode already exists`);
+    if ([...this.candidateEpisodes.values()].some((episode) => episode.updateId === input.updateId))
+      throw new Error(`${input.updateId}: candidate service episode already exists`);
+    const current = this.cfg.plugins.get(record.id);
+    const actualBase = current?.installRevision ?? null;
+    if (actualBase !== input.baseInstallRevision) {
+      throw new Error(
+        `${record.id}: candidate service base is stale; expected ${input.baseInstallRevision ?? "absent"}, found ${actualBase ?? "absent"}`,
+      );
+    }
+    const target = this.serviceTargetForRecord(record);
+    if (target === null) return null;
+    const source = { record, manifest, root };
+    const episode: ServiceCandidateEpisode = {
+      updateId: input.updateId,
+      pluginId: record.id,
+      baseInstallRevision: input.baseInstallRevision,
+      baseObservationFingerprint: serviceRecordFingerprint(current),
+      source,
+      target,
+      state: "prepared",
+    };
+    this.candidateEpisodes.set(record.id, episode);
+    const e = this.entry(record.id);
+    try {
+      e.controller.prepareDesired(target, {
+        reason: { kind: "reload", detail: input.updateId },
+      });
+      const settled = await e.controller.settle({ deadlineMs: this.controllerSettleDeadline() });
+      if (
+        settled.state !== "prepared" ||
+        !samePluginRuntimeObservation(settled.desired, target) ||
+        e.controller.preparedCandidate === undefined
+      ) {
+        throw new Error(
+          `${record.id}: candidate service did not reach private readiness (${settled.state})`,
+        );
+      }
+    } catch (error) {
+      await this.discardServiceEpisode(episode).catch(() => undefined);
+      throw error;
+    }
+
+    const handle: PreparedServiceCandidate = {
+      updateId: input.updateId,
+      pluginId: record.id,
+      target,
+      commit: () => {
+        if (episode.state === "committed") return;
+        if (episode.state !== "prepared")
+          throw new Error(`${input.updateId}: candidate service episode is disposed`);
+        if (
+          serviceRecordFingerprint(this.cfg.plugins.get(record.id)) !==
+          serviceRecordFingerprint(episode.source.record)
+        ) {
+          throw new Error(`${record.id}: stale service candidate cannot commit`);
+        }
+        const snapshot = e.controller.commitPrepared();
+        if (!samePluginRuntimeObservation(snapshot.committed, target))
+          throw new Error(`${input.updateId}: candidate service did not commit its exact target`);
+        episode.state = "committed";
+      },
+      discard: async () => await this.discardServiceEpisode(episode),
+      release: () => {
+        if (episode.state !== "committed")
+          throw new Error(`${input.updateId}: only a committed service episode can release`);
+        if (this.candidateEpisodes.get(record.id) === episode)
+          this.candidateEpisodes.delete(record.id);
+      },
+    };
+    return Object.freeze(handle);
+  }
+
   async start(pluginId: string): Promise<void> {
     if (this.disposed) return;
+    const updateEpisode = this.candidateEpisodes.get(pluginId);
+    if (updateEpisode?.state === "prepared")
+      throw new Error(`${pluginId}: candidate update ${updateEpisode.updateId} owns the service`);
     const e = this.entry(pluginId);
     if (e.stopTask !== null) await e.stopTask;
     if (this.disposed) return;
@@ -292,19 +422,16 @@ export class ServiceHost {
       { once: true },
     );
 
-    const record = this.cfg.plugins.get(pluginId);
-    if (record === undefined || !record.enabled)
-      throw new Error(`${pluginId}: service target is no longer enabled`);
-    const root = this.cfg.plugins.rootPath(pluginId);
-    const manifest = await this.readManifest(pluginId);
+    const source = await this.resolveActivationSource(pluginId, target);
     if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal))
       throw new Error(`${pluginId}: service target superseded while reading its manifest`);
+    if (source === null) throw new Error(`${pluginId}: service activation source is unavailable`);
+    const { record, root, manifest, updateEpisode } = source;
     const entryRel = manifest?.entries?.service;
-    if (root === undefined || manifest === null || entryRel === undefined)
-      throw new Error(`${pluginId}: service entry is unavailable`);
+    if (entryRel === undefined) throw new Error(`${pluginId}: service entry is unavailable`);
     const entryPath = resolve(join(root, entryRel));
-    if (!entryPath.startsWith(resolve(root))) {
-      this.setState(pluginId, e, "quarantined");
+    if (!entryPath.startsWith(`${resolve(root)}${sep}`)) {
+      this.setActivationState(pluginId, e, "quarantined", updateEpisode);
       this.logger.error(
         "fieldd.plugin_service.entry_path_rejected",
         "Plugin service entry escaped its plugin root and was refused",
@@ -316,7 +443,7 @@ export class ServiceHost {
 
     const generation = ++e.generation;
     e.routeState = "activating";
-    this.setState(pluginId, e, "activating");
+    this.setActivationState(pluginId, e, "activating", updateEpisode);
 
     const authority = projectPluginAuthority("service", record.grantedCapabilities);
     const scopes = authority.capabilities.filter((capability): capability is Scope =>
@@ -343,7 +470,7 @@ export class ServiceHost {
       if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal))
         throw new Error(`${pluginId}: service target superseded during lease mint`);
       e.routeState = "withdrawn";
-      this.setState(pluginId, e, "degraded");
+      this.setActivationState(pluginId, e, "degraded", updateEpisode);
       throw error;
     }
     if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal)) {
@@ -392,7 +519,7 @@ export class ServiceHost {
     } catch (error) {
       e.routeState = "withdrawn";
       await this.releaseServiceLease(pluginId, e, "worker-construction-failed");
-      this.setState(pluginId, e, "degraded");
+      this.setActivationState(pluginId, e, "degraded", updateEpisode);
       throw error;
     }
     e.detachOutput?.();
@@ -427,7 +554,7 @@ export class ServiceHost {
               finish(() => {
                 this.beginRouteDrain(pluginId, e);
                 void worker.terminate();
-                this.setState(pluginId, e, "degraded");
+                this.setActivationState(pluginId, e, "degraded", updateEpisode);
                 rejectActivate(
                   providerError instanceof Error
                     ? providerError
@@ -444,7 +571,7 @@ export class ServiceHost {
             finish(() => {
               this.beginRouteDrain(pluginId, e);
               void worker.terminate();
-              this.setState(pluginId, e, "degraded");
+              this.setActivationState(pluginId, e, "degraded", updateEpisode);
               rejectActivate(
                 new Error(
                   `${pluginId}: ${(msg["error"] as { message?: string } | undefined)?.message ?? "activation failed"}`,
@@ -593,7 +720,14 @@ export class ServiceHost {
         finish(() =>
           rejectActivate(new Error(`${pluginId}: worker exited (${code}) during activation`)),
         );
-        this.onCrash(pluginId, e);
+        if (updateEpisode?.state === "prepared") {
+          e.state = "degraded";
+          e.controller.setDesired(null, {
+            reason: { kind: "crash", detail: updateEpisode.updateId },
+          });
+        } else {
+          this.onCrash(pluginId, e);
+        }
       });
     });
 
@@ -602,6 +736,7 @@ export class ServiceHost {
       worker,
       generation,
       leaseTokenId: lease.tokenId,
+      ...(updateEpisode === undefined ? {} : { updateEpisode }),
       commit: () => {
         if (!this.isCurrentTarget(pluginId, e, startEpoch, target, signal))
           throw new Error(`${pluginId}: stale service candidate cannot commit`);
@@ -752,7 +887,9 @@ export class ServiceHost {
     // A crash already moved the public entry into restarting/quarantined and owns that state until
     // its backoff or explicit recovery. Cooperative/manual teardown lands inactive instead.
     if (e.state !== "restarting" && e.state !== "quarantined") {
-      this.setState(pluginId, e, "inactive");
+      if (candidate.updateEpisode === undefined || candidate.updateEpisode.state === "committed")
+        this.setState(pluginId, e, "inactive");
+      else e.state = "inactive";
       this.logger.info("fieldd.plugin_service.deactivated", "Plugin service worker deactivated", {
         pluginId,
       });
@@ -877,18 +1014,36 @@ export class ServiceHost {
     this.cfg.plugins.setServiceEntryState(pluginId, state);
   }
 
+  private setActivationState(
+    pluginId: string,
+    e: Entry,
+    state: PublicEntryState,
+    updateEpisode: ServiceCandidateEpisode | undefined,
+  ): void {
+    if (updateEpisode === undefined || updateEpisode.state === "committed") {
+      this.setState(pluginId, e, state);
+    } else {
+      // A private candidate is not the live registry row's entry state.
+      e.state = state;
+    }
+  }
+
   private serviceTarget(pluginId: string): ServiceRuntimeTarget | null {
     const record = this.cfg.plugins.get(pluginId);
-    if (record === undefined || !record.enabled || record.service === "none") return null;
+    return record === undefined ? null : this.serviceTargetForRecord(record);
+  }
+
+  private serviceTargetForRecord(record: PluginRecord): ServiceRuntimeTarget | null {
+    if (!record.enabled || record.service === "none") return null;
     const authority = projectPluginAuthority("service", record.grantedCapabilities);
     return {
       face: "service",
-      pluginId,
+      pluginId: record.id,
       artifact: {
         // Production PluginRecord always carries both fields. Fallbacks keep narrow host fakes
         // source-compatible without weakening the daemon's real target identity.
         installRevision: record.installRevision ?? `${record.version}:legacy`,
-        manifestHash: record.manifestHash ?? `legacy:${pluginId}:${record.version}`,
+        manifestHash: record.manifestHash ?? `legacy:${record.id}:${record.version}`,
       },
       instanceKey: { deviceId: this.cfg.deviceId?.() ?? "local" },
       authorityFingerprint: authority.fingerprint,
@@ -908,8 +1063,67 @@ export class ServiceHost {
       !signal.aborted &&
       !e.stopping &&
       e.startEpoch === startEpoch &&
-      samePluginRuntimeObservation(this.serviceTarget(pluginId), target)
+      samePluginRuntimeObservation(this.authoritativeTarget(pluginId, target), target)
     );
+  }
+
+  private authoritativeTarget(
+    pluginId: string,
+    requested: ServiceRuntimeTarget,
+  ): ServiceRuntimeTarget | null {
+    const episode = this.candidateEpisodes.get(pluginId);
+    if (episode !== undefined && samePluginRuntimeObservation(episode.target, requested)) {
+      return this.candidateEpisodeCurrent(episode) ? episode.target : null;
+    }
+    return this.serviceTarget(pluginId);
+  }
+
+  private candidateEpisodeCurrent(episode: ServiceCandidateEpisode): boolean {
+    if (episode.state === "disposed") return false;
+    const current = this.cfg.plugins.get(episode.pluginId);
+    const fingerprint = serviceRecordFingerprint(current);
+    const candidate = serviceRecordFingerprint(episode.source.record);
+    if (episode.state === "committed") return fingerprint === candidate;
+    return fingerprint === episode.baseObservationFingerprint || fingerprint === candidate;
+  }
+
+  private async resolveActivationSource(
+    pluginId: string,
+    target: ServiceRuntimeTarget,
+  ): Promise<ServiceActivationSource | null> {
+    const episode = this.candidateEpisodes.get(pluginId);
+    if (episode !== undefined && samePluginRuntimeObservation(episode.target, target)) {
+      return this.candidateEpisodeCurrent(episode)
+        ? { ...episode.source, updateEpisode: episode }
+        : null;
+    }
+    const record = this.cfg.plugins.get(pluginId);
+    const root = this.cfg.plugins.rootPath(pluginId);
+    if (
+      record === undefined ||
+      root === undefined ||
+      !samePluginRuntimeObservation(this.serviceTargetForRecord(record), target)
+    ) {
+      return null;
+    }
+    const manifest = await this.readManifestAt(root);
+    return manifest === null ? null : { record, root, manifest };
+  }
+
+  private async discardServiceEpisode(episode: ServiceCandidateEpisode): Promise<void> {
+    if (episode.state === "disposed") return;
+    if (episode.state === "committed")
+      throw new Error(`${episode.updateId}: committed service candidate cannot be discarded`);
+    episode.state = "disposed";
+    const e = this.entries.get(episode.pluginId);
+    if (e !== undefined) {
+      e.controller.setDesired(null, {
+        reason: { kind: "reload", detail: `${episode.updateId}:discard` },
+      });
+      await e.controller.settle({ deadlineMs: this.controllerSettleDeadline() });
+    }
+    if (this.candidateEpisodes.get(episode.pluginId) === episode)
+      this.candidateEpisodes.delete(episode.pluginId);
   }
 
   private controllerSettleDeadline(): number {
@@ -1216,6 +1430,10 @@ export class ServiceHost {
   private async readManifest(pluginId: string): Promise<PluginManifestV1 | null> {
     const root = this.cfg.plugins.rootPath(pluginId);
     if (root === undefined) return null;
+    return await this.readManifestAt(root);
+  }
+
+  private async readManifestAt(root: string): Promise<PluginManifestV1 | null> {
     try {
       const raw = JSON.parse(await readFile(join(root, "vibefield.plugin.json"), "utf8"));
       const result = validatePluginManifest(raw);
@@ -1224,4 +1442,25 @@ export class ServiceHost {
       return null;
     }
   }
+}
+
+function serviceRecordFingerprint(record: PluginRecord | undefined): string {
+  return JSON.stringify(
+    record === undefined
+      ? null
+      : [
+          record.id,
+          record.version,
+          record.state,
+          record.enabled,
+          // active/inactive/degraded are runtime output, not authority input.
+          // Only whether the manifest declares a service participates in the
+          // observation; private preparation necessarily drains the old entry.
+          record.service === "none",
+          record.installRevision,
+          record.manifestHash,
+          record.grantGeneration,
+          record.grantedCapabilities,
+        ],
+  );
 }

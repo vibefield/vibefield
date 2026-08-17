@@ -338,6 +338,54 @@ describe("RuntimeTargetController", () => {
     expect(disposed).toBe(1);
   });
 
+  it("holds a disruptive candidate private until one synchronous prepared commit", async () => {
+    const publications = new Set<string>();
+    const events: string[] = [];
+    const controller = new RuntimeTargetController("renderer/window-a", {
+      activate(next) {
+        return candidate(next.artifact.installRevision, publications, events);
+      },
+    });
+
+    controller.setDesired(target("old"));
+    await controller.settle();
+    controller.prepareDesired(target("candidate"));
+    const prepared = await controller.settle();
+
+    expect(prepared.state).toBe("prepared");
+    expect(prepared.committed).toBeNull();
+    expect(controller.preparedCandidate?.revision).toBe("candidate");
+    expect(publications).toEqual(new Set());
+    expect(events).toEqual(["commit:old", "dispose:old"]);
+
+    const committed = controller.commitPrepared();
+    expect(committed.state).toBe("active");
+    expect(committed.committed?.artifact.installRevision).toBe("candidate");
+    expect(publications).toEqual(new Set(["candidate"]));
+    expect(events).toEqual(["commit:old", "dispose:old", "commit:candidate"]);
+  });
+
+  it("disposes a prepared candidate that is superseded before commit", async () => {
+    const publications = new Set<string>();
+    const events: string[] = [];
+    const controller = new RuntimeTargetController("renderer/window-a", {
+      activate(next) {
+        return candidate(next.artifact.installRevision, publications, events);
+      },
+    });
+
+    controller.prepareDesired(target("candidate"));
+    await controller.settle();
+    expect(controller.state).toBe("prepared");
+    controller.setDesired(target("newer"));
+    expect(() => controller.commitPrepared()).toThrow(/no current prepared target/);
+    await controller.settle();
+
+    expect(events).not.toContain("commit:candidate");
+    expect(events).toEqual(["dispose:candidate", "commit:newer"]);
+    expect(publications).toEqual(new Set(["newer"]));
+  });
+
   it("isolates close to the exact renderer instance", async () => {
     const publications = new Set<string>();
     const events: string[] = [];
