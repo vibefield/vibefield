@@ -464,6 +464,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         : {}),
       logger: logger.child({ component: "plugin.install" }),
     });
+    await installer.recover();
     const emitPluginLog =
       config.pluginLog ??
       ((record: PluginServiceLogRecord): void => {

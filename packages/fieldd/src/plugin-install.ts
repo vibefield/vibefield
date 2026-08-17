@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -14,15 +14,16 @@ import {
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { unpackVfplugin, verifyRegistryIndex } from "@vibefield/plugin-build";
 import { RpcCallError } from "./native-link";
+import { type ImmutablePluginArtifact, PluginArtifactStore } from "./plugin-artifact-store";
 import { contractsRangeSatisfied, type PluginRegistryService } from "./plugin-registry";
 
 // RegistryInstallService (P7, spec §5.3.1): fetch index → VERIFY signature →
 // fetch artifact → sha256 MUST match the index → unpack (traversal-proof
-// reader) → atomic move into the installed root → §9 re-scan. A mismatch is
-// PLUGIN_ARTIFACT_MISMATCH and the artifact is DISCARDED — never partially
-// installed. Fetches happen only on user action (no push feed, no phone-home,
-// no identity — §5.3.1/EL3); file:// registries serve tests and the offline
-// path.
+// reader) → durable immutable candidate → atomic current-pointer CAS → §9
+// re-scan. A mismatch is PLUGIN_ARTIFACT_MISMATCH and the artifact is
+// DISCARDED — never partially installed. Fetches happen only on user action
+// (no push feed, no phone-home, no identity — §5.3.1/EL3); file:// registries
+// serve tests and the offline path.
 
 export interface RegistryInstallConfig {
   dataDir: string;
@@ -35,6 +36,16 @@ export interface RegistryInstallConfig {
   registryPublicKey?: string;
   fetchImpl?: typeof fetch;
   logger?: Logger;
+}
+
+/** A verified, durable candidate that is still invisible to discovery. PRC-5c
+ * will carry this handle through the participant prepare barrier before the
+ * pointer is committed. */
+export interface PreparedRegistryInstall {
+  readonly id: string;
+  readonly version: string;
+  readonly baseSlot: string | null;
+  readonly artifact: ImmutablePluginArtifact;
 }
 
 const sha256hex = (bytes: Buffer): string =>
@@ -55,11 +66,27 @@ export function semverNewer(candidate: string, installed: string): boolean {
 
 export class RegistryInstallService {
   private readonly log: Logger;
+  private readonly artifacts: PluginArtifactStore;
   readonly installedRoot: string;
 
   constructor(private readonly cfg: RegistryInstallConfig) {
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.install" });
     this.installedRoot = join(cfg.dataDir, "plugins", "installed");
+    this.artifacts = new PluginArtifactStore(this.installedRoot);
+  }
+
+  /** Boot cleanup is deliberately narrow: only unpublished staging/temp
+   * state is removed; every immutable revision remains available for recovery. */
+  async recover(): Promise<{ removed: number }> {
+    const result = await this.artifacts.recover();
+    if (result.removed > 0) {
+      this.log.info(
+        "fieldd.plugin_install.orphans_recovered",
+        "Removed unpublished plugin installation state after restart",
+        { removed: result.removed },
+      );
+    }
+    return result;
   }
 
   /** fetch + signature-verify + parse the index (§5.3.1 — the byte is the
@@ -97,9 +124,9 @@ export class RegistryInstallService {
     return { index: index.data, indexRef: url };
   }
 
-  /** §5.3.1 install: resolve → fetch → hash-verify → unpack → atomic move.
-   * The caller (daemon) owns the deactivate/re-scan choreography around it. */
-  async install(params: PluginsInstallParams): Promise<{ id: string; version: string }> {
+  /** Resolve, verify, unpack, and durably publish an immutable candidate slot.
+   * Discovery remains on the old pointer until commit(). */
+  async prepare(params: PluginsInstallParams): Promise<PreparedRegistryInstall> {
     if (params.artifactPath !== undefined)
       throw new RpcCallError(
         "PRECONDITION_FAILED",
@@ -149,52 +176,84 @@ export class RegistryInstallService {
       );
     }
 
-    // unpack into a STAGING dir; only a fully-valid unpack moves into place
-    const staging = join(this.installedRoot, `.staging-${params.id}-${Date.now()}`);
-    await mkdir(staging, { recursive: true });
-    try {
-      await unpackVfplugin(artifactBytes, staging);
-      const manifestRaw = await readFile(join(staging, "vibefield.plugin.json"), "utf8").catch(
-        () => {
+    // P7 flat installs are copied into their first immutable revision before
+    // an update. The old live bytes remain selected throughout preparation.
+    await this.artifacts.adoptLegacy(params.id);
+    const baseSlot = (await this.artifacts.current(params.id))?.pointer.slot ?? null;
+    const artifact = await this.artifacts.stage({
+      pluginId: params.id,
+      artifactSha256: release.sha256,
+      prepare: async (staging) => {
+        await unpackVfplugin(artifactBytes, staging);
+        const manifestRaw = await readFile(join(staging, "vibefield.plugin.json"), "utf8").catch(
+          () => {
+            throw new RpcCallError(
+              "PRECONDITION_FAILED",
+              "artifact carries no vibefield.plugin.json",
+              false,
+              { pluginKind: "PLUGIN_INVALID" },
+            );
+          },
+        );
+        const manifest = JSON.parse(manifestRaw) as { id?: unknown; version?: unknown };
+        if (manifest.id !== params.id) {
           throw new RpcCallError(
             "PRECONDITION_FAILED",
-            "artifact carries no vibefield.plugin.json",
+            `artifact manifest id ${String(manifest.id)} does not match the index entry ${params.id}`,
             false,
-            { pluginKind: "PLUGIN_INVALID" },
+            { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
           );
-        },
-      );
-      const manifestId = (JSON.parse(manifestRaw) as { id?: unknown }).id;
-      if (manifestId !== params.id)
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          `artifact manifest id ${String(manifestId)} does not match the index entry ${params.id}`,
-          false,
-          { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
+        }
+        if (manifest.version !== release.version) {
+          throw new RpcCallError(
+            "PRECONDITION_FAILED",
+            `artifact manifest version ${String(manifest.version)} does not match release ${release.version}`,
+            false,
+            { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
+          );
+        }
+        // §6.3 provenance sidecar — written by fieldd, never by the artifact.
+        await rm(join(staging, ".vf-registry.json"), { force: true });
+        await writeFile(
+          join(staging, ".vf-registry.json"),
+          `${JSON.stringify(
+            { indexRef, artifactSha256: release.sha256, publisher: entry.repo },
+            null,
+            2,
+          )}\n`,
         );
-      // §6.3 provenance sidecar — written by fieldd, never by the artifact
-      await rm(join(staging, ".vf-registry.json"), { force: true });
-      await writeFile(
-        join(staging, ".vf-registry.json"),
-        `${JSON.stringify(
-          { indexRef, artifactSha256: release.sha256, publisher: entry.repo },
-          null,
-          2,
-        )}\n`,
-      );
-      const dest = join(this.installedRoot, params.id);
-      await rm(dest, { recursive: true, force: true }); // upgrade replaces bytes
-      await rename(staging, dest);
-    } catch (e) {
-      await rm(staging, { recursive: true, force: true });
-      throw e;
-    }
+      },
+    });
+    return { id: params.id, version: release.version, baseSlot, artifact };
+  }
+
+  /** The only discovery-visible mutation: compare-and-swap the small pointer,
+   * then rebuild the registry snapshot from that exact immutable root. */
+  async commit(candidate: PreparedRegistryInstall): Promise<{ id: string; version: string }> {
+    await this.artifacts.commit(candidate.artifact, candidate.baseSlot);
     this.log.info("fieldd.plugin_install.installed", "Registry plugin installed", {
-      pluginId: params.id,
-      version: release.version,
+      pluginId: candidate.id,
+      version: candidate.version,
+      artifactSha256: candidate.artifact.artifactSha256,
     });
     await this.cfg.plugins.refresh();
-    return { id: params.id, version: release.version };
+    return { id: candidate.id, version: candidate.version };
+  }
+
+  async discard(candidate: PreparedRegistryInstall): Promise<boolean> {
+    return await this.artifacts.discard(candidate.artifact);
+  }
+
+  /** Compatibility wrapper until PRC-5c moves prepare before participant
+   * teardown and commit after its prepare barrier. */
+  async install(params: PluginsInstallParams): Promise<{ id: string; version: string }> {
+    const candidate = await this.prepare(params);
+    try {
+      return await this.commit(candidate);
+    } catch (error) {
+      await this.discard(candidate).catch(() => false);
+      throw error;
+    }
   }
 
   /** §16.5 — uninstall removes CODE; data survives unless removeData. */
@@ -207,7 +266,7 @@ export class RegistryInstallService {
         `${id} is ${record.source} — only registry installs uninstall here`,
         false,
       );
-    await rm(join(this.installedRoot, id), { recursive: true, force: true });
+    await this.artifacts.uninstall(id);
     if (removeData)
       await rm(join(this.cfg.dataDir, "plugins", id), { recursive: true, force: true });
     this.log.info("fieldd.plugin_install.uninstalled", "Registry plugin uninstalled", {

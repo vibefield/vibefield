@@ -18,6 +18,7 @@ import {
 } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
 import { RpcCallError } from "./native-link";
+import { resolveInstalledArtifactRoot } from "./plugin-artifact-store";
 
 // PluginRegistryService (plugin spec §9, slice P2): discovery → validation →
 // install records → sanitized snapshot. NO plugin module is ever imported here
@@ -152,7 +153,24 @@ export class PluginRegistryService extends EventEmitter {
         continue;
       }
       for (const dir of children) {
-        const manifestPath = join(root, dir, "vibefield.plugin.json");
+        let pluginRoot = join(root, dir);
+        if (source === "registry") {
+          try {
+            const selected = await resolveInstalledArtifactRoot(root, dir);
+            if (selected === null) continue;
+            pluginRoot = selected;
+          } catch (error) {
+            problems.push({
+              root: dir,
+              error: summary(
+                "PLUGIN_ARTIFACT_MISMATCH",
+                `current artifact pointer is invalid: ${error instanceof Error ? error.message : String(error)}`,
+              ),
+            });
+            continue;
+          }
+        }
+        const manifestPath = join(pluginRoot, "vibefield.plugin.json");
         let size: number;
         try {
           size = (await stat(manifestPath)).size;
@@ -190,7 +208,7 @@ export class PluginRegistryService extends EventEmitter {
           // in the manager as an anomaly, never fatal)
           try {
             const sidecar = JSON.parse(
-              await readFile(join(root, dir, ".vf-registry.json"), "utf8"),
+              await readFile(join(pluginRoot, ".vf-registry.json"), "utf8"),
             );
             const prov = RegistryProvenance.safeParse(sidecar);
             if (prov.success) row = { ...row, registry: prov.data };
@@ -217,7 +235,7 @@ export class PluginRegistryService extends EventEmitter {
           continue; // first-discovered wins; bundled scans first (§9.1)
         }
         rows.set(row.id, row);
-        rootPaths.set(row.id, join(root, dir));
+        rootPaths.set(row.id, pluginRoot);
       }
     }
 
