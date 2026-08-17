@@ -11,10 +11,12 @@
 // package-census.mjs carries it as an acknowledged non-shipping artifact and this stage is where
 // it actually gets dropped.
 //
-// Usage: node scripts/stage-package.mjs [--out <dir>] [--verify]
+// Usage: node scripts/stage-package.mjs [--out <dir>] [--verify] [--require-complete]
 //   (no flag)  wipe and rebuild the stage, then verify what was produced
 //   --verify   verify an EXISTING stage without touching it — the check CI runs against a stage
 //              it did not just create, and the only form that can catch a stale or tampered one
+//   --require-complete  make every declared optional gap fatal; release packaging uses this after
+//                       the ordinary stage build so an explicitly incomplete preview cannot ship
 //
 // Node >=22 ESM, builtins only — no new dependencies, no glob library.
 import {
@@ -42,6 +44,7 @@ const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const outRel = argValue("--out") ?? "apps/desktop/build/stage";
 const outAbs = resolve(repoRoot, outRel);
 const verifyOnly = args.includes("--verify");
+const requireComplete = args.includes("--require-complete");
 
 // Modes are SET rather than inherited (§7.4 "executable permission bits are asserted after
 // staging"; §13.2 "exact executable modes"). A stage whose modes depend on the umask of whoever
@@ -567,6 +570,11 @@ if (plan.missing.length > 0) {
       `  A RELEASE build must not be cut from this stage.`,
   );
   console.warn(`${bar}\n`);
+  if (requireComplete) {
+    problems.push(
+      `release requires a complete stage; ${plan.missing.length} declared optional input(s) are absent`,
+    );
+  }
 }
 
 if (problems.length > 0) {

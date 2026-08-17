@@ -23,11 +23,13 @@
     "icons:generate": "node packaging/generate-icons.mjs",
     "icons:check": "node packaging/generate-icons.mjs --check",
     "verify:live-surfaces-native": "pnpm run build:live-surfaces-native && node packaging/verify-live-surface-capture.mjs --enumerate-only",
+    "verify:live-surfaces-release": "node packaging/verify-live-surface-release.mjs",
     "//package:stage": "NOT named `stage` — pnpm has a built-in `stage` subcommand that shadows it",
     "package:sea": "node packaging/build-fieldd-sea.mjs",
     "package:stage": "pnpm run icons:check && pnpm build:all && pnpm run build:live-surfaces-native && pnpm run package:sea && node ../../scripts/stage-package.mjs",
     "package:verify": "node ../../scripts/stage-package.mjs --verify",
     "package:dir": "pnpm run package:stage && node packaging/run-electron-builder.mjs --dir --config packaging/electron-builder.yml",
+    "package:mac:release": "node packaging/run-macos-release.mjs",
     "package:audit": "node ../../scripts/audit-fuses.mjs --app release/mac-arm64/VibeField.app"
   },
   "devDependencies": {

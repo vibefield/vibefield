@@ -1,0 +1,17 @@
+# Production-only macOS overlay. The ordinary electron-builder.yml remains
+# deterministically unsigned for preview packages; this file turns signing and
+# notarization into hard release requirements.
+extends: packaging/electron-builder.yml
+
+mac:
+  # Match only a Developer ID Application certificate from the frozen team.
+  # The certificate/private key itself remains in the keychain or CSC_LINK.
+  identity: 9F79X9D26S
+  type: distribution
+  forceCodeSigning: true
+  hardenedRuntime: true
+  notarize: true
+  strictVerify: true
+  preAutoEntitlements: false
+  entitlements: packaging/entitlements.mac.plist
+  entitlementsInherit: packaging/entitlements.mac.inherit.plist
