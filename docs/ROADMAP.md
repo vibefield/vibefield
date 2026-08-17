@@ -3,16 +3,17 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-17** — **PRC-4f LANDED
-> `9fc2de6` on ICE 0.8.1 / strata 0.13.0.** One ordinary plugin now rebuilds its ignored release
-> artifact from committed inputs and crosses fieldd discovery, staged activation, sealed behavior
-> publication, prefab construction, and document-generation execution. Fresh-process v1 bytes
-> migrate 41→42; six grant replacements and nine total engines preserve the durable/runtime split,
-> carry chronic breaker state, balance 45 registrations/45 unregistrations, and leave no stale
-> guest or hook. Acceptance is green across all 23 test and typecheck targets plus preflight,
-> singleton dependencies, lint, generated freshness, and the production bundle wall. **Now:
-> PRC-4g** — design and prove the product document-room presence transport plus a two-engine remote
-> tombstone witness before admitting ephemeral plugin behaviors; I18 itself is already consumed.
+> stays in the design docs + specs. Last rewritten: **2026-08-17** — **PRC-4g1 CORE CODE LANDED
+> `43929e7` + `81c21fd` on ICE 0.8.1 / strata 0.13.0.** The ticketed document socket now carries
+> opaque ICE presence; one bounded fieldd room owns latest-only per-document fanout and shared lane
+> ids; MeshData barriers fence close; and native carries authenticated QUIC OPEN/READY/FINAL/STOP
+> control plus ≤1,150-byte UDP fragments, newest-only reassembly, and exact receiver rejection/
+> reopen. All 23 typecheck targets, focused product controls, native codec/lane units, all-target
+> check/clippy, and link-compilation of the real-tailnet witness pass. **Now:** run that ignored
+> witness with a real auth key to close PRC-4g1 physically. PRC-4g2 remains separately gated by
+> I19 (or a ratified fixed-width fallback), aggregate headroom, and a packaged two-engine remote-
+> tombstone witness. E22's 66,498-byte legal-plugin counterexample means ephemeral admission stays
+> refused; `ce43bad` names the budget gate honestly.
 > Earlier milestone context follows for continuity: R3-0 landed three slices
 > on main, each behind a verbatim green gate: **S2**
 > `e66143a` (keyboard claim declared in contracts; + the docs-generator inline-object
@@ -123,7 +124,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-D1…D13 ratified; PRC-0 through PRC-3d landed; PRC-4a proof, PRC-4b/4c ICE floor, **PRC-4d binding `95da1b8`**, **PRC-4e document host `6289795`**, and **PRC-4f packaged conformance `9fc2de6` LANDED** on ICE 0.8.1 / strata 0.13.0. | `specs/plugin-architecture.md` §8.8/§12.7/§21.9 · `thinking-plugin-runtime-composability.md` · `thinking-prc4-behavior-adapter.md` | **PRC-4g next:** product document-room presence transport + two-engine remote-tombstone witness, then and only then ephemeral behavior admission. P8c rides WP8; P8e gates third-party listing; public index repo remains James's operation. |
+| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-D1…D13 ratified; PRC-0 through PRC-3d landed; PRC-4a proof, PRC-4b/4c ICE floor, **PRC-4d binding `95da1b8`**, **PRC-4e document host `6289795`**, **PRC-4f packaged conformance `9fc2de6`**, and **PRC-4g1 core room code `43929e7` + `81c21fd` LANDED** on ICE 0.8.1 / strata 0.13.0. | `specs/plugin-architecture.md` §8.8/§12.7/§21.9 · `thinking-plugin-runtime-composability.md` · `thinking-prc4-behavior-adapter.md` | **PRC-4g1 physical closeout:** run the ignored real-tailnet witness with an auth key. **PRC-4g2:** consume I19 or ratify the fixed-width fallback, impose aggregate headroom, then pass the packaged two-engine remote-tombstone witness before lifting ephemeral refusal. P8c rides WP8; P8e gates third-party listing. |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -286,8 +287,31 @@ generation host. Child-authored v1 count 41 migrates to 42; six deny/regrant cyc
 engines preserve durable values, reset fresh-engine runtime values, carry suspended strike 3, and
 balance **45 register / 45 unregister** with every closed edge quiet. The experiment repaired the
 playground's missing behavior-declaration/handle bridge; the field runtime required no change.
-All **23/23** workspace test and typecheck targets plus production boundary gates pass. **PRC-4g
-is next:** product document-room presence transport and the two-engine remote-tombstone witness.
+All **23/23** workspace test and typecheck targets plus production boundary gates pass.
+**PRC4-E22 / PRC-4g1 CORE CODE LANDED `43929e7` + `81c21fd`.** The renderer attaches released
+ICE facade presence only after document open/create and preserves behavior-unregister → presence-
+detach → document-close order. Its already-ticketed document socket demultiplexes opaque presence
+pushes ahead of persistence replies. One bounded `PresenceRoomRouter` keys authority only from the
+redeemed document, retains one newest snapshot, shares a daemon lane-id allocator with doc sync,
+and fences graceful lane close with MeshData BARRIER/BARRIER_OK.
+
+The native leg is a hybrid rather than a mislabeled reliable stream: authenticated QUIC installs
+OPEN/READY routes and carries terminal FINAL/STOP control; steady state uses shared UDP 9441 with a
+versioned 20-byte header, ≤1,150-byte datagrams, a 64 KiB logical ceiling, sequence wrap, and one
+newest incomplete message per lane. Graceful close reliably replays the retained latest snapshot;
+receiver rejection stops the opener and permits exact reopen; a retired bridge lane drops late UDP.
+Focused acceptance is field-app **44**, fieldd room/doc-lane **43**, fieldd-client **8**, contracts
+**25**, native codec **4/4**, and native lane controls **6/6**, plus all **23/23** typecheck targets,
+all-target Rust check, warnings-denied clippy, and link-compilation of the ignored two-daemon
+tailnet witness. The live auth-key run is still owed; a broad Rust lib run passed 63 tests and hit
+only the sandbox's pre-existing socket-bind refusal.
+
+E22 separately refutes admission: sixteen legal 4 KiB ephemeral facets emit **66,498 bytes**, over
+the 64 KiB logical cap, and runtime writes are unbounded and unattributable at the aggregate frame.
+I19 asks ICE for a descriptor-bearing enforced facet budget. The stable manifest refusal remains;
+`ce43bad` corrects its author-facing explanation from missing transport to missing budget. **Next:**
+run the physical tailnet row for g1; consume I19 (or ratify the fixed-width fallback), add aggregate
+headroom and the packaged two-engine remote-tombstone witness, then and only then lift g2.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through

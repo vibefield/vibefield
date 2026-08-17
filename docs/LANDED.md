@@ -2471,3 +2471,41 @@ preflight; physical singleton graph (Loro 1.13.8, ICE 0.8.1, strata 0.13.0, Reac
 19.2.7); generated manifests/contracts/docs; lint (standing warnings only); production renderer/
 bundle wall; and patch hygiene all green. PRC-4g now owns the product document-room presence
 transport and two-engine remote-tombstone witness required before ephemeral admission.
+
+## PRC-4g1 — bounded document-room presence reaches the product and native mesh
+
+**CORE CODE LANDED 2026-08-17** (`43929e7` + `81c21fd`) on ICE 0.8.1 / strata 0.13.0.
+The existing ticketed document WebSocket now carries two opaque presence frame kinds without a
+second room authority: fieldd derives the room only from the redeemed document connection, and
+the client dispatches pushes before its persistence reply waiter. Released ICE facade presence
+attaches after open/create, refreshes behavior eligibility, and closes in the evidence-selected
+order: behavior unregister, ICE detach while outbound remains subscribed, then persistence and
+document teardown.
+
+One bounded `PresenceRoomRouter` owns one local generation, one newest retained snapshot, and at
+most one exact inbound/outbound lane per document/peer. It shares the daemon's outbound lane-id
+allocator with doc sync and uses a new MeshData barrier to fence earlier DATA before management
+close. Native no longer refuses the reserved lossy class: an authenticated QUIC stream carries
+OPEN/READY and graceful FINAL/receiver STOP, while shared tailnet UDP 9441 carries versioned
+20-byte headers and ≤1,150-byte fragments. Reassembly retains only the newest incomplete sequence,
+handles wrap/out-of-order input, and heals missing terminal UDP from the reliable final replay.
+Routes are keyed by authenticated source IP plus opener lane id; direct unauthenticated fallback
+UDP is refused. A receiver can reject, retire, and later reopen a lane without ghost control state,
+and the bridge fences late datagrams after close.
+
+Acceptance: all **23/23** workspace typecheck targets; focused field-app **44**, fieldd room/
+doc-lane **43**, fieldd-client **8**, and contracts **25**; native lossy codec **4/4** and lane
+control **6/6**; all-target Rust check; `clippy -D warnings`; formatting/patch hygiene; and
+link-compilation of the ignored real-tailnet witness. That witness now covers a 4,242-byte ICE-
+shaped snapshot crossing fragmented UDP, terminal replay deduplication, receiver STOP, exact same-
+id reopen, and post-reopen delivery. No auth key was available, so its physical run remains owed.
+The broad Rust lib row passed 63 tests, ignored one benchmark, and failed only where this sandbox
+refused a pre-existing fake socket bind (`Operation not permitted`).
+
+E22 does **not** lift plugin ephemeral admission. One legal 16-facet plugin emits 66,498 bytes,
+already beyond the selected 64 KiB logical cap, and runtime `ctx.write` can grow further without
+producer attribution. I19 asks ICE for a descriptor-bearing, runtime-enforced facet budget; the
+host will still need deterministic aggregate headroom and a packaged two-engine remote-tombstone
+witness. Commit `ce43bad` keeps the stable `behavior-store-unsupported` code but corrects its
+author-facing explanation to the real budget gate. PRC-4g2 remains closed until that evidence is
+green (or a separately ratified fixed-width fallback replaces I19).
