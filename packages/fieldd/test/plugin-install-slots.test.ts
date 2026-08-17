@@ -79,15 +79,21 @@ describe("PRC-5b registry installer slots", () => {
 
     const first = await installer.prepare({ id: KV_ID, version: "0.1.0" });
     expect(plugins.get(KV_ID)).toBeUndefined();
+    expect(first.runtime.root).toBe(first.artifact.root);
+    expect(first.runtime.record.installRevision).toBe(first.artifact.slot);
+    expect(first.runtime.manifest.version).toBe("0.1.0");
     expect(existsSync(join(installedRoot, KV_ID, PLUGIN_CURRENT_POINTER_FILE))).toBe(false);
     await installer.commit(first);
 
     const oldRoot = plugins.rootPath(KV_ID);
     expect(plugins.get(KV_ID)?.version).toBe("0.1.0");
+    expect(plugins.get(KV_ID)?.installRevision).toBe(first.artifact.slot);
     expect(oldRoot).toBe(first.artifact.root);
 
     const candidate = await installer.prepare({ id: KV_ID });
     expect(candidate.version).toBe("0.2.0");
+    expect(candidate.runtime.root).toBe(candidate.artifact.root);
+    expect(candidate.runtime.record.installRevision).toBe(candidate.artifact.slot);
     expect(candidate.artifact.root).not.toBe(oldRoot);
     expect(plugins.get(KV_ID)?.version).toBe("0.1.0");
     expect(plugins.rootPath(KV_ID)).toBe(oldRoot);
@@ -97,6 +103,7 @@ describe("PRC-5b registry installer slots", () => {
 
     await installer.commit(candidate);
     expect(plugins.get(KV_ID)?.version).toBe("0.2.0");
+    expect(plugins.get(KV_ID)?.installRevision).toBe(candidate.artifact.slot);
     expect(plugins.rootPath(KV_ID)).toBe(candidate.artifact.root);
     expect(readFileSync(join(oldRoot!, "vibefield.plugin.json"), "utf8")).toContain(
       '"version": "0.1.0"',

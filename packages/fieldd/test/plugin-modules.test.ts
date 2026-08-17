@@ -1,10 +1,14 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PLUGIN_MODULE_SCHEME } from "@vibefield/contracts";
+import {
+  PLUGIN_MODULE_SCHEME,
+  type PluginManifestV1,
+  type PluginRecord,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { PluginModuleAuthority } from "../src/plugin-modules";
-import { PluginRegistryService } from "../src/plugin-registry";
+import { type PluginRegistryCandidate, PluginRegistryService } from "../src/plugin-registry";
 
 // P8b — the module authority, tested against ESP §8.4's clauses one at a time.
 // The section is short and every sentence in it is a rule, so each gets a row:
@@ -62,6 +66,94 @@ async function fixture(css = true): Promise<{
   cleanup.push(() => registry.dispose());
   await registry.refresh();
   return { authority: new PluginModuleAuthority({ plugins: registry }), registry, id };
+}
+
+function registryRecord(
+  id: string,
+  slot: string,
+  manifestHash: string,
+  overrides: Partial<PluginRecord> = {},
+): PluginRecord {
+  return {
+    id,
+    version: "0.1.0",
+    title: id,
+    source: "registry",
+    manifestHash,
+    installRevision: slot,
+    state: "enabled",
+    compatible: true,
+    enabled: true,
+    requestedCapabilities: [],
+    grantedCapabilities: [],
+    deniedCapabilities: [],
+    grantGeneration: 0,
+    contributions: {
+      widgets: [],
+      behaviors: [],
+      commands: [],
+      surfaces: [],
+      capabilities: [],
+    },
+    renderer: "inactive",
+    service: "none",
+    registry: {
+      indexRef: "file:///registry/index.json",
+      artifactSha256: `sha256:${slot}`,
+      publisher: "candidate-authority-test",
+    },
+    ...overrides,
+  };
+}
+
+async function candidateFixture(): Promise<{
+  authority: PluginModuleAuthority;
+  oldRecord: PluginRecord;
+  candidate: PluginRegistryCandidate;
+  setCurrent(record: PluginRecord): void;
+}> {
+  const root = mkdtempSync(join(tmpdir(), "plugmod-candidate-"));
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+  const id = "vibefield.fixture.candidate";
+  const sharedManifest = manifest(id);
+  const oldRoot = writePlugin(root, "old", sharedManifest);
+  const candidateRoot = writePlugin(root, "candidate", sharedManifest);
+  writeFileSync(join(oldRoot, "dist", "renderer.js"), "export const revision = 'old';\n");
+  writeFileSync(join(candidateRoot, "dist", "renderer.js"), "export const revision = 'new';\n");
+  const manifestHash = `sha256:${"c".repeat(64)}`;
+  const oldRecord = registryRecord(id, "a".repeat(64), manifestHash);
+  const candidateRecord = registryRecord(id, "b".repeat(64), manifestHash);
+  let generation = 1;
+  let current = oldRecord;
+  const roots = new Map([
+    [oldRecord.installRevision, oldRoot],
+    [candidateRecord.installRevision, candidateRoot],
+  ]);
+  const plugins = {
+    get(pluginId: string): PluginRecord | undefined {
+      return pluginId === id ? current : undefined;
+    },
+    snapshot() {
+      return { generation, plugins: [current], problems: [] };
+    },
+    rootPath(pluginId: string): string | undefined {
+      return pluginId === id ? roots.get(current.installRevision) : undefined;
+    },
+  };
+  return {
+    authority: new PluginModuleAuthority({ plugins }),
+    oldRecord,
+    candidate: {
+      record: candidateRecord,
+      manifest: sharedManifest as PluginManifestV1,
+      root: candidateRoot,
+      artifactSha256: `sha256:${candidateRecord.installRevision}`,
+    },
+    setCurrent(record) {
+      current = record;
+      generation += 1;
+    },
+  };
 }
 
 describe("PluginModuleAuthority (ESP §8.4)", () => {
@@ -173,5 +265,72 @@ describe("PluginModuleAuthority (ESP §8.4)", () => {
     await registry.refresh();
     const authority = new PluginModuleAuthority({ plugins: registry });
     expect((await authority.modules()).modules).toHaveLength(0);
+  });
+});
+
+describe("PluginModuleAuthority candidate episodes (PRC-5c)", () => {
+  it("authorizes code-only candidate bytes without moving the live module set", async () => {
+    const rig = await candidateFixture();
+    const live = (await rig.authority.modules()).modules[0]!;
+    const prepared = await rig.authority.prepareCandidate({
+      updateId: "pupd_candidate_bytes",
+      baseInstallRevision: rig.oldRecord.installRevision,
+      candidate: rig.candidate,
+    });
+    expect(prepared.module).toBeDefined();
+    expect(prepared.module?.manifestHash).toBe(live.manifestHash);
+    expect(prepared.module?.installRevision).not.toBe(live.installRevision);
+    expect(JSON.stringify(prepared.module)).not.toContain(rig.candidate.root);
+    expect((await rig.authority.modules()).modules[0]?.installRevision).toBe(
+      rig.oldRecord.installRevision,
+    );
+
+    const liveToken = live.moduleUrl.slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    const candidateToken = prepared.module!.moduleUrl.slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    expect((await rig.authority.resolve(liveToken))?.path).toContain(join("old", "dist"));
+    expect((await rig.authority.resolve(candidateToken))?.path).toContain(
+      join("candidate", "dist"),
+    );
+  });
+
+  it("promotes only after the exact candidate row is current and then follows disable", async () => {
+    const rig = await candidateFixture();
+    const prepared = await rig.authority.prepareCandidate({
+      updateId: "pupd_candidate_promote",
+      baseInstallRevision: rig.oldRecord.installRevision,
+      candidate: rig.candidate,
+    });
+    const token = prepared.module!.moduleUrl.slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    expect(() => prepared.promote()).toThrow(/not current/);
+
+    rig.setCurrent(rig.candidate.record);
+    prepared.promote();
+    expect(await rig.authority.resolve(token)).toBeDefined();
+
+    rig.setCurrent({ ...rig.candidate.record, state: "disabled", enabled: false });
+    expect(await rig.authority.resolve(token)).toBeUndefined();
+    prepared.dispose();
+  });
+
+  it("revokes a prepared episode on same-artifact authority movement", async () => {
+    const rig = await candidateFixture();
+    const prepared = await rig.authority.prepareCandidate({
+      updateId: "pupd_candidate_stale",
+      baseInstallRevision: rig.oldRecord.installRevision,
+      candidate: rig.candidate,
+    });
+    const token = prepared.module!.moduleUrl.slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    rig.setCurrent({ ...rig.oldRecord, grantGeneration: 1 });
+
+    expect(await rig.authority.resolve(token)).toBeUndefined();
+    prepared.dispose();
+    rig.setCurrent(rig.oldRecord);
+    await expect(
+      rig.authority.prepareCandidate({
+        updateId: "pupd_candidate_retry",
+        baseInstallRevision: rig.oldRecord.installRevision,
+        candidate: rig.candidate,
+      }),
+    ).resolves.toBeDefined();
   });
 });

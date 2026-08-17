@@ -15,7 +15,11 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { unpackVfplugin, verifyRegistryIndex } from "@vibefield/plugin-build";
 import { RpcCallError } from "./native-link";
 import { type ImmutablePluginArtifact, PluginArtifactStore } from "./plugin-artifact-store";
-import { contractsRangeSatisfied, type PluginRegistryService } from "./plugin-registry";
+import {
+  contractsRangeSatisfied,
+  type PluginRegistryCandidate,
+  type PluginRegistryService,
+} from "./plugin-registry";
 
 // RegistryInstallService (P7, spec §5.3.1): fetch index → VERIFY signature →
 // fetch artifact → sha256 MUST match the index → unpack (traversal-proof
@@ -46,6 +50,7 @@ export interface PreparedRegistryInstall {
   readonly version: string;
   readonly baseSlot: string | null;
   readonly artifact: ImmutablePluginArtifact;
+  readonly runtime: PluginRegistryCandidate;
 }
 
 const sha256hex = (bytes: Buffer): string =>
@@ -224,7 +229,17 @@ export class RegistryInstallService {
         );
       },
     });
-    return { id: params.id, version: release.version, baseSlot, artifact };
+    try {
+      const runtime = await this.cfg.plugins.inspectRegistryCandidate({
+        pluginId: params.id,
+        root: artifact.root,
+        artifactSha256: artifact.artifactSha256,
+      });
+      return { id: params.id, version: release.version, baseSlot, artifact, runtime };
+    } catch (error) {
+      await this.artifacts.discard(artifact).catch(() => false);
+      throw error;
+    }
   }
 
   /** The only discovery-visible mutation: compare-and-swap the small pointer,

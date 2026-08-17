@@ -56,6 +56,15 @@ export interface PluginRegistryHealth {
   invalid: number;
 }
 
+/** Daemon-internal, code-free view of one immutable registry candidate. It is
+ * intentionally not installed in rows/rootPaths/serviceDecls by inspection. */
+export interface PluginRegistryCandidate {
+  readonly record: PluginRecord;
+  readonly manifest: PluginManifestV1;
+  readonly root: string;
+  readonly artifactSha256: string;
+}
+
 /** Minimal range check for the engine ranges built-ins actually declare:
  * "*", exact "a.b.c", "^a.b.c" (npm zero-major rule), ">=a.b.c". Anything
  * fancier is honestly incompatible until a real semver lands (doctor says so). */
@@ -211,7 +220,16 @@ export class PluginRegistryService extends EventEmitter {
               await readFile(join(pluginRoot, ".vf-registry.json"), "utf8"),
             );
             const prov = RegistryProvenance.safeParse(sidecar);
-            if (prov.success) row = { ...row, registry: prov.data };
+            if (prov.success) {
+              row = {
+                ...row,
+                registry: prov.data,
+                // PRC-5c: runtime identity must cover code/assets, not only
+                // the manifest. Artifact-store slots are the complete signed
+                // package SHA-256 without its `sha256:` prefix.
+                installRevision: prov.data.artifactSha256.slice("sha256:".length),
+              };
+            }
           } catch {
             // absent sidecar — the honest state is simply no provenance block
           }
@@ -427,6 +445,102 @@ export class PluginRegistryService extends EventEmitter {
     return this.rows.get(id);
   }
 
+  /** PRC-5c code-free candidate inspection. The explicit immutable root is
+   * validated into a complete row/manifest without moving live registry state. */
+  async inspectRegistryCandidate(input: {
+    pluginId: string;
+    root: string;
+    artifactSha256: string;
+  }): Promise<PluginRegistryCandidate> {
+    const manifestPath = join(input.root, "vibefield.plugin.json");
+    let raw: string;
+    let parsed: unknown;
+    try {
+      const size = (await stat(manifestPath)).size;
+      if (size > PLUGIN_LIMITS.MANIFEST_MAX_BYTES) throw new Error("manifest exceeds size cap");
+      raw = await readFile(manifestPath, "utf8");
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `candidate manifest is unreadable (${error instanceof Error ? error.message : String(error)})`,
+        false,
+        { pluginKind: "PLUGIN_INVALID" },
+      );
+    }
+    const validation = validatePluginManifest(parsed);
+    if (!validation.ok) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `candidate manifest is invalid (${validation.issues[0] ?? "schema failure"})`,
+        false,
+        { pluginKind: "PLUGIN_INVALID" },
+      );
+    }
+    if (validation.manifest.id !== input.pluginId) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `candidate manifest id ${validation.manifest.id} does not match ${input.pluginId}`,
+        false,
+        { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
+      );
+    }
+
+    let provenance: RegistryProvenance;
+    try {
+      provenance = RegistryProvenance.parse(
+        JSON.parse(await readFile(join(input.root, ".vf-registry.json"), "utf8")),
+      );
+    } catch {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "candidate has no valid fieldd registry provenance",
+        false,
+        { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
+      );
+    }
+    if (provenance.artifactSha256 !== input.artifactSha256) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "candidate provenance does not match its immutable artifact handle",
+        false,
+        { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
+      );
+    }
+
+    const records = await this.loadRecords();
+    const built = this.buildRow(parsed, raw, "registry", records);
+    if (built === null || built.id !== input.pluginId) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "candidate could not produce its expected registry row",
+        false,
+        { pluginKind: "PLUGIN_INVALID" },
+      );
+    }
+    if (built.state === "invalid" || built.state === "incompatible") {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `candidate refused (${built.lastError?.message ?? built.state})`,
+        false,
+        { pluginKind: built.state === "invalid" ? "PLUGIN_INVALID" : "PLUGIN_INCOMPATIBLE" },
+      );
+    }
+    const record: PluginRecord = {
+      ...built,
+      registry: provenance,
+      installRevision: provenance.artifactSha256.slice("sha256:".length),
+    };
+    const old = this.rows.get(input.pluginId);
+    if (old !== undefined) this.assertDurableSchemaProgress(old, record);
+    return {
+      record,
+      manifest: validation.manifest,
+      root: input.root,
+      artifactSha256: input.artifactSha256,
+    };
+  }
+
   async enable(id: string): Promise<PluginRecord> {
     return this.setEnabled(id, true);
   }
@@ -554,20 +668,7 @@ export class PluginRegistryService extends EventEmitter {
         false,
         { pluginKind: candidate.state === "invalid" ? "PLUGIN_INVALID" : "PLUGIN_INCOMPATIBLE" },
       );
-    // §18.5 — durable widget schemas may only move forward
-    const oldVersions = new Map(
-      row.contributions.widgets.map((w) => [w.type, w.schemaVersion] as const),
-    );
-    for (const w of candidate.contributions.widgets) {
-      const prior = oldVersions.get(w.type);
-      if (prior !== undefined && w.schemaVersion < prior)
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          `widget ${w.type} regresses schemaVersion ${prior} → ${w.schemaVersion} (§18.5); live version untouched`,
-          false,
-          { pluginKind: "PLUGIN_SCHEMA_VIOLATION" },
-        );
-    }
+    this.assertDurableSchemaProgress(row, candidate);
     return candidate;
   }
 
@@ -582,6 +683,25 @@ export class PluginRegistryService extends EventEmitter {
     this.rows.set(id, candidate);
     this.publish();
     return this.snapshot().plugins.find((p) => p.id === id) ?? candidate;
+  }
+
+  /** §18.5 — durable widget schemas may only move forward, for both dev
+   * reload and immutable registry candidates. */
+  private assertDurableSchemaProgress(old: PluginRecord, candidate: PluginRecord): void {
+    const oldVersions = new Map(
+      old.contributions.widgets.map((widget) => [widget.type, widget.schemaVersion] as const),
+    );
+    for (const widget of candidate.contributions.widgets) {
+      const prior = oldVersions.get(widget.type);
+      if (prior !== undefined && widget.schemaVersion < prior) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `widget ${widget.type} regresses schemaVersion ${prior} → ${widget.schemaVersion} (§18.5); live version untouched`,
+          false,
+          { pluginKind: "PLUGIN_SCHEMA_VIOLATION" },
+        );
+      }
+    }
   }
 
   /** The row-shaped view of computeEffectiveGrants — entry kinds come from the
