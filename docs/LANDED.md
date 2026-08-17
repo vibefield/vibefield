@@ -2405,3 +2405,36 @@ intentional skip**, SDK/CLI/plugin-build/create-plugin **22/81/49/75**; workspac
 **22/22**; preflight, one-copy dependency graph, lint, bundle assert, generated freshness, and
 patch hygiene all green. PRC-4e owns the observable window catalog and synchronous sorted
 durable/runtime registration batch; PRC-4f owns production conformance and lifecycle churn.
+
+## PRC-4e — behavior execution follows exact document generations
+
+**LANDED 2026-08-17** (`6289795`) on ICE 0.8.1 / strata 0.13.0. Complete committed renderer
+candidates now publish canonical, immutable behavior rows into one window-scoped catalog. Each row
+carries the exact candidate token and renderer target alongside the signed definition, code handle,
+authorization, and declaration rank. Disable, relevant grant movement, candidate failure, and
+window close withdraw exact identity synchronously; an obsolete disposer cannot erase a replacement.
+Observation-only credential refresh retains the same token and never recomputes semantic
+`canvas.write` authority from a mutable registry record.
+
+Every committed workspace document layout lifetime now owns one `BehaviorGenerationHost`. It
+subscribes before reading the catalog, validates complete truth before mutation, filters effective
+grant and facade presence, and registers the canonical durable/runtime batch before
+`docs.open/create` with ICE order keys plus prior breaker state. Failed additions roll back;
+invalid snapshots leave committed execution untouched; close reverse-unregisters before
+persistence unbind, document close, and passive engine disposal. A corrupt journal is two honest
+generations: the failed one unregisters before its document closes, then a fresh nonce registers
+before the quarantined blank replacement is created.
+
+Chronic breaker memory is window-owned, bounded to 4,096 rows, and keyed without document/runtime
+generation so suspension survives engine replacement. ICE behavior fault/log callbacks route
+plugin/behavior/hook/entity provenance through the bounded renderer logger while generic guest
+diagnostics remain intact; a broken diagnostic sink cannot interrupt authority or cleanup. The
+released I18 wake path is pinned—ephemeral intent installs no guest without facade presence and
+wakes after attach plus refresh—but product admission remains refused pending room transport and
+the two-engine tombstone witness.
+
+Acceptance: focused catalog/host/workspace/renderer matrix **26/26**; field-app **62 files / 477
+tests**; workspace tests and typechecks **22/22 targets each**; preflight, physical singleton graph,
+lint, generated freshness, production renderer/bundle wall (**480.0 KB raw / 128.7 KB gzip initial
+graph**), and patch hygiene all green. PRC-4f now owns the packaged durable/runtime conformance
+fixture and repeated lifecycle churn.
