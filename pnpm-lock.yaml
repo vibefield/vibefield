@@ -42,7 +42,7 @@ catalogs:
 
 overrides:
   loro-crdt: ^1.13.8
-  '@vibecook/ice': 0.8.1
+  '@vibecook/ice': 0.9.0
   '@vibecook/ghosttea-client': 0.9.3
   '@vibecook/ghosttea-electron': 0.9.3
   '@vibecook/ghosttea-react': 0.9.3
@@ -108,8 +108,8 @@ importers:
   apps/plugin-playground:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.8.1
-        version: 0.8.1(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+        specifier: 0.9.0
+        version: 0.9.0(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -285,8 +285,8 @@ importers:
   packages/design-kit:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.8.1
-        version: 0.8.1(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+        specifier: 0.9.0
+        version: 0.9.0(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
     devDependencies:
       '@react-three/fiber':
         specifier: ^9.6.1
@@ -389,8 +389,8 @@ importers:
         specifier: 0.9.3
         version: 0.9.3(react@19.2.7)
       '@vibecook/ice':
-        specifier: 0.8.1
-        version: 0.8.1(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+        specifier: 0.9.0
+        version: 0.9.0(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -630,8 +630,8 @@ importers:
   packages/plugin-sdk:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.8.1
-        version: 0.8.1(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+        specifier: 0.9.0
+        version: 0.9.0(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -1829,8 +1829,8 @@ packages:
   '@vibecook/ghosttea@0.9.3':
     resolution: {integrity: sha512-t2WsVQljtAB4kgTiwiAPqw2WSQu4EVEXIEb3wCmaMri30pU6cu9FrB5HGoivvWmiycpjxLwRe2mjP0FjJHUBvw==}
 
-  '@vibecook/ice@0.8.1':
-    resolution: {integrity: sha512-KppTZ5iuact3QP4+f/mAZUT/nbmRyTg5fLWftwOubLYTqjgk3W6bIgPInB/AfKoGpT/MK2g3gjVwGV/CX3ylCQ==}
+  '@vibecook/ice@0.9.0':
+    resolution: {integrity: sha512-80VzznlXcOR4XJP8BsPp48IqkiJID+DjJ/xJD914gPHq/vudTyuosEh021koAYOuCNHoG8ej5zU+TPu9XUvjTQ==}
     engines: {node: '>=20'}
     peerDependencies:
       '@react-three/fiber': '>=9'
@@ -4465,7 +4465,7 @@ snapshots:
     dependencies:
       '@vibecook/ghosttea-protocol': 0.9.3
 
-  '@vibecook/ice@0.8.1(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)':
+  '@vibecook/ice@0.9.0(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)':
     dependencies:
       '@vibecook/strata-ecs': 0.13.0(loro-crdt@1.13.8)(react@19.2.7)
       loro-crdt: 1.13.8

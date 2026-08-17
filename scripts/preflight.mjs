@@ -56,8 +56,8 @@ const PIN_EXPECTATIONS = [
   { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.12"/m, label: 'truffle-core = "=0.7.12"' },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ice":\s*0\.8\.1/,
-    label: '"@vibecook/ice": 0.8.1',
+    re: /"@vibecook\/ice":\s*0\.9\.0/,
+    label: '"@vibecook/ice": 0.9.0',
   },
   { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.9\.3"/m, label: 'ghosttea = "=0.9.3"' },
   {
