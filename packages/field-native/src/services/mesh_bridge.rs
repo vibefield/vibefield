@@ -410,6 +410,21 @@ impl BridgeHandle {
         protocol: String,
         doc_id: Option<String>,
     ) -> Lane {
+        let lane = self.reserve_inbound_lane(class, peer, protocol, doc_id);
+        self.announce_inbound_lane(&lane);
+        lane
+    }
+
+    /** Reserve an inbound id without announcing it yet. The remote transport
+     * uses this two-step form to install its exact close/UDP routes before
+     * fieldd can react to `peerOpened`; ordinary callers use `adopt` above. */
+    pub fn reserve_inbound_lane(
+        &self,
+        class: LaneClass,
+        peer: String,
+        protocol: String,
+        doc_id: Option<String>,
+    ) -> Lane {
         let lane = {
             let mut lanes = self.shared.lanes.lock().unwrap();
             // The base makes a collision impossible in practice; the skip makes
@@ -432,8 +447,11 @@ impl BridgeHandle {
             lanes.insert(lane_id, lane.clone());
             lane
         };
-        let _ = self.shared.events.send(LaneEvent::PeerOpened(lane.clone()));
         lane
+    }
+
+    pub fn announce_inbound_lane(&self, lane: &Lane) {
+        let _ = self.shared.events.send(LaneEvent::PeerOpened(lane.clone()));
     }
 
     /// A lane that ended AT THE TRANSPORT — the peer hung up, or its stream
@@ -462,6 +480,14 @@ impl BridgeHandle {
     /// data socket are different transports, so bytes can legitimately arrive
     /// for a lane fieldd has not been told about yet.
     pub fn deliver_inbound(&self, lane_id: u64, payload: &[u8]) {
+        // Hold the lane-table guard through the local enqueue. This is the
+        // receive half of close's fence: after `close_lane` removes the id, a
+        // UDP receive that had already cloned its route still cannot leak one
+        // late snapshot into fieldd under a retired lane id.
+        let lanes = self.shared.lanes.lock().unwrap();
+        if !lanes.contains_key(&lane_id) {
+            return;
+        }
         match encode_frame(FRAME_DATA, lane_id, payload) {
             Ok(frame) => self.shared.send_to_client(frame),
             Err(e) => tracing::warn!(
@@ -472,6 +498,7 @@ impl BridgeHandle {
                 "An inbound lane delivery could not be framed"
             ),
         }
+        drop(lanes);
     }
 }
 

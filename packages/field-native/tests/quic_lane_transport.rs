@@ -178,20 +178,20 @@ async fn a_lane_carries_document_bytes_between_two_daemons_over_the_mesh() {
     let mut fieldd_b = DataClient::connect(&daemon_b).await;
     let mut lanes_b = daemon_b.bridge.subscribe_events();
 
-    // B accepts inbound lanes; A dials out. (A device does both in production;
-    // splitting them here makes the direction of every assertion unambiguous.)
+    // B accepts inbound lanes; A dials out. Each production transport also
+    // binds the shared presence UDP socket even though this witness uses the
+    // reliable class.
+    let transport_b = Arc::new(
+        TruffleLaneTransport::new(beta.clone(), daemon_b.bridge.clone(), DOC_SYNC_QUIC_PORT).await,
+    );
+    daemon_b.bridge.set_transport(transport_b.clone());
     let inbound = tokio::spawn(field_native::services::lane_transport::serve_inbound(
-        beta.clone(),
-        daemon_b.bridge.clone(),
-        DOC_SYNC_QUIC_PORT,
+        transport_b,
     ));
-    daemon_a
-        .bridge
-        .set_transport(Arc::new(TruffleLaneTransport::new(
-            alpha.clone(),
-            daemon_a.bridge.clone(),
-            DOC_SYNC_QUIC_PORT,
-        )));
+    let transport_a = Arc::new(
+        TruffleLaneTransport::new(alpha.clone(), daemon_a.bridge.clone(), DOC_SYNC_QUIC_PORT).await,
+    );
+    daemon_a.bridge.set_transport(transport_a);
 
     // The listener binds asynchronously, so the first dial can legitimately
     // lose the race. Retrying is honest; a bare sleep would only hide it.
@@ -291,7 +291,161 @@ async fn a_lane_carries_document_bytes_between_two_daemons_over_the_mesh() {
     assert_eq!(daemon_b.bridge.open_lane_count(), 0);
     eprintln!("[e2e] lane closed cleanly from the far end");
 
-    // 4. The OTHER direction, and the one a clean close cannot prove: the peer
+    // 4. The released presence shape: a fragmentable logical snapshot crosses
+    //    the shared UDP socket only after READY installed its authenticated
+    //    route. Graceful close replays it on QUIC, and the receiver deduplicates
+    //    that replay rather than delivering the snapshot twice.
+    let lossy = Lane {
+        lane_id: 9,
+        class: LaneClass::Lossy,
+        peer: beta_id.clone(),
+        protocol: "presence".into(),
+        doc_id: Some("doc-presence".into()),
+        inbound: false,
+    };
+    daemon_a
+        .bridge
+        .open_lane(lossy)
+        .await
+        .expect("lossy presence lane opened toward beta");
+    let adopted_lossy = match timeout(Duration::from_secs(30), lanes_b.recv())
+        .await
+        .expect("no lossy lane event within 30s")
+        .expect("lane event stream closed")
+    {
+        LaneEvent::PeerOpened(lane) => lane,
+        other => panic!("expected lossy peerOpened, got {other:?}"),
+    };
+    assert_eq!(adopted_lossy.class, LaneClass::Lossy);
+    assert_eq!(adopted_lossy.protocol, "presence");
+    assert_eq!(adopted_lossy.doc_id.as_deref(), Some("doc-presence"));
+    let presence = vec![0x5a; 4_242];
+    fieldd_a.send_lane(9, &presence).await;
+    let got_presence = timeout(Duration::from_secs(30), fieldd_b.next())
+        .await
+        .expect("presence datagrams timed out")
+        .expect("no reassembled presence frame");
+    assert_eq!(got_presence.lane_id, adopted_lossy.lane_id);
+    assert_eq!(got_presence.payload, presence);
+    daemon_a.bridge.close_lane(9).await.expect("lossy close");
+    let lossy_closed = timeout(Duration::from_secs(30), lanes_b.recv())
+        .await
+        .expect("no lossy close event within 30s")
+        .expect("lane event stream closed");
+    assert!(matches!(
+        lossy_closed,
+        LaneEvent::Closed { lane_id, .. } if lane_id == adopted_lossy.lane_id
+    ));
+    assert!(
+        timeout(Duration::from_millis(500), fieldd_b.next())
+            .await
+            .is_err(),
+        "the reliable terminal replay must deduplicate a completed UDP sequence"
+    );
+    eprintln!("[e2e] fragmentable presence crossed UDP and terminal replay deduplicated");
+
+    // 5. Receiver-side refusal is not EOF-shaped bookkeeping. B deliberately
+    //    closes a peer-opened lane; A observes STOP on the authenticated QUIC
+    //    control leg, retires its outbound id, and can reopen that SAME id.
+    //    This is the document-room race: a peer without the document closes
+    //    presence now, then becomes eligible after opening it later.
+    let mut rejection_events = daemon_a.bridge.subscribe_events();
+    let rejected_lane = Lane {
+        lane_id: 10,
+        class: LaneClass::Lossy,
+        peer: beta_id.clone(),
+        protocol: "presence".into(),
+        doc_id: Some("doc-reopen".into()),
+        inbound: false,
+    };
+    daemon_a
+        .bridge
+        .open_lane(rejected_lane.clone())
+        .await
+        .expect("receiver-refusal witness opened");
+    let rejected_inbound = match timeout(Duration::from_secs(30), lanes_b.recv())
+        .await
+        .expect("no rejected lane event")
+        .expect("lane event stream closed")
+    {
+        LaneEvent::PeerOpened(lane) => lane,
+        other => panic!("expected peerOpened before refusal, got {other:?}"),
+    };
+    daemon_b
+        .bridge
+        .close_lane(rejected_inbound.lane_id)
+        .await
+        .expect("B refused its inbound lane");
+    assert!(matches!(
+        timeout(Duration::from_secs(30), lanes_b.recv())
+            .await
+            .expect("B did not announce its local refusal")
+            .expect("lane event stream closed"),
+        LaneEvent::Closed { lane_id, reason, .. }
+            if lane_id == rejected_inbound.lane_id && reason == "local"
+    ));
+
+    // Drive the same path as ICE's next keepalive snapshot. STOP was written
+    // before B's close returned; this send polls it and corrects A's control
+    // table even though UDP itself has no acknowledgement.
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    let stopped = loop {
+        fieldd_a
+            .send_lane(rejected_lane.lane_id, b"keepalive-after-stop")
+            .await;
+        if let Ok(event) = timeout(Duration::from_millis(200), rejection_events.recv()).await {
+            break event.expect("lane event stream closed");
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "A did not observe receiver STOP"
+        );
+    };
+    assert!(matches!(
+        stopped,
+        LaneEvent::Closed { lane_id, reason, .. }
+            if lane_id == rejected_lane.lane_id && reason == "peer-closed"
+    ));
+
+    daemon_a
+        .bridge
+        .open_lane(rejected_lane.clone())
+        .await
+        .expect("the stopped outbound id can reopen");
+    let reopened = match timeout(Duration::from_secs(30), lanes_b.recv())
+        .await
+        .expect("no reopened lane event")
+        .expect("lane event stream closed")
+    {
+        LaneEvent::PeerOpened(lane) => lane,
+        other => panic!("expected reopened peerOpened, got {other:?}"),
+    };
+    assert_ne!(reopened.lane_id, rejected_inbound.lane_id);
+    let after_reopen = vec![0xa5; 2_000];
+    fieldd_a
+        .send_lane(rejected_lane.lane_id, &after_reopen)
+        .await;
+    let reopened_payload = timeout(Duration::from_secs(30), fieldd_b.next())
+        .await
+        .expect("reopened presence timed out")
+        .expect("no reopened presence frame");
+    assert_eq!(reopened_payload.lane_id, reopened.lane_id);
+    assert_eq!(reopened_payload.payload, after_reopen);
+    daemon_a
+        .bridge
+        .close_lane(rejected_lane.lane_id)
+        .await
+        .expect("close reopened lane");
+    assert!(matches!(
+        timeout(Duration::from_secs(30), lanes_b.recv())
+            .await
+            .expect("reopened lane did not close")
+            .expect("lane event stream closed"),
+        LaneEvent::Closed { lane_id, .. } if lane_id == reopened.lane_id
+    ));
+    eprintln!("[e2e] receiver STOP retired and reopened a lossy lane cleanly");
+
+    // 6. The OTHER direction, and the one a clean close cannot prove: the peer
     //    vanishes without hanging up. F-C6-6 was that a dead outbound stream
     //    told nobody — the writer task logged and exited, so fieldd kept a lane
     //    it believed was open forever and only learned otherwise by writing to

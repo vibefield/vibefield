@@ -6,9 +6,10 @@
 //! before C6-3 puts truffle QUIC behind the same seam.
 use field_native::local_ipc;
 use field_native::services::mesh_bridge::{
-    encode_frame, FrameReader, Lane, LaneClass, LoopbackTransport, FRAME_BARRIER, FRAME_BARRIER_OK,
-    FRAME_DATA, FRAME_ERR, FRAME_HELLO, FRAME_HELLO_OK, HEADER_BYTES, INBOUND_LANE_ID_BASE,
-    LENGTH_PREFIX_BYTES, LOSSY_MAX_LOGICAL_BYTES, LOSSY_MAX_PAYLOAD_BYTES, MAX_FRAME_BYTES,
+    encode_frame, FrameReader, Lane, LaneClass, LaneEvent, LoopbackTransport, FRAME_BARRIER,
+    FRAME_BARRIER_OK, FRAME_DATA, FRAME_ERR, FRAME_HELLO, FRAME_HELLO_OK, HEADER_BYTES,
+    INBOUND_LANE_ID_BASE, LENGTH_PREFIX_BYTES, LOSSY_MAX_LOGICAL_BYTES, LOSSY_MAX_PAYLOAD_BYTES,
+    MAX_FRAME_BYTES,
 };
 // only the filesystem-shape test reads it, and that test is unix-only
 #[cfg(unix)]
@@ -342,6 +343,13 @@ async fn inbound_deliveries_reach_the_client_framed() {
     assert_eq!(frame.kind, FRAME_DATA);
     assert_eq!(frame.lane_id, 12);
     assert_eq!(frame.payload, b"from-the-peer");
+
+    daemon.bridge.forget_lane(12, "peer-closed");
+    daemon.bridge.deliver_inbound(12, b"after-close");
+    assert!(
+        timeout(Duration::from_millis(50), c.next()).await.is_err(),
+        "bytes for a retired inbound id must not leak into fieldd"
+    );
     daemon.shutdown().await;
 }
 
@@ -872,6 +880,33 @@ async fn subscribers_hear_a_peer_open_a_lane_and_hear_it_close() {
 }
 
 #[tokio::test]
+async fn an_inbound_lane_is_not_announced_until_its_transport_routes_exist() {
+    let (_dir, daemon) = boot().await;
+    let mut events = daemon.bridge.subscribe_events();
+    let reserved = daemon.bridge.reserve_inbound_lane(
+        LaneClass::Lossy,
+        "ts-abc".into(),
+        "presence".into(),
+        Some("doc-1".into()),
+    );
+    assert!(matches!(
+        events.try_recv(),
+        Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+    ));
+    let stored = daemon.bridge.lane(reserved.lane_id).expect("reserved lane");
+    assert_eq!(stored.lane_id, reserved.lane_id);
+    assert_eq!(stored.class, LaneClass::Lossy);
+    assert_eq!(stored.doc_id.as_deref(), Some("doc-1"));
+
+    daemon.bridge.announce_inbound_lane(&reserved);
+    match events.recv().await.unwrap() {
+        LaneEvent::PeerOpened(opened) => assert_eq!(opened.lane_id, reserved.lane_id),
+        other => panic!("expected peerOpened, got {other:?}"),
+    }
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
 async fn the_lane_snapshot_carries_lanes_already_open() {
     // A fieldd that reconnects mid-session must learn the lanes it missed from
     // the snapshot; the event stream alone would leave it blind to them.
@@ -885,7 +920,7 @@ async fn the_lane_snapshot_carries_lanes_already_open() {
         LaneClass::Lossy,
         "ts-xyz".into(),
         "presence".into(),
-        None,
+        Some("doc-presence".into()),
     );
 
     let mut c = MgmtClient::connect(&daemon).await;
@@ -901,10 +936,7 @@ async fn the_lane_snapshot_carries_lanes_already_open() {
     assert_eq!(lanes[1]["laneId"], inbound.lane_id);
     assert_eq!(lanes[1]["class"], "lossy");
     assert_eq!(lanes[1]["inbound"], true);
-    assert!(
-        lanes[1].get("docId").is_none(),
-        "a presence lane has no doc"
-    );
+    assert_eq!(lanes[1]["docId"], "doc-presence");
     daemon.shutdown().await;
 }
 

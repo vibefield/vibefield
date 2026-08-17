@@ -1,4 +1,5 @@
 pub mod lane_transport;
+mod lossy_lane;
 pub mod mesh;
 pub mod mesh_bridge;
 pub mod stubs;
