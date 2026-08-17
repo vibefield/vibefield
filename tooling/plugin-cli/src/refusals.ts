@@ -41,9 +41,9 @@ export const REFUSAL_CATALOG = {
   "behavior-store-unsupported": {
     check: "manifest",
     level: "refuse",
-    meaning: "the behavior store has no safe plugin transport in this release",
+    meaning: "the behavior store has no enforceable plugin facet budget in this release",
     guidance:
-      "use a durable or runtime behavior; ephemeral awaits document-room presence transport",
+      "use a durable or runtime behavior; ephemeral awaits an ICE facet bound and aggregate host budget",
   },
   "systems-contribution-superseded": {
     check: "manifest",

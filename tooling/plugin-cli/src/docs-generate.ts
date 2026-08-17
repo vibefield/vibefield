@@ -460,8 +460,9 @@ function contributionsDoc(): string {
       "All behavior declarations request `canvas.write`. A denied grant still permits",
       "the inert declaration/code bind, but the sealed binding is dormant and never",
       "registers with ICE. Durable and runtime stores are admitted; ephemeral remains",
-      "explicitly refused until a document-room presence transport exists. A tick hook",
-      "also requires `reason`, because frame cadence is a scarce power.",
+      "explicitly refused until ICE enforces a declared facet byte bound and the host",
+      "can impose aggregate headroom. A tick hook also requires `reason`, because frame",
+      "cadence is a scarce power.",
       "",
       fence(
         "ts",

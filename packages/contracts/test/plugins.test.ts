@@ -275,7 +275,7 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     expect(gated.issueDetails).toContainEqual({
       code: "behavior-store-unsupported",
       path: ["contributes", "behaviors", 0, "definition", "store"],
-      message: "ephemeral plugin behaviors await a document-room presence transport",
+      message: "ephemeral plugin behaviors await an enforceable facet byte budget",
     });
   });
 

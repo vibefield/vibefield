@@ -996,7 +996,7 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       behaviorIds.add(behavior.id);
       if (behavior.definition.store === "ephemeral") {
         issue(
-          "ephemeral plugin behaviors await a document-room presence transport",
+          "ephemeral plugin behaviors await an enforceable facet byte budget",
           ["contributes", "behaviors", index, "definition", "store"],
           "behavior-store-unsupported",
         );
