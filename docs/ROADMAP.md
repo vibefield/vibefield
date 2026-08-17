@@ -3,15 +3,15 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-17 — PRC-4g2 LANDED `ce92023` on
-> ICE 0.9.0 / strata 0.13.0** (exact dependency consumption `1fecb94`). I19 makes each ephemeral
-> behavior attest and enforce canonical complete-cell UTF-8 JSON bytes. VibeField admits only
-> attested rows, charges each claim +256 measured envelope bytes, caps the window-owned plugin set
-> at 48 KiB, and allocates plugins atomically in canonical plugin-id order. A maximum-id, fully
-> charged 16-facet frame remains below the independent 64 KiB transport guard, while a packaged
-> artifact crosses the production presence composition and remotely tombstones on authority loss.
-> **Now:** run the ignored real-tailnet witness with an auth key to close PRC-4g1 physically, then
-> continue to PRC-5's disruptive artifact replacement barrier and PRC-6's bounded diagnostics/soak.
+> stays in the design docs + specs. Last rewritten: **2026-08-17 — PRC-4 COMPLETE.** PRC-4g2
+> landed bounded plugin presence in `ce92023` on ICE 0.9.0 / strata 0.13.0 (exact dependency
+> consumption `1fecb94`): identity-bearing complete-cell claims, claim +256-byte aggregate charge
+> under 48 KiB, plugin-atomic canonical allocation, a separate 64 KiB guard, and packaged remote
+> withdrawal. PRC-4g1 is now physically closed too: the ignored production witness passed **1/1 in
+> 35.11 s** across two ephemeral nodes on the real tailnet, including reliable records, a 4,242-byte
+> fragmented presence snapshot, terminal replay deduplication, receiver STOP/reopen, and vanished-
+> peer repair. **Now:** PRC-5 owns disruptive artifact replacement; PRC-6 follows with bounded
+> diagnostics and soak.
 > Earlier milestone context follows for continuity: R3-0 landed three slices
 > on main, each behind a verbatim green gate: **S2**
 > `e66143a` (keyboard claim declared in contracts; + the docs-generator inline-object
@@ -122,7 +122,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-D1…D13 ratified; PRC-0 through PRC-3d landed; PRC-4a proof, PRC-4b/4c ICE floor, **PRC-4d binding `95da1b8`**, **PRC-4e document host `6289795`**, **PRC-4f packaged conformance `9fc2de6`**, **PRC-4g1 core room code `43929e7` + `81c21fd`**, and **PRC-4g2 bounded ephemeral admission `ce92023` LANDED** on ICE 0.9.0 / strata 0.13.0. | `specs/plugin-architecture.md` §8.8/§12.7/§21.9 · `thinking-plugin-runtime-composability.md` · `thinking-prc4-behavior-adapter.md` | **PRC-4g1 physical closeout:** run the ignored real-tailnet witness with an auth key. Then PRC-5 owns disruptive artifact replacement and PRC-6 owns bounded diagnostics/soak. P8c rides WP8; P8e gates third-party listing. |
+| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-D1…D13 ratified; PRC-0 through PRC-3d landed; **PRC-4 COMPLETE**: PRC-4d binding `95da1b8`, PRC-4e document host `6289795`, PRC-4f packaged conformance `9fc2de6`, PRC-4g1 room/native code `43929e7` + `81c21fd` with its real-tailnet witness green, and PRC-4g2 bounded ephemeral admission `ce92023` on ICE 0.9.0 / strata 0.13.0. | `specs/plugin-architecture.md` §8.8/§12.7/§21.9 · `thinking-plugin-runtime-composability.md` · `thinking-prc4-behavior-adapter.md` | PRC-5 owns disruptive artifact replacement and PRC-6 owns bounded diagnostics/soak. P8c rides WP8; P8e gates third-party listing. |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -300,8 +300,10 @@ newest incomplete message per lane. Graceful close reliably replays the retained
 receiver rejection stops the opener and permits exact reopen; a retired bridge lane drops late UDP.
 Focused acceptance is field-app **44**, fieldd room/doc-lane **43**, fieldd-client **8**, contracts
 **25**, native codec **4/4**, and native lane controls **6/6**, plus all **23/23** typecheck targets,
-all-target Rust check, warnings-denied clippy, and link-compilation of the ignored two-daemon
-tailnet witness. The live auth-key run is still owed; a broad Rust lib run passed 63 tests and hit
+all-target Rust check and warnings-denied clippy. The ignored two-daemon witness then passed **1/1
+in 35.11 s** on the real tailnet with the pinned sidecar: reliable record boundaries, 4,242-byte
+fragmented presence, terminal replay deduplication, receiver STOP/reopen with post-reopen delivery,
+and vanished-peer `peer-unreachable` repair. A broad Rust lib run separately passed 63 tests and hit
 only the sandbox's pre-existing socket-bind refusal.
 
 E22 separately refutes admission: sixteen legal 4 KiB ephemeral facets emit **66,498 bytes**, over
@@ -331,7 +333,7 @@ producer and the second engine observes I17's tombstone. E23 is **8/8** against 
 artifact; all **23/23** typecheck targets, changed suites, **61 field-app files / 473 non-socket
 tests**, preflight/single-copy, generated artifacts, targeted lint, and the production bundle wall
 pass. The broad sandbox run's remaining failures are only pre-existing local socket binds refused
-with `EPERM`. **Next:** the physical tailnet row closes g1; PRC-5 and PRC-6 remain distinct.
+with `EPERM`. **PRC-4 is complete. Next:** PRC-5 and PRC-6 remain distinct.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through

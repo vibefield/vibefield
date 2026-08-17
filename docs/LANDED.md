@@ -2474,7 +2474,8 @@ transport and two-engine remote-tombstone witness required before ephemeral admi
 
 ## PRC-4g1 — bounded document-room presence reaches the product and native mesh
 
-**CORE CODE LANDED 2026-08-17** (`43929e7` + `81c21fd`) on ICE 0.8.1 / strata 0.13.0.
+**LANDED AND PHYSICALLY CLOSED 2026-08-17** (`43929e7` + `81c21fd`) on the cumulative
+ICE/strata line now consumed as ICE 0.9.0 / strata 0.13.0.
 The existing ticketed document WebSocket now carries two opaque presence frame kinds without a
 second room authority: fieldd derives the room only from the redeemed document connection, and
 the client dispatches pushes before its persistence reply waiter. Released ICE facade presence
@@ -2495,12 +2496,16 @@ and the bridge fences late datagrams after close.
 
 Acceptance: all **23/23** workspace typecheck targets; focused field-app **44**, fieldd room/
 doc-lane **43**, fieldd-client **8**, and contracts **25**; native lossy codec **4/4** and lane
-control **6/6**; all-target Rust check; `clippy -D warnings`; formatting/patch hygiene; and
-link-compilation of the ignored real-tailnet witness. That witness now covers a 4,242-byte ICE-
-shaped snapshot crossing fragmented UDP, terminal replay deduplication, receiver STOP, exact same-
-id reopen, and post-reopen delivery. No auth key was available, so its physical run remains owed.
-The broad Rust lib row passed 63 tests, ignored one benchmark, and failed only where this sandbox
-refused a pre-existing fake socket bind (`Operation not permitted`).
+control **6/6**; all-target Rust check; `clippy -D warnings`; formatting/patch hygiene; and the
+physical ignored witness. On 2026-08-17,
+`cargo test -p field-native --test quic_lane_transport -- --ignored --nocapture` passed **1/1 in
+35.11 s** using the pinned arm64 sidecar. It created two uniquely namespaced ephemeral nodes and
+two production-bootstrapped daemons on the real tailnet; rendezvous and first-attempt lane open
+succeeded; binary records retained boundaries; a 4,242-byte ICE-shaped snapshot crossed
+fragmented UDP; terminal replay deduplicated; receiver STOP retired and reopened the same outbound
+id with post-reopen delivery; and taking the peer offline produced `peer-unreachable` instead of a
+dangling lane. The broad Rust lib row separately passed 63 tests, ignored one benchmark, and failed
+only where this sandbox refused a pre-existing fake socket bind (`Operation not permitted`).
 
 E22 does **not** lift plugin ephemeral admission. One legal 16-facet plugin emits 66,498 bytes,
 already beyond the selected 64 KiB logical cap, and runtime `ctx.write` can grow further without
@@ -2552,4 +2557,4 @@ field-app **61 files / 473 tests**; preflight; one-copy resolution (Loro 1.13.8,
 0.13.0, React/React DOM 19.2.7); generated manifests/contracts/docs; changed-file lint; production
 renderer/bundle wall; and patch hygiene. The broad workspace run reached only pre-existing local
 TCP/Unix socket tests that this sandbox refuses with `EPERM`; no changed-surface failure occurred.
-PRC-4g1's physical two-daemon auth-key witness remains independently owed; PRC-5/PRC-6 follow.
+Together with PRC-4g1's physical closeout, **PRC-4 is complete**. PRC-5/PRC-6 follow.
