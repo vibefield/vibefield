@@ -1,0 +1,138 @@
+{
+  "activation": [
+    "onWidget:vibefield.behavior-conformance.card"
+  ],
+  "capabilities": [
+    "canvas.write"
+  ],
+  "contributes": {
+    "behaviors": [
+      {
+        "definition": {
+          "deriveDuringGesture": false,
+          "derived": false,
+          "hooks": [
+            "init",
+            "dispose"
+          ],
+          "migrationFrom": [
+            1
+          ],
+          "phase": "derive",
+          "reads": [],
+          "schema": [
+            {
+              "name": "count",
+              "spec": {
+                "default": 5,
+                "kind": "number",
+                "min": 0
+              }
+            }
+          ],
+          "store": "durable",
+          "tickWhile": "all",
+          "version": 2,
+          "writes": []
+        },
+        "id": "vibefield.behavior-conformance:durable"
+      },
+      {
+        "definition": {
+          "deriveDuringGesture": false,
+          "derived": false,
+          "hooks": [
+            "init",
+            "dispose"
+          ],
+          "migrationFrom": [],
+          "phase": "simulate",
+          "reads": [],
+          "schema": [
+            {
+              "name": "count",
+              "spec": {
+                "default": 7,
+                "kind": "number",
+                "min": 0
+              }
+            }
+          ],
+          "store": "runtime",
+          "tickWhile": "all",
+          "version": 1,
+          "writes": []
+        },
+        "id": "vibefield.behavior-conformance:runtime"
+      },
+      {
+        "definition": {
+          "deriveDuringGesture": false,
+          "derived": false,
+          "hooks": [
+            "tick"
+          ],
+          "migrationFrom": [],
+          "phase": "simulate",
+          "reads": [],
+          "schema": [],
+          "store": "runtime",
+          "tickWhile": "all",
+          "version": 1,
+          "writes": []
+        },
+        "id": "vibefield.behavior-conformance:breaker",
+        "reason": "Exercise the host breaker, fault provenance, and chronic-ledger carryover"
+      }
+    ],
+    "widgets": [
+      {
+        "behaviors": [
+          {
+            "data": {
+              "count": 5
+            },
+            "id": "vibefield.behavior-conformance:durable"
+          },
+          {
+            "data": {
+              "count": 7
+            },
+            "id": "vibefield.behavior-conformance:runtime"
+          },
+          {
+            "id": "vibefield.behavior-conformance:breaker"
+          }
+        ],
+        "category": "Tools",
+        "defaultSize": {
+          "h": 120,
+          "w": 220
+        },
+        "description": "Exercises durable and runtime behavior riders through the packaged host",
+        "groups": {},
+        "interaction": {
+          "movable": true,
+          "selectable": true
+        },
+        "props": {},
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Behavior conformance card",
+        "type": "vibefield.behavior-conformance.card"
+      }
+    ]
+  },
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "id": "vibefield.behavior-conformance",
+  "manifestVersion": 1,
+  "title": "Behavior conformance",
+  "version": "0.1.0"
+}

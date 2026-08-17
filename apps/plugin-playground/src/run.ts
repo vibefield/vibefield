@@ -16,6 +16,7 @@ import { PluginManifestV1, type WidgetContribution } from "@vibefield/contracts"
 import { buildWidgetType, createFieldEngine } from "@vibefield/field-app/host-kit";
 import { RENDERER_SOURCES } from "@vibefield/plugin-build/build";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
+import type { AnyBehaviorDef } from "@vibefield/plugin-sdk/behavior";
 import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
 import { mountState } from "./render";
 import {
@@ -178,15 +179,20 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
   // carrying no process-global activation memo, so a second run never answers
   // for the first.
   let bindings: ReadonlyMap<string, { component: unknown }>;
+  let behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }>;
   try {
     const activation = await activateWithMockHost(mod as never, {
       id: manifest.id,
       version: manifest.version,
       declaredWidgets: contributions.map((w) => w.type),
+      declaredBehaviors: manifest.contributes?.behaviors ?? [],
       declaredCommands: manifest.contributes?.commands?.map((c) => c.id) ?? [],
       declaredSurfaces: manifest.contributes?.surfaces?.map((s) => s.id) ?? [],
     });
     bindings = activation.bindings;
+    behaviorBindings = new Map(
+      [...activation.behaviors].map(([id, handle]) => [id, { handle }] as const),
+    );
   } catch (error) {
     return stopAt(manifest.id, {
       kind: "plugin",
@@ -231,6 +237,7 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
         decl,
         (binding ?? { component: Unmountable }) as never,
         owner,
+        behaviorBindings,
       );
     } catch (error) {
       unusable.add(decl.type);

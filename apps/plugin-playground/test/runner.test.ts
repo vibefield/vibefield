@@ -23,6 +23,7 @@ const REPO_PLUGINS = [
   join(REPO, "plugins", "browser"),
   join(REPO, "examples", "plugins", "widgetlab"),
   join(REPO, "examples", "plugins", "kv-service"),
+  join(REPO, "examples", "plugins", "behavior-conformance"),
 ];
 
 let harness: Harness;
