@@ -1453,6 +1453,10 @@ describe("Artifact Hub over a real daemon", () => {
     const minted = (await shell.call("system.mintWindowToken", {
       scopes: ["workspace.read"],
       label: "observer",
+      rendererParticipant: {
+        participantId: "renderer:desktop-artifact:window-1",
+        incarnation: "renderer:desktop-artifact:window-1:document-1",
+      },
     })) as { token: string };
     const observer = await rpcFor(daemon.controlPort, minted.token);
     const denied = await observer.callErr("artifact.publish", proxy());

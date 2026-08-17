@@ -11,6 +11,7 @@ import {
   GodviewSetRequest,
   GodviewState,
   ProductInfo,
+  RendererParticipantIdentity,
   SHELL_PROVIDER_METHODS,
   ShellCommandRequest,
   ShellDialogPickFolderParams,
@@ -28,9 +29,8 @@ import {
 // Shell-boundary contracts (ESR spec §6.1–6.2). These shapes cross the Electron
 // seam — product.json on the daemon filesystem boundary and the CLOSED
 // contextBridge IPC surface — so the fixtures here double as the EL9
-// tolerant-reader proof for that seam. Shapes are today's reality (port-based
-// WindowConnection), not slice-4's WindowBootstrap envelope; contracts describe
-// what ships.
+// tolerant-reader proof for that seam. Shapes are today's reality; contracts
+// describe what ships.
 
 // The exact literal fieldd writes to `<dataRoot>/fieldd/run/product.json`
 // (packages/fieldd/src/daemon.ts, `satisfies ProductInfo`): an ephemeral bound
@@ -99,20 +99,39 @@ describe("ProductInfo — fieldd's product.json adoption descriptor (design-02 �
 });
 
 describe("WindowConnection — the D27 loopback endpoint + per-window scoped token", () => {
-  it("parses {port, token} and tolerates extra fields", () => {
+  const rendererParticipant = {
+    participantId: "renderer:desktop-a1b2:window-1",
+    incarnation: "renderer:desktop-a1b2:window-1:document-2",
+  };
+
+  it("parses a shell-minted participant identity and tolerates extra fields", () => {
     const parsed = WindowConnection.parse({
       port: 49213,
       token: "wnd_9f8e7d6c5b4a39281706",
+      rendererParticipant,
       generation: 3, // an unknown field a future broker might add
     });
     expect(parsed.port).toBe(49213);
     expect(parsed.token).toBe("wnd_9f8e7d6c5b4a39281706");
+    expect(parsed.rendererParticipant).toEqual(rendererParticipant);
     expect((parsed as Record<string, unknown>).generation).toBe(3);
   });
 
+  it("bounds both renderer identity parts to printable protocol-safe values", () => {
+    expect(RendererParticipantIdentity.parse(rendererParticipant)).toEqual(rendererParticipant);
+    for (const value of [
+      { ...rendererParticipant, participantId: "" },
+      { ...rendererParticipant, incarnation: "renderer window with spaces" },
+      { ...rendererParticipant, incarnation: "x".repeat(257) },
+    ]) {
+      expect(RendererParticipantIdentity.safeParse(value).success).toBe(false);
+    }
+  });
+
   const BAD_CONNECTION: ReadonlyArray<[string, unknown]> = [
-    ["an empty token", { port: 49213, token: "" }],
-    ["a non-positive port", { port: 0, token: "wnd_abc" }],
+    ["a missing participant identity", { port: 49213, token: "wnd_abc" }],
+    ["an empty token", { port: 49213, token: "", rendererParticipant }],
+    ["a non-positive port", { port: 0, token: "wnd_abc", rendererParticipant }],
   ];
   for (const [label, value] of BAD_CONNECTION) {
     it(`rejects ${label}`, () => {

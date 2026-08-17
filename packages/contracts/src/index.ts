@@ -18,6 +18,7 @@ export * from "./mgmt";
 export * from "./plugin-distribution";
 export * from "./plugin-registry";
 export * from "./plugin-runtime";
+export * from "./plugin-update";
 export * from "./plugins";
 export * from "./registries";
 export * from "./shell";

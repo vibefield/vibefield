@@ -10,6 +10,7 @@ import {
   METHODS,
   type MethodDef,
   NAMESPACES,
+  type RendererParticipantIdentity,
   RPC_ERROR_CODES,
   type Scope,
   type ShellClientProviderMethod,
@@ -115,6 +116,7 @@ export interface TokenServiceLike {
     label: string;
     pluginId?: string;
     shellMain?: true;
+    rendererParticipant?: RendererParticipantIdentity;
   } | null;
 }
 
@@ -486,7 +488,14 @@ export class ProductApi extends EventEmitter {
                   parsed.data.clientKind === "shell-main" &&
                   state.tailnetLogin === null
                 ? { kind: "shell-main", tokenId: grant.tokenId, scopes: grant.scopes }
-                : { kind: "local-token", tokenId: grant.tokenId, scopes: grant.scopes },
+                : {
+                    kind: "local-token",
+                    tokenId: grant.tokenId,
+                    scopes: grant.scopes,
+                    ...(grant.rendererParticipant === undefined
+                      ? {}
+                      : { rendererParticipant: { ...grant.rendererParticipant } }),
+                  },
           transport: state.tailnetLogin !== null ? "ws-tailnet" : "ws-loopback",
           receivedAt: Date.now(),
           clientKind: parsed.data.clientKind, // §11.2 kind gate reads it (restrict-only)

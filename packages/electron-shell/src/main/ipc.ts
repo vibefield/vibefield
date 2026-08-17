@@ -28,11 +28,13 @@ import type { WindowRegistry } from "./window-policy";
 export function registerWindowBootstrap(
   registry: WindowRegistry,
   ensure: FielddSupervisor["ensure"],
+  desktopBootId: string,
   logger?: Logger,
 ): void {
   const handle = createBootstrapHandler({
     owns: (sender) => registry.owns(sender),
     ensure,
+    desktopBootId,
     onRevokeError: (error, details) => {
       logger?.error(
         "desktop.ipc.window_token_revoke_failed",

@@ -8,9 +8,8 @@ import { PluginId } from "./plugins";
 // seam — the daemon's on-disk discovery descriptor and the closed contextBridge
 // IPC surface. TS-only by design (never in the Rust gen bundle): fieldd writes
 // and Electron reads on the same machine. Channel names live in
-// registries.IPC_CHANNELS; slice 4's bootstrap semantics evolve WindowConnection
-// into the WindowBootstrap envelope (controlUrl instead of a bare port) — until
-// that wire exists, only today's shapes ship (contracts describe reality).
+// registries.IPC_CHANNELS. Contracts describe the wire that ships today; future
+// controlUrl work remains additive to this envelope.
 
 /** `<dataRoot>/fieldd/run/product.json` — written by fieldd on boot, read by the
  * shell/supervisor for adopt-or-spawn (design-02 §3.6/D10). Tolerant: future
@@ -36,12 +35,31 @@ export const ProductInfo = z
   .passthrough();
 export type ProductInfo = z.infer<typeof ProductInfo>;
 
-/** Reply to the window-bootstrap invoke: the loopback control endpoint + the
- * per-window scoped token (D27 — main brokers this once, relays nothing). */
+const RendererParticipantPart = z
+  .string()
+  .min(1)
+  .max(256)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+
+/** PRC-D14 — an identity minted by Electron main, never selected by renderer
+ * code. `participantId` is stable for one logical BrowserWindow within a shell
+ * boot; `incarnation` changes for every cross-document renderer generation. */
+export const RendererParticipantIdentity = z
+  .object({
+    participantId: RendererParticipantPart,
+    incarnation: RendererParticipantPart,
+  })
+  .passthrough();
+export type RendererParticipantIdentity = z.infer<typeof RendererParticipantIdentity>;
+
+/** Reply to the window-bootstrap invoke: the loopback control endpoint, the
+ * per-window scoped token, and the exact identity bound into that token (D27,
+ * PRC-D14 — main brokers this once and relays nothing). */
 export const WindowConnection = z
   .object({
     port: z.number().int().positive(),
     token: z.string().min(1), // opaque bearer token, same treatment as hello credential
+    rendererParticipant: RendererParticipantIdentity,
   })
   .passthrough();
 export type WindowConnection = z.infer<typeof WindowConnection>;

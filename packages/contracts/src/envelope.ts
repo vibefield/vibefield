@@ -148,7 +148,14 @@ export type Unsubscribe = z.infer<typeof Unsubscribe>;
 
 // ---- CallerContext (P6 — server-side ONLY; identity is transport-derived, never on the wire) ----
 export type Principal =
-  | { kind: "local-token"; tokenId: string; scopes: string[] }
+  | {
+      kind: "local-token";
+      tokenId: string;
+      scopes: string[];
+      /** PRC-D14 — present only on a shell-minted renderer window grant.
+       * Server-derived from the bearer record, never from request params. */
+      rendererParticipant?: import("./shell").RendererParticipantIdentity;
+    }
   | { kind: "shell-main"; tokenId: string; scopes: string[] }
   // deviceName/tailscaleId optional (C3): the sidecar proxy injects only
   // login/name/pic — absent transport facts stay absent, never empty-string

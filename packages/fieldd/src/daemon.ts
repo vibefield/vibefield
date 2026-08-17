@@ -41,6 +41,7 @@ import {
   ProcessStatParams,
   type ProcessSubEvent,
   type ProductInfo,
+  RendererParticipantIdentity,
   SCOPES,
   type Scope,
   SettingsGetParams,
@@ -838,17 +839,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     };
     api.register("system.mintWindowToken", async (ctx, params) => {
       requireShellWindowTokenAuthority(ctx);
-      const p = params as { scopes?: unknown; label?: unknown } | undefined;
+      const p = params as
+        | { scopes?: unknown; label?: unknown; rendererParticipant?: unknown }
+        | undefined;
       const scopes = p?.scopes;
       const label = p?.label;
+      const rendererParticipant = RendererParticipantIdentity.safeParse(p?.rendererParticipant);
       if (
         !Array.isArray(scopes) ||
         !scopes.every((s) => typeof s === "string") ||
-        typeof label !== "string"
+        typeof label !== "string" ||
+        !rendererParticipant.success
       )
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { scopes: string[], label: string }",
+          "expected { scopes: string[], label: string, rendererParticipant }",
         );
       if (scopes.some((s) => !(SCOPES as readonly string[]).includes(s)))
         throw new RpcCallError("PRECONDITION_FAILED", "unknown scope requested");
@@ -870,9 +875,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         {
           action: "token.window.mint",
           target: { kind: "token", id: tokenId },
-          attrs: { scopes: scopes as string[], scopeCount: scopes.length },
+          attrs: {
+            scopes: scopes as string[],
+            scopeCount: scopes.length,
+            participantId: rendererParticipant.data.participantId,
+            incarnation: rendererParticipant.data.incarnation,
+          },
         },
-        () => tokens.mint(scopes as Scope[], label, { tokenId }),
+        () =>
+          tokens.mint(scopes as Scope[], label, {
+            tokenId,
+            rendererParticipant: rendererParticipant.data,
+          }),
         (minted) => ({
           attrs: {
             grantId: minted.tokenId,
@@ -884,7 +898,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
       );
       windowTokenIds.add(grant.tokenId);
-      return { token: grant.token, tokenId: grant.tokenId, scopes: grant.scopes };
+      return {
+        token: grant.token,
+        tokenId: grant.tokenId,
+        scopes: grant.scopes,
+        rendererParticipant: grant.rendererParticipant,
+      };
     });
     api.register("system.revokeWindowToken", async (ctx, params) => {
       requireShellWindowTokenAuthority(ctx);

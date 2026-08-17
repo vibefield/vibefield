@@ -4,13 +4,13 @@
 // provide fakes. Product code NEVER touches window.vibefield — that global is
 // the adapter's business (wall R1 keeps Electron out of this package).
 //
-// Slice 4 evolves getConnection into getBootstrap (the WindowBootstrap
-// envelope with controlUrl); until that wire exists this mirrors today's
-// bridge exactly.
+// Electron's bootstrap includes an authenticated renderer participant identity;
+// browser harnesses may omit it because they have no shell lifecycle witness.
 
 import type {
   DesktopShellState,
   GodviewState,
+  RendererParticipantIdentity,
   ShellCommand,
   ShellPlatform,
   TerminalBackendAttachResult,
@@ -34,6 +34,13 @@ import type { RendererLogger } from "./logging";
 export type FieldDiagnosticEvent =
   | { kind: "delta"; payload: DiagnosticLogDeltaV1 }
   | { kind: "snapshot"; payload: DiagnosticLogSnapshotV1 };
+
+export interface FieldConnection {
+  port: number;
+  token: string;
+  /** Present on the production Electron bridge; absent in browser harnesses. */
+  rendererParticipant?: RendererParticipantIdentity;
+}
 
 export interface FieldDiagnosticsHost {
   query(query: DiagnosticLogQueryV1): Promise<DiagnosticLogSnapshotV1>;
@@ -150,7 +157,7 @@ export interface FieldHost {
   /** UA-5 — attach to an existing user (UA-D15). Switching to the user already
    * attached is main's no-op. Same reload race as `usersCreate`. */
   readonly usersSwitch?: (params: { userId: string }) => Promise<FieldUserProfile>;
-  getConnection(): Promise<{ port: number; token: string }>;
+  getConnection(): Promise<FieldConnection>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;
   onShellCommand?(handler: (command: ShellCommand) => void): () => void;

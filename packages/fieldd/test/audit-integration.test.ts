@@ -93,6 +93,10 @@ describe("LOG-L6 product audit policy", () => {
     const minted = (await shell.call("system.mintWindowToken", {
       scopes: ["canvas.read"],
       label: "audit-window",
+      rendererParticipant: {
+        participantId: "renderer:desktop-audit:window-1",
+        incarnation: "renderer:desktop-audit:window-1:document-1",
+      },
     })) as { token: string; tokenId: string };
     await shell.call("plugins.disable", { id: pluginId });
     expect(daemon.plugins.get(pluginId)?.enabled).toBe(false);

@@ -36,6 +36,26 @@ describe("TokenService", () => {
         pluginId: "vibefield.browser",
         shellMain: true,
       }),
-    ).toThrow(/both plugin-bound and shell-bound/);
+    ).toThrow(/ambiguous bindings/);
+  });
+
+  it("binds and defensively copies a renderer participant identity", () => {
+    const svc = new TokenService();
+    const rendererParticipant = {
+      participantId: "renderer:desktop-test:window-1",
+      incarnation: "renderer:desktop-test:window-1:document-1",
+    };
+    const renderer = svc.mint(["canvas.read"], "window", { rendererParticipant });
+    rendererParticipant.incarnation = "forged";
+    expect(svc.verify(renderer.token)?.rendererParticipant).toEqual({
+      participantId: "renderer:desktop-test:window-1",
+      incarnation: "renderer:desktop-test:window-1:document-1",
+    });
+    expect(() =>
+      svc.mint([], "ambiguous", {
+        pluginId: "vibefield.browser",
+        rendererParticipant,
+      }),
+    ).toThrow(/ambiguous bindings/);
   });
 });

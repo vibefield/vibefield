@@ -9,6 +9,7 @@ import { createBootstrapHandler } from "../src/main/bootstrap";
 // navigation or destruction ends the generation. Structural fakes, no electron.
 
 type NavListener = (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void;
+const DESKTOP_BOOT_ID = "desktop-test-a1b2";
 
 function fakeSender(id: number) {
   const nav: NavListener[] = [];
@@ -38,6 +39,7 @@ function fakeDaemon(opts?: {
   failFirstMint?: boolean;
   failFirstReap?: boolean;
   failFirstRevoke?: boolean;
+  mismatchIdentity?: boolean;
 }) {
   let minted = 0;
   let mintFailures = opts?.failFirstMint ? 1 : 0;
@@ -66,9 +68,17 @@ function fakeDaemon(opts?: {
     }
     expect(method).toBe("system.mintWindowToken");
     minted += 1;
+    const rendererParticipant = (params as { rendererParticipant?: unknown } | undefined)
+      ?.rendererParticipant;
     return {
       token: `tk-${minted}-${(params as { label: string }).label}`,
       tokenId: `tk_${minted.toString(16).padStart(12, "0")}`,
+      rendererParticipant: opts?.mismatchIdentity
+        ? {
+            participantId: "renderer:forged:window-9",
+            incarnation: "renderer:forged:window-9:document-9",
+          }
+        : rendererParticipant,
     };
   });
   const ensure = vi.fn(async () => ({
@@ -86,14 +96,22 @@ function fakeDaemon(opts?: {
 describe("createBootstrapHandler (once per generation)", () => {
   it("refuses a sender the registry does not own", async () => {
     const daemon = fakeDaemon();
-    const handler = createBootstrapHandler({ owns: () => false, ensure: daemon.ensure });
+    const handler = createBootstrapHandler({
+      owns: () => false,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
     await expect(handler({ sender: fakeSender(9).wc })).rejects.toThrow("unregistered sender");
     expect(daemon.request).not.toHaveBeenCalled();
   });
 
   it("concurrent and repeat invokes from one sender share ONE mint", async () => {
     const daemon = fakeDaemon();
-    const handler = createBootstrapHandler({ owns: () => true, ensure: daemon.ensure });
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
     const s = fakeSender(1);
 
     // StrictMode's dev double-invoke: two in flight at once
@@ -103,6 +121,8 @@ describe("createBootstrapHandler (once per generation)", () => {
     expect(a.token).toBe(b.token);
     expect(a.token).toBe(c.token);
     expect(a.port).toBe(4242);
+    expect(a.rendererParticipant).toEqual(b.rendererParticipant);
+    expect(a.rendererParticipant).toEqual(c.rendererParticipant);
     expect(
       daemon.request.mock.calls.filter(([method]) => method === "system.revokeStaleWindowTokens"),
     ).toHaveLength(1);
@@ -110,18 +130,27 @@ describe("createBootstrapHandler (once per generation)", () => {
 
   it("distinct senders mint distinct tokens with their own labels", async () => {
     const daemon = fakeDaemon();
-    const handler = createBootstrapHandler({ owns: () => true, ensure: daemon.ensure });
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
     const one = await handler({ sender: fakeSender(1).wc });
     const two = await handler({ sender: fakeSender(2).wc });
     expect(daemon.mintCount()).toBe(2);
     expect(one.token).toContain("window-1");
     expect(two.token).toContain("window-2");
     expect(one.token).not.toBe(two.token);
+    expect(one.rendererParticipant.participantId).not.toBe(two.rendererParticipant.participantId);
   });
 
   it("a failed mint clears the cache — the retry mints for real", async () => {
     const daemon = fakeDaemon({ failFirstMint: true });
-    const handler = createBootstrapHandler({ owns: () => true, ensure: daemon.ensure });
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
     const s = fakeSender(1);
     await expect(handler({ sender: s.wc })).rejects.toThrow("daemon not ready");
     const conn = await handler({ sender: s.wc });
@@ -129,6 +158,10 @@ describe("createBootstrapHandler (once per generation)", () => {
     expect(
       daemon.request.mock.calls.filter(([method]) => method === "system.mintWindowToken"),
     ).toHaveLength(2);
+    const identities = daemon.request.mock.calls
+      .filter(([method]) => method === "system.mintWindowToken")
+      .map(([, params]) => (params as { rendererParticipant: unknown }).rendererParticipant);
+    expect(identities[0]).toEqual(identities[1]);
     expect(
       daemon.request.mock.calls.filter(([method]) => method === "system.revokeStaleWindowTokens"),
     ).toHaveLength(1);
@@ -136,7 +169,11 @@ describe("createBootstrapHandler (once per generation)", () => {
 
   it("blocks minting behind a failed stale-token sweep and retries the sweep", async () => {
     const daemon = fakeDaemon({ failFirstReap: true });
-    const handler = createBootstrapHandler({ owns: () => true, ensure: daemon.ensure });
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
     const s = fakeSender(1);
     await expect(handler({ sender: s.wc })).rejects.toThrow("stale-token sweep failed");
     expect(daemon.mintCount()).toBe(0);
@@ -147,9 +184,27 @@ describe("createBootstrapHandler (once per generation)", () => {
     ).toHaveLength(2);
   });
 
+  it("refuses and revokes a token whose daemon identity echo does not match", async () => {
+    const daemon = fakeDaemon({ mismatchIdentity: true });
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
+
+    await expect(handler({ sender: fakeSender(1).wc })).rejects.toThrow(
+      "different renderer participant identity",
+    );
+    expect(daemon.revoked).toEqual(["tk_000000000001"]);
+  });
+
   it("a main-frame cross-document navigation ends the generation; in-place does not", async () => {
     const daemon = fakeDaemon();
-    const handler = createBootstrapHandler({ owns: () => true, ensure: daemon.ensure });
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
     const s = fakeSender(1);
 
     const first = await handler({ sender: s.wc });
@@ -161,19 +216,28 @@ describe("createBootstrapHandler (once per generation)", () => {
     await vi.waitFor(() => expect(daemon.revoked).toHaveLength(1));
     const second = await handler({ sender: s.wc });
     expect(second.token).not.toBe(first.token);
+    expect(second.rendererParticipant.participantId).toBe(first.rendererParticipant.participantId);
+    expect(second.rendererParticipant.incarnation).not.toBe(first.rendererParticipant.incarnation);
     expect(daemon.mintCount()).toBe(2);
     expect(daemon.revoked).toEqual(["tk_000000000001"]);
   });
 
   it("destruction revokes the generation before an id can be reused", async () => {
     const daemon = fakeDaemon();
-    const handler = createBootstrapHandler({ owns: () => true, ensure: daemon.ensure });
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
     const s = fakeSender(1);
-    await handler({ sender: s.wc });
+    const first = await handler({ sender: s.wc });
     s.destroy();
     await vi.waitFor(() => expect(daemon.revoked).toEqual(["tk_000000000001"]));
-    await handler({ sender: s.wc }); // a fresh generation (Electron reuses ids)
+    const second = await handler({ sender: s.wc }); // a fresh logical window
     expect(daemon.mintCount()).toBe(2);
+    expect(second.rendererParticipant.participantId).not.toBe(
+      first.rendererParticipant.participantId,
+    );
   });
 
   it("retries exact revocation after a transient daemon link failure", async () => {
@@ -182,6 +246,7 @@ describe("createBootstrapHandler (once per generation)", () => {
     const handler = createBootstrapHandler({
       owns: () => true,
       ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
       onRevokeError,
     });
     const s = fakeSender(1);
@@ -201,18 +266,28 @@ describe("createBootstrapHandler (once per generation)", () => {
     const mintResult = new Promise<{ token: string; tokenId: string }>((resolve) => {
       finishMint = resolve;
     });
-    const request = vi.fn((method: string) => {
+    const request = vi.fn((method: string, params?: unknown) => {
       if (method === "system.revokeStaleWindowTokens") {
         return Promise.resolve({ revoked: 0 });
       }
-      if (method === "system.mintWindowToken") return mintResult;
+      if (method === "system.mintWindowToken") {
+        return mintResult.then((result) => ({
+          ...result,
+          rendererParticipant: (params as { rendererParticipant?: unknown } | undefined)
+            ?.rendererParticipant,
+        }));
+      }
       return Promise.resolve({ revoked: true });
     });
     const ensure = vi.fn(async () => ({
       info: { port: 4242, bootId: "fieldd-test" },
       client: { request },
     })) as unknown as FielddSupervisor["ensure"];
-    const handler = createBootstrapHandler({ owns: () => true, ensure });
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
     const s = fakeSender(1);
 
     const connection = handler({ sender: s.wc });
@@ -221,7 +296,7 @@ describe("createBootstrapHandler (once per generation)", () => {
     );
     s.navigate();
     finishMint?.({ token: "retired-token", tokenId: "tk_00000000000a" });
-    await expect(connection).resolves.toEqual({ port: 4242, token: "retired-token" });
+    await expect(connection).resolves.toMatchObject({ port: 4242, token: "retired-token" });
     await vi.waitFor(() =>
       expect(request).toHaveBeenCalledWith("system.revokeWindowToken", {
         tokenId: "tk_00000000000a",

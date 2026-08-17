@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { SCOPES, type Scope } from "@vibefield/contracts";
+import { type RendererParticipantIdentity, SCOPES, type Scope } from "@vibefield/contracts";
 
 // TokenService (design-02 §3.3): scoped bearer tokens, minted per client kind.
 // Same-uid agents are the adversary (EL7) — tokens are mandatory on every
@@ -19,6 +19,9 @@ export interface TokenGrant {
   /** Shell bootstrap binding. A hello derives shell-main only when this and
    * clientKind:shell-main agree on the loopback door. */
   shellMain?: true;
+  /** Shell-minted renderer identity. ProductAPI projects this into the
+   * local-token principal, so update calls never trust participant params. */
+  rendererParticipant?: RendererParticipantIdentity;
 }
 
 export interface TokenEvent {
@@ -33,6 +36,7 @@ export interface TokenMintOptions {
   ttlMs?: number;
   pluginId?: string;
   shellMain?: true;
+  rendererParticipant?: RendererParticipantIdentity;
   /** A caller may reserve the safe public id so a mandatory audit attempt can
    * name it before the bearer token is generated. */
   tokenId?: string;
@@ -53,6 +57,7 @@ interface TokenRecord {
   /** P4 — plugin-bound grants (renderer leases + service-entry mints) */
   pluginId?: string;
   shellMain?: true;
+  rendererParticipant?: RendererParticipantIdentity;
 }
 
 export class TokenService {
@@ -70,8 +75,13 @@ export class TokenService {
   }
 
   mint(scopes: Scope[], label: string, opts?: TokenMintOptions): TokenGrant {
-    if (opts?.pluginId !== undefined && opts.shellMain === true) {
-      throw new Error("a token cannot be both plugin-bound and shell-bound");
+    const bindings = [
+      opts?.pluginId === undefined ? null : "plugin",
+      opts?.shellMain === true ? "shell" : null,
+      opts?.rendererParticipant === undefined ? null : "renderer",
+    ].filter((binding) => binding !== null);
+    if (bindings.length > 1) {
+      throw new Error(`a token cannot carry ambiguous bindings: ${bindings.join(", ")}`);
     }
     for (const s of scopes) {
       if (!(SCOPES as readonly string[]).includes(s)) throw new Error(`unknown scope: ${s}`);
@@ -90,6 +100,9 @@ export class TokenService {
       ...(expiresAt !== undefined ? { expiresAt } : {}),
       ...(opts?.pluginId !== undefined ? { pluginId: opts.pluginId } : {}),
       ...(opts?.shellMain === true ? { shellMain: true } : {}),
+      ...(opts?.rendererParticipant !== undefined
+        ? { rendererParticipant: { ...opts.rendererParticipant } }
+        : {}),
     });
     this.byId.set(tokenId, token);
     this.onEvent?.({ kind: "mint", tokenId, label, scopes, at: Date.now() });
@@ -101,6 +114,9 @@ export class TokenService {
       ...(expiresAt !== undefined ? { expiresAt } : {}),
       ...(opts?.pluginId !== undefined ? { pluginId: opts.pluginId } : {}),
       ...(opts?.shellMain === true ? { shellMain: true } : {}),
+      ...(opts?.rendererParticipant !== undefined
+        ? { rendererParticipant: { ...opts.rendererParticipant } }
+        : {}),
     };
   }
 
@@ -110,6 +126,7 @@ export class TokenService {
     label: string;
     pluginId?: string;
     shellMain?: true;
+    rendererParticipant?: RendererParticipantIdentity;
   } | null {
     const rec = this.byToken.get(token); // token is 192-bit random — map lookup is fine
     if (!rec) {
@@ -129,6 +146,9 @@ export class TokenService {
       label: rec.label,
       ...(rec.pluginId !== undefined ? { pluginId: rec.pluginId } : {}),
       ...(rec.shellMain === true ? { shellMain: true } : {}),
+      ...(rec.rendererParticipant !== undefined
+        ? { rendererParticipant: { ...rec.rendererParticipant } }
+        : {}),
     };
   }
 

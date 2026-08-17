@@ -1,4 +1,8 @@
-import type { WindowConnection } from "@vibefield/contracts";
+import {
+  RendererParticipantIdentity,
+  type RendererParticipantIdentity as RendererParticipantIdentityValue,
+  type WindowConnection,
+} from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { WebContents } from "electron";
 
@@ -25,6 +29,8 @@ interface SenderLike {
 export function createBootstrapHandler(deps: {
   owns: (sender: WebContents) => boolean;
   ensure: FielddSupervisor["ensure"];
+  /** Stable for one Electron main process. Renderer code never selects it. */
+  desktopBootId: string;
   onRevokeError?: (error: unknown, details: { senderId: number; tokenId: string }) => void;
 }): (event: { sender: WebContents }) => Promise<WindowConnection> {
   interface MintedGeneration {
@@ -40,7 +46,27 @@ export function createBootstrapHandler(deps: {
 
   const generations = new Map<number, Generation>();
   const hooked = new Set<number>();
+  const windowIdentities = new Map<number, string>();
+  const documentIdentities = new Map<number, RendererParticipantIdentityValue>();
+  let windowSequence = 0;
+  let documentSequence = 0;
   let reaper: { bootId: string; promise: Promise<void> } | null = null;
+
+  const identityFor = (senderId: number): RendererParticipantIdentityValue => {
+    const cached = documentIdentities.get(senderId);
+    if (cached !== undefined) return cached;
+    let participantId = windowIdentities.get(senderId);
+    if (participantId === undefined) {
+      participantId = `renderer:${deps.desktopBootId}:window-${++windowSequence}`;
+      windowIdentities.set(senderId, participantId);
+    }
+    const identity = RendererParticipantIdentity.parse({
+      participantId,
+      incarnation: `${participantId}:document-${++documentSequence}`,
+    });
+    documentIdentities.set(senderId, identity);
+    return identity;
+  };
 
   const revokeWindowToken = async (handle: FielddHandle, tokenId: string): Promise<void> => {
     try {
@@ -110,17 +136,27 @@ export function createBootstrapHandler(deps: {
       s.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
         // a new main-frame document is a NEW generation — the old page's token
         // dies with its JS; revoke it before the next invoke mints fresh
-        if (isMainFrame && !isInPlace) retire(sender.id);
+        if (isMainFrame && !isInPlace) {
+          retire(sender.id);
+          documentIdentities.delete(sender.id);
+        }
       });
       s.once("destroyed", () => {
         retire(sender.id);
         hooked.delete(sender.id);
+        documentIdentities.delete(sender.id);
+        windowIdentities.delete(sender.id);
       });
     }
 
     const generation = {} as Generation;
     generation.retired = false;
-    generation.result = mint(deps.ensure, reapStaleForBoot, sender.id).catch((error: unknown) => {
+    generation.result = mint(
+      deps.ensure,
+      reapStaleForBoot,
+      sender.id,
+      identityFor(sender.id),
+    ).catch((error: unknown) => {
       // failure ends the cached attempt — retry re-mints for real
       if (generations.get(sender.id) === generation) generations.delete(sender.id);
       throw error;
@@ -135,6 +171,7 @@ async function mint(
   ensure: FielddSupervisor["ensure"],
   reapStaleForBoot: (handle: FielddHandle) => Promise<void>,
   senderId: number,
+  rendererParticipant: RendererParticipantIdentityValue,
 ): Promise<{ connection: WindowConnection; tokenId: string; handle: FielddHandle }> {
   const handle = await ensure();
   // A production fieldd outlives Electron. Reap grants left by a previous
@@ -164,9 +201,32 @@ async function mint(
       "terminal.attach",
     ],
     label: `window-${senderId}`,
-  })) as { token: string; tokenId: string };
+    rendererParticipant,
+  })) as { token: string; tokenId: string; rendererParticipant?: unknown };
+  let acceptedIdentity: RendererParticipantIdentityValue;
+  try {
+    acceptedIdentity = RendererParticipantIdentity.parse(minted.rendererParticipant);
+    if (
+      acceptedIdentity.participantId !== rendererParticipant.participantId ||
+      acceptedIdentity.incarnation !== rendererParticipant.incarnation
+    ) {
+      throw new Error("fieldd returned a different renderer participant identity");
+    }
+  } catch (error) {
+    // Never disclose a bearer whose server-side participant binding is absent
+    // or different. A failed best-effort revoke is caught by the next mandatory
+    // stale-window sweep, and this token never reaches renderer code.
+    await handle.client
+      .request("system.revokeWindowToken", { tokenId: minted.tokenId })
+      .catch(() => undefined);
+    throw error;
+  }
   return {
-    connection: { port: handle.info.port, token: minted.token },
+    connection: {
+      port: handle.info.port,
+      token: minted.token,
+      rendererParticipant: acceptedIdentity,
+    },
     tokenId: minted.tokenId,
     handle,
   };

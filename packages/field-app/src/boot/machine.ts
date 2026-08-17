@@ -1,6 +1,6 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
 import type { DocManager } from "../doc-manager";
-import type { FieldHost, FieldUserProfile } from "../host";
+import type { FieldConnection, FieldHost, FieldUserProfile } from "../host";
 import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 
 // The boot machine (ESR §5.4.2; design-03 §4.3 v0.3): explicit states, no
@@ -53,6 +53,8 @@ export interface BootReady {
    * registry is built synchronously in a memo, so this is the last moment an
    * import can still happen; after this the set is fixed for the mount. */
   plugins: PreparedRendererPlugins;
+  /** Shell-authenticated renderer identity. Absent only in browser harnesses. */
+  rendererParticipant?: NonNullable<FieldConnection["rendererParticipant"]>;
   /** Supervisor-owned identity used for document presence. Absent in browser
    * harnesses or when the optional profile bridge could not be read. */
   profile?: FieldUserProfile;
@@ -141,7 +143,7 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
   // resumable checkpoints — retry() re-enters run() and completed steps skip
   let workspacePromise: Promise<WorkspaceModule> | null = null;
   let pluginsPromise: Promise<PreparedRendererPlugins> | null = null;
-  let conn: { port: number; token: string } | null = null;
+  let conn: FieldConnection | null = null;
   let client: FielddClient | null = null;
   let mod: WorkspaceModule | null = null;
   let ready: BootReady | null = null;
@@ -255,6 +257,11 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
             // Renderer modules activate behind the splash, before FieldView can install its
             // effect. Hand the same exact window client to the lazy lease broker at that edge.
             pluginClientBackend: { windowClient: prepareClient },
+            // PRC-5a: renderer target identity now comes from Electron main,
+            // not the old process-wide "field" placeholder.
+            ...(conn.rendererParticipant === undefined
+              ? {}
+              : { windowId: conn.rendererParticipant.participantId }),
           });
         }
       }
@@ -289,6 +296,9 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
           manager,
           mod,
           plugins,
+          ...(conn.rendererParticipant === undefined
+            ? {}
+            : { rendererParticipant: conn.rendererParticipant }),
           ...(currentProfile === null ? {} : { profile: currentProfile }),
         };
         mark("vf:renderer:document-ready");

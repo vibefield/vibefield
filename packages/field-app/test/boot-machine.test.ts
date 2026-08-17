@@ -307,7 +307,11 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
       bundled: [],
     }));
     const mod = { ...workspaceModule, prepareFieldPlugins } as unknown as WorkspaceModule;
-    h.getConnection.mockResolvedValue({ port: 4242, token: "abc" });
+    const rendererParticipant = {
+      participantId: "renderer:desktop-test:window-1",
+      incarnation: "renderer:desktop-test:window-1:document-1",
+    };
+    h.getConnection.mockResolvedValue({ port: 4242, token: "abc", rendererParticipant });
     h.importWorkspace.mockResolvedValue(mod);
 
     h.machine.start();
@@ -316,7 +320,9 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     expect(prepareFieldPlugins).toHaveBeenCalledWith({
       request: expect.any(Function),
       pluginClientBackend: { windowClient: h.clientStub },
+      windowId: rendererParticipant.participantId,
     });
+    expect(h.machine.ready?.rendererParticipant).toEqual(rendererParticipant);
   });
 
   it("closes a staged plugin runtime even before the document-ready checkpoint", async () => {

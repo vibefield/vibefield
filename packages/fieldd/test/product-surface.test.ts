@@ -21,6 +21,10 @@ import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
+const rendererParticipant = (suffix: string) => ({
+  participantId: `renderer:desktop-test:window-${suffix}`,
+  incarnation: `renderer:desktop-test:window-${suffix}:document-1`,
+});
 afterEach(async () => {
   for (const fn of cleanup.reverse()) await fn();
   cleanup = [];
@@ -120,8 +124,12 @@ describe("system.mintWindowToken", () => {
     const minted = (await shell.call("system.mintWindowToken", {
       scopes: ["canvas.read"],
       label: "window-1",
+      rendererParticipant: rendererParticipant("1"),
     })) as { token: string; scopes: string[] };
     expect(minted.scopes).toEqual(["canvas.read"]);
+    expect(daemon.tokens.verify(minted.token)?.rendererParticipant).toEqual(
+      rendererParticipant("1"),
+    );
 
     // the window token authenticates…
     const win = await openRpc(daemon.controlPort);
@@ -141,15 +149,23 @@ describe("system.mintWindowToken", () => {
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, narrow.token, "shell-main");
 
+    const unbound = await rpc.callErr("system.mintWindowToken", {
+      scopes: [],
+      label: "unbound-window",
+    });
+    expect(unbound.data?.kind).toBe("PRECONDITION_FAILED");
+
     const escalate = await rpc.callErr("system.mintWindowToken", {
       scopes: ["canvas.read"],
       label: "w",
+      rendererParticipant: rendererParticipant("escalate"),
     });
     expect(escalate.data?.kind).toBe("FORBIDDEN_SCOPE");
 
     const junk = await rpc.callErr("system.mintWindowToken", {
       scopes: ["not.a.scope"],
       label: "w",
+      rendererParticipant: rendererParticipant("junk"),
     });
     expect(junk.data?.kind).toBe("PRECONDITION_FAILED");
 
@@ -166,10 +182,12 @@ describe("system.mintWindowToken", () => {
     const first = (await shell.call("system.mintWindowToken", {
       scopes: ["canvas.read"],
       label: "window-1",
+      rendererParticipant: rendererParticipant("1"),
     })) as { token: string; tokenId: string };
     const second = (await shell.call("system.mintWindowToken", {
       scopes: ["canvas.read"],
       label: "window-2",
+      rendererParticipant: rendererParticipant("2"),
     })) as { token: string; tokenId: string };
     const firstWindow = await openRpc(daemon.controlPort);
     await helloAs(firstWindow, first.token);

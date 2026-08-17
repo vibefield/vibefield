@@ -845,6 +845,7 @@ async function main(
   registerWindowBootstrap(
     registry,
     (options) => fielddHandles!.ensure(options),
+    DESKTOP_BOOT_ID,
     logger.child({ component: "ipc.bootstrap" }),
   );
 

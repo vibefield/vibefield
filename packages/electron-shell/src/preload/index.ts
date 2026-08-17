@@ -218,7 +218,7 @@ contextBridge.exposeInMainWorld("vibefield", {
   // recover the nonce nor forge the preload's transferred-port message.
   claimLiveSurfacePortBridge,
   submitRendererLogs: (serializedBatch: string): boolean => logging.submit(serializedBatch),
-  getConnection: async (): Promise<{ port: number; token: string }> =>
+  getConnection: async (): Promise<WindowConnection> =>
     WindowConnection.parse(await ipcRenderer.invoke(IPC_CHANNELS.windowBootstrap)),
   /** UA-3 — the Account page's profile write (name/color/resident/onboarded).
    * Validated both directions; main owns users.json and refuses empty or

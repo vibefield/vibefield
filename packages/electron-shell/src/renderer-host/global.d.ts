@@ -6,6 +6,7 @@ import type {
   TerminalBackendAttachResult,
   TerminalBridgeStatus,
   TerminalTicket,
+  WindowConnection,
 } from "@vibefield/contracts";
 import type {
   CrashArtifactListV1,
@@ -42,7 +43,7 @@ declare global {
       readonly platform: ShellPlatform;
       claimLiveSurfacePortBridge(): string;
       submitRendererLogs(serializedBatch: string): boolean;
-      getConnection(): Promise<{ port: number; token: string }>;
+      getConnection(): Promise<WindowConnection>;
       /** UA-3 — one door, two verbs: empty params READ the current record. */
       usersUpdate(params: {
         name?: string;
