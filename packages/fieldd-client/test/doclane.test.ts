@@ -220,6 +220,36 @@ describe("DocLaneClient", () => {
     client.close();
   });
 
+  it("routes unsolicited presence before the persistence waiter and isolates listener faults", async () => {
+    const store: MemoryDoc = { bytes: envelope(2), updates: [] };
+    const happy = happyServer(store);
+    const pushed: number[] = [];
+    FakeLaneWs.handler = (ws, frame) => {
+      if (frame.kind === LANE_FRAME.GET || frame.kind === LANE_FRAME.PUT) {
+        ws.receive(encodeLaneFrame(LANE_FRAME.PRESENCE_PUSH, 0, new Uint8Array([frame.kind])));
+      }
+      happy(ws, frame);
+    };
+    const { client } = makeClient();
+    client.onPresence(() => {
+      throw new Error("one observer is broken");
+    });
+    client.onPresence((payload) => pushed.push(payload[0] ?? -1));
+
+    await client.attach();
+    expect(Array.from((await client.get()) ?? [])).toEqual(Array.from(store.bytes ?? []));
+    await client.put(envelope(4), { engineSchema: 2, savedAt: 9 });
+    client.sendPresence(new Uint8Array([7, 8, 9]));
+    await Promise.resolve();
+
+    expect(pushed).toEqual([LANE_FRAME.GET, LANE_FRAME.PUT]);
+    expect(FakeLaneWs.instances[0]?.sent.at(-1)).toMatchObject({
+      kind: LANE_FRAME.PRESENCE_PUBLISH,
+      payload: new Uint8Array([7, 8, 9]),
+    });
+    client.close();
+  });
+
   it("maps server LaneErr to a typed FielddRpcError", async () => {
     FakeLaneWs.handler = (ws, frame) => {
       if (frame.kind === LANE_FRAME.HELLO)

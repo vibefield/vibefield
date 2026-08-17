@@ -127,10 +127,12 @@ function harness(peerIds: string[] = ["peer-a"]) {
    * injected a hand-written predicate would prove the gates work and say
    * nothing about whether the daemon asks them the right question. */
   const posture = { value: "automatic" as MeshSyncPosture };
+  let nextLaneId = 1;
   sync = new DocSyncService({
     docs,
     control,
     bytes,
+    allocateLaneId: () => nextLaneId++,
     peers: async () => [...peerState].map(([id, online]) => ({ id, online })),
     resolveIntent: (docId) => resolveSyncIntent(docs.syncIntentOf(docId), posture.value),
   });

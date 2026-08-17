@@ -244,8 +244,8 @@ export type ServeEntry = z.infer<typeof ServeEntry>;
 
 /** Delivery class, mapped 1:1 from strata's DeliveryClass by fieldd's Channel
  * impl. `reliable` = one QUIC stream per lane (per-lane FIFO, flow control
- * propagates); `lossy` = datagrams, drop-oldest, payload bounded by
- * MESHDATA_LOSSY_MAX_PAYLOAD_BYTES. */
+ * propagates); `lossy` = bounded logical snapshots fragmented into datagrams,
+ * latest-first healing, with reliable terminal replay on graceful close. */
 export const MeshLaneClass = z.enum(["reliable", "lossy"]);
 export type MeshLaneClass = z.infer<typeof MeshLaneClass>;
 
@@ -265,8 +265,8 @@ export const MeshLaneOpenRequest = z
     /** truffle peer id, as carried by PeerInfo.id */
     peer: z.string(),
     protocol: MeshLaneProtocol,
-    /** doc-sync only: which document this lane is for. A snapshot takes its own
-     * short-lived lane (snapshot-per-stream), so this is not unique per doc. */
+    /** Document room this lane is for (`doc-sync` and `presence`). A snapshot
+     * takes its own short-lived lane, so this is not unique per document. */
     docId: z.string().optional(),
   })
   .passthrough();

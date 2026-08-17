@@ -73,7 +73,7 @@ export function OnboardingWizard({
 }: {
   client: FielddClient;
   onboarding: BootOnboarding;
-  onComplete: () => void;
+  onComplete: (profile?: FieldUserProfile) => void;
 }): ReactElement {
   return (
     <FielddProvider client={client}>
@@ -87,7 +87,7 @@ function WizardBody({
   onComplete,
 }: {
   onboarding: BootOnboarding;
-  onComplete: () => void;
+  onComplete: (profile?: FieldUserProfile) => void;
 }): ReactElement {
   const usersUpdate = getHost().usersUpdate;
   const [profile, setProfile] = useState<FieldUserProfile>(onboarding.profile);
@@ -179,13 +179,13 @@ function WizardBody({
     const timer = setTimeout(
       () => {
         if (usersUpdate === undefined) {
-          onComplete();
+          onComplete(profile);
           return;
         }
         setFlag({ kind: "writing" });
         usersUpdate({ onboarded: true })
-          .then(() => {
-            if (!cancelled) onComplete();
+          .then((updated) => {
+            if (!cancelled) onComplete(updated);
           })
           .catch((cause: unknown) => {
             if (cancelled) return;
@@ -201,7 +201,7 @@ function WizardBody({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [pane, attempt, usersUpdate, onComplete]);
+  }, [pane, attempt, usersUpdate, onComplete, profile]);
 
   const shell = (content: ReactElement): ReactElement => <WizardShell>{content}</WizardShell>;
 
@@ -259,7 +259,7 @@ function WizardBody({
           profileName={profile.name}
           flag={flag}
           onRetry={() => setAttempt((n) => n + 1)}
-          onContinueAnyway={onComplete}
+          onContinueAnyway={() => onComplete(profile)}
         />,
       );
 
@@ -272,7 +272,7 @@ function WizardBody({
         <OnboardingFinishingPaneView
           flag={flag}
           onRetry={() => setAttempt((n) => n + 1)}
-          onContinueAnyway={onComplete}
+          onContinueAnyway={() => onComplete(profile)}
         />,
       );
   }

@@ -33,6 +33,10 @@ export const MESHDATA_FRAME = {
   DATA: 3,
   /** bridge → fieldd: a lane-scoped or socket-scoped failure, JSON payload. */
   ERR: 4,
+  /** fieldd → bridge: acknowledge only after every earlier DATA on this socket reached transport. */
+  BARRIER: 5,
+  /** bridge → fieldd: the matching lane's ordered DATA has reached transport. */
+  BARRIER_OK: 6,
 } as const;
 export type MeshDataFrameKind = (typeof MESHDATA_FRAME)[keyof typeof MESHDATA_FRAME];
 
@@ -56,10 +60,15 @@ export const MESHDATA_MAX_FRAME_BYTES = 8 * 1024 * 1024;
  * JavaScript number, and past 2^53 it stops round-tripping. */
 export const MESHDATA_INBOUND_LANE_ID_BASE = 2 ** 32;
 
-/** D5's lossy ceiling: a datagram payload must fit one packet without
- * fragmenting. Enforced by the sender — a lossy lane is drop-tolerant, not
- * reassembling. */
+/** D5's physical lossy ceiling: every UDP fragment, including its transport
+ * header, fits one tailnet datagram. Logical presence snapshots are fragmented
+ * and reassembled beneath MeshData; callers still send one complete snapshot. */
 export const MESHDATA_LOSSY_MAX_PAYLOAD_BYTES = 1150;
+
+/** PRC4-E22's bounded core-presence message ceiling. This is a TRANSPORT bound,
+ * not plugin admission: plugin ephemeral facets remain refused until ICE
+ * exposes an enforceable producer budget that can be summed below this cap. */
+export const MESHDATA_LOSSY_MAX_LOGICAL_BYTES = 64 * 1024;
 
 export interface MeshDataFrame {
   /** Tolerant reader: an unknown kind decodes fine and the receiver decides. */

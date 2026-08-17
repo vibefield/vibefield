@@ -129,6 +129,8 @@ async function fakeBridge(): Promise<{
           sock.write(encodeMeshDataFrame(MESHDATA_FRAME.HELLO_OK, 0, new Uint8Array()));
         } else if (f.kind === MESHDATA_FRAME.DATA) {
           received.push({ laneId: f.laneId, payload: f.payload });
+        } else if (f.kind === MESHDATA_FRAME.BARRIER) {
+          sock.write(encodeMeshDataFrame(MESHDATA_FRAME.BARRIER_OK, f.laneId, new Uint8Array()));
         }
       }
     });
@@ -366,5 +368,14 @@ describe("inbound lanes — the ordering hazard", () => {
     expect(got).toHaveLength(1);
     expect(got[0]?.laneId).toBe(5);
     expect([...(got[0]?.payload ?? [])]).toEqual([...payload]);
+  }, 30_000);
+
+  it("fences every earlier DATA frame before resolving a lane barrier", async () => {
+    const bridge = await fakeBridge();
+    const l = link(bridge);
+    await l.connect();
+    l.send(5, bytes("terminal-presence"));
+    await l.flush(5);
+    expect(bridge.received().map((frame) => text(frame.payload))).toEqual(["terminal-presence"]);
   }, 30_000);
 });

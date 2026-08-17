@@ -46,6 +46,7 @@ export {
   type FederatedSubsOptions,
   type UpstreamLink,
 } from "./federated-subs";
+export { OutboundLaneIdAllocator } from "./lane-id";
 export { MeshClient, type ServeSpec, type ServeState } from "./mesh-client";
 export { MeshLaneLink, type MeshLaneLinkOptions } from "./mesh-lane";
 export { NativeLink, RpcCallError } from "./native-link";
@@ -58,6 +59,12 @@ export {
   type PluginRegistryHealth,
   PluginRegistryService,
 } from "./plugin-registry";
+export {
+  type PresenceLaneBytes,
+  type PresenceLaneControl,
+  PresenceRoomRouter,
+  type PresenceRoomRouterOptions,
+} from "./presence-room";
 export { ProductApi } from "./product-api";
 export { ServiceHost, type ServiceHostConfig } from "./service-host";
 export {

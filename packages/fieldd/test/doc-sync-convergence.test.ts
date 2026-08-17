@@ -55,10 +55,12 @@ class Device {
     this.control = new RoutedControl(name, mesh);
     let sync: DocSyncService | undefined;
     this.docs = new DocumentService({ dataDir, onCommit: (c) => sync?.onCommit(c) });
+    let nextLaneId = 1;
     sync = new DocSyncService({
       docs: this.docs,
       control: this.control,
       bytes: this.bytes,
+      allocateLaneId: () => nextLaneId++,
       peers: async () => mesh.peersOf(name),
     });
     this.sync = sync;

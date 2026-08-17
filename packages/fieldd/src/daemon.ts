@@ -90,6 +90,7 @@ import { DocSyncService, type LaneInfo } from "./doc-sync";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { InstallSetReconciler } from "./install-reconciler";
+import { OutboundLaneIdAllocator } from "./lane-id";
 import { LinkService } from "./link-service";
 import { McpService } from "./mcp-service";
 import { MeshClient, type ServeSpec } from "./mesh-client";
@@ -101,6 +102,7 @@ import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
+import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, pluginChildEnv } from "./process-service";
 import { ProductApi } from "./product-api";
 import {
@@ -334,6 +336,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // optional the whole way down — with the mesh off (the default) `docSync`
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
+    let presenceRooms: PresenceRoomRouter | null = null;
     // UA-D7 — the user's posture, CACHED because the three sync gates ask
     // synchronously (a commit hook cannot await a settings-document read) and
     // because the settings doc is constructed further down. It starts at the
@@ -352,6 +355,33 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       bootId,
       logger: logger.child({ component: "mesh.lane" }),
     });
+    const laneIds = new OutboundLaneIdAllocator();
+    const laneControl = {
+      open: async (req: {
+        laneId: number;
+        class: "reliable" | "lossy";
+        peer: string;
+        protocol: "doc-sync" | "presence";
+        docId?: string;
+      }): Promise<void> => {
+        await native.request("native.mesh.lane.open", req);
+      },
+      close: async (laneId: number): Promise<void> => {
+        await native.request("native.mesh.lane.close", { laneId });
+      },
+      subscribe: async (
+        onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+      ): Promise<{ lanes: LaneInfo[] }> => {
+        const { snapshot } = await native.subscribe("native.mesh.lane.subscribe", {}, onEvent);
+        return (snapshot as { lanes: LaneInfo[] } | undefined) ?? { lanes: [] };
+      },
+    };
+    const meshPeers = async (): Promise<Array<{ id: string; online: boolean }>> => {
+      const peers = (await mesh.peers()) as { id?: unknown; online?: unknown }[];
+      return peers
+        .filter((peer): peer is { id: string; online?: unknown } => typeof peer.id === "string")
+        .map((peer) => ({ id: peer.id, online: peer.online !== false }));
+    };
     // PLUG-P2 — the plugin registry (§9): manifest-only discovery, pre-listen
     // so the first snapshot is warm. No module code loads here (§19.1).
     // P7 — the installed root is fieldd-OWNED: absent on first boot is the
@@ -380,40 +410,42 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // `lane.open` already answers UNAVAILABLE with the mesh unit's real state.
     docSync = new DocSyncService({
       docs,
-      control: {
-        open: async (req) => {
-          await native.request("native.mesh.lane.open", req);
-        },
-        close: async (laneId) => {
-          await native.request("native.mesh.lane.close", { laneId });
-        },
-        subscribe: async (onEvent) => {
-          const { snapshot } = await native.subscribe("native.mesh.lane.subscribe", {}, onEvent);
-          return (snapshot as { lanes: LaneInfo[] } | undefined) ?? { lanes: [] };
-        },
-      },
+      control: laneControl,
       bytes: laneLink,
-      peers: async () => {
-        const peers = (await mesh.peers()) as { id?: unknown; online?: unknown }[];
-        return (
-          peers
-            .filter((p): p is { id: string; online?: unknown } => typeof p.id === "string")
-            // A peer that does not SAY offline gets the attempt (tolerant
-            // reader); a failed open records the truth either way.
-            .map((p) => ({ id: p.id, online: p.online !== false }))
-        );
-      },
+      allocateLaneId: laneIds.allocate,
+      // A peer that does not SAY offline gets the attempt (tolerant reader); a
+      // failed open records the truth either way.
+      peers: meshPeers,
       // UA-D7 — the one place per-doc intent and user posture are folded
       // together; the service itself never learns that a posture exists.
       resolveIntent: (docId) => resolveSyncIntent(docs.syncIntentOf(docId), syncPosture),
       logger: logger.child({ component: "doc.sync" }),
     });
+    presenceRooms = new PresenceRoomRouter({
+      control: laneControl,
+      bytes: laneLink,
+      peers: meshPeers,
+      allocateLaneId: laneIds.allocate,
+      logger: logger.child({ component: "presence.room" }),
+    });
     try {
       await laneLink.connect();
       await docSync.start();
       logger.info("fieldd.doc_sync.started", "Cross-device document sync is live");
+      try {
+        await presenceRooms.start();
+        logger.info("fieldd.presence.started", "Document-room presence routing is live");
+      } catch (error) {
+        presenceRooms = null;
+        logger.info(
+          "fieldd.presence.unavailable",
+          "Document-room presence is not available on this boot",
+          { error: String(error) },
+        );
+      }
     } catch (error) {
       docSync = null;
+      presenceRooms = null;
       laneLink.close();
       logger.info(
         "fieldd.doc_sync.unavailable",
@@ -888,6 +920,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const docLane = new DocLane({
       dataPort: config.dataPort ?? 0,
       docs,
+      ...(presenceRooms === null ? {} : { rooms: presenceRooms }),
       logger: logger.child({ component: "docs.lane" }),
     });
     const dataPort = await docLane.listen();
@@ -2188,6 +2221,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ]);
         detachHealthSources?.();
         links.stop();
+        await presenceRooms?.stop();
         docSync?.stop();
         laneLink.close();
         docs.dispose();
@@ -2226,6 +2260,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       detachHealthSources?.();
       api.close();
       docLane.close(); // release the lane port before the outer rollback runs
+      await presenceRooms?.stop();
       docSync?.stop();
       laneLink.close();
       docs.dispose();
@@ -2497,6 +2532,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await settingsDoc.dispose(); // D29′ — the doc's writes are already durable
           api.close();
           docLane.close();
+          await presenceRooms?.stop();
+          docSync?.stop();
+          laneLink.close();
           docs.dispose();
           const artifactDrain = artifacts.dispose();
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery

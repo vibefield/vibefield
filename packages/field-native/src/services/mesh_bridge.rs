@@ -45,6 +45,8 @@ pub const FRAME_HELLO: u8 = 1;
 pub const FRAME_HELLO_OK: u8 = 2;
 pub const FRAME_DATA: u8 = 3;
 pub const FRAME_ERR: u8 = 4;
+pub const FRAME_BARRIER: u8 = 5;
+pub const FRAME_BARRIER_OK: u8 = 6;
 
 /// u32 len + u8 kind + u64 laneId.
 pub const HEADER_BYTES: usize = 13;
@@ -54,6 +56,7 @@ pub const LENGTH_PREFIX_BYTES: usize = 4;
 const MIN_BODY_BYTES: usize = 1 + 8;
 pub const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;
 pub const LOSSY_MAX_PAYLOAD_BYTES: usize = 1150;
+pub const LOSSY_MAX_LOGICAL_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
@@ -237,9 +240,9 @@ impl LaneTransport for LoopbackTransport {
         Ok(())
     }
     async fn send(&self, lane: &Lane, payload: &[u8]) -> anyhow::Result<()> {
-        if lane.class == LaneClass::Lossy && payload.len() > LOSSY_MAX_PAYLOAD_BYTES {
+        if lane.class == LaneClass::Lossy && payload.len() > LOSSY_MAX_LOGICAL_BYTES {
             anyhow::bail!(
-                "lossy payload {} exceeds {LOSSY_MAX_PAYLOAD_BYTES}",
+                "lossy logical payload {} exceeds {LOSSY_MAX_LOGICAL_BYTES}",
                 payload.len()
             );
         }
@@ -694,6 +697,20 @@ async fn serve_client(stream: local_ipc::Stream, shared: Arc<Shared>, secret: [u
                         lane_id = frame.lane_id,
                         error = %e,
                         "A lane send failed"
+                    );
+                }
+            } else if frame.kind == FRAME_BARRIER {
+                // This loop awaits every DATA transport send before advancing,
+                // so reaching the barrier is the exact byte-plane fence fieldd
+                // needs before it asks the independent mgmt plane to close.
+                if shared.lanes.lock().unwrap().contains_key(&frame.lane_id) {
+                    let _ = tx.send(
+                        encode_frame(FRAME_BARRIER_OK, frame.lane_id, &[]).unwrap_or_default(),
+                    );
+                } else {
+                    let _ = tx.send(
+                        encode_frame(FRAME_ERR, frame.lane_id, b"{\"reason\":\"unknown-lane\"}")
+                            .unwrap_or_default(),
                     );
                 }
             }

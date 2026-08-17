@@ -7,7 +7,6 @@ import {
   decodeDocSyncRecord,
   encodeDocSyncHave,
   encodeDocSyncRecord,
-  MESHDATA_INBOUND_LANE_ID_BASE,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { contentIdOf, type DocCommit, type DocumentService } from "./doc-service";
@@ -69,6 +68,7 @@ export interface LaneInfo {
   laneId: number;
   peer: string;
   protocol: string;
+  class?: string;
   docId?: string;
   inbound?: boolean;
 }
@@ -98,6 +98,9 @@ export interface DocSyncOptions {
    * of this comment asserted the opposite and the liveness fold was inert for
    * it). `SyncLiveness` rows must arrive in this same keyspace. */
   peers: () => Promise<SyncPeer[]>;
+  /** Shared daemon-owned allocator. Doc sync and presence must never mint the
+   * same outbound id into field-native's one lane table. */
+  allocateLaneId: () => number;
   /** UA-D7 — this doc's settled answer to "may you leave the device?", per-doc
    * intent already folded with the user's posture (the daemon owns that fold;
    * see `resolveSyncIntent`). SYNCHRONOUS on purpose: it is consulted from
@@ -148,6 +151,7 @@ export class DocSyncService {
   readonly #resolveIntent: (docId: string) => DocSyncIntent;
   readonly #logger: Logger;
   readonly #now: () => number;
+  readonly #allocateLaneId: () => number;
 
   /** docId → peer → laneId, for lanes WE opened. */
   readonly #outbound = new Map<string, Map<string, number>>();
@@ -165,7 +169,6 @@ export class DocSyncService {
   #liveness: SyncLiveness | null = null;
   #livenessOff: (() => void) | null = null;
 
-  #nextLaneId = 1;
   #started = false;
 
   constructor(opts: DocSyncOptions) {
@@ -173,6 +176,7 @@ export class DocSyncService {
     this.#control = opts.control;
     this.#bytes = opts.bytes;
     this.#peers = opts.peers;
+    this.#allocateLaneId = opts.allocateLaneId;
     this.#resolveIntent = opts.resolveIntent ?? (() => "sync");
     this.#now = opts.now ?? Date.now;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "doc.sync" });
@@ -794,7 +798,7 @@ export class DocSyncService {
   }
 
   async #openLane(docId: string, peer: string): Promise<number | null> {
-    const laneId = this.#mintLaneId();
+    const laneId = this.#allocateLaneId();
     try {
       await this.#control.open({ laneId, class: "reliable", peer, protocol: "doc-sync", docId });
     } catch (error) {
@@ -821,13 +825,6 @@ export class DocSyncService {
     }
     byPeer.set(peer, laneId);
     return laneId;
-  }
-
-  /** fieldd's half of the id space, and it must stay there — field-native
-   * refuses an id from the inbound half at the door. */
-  #mintLaneId(): number {
-    if (this.#nextLaneId >= MESHDATA_INBOUND_LANE_ID_BASE) this.#nextLaneId = 1;
-    return this.#nextLaneId++;
   }
 
   #send(laneId: number, peer: string, as: "snapshot" | "update", commit: DocCommit): void {

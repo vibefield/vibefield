@@ -48,6 +48,12 @@ export interface MeshLaneLinkOptions {
 }
 
 type LaneHandler = (payload: Uint8Array) => void;
+interface BarrierWaiter {
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (error: Error) => void;
+  timer: NodeJS.Timeout;
+}
 
 const DEFAULT_ORPHAN_TTL_MS = 30_000;
 const DEFAULT_ORPHAN_MAX_BYTES = 4 * 1024 * 1024;
@@ -59,6 +65,7 @@ export class MeshLaneLink extends EventEmitter {
   #sock: Socket | null = null;
   #reader = new MeshDataFrameReader();
   #handlers = new Map<number, LaneHandler>();
+  #barriers = new Map<number, BarrierWaiter>();
   #orphans = new Map<number, { chunks: Uint8Array[]; bytes: number; timer: NodeJS.Timeout }>();
   #closed = false;
   /** Whether the handshake has resolved one way or the other. Distinct from
@@ -151,6 +158,42 @@ export class MeshLaneLink extends EventEmitter {
     return this.#sock.write(encodeMeshDataFrame(MESHDATA_FRAME.DATA, laneId, payload));
   }
 
+  /** Fence the independent byte/control planes before `lane.close`.
+   *
+   * BARRIER is ordered behind earlier DATA on this socket. The bridge answers
+   * only after those sends have entered the lane transport, so a subsequent
+   * management close can reliably replay the transport's retained latest
+   * lossy snapshot instead of racing an older one. */
+  flush(laneId: number, timeoutMs = 5_000): Promise<void> {
+    if (!this.connected || this.#sock === null) {
+      return Promise.reject(new Error("meshdata link is not connected"));
+    }
+    const existing = this.#barriers.get(laneId);
+    if (existing !== undefined) return existing.promise;
+
+    let resolvePromise!: () => void;
+    let rejectPromise!: (error: Error) => void;
+    const promise = new Promise<void>((resolve, reject) => {
+      resolvePromise = resolve;
+      rejectPromise = reject;
+    });
+    const timer = setTimeout(() => {
+      const current = this.#barriers.get(laneId);
+      if (current?.promise !== promise) return;
+      this.#barriers.delete(laneId);
+      current.reject(new Error(`meshdata barrier timed out for lane ${laneId}`));
+    }, timeoutMs);
+    timer.unref?.();
+    this.#barriers.set(laneId, {
+      promise,
+      resolve: resolvePromise,
+      reject: rejectPromise,
+      timer,
+    });
+    this.#sock.write(encodeMeshDataFrame(MESHDATA_FRAME.BARRIER, laneId, new Uint8Array()));
+    return promise;
+  }
+
   /** Bytes queued in the socket toward the bridge — the outbound watermark's
    * live reading, for callers pacing a large transfer. */
   get bufferedBytes(): number {
@@ -181,6 +224,7 @@ export class MeshLaneLink extends EventEmitter {
     for (const held of this.#orphans.values()) clearTimeout(held.timer);
     this.#orphans.clear();
     this.#handlers.clear();
+    this.#rejectBarriers(new Error("meshdata link closed"));
     this.#sock?.destroy();
     this.#sock = null;
   }
@@ -237,8 +281,12 @@ export class MeshLaneLink extends EventEmitter {
         case MESHDATA_FRAME.DATA:
           this.#deliver(frame.laneId, frame.payload);
           break;
+        case MESHDATA_FRAME.BARRIER_OK:
+          this.#settleBarrier(frame.laneId);
+          break;
         case MESHDATA_FRAME.ERR: {
           const reason = safeReason(frame.payload);
+          this.#settleBarrier(frame.laneId, new Error(`meshdata lane ${frame.laneId}: ${reason}`));
           if (!this.#helloSettled) this.emit("hello-refused", reason);
           else this.emit("lane-error", frame.laneId, reason);
           this.#logger.warn("fieldd.mesh_lane.error_frame", "The bridge reported a lane error", {
@@ -305,7 +353,21 @@ export class MeshLaneLink extends EventEmitter {
     this.connected = false;
     this.#helloSettled = false; // a reconnect gets a fresh handshake
     this.#reader.reset();
+    this.#rejectBarriers(new Error("meshdata link disconnected"));
     if (!this.#closed) this.emit("disconnected");
+  }
+
+  #settleBarrier(laneId: number, error?: Error): void {
+    const waiter = this.#barriers.get(laneId);
+    if (waiter === undefined) return;
+    this.#barriers.delete(laneId);
+    clearTimeout(waiter.timer);
+    if (error === undefined) waiter.resolve();
+    else waiter.reject(error);
+  }
+
+  #rejectBarriers(error: Error): void {
+    for (const laneId of [...this.#barriers.keys()]) this.#settleBarrier(laneId, error);
   }
 }
 

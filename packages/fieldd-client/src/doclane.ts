@@ -8,6 +8,7 @@ import {
   LaneErr,
   LaneHelloOk,
   LanePutOk,
+  MESHDATA_LOSSY_MAX_LOGICAL_BYTES,
 } from "@vibefield/contracts";
 import { FielddRpcError } from "./client";
 
@@ -85,6 +86,7 @@ export class DocLaneClient {
   private attempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private statusListeners = new Set<() => void>();
+  private presenceListeners = new Set<(payload: Uint8Array) => void>();
   private closedByUser = false;
   private attachedOnce = false;
   private recoveryEnabled = false;
@@ -104,6 +106,26 @@ export class DocLaneClient {
   onStatusChange(fn: () => void): () => void {
     this.statusListeners.add(fn);
     return () => this.statusListeners.delete(fn);
+  }
+
+  /** Subscribe to unsolicited room snapshots. The listener survives transient
+   * reconnects; its returned inverse is identity-bound to this subscription. */
+  onPresence(fn: (payload: Uint8Array) => void): () => void {
+    this.presenceListeners.add(fn);
+    return () => this.presenceListeners.delete(fn);
+  }
+
+  /** Publish one opaque ICE presence snapshot into the authenticated doc room. */
+  sendPresence(payload: Uint8Array): void {
+    if (payload.byteLength > MESHDATA_LOSSY_MAX_LOGICAL_BYTES) {
+      throw new FielddRpcError(
+        "PRECONDITION_FAILED",
+        `presence snapshot exceeds ${MESHDATA_LOSSY_MAX_LOGICAL_BYTES} bytes`,
+        false,
+      );
+    }
+    this.requireAttached();
+    this.send(encodeLaneFrame(LANE_FRAME.PRESENCE_PUBLISH, 0, payload));
   }
 
   /** Dial + HELLO. Resolves once the daemon acknowledged the lane. */
@@ -190,6 +212,7 @@ export class DocLaneClient {
     this.dialingWs = null;
     dialing?.close();
     this.failWaiter(new FielddRpcError("UNAVAILABLE", "doc lane closed"));
+    this.presenceListeners.clear();
     this.setStatus("closed");
   }
 
@@ -348,6 +371,18 @@ export class DocLaneClient {
       frame = decodeLaneFrame(bytes);
     } catch {
       return; // tolerant reader: structural garbage never fatal to the client
+    }
+    if (frame.kind === LANE_FRAME.PRESENCE_PUSH) {
+      const payload = frame.payload.slice();
+      for (const listener of [...this.presenceListeners]) {
+        try {
+          listener(payload);
+        } catch {
+          // Presence is an optional coeffect: one renderer observer cannot
+          // steal a persistence reply or tear down the document lane.
+        }
+      }
+      return;
     }
     const w = this.waiter;
     if (w) {

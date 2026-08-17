@@ -18,6 +18,7 @@ import { defaultCanvasGridConfig } from "./field/canvas-appearance";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
+import type { FieldUserProfile } from "./host";
 import { getRendererLogger } from "./logging";
 import { setPluginClientBackend } from "./plugin-host/plugin-client";
 import {
@@ -44,12 +45,15 @@ import { useTheme } from "./theme";
 export function FieldView({
   manager,
   plugins,
+  profile,
 }: {
   manager: DocManager;
   /** P8b-3 — the staged set the boot phase resolved. Absent only in harnesses
    * that mount the view without a boot machine; the session then builds an
    * empty registry rather than reaching for a loader of its own. */
   plugins?: PreparedRendererPlugins;
+  /** Real supervisor-owned identity; absent harnesses run without presence. */
+  profile?: FieldUserProfile;
 }): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
   // Shared seams between units: the stage publishes its GL/halo teardown for
@@ -95,6 +99,7 @@ export function FieldView({
     manager,
     stageDisposeRef,
     plugins,
+    profile,
   );
   usePreviewWarmup(manager, registry);
 

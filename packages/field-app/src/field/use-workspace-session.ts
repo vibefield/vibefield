@@ -11,6 +11,7 @@ import { setBoardStatus } from "../board-status";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
+import type { FieldUserProfile } from "../host";
 import { getRendererLogger } from "../logging";
 import {
   type BehaviorGenerationEvent,
@@ -20,6 +21,7 @@ import {
 import { setActiveCanvasEngine } from "../plugin-host/canvas-engine-ref";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
+import { attachDocumentPresence } from "./document-presence";
 import { bindPersistence } from "./persistence-controller";
 
 let nextBehaviorRuntimeGeneration = 0;
@@ -121,6 +123,9 @@ export function useWorkspaceSession(
    * than fetched here: the registry is built synchronously in the memo below,
    * so every import had to finish before this hook ever ran. */
   plugins?: PreparedRendererPlugins,
+  /** Supervisor-owned identity. No profile means the optional room coeffect
+   * stays off; persistence and every non-ephemeral behavior remain unchanged. */
+  profile?: FieldUserProfile,
 ): WorkspaceSession {
   const docState = useSyncExternalStore(manager.subscribe, manager.getState);
   const pending = docState.pending;
@@ -185,12 +190,31 @@ export function useWorkspaceSession(
       );
     };
     let behaviorConnection = connectBehaviorEpisode();
+    const lane = pending.lane;
+    let closePresence = (): void => {};
+    const connectPresence = (): void => {
+      if (lane === null || profile === undefined) return;
+      try {
+        closePresence = attachDocumentPresence({
+          ce,
+          lane,
+          profile,
+          docId: pending.docId,
+        });
+      } catch (error) {
+        getRendererLogger()
+          .child({ component: "presence", docId: pending.docId })
+          .warn("renderer.presence.attach_failed", "The document opened without presence", {
+            error: String(error),
+          });
+      }
+    };
     const closeDocument = (reason: string): void => {
       // Registration is execution authority: withdraw it before persistence and document close.
       behaviorConnection?.close(reason);
+      closePresence();
       ce.docs.close();
     };
-    const lane = pending.lane;
     if (pending.initialBytes !== null) {
       // C2 renames fold IN-BAND since ice 0.4.0 (design-008, petition I5): the
       // widgets' `renamedFrom` declarations drive the engine's own open-path
@@ -210,14 +234,12 @@ export function useWorkspaceSession(
           );
         setBoardStatus({ state: "quarantined", detail: res.reason });
         ce.docs.create();
+        connectPresence();
         behaviorConnection?.refresh();
         ce.world.sync();
         manager.contentApplied(pending.generation);
         return () => closeDocument("quarantined-document-close");
       }
-      // Today this is a no-op for the admitted durable/runtime profile. It is the explicit
-      // coeffect edge PRC-4g will use after attaching product presence to the live document.
-      behaviorConnection?.refresh();
       try {
         for (const update of pending.initialUpdates) res.session.applyRemote(update);
       } catch (error) {
@@ -237,11 +259,14 @@ export function useWorkspaceSession(
         setBoardStatus({ state: "quarantined", detail });
         behaviorConnection = connectBehaviorEpisode();
         ce.docs.create();
+        connectPresence();
         behaviorConnection?.refresh();
         ce.world.sync();
         manager.contentApplied(pending.generation);
         return () => closeDocument("quarantined-journal-close");
       }
+      connectPresence();
+      behaviorConnection?.refresh();
       ce.world.sync();
       if (res.session.readOnly) {
         // P2 — the engine's pack-marker gate (ghost probe 2026-07-23): a board
@@ -261,6 +286,7 @@ export function useWorkspaceSession(
       }
     } else {
       const session = ce.docs.create();
+      connectPresence();
       behaviorConnection?.refresh();
       // The demo scene belongs to the bootstrap default doc alone (seed flag);
       // user-created docs open as an empty field.
@@ -276,10 +302,11 @@ export function useWorkspaceSession(
     manager.contentApplied(pending.generation);
     return () => {
       behaviorConnection?.close("document-close");
+      closePresence();
       unbindPersistence();
       ce.docs.close();
     };
-  }, [ce, manager, pending, plugins, registry, runtimeGeneration]);
+  }, [ce, manager, pending, plugins, profile, registry, runtimeGeneration]);
 
   // Natural boot framing (widgetlab, 2026-07-18: "zoom to fit, but with an
   // upper and bottom cap"): frame the content once the viewport is measured

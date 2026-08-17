@@ -11,6 +11,7 @@ import {
   type LaneHelloOk,
   LanePutMeta,
   type LanePutOk,
+  MESHDATA_LOSSY_MAX_LOGICAL_BYTES,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { type RawData, type WebSocket, WebSocketServer } from "ws";
@@ -35,7 +36,19 @@ export interface DocLaneOptions {
   /** 0 = ephemeral (tests); production passes PORTS.FIELDD_WS_DATA via bin.ts. */
   dataPort: number;
   docs: DocumentService;
+  /** Optional document-room owner. Persistence remains fully available when
+   * the mesh/presence plane is absent. */
+  rooms?: DocumentPresenceRooms;
   logger?: Logger;
+}
+
+export interface DocumentPresenceRoomHandle {
+  publish(payload: Uint8Array): void;
+  close(): void | Promise<void>;
+}
+
+export interface DocumentPresenceRooms {
+  attach(docId: string, sink: (payload: Uint8Array) => void): DocumentPresenceRoomHandle;
 }
 
 interface LaneConn {
@@ -46,6 +59,8 @@ interface LaneConn {
   helloTimer: NodeJS.Timeout | null;
   /** Serializes async storage operations and preserves frame order. */
   chain: Promise<void>;
+  /** identity-bound membership derived from the redeemed HELLO docId */
+  room: DocumentPresenceRoomHandle | null;
 }
 
 export class DocLane {
@@ -73,6 +88,7 @@ export class DocLane {
       docId: null,
       pendingMeta: null,
       chain: Promise.resolve(),
+      room: null,
       helloTimer: setTimeout(() => {
         if (!conn.docId) ws.close(1008, "no hello");
       }, HELLO_TIMEOUT_MS),
@@ -87,10 +103,23 @@ export class DocLane {
     });
     ws.on("close", () => {
       if (conn.helloTimer) clearTimeout(conn.helloTimer);
-      void conn.chain.finally(() => {
-        if (conn.docId) this.opts.docs.writerDetached(conn.docId);
-        conn.docId = null;
-        conn.pendingMeta = null;
+      void conn.chain.then(async () => {
+        const docId = conn.docId;
+        const room = conn.room;
+        conn.room = null;
+        try {
+          await room?.close();
+        } catch (error) {
+          this.logger.warn(
+            "fieldd.doclane.presence_close_failed",
+            "A document room did not close cleanly",
+            { docId, error: String(error) },
+          );
+        } finally {
+          if (docId) this.opts.docs.writerDetached(docId);
+          conn.docId = null;
+          conn.pendingMeta = null;
+        }
       });
     });
     ws.on("error", () => {
@@ -152,6 +181,9 @@ export class DocLane {
       case LANE_FRAME.PUT:
         await this.onPut(ws, conn, frame.payload);
         return;
+      case LANE_FRAME.PRESENCE_PUBLISH:
+        this.onPresencePublish(conn, frame.payload);
+        return;
       default:
         // tolerant reader: unknown (or out-of-sequence) kinds are logged + ignored,
         // never fatal — a future frame kind must degrade, not drop the lane
@@ -194,6 +226,21 @@ export class DocLane {
     }
     conn.docId = redeemed.docId;
     this.opts.docs.writerAttached(redeemed.docId);
+    try {
+      conn.room =
+        this.opts.rooms?.attach(redeemed.docId, (payload) => {
+          this.sendFrame(ws, encodeLaneFrame(LANE_FRAME.PRESENCE_PUSH, 0, payload));
+        }) ?? null;
+    } catch (error) {
+      // Presence is an optional coeffect. A room failure must never turn a
+      // valid persistence ticket into a failed document attach.
+      this.logger.warn(
+        "fieldd.doclane.presence_attach_failed",
+        "The document opened without its presence room",
+        { docId: redeemed.docId, error: String(error) },
+      );
+      conn.room = null;
+    }
 
     const meta = await this.opts.docs.readDocMeta(redeemed.docId);
     const helloOk: LaneHelloOk = {
@@ -247,6 +294,28 @@ export class DocLane {
     } catch (e) {
       if (e instanceof RpcCallError) this.sendErr(ws, e.kind as ErrorKind, e.message);
       else this.sendErr(ws, "INTERNAL", e instanceof Error ? e.message : "write failed");
+    }
+  }
+
+  private onPresencePublish(conn: LaneConn, payload: Uint8Array): void {
+    if (payload.byteLength > MESHDATA_LOSSY_MAX_LOGICAL_BYTES) {
+      this.logger.warn(
+        "fieldd.doclane.presence_oversize",
+        "An oversized presence snapshot was dropped",
+        { docId: conn.docId, bytes: payload.byteLength },
+      );
+      return;
+    }
+    try {
+      conn.room?.publish(payload);
+    } catch (error) {
+      // No acknowledgement exists for lossy presence. Log and wait for ICE's
+      // next keepalive snapshot; never poison the ordered persistence chain.
+      this.logger.warn(
+        "fieldd.doclane.presence_publish_failed",
+        "A presence snapshot could not enter its document room",
+        { docId: conn.docId, error: String(error) },
+      );
     }
   }
 

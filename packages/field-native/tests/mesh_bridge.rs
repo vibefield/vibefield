@@ -6,9 +6,9 @@
 //! before C6-3 puts truffle QUIC behind the same seam.
 use field_native::local_ipc;
 use field_native::services::mesh_bridge::{
-    encode_frame, FrameReader, Lane, LaneClass, LoopbackTransport, FRAME_DATA, FRAME_ERR,
-    FRAME_HELLO, FRAME_HELLO_OK, HEADER_BYTES, INBOUND_LANE_ID_BASE, LENGTH_PREFIX_BYTES,
-    LOSSY_MAX_PAYLOAD_BYTES, MAX_FRAME_BYTES,
+    encode_frame, FrameReader, Lane, LaneClass, LoopbackTransport, FRAME_BARRIER, FRAME_BARRIER_OK,
+    FRAME_DATA, FRAME_ERR, FRAME_HELLO, FRAME_HELLO_OK, HEADER_BYTES, INBOUND_LANE_ID_BASE,
+    LENGTH_PREFIX_BYTES, LOSSY_MAX_LOGICAL_BYTES, LOSSY_MAX_PAYLOAD_BYTES, MAX_FRAME_BYTES,
 };
 // only the filesystem-shape test reads it, and that test is unix-only
 #[cfg(unix)]
@@ -130,6 +130,8 @@ fn frame_constants_match_the_typescript_codec() {
         ("HELLO_OK", FRAME_HELLO_OK),
         ("DATA", FRAME_DATA),
         ("ERR", FRAME_ERR),
+        ("BARRIER", FRAME_BARRIER),
+        ("BARRIER_OK", FRAME_BARRIER_OK),
     ] {
         assert!(
             src.contains(&format!("{name}: {value},")),
@@ -143,6 +145,8 @@ fn frame_constants_match_the_typescript_codec() {
     assert!(src.contains(&format!(
         "MESHDATA_LOSSY_MAX_PAYLOAD_BYTES = {LOSSY_MAX_PAYLOAD_BYTES}"
     )));
+    assert!(src.contains("MESHDATA_LOSSY_MAX_LOGICAL_BYTES = 64 * 1024"));
+    assert_eq!(LOSSY_MAX_LOGICAL_BYTES, 64 * 1024);
     // The two minting authorities share one number across two languages, and
     // nothing regenerates them into agreement.
     assert_eq!(INBOUND_LANE_ID_BASE, 1 << 32);
@@ -480,18 +484,23 @@ async fn closing_a_lane_is_idempotent() {
 }
 
 #[tokio::test]
-async fn a_lossy_lane_refuses_a_payload_that_would_fragment() {
+async fn a_lossy_lane_accepts_fragmentable_messages_but_refuses_past_the_logical_cap() {
     let (_dir, daemon) = boot().await;
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let transport = LoopbackTransport::new(tx);
-    let big = vec![0u8; LOSSY_MAX_PAYLOAD_BYTES + 1];
+    let fragmentable = vec![0u8; LOSSY_MAX_PAYLOAD_BYTES + 1];
     use field_native::services::mesh_bridge::LaneTransport;
+    assert!(transport
+        .send(&lane(1, LaneClass::Lossy), &fragmentable)
+        .await
+        .is_ok());
+    let big = vec![0u8; LOSSY_MAX_LOGICAL_BYTES + 1];
     assert!(
         transport
             .send(&lane(1, LaneClass::Lossy), &big)
             .await
             .is_err(),
-        "a lossy lane must refuse to fragment"
+        "a lossy lane must refuse past its logical-message cap"
     );
     // the same payload on a reliable lane is fine — that is the whole difference
     assert!(transport

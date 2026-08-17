@@ -6,6 +6,7 @@ import {
   encodeMeshDataJsonFrame,
   MESHDATA_FRAME,
   MESHDATA_HEADER_BYTES,
+  MESHDATA_LOSSY_MAX_LOGICAL_BYTES,
   MESHDATA_LOSSY_MAX_PAYLOAD_BYTES,
   MESHDATA_MAX_FRAME_BYTES,
   MeshDataFrameReader,
@@ -184,8 +185,9 @@ describe("MeshDataFrameReader — the stream, where chunk boundaries are arbitra
 });
 
 describe("bounds", () => {
-  it("states the lossy datagram ceiling D5 fixes at one unfragmented packet", () => {
+  it("states separate physical-datagram and bounded logical-message ceilings", () => {
     expect(MESHDATA_LOSSY_MAX_PAYLOAD_BYTES).toBe(1150);
+    expect(MESHDATA_LOSSY_MAX_LOGICAL_BYTES).toBe(64 * 1024);
   });
 
   it("refuses to ENCODE past the socket ceiling", () => {

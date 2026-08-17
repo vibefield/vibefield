@@ -53,6 +53,9 @@ export interface BootReady {
    * registry is built synchronously in a memo, so this is the last moment an
    * import can still happen; after this the set is fixed for the mount. */
   plugins: PreparedRendererPlugins;
+  /** Supervisor-owned identity used for document presence. Absent in browser
+   * harnesses or when the optional profile bridge could not be read. */
+  profile?: FieldUserProfile;
 }
 
 /** What the wizard is handed while the boot holds for it (UA-3w). The profile
@@ -103,7 +106,7 @@ export interface BootMachine {
    * and inert when nothing is holding. The wizard calls it only after the
    * durable `onboarded` write lands, so a later retry() re-reads a record that
    * skips the phase on its own — no "already shown" bit is kept anywhere. */
-  completeOnboarding(): void;
+  completeOnboarding(profile?: FieldUserProfile): void;
 }
 
 const FRAME_BUDGET_MS = 24; // 60Hz + scheduling slack
@@ -148,6 +151,7 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
   let releaseOnboarding: (() => void) | null = null;
   let pluginCloseRequested = false;
   let pluginCloseTask: Promise<void> | null = null;
+  let currentProfile: FieldUserProfile | null = null;
 
   /** The §6 gate (UA-3w). The ONE outcome that opens the wizard is a record
    * this build can read that says `onboarded: false`. Everything else — no
@@ -176,6 +180,7 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
         );
         return null;
       }
+      currentProfile = profile;
       if (deps.host.forceOnboarding === true) {
         log.info(
           "renderer.boot.onboarding_forced",
@@ -279,7 +284,13 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
         const plugins = await pluginsPromise;
         patch({ stage: "opening doc", progress: 0 });
         const manager = new mod.DocManager(client);
-        ready = { client, manager, mod, plugins };
+        ready = {
+          client,
+          manager,
+          mod,
+          plugins,
+          ...(currentProfile === null ? {} : { profile: currentProfile }),
+        };
         mark("vf:renderer:document-ready");
         for (const fn of [...listeners]) fn(); // BootRoot mounts the workspace under the splash
       }
@@ -379,7 +390,8 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
     get onboarding() {
       return onboarding;
     },
-    completeOnboarding: () => {
+    completeOnboarding: (profile) => {
+      if (profile !== undefined) currentProfile = profile;
       releaseOnboarding?.();
     },
     closePlugins: () => {
