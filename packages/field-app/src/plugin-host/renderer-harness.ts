@@ -1,6 +1,7 @@
 import { type AnyBehaviorDef, describeBehavior } from "@vibecook/ice";
 import {
   type BehaviorContribution,
+  type BehaviorDefinition,
   type CommandContribution,
   computeEffectiveGrants,
   PLUGIN_LIMITS,
@@ -84,6 +85,8 @@ export interface RendererBehaviorBinding {
   readonly id: string;
   readonly declarationIndex: number;
   readonly orderKey: string;
+  /** Signed, descriptor-checked serial truth used by the document host for store policy. */
+  readonly definition: BehaviorDefinition;
   /** Effective renderer authority only; binding itself is always inert. */
   readonly authorized: boolean;
   readonly handle: AnyBehaviorDef;
@@ -686,6 +689,7 @@ function buildActivation(
           id: declaration.id,
           declarationIndex,
           orderKey: behaviorOrderKey(spec.id, declarationIndex),
+          definition: declaration.definition,
           authorized: spec.effectiveCapabilities.includes("canvas.write"),
           handle,
         }),

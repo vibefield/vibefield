@@ -12,10 +12,81 @@ import type { DocManager, DocManagerState } from "../doc-manager";
 import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
 import { getRendererLogger } from "../logging";
+import {
+  type BehaviorGenerationEvent,
+  BehaviorGenerationHost,
+  connectBehaviorGenerationHost,
+} from "../plugin-host/behavior-generation-host";
 import { setActiveCanvasEngine } from "../plugin-host/canvas-engine-ref";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 import { bindPersistence } from "./persistence-controller";
+
+let nextBehaviorRuntimeGeneration = 0;
+
+function logBehaviorGenerationEvent(event: BehaviorGenerationEvent): void {
+  const attrs = {
+    behaviorId: event.declarationId,
+    runtimeGeneration: event.target.runtimeGeneration,
+    ...(event.orderKey === undefined ? {} : { orderKey: event.orderKey }),
+    ...(event.reason === undefined ? {} : { reason: event.reason }),
+    ...(event.record === undefined ? {} : { ledger: event.record }),
+  };
+  const log = getRendererLogger().child({
+    component: "plugin.behavior.host",
+    docId: event.target.documentId,
+    ...(event.pluginId === undefined ? {} : { pluginId: event.pluginId }),
+  });
+  switch (event.type) {
+    case "register":
+      log.debug("renderer.plugin.behavior_registered", "A plugin behavior was registered", attrs);
+      break;
+    case "unregister":
+      log.debug(
+        "renderer.plugin.behavior_unregistered",
+        "A plugin behavior was unregistered",
+        attrs,
+      );
+      break;
+    case "rollback":
+      log.warn(
+        "renderer.plugin.behavior_registration_rolled_back",
+        "A failed behavior batch addition was rolled back",
+        attrs,
+      );
+      break;
+    case "ledger":
+      if (event.record?.suspended) {
+        log.warn(
+          "renderer.plugin.behavior_breaker_changed",
+          "A plugin behavior breaker changed",
+          attrs,
+        );
+      } else {
+        log.debug(
+          "renderer.plugin.behavior_breaker_changed",
+          "A plugin behavior breaker changed",
+          attrs,
+        );
+      }
+      break;
+    case "error":
+      log.error(
+        "renderer.plugin.behavior_host_error",
+        "A plugin behavior host operation failed",
+        event.error,
+        attrs,
+      );
+      break;
+    case "close":
+      log.debug(
+        "renderer.plugin.behavior_generation_closed",
+        "The document behavior generation closed",
+        attrs,
+      );
+      break;
+  }
+}
 
 // WorkspaceSession (§5.4.3): exactly ONE ICE engine generation and ONE
 // document-attach lifetime. The two named invariants live here:
@@ -75,7 +146,14 @@ export function useWorkspaceSession(
       return [];
     }
   }, [pending, registry]);
-  const ce = useMemo(() => createFieldEngine(registry, ghosts), [registry, ghosts, generation]);
+  const engineGeneration = useMemo(
+    () => ({
+      ce: createFieldEngine(registry, ghosts),
+      runtimeGeneration: `field-engine-${++nextBehaviorRuntimeGeneration}`,
+    }),
+    [registry, ghosts, generation],
+  );
+  const { ce, runtimeGeneration } = engineGeneration;
 
   // B3 law carried into B4 — the doc attaches to the COMMITTED engine only,
   // never in the memo factory. Keyed on the manager's pending session: a doc
@@ -83,6 +161,35 @@ export function useWorkspaceSession(
   // flushed it, then lands the new one before paint.
   useLayoutEffect(() => {
     if (pending === null) return;
+    const behaviorRuntime = plugins?.runtime;
+    let behaviorEpisode = 0;
+    const connectBehaviorEpisode = () => {
+      if (behaviorRuntime === undefined) return undefined;
+      behaviorEpisode += 1;
+      return connectBehaviorGenerationHost(
+        new BehaviorGenerationHost({
+          engine: ce,
+          target: {
+            windowId: behaviorRuntime.windowId,
+            documentId: pending.docId,
+            runtimeGeneration:
+              behaviorEpisode === 1
+                ? runtimeGeneration
+                : `${runtimeGeneration}:session-${behaviorEpisode}`,
+          },
+          ledger: behaviorRuntime.behaviorLedger,
+          presenceAvailable: () => ce.docs.presence() !== undefined,
+          onEvent: logBehaviorGenerationEvent,
+        }),
+        behaviorRuntime.behaviorCatalog,
+      );
+    };
+    let behaviorConnection = connectBehaviorEpisode();
+    const closeDocument = (reason: string): void => {
+      // Registration is execution authority: withdraw it before persistence and document close.
+      behaviorConnection?.close(reason);
+      ce.docs.close();
+    };
     const lane = pending.lane;
     if (pending.initialBytes !== null) {
       // C2 renames fold IN-BAND since ice 0.4.0 (design-008, petition I5): the
@@ -103,13 +210,20 @@ export function useWorkspaceSession(
           );
         setBoardStatus({ state: "quarantined", detail: res.reason });
         ce.docs.create();
+        behaviorConnection?.refresh();
         ce.world.sync();
         manager.contentApplied(pending.generation);
-        return () => ce.docs.close();
+        return () => closeDocument("quarantined-document-close");
       }
+      // Today this is a no-op for the admitted durable/runtime profile. It is the explicit
+      // coeffect edge PRC-4g will use after attaching product presence to the live document.
+      behaviorConnection?.refresh();
       try {
         for (const update of pending.initialUpdates) res.session.applyRemote(update);
       } catch (error) {
+        // The failed session is a real close edge. Reverse its exact behavior generation before
+        // closing, then create a fresh generation before the quarantined blank document.
+        behaviorConnection?.close("quarantined-journal-reset");
         ce.docs.close();
         const detail = error instanceof Error ? error.message : String(error);
         getRendererLogger()
@@ -121,10 +235,12 @@ export function useWorkspaceSession(
             { detail },
           );
         setBoardStatus({ state: "quarantined", detail });
+        behaviorConnection = connectBehaviorEpisode();
         ce.docs.create();
+        behaviorConnection?.refresh();
         ce.world.sync();
         manager.contentApplied(pending.generation);
-        return () => ce.docs.close();
+        return () => closeDocument("quarantined-journal-close");
       }
       ce.world.sync();
       if (res.session.readOnly) {
@@ -141,10 +257,11 @@ export function useWorkspaceSession(
           .warn("renderer.board.read_only", "Document opened read-only", { detail });
         setBoardStatus({ state: "readonly", detail });
         manager.contentApplied(pending.generation);
-        return () => ce.docs.close();
+        return () => closeDocument("readonly-document-close");
       }
     } else {
       const session = ce.docs.create();
+      behaviorConnection?.refresh();
       // The demo scene belongs to the bootstrap default doc alone (seed flag);
       // user-created docs open as an empty field.
       if (pending.seed) seedField(ce, session, registry);
@@ -153,15 +270,16 @@ export function useWorkspaceSession(
     if (lane === null) {
       // degraded (in-memory) session — the manager already set the board row
       manager.contentApplied(pending.generation);
-      return () => ce.docs.close();
+      return () => closeDocument("degraded-document-close");
     }
     const unbindPersistence = bindPersistence({ ce, manager, pending, lane });
     manager.contentApplied(pending.generation);
     return () => {
+      behaviorConnection?.close("document-close");
       unbindPersistence();
       ce.docs.close();
     };
-  }, [ce, manager, pending, registry]);
+  }, [ce, manager, pending, plugins, registry, runtimeGeneration]);
 
   // Natural boot framing (widgetlab, 2026-07-18: "zoom to fit, but with an
   // upper and bottom cap"): frame the content once the viewport is measured

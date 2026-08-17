@@ -69,6 +69,8 @@ export interface PreparedRendererPlugins {
 export interface BundledRendererPlugin {
   readonly manifest: PluginManifestV1;
   readonly mod: RendererPluginModule;
+  /** Prepared by the app boot path when a dev fallback needs window-owned behavior intent. */
+  readonly activation?: ActivatedRenderer;
 }
 
 export const EMPTY_PREPARED: PreparedRendererPlugins = {

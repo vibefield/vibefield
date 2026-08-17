@@ -1,5 +1,7 @@
 import {
+  computeEffectiveGrants,
   PLUGIN_LIMITS,
+  type PluginManifestV1,
   type PluginModuleUrls,
   type PluginRecord,
   type PluginRegistrySnapshot,
@@ -15,6 +17,8 @@ import {
 } from "@vibefield/plugin-runtime";
 import type { RendererPluginModule, WidgetBinding } from "@vibefield/plugin-sdk";
 import { type ComponentType, createElement, type ReactElement, useSyncExternalStore } from "react";
+import { BehaviorBindingCatalog } from "./behavior-binding-catalog";
+import { BehaviorBreakerLedger } from "./behavior-generation-host";
 import { refreshPluginProductClient, retirePluginProductClient } from "./plugin-client";
 import { stagePluginStyleLink } from "./plugin-style";
 import {
@@ -27,8 +31,13 @@ import {
 
 export const DEFAULT_RENDERER_WINDOW_ID = "field";
 
+interface ControlledRendererTarget extends RendererRuntimeTarget {
+  /** Captured from this exact target's canonical projected authority. */
+  readonly behaviorAuthorized: boolean;
+}
+
 interface ControlledRendererCandidate extends RuntimeTargetCandidate {
-  readonly target: RendererRuntimeTarget;
+  readonly target: ControlledRendererTarget;
   readonly activation: ActivatedRenderer;
   readonly inner: RendererActivationCandidate;
 }
@@ -60,9 +69,10 @@ export class RendererPluginController {
     { required: boolean; animated?: boolean; chrome?: unknown; preview?: unknown }
   >();
   private readonly listeners = new Set<() => void>();
+  private behaviorCatalog: BehaviorBindingCatalog | undefined;
   private revision = 0;
   private readonly controller: RuntimeTargetController<
-    RendererRuntimeTarget,
+    ControlledRendererTarget,
     ControlledRendererCandidate
   >;
   private readonly refreshCredential: NonNullable<
@@ -84,7 +94,7 @@ export class RendererPluginController {
     this.retireCredential = deps.retireCredential ?? retirePluginProductClient;
     this.controller = new RuntimeTargetController(`renderer:${this.pluginId}:${this.windowId}`, {
       activate: (target, scope, signal) => this.activate(target, scope, signal),
-      refresh: async (candidate, _previous, next, signal) => {
+      refresh: async (_candidate, _previous, next, signal) => {
         await this.refreshCredential(
           this.pluginId,
           {
@@ -93,9 +103,8 @@ export class RendererPluginController {
           },
           signal,
         );
-        candidate.inner.setBehaviorAuthorization(
-          this.record.grantedCapabilities.includes("canvas.write"),
-        );
+        // `canvas.write` is part of renderer semantic authority, so it can never change in this
+        // observation-only path. Do not recompute authorization from mutable registry state.
       },
       termination: { kind: "same-realm" },
       // The harness owns the exact §10.4 race. The small outer margin prevents two independent
@@ -111,6 +120,19 @@ export class RendererPluginController {
 
   get snapshot() {
     return this.controller.snapshot();
+  }
+
+  /** Window-owner injection. Must happen before the first activation attempt. */
+  attachBehaviorCatalog(catalog: BehaviorBindingCatalog): void {
+    if (this.behaviorCatalog === catalog) return;
+    if (this.behaviorCatalog !== undefined) {
+      throw new Error(`${this.pluginId}: renderer controller already has a behavior catalog`);
+    }
+    const snapshot = this.controller.snapshot();
+    if (snapshot.state !== "inactive" || snapshot.desired !== null) {
+      throw new Error(`${this.pluginId}: behavior catalog must attach before renderer activation`);
+    }
+    this.behaviorCatalog = catalog;
   }
 
   /** Stable ICE-facing binding. Code components dereference the currently committed activation;
@@ -209,7 +231,7 @@ export class RendererPluginController {
     }
   }
 
-  private targetFor(record: PluginRecord | null): RendererRuntimeTarget | null {
+  private targetFor(record: PluginRecord | null): ControlledRendererTarget | null {
     if (record === null || !record.enabled || record.renderer === "none") return null;
     if (
       record.installRevision !== this.module.installRevision ||
@@ -228,11 +250,12 @@ export class RendererPluginController {
       instanceKey: { windowId: this.windowId },
       authorityFingerprint: authority.fingerprint,
       observedGrantGeneration: record.grantGeneration,
+      behaviorAuthorized: authority.capabilities.includes("canvas.write"),
     };
   }
 
   private async activate(
-    target: RendererRuntimeTarget,
+    target: ControlledRendererTarget,
     scope: ActivationScope,
     signal: AbortSignal,
   ): Promise<ControlledRendererCandidate> {
@@ -250,6 +273,10 @@ export class RendererPluginController {
           }
         },
       });
+      inner.setBehaviorAuthorization(target.behaviorAuthorized);
+      if (inner.activation.behaviors.size > 0 && this.behaviorCatalog === undefined) {
+        throw new Error(`${this.pluginId}: behavior bindings require a window catalog owner`);
+      }
     } catch (error) {
       if (error instanceof RendererActivationStageError && !signal.aborted) {
         this.lastFailure = error.activation;
@@ -268,7 +295,9 @@ export class RendererPluginController {
             this.module.installRevision,
             this.deps.style.href,
           );
+    const candidateToken = {};
     const withdraw = (): void => {
+      this.behaviorCatalog?.withdrawCandidate(this.pluginId, candidateToken);
       style?.dispose();
       if (candidate !== undefined && this.currentCandidate === candidate) {
         this.currentCandidate = null;
@@ -297,6 +326,16 @@ export class RendererPluginController {
           inner.commit();
           if (signal.aborted)
             throw new Error(`${this.pluginId}: renderer target changed during commit`);
+          if (inner.activation.behaviors.size > 0) {
+            this.behaviorCatalog?.publishCandidate(
+              this.pluginId,
+              candidateToken,
+              target,
+              inner.activation.behaviors,
+            );
+          }
+          if (signal.aborted)
+            throw new Error(`${this.pluginId}: renderer target changed during behavior commit`);
         } catch (error) {
           withdraw();
           throw error;
@@ -370,6 +409,11 @@ function sameOpaqueBindingValue(left: unknown, right: unknown): boolean {
 /** One window's imported renderer set. It projects each registry snapshot onto only the artifacts
  * this boot actually approved and waits every exact controller during window close. */
 export class RendererWindowController {
+  /** Code-bearing renderer truth consumed by each committed document generation. */
+  readonly behaviorCatalog = new BehaviorBindingCatalog();
+  /** Chronic breaker state survives document/engine replacement within this window. */
+  readonly behaviorLedger = new BehaviorBreakerLedger();
+
   private readonly controllers = new Map<string, RendererPluginController>();
   private readonly inFlight = new Set<Promise<void>>();
   private closeTask: Promise<void> | undefined;
@@ -385,11 +429,41 @@ export class RendererWindowController {
       );
     if (this.controllers.has(controller.pluginId))
       throw new Error(`renderer controller already exists for ${controller.pluginId}`);
+    controller.attachBehaviorCatalog(this.behaviorCatalog);
     this.controllers.set(controller.pluginId, controller);
   }
 
   controller(pluginId: string): RendererPluginController | undefined {
     return this.controllers.get(pluginId);
+  }
+
+  /** DEV-only fallback bridge. Production staged artifacts always publish through a controller. */
+  publishBundled(manifest: PluginManifestV1, activation: ActivatedRenderer): void {
+    if (this.closed) throw new Error("renderer window controller is closed");
+    if (activation.state !== "active" || activation.behaviors.size === 0) return;
+    const effective = computeEffectiveGrants({
+      requested: manifest.capabilities,
+      hasRenderer: manifest.entries?.renderer !== undefined,
+      hasService: manifest.entries?.service !== undefined,
+      source: "bundled",
+    }).granted;
+    const authority = projectPluginAuthority("renderer", effective);
+    this.behaviorCatalog.publishCandidate(
+      manifest.id,
+      {},
+      {
+        face: "renderer",
+        pluginId: manifest.id,
+        artifact: {
+          installRevision: `dev-bundled:${manifest.version}`,
+          manifestHash: `dev-bundled:${manifest.id}@${manifest.version}`,
+        },
+        instanceKey: { windowId: this.windowId },
+        authorityFingerprint: authority.fingerprint,
+        observedGrantGeneration: 0,
+      },
+      activation.behaviors,
+    );
   }
 
   reconcile(snapshot: PluginRegistrySnapshot): Promise<void> {
@@ -422,6 +496,9 @@ export class RendererWindowController {
     const pending = [...this.inFlight];
     // Every close edge runs now; only observation waits are asynchronous.
     const closing = [...this.controllers.values()].map(async (controller) => controller.close());
+    // Controller abort listeners have withdrawn their exact rows synchronously. This final fence
+    // prevents any orphaned or reentrant publication from surviving window close.
+    this.behaviorCatalog.close();
     void Promise.allSettled([...pending, ...closing]).then((results) => {
       const failures = results.flatMap((result) =>
         result.status === "rejected"

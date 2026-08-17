@@ -17,7 +17,10 @@ import type { WidgetBinding } from "@vibefield/plugin-sdk";
 import { getRendererLogger } from "./logging";
 import { buildWidgetType } from "./plugin-host/build-widget";
 import { failedFaceComponent } from "./plugin-host/faces";
-import type { RendererPluginController } from "./plugin-host/renderer-controller";
+import {
+  type RendererPluginController,
+  RendererWindowController,
+} from "./plugin-host/renderer-controller";
 import { type ActivatedRenderer, activateRenderer } from "./plugin-host/renderer-harness";
 import {
   type BundledRendererPlugin,
@@ -170,8 +173,8 @@ export function buildRegistry(
     // whose setup file loads it once. It is null in every production build,
     // where the loader above is compiled away entirely.
     const bundled = prepared.bundled.length > 0 ? prepared.bundled : (devBundled ?? []);
-    for (const { manifest, mod } of bundled) {
-      const activation = activateRenderer(manifest, mod);
+    for (const { manifest, mod, activation: preparedActivation } of bundled) {
+      const activation = preparedActivation ?? activateRenderer(manifest, mod);
       if (activation.state !== "active") {
         log.error(
           "renderer.plugins.activation_failed",
@@ -226,7 +229,25 @@ export async function prepareFieldPlugins(
 ): Promise<PreparedRendererPlugins> {
   const prepared = await prepareRendererPlugins(deps);
   if (prepared.staged.length > 0) return prepared;
-  return { ...prepared, bundled: await loadDevBundledPlugins() };
+  const bundled = await loadDevBundledPlugins();
+  if (bundled.length === 0) return { ...prepared, bundled };
+  const runtime = prepared.runtime ?? new RendererWindowController(deps.windowId);
+  const log = getRendererLogger().child({ component: "plugin.host" });
+  const activated = bundled.map(({ manifest, mod }) => {
+    const activation = activateRenderer(manifest, mod);
+    try {
+      runtime.publishBundled(manifest, activation);
+    } catch (error) {
+      log.error(
+        "renderer.plugins.bundled_behavior_publication_failed",
+        "A dev-bundled plugin could not publish its behavior bindings",
+        error,
+        { pluginId: manifest.id },
+      );
+    }
+    return { manifest, mod, activation };
+  });
+  return { ...prepared, bundled: activated, runtime };
 }
 
 // === the demo scene — widgetlab App.tsx coordinates verbatim ===
@@ -333,6 +354,45 @@ export function createFieldEngine(
 ): CanvasEngine {
   return createCanvasEngine({
     widgets: [...registry.allWidgets().values(), ...ghosts],
+    // ICE keeps generic guest diagnostics and behavior-specific provenance as complementary
+    // routes. Preserve both; the renderer logger owns transport, bounds, and redaction.
+    onGuestFault(id, error) {
+      getRendererLogger()
+        .child({ component: "canvas.guest" })
+        .error("renderer.canvas.guest_fault", "A canvas guest faulted", error, { guestId: id });
+    },
+    onGuestNotice(message) {
+      getRendererLogger()
+        .child({ component: "canvas.guest" })
+        .warn("renderer.canvas.guest_notice", message);
+    },
+    onBehaviorFault(behavior, hook, entity, error) {
+      getRendererLogger()
+        .child({
+          component: "plugin.behavior",
+          ...(pluginIdForBehavior(behavior) === undefined
+            ? {}
+            : { pluginId: pluginIdForBehavior(behavior) }),
+        })
+        .error("renderer.plugin.behavior_fault", "A plugin behavior hook faulted", error, {
+          behaviorId: behavior,
+          hook,
+          ...(entity === undefined ? {} : { entity: String(entity) }),
+        });
+    },
+    onBehaviorLog(behavior, message, rest) {
+      getRendererLogger()
+        .child({
+          component: "plugin.behavior",
+          ...(pluginIdForBehavior(behavior) === undefined
+            ? {}
+            : { pluginId: pluginIdForBehavior(behavior) }),
+        })
+        .info("renderer.plugin.behavior_log", message, {
+          behaviorId: behavior,
+          arguments: [...rest],
+        });
+    },
     settings: {
       zoom: { min: 0.25, max: 3 },
       snap: { enabled: true, thresholdPx: 5 },
@@ -341,6 +401,11 @@ export function createFieldEngine(
       chrome: { liftScale: 1.05 },
     },
   });
+}
+
+function pluginIdForBehavior(behaviorId: string): string | undefined {
+  const separator = behaviorId.indexOf(":");
+  return separator > 0 ? behaviorId.slice(0, separator) : undefined;
 }
 
 /** The first-run board (widgetlab demo scene). Requires a live doc session.
