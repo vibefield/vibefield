@@ -65,7 +65,7 @@ function buildWidgets(
             w.surface,
           ),
         } satisfies WidgetBinding);
-      return [w.type, buildWidgetType(w, binding, owner)];
+      return [w.type, buildWidgetType(w, binding, owner, activation.behaviors)];
     }),
   );
 }
@@ -150,9 +150,19 @@ export function buildRegistry(
         { pluginId: staged.record.id },
       );
     }
-    // §11.4: a failed plugin registers face-only widgets — its boards render
-    // honest failed faces; peers and the canvas are untouched.
-    registerStaged(registry, staged.record, staged.activation, staged.controller);
+    // §11.4: ordinary failed plugins register face-only widgets. A behavior
+    // plugin whose sealed code identities are unavailable cannot be defined
+    // honestly; isolate that plugin and leave its document data untouched.
+    try {
+      registerStaged(registry, staged.record, staged.activation, staged.controller);
+    } catch (error) {
+      log.error(
+        "renderer.plugins.registration_failed",
+        "A staged plugin could not be registered",
+        error,
+        { pluginId: staged.record.id },
+      );
+    }
   }
   if (prepared.staged.length === 0) {
     // `devBundled` is the fallback's fallback, for a caller with no prepared set
@@ -170,7 +180,16 @@ export function buildRegistry(
           { pluginId: manifest.id },
         );
       }
-      registerCanonical(registry, manifest, activation);
+      try {
+        registerCanonical(registry, manifest, activation);
+      } catch (error) {
+        log.error(
+          "renderer.plugins.registration_failed",
+          "A bundled plugin could not be registered",
+          error,
+          { pluginId: manifest.id },
+        );
+      }
     }
     if (bundled.length === 0) {
       log.warn(

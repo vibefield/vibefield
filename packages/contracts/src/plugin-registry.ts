@@ -3,6 +3,7 @@ import { SemverString } from "./envelope";
 import { RegistryProvenance } from "./plugin-distribution";
 import { DeniedCapability } from "./plugin-runtime";
 import {
+  BehaviorContribution,
   CommandContribution,
   PluginCapabilityContribution,
   PluginId,
@@ -102,6 +103,8 @@ export type SanitizedMcp = z.infer<typeof SanitizedMcp>;
 export const SanitizedContributions = z
   .object({
     widgets: z.array(WidgetContribution).default([]),
+    /** Full data-only behavior descriptors are public renderer authority. */
+    behaviors: z.array(BehaviorContribution).default([]),
     commands: z.array(CommandContribution).default([]),
     surfaces: z.array(SurfaceContribution).default([]),
     /** P5 — the §8.5 declaration (scalar form-subset schemas; PUBLIC data —

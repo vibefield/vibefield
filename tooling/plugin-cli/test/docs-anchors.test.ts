@@ -47,4 +47,10 @@ describe("generated docs teach the shipped API", () => {
     expect(widgets).toContain("keyboard?: `shared` \\| `exclusive`");
     expect(widgets).toContain("keyboardEscape?: `release` \\| `widget`");
   });
+
+  it("keeps parser tombstones out of the author-facing vocabulary", () => {
+    const manifest = read("docs/plugin-authoring/manifest.md");
+    expect(manifest).toContain("behaviors?: object[]");
+    expect(manifest).not.toContain("systems?:");
+  });
 });

@@ -277,6 +277,7 @@ export const HOST_SINGLETON_MODULE_SPECIFIERS = [
   ...HOST_SINGLETON_EXTERNALS,
   "@vibefield/plugin-sdk/ui",
   "@vibefield/plugin-sdk/canvas",
+  "@vibefield/plugin-sdk/behavior",
 ] as const;
 
 export type HostSingletonModuleSpecifier = (typeof HOST_SINGLETON_MODULE_SPECIFIERS)[number];

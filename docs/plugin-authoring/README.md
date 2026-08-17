@@ -219,7 +219,8 @@ and the build preset — every file already in the shape `check` demands.
 ## The rules that catch people first
 
 - **Every contributed id is owned by the plugin id.** A widget type is `<id>` or
-  `<id>.<name>`; commands, surfaces and systems are `<id>.<name>`; custom
+  `<id>.<name>`; commands and surfaces are `<id>.<name>`; behaviors are
+  `<id>:<name>`; custom
   capabilities are `x.<id>.<name>`.
 - **Declare before you bind.** `ctx.widgets.register` throws for a type the
   manifest does not declare, and `check` refuses a declaration nothing binds.
@@ -227,7 +228,8 @@ and the build preset — every file already in the shape `check` demands.
   key-sorted JSON; its hash is the plugin's identity. Hand-edit it and `check`
   refuses with `manifest-stale`.
 - **The SDK is the only door.** Plugin code imports `@vibefield/plugin-sdk`
-  (plus `/ui`, `/canvas`), `@vibefield/contracts` types, and `react`. Nothing
+  (plus `/ui`, `/canvas`, `/behavior`), `@vibefield/contracts` types, and
+  `react`. Nothing
   else — no host packages, no Electron, no Node builtins.
 - **Absent APIs are absent, never stubbed.** If a face is missing from `ctx`,
   the manifest did not ask for it. See `context.md`.

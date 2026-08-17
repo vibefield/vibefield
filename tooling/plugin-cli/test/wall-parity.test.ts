@@ -48,6 +48,7 @@ describe("R10 parity with the repo's import-boundary checker", () => {
     // The SDK door and its subpaths are the sanctioned imports.
     expect(violatesR10("@vibefield/plugin-sdk")).toBe(false);
     expect(violatesR10("@vibefield/plugin-sdk/canvas")).toBe(false);
+    expect(violatesR10("@vibefield/plugin-sdk/behavior")).toBe(false);
     expect(violatesR10("react")).toBe(false);
     // A same-prefix impostor is not the forbidden module.
     expect(violatesR10("electronics")).toBe(false);

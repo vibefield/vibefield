@@ -1,4 +1,5 @@
 import type {
+  BehaviorContribution,
   PluginManifestV1,
   PluginRecord,
   SafePreview,
@@ -37,6 +38,9 @@ export interface RegisteredPlugin<W = unknown> {
   title: string;
   version: string;
   widgetContributions: readonly WidgetContribution[];
+  /** Data-only declarations, paired with renderer bindings by the document
+   * behavior host in canonical plugin/declaration order. */
+  behaviorContributions: readonly BehaviorContribution[];
   /** the validated canonical manifest — present iff registered by `registerV1` */
   v1?: PluginManifestV1;
   /** the sanitized registry record — present iff registered by `registerRecord` */
@@ -70,6 +74,7 @@ export class PluginRegistry<W = unknown> {
         title: result.manifest.title,
         version: result.manifest.version,
         widgetContributions: contributions,
+        behaviorContributions: result.manifest.contributes?.behaviors ?? [],
         v1: result.manifest,
       },
       widgets,
@@ -91,6 +96,7 @@ export class PluginRegistry<W = unknown> {
         title: record.title,
         version: record.version,
         widgetContributions: record.contributions.widgets,
+        behaviorContributions: record.contributions.behaviors,
         record,
       },
       widgets,

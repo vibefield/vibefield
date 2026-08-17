@@ -120,7 +120,11 @@ describe("host singleton registries (PA-29 / plugin spec §11.6)", () => {
     const extras = HOST_SINGLETON_MODULE_SPECIFIERS.filter(
       (spec) => !(HOST_SINGLETON_EXTERNALS as readonly string[]).includes(spec),
     );
-    expect(extras).toEqual(["@vibefield/plugin-sdk/ui", "@vibefield/plugin-sdk/canvas"]);
+    expect(extras).toEqual([
+      "@vibefield/plugin-sdk/ui",
+      "@vibefield/plugin-sdk/canvas",
+      "@vibefield/plugin-sdk/behavior",
+    ]);
     for (const extra of extras) {
       expect(
         HOST_SINGLETON_EXTERNALS.some((root) => extra.startsWith(`${root}/`)),

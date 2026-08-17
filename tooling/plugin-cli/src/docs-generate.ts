@@ -14,7 +14,7 @@
 // unordered map anywhere in here would make the gate flap.
 
 import {
-  CanvasSystemContribution,
+  BehaviorContribution,
   CONTRACTS_VERSION,
   CommandContribution,
   HOST_SINGLETON_MODULE_SPECIFIERS,
@@ -279,7 +279,8 @@ function readme(): string {
     ]),
     section("The rules that catch people first", [
       "- **Every contributed id is owned by the plugin id.** A widget type is `<id>` or",
-      "  `<id>.<name>`; commands, surfaces and systems are `<id>.<name>`; custom",
+      "  `<id>.<name>`; commands and surfaces are `<id>.<name>`; behaviors are",
+      "  `<id>:<name>`; custom",
       "  capabilities are `x.<id>.<name>`.",
       "- **Declare before you bind.** `ctx.widgets.register` throws for a type the",
       "  manifest does not declare, and `check` refuses a declaration nothing binds.",
@@ -287,7 +288,8 @@ function readme(): string {
       "  key-sorted JSON; its hash is the plugin's identity. Hand-edit it and `check`",
       "  refuses with `manifest-stale`.",
       "- **The SDK is the only door.** Plugin code imports `@vibefield/plugin-sdk`",
-      "  (plus `/ui`, `/canvas`), `@vibefield/contracts` types, and `react`. Nothing",
+      "  (plus `/ui`, `/canvas`, `/behavior`), `@vibefield/contracts` types, and",
+      "  `react`. Nothing",
       "  else — no host packages, no Electron, no Node builtins.",
       "- **Absent APIs are absent, never stubbed.** If a face is missing from `ctx`,",
       "  the manifest did not ask for it. See `context.md`.",
@@ -386,7 +388,7 @@ function contributionsDoc(): string {
   const surfaceSlice = contributionSlice(examples.commandsAndSurfaces, "surfaces");
   const settingsSlice = contributionSlice(examples.service, "settings");
   const servicesSlice = contributionSlice(examples.service, "services");
-  const systemsSlice = contributionSlice(examples.service, "systems");
+  const behaviorsSlice = contributionSlice(examples.service, "behaviors");
   const capabilitiesSlice = contributionSlice(examples.service, "capabilities");
   const mcpSlice = contributionSlice(examples.service, "mcp");
 
@@ -447,10 +449,35 @@ function contributionsDoc(): string {
         (v) => `- \`${v.discriminant}\` — ${v.fields.map((f) => `\`${f.name}\``).join(", ")}`,
       ),
     ]),
-    kindSection("Canvas systems", CanvasSystemContribution, systemsSlice, [
-      "A system runs after the engine step, inside a budget the spine enforces. The",
-      "`reason` field is the honesty tax: frame cadence is a scarce power, and a system",
-      "says why it needs one.",
+    kindSection("Canvas behaviors", BehaviorContribution, behaviorsSlice, [
+      "A behavior is ICE execution code with a signed, complete descriptor. Define it",
+      "through the React-free `/behavior` door, put `declareBehavior(handle)` under",
+      "`contributes.behaviors`, then bind the SAME handle during renderer activation:",
+      "`ctx.canvas.behaviors.bind(handle.name, handle)`. The host compares every",
+      "descriptor field before publication; missing, duplicate, renamed, or drifted",
+      "handles fail closed.",
+      "",
+      "All behavior declarations request `canvas.write`. A denied grant still permits",
+      "the inert declaration/code bind, but the sealed binding is dormant and never",
+      "registers with ICE. Durable and runtime stores are admitted; ephemeral remains",
+      "explicitly refused until a document-room presence transport exists. A tick hook",
+      "also requires `reason`, because frame cadence is a scarce power.",
+      "",
+      fence(
+        "ts",
+        [
+          'import { declareBehavior, defineBehavior, p } from "@vibefield/plugin-sdk/behavior";',
+          "",
+          'export const Counter = defineBehavior("com.example.metrics:counter", {',
+          '  store: "runtime",',
+          "  schema: { count: p.number({ default: 0 }) },",
+          "});",
+          "export const counterContribution = declareBehavior(Counter);",
+          "",
+          '// manifest.ts: behaviors: [counterContribution], capabilities: ["canvas.write"]',
+          "// renderer.ts: ctx.canvas.behaviors.bind(Counter.name, Counter)",
+        ].join("\n"),
+      ),
     ]),
     kindSection("Custom capabilities", PluginCapabilityContribution, capabilitiesSlice, [
       "A plugin that provides services can define the capabilities that gate them:",
@@ -745,7 +772,8 @@ function contextDoc(): string {
       "The two lists overlap on purpose and do not contradict each other: the canvas",
       "engine is resolvable at runtime because the SDK's own re-exports need it, while",
       "a plugin that imports `@vibecook/ice` directly is still refused. Reach the canvas",
-      "through `@vibefield/plugin-sdk/canvas`. You never configure bundler externals by",
+      "through `@vibefield/plugin-sdk/canvas` or the React-free `/behavior` door. You",
+      "never configure bundler externals by",
       "hand either way — `plugin-build` owns that list.",
       "",
     ]),

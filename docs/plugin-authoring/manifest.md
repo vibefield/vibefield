@@ -25,7 +25,7 @@ derive from them.
 | `activation` | `string[]` | yes | `each item: at most 128 characters; each item: activation events: onStartup \| on{Widget,Command,Surface,Service}:<owned id>; at most 64 item(s)` |
 | `backgroundReason` | string | no | at least 1 character; at most 500 characters |
 | `capabilities` | `string[]` | yes | `each item: at most 72 characters; each item: capability must be a core scope or x.<pluginId>.<name>; at most 32 item(s)` |
-| `contributes` | `{ capabilities?: object[], widgets?: object[], systems?: object[], commands?: object[], surfaces?: object[], settings?: object, services?: object[], mcp?: object }` | no | — |
+| `contributes` | `{ capabilities?: object[], widgets?: object[], behaviors?: object[], commands?: object[], surfaces?: object[], settings?: object, services?: object[], mcp?: object }` | no | — |
 
 `engines.app` and `engines.contracts` are semver ranges the host checks before
 a plugin loads; `engines.platforms` narrows to `darwin`/`linux`/`win32`.
@@ -43,7 +43,7 @@ the schema itself says — `check` prints it verbatim with a pointer.
 | dynamic services and contributed MCP tools need a service entry | `entries` | dynamic services and contributed MCP tools require entries.service |
 | declaring dynamic services requires the services.provide capability | `capabilities` | declaring dynamic services requires the services.provide capability |
 | settings access from code requires storage.self | `capabilities` | settings access from code requires the storage.self capability |
-| canvas systems require at least canvas.read | `capabilities` | canvas systems require at least the canvas.read capability |
+| canvas behaviors require canvas.write | `capabilities` | canvas behaviors require the canvas.write capability |
 | onStartup is a background power, and pays the honesty tax | `activation` | onStartup requires entries.service |
 | onStartup is a background power, and pays the honesty tax | `capabilities` | onStartup requires the background capability |
 | onStartup is a background power, and pays the honesty tax | `backgroundReason` | onStartup requires a non-empty backgroundReason |
@@ -123,12 +123,17 @@ Every string and collection in a manifest is bounded (§7.1). The numbers:
 | `PORTS_MAX` | 16 |
 | `COMMANDS_MAX` | 64 |
 | `SURFACES_MAX` | 32 |
-| `SYSTEMS_MAX` | 16 |
+| `BEHAVIORS_MAX` | 16 |
+| `BEHAVIOR_SCHEMA_FIELDS_MAX` | 64 |
+| `BEHAVIOR_READS_MAX` | 64 |
+| `BEHAVIOR_WRITES_MAX` | 64 |
+| `BEHAVIOR_MIGRATIONS_MAX` | 64 |
+| `WIDGET_BEHAVIORS_MAX` | 16 |
 | `SERVICE_METHODS_MAX` | 64 |
 | `SETTINGS_MAX` | 64 |
 | `CAPABILITIES_MAX` | 32 |
 | `ACTIVATION_MAX` | 64 |
-| `SYSTEM_BUDGET_MS_MAX` | 16 |
+| `BEHAVIOR_BUDGET_MS_MAX` | 16 |
 | `RENDERER_ACTIVATE_DEADLINE_MS` | 5000 |
 | `SERVICE_ACTIVATE_DEADLINE_MS` | 10000 |
 | `DEACTIVATE_DEADLINE_MS` | 5000 |
@@ -165,6 +170,7 @@ Every string and collection in a manifest is bounded (§7.1). The numbers:
     "services.provide",
     "storage.self",
     "canvas.read",
+    "canvas.write",
     "doc.write",
     "mcp.contribute",
     "x.com.example.metrics.read"
@@ -208,15 +214,34 @@ Every string and collection in a manifest is bounded (§7.1). The numbers:
           "source": [
             "source"
           ]
-        }
+        },
+        "behaviors": [
+          {
+            "id": "com.example.metrics:ticker"
+          }
+        ]
       }
     ],
-    "systems": [
+    "behaviors": [
       {
-        "id": "com.example.metrics.ticker",
-        "phase": "tick",
-        "budgetMs": 1,
-        "reason": "advance the live sparkline between service snapshots"
+        "id": "com.example.metrics:ticker",
+        "reason": "advance the live sparkline between service snapshots",
+        "definition": {
+          "store": "runtime",
+          "derived": false,
+          "deriveDuringGesture": false,
+          "version": 1,
+          "phase": "simulate",
+          "budgetMs": 1,
+          "tickWhile": "all",
+          "schema": [],
+          "reads": [],
+          "writes": [],
+          "migrationFrom": [],
+          "hooks": [
+            "tick"
+          ]
+        }
       }
     ],
     "settings": {

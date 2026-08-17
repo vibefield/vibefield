@@ -44,7 +44,13 @@ export interface InspectionResult {
     readonly widgets: InspectedWidget[];
     readonly commands: Array<{ id: string; title: string; placements: string[] }>;
     readonly surfaces: Array<{ id: string; title: string; slot: string }>;
-    readonly systems: Array<{ id: string; budgetMs: number }>;
+    readonly behaviors: Array<{
+      id: string;
+      store: "durable" | "runtime" | "ephemeral";
+      phase: "simulate" | "derive" | "present" | "publish";
+      hooks: string[];
+      budgetMs?: number;
+    }>;
     readonly settings: Array<{ key: string; scope: string }>;
     readonly services: Array<{ namespace: string; methods: string[] }>;
     readonly capabilities: Array<{ id: string; risk: string }>;
@@ -141,7 +147,13 @@ export async function inspectPlugin(
         placements: [...x.placements],
       })),
       surfaces: (c.surfaces ?? []).map((x) => ({ id: x.id, title: x.title, slot: x.slot })),
-      systems: (c.systems ?? []).map((x) => ({ id: x.id, budgetMs: x.budgetMs })),
+      behaviors: (c.behaviors ?? []).map((x) => ({
+        id: x.id,
+        store: x.definition.store,
+        phase: x.definition.phase,
+        hooks: [...x.definition.hooks],
+        ...(x.definition.budgetMs === undefined ? {} : { budgetMs: x.definition.budgetMs }),
+      })),
       settings: Object.entries(c.settings?.properties ?? {}).map(([key, v]) => ({
         key,
         scope: v.scope,
@@ -190,7 +202,11 @@ export function formatInspection(result: InspectionResult): string {
     );
   for (const x of c.commands) push("command", `${x.id} [${x.placements.join(", ")}]`);
   for (const x of c.surfaces) push("surface", `${x.id} → ${x.slot}`);
-  for (const x of c.systems) push("system", `${x.id} (${x.budgetMs}ms budget)`);
+  for (const x of c.behaviors) {
+    const hooks = x.hooks.join(", ") || "no hooks";
+    const budget = x.budgetMs === undefined ? "" : `, ${x.budgetMs}ms budget`;
+    push("behavior", `${x.id} (${x.store}/${x.phase}, ${hooks}${budget})`);
+  }
   for (const x of c.settings) push("setting", `${x.key} (${x.scope})`);
   for (const x of c.services) push("service", `${x.namespace}: ${x.methods.join(", ")}`);
   for (const x of c.capabilities) push("capability", `${x.id} (${x.risk})`);

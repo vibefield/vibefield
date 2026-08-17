@@ -3,15 +3,16 @@
 // artifact IS the canonical emission of itself (the same freshness law
 // `gen:manifest` pins per plugin — a hand-edit is caught here, not at install).
 //
-// P8-D8's point in one line: `validatePluginManifest` joins zod's issues into
-// strings and throws the structure away. An agent needs the structure, so this
-// row parses with the schema directly and keeps `path`, `expected`, `received`.
+// The contracts reader preserves stable semantic codes plus issue paths. We run
+// the raw schema beside it only to enrich ordinary zod rows with `expected`;
+// admission policy and its public codes always come from validatePluginManifest.
 
 import {
   findUnknownManifestKeys,
   isDistributablePluginId,
   type PluginManifestV1 as PluginManifest,
   PluginManifestV1,
+  validatePluginManifest,
 } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
 import type { z } from "zod";
@@ -57,22 +58,28 @@ export function expectedFromIssue(issue: z.ZodIssue): string | undefined {
 
 export function checkManifest(plugin: LoadedPlugin): ManifestRowResult {
   const verdicts: Verdict[] = [];
-  const parsed = PluginManifestV1.safeParse(plugin.parsed);
+  const validation = validatePluginManifest(plugin.parsed);
 
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) {
-      const expected = expectedFromIssue(issue);
+  if (!validation.ok) {
+    const parsed = PluginManifestV1.safeParse(plugin.parsed);
+    const zodIssues = parsed.success ? [] : parsed.error.issues;
+    validation.issueDetails.forEach((issue, index) => {
+      const zodIssue = zodIssues[index];
+      const expected =
+        issue.code === "manifest-invalid" && zodIssue !== undefined
+          ? expectedFromIssue(zodIssue)
+          : undefined;
       verdicts.push(
-        refuse("manifest", "manifest-invalid", issue.message, {
+        refuse("manifest", issue.code, issue.message, {
           pointer: jsonPointer(issue.path),
           ...(expected !== undefined ? { expected } : {}),
         }),
       );
-    }
+    });
     return { verdicts };
   }
 
-  const manifest = parsed.data;
+  const manifest = validation.manifest;
   verdicts.push(
     pass("manifest", `${manifest.id}@${manifest.version} validates as PluginManifestV1`),
   );

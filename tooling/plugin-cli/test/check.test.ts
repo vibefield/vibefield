@@ -81,6 +81,51 @@ describe("check — manifest-invalid (the control run)", () => {
     expect(verdicts.some((v) => v.level === "note" && v.check === "check")).toBe(true);
     expect(verdicts.some((v) => v.check === "schema")).toBe(false);
   });
+
+  it("preserves stable behavior admission codes and exact pointers", async () => {
+    const withSystems = baseManifest();
+    withSystems["contributes"] = {
+      ...(withSystems["contributes"] as Record<string, unknown>),
+      systems: [{ id: `${FIXTURE_ID}.tick`, phase: "tick", budgetMs: 1, reason: "test" }],
+    };
+    const retired = makePlugin({ rawManifest: `${JSON.stringify(withSystems, null, 2)}\n` });
+    const retiredVerdict = (await checkPlugin({ dir: retired })).find(
+      (v) => v.code === "systems-contribution-superseded",
+    );
+    expect(retiredVerdict?.pointer).toBe("/contributes/systems");
+    expect(retiredVerdict?.expected).toContain("contributes.behaviors");
+
+    const withEphemeral = baseManifest({
+      capabilities: ["canvas.write"],
+      contributes: {
+        ...(baseManifest()["contributes"] as Record<string, unknown>),
+        behaviors: [
+          {
+            id: `${FIXTURE_ID}:presence`,
+            definition: {
+              store: "ephemeral",
+              derived: false,
+              deriveDuringGesture: false,
+              version: 1,
+              phase: "publish",
+              tickWhile: "all",
+              schema: [],
+              reads: [],
+              writes: [],
+              migrationFrom: [],
+              hooks: [],
+            },
+          },
+        ],
+      },
+    });
+    const ephemeral = makePlugin({ rawManifest: `${JSON.stringify(withEphemeral, null, 2)}\n` });
+    const ephemeralVerdict = (await checkPlugin({ dir: ephemeral })).find(
+      (v) => v.code === "behavior-store-unsupported",
+    );
+    expect(ephemeralVerdict?.pointer).toBe("/contributes/behaviors/0/definition/store");
+    expect(ephemeralVerdict?.expected).toContain("runtime behavior");
+  });
 });
 
 describe("check — manifest-stale (the freshness law)", () => {

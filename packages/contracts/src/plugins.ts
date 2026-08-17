@@ -32,12 +32,17 @@ export const PLUGIN_LIMITS = {
   PORTS_MAX: 16,
   COMMANDS_MAX: 64,
   SURFACES_MAX: 32,
-  SYSTEMS_MAX: 16,
+  BEHAVIORS_MAX: 16,
+  BEHAVIOR_SCHEMA_FIELDS_MAX: 64,
+  BEHAVIOR_READS_MAX: 64,
+  BEHAVIOR_WRITES_MAX: 64,
+  BEHAVIOR_MIGRATIONS_MAX: 64,
+  WIDGET_BEHAVIORS_MAX: 16,
   SERVICE_METHODS_MAX: 64,
   SETTINGS_MAX: 64,
   CAPABILITIES_MAX: 32,
   ACTIVATION_MAX: 64,
-  SYSTEM_BUDGET_MS_MAX: 16,
+  BEHAVIOR_BUDGET_MS_MAX: 16,
   RENDERER_ACTIVATE_DEADLINE_MS: 5_000,
   SERVICE_ACTIVATE_DEADLINE_MS: 10_000,
   DEACTIVATE_DEADLINE_MS: 5_000,
@@ -240,6 +245,359 @@ export const PropSpec = z.discriminatedUnion("kind", [
 ]);
 export type PropSpec = z.infer<typeof PropSpec>;
 
+// --- canvas behavior contribution (spec §8.8 / PRC-4d) ----------------------
+
+/** The JSON-only value domain accepted by widget behavior attachment data.
+ * Functions, symbols, class instances, and non-finite numbers cannot cross the
+ * signed manifest boundary. */
+export type BehaviorJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | BehaviorJsonValue[]
+  | { [key: string]: BehaviorJsonValue };
+
+const BehaviorJsonValue: z.ZodType<BehaviorJsonValue> = z.lazy(() =>
+  z.union([
+    z.null(),
+    z.boolean(),
+    z.number().finite(),
+    z.string(),
+    z.array(BehaviorJsonValue),
+    z.record(BehaviorJsonValue),
+  ]),
+);
+
+/** Strict JSON mirror of ICE's JsonShape. Unlike the outer tolerant manifest,
+ * this is version-coupled semantic truth: accepting a field ICE cannot
+ * describe would create an installable but permanently unbindable plugin. */
+export type BehaviorJsonShape =
+  | { kind: "string" }
+  | { kind: "number" }
+  | { kind: "boolean" }
+  | { kind: "enum"; options: string[] }
+  | { kind: "array"; item: BehaviorJsonShape }
+  | { kind: "object"; fields: Record<string, BehaviorJsonShape> };
+
+export const BehaviorJsonShape: z.ZodType<BehaviorJsonShape> = z.lazy(() =>
+  z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("string") }).strict(),
+    z.object({ kind: z.literal("number") }).strict(),
+    z.object({ kind: z.literal("boolean") }).strict(),
+    z.object({ kind: z.literal("enum"), options: z.array(z.string()).min(1).max(64) }).strict(),
+    z.object({ kind: z.literal("array"), item: BehaviorJsonShape }).strict(),
+    z.object({ kind: z.literal("object"), fields: z.record(BehaviorJsonShape) }).strict(),
+  ]),
+);
+
+export const BehaviorPropDescription = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("string"), default: z.string().optional() }).strict(),
+  z
+    .object({
+      kind: z.literal("number"),
+      default: z.number().finite().optional(),
+      min: z.number().finite().optional(),
+      max: z.number().finite().optional(),
+    })
+    .strict(),
+  z.object({ kind: z.literal("boolean"), default: z.boolean().optional() }).strict(),
+  z
+    .object({
+      kind: z.literal("enum"),
+      options: z.array(z.string()).min(1).max(64),
+      default: z.string().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("json"),
+      inner: BehaviorJsonShape,
+      /** ICE describeBehavior emits JSON defaults in their serialized form. */
+      default: z.string().optional(),
+    })
+    .strict(),
+  z.object({ kind: z.literal("entityKey"), default: z.string().optional() }).strict(),
+]);
+export type BehaviorPropDescription = z.infer<typeof BehaviorPropDescription>;
+
+export const BehaviorReadDescription = z
+  .object({
+    kind: z.enum(["behavior", "component", "tag", "relation", "resource"]),
+    name: z
+      .string()
+      .min(1)
+      .max(PLUGIN_LIMITS.ID_MAX * 2),
+  })
+  .strict();
+export type BehaviorReadDescription = z.infer<typeof BehaviorReadDescription>;
+
+const BEHAVIOR_HOOKS = ["init", "update", "changed", "tick", "dispose"] as const;
+const BEHAVIOR_HOOK_RANK = new Map<string, number>(
+  BEHAVIOR_HOOKS.map((hook, index) => [hook, index]),
+);
+const BEHAVIOR_STORE_PHASES: Readonly<Record<string, readonly string[]>> = {
+  durable: ["derive"],
+  runtime: ["simulate", "derive", "present", "publish"],
+  ephemeral: ["publish"],
+};
+
+function addBehaviorIssue(
+  ctx: z.RefinementCtx,
+  path: Array<string | number>,
+  message: string,
+): void {
+  ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
+}
+
+function behaviorJsonMatchesShape(shape: BehaviorJsonShape, value: BehaviorJsonValue): boolean {
+  switch (shape.kind) {
+    case "string":
+      return typeof value === "string";
+    case "number":
+      return typeof value === "number" && Number.isFinite(value);
+    case "boolean":
+      return typeof value === "boolean";
+    case "enum":
+      return typeof value === "string" && shape.options.includes(value);
+    case "array":
+      return (
+        Array.isArray(value) && value.every((entry) => behaviorJsonMatchesShape(shape.item, entry))
+      );
+    case "object":
+      return (
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        Object.keys(value).length === Object.keys(shape.fields).length &&
+        Object.entries(shape.fields).every(
+          ([name, child]) =>
+            Object.hasOwn(value, name) &&
+            behaviorJsonMatchesShape(
+              child,
+              (value as Record<string, BehaviorJsonValue>)[name] as BehaviorJsonValue,
+            ),
+        )
+      );
+  }
+}
+
+function behaviorAttachmentValueMatches(
+  spec: BehaviorPropDescription,
+  value: BehaviorJsonValue,
+): boolean {
+  switch (spec.kind) {
+    case "string":
+    case "entityKey":
+      return typeof value === "string";
+    case "number":
+      return (
+        typeof value === "number" &&
+        Number.isFinite(value) &&
+        (spec.min === undefined || value >= spec.min) &&
+        (spec.max === undefined || value <= spec.max)
+      );
+    case "boolean":
+      return typeof value === "boolean";
+    case "enum":
+      return typeof value === "string" && spec.options.includes(value);
+    case "json":
+      return behaviorJsonMatchesShape(spec.inner, value);
+  }
+}
+
+export const BehaviorDefinition = z
+  .object({
+    store: z.enum(["durable", "runtime", "ephemeral"]),
+    derived: z.boolean(),
+    deriveDuringGesture: z.boolean(),
+    version: z.number().int().positive(),
+    phase: z.enum(["simulate", "derive", "present", "publish"]),
+    budgetMs: z.number().finite().positive().max(PLUGIN_LIMITS.BEHAVIOR_BUDGET_MS_MAX).optional(),
+    tickWhile: z.enum(["all", "visible"]),
+    schema: z
+      .array(
+        z
+          .object({
+            name: z.string().min(1).max(PLUGIN_LIMITS.ID_MAX),
+            spec: BehaviorPropDescription,
+          })
+          .strict(),
+      )
+      .max(PLUGIN_LIMITS.BEHAVIOR_SCHEMA_FIELDS_MAX),
+    reads: z.array(BehaviorReadDescription).max(PLUGIN_LIMITS.BEHAVIOR_READS_MAX),
+    writes: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(PLUGIN_LIMITS.ID_MAX * 2),
+      )
+      .max(PLUGIN_LIMITS.BEHAVIOR_WRITES_MAX),
+    migrationFrom: z.array(z.number().int().positive()).max(PLUGIN_LIMITS.BEHAVIOR_MIGRATIONS_MAX),
+    hooks: z.array(z.enum(BEHAVIOR_HOOKS)).max(BEHAVIOR_HOOKS.length),
+  })
+  .strict()
+  .superRefine((definition, ctx) => {
+    if (!BEHAVIOR_STORE_PHASES[definition.store]?.includes(definition.phase)) {
+      addBehaviorIssue(
+        ctx,
+        ["phase"],
+        `phase ${definition.phase} is illegal for ${definition.store}`,
+      );
+    }
+    if (definition.store !== "durable") {
+      if (definition.derived) {
+        addBehaviorIssue(ctx, ["derived"], "derived=true is durable-only");
+      }
+      if (definition.deriveDuringGesture) {
+        addBehaviorIssue(ctx, ["deriveDuringGesture"], "deriveDuringGesture=true is durable-only");
+      }
+      if (definition.version !== 1) {
+        addBehaviorIssue(ctx, ["version"], "non-durable behaviors have canonical version 1");
+      }
+      if (definition.migrationFrom.length > 0) {
+        addBehaviorIssue(ctx, ["migrationFrom"], "migrations are durable-only");
+      }
+    }
+    if (definition.store === "ephemeral" && definition.writes.length > 0) {
+      addBehaviorIssue(ctx, ["writes"], "ephemeral behaviors cannot declare component writes");
+    }
+    if (definition.deriveDuringGesture && !definition.derived) {
+      addBehaviorIssue(ctx, ["deriveDuringGesture"], "deriveDuringGesture requires derived=true");
+    }
+    if (definition.tickWhile !== "all" && !definition.hooks.includes("tick")) {
+      addBehaviorIssue(ctx, ["tickWhile"], "a scoped tick policy requires a tick hook");
+    }
+
+    const fields = new Set<string>();
+    definition.schema.forEach((field, index) => {
+      if (fields.has(field.name))
+        addBehaviorIssue(ctx, ["schema", index, "name"], "duplicate field");
+      fields.add(field.name);
+      const spec = field.spec;
+      if (spec.kind === "number") {
+        if (spec.min !== undefined && spec.max !== undefined && spec.min > spec.max) {
+          addBehaviorIssue(ctx, ["schema", index, "spec"], "min must not exceed max");
+        }
+        if (spec.default !== undefined && spec.min !== undefined && spec.default < spec.min) {
+          addBehaviorIssue(ctx, ["schema", index, "spec", "default"], "default is below min");
+        }
+        if (spec.default !== undefined && spec.max !== undefined && spec.default > spec.max) {
+          addBehaviorIssue(ctx, ["schema", index, "spec", "default"], "default is above max");
+        }
+      }
+      if (spec.kind === "enum") {
+        if (new Set(spec.options).size !== spec.options.length) {
+          addBehaviorIssue(
+            ctx,
+            ["schema", index, "spec", "options"],
+            "enum options must be unique",
+          );
+        }
+        if (spec.default !== undefined && !spec.options.includes(spec.default)) {
+          addBehaviorIssue(
+            ctx,
+            ["schema", index, "spec", "default"],
+            "default must be an enum option",
+          );
+        }
+      }
+      if (spec.kind === "json" && spec.default !== undefined) {
+        try {
+          const parsed = BehaviorJsonValue.parse(JSON.parse(spec.default));
+          if (!behaviorJsonMatchesShape(spec.inner, parsed)) {
+            addBehaviorIssue(
+              ctx,
+              ["schema", index, "spec", "default"],
+              "serialized default does not match inner JSON shape",
+            );
+          }
+        } catch {
+          addBehaviorIssue(
+            ctx,
+            ["schema", index, "spec", "default"],
+            "default must be serialized JSON matching inner",
+          );
+        }
+      }
+    });
+
+    let priorMigration = 0;
+    definition.migrationFrom.forEach((from, index) => {
+      if (from >= definition.version) {
+        addBehaviorIssue(ctx, ["migrationFrom", index], "migration source must precede version");
+      }
+      if (from <= priorMigration) {
+        addBehaviorIssue(
+          ctx,
+          ["migrationFrom", index],
+          "migration sources must be strictly increasing",
+        );
+      }
+      priorMigration = from;
+    });
+    if (
+      definition.migrationFrom.length > 0 &&
+      definition.migrationFrom.some((from, index) => from !== index + 1)
+    ) {
+      addBehaviorIssue(
+        ctx,
+        ["migrationFrom"],
+        `migration chain must cover every version from 1 through ${definition.version - 1}`,
+      );
+    }
+
+    let priorHook = -1;
+    definition.hooks.forEach((hook, index) => {
+      const rank = BEHAVIOR_HOOK_RANK.get(hook) ?? -1;
+      if (rank <= priorHook) {
+        addBehaviorIssue(ctx, ["hooks", index], "hooks must be unique and in ICE delivery order");
+      }
+      priorHook = rank;
+    });
+  });
+export type BehaviorDefinition = z.infer<typeof BehaviorDefinition>;
+
+export const BehaviorContribution = z
+  .object({
+    id: z
+      .string()
+      .min(3)
+      .max(PLUGIN_LIMITS.ID_MAX * 2),
+    reason: z.string().min(1).max(PLUGIN_LIMITS.TEXT_MAX).optional(),
+    definition: BehaviorDefinition,
+  })
+  .strict()
+  .superRefine((row, ctx) => {
+    if (row.definition.hooks.includes("tick") && row.reason === undefined) {
+      addBehaviorIssue(ctx, ["reason"], "a tick behavior requires a non-empty reason");
+    }
+  });
+export type BehaviorContribution = z.infer<typeof BehaviorContribution>;
+
+export const WidgetBehaviorAttachment = z
+  .object({
+    id: z
+      .string()
+      .min(3)
+      .max(PLUGIN_LIMITS.ID_MAX * 2),
+    data: z.record(BehaviorJsonValue).optional(),
+  })
+  .strict();
+export type WidgetBehaviorAttachment = z.infer<typeof WidgetBehaviorAttachment>;
+
+export type PluginManifestIssueCode =
+  | "manifest-invalid"
+  | "behavior-store-unsupported"
+  | "systems-contribution-superseded";
+
+export interface PluginManifestIssue {
+  readonly code: PluginManifestIssueCode;
+  readonly path: readonly (string | number)[];
+  readonly message: string;
+}
+
 const SizeSpec = z.object({ w: z.number().positive(), h: z.number().positive() }).passthrough();
 
 export const WidgetContribution = z
@@ -317,24 +675,14 @@ export const WidgetContribution = z
      * the engine's "props" default group — omitting groups entirely is the
      * common case and exactly what all 21 shipped widgets do. */
     groups: z.record(z.array(z.string()).min(1)).optional().default({}),
+    /** Declarative ICE behavior riders. The renderer binds code separately;
+     * these rows are data-only, same-plugin durable/runtime attachments. */
+    behaviors: z.array(WidgetBehaviorAttachment).max(PLUGIN_LIMITS.WIDGET_BEHAVIORS_MAX).optional(),
   })
   .passthrough();
 export type WidgetContribution = z.infer<typeof WidgetContribution>;
 
 // --- other contributions (spec §8.3–§8.8) -------------------------------------
-
-export const CanvasSystemContribution = z
-  .object({
-    id: z.string().max(PLUGIN_LIMITS.ID_MAX * 2),
-    /** runs after the engine step; more phases are earned (A7) */
-    phase: z.literal("tick"),
-    /** per-invocation budget, enforced by the spine scheduler (PA-28) */
-    budgetMs: z.number().positive().max(PLUGIN_LIMITS.SYSTEM_BUDGET_MS_MAX),
-    /** the honesty tax: why frame cadence is required */
-    reason: z.string().min(1).max(PLUGIN_LIMITS.TEXT_MAX),
-  })
-  .passthrough();
-export type CanvasSystemContribution = z.infer<typeof CanvasSystemContribution>;
 
 export const CommandContribution = z
   .object({
@@ -521,7 +869,10 @@ export const PluginManifestV1Shape = z
           .max(PLUGIN_LIMITS.CAPABILITIES_MAX)
           .optional(),
         widgets: z.array(WidgetContribution).max(PLUGIN_LIMITS.WIDGETS_MAX).optional(),
-        systems: z.array(CanvasSystemContribution).max(PLUGIN_LIMITS.SYSTEMS_MAX).optional(),
+        /** Explicit tombstone: the former scheduler-shaped contribution was
+         * never consumed and is superseded by the ICE behavior contract. */
+        systems: z.never().optional(),
+        behaviors: z.array(BehaviorContribution).max(PLUGIN_LIMITS.BEHAVIORS_MAX).optional(),
         commands: z.array(CommandContribution).max(PLUGIN_LIMITS.COMMANDS_MAX).optional(),
         surfaces: z.array(SurfaceContribution).max(PLUGIN_LIMITS.SURFACES_MAX).optional(),
         settings: SettingsContribution.optional(),
@@ -549,8 +900,17 @@ function isOwnedName(id: string, name: string, allowBare: boolean): boolean {
 
 export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
   PluginManifestV1Shape.superRefine((m, ctx) => {
-    const issue = (message: string, path: (string | number)[] = []) =>
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path });
+    const issue = (
+      message: string,
+      path: (string | number)[] = [],
+      pluginIssueCode?: PluginManifestIssueCode,
+    ) =>
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message,
+        path,
+        ...(pluginIssueCode !== undefined ? { params: { pluginIssueCode } } : {}),
+      });
     const c = m.contributes ?? {};
     const caps = new Set(m.capabilities);
     const hasRenderer = m.entries?.renderer !== undefined;
@@ -561,7 +921,7 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       c.widgets?.length ? "widgets" : null,
       c.commands?.length ? "commands" : null,
       c.surfaces?.length ? "surfaces" : null,
-      c.systems?.length ? "systems" : null,
+      c.behaviors?.length ? "behaviors" : null,
     ].filter((x) => x !== null);
     if (rendererNeeds.length > 0 && !hasRenderer)
       issue(`${rendererNeeds.join("/")} require entries.renderer`, ["entries"]);
@@ -577,8 +937,8 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       ]);
     if (c.settings !== undefined && (hasRenderer || hasService) && !caps.has("storage.self"))
       issue("settings access from code requires the storage.self capability", ["capabilities"]);
-    if (c.systems?.length && !caps.has("canvas.read"))
-      issue("canvas systems require at least the canvas.read capability", ["capabilities"]);
+    if (c.behaviors?.length && !caps.has("canvas.write"))
+      issue("canvas behaviors require the canvas.write capability", ["capabilities"]);
     if (c.mcp?.tools?.length && !caps.has("mcp.contribute"))
       issue("contributed MCP tools require the mcp.contribute capability", ["capabilities"]);
     if (c.mcp?.servers?.length && !caps.has("mcp.consume"))
@@ -611,7 +971,6 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       ["widget types", widgetTypes],
       ["command ids", (c.commands ?? []).map((x) => x.id)],
       ["surface ids", (c.surfaces ?? []).map((x) => x.id)],
-      ["system ids", (c.systems ?? []).map((x) => x.id)],
       ["capability ids", (c.capabilities ?? []).map((x) => x.id)],
     ] as const) {
       const d = dupes([...ids]);
@@ -623,9 +982,26 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
     for (const x of c.surfaces ?? [])
       if (!isOwnedName(m.id, x.id, false))
         issue(`surface ${x.id} must be ${m.id}.<name>`, ["contributes", "surfaces"]);
-    for (const x of c.systems ?? [])
-      if (!isOwnedName(m.id, x.id, false))
-        issue(`system ${x.id} must be ${m.id}.<name>`, ["contributes", "systems"]);
+    const behaviorLocalName = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+    const behaviorIds = new Set<string>();
+    for (const [index, behavior] of (c.behaviors ?? []).entries()) {
+      const prefix = `${m.id}:`;
+      const local = behavior.id.startsWith(prefix) ? behavior.id.slice(prefix.length) : "";
+      if (!behavior.id.startsWith(prefix) || !behaviorLocalName.test(local)) {
+        issue(`behavior id must be ${m.id}:<localName>`, ["contributes", "behaviors", index, "id"]);
+      }
+      if (behaviorIds.has(behavior.id)) {
+        issue(`duplicate behavior id ${behavior.id}`, ["contributes", "behaviors", index, "id"]);
+      }
+      behaviorIds.add(behavior.id);
+      if (behavior.definition.store === "ephemeral") {
+        issue(
+          "ephemeral plugin behaviors await a document-room presence transport",
+          ["contributes", "behaviors", index, "definition", "store"],
+          "behavior-store-unsupported",
+        );
+      }
+    }
     for (const x of c.capabilities ?? [])
       if (!isOwnedName(`x.${m.id}`, x.id, false))
         issue(`custom capability ${x.id} must be x.${m.id}.<name>`, [
@@ -678,6 +1054,35 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       const portIds = (w.ports ?? []).map((p) => p.id);
       const pd = dupes(portIds);
       if (pd.length > 0) issue(`duplicate port ids: ${pd.join(", ")}`, path);
+
+      const behaviorRows = new Map((c.behaviors ?? []).map((row) => [row.id, row] as const));
+      const attached = new Set<string>();
+      for (const [attachmentIndex, attachment] of (w.behaviors ?? []).entries()) {
+        const attachmentPath = [...path, "behaviors", attachmentIndex];
+        if (attached.has(attachment.id)) {
+          issue(`duplicate attachment ${attachment.id}`, [...attachmentPath, "id"]);
+        }
+        attached.add(attachment.id);
+        const declaration = behaviorRows.get(attachment.id);
+        if (declaration === undefined) {
+          issue("attachment names no same-plugin behavior", [...attachmentPath, "id"]);
+          continue;
+        }
+        if (declaration.definition.store === "ephemeral") {
+          issue("ephemeral behaviors cannot ride widgets", [...attachmentPath, "id"]);
+        }
+        const fields = new Map(
+          declaration.definition.schema.map((field) => [field.name, field.spec] as const),
+        );
+        for (const [name, value] of Object.entries(attachment.data ?? {})) {
+          const spec = fields.get(name);
+          if (spec === undefined) {
+            issue("undeclared behavior data field", [...attachmentPath, "data", name]);
+          } else if (!behaviorAttachmentValueMatches(spec, value)) {
+            issue("value does not match behavior schema", [...attachmentPath, "data", name]);
+          }
+        }
+      }
     });
 
     // services: namespace ownership + method-name uniqueness (§8.6/§14.6)
@@ -755,6 +1160,9 @@ const KNOWN_TOP_KEYS = new Set([
 const KNOWN_CONTRIBUTES_KEYS = new Set([
   "capabilities",
   "widgets",
+  "behaviors",
+  // Retired but recognized so callers receive the stable superseded verdict,
+  // not a misleading unknown-key warning.
   "systems",
   "commands",
   "surfaces",
@@ -779,7 +1187,15 @@ export function findUnknownManifestKeys(raw: unknown): string[] {
 
 export type PluginManifestValidation =
   | { ok: true; manifest: PluginManifestV1; unknownKeys: string[] }
-  | { ok: false; issues: string[] };
+  | { ok: false; issues: string[]; issueDetails: PluginManifestIssue[] };
+
+function hasSupersededSystems(raw: unknown): boolean {
+  if (raw === null || typeof raw !== "object") return false;
+  const contributes = (raw as Record<string, unknown>)["contributes"];
+  return (
+    contributes !== null && typeof contributes === "object" && Object.hasOwn(contributes, "systems")
+  );
+}
 
 /** The host entry point: parse + invariants + unknown-key visibility. Strict
  * callers (bundled CI, the distribution gate) additionally reject non-empty
@@ -787,9 +1203,26 @@ export type PluginManifestValidation =
 export function validatePluginManifest(raw: unknown): PluginManifestValidation {
   const parsed = PluginManifestV1.safeParse(raw);
   if (!parsed.success) {
+    const supersededSystems = hasSupersededSystems(raw);
+    const issueDetails: PluginManifestIssue[] = parsed.error.issues.map((entry) => {
+      const systemPath =
+        supersededSystems && entry.path[0] === "contributes" && entry.path[1] === "systems";
+      const customCode =
+        entry.code === z.ZodIssueCode.custom
+          ? (entry.params?.["pluginIssueCode"] as PluginManifestIssueCode | undefined)
+          : undefined;
+      return {
+        code: systemPath ? "systems-contribution-superseded" : (customCode ?? "manifest-invalid"),
+        path: entry.path,
+        message: systemPath
+          ? "contributes.systems is superseded by contributes.behaviors"
+          : entry.message,
+      };
+    });
     return {
       ok: false,
-      issues: parsed.error.issues.map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`),
+      issues: issueDetails.map((entry) => `${entry.path.join(".") || "<root>"}: ${entry.message}`),
+      issueDetails,
     };
   }
   return { ok: true, manifest: parsed.data, unknownKeys: findUnknownManifestKeys(raw) };

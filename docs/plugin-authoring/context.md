@@ -56,7 +56,7 @@ you ask for something optional.
 | `ctx.client` | PluginProductClient (request/subscribe) | always; calls arrive at fieldd as THIS plugin, with its granted scopes |
 | `ctx.commands` | RendererCommandAPI | present iff the manifest DECLARES `contributes.commands` |
 | `ctx.surfaces` | RendererSurfaceAPI | present iff the manifest DECLARES `contributes.surfaces` |
-| `ctx.canvas` | PluginCanvasAPI (`engine()`) | present iff `canvas.read` or `canvas.write` is granted |
+| `ctx.canvas` | PluginCanvasAPI (`engine()`, `behaviors.bind()`) | present iff canvas access is requested or the manifest declares a behavior; denied behavior bindings seal identity but remain dormant |
 | `ctx.settings` | PluginSettingsAPI | present iff the manifest requests `storage.self` — absent, not stubbed |
 | `ctx.storage` | PluginStorageAPI (`kv` only) | present iff the manifest requests `storage.self`; files ride a ticketed lane and are deliberately absent |
 | `ctx.track` | `(resource) or (label, resource) => resource` | always; exact handles are deduplicated and disposed when the activation ends |
@@ -138,6 +138,7 @@ What plugin runtime code may import, and nothing else:
 - `@vibefield/plugin-sdk`
 - `@vibefield/plugin-sdk/ui`
 - `@vibefield/plugin-sdk/canvas`
+- `@vibefield/plugin-sdk/behavior`
 - `@vibefield/contracts`
 - `react`
 
@@ -173,9 +174,11 @@ copy:
 - `loro-crdt`
 - `@vibefield/plugin-sdk/ui`
 - `@vibefield/plugin-sdk/canvas`
+- `@vibefield/plugin-sdk/behavior`
 
 The two lists overlap on purpose and do not contradict each other: the canvas
 engine is resolvable at runtime because the SDK's own re-exports need it, while
 a plugin that imports `@vibecook/ice` directly is still refused. Reach the canvas
-through `@vibefield/plugin-sdk/canvas`. You never configure bundler externals by
+through `@vibefield/plugin-sdk/canvas` or the React-free `/behavior` door. You
+never configure bundler externals by
 hand either way — `plugin-build` owns that list.

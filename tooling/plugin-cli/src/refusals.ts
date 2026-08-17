@@ -38,6 +38,20 @@ export const REFUSAL_CATALOG = {
     meaning: "the manifest fails PluginManifestV1 — one verdict per zod issue",
     guidance: "the verdict's pointer names the failing field; expected states the passing shape",
   },
+  "behavior-store-unsupported": {
+    check: "manifest",
+    level: "refuse",
+    meaning: "the behavior store has no safe plugin transport in this release",
+    guidance:
+      "use a durable or runtime behavior; ephemeral awaits document-room presence transport",
+  },
+  "systems-contribution-superseded": {
+    check: "manifest",
+    level: "refuse",
+    meaning: "the retired contributes.systems shape cannot express an ICE behavior descriptor",
+    guidance:
+      "define through @vibefield/plugin-sdk/behavior and declare under contributes.behaviors",
+  },
   "manifest-stale": {
     check: "manifest",
     level: "refuse",
@@ -62,7 +76,8 @@ export const REFUSAL_CATALOG = {
     check: "wall",
     level: "refuse",
     meaning: "plugin runtime code imports something outside the SDK door (§11.3, wall R10)",
-    guidance: "import @vibefield/plugin-sdk (+ /ui, /canvas), @vibefield/contracts types, or react",
+    guidance:
+      "import @vibefield/plugin-sdk (+ /ui, /canvas, /behavior), @vibefield/contracts types, or react",
   },
 
   // --- declared schemas --------------------------------------------------------

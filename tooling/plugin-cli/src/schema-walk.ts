@@ -53,6 +53,27 @@ function defOf(schema: unknown): ZodDefLike {
   return (schema as { _def?: ZodDefLike })._def ?? {};
 }
 
+/** A `never().optional()` field is a parser tombstone, not author vocabulary.
+ * Keep it in the contract for a stable refusal, but omit it from generated
+ * shape tables so the reference never teaches a retired contribution. */
+function isNeverField(schema: unknown): boolean {
+  let current = schema;
+  for (let depth = 0; depth < 8; depth++) {
+    const def = defOf(current);
+    if (def.typeName === "ZodNever") return true;
+    if (def.typeName === "ZodOptional" || def.typeName === "ZodDefault") {
+      current = def.innerType;
+      continue;
+    }
+    if (def.typeName === "ZodEffects") {
+      current = def.schema;
+      continue;
+    }
+    return false;
+  }
+  return false;
+}
+
 export function typeNameOf(schema: unknown): string {
   return defOf(schema).typeName ?? "unknown";
 }
@@ -149,7 +170,7 @@ export function describe(schema: unknown, depth = 0): Described {
     }
     case "ZodObject": {
       const shape = def.shape?.() ?? {};
-      const keys = Object.keys(shape);
+      const keys = Object.keys(shape).filter((key) => !isNeverField(shape[key]));
       // Nine is where the widget `interaction` flags fit (keyboard/keyboardEscape
       // joined 2026-08-13, S2) — the one nested shape an author configures by
       // hand, and the one worth the width. The docs-anchors test pins the inline
@@ -243,15 +264,17 @@ export function shapeOf(schema: unknown): Record<string, unknown> | undefined {
 export function fieldsOf(schema: unknown): FieldDoc[] {
   const shape = shapeOf(schema);
   if (shape === undefined) return [];
-  return Object.entries(shape).map(([name, field]) => {
-    const described = describe(field);
-    return {
-      name,
-      type: described.type,
-      required: !described.optional,
-      constraints: described.constraints,
-    };
-  });
+  return Object.entries(shape)
+    .filter(([, field]) => !isNeverField(field))
+    .map(([name, field]) => {
+      const described = describe(field);
+      return {
+        name,
+        type: described.type,
+        required: !described.optional,
+        constraints: described.constraints,
+      };
+    });
 }
 
 /** The variants of a discriminated union, each with its own field rows — how

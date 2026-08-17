@@ -17,7 +17,7 @@ function record(overrides: Partial<PluginRecord> = {}): PluginRecord {
     grantedCapabilities: [],
     deniedCapabilities: [],
     grantGeneration: 0,
-    contributions: { widgets: [], commands: [], surfaces: [], capabilities: [] },
+    contributions: { widgets: [], behaviors: [], commands: [], surfaces: [], capabilities: [] },
     renderer: "active",
     service: "none",
     ...overrides,

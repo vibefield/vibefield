@@ -1,4 +1,4 @@
-import { defineWidget, p, type WidgetType } from "@vibecook/ice";
+import { type AnyBehaviorDef, defineWidget, p, type WidgetType } from "@vibecook/ice";
 import type { PropSpec, WidgetContribution } from "@vibefield/contracts";
 import type { WidgetBinding } from "@vibefield/plugin-sdk";
 import { withPluginFace } from "./faces";
@@ -65,6 +65,7 @@ export function buildWidgetType(
   w: WidgetContribution,
   binding: WidgetBinding,
   owner?: { pluginId: string; pluginTitle: string },
+  behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }> = new Map(),
 ): WidgetType {
   const cached = built.get(w.type);
   if (cached !== undefined) return cached;
@@ -86,6 +87,26 @@ export function buildWidgetType(
           component: binding.component as Parameters<typeof withPluginFace>[0]["component"],
         })
       : binding.component;
+  const behaviors = (w.behaviors ?? []).map((attachment) => {
+    if (owner !== undefined && !attachment.id.startsWith(`${owner.pluginId}:`)) {
+      throw new Error(
+        `widget ${w.type} behavior ${attachment.id} is outside plugin ${owner.pluginId}`,
+      );
+    }
+    const bound = behaviorBindings.get(attachment.id);
+    if (bound === undefined) {
+      throw new Error(`widget ${w.type} behavior ${attachment.id} has no sealed code binding`);
+    }
+    if (bound.handle.name !== attachment.id) {
+      throw new Error(
+        `widget ${w.type} behavior binding ${bound.handle.name} does not match ${attachment.id}`,
+      );
+    }
+    if (bound.handle.store === "ephemeral") {
+      throw new Error(`widget ${w.type} cannot pre-attach ephemeral behavior ${attachment.id}`);
+    }
+    return attachment.data === undefined ? bound.handle : bound.handle.with(attachment.data);
+  });
   const def = {
     type: w.type,
     version: w.schemaVersion,
@@ -103,6 +124,7 @@ export function buildWidgetType(
     ...(w.container !== undefined ? { container: w.container } : {}),
     ...(w.provides !== undefined ? { provides: w.provides } : {}),
     ...(w.ports !== undefined ? { ports: w.ports } : {}),
+    ...(behaviors.length > 0 ? { behaviors } : {}),
     ...(RENAMED_FROM[w.type] !== undefined ? { renamedFrom: RENAMED_FROM[w.type] } : {}),
   };
   // Boundary cast, attested: zod `.optional()` infers `| undefined` on every

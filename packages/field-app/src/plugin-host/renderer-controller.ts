@@ -84,7 +84,7 @@ export class RendererPluginController {
     this.retireCredential = deps.retireCredential ?? retirePluginProductClient;
     this.controller = new RuntimeTargetController(`renderer:${this.pluginId}:${this.windowId}`, {
       activate: (target, scope, signal) => this.activate(target, scope, signal),
-      refresh: async (_candidate, _previous, next, signal) => {
+      refresh: async (candidate, _previous, next, signal) => {
         await this.refreshCredential(
           this.pluginId,
           {
@@ -92,6 +92,9 @@ export class RendererPluginController {
             grantGeneration: next.observedGrantGeneration,
           },
           signal,
+        );
+        candidate.inner.setBehaviorAuthorization(
+          this.record.grantedCapabilities.includes("canvas.write"),
         );
       },
       termination: { kind: "same-realm" },
@@ -169,6 +172,7 @@ export class RendererPluginController {
       this.lastFailure = {
         state: "non-quiescent",
         bindings: new Map(),
+        behaviors: new Map(),
         error: "the previous renderer activation is still draining",
         ...(settled.blocked?.report === undefined ? {} : { cleanup: settled.blocked.report }),
       };
@@ -177,6 +181,7 @@ export class RendererPluginController {
       this.lastFailure = {
         state: "failed",
         bindings: new Map(),
+        behaviors: new Map(),
         error: settled.error ?? "renderer activation failed",
       };
       this.publishBindings();

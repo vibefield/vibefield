@@ -1,4 +1,6 @@
+import type { BehaviorContribution } from "@vibefield/contracts";
 import type { ComponentType } from "react";
+import { type AnyBehaviorDef, describeBehavior } from "./behavior";
 import type {
   CommandInvocation,
   Disposable,
@@ -22,6 +24,8 @@ type MockSurfaceComponent = ComponentType<PluginSurfaceProps>;
 
 export interface MockActivation {
   bindings: Map<string, WidgetBinding>;
+  /** behavior id → inert code handle bound during the private candidate. */
+  behaviors: Map<string, AnyBehaviorDef>;
   /** command id → bound handler (§13.1) — ctx.commands is present iff the
    * options DECLARE the commands contribution (declaredCommands supplied) */
   commands: Map<string, MockCommandHandler>;
@@ -48,6 +52,10 @@ export interface MockPluginHostOptions {
   /** surface ids the manifest declares. Supplying this makes ctx.surfaces
    * present; register() enforces declared-id + no-double-bind (§8.4/§13.2). */
   declaredSurfaces?: readonly string[];
+  /** Behavior ids or complete manifest rows. Supplying this makes the inert
+   * binding door present even when canvas.write is effectively denied; complete
+   * rows additionally enforce the same descriptor identity as production. */
+  declaredBehaviors?: readonly (string | BehaviorContribution)[];
   /** the opaque canvas handle ctx.canvas.engine() returns. Supplying this makes
    * ctx.canvas present (mirrors canvas.read/write being granted — §12.7). */
   canvasEngine?: unknown;
@@ -59,6 +67,18 @@ function isDisposable(value: unknown): value is Disposable {
     value !== null &&
     typeof (value as { dispose?: unknown }).dispose === "function"
   );
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    return `{${Object.entries(value)
+      .filter(([, child]) => child !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 /** A deliberately small authoring twin of the production ownership contract. Host runtime code
@@ -147,12 +167,24 @@ export async function activateWithMockHost(
   const declared = opts.declaredWidgets;
   const declaredCommands = opts.declaredCommands;
   const declaredSurfaces = opts.declaredSurfaces;
+  const declaredBehaviors = opts.declaredBehaviors;
+  const declaredBehaviorIds = declaredBehaviors?.map((row) =>
+    typeof row === "string" ? row : row.id,
+  );
+  const declaredBehaviorRows = new Map(
+    (declaredBehaviors ?? [])
+      .filter((row): row is BehaviorContribution => typeof row !== "string")
+      .map((row) => [row.id, row]),
+  );
   const bindings = new Map<string, WidgetBinding>();
+  const behaviors = new Map<string, AnyBehaviorDef>();
   const commands = new Map<string, MockCommandHandler>();
   const surfaces = new Map<string, MockSurfaceComponent>();
   const widgetGenerations = new Map<string, symbol>();
   const commandGenerations = new Map<string, symbol>();
   const surfaceGenerations = new Map<string, symbol>();
+  const behaviorGenerations = new Map<string, symbol>();
+  let behaviorsSealed = false;
   const logs: MockActivation["logs"] = [];
   const disposables: Disposable[] = [];
   const cleanupErrors: unknown[] = [];
@@ -268,9 +300,60 @@ export async function activateWithMockHost(
             },
           }
         : {}),
-      ...(opts.canvasEngine !== undefined
+      ...(opts.canvasEngine !== undefined || declaredBehaviors !== undefined
         ? {
             canvas: {
+              behaviors: {
+                bind(behaviorId: string, behavior: AnyBehaviorDef): Disposable {
+                  assertOpen();
+                  if (behaviorsSealed) {
+                    throw new Error("mock host: behavior bindings are sealed after activation");
+                  }
+                  if (
+                    declaredBehaviorIds === undefined ||
+                    !declaredBehaviorIds.includes(behaviorId)
+                  ) {
+                    throw new Error(`mock host: ${behaviorId} is not declared by this plugin`);
+                  }
+                  if (behavior.name !== behaviorId) {
+                    throw new Error(
+                      `mock host: behavior handle ${behavior.name} does not match ${behaviorId}`,
+                    );
+                  }
+                  const declaration = declaredBehaviorRows.get(behaviorId);
+                  if (
+                    declaration !== undefined &&
+                    canonicalJson(describeBehavior(behavior)) !==
+                      canonicalJson({ id: declaration.id, ...declaration.definition })
+                  ) {
+                    throw new Error(
+                      `mock host: behavior ${behaviorId} descriptor does not match its manifest declaration`,
+                    );
+                  }
+                  if (behaviors.has(behaviorId)) {
+                    throw new Error(`mock host: ${behaviorId} already bound in this entry`);
+                  }
+                  const generation = Symbol(behaviorId);
+                  behaviorGenerations.set(behaviorId, generation);
+                  behaviors.set(behaviorId, behavior);
+                  const resource: Disposable = {
+                    dispose() {
+                      if (behaviorGenerations.get(behaviorId) !== generation) return;
+                      behaviorGenerations.delete(behaviorId);
+                      behaviors.delete(behaviorId);
+                    },
+                  };
+                  // Match production: the complete declaration set belongs to the activation,
+                  // not to whichever child effect happened to perform a bind.
+                  activation.track(resource);
+                  return {
+                    dispose(): void {
+                      if (behaviorsSealed) return;
+                      resource.dispose();
+                    },
+                  };
+                },
+              },
               engine() {
                 assertOpen();
                 return opts.canvasEngine ?? null;
@@ -301,6 +384,13 @@ export async function activateWithMockHost(
   try {
     const result = await mod.activate(contextFor(activation));
     if (isDisposable(result)) activation.track(result);
+    if (declaredBehaviors !== undefined) {
+      const missing = (declaredBehaviorIds ?? []).filter((id) => !behaviors.has(id));
+      if (missing.length > 0) {
+        throw new Error(`mock host: missing behavior bindings: ${missing.join(", ")}`);
+      }
+      behaviorsSealed = true;
+    }
   } catch (error) {
     await activation.close();
     await root.close();
@@ -313,6 +403,7 @@ export async function activateWithMockHost(
   };
   return {
     bindings,
+    behaviors,
     commands,
     surfaces,
     logs,

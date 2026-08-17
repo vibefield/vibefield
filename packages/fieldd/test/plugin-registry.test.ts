@@ -146,6 +146,61 @@ describe("PluginRegistryService — discovery", () => {
 
     expect(svc.health()).toEqual({ count: 2, enabled: 2, invalid: 0 });
   });
+
+  it("projects behavior declarations and widget riders together without executing code", async () => {
+    const root = mkdtempSync(join(tmpdir(), "plugreg-behavior-"));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const id = "vibefield.fixture.behavior";
+    const behaviorId = `${id}:counter`;
+    const manifest = {
+      ...validManifest(id),
+      capabilities: ["canvas.write"],
+      contributes: {
+        widgets: [
+          {
+            type: `${id}.card`,
+            title: "Card",
+            schemaVersion: 1,
+            surface: "dom",
+            sizeMode: "fixed",
+            defaultSize: { w: 200, h: 120 },
+            behaviors: [{ id: behaviorId, data: { count: 3 } }],
+          },
+        ],
+        behaviors: [
+          {
+            id: behaviorId,
+            definition: {
+              store: "runtime",
+              derived: false,
+              deriveDuringGesture: false,
+              version: 1,
+              phase: "simulate",
+              tickWhile: "all",
+              schema: [{ name: "count", spec: { kind: "number", default: 0, min: 0, max: 10 } }],
+              reads: [],
+              writes: [],
+              migrationFrom: [],
+              hooks: ["init"],
+            },
+          },
+        ],
+      },
+    };
+    writePluginDir(root, "behavior", manifest);
+    const svc = newService({ bundled: [], devLinked: [root] });
+
+    await svc.refresh();
+
+    const record = svc.get(id);
+    expect(record?.state).toBe("enabled");
+    expect(record?.grantedCapabilities).toContain("canvas.write");
+    expect(record?.contributions.behaviors).toEqual(manifest.contributes.behaviors);
+    expect(record?.contributions.widgets[0]?.behaviors).toEqual(
+      manifest.contributes.widgets[0]?.behaviors,
+    );
+    expect(PluginRegistrySnapshot.safeParse(svc.snapshot()).success).toBe(true);
+  });
 });
 
 describe("PluginRegistryService — invalid & incompatible roots", () => {

@@ -29,6 +29,7 @@ prop names and group names outlive any particular implementation.
 | `ports` | { id: string, side: `n` \| `e` \| `s` \| `w`, index?: number, accepts?: string[] }[] | no | at most 16 item(s) |
 | `props` | object mapping name → one of `string`, `number`, `boolean`, `enum`, `json`, `entity-ref`, `session-ref`, `terminal-ref`, `artifact-ref`, `file-ref` | no | discriminated by `kind`; defaults to `{}` |
 | `groups` | `object mapping name → string[]` | no | at least 1 item(s); defaults to `{}` |
+| `behaviors` | `{ id: string, data?: object mapping name → recursive shape }[]` | no | at most 16 item(s) |
 
 `surface` picks the renderer: `dom` for an HTML card, `gl` for a 3D island with
 DOM chrome portaled under it. `sizeMode` and `defaultSize` set the prefab the

@@ -10,8 +10,9 @@ import "./renderer.css";
 //  - top-level code stays PURE. The host imports this module before it decides
 //    whether to activate it, so registration, I/O and timers all start in
 //    `activate` — never here.
-//  - the SDK is the only door (wall R10). `@vibefield/plugin-sdk` (plus `/ui`
-//    and `/canvas`), `@vibefield/contracts` types, and `react`. Importing
+//  - the SDK is the only door (wall R10). `@vibefield/plugin-sdk` (plus `/ui`,
+//    `/canvas`, and the React-free `/behavior`), `@vibefield/contracts` types,
+//    and `react`. Importing
 //    `@vibecook/ice` or a host package directly is refused by
 //    `pnpm plugin check` with `wall-violation`, even though the canvas hooks
 //    below ultimately come from ICE — reaching them THROUGH the SDK is the

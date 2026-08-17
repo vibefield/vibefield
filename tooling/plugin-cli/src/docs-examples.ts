@@ -67,7 +67,7 @@ export function minimalExample(): ExampleManifest {
 }
 
 /** Renderer + service, and the kinds that ride with it: custom capabilities,
- * canvas systems, settings, dynamic services, MCP. */
+ * canvas behaviors, settings, dynamic services, MCP. */
 export function serviceExample(): ExampleManifest {
   return {
     source: "@vibefield/contracts fixtures/plugin-manifest.service.json",

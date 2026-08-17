@@ -35,6 +35,7 @@ Categories: `Cards`, `3D`, `Nodes`, `Tools`.
 | `ports` | { id: string, side: `n` \| `e` \| `s` \| `w`, index?: number, accepts?: string[] }[] | no | at most 16 item(s) |
 | `props` | object mapping name → one of `string`, `number`, `boolean`, `enum`, `json`, `entity-ref`, `session-ref`, `terminal-ref`, `artifact-ref`, `file-ref` | no | discriminated by `kind`; defaults to `{}` |
 | `groups` | `object mapping name → string[]` | no | at least 1 item(s); defaults to `{}` |
+| `behaviors` | `{ id: string, data?: object mapping name → recursive shape }[]` | no | at most 16 item(s) |
 
 ```json
 [
@@ -248,26 +249,61 @@ Method kinds:
 
 *(@vibefield/contracts fixtures/plugin-manifest.service.json)*
 
-## Canvas systems
+## Canvas behaviors
 
-A system runs after the engine step, inside a budget the spine enforces. The
-`reason` field is the honesty tax: frame cadence is a scarce power, and a system
-says why it needs one.
+A behavior is ICE execution code with a signed, complete descriptor. Define it
+through the React-free `/behavior` door, put `declareBehavior(handle)` under
+`contributes.behaviors`, then bind the SAME handle during renderer activation:
+`ctx.canvas.behaviors.bind(handle.name, handle)`. The host compares every
+descriptor field before publication; missing, duplicate, renamed, or drifted
+handles fail closed.
+
+All behavior declarations request `canvas.write`. A denied grant still permits
+the inert declaration/code bind, but the sealed binding is dormant and never
+registers with ICE. Durable and runtime stores are admitted; ephemeral remains
+explicitly refused until a document-room presence transport exists. A tick hook
+also requires `reason`, because frame cadence is a scarce power.
+
+```ts
+import { declareBehavior, defineBehavior, p } from "@vibefield/plugin-sdk/behavior";
+
+export const Counter = defineBehavior("com.example.metrics:counter", {
+  store: "runtime",
+  schema: { count: p.number({ default: 0 }) },
+});
+export const counterContribution = declareBehavior(Counter);
+
+// manifest.ts: behaviors: [counterContribution], capabilities: ["canvas.write"]
+// renderer.ts: ctx.canvas.behaviors.bind(Counter.name, Counter)
+```
 
 | field | type | required | rules |
 | --- | --- | --- | --- |
-| `id` | string | yes | at most 128 characters |
-| `phase` | `"tick"` | yes | — |
-| `budgetMs` | number | yes | `> 0; ≤ 16` |
-| `reason` | string | yes | at least 1 character; at most 500 characters |
+| `id` | string | yes | at least 3 characters; at most 128 characters |
+| `reason` | string | no | at least 1 character; at most 500 characters |
+| `definition` | object | yes | — |
 
 ```json
 [
   {
-    "id": "com.example.metrics.ticker",
-    "phase": "tick",
-    "budgetMs": 1,
-    "reason": "advance the live sparkline between service snapshots"
+    "id": "com.example.metrics:ticker",
+    "reason": "advance the live sparkline between service snapshots",
+    "definition": {
+      "store": "runtime",
+      "derived": false,
+      "deriveDuringGesture": false,
+      "version": 1,
+      "phase": "simulate",
+      "budgetMs": 1,
+      "tickWhile": "all",
+      "schema": [],
+      "reads": [],
+      "writes": [],
+      "migrationFrom": [],
+      "hooks": [
+        "tick"
+      ]
+    }
   }
 ]
 ```

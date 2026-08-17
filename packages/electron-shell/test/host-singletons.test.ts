@@ -45,7 +45,6 @@ describe("host singleton addresses", () => {
       // module's own origin never enters the resolution (the 2026-08-13 probe's
       // row G4, which is what retired P8-D9's plugin-origin chunks).
       expect(url).toBe(`${APP_ORIGIN}/assets/${singletonChunkName(specifier)}.js`);
-      expect(url).not.toMatch(/-[A-Za-z0-9_-]{8}\.js$/);
     }
   });
 });

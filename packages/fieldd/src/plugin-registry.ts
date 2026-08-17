@@ -276,7 +276,13 @@ export class PluginRegistryService extends EventEmitter {
         grantedCapabilities: [],
         deniedCapabilities: [],
         grantGeneration: this.grantGenerations.get(idCandidate) ?? 0,
-        contributions: { widgets: [], commands: [], surfaces: [], capabilities: [] },
+        contributions: {
+          widgets: [],
+          behaviors: [],
+          commands: [],
+          surfaces: [],
+          capabilities: [],
+        },
         renderer: "none",
         service: "none",
         lastError: summary("PLUGIN_INVALID", validation.issues[0] ?? "manifest is invalid"),
@@ -322,6 +328,9 @@ export class PluginRegistryService extends EventEmitter {
       grantGeneration: this.grantGenerations.get(m.id) ?? 0,
       contributions: {
         widgets: m.contributes?.widgets ?? [],
+        // PRC-4d: renderer-safe, code-free canonical ICE descriptors. Widget
+        // riders and their declaration table must cross this boundary together.
+        behaviors: m.contributes?.behaviors ?? [],
         commands: m.contributes?.commands ?? [],
         surfaces: m.contributes?.surfaces ?? [],
         // P5 — the §8.5 declaration is PUBLIC pane data; values stay behind

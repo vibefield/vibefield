@@ -70,9 +70,10 @@ export const RENDERER_CTX_FACES: readonly CtxFaceRow[] = [
   },
   {
     face: "ctx.canvas",
-    type: "PluginCanvasAPI (`engine()`)",
-    presence: "present iff `canvas.read` or `canvas.write` is granted",
-    anchor: "present iff canvas.read or canvas.write is granted",
+    type: "PluginCanvasAPI (`engine()`, `behaviors.bind()`)",
+    presence:
+      "present iff canvas access is requested or the manifest declares a behavior; denied behavior bindings seal identity but remain dormant",
+    anchor: "Present iff the manifest requests canvas.read/write OR declares a behavior",
   },
   {
     face: "ctx.settings",
@@ -167,6 +168,26 @@ function widget(overrides: Record<string, unknown> = {}): Record<string, unknown
   };
 }
 
+function behavior(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "com.example.demo:counter",
+    definition: {
+      store: "runtime",
+      derived: false,
+      deriveDuringGesture: false,
+      version: 1,
+      phase: "simulate",
+      tickWhile: "all",
+      schema: [],
+      reads: [],
+      writes: [],
+      migrationFrom: [],
+      hooks: [],
+    },
+    ...overrides,
+  };
+}
+
 export interface InvariantProbe {
   /** the rule, in the docs' own words — the message comes from the schema */
   readonly topic: string;
@@ -241,11 +262,11 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
     },
   },
   {
-    topic: "canvas systems require at least canvas.read",
+    topic: "canvas behaviors require canvas.write",
     manifest: {
       ...base(),
       contributes: {
-        systems: [{ id: "com.example.demo.tick", phase: "tick", budgetMs: 2, reason: "why" }],
+        behaviors: [behavior()],
       },
     },
   },

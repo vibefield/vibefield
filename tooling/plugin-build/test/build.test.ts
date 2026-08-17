@@ -90,6 +90,7 @@ describe("findUnmappableSpecifiers (the §11.6 artifact check)", () => {
         "@vibefield/plugin-sdk",
         "@vibefield/plugin-sdk/ui",
         "@vibefield/plugin-sdk/canvas",
+        "@vibefield/plugin-sdk/behavior",
       ]),
     ).toEqual([]);
   });

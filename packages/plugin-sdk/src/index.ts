@@ -15,6 +15,7 @@
 // riding the app bundle was never installed, so there is no install to revise.
 
 import type { ComponentType } from "react";
+import type { PluginBehaviorBindingAPI } from "./behavior";
 
 export interface Disposable {
   dispose(): void | Promise<void>;
@@ -84,7 +85,9 @@ export interface RendererPluginContext {
   readonly commands?: RendererCommandAPI;
   /** present iff the manifest DECLARES contributes.surfaces (§8.4/§10.2) */
   readonly surfaces?: RendererSurfaceAPI;
-  /** present iff canvas.read or canvas.write is granted (§12.7 stopgap/§10.2) */
+  /** Present iff the manifest requests canvas.read/write OR declares a behavior.
+   * A declaration-only face remains inert when canvas.write is denied: it can
+   * seal code identity, but cannot register execution with ICE. */
   readonly canvas?: PluginCanvasAPI;
   /** present iff the manifest requests storage.self (§16.3 — absent, not stubbed) */
   readonly settings?: PluginSettingsAPI;
@@ -413,8 +416,13 @@ export interface RendererSurfaceAPI {
  * this is the least-power v1 handle so declared commands can act on the canvas
  * — a recorded delta (thinking-p3). The raw mutable World stays unreachable
  * (PA-22); callers cast the opaque handle through the SDK ./canvas CanvasEngine
- * door. Present on ctx iff canvas.read or canvas.write is granted (§10.2). */
+ * door. Present on ctx iff canvas access is requested or a behavior declaration
+ * needs the inert binding face (§10.2/§12.7). */
 export interface PluginCanvasAPI {
+  /** Inert declaration/code binding. Present independently of the effective
+   * write grant; only the document host may turn a sealed binding into an ICE
+   * execution registration. */
+  readonly behaviors: PluginBehaviorBindingAPI;
   /** The active canvas engine, or null when none is mounted (daemon-away boot,
    * between doc switches). Opaque `unknown` — the SDK ./canvas re-export types
    * the cast; a command reads a null return as "no canvas, no-op". */

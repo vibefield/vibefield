@@ -47,6 +47,7 @@ describe("the scaffolded tree", () => {
       "package.json",
       "tsconfig.json",
       MANIFEST_SOURCE,
+      "src/behavior.example.ts",
       "src/renderer.tsx",
       "src/index.ts",
       "scripts/emit-manifest.ts",
@@ -79,6 +80,19 @@ describe("the scaffolded tree", () => {
     const renderer = readFileSync(join(dir, "src", "renderer.tsx"), "utf8");
     expect(renderer).toContain("function MindMap(");
     expect(renderer).toContain("component: MindMap");
+  });
+
+  it("ships a substituted, React-free behavior authoring example", async () => {
+    const dir = unusedPath();
+    await scaffoldPlugin({ id: "vendor.demo", title: "Demo", dir });
+
+    const example = readFileSync(join(dir, "src", "behavior.example.ts"), "utf8");
+    expect(example).toContain('from "@vibefield/plugin-sdk/behavior"');
+    expect(example).toContain('defineBehavior("vendor.demo:counter"');
+    expect(example).toContain("declareBehavior(ExampleCounter)");
+    expect(example).toContain("ctx.canvas.behaviors.bind");
+    expect(example).not.toContain("react");
+    expect(example).not.toContain("@vibecook/ice");
   });
 });
 

@@ -16,6 +16,7 @@ column is the general one.
 | `artifact-hash-mismatch` | registry | `the artifact's sha256 is not what the index pins (PLUGIN_ARTIFACT_MISMATCH)` | re-pack and re-pin: the index pins the bytes, and a mismatch is never installed |
 | `artifact-missing` | artifact | the manifest declares an entry module that is not on disk | run `plugin-build`, or fix entries.<renderer\|service> to name what it builds |
 | `artifact-unmappable-specifier` | artifact | the bundle imports a bare specifier the host import map cannot bind (§11.6) | `import only HOST_SINGLETON_MODULE_SPECIFIERS, or let the plugin bundle it in` |
+| `behavior-store-unsupported` | manifest | the behavior store has no safe plugin transport in this release | use a durable or runtime behavior; ephemeral awaits document-room presence transport |
 | `binding-missing` | activation | the manifest declares a widget type that activate never bound (§12.1) | bind every declared type: ctx.widgets.register({ type, binding }) |
 | `binding-undeclared` | activation | activate registered a widget type the manifest does not declare (§12.1) | declare the type under contributes.widgets, or register the declared type |
 | `dev-root-unknown` | dev-link | no dev-linked plugin root could be resolved for this machine | `pass --root <dir>, or run inside the repo whose dev session watches examples/plugins` |
@@ -37,8 +38,9 @@ column is the general one.
 | `schema-invalid` | schema | a declared settings or service JSON Schema does not compile | the schema must compile under ajv (draft-07 style, `strict: false`) as the daemon compiles it |
 | `signature-invalid` | registry | the detached signature does not verify against the index bytes | re-sign the EXACT bytes on disk; verification never re-canonicalizes |
 | `signature-missing` | registry | no detached index.json.sig beside the index | sign the index with `vibefield-plugin index sign <index> --key <secret>` |
+| `systems-contribution-superseded` | manifest | the retired contributes.systems shape cannot express an ICE behavior descriptor | define through @vibefield/plugin-sdk/behavior and declare under contributes.behaviors |
 | `usage` | input | the command line could not be understood | run `vibefield-plugin --help`; every command is non-interactive |
-| `wall-violation` | wall | plugin runtime code imports something outside the SDK door (§11.3, wall R10) | import @vibefield/plugin-sdk (+ /ui, /canvas), @vibefield/contracts types, or react |
+| `wall-violation` | wall | plugin runtime code imports something outside the SDK door (§11.3, wall R10) | import @vibefield/plugin-sdk (+ /ui, /canvas, /behavior), @vibefield/contracts types, or react |
 
 ## Notes (exit 0)
 

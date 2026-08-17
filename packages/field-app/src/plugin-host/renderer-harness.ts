@@ -1,5 +1,8 @@
+import { type AnyBehaviorDef, describeBehavior } from "@vibecook/ice";
 import {
+  type BehaviorContribution,
   type CommandContribution,
+  computeEffectiveGrants,
   PLUGIN_LIMITS,
   type PluginManifestV1,
   type PluginModuleUrls,
@@ -68,24 +71,39 @@ export interface RendererActivationLifetime {
 export interface ActivatedRenderer {
   readonly state: RendererActivationState;
   readonly bindings: ReadonlyMap<string, WidgetBinding>;
+  /** Complete, descriptor-checked inert bindings. This map is populated only
+   * after the private candidate seals and clears at the lifetime close edge. */
+  readonly behaviors: ReadonlyMap<string, RendererBehaviorBinding>;
   readonly error?: string;
   readonly cleanup?: ActivationCloseReport;
   readonly lifetime?: RendererActivationLifetime;
+}
+
+export interface RendererBehaviorBinding {
+  readonly pluginId: string;
+  readonly id: string;
+  readonly declarationIndex: number;
+  readonly orderKey: string;
+  /** Effective renderer authority only; binding itself is always inert. */
+  readonly authorized: boolean;
+  readonly handle: AnyBehaviorDef;
 }
 
 const activated = new Map<string, ActivatedRenderer>();
 
 /** What the harness needs to build a context, from whichever authority the
  * caller holds: the canonical manifest (bundled) or the sanitized registry
- * record plus its approved module row (staged). Capabilities are the REQUESTED
- * set in both cases — see the §12.7 stopgap note below. */
+ * record plus its approved module row (staged). Requested capabilities admit
+ * declarations; effective capabilities alone authorize later execution. */
 interface ActivationSpec {
   readonly id: string;
   readonly version: string;
   readonly widgets: readonly WidgetContribution[];
   readonly commands: readonly CommandContribution[];
   readonly surfaces: readonly SurfaceContribution[];
-  readonly capabilities: readonly string[];
+  readonly behaviors: readonly BehaviorContribution[];
+  readonly requestedCapabilities: readonly string[];
+  readonly effectiveCapabilities: readonly string[];
   readonly manifestHash?: string;
   readonly installRevision?: string;
   readonly grantGeneration?: number;
@@ -104,13 +122,21 @@ export interface RendererActivationDeps {
 }
 
 function specFromManifest(manifest: PluginManifestV1): ActivationSpec {
+  const effective = computeEffectiveGrants({
+    requested: manifest.capabilities,
+    hasRenderer: manifest.entries?.renderer !== undefined,
+    hasService: manifest.entries?.service !== undefined,
+    source: "bundled",
+  }).granted;
   return {
     id: manifest.id,
     version: manifest.version,
     widgets: manifest.contributes?.widgets ?? [],
     commands: manifest.contributes?.commands ?? [],
     surfaces: manifest.contributes?.surfaces ?? [],
-    capabilities: manifest.capabilities,
+    behaviors: manifest.contributes?.behaviors ?? [],
+    requestedCapabilities: manifest.capabilities,
+    effectiveCapabilities: effective,
   };
 }
 
@@ -121,9 +147,9 @@ function specFromRecord(record: PluginRecord, module: PluginModuleUrls): Activat
     widgets: record.contributions.widgets,
     commands: record.contributions.commands,
     surfaces: record.contributions.surfaces,
-    // §9.4's record splits requested from granted; the harness gates on
-    // REQUESTED for the same reason the manifest path does (see §12.7 below).
-    capabilities: record.requestedCapabilities,
+    behaviors: record.contributions.behaviors ?? [],
+    requestedCapabilities: record.requestedCapabilities,
+    effectiveCapabilities: record.grantedCapabilities,
     manifestHash: module.manifestHash,
     installRevision: module.installRevision,
     grantGeneration: record.grantGeneration,
@@ -152,6 +178,7 @@ function isThenable(v: unknown): v is PromiseLike<unknown> {
 interface Activation {
   readonly contextFor: (scope: ActivationScope) => RendererPluginContext;
   readonly bindings: Map<string, WidgetBinding>;
+  readonly behaviors: Map<string, RendererBehaviorBinding>;
   readonly commandBindings: Map<string, { token: symbol; handler: commandRegistry.CommandHandler }>;
   readonly surfaceBindings: Map<
     string,
@@ -167,6 +194,7 @@ interface Activation {
   readonly scope: ActivationScope;
   readonly lifetime: RendererActivationLifetime;
   readonly logger: PluginLogger;
+  setBehaviorAuthorization(authorized: boolean): void;
   stagePublications(): RendererPublicationCandidate;
 }
 
@@ -218,6 +246,7 @@ function ownPublication(
 function lifetimeFor(
   scope: ActivationScope,
   bindings: Map<string, WidgetBinding>,
+  behaviors: Map<string, RendererBehaviorBinding>,
 ): RendererActivationLifetime {
   return Object.freeze({
     signal: scope.signal,
@@ -226,6 +255,7 @@ function lifetimeFor(
       // Widget implementations are a publication projection, not an inverse. Withdraw them at
       // the synchronous close edge while resource cleanup continues in strict LIFO order.
       bindings.clear();
+      behaviors.clear();
     },
     observe: (deadlineMs?: number) => scope.observe(deadlineMs),
     whenQuiescent: () => scope.whenQuiescent(),
@@ -236,6 +266,25 @@ function lifetimeFor(
 function primaryErrorMessage(error: unknown): string {
   const primary = error instanceof ActivationEffectSetupError ? error.cause : error;
   return primary instanceof Error ? primary.message : String(primary);
+}
+
+function canonicalDescriptorJson(value: unknown): string {
+  const visit = (entry: unknown): unknown => {
+    if (Array.isArray(entry)) return entry.map(visit);
+    if (entry !== null && typeof entry === "object") {
+      return Object.fromEntries(
+        Object.entries(entry as Record<string, unknown>)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, child]) => [key, visit(child)]),
+      );
+    }
+    return entry;
+  };
+  return JSON.stringify(visit(value));
+}
+
+function behaviorOrderKey(pluginId: string, declarationIndex: number): string {
+  return `${pluginId}\0${declarationIndex.toString().padStart(6, "0")}`;
 }
 
 function buildActivation(
@@ -260,23 +309,38 @@ function buildActivation(
       },
     ]),
   );
+  const declaredBehaviors = new Map(
+    spec.behaviors.map((row, declarationIndex) => [
+      row.id,
+      {
+        row,
+        declarationIndex,
+        expectedDescriptor: { id: row.id, ...row.definition },
+      },
+    ]),
+  );
   // §12.7 STOPGAP gate: mirror the storage.self pattern — key on the REQUESTED
   // capability (the manifest ceiling). The daemon's caller matrix enforces the
   // granted set for fabric calls; the canvas handle is an in-renderer direct
   // engine reference with no daemon behind it, so requested-capability is the
   // honest v1 signal (recorded — the curated PA-27 tier will gate on grants).
   const hasCanvas =
-    spec.capabilities.includes("canvas.read") || spec.capabilities.includes("canvas.write");
+    spec.requestedCapabilities.includes("canvas.read") ||
+    spec.requestedCapabilities.includes("canvas.write") ||
+    declaredBehaviors.size > 0;
   const rawClient =
     deps.productClient ??
     createPluginProductClient(spec.id, {
       ...(spec.manifestHash !== undefined ? { manifestHash: spec.manifestHash } : {}),
       ...(spec.grantGeneration !== undefined ? { grantGeneration: spec.grantGeneration } : {}),
     });
-  const rawStorage = spec.capabilities.includes("storage.self")
+  const rawStorage = spec.requestedCapabilities.includes("storage.self")
     ? createStorageSurfaces(rawClient)
     : undefined;
   const bindings = new Map<string, WidgetBinding>();
+  const boundBehaviorHandles = new Map<string, AnyBehaviorDef>();
+  const behaviors = new Map<string, RendererBehaviorBinding>();
+  let behaviorsSealed = false;
   const widgetGenerations = new Map<string, symbol>();
   const commandBindings = new Map<
     string,
@@ -535,6 +599,53 @@ function buildActivation(
       ...(hasCanvas
         ? {
             canvas: Object.freeze({
+              behaviors: Object.freeze({
+                bind(behaviorId: string, behavior: AnyBehaviorDef): Disposable {
+                  assertOpen();
+                  if (behaviorsSealed) {
+                    throw new Error(`behavior bindings for ${spec.id} are sealed after activation`);
+                  }
+                  const declaration = declaredBehaviors.get(behaviorId);
+                  if (declaration === undefined) {
+                    throw new Error(`${behaviorId} is not declared by ${spec.id} (§8.8)`);
+                  }
+                  if (behavior.name !== behaviorId) {
+                    throw new Error(
+                      `behavior handle ${behavior.name} does not match declaration ${behaviorId}`,
+                    );
+                  }
+                  if (boundBehaviorHandles.has(behaviorId)) {
+                    throw new Error(`behavior ${behaviorId} already bound in this entry (§8.8)`);
+                  }
+                  const actualDescriptor = describeBehavior(behavior);
+                  if (
+                    canonicalDescriptorJson(actualDescriptor) !==
+                    canonicalDescriptorJson(declaration.expectedDescriptor)
+                  ) {
+                    throw new Error(
+                      `behavior ${behaviorId} descriptor does not match its manifest declaration`,
+                    );
+                  }
+                  boundBehaviorHandles.set(behaviorId, behavior);
+                  const resource: Disposable = {
+                    dispose() {
+                      if (boundBehaviorHandles.get(behaviorId) !== behavior) return;
+                      boundBehaviorHandles.delete(behaviorId);
+                    },
+                  };
+                  // A declaration binding is candidate-global, even if the call came through a
+                  // child effect context. The activation root owns the exact inverse; otherwise
+                  // closing a child scope after commit could silently unbind immutable catalog
+                  // truth. The author-facing disposer can only revise the still-private set.
+                  ownPublication(scope, `behavior:${behaviorId}`, resource);
+                  return Object.freeze({
+                    dispose(): void {
+                      if (behaviorsSealed) return;
+                      resource.dispose();
+                    },
+                  });
+                },
+              }),
               engine() {
                 assertOpen();
                 return getActiveCanvasEngine();
@@ -555,6 +666,31 @@ function buildActivation(
 
   const stagePublications = (): RendererPublicationCandidate => {
     assertScopeOpen(scope);
+    const missingBehaviors = spec.behaviors
+      .map((row) => row.id)
+      .filter((id) => !boundBehaviorHandles.has(id));
+    if (missingBehaviors.length > 0) {
+      throw new Error(`missing behavior bindings: ${missingBehaviors.join(", ")}`);
+    }
+    behaviorsSealed = true;
+    behaviors.clear();
+    for (const [declarationIndex, declaration] of spec.behaviors.entries()) {
+      const handle = boundBehaviorHandles.get(declaration.id);
+      if (handle === undefined) {
+        throw new Error(`missing behavior binding ${declaration.id}`);
+      }
+      behaviors.set(
+        declaration.id,
+        Object.freeze({
+          pluginId: spec.id,
+          id: declaration.id,
+          declarationIndex,
+          orderKey: behaviorOrderKey(spec.id, declarationIndex),
+          authorized: spec.effectiveCapabilities.includes("canvas.write"),
+          handle,
+        }),
+      );
+    }
     const commands = commandRegistry.stageBindings(
       spec.id,
       [...commandBindings].map(([commandId, binding]) => ({
@@ -626,14 +762,26 @@ function buildActivation(
     return candidate;
   };
 
+  const setBehaviorAuthorization = (authorized: boolean): void => {
+    if (!behaviorsSealed) {
+      throw new Error(`behavior bindings for ${spec.id} are not sealed`);
+    }
+    for (const [id, binding] of behaviors) {
+      if (binding.authorized === authorized) continue;
+      behaviors.set(id, Object.freeze({ ...binding, authorized }));
+    }
+  };
+
   return {
     contextFor,
     bindings,
+    behaviors,
     commandBindings,
     surfaceBindings,
     scope,
-    lifetime: lifetimeFor(scope, bindings),
+    lifetime: lifetimeFor(scope, bindings, behaviors),
     logger,
+    setBehaviorAuthorization,
     stagePublications,
   };
 }
@@ -652,6 +800,7 @@ function beginActivation(attempt: Activation, mod: RendererPluginModule): Starte
   // Explicit initialization is required for the outer return path: ActivationScope.effect can
   // reject before invoking the acquisition callback, even though the ordinary open-scope path
   // assigns synchronously.
+  // biome-ignore lint/complexity/noUselessUndefinedInitialization: the callback is not guaranteed to run
   let syncValue: void | Disposable | Promise<void | Disposable> = undefined;
   let syncThrew = false;
   let syncError: unknown;
@@ -683,6 +832,7 @@ function cachedActivation(id: string): ActivatedRenderer | undefined {
   return {
     state: "non-quiescent",
     bindings: new Map(),
+    behaviors: new Map(),
     error: cached.error ?? "the previous renderer activation is still draining",
     cleanup,
     lifetime: cached.lifetime,
@@ -712,6 +862,7 @@ export function activateRenderer(
     const failed: ActivatedRenderer = {
       state: cleanup.quiescent ? "failed" : "non-quiescent",
       bindings: attempt.bindings,
+      behaviors: new Map(),
       error: message,
       cleanup,
       lifetime: attempt.lifetime,
@@ -727,6 +878,7 @@ export function activateRenderer(
     const failed: ActivatedRenderer = {
       state: cleanup.quiescent ? "failed" : "non-quiescent",
       bindings: attempt.bindings,
+      behaviors: new Map(),
       error: "async activate needs the staged loader (§19.2) — bundled activation is sync",
       cleanup,
       lifetime: attempt.lifetime,
@@ -746,6 +898,7 @@ export function activateRenderer(
     const failed: ActivatedRenderer = {
       state: cleanup.quiescent ? "failed" : "non-quiescent",
       bindings: attempt.bindings,
+      behaviors: new Map(),
       error: message,
       cleanup,
       lifetime: attempt.lifetime,
@@ -761,6 +914,7 @@ export function activateRenderer(
   const ok: ActivatedRenderer = {
     state: "active",
     bindings: attempt.bindings,
+    behaviors: attempt.behaviors,
     lifetime: attempt.lifetime,
   };
   activated.set(manifest.id, ok);
@@ -783,6 +937,7 @@ type RacedActivation =
 
 export interface RendererActivationCandidate extends Disposable {
   readonly activation: ActivatedRenderer;
+  setBehaviorAuthorization(authorized: boolean): void;
   commit(): void;
   dispose(): Promise<void>;
 }
@@ -845,6 +1000,7 @@ export async function stageStagedRenderer(
       throw new RendererActivationStageError({
         state: cleanup.quiescent ? "failed" : "non-quiescent",
         bindings: attempt.bindings,
+        behaviors: new Map(),
         error,
         cleanup,
         lifetime: attempt.lifetime,
@@ -854,12 +1010,19 @@ export async function stageStagedRenderer(
     const activation: ActivatedRenderer = {
       state: "active",
       bindings: attempt.bindings,
+      behaviors: attempt.behaviors,
       lifetime: attempt.lifetime,
     };
     let state: "staged" | "active" | "disposed" = "staged";
     let disposeTask: Promise<void> | undefined;
     const candidate: RendererActivationCandidate = Object.freeze({
       activation,
+      setBehaviorAuthorization(authorized: boolean): void {
+        if (state === "disposed" || attempt.scope.state !== "open") {
+          throw new Error(`renderer candidate for ${record.id} is no longer current`);
+        }
+        attempt.setBehaviorAuthorization(authorized);
+      },
       commit(): void {
         if (state === "active") return;
         if (state === "disposed" || attempt.scope.state !== "open")
@@ -896,6 +1059,7 @@ export async function stageStagedRenderer(
     throw new RendererActivationStageError({
       state: cleanup.quiescent ? "failed" : "non-quiescent",
       bindings: attempt.bindings,
+      behaviors: new Map(),
       error: message,
       cleanup,
       lifetime: attempt.lifetime,
@@ -937,7 +1101,12 @@ export async function activateStagedRenderer(
     const failed: ActivatedRenderer =
       error instanceof RendererActivationStageError
         ? error.activation
-        : { state: "failed" as const, bindings: new Map(), error: primaryErrorMessage(error) };
+        : {
+            state: "failed" as const,
+            bindings: new Map(),
+            behaviors: new Map(),
+            error: primaryErrorMessage(error),
+          };
     if (failed.cleanup !== undefined && !failed.cleanup.quiescent) activated.set(record.id, failed);
     return failed;
   }

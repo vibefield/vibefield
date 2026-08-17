@@ -80,6 +80,7 @@ export async function checkActivation(
   const declaredWidgets = (manifest.contributes?.widgets ?? []).map((w) => w.type);
   const declaredCommands = (manifest.contributes?.commands ?? []).map((c) => c.id);
   const declaredSurfaces = (manifest.contributes?.surfaces ?? []).map((s) => s.id);
+  const declaredBehaviors = manifest.contributes?.behaviors ?? [];
 
   const entry = manifest.entries?.renderer;
   if (entry === undefined)
@@ -134,6 +135,7 @@ export async function checkActivation(
     declaredWidgets,
     ...(declaredCommands.length > 0 ? { declaredCommands } : {}),
     ...(declaredSurfaces.length > 0 ? { declaredSurfaces } : {}),
+    ...(declaredBehaviors.length > 0 ? { declaredBehaviors } : {}),
     ...(manifest.capabilities.includes("canvas.read") ||
     manifest.capabilities.includes("canvas.write")
       ? { canvasEngine: { note: "plugin-cli check: opaque canvas handle, no engine behind it" } }
@@ -160,6 +162,11 @@ export async function checkActivation(
     ...exactMatch("widget type", declaredWidgets, [...session.bindings.keys()]),
     ...exactMatch("command", declaredCommands, [...session.commands.keys()]),
     ...exactMatch("surface", declaredSurfaces, [...session.surfaces.keys()]),
+    ...exactMatch(
+      "behavior",
+      declaredBehaviors.map((row) => row.id),
+      [...session.behaviors.keys()],
+    ),
   );
 
   // Deactivation uses the mock host's scope twin: synchronous abort followed by awaited reverse
