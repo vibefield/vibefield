@@ -3,16 +3,17 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-17** — **PRC-4e LANDED
-> `6289795` on ICE 0.8.1 / strata 0.13.0.** Complete renderer candidates now publish into one
-> observable window catalog; each committed document generation installs the authorized canonical
-> batch before open/create, carries bounded chronic breaker state across engines, and withdraws in
-> reverse before every close/reset. Permission-correct acceptance is green across all 22 test and
-> typecheck targets; field-app is 477/477, and preflight, singleton dependencies, lint, generated
-> freshness, and the production bundle wall pass. **Now: PRC-4f** — land a real packaged
-> durable/runtime conformance plugin and repeated lifecycle churn. Ephemeral remains deliberately refused
-> until the product document-room presence lane and two-engine tombstone witness exist; I18 itself
-> is already consumed. Earlier milestone context follows for continuity: R3-0 landed three slices
+> stays in the design docs + specs. Last rewritten: **2026-08-17** — **PRC-4f LANDED
+> `9fc2de6` on ICE 0.8.1 / strata 0.13.0.** One ordinary plugin now rebuilds its ignored release
+> artifact from committed inputs and crosses fieldd discovery, staged activation, sealed behavior
+> publication, prefab construction, and document-generation execution. Fresh-process v1 bytes
+> migrate 41→42; six grant replacements and nine total engines preserve the durable/runtime split,
+> carry chronic breaker state, balance 45 registrations/45 unregistrations, and leave no stale
+> guest or hook. Acceptance is green across all 23 test and typecheck targets plus preflight,
+> singleton dependencies, lint, generated freshness, and the production bundle wall. **Now:
+> PRC-4g** — design and prove the product document-room presence transport plus a two-engine remote
+> tombstone witness before admitting ephemeral plugin behaviors; I18 itself is already consumed.
+> Earlier milestone context follows for continuity: R3-0 landed three slices
 > on main, each behind a verbatim green gate: **S2**
 > `e66143a` (keyboard claim declared in contracts; + the docs-generator inline-object
 > threshold fix its rendering regression exposed, + two raw NUL bytes found making
@@ -122,7 +123,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-D1…D13 ratified; PRC-0 through PRC-3d landed; PRC-4a proof, PRC-4b/4c ICE floor, **PRC-4d binding `95da1b8`**, and **PRC-4e document host `6289795` LANDED** on ICE 0.8.1 / strata 0.13.0. | `specs/plugin-architecture.md` §8.8/§12.7/§21.9 · `thinking-plugin-runtime-composability.md` · `thinking-prc4-behavior-adapter.md` | **PRC-4f next:** packaged durable/runtime conformance fixture + repeated lifecycle churn with zero stale guests/hooks. Ephemeral PRC-4g remains gated only by the product document-room presence lane and two-engine tombstone witness. P8c rides WP8; P8e gates third-party listing; public index repo remains James's operation. |
+| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-D1…D13 ratified; PRC-0 through PRC-3d landed; PRC-4a proof, PRC-4b/4c ICE floor, **PRC-4d binding `95da1b8`**, **PRC-4e document host `6289795`**, and **PRC-4f packaged conformance `9fc2de6` LANDED** on ICE 0.8.1 / strata 0.13.0. | `specs/plugin-architecture.md` §8.8/§12.7/§21.9 · `thinking-plugin-runtime-composability.md` · `thinking-prc4-behavior-adapter.md` | **PRC-4g next:** product document-room presence transport + two-engine remote-tombstone witness, then and only then ephemeral behavior admission. P8c rides WP8; P8e gates third-party listing; public index repo remains James's operation. |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -276,8 +277,17 @@ before persistence unbind and every document close/reset. The window ledger is b
 document/runtime generation from chronic identity. A corrupt journal now ends the old behavior
 generation before closing and registers a fresh one before the quarantined replacement. Focused
 acceptance is **26/26**; field-app is **477/477**; all **22/22** workspace test/typecheck targets,
-preflight, dependency, lint, generated, bundle, and patch gates pass. **PRC-4f is next:** packaged
-durable/runtime conformance plus repeated lifecycle churn.
+preflight, dependency, lint, generated, bundle, and patch gates pass.
+**PRC4-E21 / PRC-4f LANDED `9fc2de6`.** A real example plugin declares v2 durable migration,
+runtime state, a deliberately thenable breaker, and one widget riding all three. The vertical row
+builds its ignored artifact from committed inputs, discovers it through fieldd, imports only the
+emitted bytes through the renderer singleton harness, stages it, and installs it through the real
+generation host. Child-authored v1 count 41 migrates to 42; six deny/regrant cycles and nine total
+engines preserve durable values, reset fresh-engine runtime values, carry suspended strike 3, and
+balance **45 register / 45 unregister** with every closed edge quiet. The experiment repaired the
+playground's missing behavior-declaration/handle bridge; the field runtime required no change.
+All **23/23** workspace test and typecheck targets plus production boundary gates pass. **PRC-4g
+is next:** product document-room presence transport and the two-engine remote-tombstone witness.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through

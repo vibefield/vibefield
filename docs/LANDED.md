@@ -2438,3 +2438,36 @@ tests**; workspace tests and typechecks **22/22 targets each**; preflight, physi
 lint, generated freshness, production renderer/bundle wall (**480.0 KB raw / 128.7 KB gzip initial
 graph**), and patch hygiene all green. PRC-4f now owns the packaged durable/runtime conformance
 fixture and repeated lifecycle churn.
+
+## PRC-4f — one packaged plugin proves the durable/runtime base
+
+**LANDED 2026-08-17** (`9fc2de6`) on ICE 0.8.1 / strata 0.13.0. The new non-shipping
+`vibefield.behavior-conformance` example declares one v2 durable behavior with a real v1 migration,
+one runtime behavior, one deliberately thenable runtime breaker, and a widget pre-attaching all
+three. Its canonical manifest, React-free SDK bindings, playground state, and package build use the
+same author-facing surfaces as an ordinary plugin. Because `dist/` is intentionally ignored, the
+vertical row invokes the production builder from committed inputs before importing only the
+emitted renderer artifact; a clean checkout cannot inherit a false local precondition.
+
+The witness discovers the manifest through `PluginRegistryService`, stages the emitted bytes with
+the production renderer loader, builds the real prefab registry/engine, and connects the real
+`BehaviorGenerationHost`. A fresh child process authors only durable v1 with count 41; registering
+the packaged v2 code before open migrates it to 42 before first init. Three attributed thenable
+faults suspend the breaker at strike 3. Six live `canvas.write` deny/regrant cycles leave zero
+guests and hooks while denied, retain durable 42 and same-engine runtime 9, and reinstall the
+breaker already suspended. Eight replacement engines retain durable state, restore runtime to its
+declared default 7, and remain quiet after close. Across nine engines the trace balances exactly
+**45 registrations / 45 unregistrations**.
+
+The red path found one real missing middle outside the field runtime: plugin playground activation
+did not pass declared behavior rows into the SDK mock or sealed behavior handles into prefab
+construction, so a correct behavior plugin was unbuildable in the authoring tool. That bridge is
+now wired and the fixture joins the automatic repository-plugin census. Native Node import remains
+the wrong renderer witness; the shared Vite loader preserves the production singleton topology.
+
+Acceptance: package tests **2/2**; full playground **41/41**; workspace tests and typechecks
+**23/23 targets each**; six grant cycles, nine engines, and the exact lifecycle census above;
+preflight; physical singleton graph (Loro 1.13.8, ICE 0.8.1, strata 0.13.0, React/React DOM
+19.2.7); generated manifests/contracts/docs; lint (standing warnings only); production renderer/
+bundle wall; and patch hygiene all green. PRC-4g now owns the product document-room presence
+transport and two-engine remote-tombstone witness required before ephemeral admission.
