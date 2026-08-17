@@ -2509,3 +2509,47 @@ host will still need deterministic aggregate headroom and a packaged two-engine 
 witness. Commit `ce43bad` keeps the stable `behavior-store-unsupported` code but corrects its
 author-facing explanation to the real budget gate. PRC-4g2 remains closed until that evidence is
 green (or a separately ratified fixed-width fallback replaces I19).
+
+## PRC-4g2 — bounded plugin presence admission
+
+**LANDED 2026-08-17** (`1fecb94` dependency consumption + `ce92023` implementation) on ICE 0.9.0 /
+strata 0.13.0. The published ICE artifact adds optional, identity-bearing `maxFacetBytes` for
+ephemeral behaviors. Its canonical measure is the UTF-8 JSON bytes of the complete component cell.
+Default mint and every prospective merged runtime write are checked before publication; refusal
+leaves no residue or preserves the last good facet, and repeated attributed overruns reach the
+existing breaker/quarantine path whose I17 inverse withdraws the facet. VibeField requires the
+claim for plugin declarations even though ICE keeps it optional for compatibility, and defensively
+validates its finite positive shape because declaration dev guards can be disabled independently
+of production byte enforcement.
+
+E23 measures the exact installed wire before selecting product constants. Baseline is 132 bytes;
+one maximal 128-byte behavior id adds 139 bytes beyond its cell claim; sixteen empty maximal-id
+facets add 2,224 bytes, refuting a claims-only sum. VibeField therefore charges each claim plus a
+256-byte envelope and reserves a 48 KiB plugin window beneath the independent 64 KiB transport
+ceiling. A plugin must fit that window alone at manifest validation. At runtime, the document host
+groups eligible ephemeral declarations by plugin, admits or blocks each group atomically in
+canonical plugin-id order, and skips a group that does not fit so a later smaller group may still
+run. Durable/runtime rows are unaffected; values are never silently truncated.
+
+The boundary case is executable, not arithmetic-only. Sixteen exact-claim facets with maximal ids
+charge exactly 48 KiB; with a 120-character multibyte profile, 64-character multibyte color, and
+32 selected durable entities, ICE emits **48,776 bytes**, leaving **16,760 bytes** below the hard
+guard. A tracked field-app test repeats a fully charged maximum-id plugin against the installed
+artifact so future encoding drift cannot silently cross the transport ceiling.
+
+The packaged `vibefield.behavior-conformance` artifact now contributes a bounded presence facet
+without attaching it to a durable widget. The vertical witness rebuilds the artifact, discovers it
+through fieldd, stages and seals the exact byte-bearing descriptor, installs it through the real
+generation host, and connects two engines through VibeField's production document-presence
+composition. The second engine observes the remote facet; live `canvas.write` withdrawal removes
+the producer and the second engine observes the I17 tombstone. The legacy
+`behavior-store-unsupported` code remains in the refusal vocabulary for older hosts but has no
+current emitter; over-large manifests use `behavior-presence-budget-exceeded`.
+
+Acceptance: exact published-artifact E23 probes **8/8**; all **23/23** workspace typecheck targets;
+contracts **231**, SDK **23**, CLI **81**, playground **42**, and fixture **2** tests; non-socket
+field-app **61 files / 473 tests**; preflight; one-copy resolution (Loro 1.13.8, ICE 0.9.0, strata
+0.13.0, React/React DOM 19.2.7); generated manifests/contracts/docs; changed-file lint; production
+renderer/bundle wall; and patch hygiene. The broad workspace run reached only pre-existing local
+TCP/Unix socket tests that this sandbox refuses with `EPERM`; no changed-surface failure occurred.
+PRC-4g1's physical two-daemon auth-key witness remains independently owed; PRC-5/PRC-6 follow.
