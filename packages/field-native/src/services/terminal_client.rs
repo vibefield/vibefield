@@ -32,14 +32,15 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc, oneshot};
 
-/// Control protocol: ghosttea 0.9.2 serves 1.13. This client announces **1.9** —
+/// Control protocol: ghosttea 0.10.0 serves 1.16. This client announces **1.9** —
 /// the feature floor it consumes, not the newest it has heard of. The minor is
 /// not cosmetic: the service gates events on it — `session-activity-changed`
 /// below 1.6, `events-lost` below 1.8, and `session-created` below 1.9
 /// (`SESSION_CREATED_PROTOCOL_MINOR`, service.rs:48). 1.9 is what turns
-/// creation from a polled fact into a pushed hint (NF-7); the 1.10-1.13
-/// reconnect-era answers stay off this connection until something here reads
-/// them.
+/// creation from a polled fact into a pushed hint (NF-7); the 1.10-1.16
+/// answers (reconnect era, per-session scrollback at 1.15, structured errors
+/// at 1.16) stay off THIS connection until something here reads them — the
+/// G16/G17 consumer is fieldd's npm client, which requires them per-command.
 ///
 /// Two different numbers, and confusing them is what made this a floor nobody
 /// checked. The service RECORDS `min(client, server)` per connection and gates

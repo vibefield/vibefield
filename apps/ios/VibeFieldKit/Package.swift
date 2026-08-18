@@ -27,17 +27,20 @@ let package = Package(
     // field-native's ghosttea and truffle-core pins (both planes ride truffle
     // 0.7.12 — this line read 0.7.11 until 2026-08-09, contradicting the very
     // next sentence; the manifests were always the authority).
-    // 0.9.3 is THE meeting point: G12 (2026-08-09) moved every desktop plane to
-    // it (cargo ghosttea + ghosttea-truffle "=0.9.3", npm overrides), and its
-    // Swift manifest still pins truffle 0.7.12 — one wire, one Arc<Node> type,
-    // both planes. This plane has NO delta to consume: v0.9.2…v0.9.3 is one
-    // build-script fix (`ghosttea-vt-sys/build.rs`), one new upstream regression
-    // check, and version strings/lockfiles/SBOMs — verified against the compare,
-    // not assumed. The pin moves only to keep the one-version law true. It still
-    // carries 0.9.0's appearance parity and 0.7.0's reconnect layer, and remains
-    // the version whose TruffleTerminalMesh the desktop floor publishes terminal
-    // hosts with (IOS-3's server).
-    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.9.3")
+    // 0.10.0 is THE meeting point: the TC petition bump (2026-08-18) moved
+    // every desktop plane to it (cargo ghosttea + ghosttea-truffle "=0.10.0",
+    // npm overrides) when the terminal-custody petition set G15–G21 landed
+    // upstream in one release. Its Swift manifest still pins truffle 0.7.12 —
+    // one wire, one Arc<Node> type, both planes. This plane consumes none of
+    // the new surface yet (the G16/G17 consumers are fieldd's npm client; the
+    // read-surface set waits on TC-S6): the pin moves to keep the one-version
+    // law true, and the resolved revision 43361e53 is the same commit every
+    // published 0.10.0 artifact was built from (npm gitHead + crate vcs-info,
+    // checked — the later v0.10.0-retry.1 tag shipped in none of them). It
+    // still carries 0.9.0's appearance parity and 0.7.0's reconnect layer, and
+    // remains the version whose TruffleTerminalMesh the desktop floor
+    // publishes terminal hosts with (IOS-3's server).
+    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.10.0")
   ],
   targets: [
     // Design tokens and shared chrome — the godview monochrome language.

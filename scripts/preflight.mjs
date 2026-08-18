@@ -59,31 +59,31 @@ const PIN_EXPECTATIONS = [
     re: /"@vibecook\/ice":\s*0\.9\.0/,
     label: '"@vibecook/ice": 0.9.0',
   },
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.9\.3"/m, label: 'ghosttea = "=0.9.3"' },
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.10\.0"/m, label: 'ghosttea = "=0.10.0"' },
   {
     file: "Cargo.toml",
-    re: /^ghosttea-truffle\s*=\s*"=0\.9\.3"/m,
-    label: 'ghosttea-truffle = "=0.9.3"',
+    re: /^ghosttea-truffle\s*=\s*"=0\.10\.0"/m,
+    label: 'ghosttea-truffle = "=0.10.0"',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.9\.3/,
-    label: '"@vibecook/ghosttea-client": 0.9.3',
+    re: /"@vibecook\/ghosttea-client":\s*0\.10\.0/,
+    label: '"@vibecook/ghosttea-client": 0.10.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-electron":\s*0\.9\.3/,
-    label: '"@vibecook/ghosttea-electron": 0.9.3',
+    re: /"@vibecook\/ghosttea-electron":\s*0\.10\.0/,
+    label: '"@vibecook/ghosttea-electron": 0.10.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-react":\s*0\.9\.3/,
-    label: '"@vibecook/ghosttea-react": 0.9.3',
+    re: /"@vibecook\/ghosttea-react":\s*0\.10\.0/,
+    label: '"@vibecook/ghosttea-react": 0.10.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-protocol":\s*0\.9\.3/,
-    label: '"@vibecook/ghosttea-protocol": 0.9.3',
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.10\.0/,
+    label: '"@vibecook/ghosttea-protocol": 0.10.0',
   },
 ];
 for (const { file, re, label } of PIN_EXPECTATIONS) {

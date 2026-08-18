@@ -98,18 +98,27 @@ overrides:
   # can add ghosttea-truffle at all — and the npm rows move with it only to keep
   # the one-version law. Upstream's whole Rust delta across the two tags is one
   # test context string; nothing on this plane changed behaviour.
-  "@vibecook/ghosttea-client": 0.9.3
+  # TC petitions (2026-08-18) bump 0.9.3 → 0.10.0 — the terminal-custody set
+  # G15–G21 landed upstream in one release. THIS plane is where two are
+  # consumed at the bump: the client validates + carries `scrollbackBytes`
+  # behind protocol 1.15 and refuses older floors (G16), and wire refusals
+  # reject as GhostteaRequestError{stage, code, osError} (G17) — fieldd's
+  # terminal-service maps workloadClass → the genned class table and
+  # classifies creates by typed code. The rest of the set is the TC-S6
+  # compiler surface, cargo-side. All 0.10.0 artifacts (npm gitHead, crate
+  # vcs-info, the v0.10.0 tag) agree at commit 43361e53.
+  "@vibecook/ghosttea-client": 0.10.0
   # GT-0 (2026-08-01): the Godview terminal planes join at the same exact version
   # (one-version law) — electron-shell consumes ghosttea-electron, field-app
   # consumes ghosttea-react; packages ask for "*".
-  "@vibecook/ghosttea-electron": 0.9.3
-  "@vibecook/ghosttea-react": 0.9.3
+  "@vibecook/ghosttea-electron": 0.10.0
+  "@vibecook/ghosttea-react": 0.10.0
   # GT-3m (2026-08-04): field-app declares the wire vocabulary directly — the
   # monitor's rows ARE floor sessions, so `SessionSummary` is the honest type for
   # them. Types-and-constants only (zero dependencies), already resolved at this
   # version transitively; declaring it puts it under the one-version law rather
   # than leaving a hoisted transitive to drift.
-  "@vibecook/ghosttea-protocol": 0.9.3
+  "@vibecook/ghosttea-protocol": 0.10.0
   # chopsticks graduated at 0.1.4 (2026-07-28, C7 spawn-through aboard). Consumed
   # by the AR track; pinned at the same pin event. @vibecook/chopsticks-node is
   # unpublished and deliberately absent.
@@ -138,8 +147,8 @@ catalog:
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
   - '@vibecook/ice@0.9.0'
-  - '@vibecook/ghosttea-client@0.9.3'
-  - '@vibecook/ghosttea-protocol@0.9.3'
+  - '@vibecook/ghosttea-client@0.10.0'
+  - '@vibecook/ghosttea-protocol@0.10.0'
   - '@vibecook/chopsticks-adapter-acp@0.1.4'
   - '@vibecook/chopsticks-adapter-claude@0.1.4'
   - '@vibecook/chopsticks-adapter-codex@0.1.4'
@@ -149,10 +158,10 @@ minimumReleaseAgeExclude:
   - '@vibecook/chopsticks-runtime@0.1.4'
   - '@vibecook/chopsticks-testing@0.1.4'
   - '@vibecook/chopsticks-workspaces@0.1.4'
-  - '@vibecook/ghosttea-electron@0.9.3'
-  - '@vibecook/ghosttea-react@0.9.3'
-  - '@vibecook/ghosttea-frame@0.9.3'
-  - '@vibecook/ghosttea@0.9.3'
+  - '@vibecook/ghosttea-electron@0.10.0'
+  - '@vibecook/ghosttea-react@0.10.0'
+  - '@vibecook/ghosttea-frame@0.10.0'
+  - '@vibecook/ghosttea@0.10.0'
   # AH-1b — the exact T2 release is a reviewed executable input, not an
   # unreviewed transitive update. All platform packages move in lockstep.
   - '@vibecook/truffle-sidecar-darwin-arm64@0.7.12'

@@ -61,7 +61,19 @@ truffle-core = "=0.7.12"
 # `Prefix::Repository` and never takes the download path. Zero API/protocol
 # delta; CONTROL minor unchanged at 13, so terminal_client.rs still announces
 # 1.9. The payoff is measured below the fold, not assumed.
-ghosttea = "=0.9.3"
+# TC petitions (2026-08-18) bump 0.9.3 → 0.10.0: the terminal-custody petition
+# set G15–G21 landed upstream in one release. CONTROL minor 13 → 16
+# (per-session scrollback gates at 1.15, structured {stage, code, osError}
+# errors at 1.16); the libghostty/shim read surface gains mode_get,
+# pending-wrap, per-row wrap flags, hyperlink URI + identity, saved-cursor and
+# screen-parameterized reads, and the whole-screen recovery fragment (the
+# TC-S6 compiler surface — consumed later; G16/G17 are consumed at this bump
+# via fieldd's npm client). terminal_client.rs still announces 1.9: it reads
+# nothing new. Provenance note: npm gitHead, this crate's .cargo_vcs_info.json,
+# and the v0.10.0 tag all agree at 43361e53; the later v0.10.0-retry.1 tag
+# (a Windows release-validation fix + a process_tree.rs delta) is NOT in any
+# published 0.10.0 artifact.
+ghosttea = "=0.10.0"
 # GT-4 (native-floor §7 / GT-D7): the mesh half of the terminal floor, added at
 # the same version as `ghosttea` — it depends on that crate by path upstream, so
 # a split would be two ghosttea revisions in one graph. It brings truffle-core
@@ -69,4 +81,4 @@ ghosttea = "=0.9.3"
 # mismatch is a resolver refusal, never a silent second Arc<Node> type. Consumed
 # ONLY behind FIELD_NATIVE_TERMINAL_MESH — with the flag off the crate is linked
 # but never constructed, and the floor is bit-for-bit its pre-GT-4 self.
-ghosttea-truffle = "=0.9.3"
+ghosttea-truffle = "=0.10.0"
