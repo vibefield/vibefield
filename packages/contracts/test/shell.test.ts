@@ -21,6 +21,8 @@ import {
   ShellProviderOutcome,
   ShellProviderRegisterParams,
   ShellProviderRegisterResult,
+  ShellRendererRequestReplacementParams,
+  ShellRendererRequestReplacementResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
   WindowConnection,
@@ -424,6 +426,28 @@ describe("AH-3/AH-4 static shell provider", () => {
         deadlineAt: Date.now() + 5_000,
       }).caller,
     ).toMatchObject({ kind: "plugin", pluginId: "vibefield.browser" });
+  });
+
+  it("pins exact renderer replacement requests while keeping the result non-authoritative", () => {
+    const rendererParticipant = {
+      participantId: "renderer:desktop-test:window-1",
+      incarnation: "renderer:desktop-test:window-1:document-2",
+    };
+    expect(
+      ShellRendererRequestReplacementParams.parse({
+        rendererParticipant,
+        reason: "plugin-update-deadline",
+      }),
+    ).toEqual({ rendererParticipant, reason: "plugin-update-deadline" });
+    expect(
+      ShellRendererRequestReplacementParams.safeParse({
+        rendererParticipant,
+        reason: "renderer-said-so",
+      }).success,
+    ).toBe(false);
+    expect(ShellRendererRequestReplacementResult.parse({ requested: true })).toEqual({
+      requested: true,
+    });
   });
 
   it("confines preview capture to a local artifact id and canonical AH root URL", () => {

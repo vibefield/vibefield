@@ -43,6 +43,47 @@ function sameArtifact(
 export const PluginUpdatePhase = z.enum(["preparing", "committing", "recovering-old"]);
 export type PluginUpdatePhase = z.infer<typeof PluginUpdatePhase>;
 
+/** Positive renderer-boundary death leaves a bounded, stable-window recovery
+ * target. During PREPARING its outcome is deliberately unknown until the
+ * episode selects candidate commit or retained-old recovery. */
+export const PluginUpdateRecoveryTarget = z
+  .object({
+    kind: z.literal("renderer"),
+    participantId: UpdateBoundedId,
+    retiredIncarnation: UpdateBoundedId,
+    artifact: PluginUpdateArtifact.nullable(),
+    commitEpoch: z.number().int().positive().nullable(),
+    reason: z.literal("boundary-death"),
+  })
+  .passthrough()
+  .superRefine((target, ctx) => {
+    if ((target.artifact === null) !== (target.commitEpoch === null)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [target.artifact === null ? "commitEpoch" : "artifact"],
+        message: "recovery artifact and commit epoch must become known together",
+      });
+    }
+  });
+export type PluginUpdateRecoveryTarget = z.infer<typeof PluginUpdateRecoveryTarget>;
+
+const PluginUpdateRecoveryTargets = z
+  .array(PluginUpdateRecoveryTarget)
+  .max(64)
+  .superRefine((targets, ctx) => {
+    const seen = new Set<string>();
+    for (const [index, target] of targets.entries()) {
+      if (seen.has(target.participantId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index],
+          message: "duplicate stable renderer recovery target",
+        });
+      }
+      seen.add(target.participantId);
+    }
+  });
+
 /** Diagnostics-only participant row. Renderer identity is server-derived from
  * its bearer; service identity is fieldd-owned. Neither is accepted in an ack. */
 export const PluginUpdateParticipant = z
@@ -81,6 +122,10 @@ export const PluginUpdateEpisode = z
     candidateArtifact: PluginUpdateArtifact,
     /** Present exactly after the logical commit edge. */
     commitEpoch: z.number().int().positive().optional(),
+    /** Absolute host-clock deadline for this exact phase. */
+    phaseDeadlineAt: z.number().int().nonnegative().safe(),
+    /** Set only after commit/recovery expiry requested positive boundary death. */
+    deathDeadlineAt: z.number().int().nonnegative().safe().nullable(),
     participants: PluginUpdateParticipants,
   })
   .passthrough()
@@ -117,6 +162,7 @@ export const PluginUpdateSnapshot = z
     state: z.enum(["active", "preparing", "committing", "recovering-old", "failed"]),
     currentArtifact: PluginUpdateArtifact,
     commitEpoch: z.number().int().positive(),
+    recoveryTargets: PluginUpdateRecoveryTargets,
     episode: PluginUpdateEpisode.nullable(),
   })
   .passthrough()
@@ -149,6 +195,18 @@ export const PluginUpdateSnapshot = z
         path: ["currentArtifact", "pluginId"],
         message: "snapshot and episode must belong to the same plugin",
       });
+    }
+    for (const [index, target] of snapshot.recoveryTargets.entries()) {
+      if (
+        target.artifact !== null &&
+        target.artifact.pluginId !== snapshot.currentArtifact.pluginId
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["recoveryTargets", index, "artifact", "pluginId"],
+          message: "recovery target belongs to another plugin",
+        });
+      }
     }
     if (
       snapshot.episode !== null &&

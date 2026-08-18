@@ -12,7 +12,7 @@ import {
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { ipcMain } from "electron";
-import { createBootstrapHandler } from "./bootstrap";
+import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap";
 import type { GodviewRegistry } from "./godview";
 import { shellIdentity } from "./login-shell";
 import type { TerminalBackendRegistry } from "./terminal-backend";
@@ -30,7 +30,7 @@ export function registerWindowBootstrap(
   ensure: FielddSupervisor["ensure"],
   desktopBootId: string,
   logger?: Logger,
-): void {
+): WindowRendererBoundary {
   const handle = createBootstrapHandler({
     owns: (sender) => registry.owns(sender),
     ensure,
@@ -62,6 +62,7 @@ export function registerWindowBootstrap(
       throw error;
     }
   });
+  return handle;
 }
 
 /** UA-3 — the Account page's profile door. Main owns users.json (UA-D10:

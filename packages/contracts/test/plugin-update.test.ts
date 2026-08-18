@@ -7,6 +7,7 @@ import {
   PluginUpdateLeaveParams,
   PluginUpdateLeaveResult,
   PluginUpdateParticipantSnapshot,
+  PluginUpdateRecoveryTarget,
   PluginUpdateSnapshot,
   PluginUpdateSourceParams,
   PluginUpdateSourceResult,
@@ -34,6 +35,8 @@ describe("PRC-5a update coordination contracts", () => {
       oldArtifact: artifact("r1"),
       candidateArtifact: artifact("r2"),
       commitEpoch: 2,
+      phaseDeadlineAt: 20_000,
+      deathDeadlineAt: null,
       participants: [participant],
     });
     expect(episode.participants[0]).toMatchObject(participant);
@@ -46,6 +49,8 @@ describe("PRC-5a update coordination contracts", () => {
         phase: "committing",
         oldArtifact: artifact("r1"),
         candidateArtifact: artifact("r2"),
+        phaseDeadlineAt: 20_000,
+        deathDeadlineAt: null,
         participants: [participant],
       }).success,
     ).toBe(false);
@@ -55,6 +60,8 @@ describe("PRC-5a update coordination contracts", () => {
         phase: "preparing",
         oldArtifact: artifact("r1"),
         candidateArtifact: artifact("r2"),
+        phaseDeadlineAt: 20_000,
+        deathDeadlineAt: null,
         participants: [
           participant,
           { ...participant, incarnation: "renderer:desktop-test:window-1:document-2" },
@@ -70,11 +77,14 @@ describe("PRC-5a update coordination contracts", () => {
         state: "preparing",
         currentArtifact: artifact("r1"),
         commitEpoch: 1,
+        recoveryTargets: [],
         episode: {
           updateId: "pupd_example_1",
           phase: "preparing",
           oldArtifact: artifact("r1"),
           candidateArtifact: artifact("r2"),
+          phaseDeadlineAt: 20_000,
+          deathDeadlineAt: null,
           participants: [{ ...participant, expected: "prepare" }],
         },
       }).currentArtifact.installRevision,
@@ -85,12 +95,15 @@ describe("PRC-5a update coordination contracts", () => {
         state: "committing",
         currentArtifact: artifact("r2"),
         commitEpoch: 2,
+        recoveryTargets: [],
         episode: {
           updateId: "pupd_example_1",
           phase: "committing",
           oldArtifact: artifact("r1"),
           candidateArtifact: artifact("r2"),
           commitEpoch: 2,
+          phaseDeadlineAt: 20_000,
+          deathDeadlineAt: null,
           participants: [participant],
         },
       }).currentArtifact.installRevision,
@@ -164,12 +177,15 @@ describe("PRC-5a update coordination contracts", () => {
         state: "preparing",
         currentArtifact: artifact("r1"),
         commitEpoch: 1,
+        recoveryTargets: [],
         episode: {
           updateId: "pupd_example_1",
           phase: "committing",
           oldArtifact: artifact("r1"),
           candidateArtifact: artifact("r2"),
           commitEpoch: 2,
+          phaseDeadlineAt: 20_000,
+          deathDeadlineAt: null,
           participants: [participant],
         },
       }).success,
@@ -180,7 +196,32 @@ describe("PRC-5a update coordination contracts", () => {
         phase: "preparing",
         oldArtifact: artifact("r1"),
         candidateArtifact: { ...artifact("r2"), pluginId: "com.example.other" },
+        phaseDeadlineAt: 20_000,
+        deathDeadlineAt: null,
         participants: [participant],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("pins bounded positive-death recovery targets without treating a request as proof", () => {
+    expect(
+      PluginUpdateRecoveryTarget.parse({
+        kind: "renderer",
+        participantId: participant.participantId,
+        retiredIncarnation: participant.incarnation,
+        artifact: artifact("r2"),
+        commitEpoch: 2,
+        reason: "boundary-death",
+      }),
+    ).toMatchObject({ retiredIncarnation: participant.incarnation, commitEpoch: 2 });
+    expect(
+      PluginUpdateRecoveryTarget.safeParse({
+        kind: "renderer",
+        participantId: participant.participantId,
+        retiredIncarnation: participant.incarnation,
+        artifact: artifact("r2"),
+        commitEpoch: null,
+        reason: "boundary-death",
       }).success,
     ).toBe(false);
   });

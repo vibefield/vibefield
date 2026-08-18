@@ -205,6 +205,7 @@ export const SHELL_CLIENT_PROVIDER_METHODS = [
 ] as const;
 export const SHELL_INTERNAL_PROVIDER_METHODS = [
   "shell.webcontents.captureArtifactPreview",
+  "shell.renderer.requestReplacement",
 ] as const;
 export const SHELL_PROVIDER_METHODS = [
   ...SHELL_CLIENT_PROVIDER_METHODS,
@@ -336,6 +337,24 @@ export const ShellWebContentsCaptureArtifactPreviewResult = z
   .passthrough();
 export type ShellWebContentsCaptureArtifactPreviewResult = z.infer<
   typeof ShellWebContentsCaptureArtifactPreviewResult
+>;
+
+/** PRC-5f: fieldd may ask Electron to terminate one exact renderer generation
+ * after an update phase deadline. `requested` is NOT death evidence; only the
+ * later Electron render-process-gone event can retire the coordinator member. */
+export const ShellRendererRequestReplacementParams = z
+  .object({
+    rendererParticipant: RendererParticipantIdentity,
+    reason: z.literal("plugin-update-deadline"),
+  })
+  .strict();
+export type ShellRendererRequestReplacementParams = z.infer<
+  typeof ShellRendererRequestReplacementParams
+>;
+
+export const ShellRendererRequestReplacementResult = z.object({ requested: z.boolean() }).strict();
+export type ShellRendererRequestReplacementResult = z.infer<
+  typeof ShellRendererRequestReplacementResult
 >;
 
 export const ShellProviderRegisterParams = z

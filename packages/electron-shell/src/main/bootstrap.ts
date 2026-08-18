@@ -19,11 +19,25 @@ import type { WebContents } from "electron";
  * structurally (the pattern of window-policy's fakes). */
 interface SenderLike {
   readonly id: number;
+  isDestroyed(): boolean;
+  forcefullyCrashRenderer(): void;
+  reload(): void;
   once(event: "destroyed", listener: () => void): unknown;
   on(
     event: "did-start-navigation",
     listener: (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void,
   ): unknown;
+  on(event: "render-process-gone", listener: () => void): unknown;
+}
+
+export interface WindowRendererBoundary {
+  /** Requests termination of only the exact still-current renderer generation.
+   * True means Electron accepted the request, not that process death occurred. */
+  requestReplacement(identity: RendererParticipantIdentityValue): boolean;
+}
+
+export interface WindowBootstrapHandler extends WindowRendererBoundary {
+  (event: { sender: WebContents }): Promise<WindowConnection>;
 }
 
 export function createBootstrapHandler(deps: {
@@ -32,7 +46,7 @@ export function createBootstrapHandler(deps: {
   /** Stable for one Electron main process. Renderer code never selects it. */
   desktopBootId: string;
   onRevokeError?: (error: unknown, details: { senderId: number; tokenId: string }) => void;
-}): (event: { sender: WebContents }) => Promise<WindowConnection> {
+}): WindowBootstrapHandler {
   interface MintedGeneration {
     connection: WindowConnection;
     tokenId: string;
@@ -41,6 +55,9 @@ export function createBootstrapHandler(deps: {
   interface Generation {
     result: Promise<MintedGeneration>;
     connection: Promise<WindowConnection>;
+    readonly identity: RendererParticipantIdentityValue;
+    readonly sender: WebContents;
+    replacementRequested: boolean;
     retired: boolean;
   }
 
@@ -48,6 +65,7 @@ export function createBootstrapHandler(deps: {
   const hooked = new Set<number>();
   const windowIdentities = new Map<number, string>();
   const documentIdentities = new Map<number, RendererParticipantIdentityValue>();
+  const retirements = new Map<number, Promise<void>>();
   let windowSequence = 0;
   let documentSequence = 0;
   let reaper: { bootId: string; promise: Promise<void> } | null = null;
@@ -68,9 +86,14 @@ export function createBootstrapHandler(deps: {
     return identity;
   };
 
-  const revokeWindowToken = async (handle: FielddHandle, tokenId: string): Promise<void> => {
+  const revokeWindowToken = async (
+    handle: FielddHandle,
+    tokenId: string,
+    cause: "generation-ended" | "render-process-gone",
+  ): Promise<void> => {
+    const params = cause === "generation-ended" ? { tokenId } : { tokenId, cause };
     try {
-      await handle.client.request("system.revokeWindowToken", { tokenId });
+      await handle.client.request("system.revokeWindowToken", params);
       return;
     } catch {
       // A navigation cannot wait for transport recovery, but revocation can.
@@ -80,7 +103,7 @@ export function createBootstrapHandler(deps: {
       // already gone.
       const current = await deps.ensure();
       if (current.info.bootId !== handle.info.bootId) return;
-      await current.client.request("system.revokeWindowToken", { tokenId });
+      await current.client.request("system.revokeWindowToken", params);
     }
   };
 
@@ -100,18 +123,24 @@ export function createBootstrapHandler(deps: {
     }
   };
 
-  const retire = (senderId: number): void => {
+  const retire = (
+    senderId: number,
+    cause: "generation-ended" | "render-process-gone",
+  ): Promise<void> | null => {
     const generation = generations.get(senderId);
-    if (generation === undefined || generation.retired) return;
+    if (generation === undefined || generation.retired) return null;
     generation.retired = true;
     if (generations.get(senderId) === generation) generations.delete(senderId);
-    void generation.result
-      .then(
-        async ({ handle, tokenId }) => {
-          await revokeWindowToken(handle, tokenId);
-        },
-        () => undefined,
-      )
+    const prior = retirements.get(senderId) ?? Promise.resolve();
+    const retirement = prior
+      .catch(() => undefined)
+      .then(async () => {
+        const minted = await generation.result.catch(() => null);
+        if (minted === null) return;
+        await revokeWindowToken(minted.handle, minted.tokenId, cause);
+      });
+    retirements.set(senderId, retirement);
+    void retirement
       .catch((error: unknown) => {
         // Revocation failures are visible, while renderer teardown remains
         // non-blocking. fieldd itself revokes even when its audit sink fails.
@@ -119,10 +148,14 @@ export function createBootstrapHandler(deps: {
           ({ tokenId }) => deps.onRevokeError?.(error, { senderId, tokenId }),
           () => undefined,
         );
+      })
+      .finally(() => {
+        if (retirements.get(senderId) === retirement) retirements.delete(senderId);
       });
+    return retirement;
   };
 
-  return (event) => {
+  const handle = ((event: { sender: WebContents }) => {
     const sender = event.sender;
     if (!deps.owns(sender)) {
       return Promise.reject(new Error("window bootstrap refused: unregistered sender"));
@@ -137,26 +170,48 @@ export function createBootstrapHandler(deps: {
         // a new main-frame document is a NEW generation — the old page's token
         // dies with its JS; revoke it before the next invoke mints fresh
         if (isMainFrame && !isInPlace) {
-          retire(sender.id);
+          retire(sender.id, "generation-ended");
           documentIdentities.delete(sender.id);
         }
       });
+      s.on("render-process-gone", () => {
+        // This event is the positive boundary fact. Its exact token generation
+        // is still present here, so fieldd never accepts renderer-supplied
+        // participant identity as death evidence.
+        const generation = generations.get(sender.id);
+        const retirement = retire(sender.id, "render-process-gone");
+        documentIdentities.delete(sender.id);
+        if (generation?.replacementRequested === true && retirement !== null) {
+          void retirement
+            .then(() => {
+              // A new renderer document must not mint until fieldd positively
+              // retired the old incarnation. Reload is the replacement half;
+              // provider success by itself remains non-authoritative.
+              if (!s.isDestroyed()) s.reload();
+            })
+            .catch(() => undefined);
+        }
+      });
       s.once("destroyed", () => {
-        retire(sender.id);
+        retire(sender.id, "generation-ended");
         hooked.delete(sender.id);
         documentIdentities.delete(sender.id);
         windowIdentities.delete(sender.id);
       });
     }
 
-    const generation = {} as Generation;
+    const identity = identityFor(sender.id);
+    const generation = {
+      identity,
+      sender,
+      replacementRequested: false,
+    } as Generation;
     generation.retired = false;
-    generation.result = mint(
-      deps.ensure,
-      reapStaleForBoot,
-      sender.id,
-      identityFor(sender.id),
-    ).catch((error: unknown) => {
+    const predecessor = retirements.get(sender.id);
+    generation.result = (async () => {
+      await predecessor?.catch(() => undefined);
+      return await mint(deps.ensure, reapStaleForBoot, sender.id, identity);
+    })().catch((error: unknown) => {
       // failure ends the cached attempt — retry re-mints for real
       if (generations.get(sender.id) === generation) generations.delete(sender.id);
       throw error;
@@ -164,7 +219,26 @@ export function createBootstrapHandler(deps: {
     generation.connection = generation.result.then((result) => result.connection);
     generations.set(sender.id, generation);
     return generation.connection;
+  }) as WindowBootstrapHandler;
+  handle.requestReplacement = (identity): boolean => {
+    const parsed = RendererParticipantIdentity.parse(identity);
+    for (const generation of generations.values()) {
+      if (
+        generation.retired ||
+        generation.identity.participantId !== parsed.participantId ||
+        generation.identity.incarnation !== parsed.incarnation
+      ) {
+        continue;
+      }
+      const sender = generation.sender as unknown as SenderLike;
+      if (sender.isDestroyed()) return false;
+      generation.replacementRequested = true;
+      sender.forcefullyCrashRenderer();
+      return true;
+    }
+    return false;
   };
+  return handle;
 }
 
 async function mint(

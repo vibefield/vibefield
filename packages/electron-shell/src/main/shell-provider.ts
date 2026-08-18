@@ -8,6 +8,9 @@ import {
   ShellProviderCallParams as ShellProviderCallParamsSchema,
   type ShellProviderError,
   ShellProviderRegisterResult,
+  ShellRendererRequestReplacementParams,
+  type ShellRendererRequestReplacementResult,
+  ShellRendererRequestReplacementResult as ShellRendererRequestReplacementResultSchema,
   ShellWebContentsCaptureArtifactPreviewParams,
   type ShellWebContentsCaptureArtifactPreviewResult,
   ShellWebContentsCaptureArtifactPreviewResult as ShellWebContentsCaptureArtifactPreviewResultSchema,
@@ -34,6 +37,9 @@ export interface ShellProviderNative {
     params: ShellWebContentsCaptureArtifactPreviewParams,
     signal: AbortSignal,
   ): Promise<ShellWebContentsCaptureArtifactPreviewResult>;
+  requestRendererReplacement(
+    params: ShellRendererRequestReplacementParams,
+  ): ShellRendererRequestReplacementResult | Promise<ShellRendererRequestReplacementResult>;
 }
 
 interface ActiveCall {
@@ -71,9 +77,11 @@ function safeProviderError(
           ? "another preview capture is already running"
           : "another folder dialog is already open"
         : kind === "UNAVAILABLE"
-          ? method === "shell.webcontents.captureArtifactPreview"
-            ? "preview capture is unavailable"
-            : "the primary window is unavailable"
+          ? method === "shell.renderer.requestReplacement"
+            ? "the exact renderer generation is unavailable"
+            : method === "shell.webcontents.captureArtifactPreview"
+              ? "preview capture is unavailable"
+              : "the primary window is unavailable"
           : kind === "RESOURCE_EXHAUSTED"
             ? "the preview could not fit within the image budget"
             : "the desktop operation failed",
@@ -250,6 +258,12 @@ export class RecoveringShellProvider {
   private async execute(call: ShellProviderCallParams, signal: AbortSignal): Promise<unknown> {
     if (call.deadlineAt < Date.now()) {
       throw { kind: "TIMEOUT" };
+    }
+    if (call.method === "shell.renderer.requestReplacement") {
+      const params = ShellRendererRequestReplacementParams.parse(call.params);
+      return ShellRendererRequestReplacementResultSchema.parse(
+        await this.native.requestRendererReplacement(params),
+      );
     }
     if (call.method === "shell.openExternal") {
       const params = ShellOpenExternalParams.parse(call.params);

@@ -231,6 +231,7 @@ function fixture(
       revocations.push(request);
       events.push(`source.${request.purpose}.revoke:${request.reason}`);
     },
+    requestRendererReplacement: async () => undefined,
   });
   const coordinator = manager.coordinatorFor(PLUGIN_ID)!;
   coordinator.registerRenderer({
@@ -502,6 +503,37 @@ describe("PluginUpdateManager (PRC-5e)", () => {
       rig.events.indexOf("pointer.commit"),
     );
     expect(rig.manager.serviceCandidateRecord(PLUGIN_ID, started.updateId)).toBeUndefined();
+    await rig.manager.dispose();
+  });
+
+  it("revokes a crashed renderer's source before recording forward recovery", async () => {
+    const rig = fixture();
+    const started = rig.manager.beginRegistryUpdate(rig.candidate);
+    const sourceHandle = await rig.manager.acquireSource({
+      identity: A,
+      fence: rig.coordinator.sourceFence(A, started.updateId, "candidate"),
+    });
+    const source = PluginUpdateSourceResult.parse(sourceHandle.value);
+
+    await expect(rig.manager.crashRendererEverywhere(A)).resolves.toBe(1);
+    await expect(started.completion).resolves.toMatchObject({ outcome: "committed" });
+    expect(rig.revocations).toEqual([
+      expect.objectContaining({
+        tokenId: source.lease.leaseId,
+        reason: "renderer-crashed",
+      }),
+    ]);
+    expect(rig.events.indexOf("source.candidate.revoke:renderer-crashed")).toBeLessThan(
+      rig.events.indexOf("pointer.commit"),
+    );
+    expect(rig.coordinator.snapshot().recoveryTargets).toEqual([
+      expect.objectContaining({
+        participantId: A.participantId,
+        retiredIncarnation: A.incarnation,
+        artifact: artifact(rig.candidateRecord),
+        commitEpoch: 2,
+      }),
+    ]);
     await rig.manager.dispose();
   });
 

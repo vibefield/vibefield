@@ -77,7 +77,8 @@ function call(
   method:
     | "shell.dialog.pickFolder"
     | "shell.openExternal"
-    | "shell.webcontents.captureArtifactPreview",
+    | "shell.webcontents.captureArtifactPreview"
+    | "shell.renderer.requestReplacement",
   params: unknown,
 ) {
   return {
@@ -101,6 +102,7 @@ async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
     showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
     openExternal: vi.fn(async () => undefined),
     captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
+    requestRendererReplacement: vi.fn(() => ({ requested: true })),
     ...nativeOverrides,
   };
   const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
@@ -133,6 +135,7 @@ describe("RecoveringShellProvider", () => {
         showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
         openExternal: vi.fn(async () => undefined),
         captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
+        requestRendererReplacement: vi.fn(() => ({ requested: true })),
       };
       const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
 
@@ -162,6 +165,37 @@ describe("RecoveringShellProvider", () => {
           callId: "shell-abcdefghijklmnop",
           outcome: { result: { opened: true } },
         },
+      }),
+    );
+    provider.dispose();
+  });
+
+  it("requests one exact renderer replacement without presenting the result as death proof", async () => {
+    const requestRendererReplacement = vi.fn(() => ({ requested: true }));
+    const { client, provider } = await fixture({ requestRendererReplacement });
+    const callId = "shell-replaceabcdefghi";
+    const rendererParticipant = {
+      participantId: "renderer:desktop-test:window-1",
+      incarnation: "renderer:desktop-test:window-1:document-2",
+    };
+    client.emit(
+      "shell.provider.call",
+      call(callId, "shell.renderer.requestReplacement", {
+        rendererParticipant,
+        reason: "plugin-update-deadline",
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect(requestRendererReplacement).toHaveBeenCalledWith({
+        rendererParticipant,
+        reason: "plugin-update-deadline",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: { callId, outcome: { result: { requested: true } } },
       }),
     );
     provider.dispose();
@@ -325,6 +359,7 @@ describe("RecoveringShellProvider", () => {
       showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
       openExternal: vi.fn(async () => undefined),
       captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
+      requestRendererReplacement: vi.fn(() => ({ requested: true })),
     };
     const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
     await coordinator.ensure();

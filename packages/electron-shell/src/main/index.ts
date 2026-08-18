@@ -682,6 +682,7 @@ async function main(
     handles: FielddHandleCoordinator;
   }
   const pairBundles = new Map<string, PairBundle>();
+  let windowRendererBoundary: ReturnType<typeof registerWindowBootstrap> | null = null;
   const ensurePairBundle = (userId: string, userRoot: string): PairBundle => {
     const existing = pairBundles.get(userId);
     if (existing !== undefined) return existing;
@@ -795,6 +796,9 @@ async function main(
         showOpenDialog: (parent, options) => dialog.showOpenDialog(parent, options),
         openExternal: (url) => shell.openExternal(url),
         captureArtifactPreview: (params, signal) => artifactPreviewCapture.capture(params, signal),
+        requestRendererReplacement: ({ rendererParticipant }) => ({
+          requested: windowRendererBoundary?.requestReplacement(rendererParticipant) === true,
+        }),
       },
       logger.child({ component: "shell.provider" }),
     );
@@ -842,7 +846,7 @@ async function main(
     return;
   }
 
-  registerWindowBootstrap(
+  windowRendererBoundary = registerWindowBootstrap(
     registry,
     (options) => fielddHandles!.ensure(options),
     DESKTOP_BOOT_ID,

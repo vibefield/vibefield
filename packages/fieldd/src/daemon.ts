@@ -105,6 +105,7 @@ import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
+import type { PluginUpdateDeadlines } from "./plugin-update-coordinator";
 import { PluginUpdateManager } from "./plugin-update-manager";
 import { PluginUpdateTransport } from "./plugin-update-transport";
 import { PresenceRoomRouter } from "./presence-room";
@@ -178,6 +179,9 @@ export interface FielddConfig {
   pluginLog?: (record: PluginServiceLogRecord) => void;
   /** LOG-L6 fault seam. Never configured by the production composition root. */
   auditTestHooks?: AuditWriterTestHooks;
+  /** Deterministic PRC-5f test seam. Production uses the contract-pinned
+   * budgets; tests may shorten them without sleeping through wall-clock policy. */
+  pluginUpdateDeadlines?: Partial<PluginUpdateDeadlines>;
 }
 
 export interface FielddHealth {
@@ -879,21 +883,24 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const revokeWindowToken = async (
       ctx: Parameters<Parameters<typeof api.register>[1]>[0],
       tokenId: string,
-      reason: "generation-ended" | "shell-restarted",
+      reason: "generation-ended" | "render-process-gone" | "shell-restarted",
     ): Promise<{ revoked: boolean; droppedConnections: number }> => {
       if (!windowTokenIds.has(tokenId)) {
         return { revoked: false, droppedConnections: 0 };
       }
       const participant = windowTokenParticipants.get(tokenId);
-      let retirementTask: Promise<number> | undefined;
+      let lifecycleTask: Promise<number> | undefined;
       const effect = async () => {
         windowTokenIds.delete(tokenId);
         windowTokenParticipants.delete(tokenId);
         const revoked = tokens.revoke(tokenId);
         const droppedConnections = api.dropTokenConnections(tokenId);
         if (participant !== undefined && pluginUpdatesForCleanup !== null) {
-          retirementTask ??= pluginUpdatesForCleanup.retireRendererEverywhere(participant);
-          await retirementTask;
+          lifecycleTask ??=
+            reason === "render-process-gone"
+              ? pluginUpdatesForCleanup.crashRendererEverywhere(participant)
+              : pluginUpdatesForCleanup.retireRendererEverywhere(participant);
+          await lifecycleTask;
         }
         return { revoked, droppedConnections };
       };
@@ -990,7 +997,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     api.register("system.revokeWindowToken", async (ctx, params) => {
       requireShellWindowTokenAuthority(ctx);
-      const tokenId = (params as { tokenId?: unknown } | undefined)?.tokenId;
+      const p = params as { tokenId?: unknown; cause?: unknown } | undefined;
+      const tokenId = p?.tokenId;
       if (typeof tokenId !== "string" || !/^tk_[0-9a-f]{12}$/.test(tokenId)) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
@@ -998,7 +1006,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           false,
         );
       }
-      return await revokeWindowToken(ctx, tokenId, "generation-ended");
+      const cause = p?.cause ?? "generation-ended";
+      if (cause !== "generation-ended" && cause !== "render-process-gone") {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "window token revocation cause is invalid",
+          false,
+        );
+      }
+      return await revokeWindowToken(ctx, tokenId, cause);
     });
     api.register("system.revokeStaleWindowTokens", async (ctx) => {
       requireShellWindowTokenAuthority(ctx);
@@ -1597,6 +1613,44 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           throw error;
         }
       },
+      requestRendererReplacement: async ({ pluginId, updateId, phase, identity }) => {
+        const result = await audit.requiredSystem(
+          {
+            action: "plugin.update.renderer_replacement_requested",
+            target: {
+              kind: "renderer",
+              id: identity.participantId,
+              parentId: pluginId,
+            },
+            attrs: {
+              pluginId,
+              updateId,
+              phase,
+              incarnation: identity.incarnation,
+            },
+          },
+          async () =>
+            await api.requestRendererReplacement({
+              rendererParticipant: identity,
+              reason: "plugin-update-deadline",
+            }),
+          (requested) => ({
+            outcome: requested.requested ? "succeeded" : "cancelled",
+            ...(requested.requested ? {} : { reasonCode: "RENDERER_GENERATION_NOT_FOUND" }),
+            attrs: { pluginId, updateId, phase },
+          }),
+        );
+        if (!result.requested) {
+          throw new RpcCallError(
+            "UNAVAILABLE",
+            `${identity.participantId}: Electron does not own the requested renderer generation`,
+            true,
+          );
+        }
+      },
+      ...(config.pluginUpdateDeadlines === undefined
+        ? {}
+        : { deadlines: config.pluginUpdateDeadlines }),
     });
     pluginUpdatesForCleanup = updateManager;
     new PluginUpdateTransport({

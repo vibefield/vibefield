@@ -15,12 +15,15 @@ import {
   type ShellProviderRegisterResult,
   ShellProviderResolveParams,
   type ShellProviderResolveResult,
+  ShellRendererRequestReplacementParams,
+  ShellRendererRequestReplacementResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
 } from "@vibefield/contracts";
 import { RpcCallError } from "./native-link";
 
 const OPEN_EXTERNAL_DEADLINE_MS = 5_000;
+const RENDERER_REPLACEMENT_REQUEST_DEADLINE_MS = 2_000;
 
 export interface ShellProviderTransport {
   /** Connection-owned identity. It is never caller data. */
@@ -57,6 +60,14 @@ const METHOD_CONTRACTS: Record<ShellProviderMethod, MethodContract> = {
     input: ShellWebContentsCaptureArtifactPreviewParams,
     output: ShellWebContentsCaptureArtifactPreviewResult,
     deadlineMs: ARTIFACT_PREVIEW_LIMITS.DEADLINE_MS,
+  },
+  "shell.renderer.requestReplacement": {
+    input: ShellRendererRequestReplacementParams,
+    output: ShellRendererRequestReplacementResult,
+    // The independent coordinator death-evidence grace remains the outer
+    // bound. This request must resolve early enough for Electron's subsequent
+    // process-gone event to cross back before that grace expires.
+    deadlineMs: RENDERER_REPLACEMENT_REQUEST_DEADLINE_MS,
   },
 };
 

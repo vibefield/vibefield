@@ -229,6 +229,14 @@ export class ProductApi extends EventEmitter {
     ) as Promise<ShellWebContentsCaptureArtifactPreviewResult>;
   }
 
+  requestRendererReplacement(
+    params: import("@vibefield/contracts").ShellRendererRequestReplacementParams,
+  ): Promise<import("@vibefield/contracts").ShellRendererRequestReplacementResult> {
+    return this.shellProvider.callInternal("shell.renderer.requestReplacement", params) as Promise<
+      import("@vibefield/contracts").ShellRendererRequestReplacementResult
+    >;
+  }
+
   artifactPreviewCaptureAvailable(): boolean {
     return this.shellProvider.provides("shell.webcontents.captureArtifactPreview");
   }

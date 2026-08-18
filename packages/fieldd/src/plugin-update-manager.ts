@@ -13,8 +13,10 @@ import type {
 import type { PluginRegistryCandidate, PluginRegistryService } from "./plugin-registry";
 import {
   PluginUpdateCoordinator,
+  type PluginUpdateDeadlines,
   type PluginUpdateStart,
   type PreparedServiceUpdate,
+  type RendererBoundaryReplacementRequest,
   type ServiceUpdateParticipant,
 } from "./plugin-update-coordinator";
 import type {
@@ -52,6 +54,7 @@ export interface PluginUpdateSourceRevokeRequest {
   readonly reason:
     | "discarded"
     | "candidate-failed"
+    | "renderer-crashed"
     | "renderer-left"
     | "released"
     | "expired"
@@ -72,6 +75,10 @@ export interface PluginUpdateManagerOptions {
   ) => PluginUpdateSourceGrant | Promise<PluginUpdateSourceGrant>;
   /** Must revoke at the mint table and terminate the exact authenticated ProductAPI connection. */
   readonly revokeSourceLease: (request: PluginUpdateSourceRevokeRequest) => void | Promise<void>;
+  readonly requestRendererReplacement: (
+    request: RendererBoundaryReplacementRequest,
+  ) => void | Promise<void>;
+  readonly deadlines?: Partial<PluginUpdateDeadlines>;
 }
 
 interface UpdateEpisodeRuntime {
@@ -135,7 +142,12 @@ export class PluginUpdateManager {
       }
       return existing;
     }
-    const coordinator = new PluginUpdateCoordinator({ pluginId, currentArtifact: artifact });
+    const coordinator = new PluginUpdateCoordinator({
+      pluginId,
+      currentArtifact: artifact,
+      requestRendererReplacement: this.options.requestRendererReplacement,
+      ...(this.options.deadlines === undefined ? {} : { deadlines: this.options.deadlines }),
+    });
     this.coordinators.set(pluginId, coordinator);
     return coordinator;
   }
@@ -201,6 +213,10 @@ export class PluginUpdateManager {
       throw new Error("coordinator did not synchronously bind its update authority episode");
     }
     const completion = started.completion.finally(async () => await this.finishEpisode(episode));
+    // The coordinator already sinks its internal deferred, but finally() creates
+    // a distinct promise. Keep shutdown/fatal disposal from becoming an
+    // unhandled rejection when an installer caller has already disappeared.
+    void completion.catch(() => undefined);
     return Object.freeze({ updateId: started.updateId, completion });
   }
 
@@ -244,6 +260,42 @@ export class PluginUpdateManager {
     }
     const results = await Promise.allSettled(
       [...pluginIds].map(async (pluginId) => await this.retireRenderer(pluginId, identity)),
+    );
+    const failure = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (failure !== undefined) throw failure.reason;
+    return results.filter(
+      (result): result is PromiseFulfilledResult<boolean> =>
+        result.status === "fulfilled" && result.value,
+    ).length;
+  }
+
+  /** Positive boundary death. Candidate/old source authority is revoked before
+   * the exact vote is removed, while the coordinator retains a recovery target
+   * for the stable logical window. */
+  async crashRenderer(pluginId: string, identity: RendererParticipantIdentity): Promise<boolean> {
+    const revocations = await Promise.allSettled(
+      [...this.sourceLeases.values()]
+        .filter((issued) => issued.pluginId === pluginId && sameIdentity(issued.identity, identity))
+        .map((issued) => this.releaseIssued(issued, "renderer-crashed")),
+    );
+    const coordinator = this.coordinators.get(pluginId);
+    const crashed = coordinator === undefined ? false : await coordinator.crashRenderer(identity);
+    const failure = revocations.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (failure !== undefined) throw failure.reason;
+    return crashed;
+  }
+
+  async crashRendererEverywhere(identity: RendererParticipantIdentity): Promise<number> {
+    const pluginIds = new Set(this.coordinators.keys());
+    for (const issued of this.sourceLeases.values()) {
+      if (sameIdentity(issued.identity, identity)) pluginIds.add(issued.pluginId);
+    }
+    const results = await Promise.allSettled(
+      [...pluginIds].map(async (pluginId) => await this.crashRenderer(pluginId, identity)),
     );
     const failure = results.find(
       (result): result is PromiseRejectedResult => result.status === "rejected",
@@ -408,6 +460,7 @@ export class PluginUpdateManager {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    for (const coordinator of this.coordinators.values()) coordinator.dispose();
     await Promise.allSettled(
       [...this.sourceLeases.values()].map((issued) => this.releaseIssued(issued, "shutdown")),
     );

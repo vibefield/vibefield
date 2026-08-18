@@ -55,6 +55,14 @@ export const PLUGIN_LIMITS = {
   RENDERER_ACTIVATE_DEADLINE_MS: 5_000,
   SERVICE_ACTIVATE_DEADLINE_MS: 10_000,
   DEACTIVATE_DEADLINE_MS: 5_000,
+  /** PRC-5f: the disruptive barrier budgets include old teardown plus the
+   * independently bounded renderer/service candidate activations. A phase
+   * expiry changes protocol state or requests a boundary; it is never itself
+   * termination evidence. */
+  UPDATE_PREPARE_DEADLINE_MS: 30_000,
+  UPDATE_COMMIT_DEADLINE_MS: 10_000,
+  UPDATE_RECOVERY_DEADLINE_MS: 30_000,
+  UPDATE_BOUNDARY_DEATH_DEADLINE_MS: 5_000,
   KV_VALUE_MAX_BYTES: 64 * 1024,
   KV_TOTAL_MAX_BYTES: 10 * 1024 * 1024,
   FILE_QUOTA_BYTES: 100 * 1024 * 1024,

@@ -6,6 +6,7 @@ import {
   type PluginUpdateCommand,
   type PluginUpdateParticipantEvent,
   PluginUpdateSourceResult,
+  SHELL_PROVIDER_METHODS,
   SOCKETS,
 } from "@vibefield/contracts";
 import {
@@ -61,7 +62,7 @@ function releaseRoot(parent: string, version: string): string {
   return root;
 }
 
-async function setup(): Promise<FielddDaemon> {
+async function setup(options: { shortUpdateDeadlines?: boolean } = {}): Promise<FielddDaemon> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-renderer-update-data-"));
   const registryDir = mkdtempSync(join(tmpdir(), "vf-renderer-update-registry-"));
   const releasesDir = mkdtempSync(join(tmpdir(), "vf-renderer-update-releases-"));
@@ -94,6 +95,16 @@ async function setup(): Promise<FielddDaemon> {
     controlPort: 0,
     registryUrl: pathToFileURL(join(registryDir, "index.json")).href,
     registryPublicKey: keys.publicKey,
+    ...(options.shortUpdateDeadlines
+      ? {
+          pluginUpdateDeadlines: {
+            prepareMs: 2_000,
+            commitMs: 50,
+            recoveryMs: 2_000,
+            boundaryDeathMs: 2_000,
+          },
+        }
+      : {}),
   });
   cleanup.push(() => daemon.stop());
   return daemon;
@@ -223,6 +234,110 @@ describe("coordinated renderer update over the production Product API", () => {
     await renderer.call("system.unsubscribe", { subId: subscription.subId });
     await expect(renderer.call("plugins.update.leave", { pluginId: PLUGIN_ID })).resolves.toEqual({
       retired: true,
+    });
+  });
+
+  it("requests exact Electron replacement on commit expiry and converges only after process-gone revokes that generation", {
+    timeout: 30_000,
+  }, async () => {
+    const daemon = await setup({ shortUpdateDeadlines: true });
+    const shell = await openRpc(daemon);
+    await helloAs(shell, daemon.shellToken, "shell-main");
+    await shell.call("shell.provider.register", { methods: [...SHELL_PROVIDER_METHODS] });
+    const installed = (await shell.call("plugins.install", {
+      id: PLUGIN_ID,
+      version: "1.0.0",
+    })) as { installRevision: string };
+
+    const windowGrant = (await shell.call("system.mintWindowToken", {
+      scopes: ["plugins.read"],
+      label: "renderer-death-window",
+      rendererParticipant: identity,
+    })) as { token: string; tokenId: string };
+    const renderer = await openRpc(daemon);
+    await helloAs(renderer, windowGrant.token, "renderer");
+    const subscription = (await renderer.call("plugins.update.subscribe", {
+      pluginId: PLUGIN_ID,
+    })) as { subId: string };
+
+    const updating = shell.call("plugins.install", { id: PLUGIN_ID });
+    await until(() => command(renderer, subscription.subId, "prepare") !== undefined);
+    const prepare = command(renderer, subscription.subId, "prepare");
+    if (prepare?.kind !== "prepare") throw new Error("prepare command was not delivered");
+    await renderer.call("plugins.update.ack", {
+      kind: "prepared",
+      updateId: prepare.updateId,
+      pluginId: PLUGIN_ID,
+      candidateArtifact: prepare.candidateArtifact,
+    });
+    await until(() => command(renderer, subscription.subId, "commit") !== undefined);
+
+    await until(
+      () =>
+        shell.notifications.some(
+          (notification) =>
+            notification.method === "shell.provider.call" &&
+            (notification.params as { method?: string }).method ===
+              "shell.renderer.requestReplacement",
+        ),
+      4_000,
+    );
+    const replacementCall = shell.notifications.find(
+      (notification) =>
+        notification.method === "shell.provider.call" &&
+        (notification.params as { method?: string }).method === "shell.renderer.requestReplacement",
+    );
+    const replacementParams = replacementCall?.params as unknown as {
+      callId: string;
+      params: {
+        rendererParticipant: typeof identity;
+        reason: string;
+      };
+    };
+    expect(replacementParams.params).toEqual({
+      rendererParticipant: identity,
+      reason: "plugin-update-deadline",
+    });
+
+    await shell.call("shell.provider.resolve", {
+      callId: replacementParams.callId,
+      outcome: { result: { requested: true } },
+    });
+    // Provider success means only that Electron accepted forcefullyCrashRenderer(). The exact
+    // token-correlated process-gone report below is the event that may release the frozen vote.
+    await expect(
+      shell.call("system.revokeWindowToken", {
+        tokenId: windowGrant.tokenId,
+        cause: "render-process-gone",
+      }),
+    ).resolves.toMatchObject({ revoked: true, droppedConnections: 1 });
+    await until(() => renderer.closed);
+    await expect(updating).resolves.toMatchObject({ version: "2.0.0" });
+
+    const replacementIdentity = {
+      ...identity,
+      incarnation: `${identity.participantId}:document-2`,
+    };
+    const replacementGrant = (await shell.call("system.mintWindowToken", {
+      scopes: ["plugins.read"],
+      label: "renderer-death-window-replacement",
+      rendererParticipant: replacementIdentity,
+    })) as { token: string };
+    const replacement = await openRpc(daemon);
+    await helloAs(replacement, replacementGrant.token, "renderer");
+    const replacementSubscription = (await replacement.call("plugins.update.subscribe", {
+      pluginId: PLUGIN_ID,
+    })) as {
+      subId: string;
+      snapshot: { status: string; artifact: { installRevision: string }; commitEpoch: number };
+    };
+    const currentRevision = daemon.plugins.get(PLUGIN_ID)?.installRevision;
+    expect(currentRevision).toBeDefined();
+    expect(currentRevision).not.toBe(installed.installRevision);
+    expect(replacementSubscription.snapshot).toMatchObject({
+      status: "live",
+      artifact: { installRevision: currentRevision },
+      commitEpoch: 2,
     });
   });
 });

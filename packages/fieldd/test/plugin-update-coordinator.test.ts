@@ -1,5 +1,5 @@
 import type { PluginUpdateArtifact, PluginUpdateCommand } from "@vibefield/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   type PluginUpdateCandidate,
   PluginUpdateCoordinator,
@@ -238,6 +238,7 @@ describe("PluginUpdateCoordinator (PRC-5e)", () => {
       /stale renderer incarnation/,
     );
     await expect(update.retireRenderer(B)).resolves.toBe(true);
+    expect(update.snapshot().recoveryTargets).toEqual([]);
     expect(a.commands.map((command) => command.kind)).toEqual(["prepare", "commit"]);
     await update.acknowledge(A, committed(started.updateId));
     await expect(started.completion).resolves.toMatchObject({ outcome: "committed" });
@@ -265,6 +266,163 @@ describe("PluginUpdateCoordinator (PRC-5e)", () => {
     await update.acknowledge(A, committed(started.updateId));
     await started.completion;
     expect(update.admitHeld(B)).toEqual({ artifact: CANDIDATE, commitEpoch: 2 });
+  });
+
+  it("records positive boundary death separately and admits only a fresh incarnation at outcome", async () => {
+    const update = coordinator();
+    const a = commandSink();
+    const b = commandSink();
+    update.registerRenderer({ identity: A, artifact: OLD, send: a.send });
+    update.registerRenderer({ identity: B, artifact: OLD, send: b.send });
+    const started = update.begin(candidate());
+
+    await update.acknowledge(A, prepared(started.updateId));
+    await update.acknowledge(B, prepared(started.updateId));
+    await update.acknowledge(A, committed(started.updateId));
+    await expect(update.crashRenderer({ ...B, incarnation: "document-b0" })).rejects.toThrow(
+      /stale renderer incarnation/,
+    );
+    await expect(update.crashRenderer(B)).resolves.toBe(true);
+    await expect(started.completion).resolves.toMatchObject({ outcome: "committed" });
+
+    expect(update.snapshot().recoveryTargets).toEqual([
+      {
+        kind: "renderer",
+        participantId: B.participantId,
+        retiredIncarnation: B.incarnation,
+        artifact: CANDIDATE,
+        commitEpoch: 2,
+        reason: "boundary-death",
+      },
+    ]);
+    expect(() =>
+      update.registerRenderer({ identity: B, artifact: CANDIDATE, send: b.send }),
+    ).toThrow(/crashed renderer incarnation/);
+    const replacement = { ...B, incarnation: "document-b2" };
+    expect(
+      update.registerRenderer({ identity: replacement, artifact: CANDIDATE, send: b.send }),
+    ).toBe("held");
+    expect(update.admitHeld(replacement)).toEqual({ artifact: CANDIDATE, commitEpoch: 2 });
+    expect(update.snapshot().recoveryTargets).toEqual([]);
+  });
+
+  it("times prepare into old recovery, requests exact boundary replacement, then fails closed without death proof", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    try {
+      const replacements: unknown[] = [];
+      const update = new PluginUpdateCoordinator({
+        pluginId: PLUGIN_ID,
+        currentArtifact: OLD,
+        makeUpdateId: () => "pupd_deadline_1",
+        deadlines: { prepareMs: 10, commitMs: 10, recoveryMs: 20, boundaryDeathMs: 5 },
+        requestRendererReplacement: (request) => {
+          replacements.push(request);
+        },
+      });
+      const a = commandSink();
+      update.registerRenderer({ identity: A, artifact: OLD, send: a.send });
+      const started = update.begin(candidate());
+      const rejected = expect(started.completion).rejects.toThrow(/boundary-death evidence/);
+      expect(update.snapshot().episode).toMatchObject({
+        phase: "preparing",
+        phaseDeadlineAt: 10_010,
+        deathDeadlineAt: null,
+      });
+
+      await vi.advanceTimersByTimeAsync(10);
+      expect(update.snapshot().state).toBe("recovering-old");
+      expect(replacements).toEqual([]);
+      expect(a.commands.map((command) => command.kind)).toEqual(["prepare", "recover-old"]);
+
+      await vi.advanceTimersByTimeAsync(20);
+      expect(replacements).toEqual([
+        {
+          pluginId: PLUGIN_ID,
+          updateId: started.updateId,
+          phase: "recovering-old",
+          identity: A,
+        },
+      ]);
+      expect(update.snapshot().episode?.deathDeadlineAt).toBe(10_035);
+      expect(update.snapshot().episode?.participants[0]?.expected).toBe("recover-old");
+
+      await vi.advanceTimersByTimeAsync(5);
+      await rejected;
+      expect(update.snapshot().state).toBe("failed");
+      expect(update.routeOpen).toBe(false);
+      expect(update.snapshot().episode?.participants[0]).toMatchObject({
+        participantId: A.participantId,
+        incarnation: A.incarnation,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("uses positive death during the grace to converge a timed-out commit", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(20_000);
+    try {
+      const replacements: unknown[] = [];
+      const update = new PluginUpdateCoordinator({
+        pluginId: PLUGIN_ID,
+        currentArtifact: OLD,
+        makeUpdateId: () => "pupd_deadline_2",
+        deadlines: { prepareMs: 10, commitMs: 20, recoveryMs: 10, boundaryDeathMs: 5 },
+        requestRendererReplacement: async (request) => {
+          replacements.push(request);
+        },
+      });
+      const a = commandSink();
+      update.registerRenderer({ identity: A, artifact: OLD, send: a.send });
+      const started = update.begin(candidate());
+      await update.acknowledge(A, prepared(started.updateId));
+      expect(update.snapshot().state).toBe("committing");
+
+      await vi.advanceTimersByTimeAsync(20);
+      expect(replacements).toHaveLength(1);
+      expect(update.snapshot().episode?.participants[0]?.expected).toBe("commit");
+      await update.crashRenderer(A);
+      await expect(started.completion).resolves.toMatchObject({ outcome: "committed" });
+      expect(update.routeOpen).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(5);
+      expect(update.snapshot().state).toBe("active");
+      expect(update.snapshot().recoveryTargets[0]).toMatchObject({
+        participantId: A.participantId,
+        artifact: CANDIDATE,
+        commitEpoch: 2,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels phase/death work on shutdown instead of calling a dead shell provider", async () => {
+    vi.useFakeTimers();
+    try {
+      const replacement = vi.fn();
+      const update = new PluginUpdateCoordinator({
+        pluginId: PLUGIN_ID,
+        currentArtifact: OLD,
+        makeUpdateId: () => "pupd_shutdown",
+        deadlines: { prepareMs: 5, commitMs: 5, recoveryMs: 5, boundaryDeathMs: 5 },
+        requestRendererReplacement: replacement,
+      });
+      update.registerRenderer({ identity: A, artifact: OLD, send: () => undefined });
+      const started = update.begin(candidate());
+      const rejected = expect(started.completion).rejects.toThrow(/stopping/);
+
+      update.dispose();
+      await rejected;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(replacement).not.toHaveBeenCalled();
+      expect(update.snapshot().state).toBe("failed");
+      expect(update.routeOpen).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("recovers retained old before discarding a failed renderer candidate", async () => {

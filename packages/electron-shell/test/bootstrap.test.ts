@@ -13,11 +13,23 @@ const DESKTOP_BOOT_ID = "desktop-test-a1b2";
 
 function fakeSender(id: number) {
   const nav: NavListener[] = [];
+  const processGone: (() => void)[] = [];
   const destroyed: (() => void)[] = [];
+  let isDestroyed = false;
+  let crashRequests = 0;
+  let reloads = 0;
   const sender = {
     id,
-    on: (event: string, fn: NavListener) => {
-      if (event === "did-start-navigation") nav.push(fn);
+    isDestroyed: () => isDestroyed,
+    forcefullyCrashRenderer: () => {
+      crashRequests += 1;
+    },
+    reload: () => {
+      reloads += 1;
+    },
+    on: (event: string, fn: NavListener | (() => void)) => {
+      if (event === "did-start-navigation") nav.push(fn as NavListener);
+      if (event === "render-process-gone") processGone.push(fn as () => void);
     },
     once: (event: string, fn: () => void) => {
       if (event === "destroyed") destroyed.push(fn);
@@ -30,8 +42,14 @@ function fakeSender(id: number) {
         fn({}, "app://reload", opts?.isInPlace ?? false, opts?.isMainFrame ?? true);
     },
     destroy: () => {
+      isDestroyed = true;
       for (const fn of [...destroyed]) fn();
     },
+    processGone: () => {
+      for (const fn of [...processGone]) fn();
+    },
+    crashRequests: () => crashRequests,
+    reloads: () => reloads,
   };
 }
 
@@ -46,6 +64,7 @@ function fakeDaemon(opts?: {
   let reapFailures = opts?.failFirstReap ? 1 : 0;
   let revokeFailures = opts?.failFirstRevoke ? 1 : 0;
   const revoked: string[] = [];
+  const revocations: Array<{ tokenId: string; cause: string }> = [];
   const request = vi.fn(async (method: string, params?: unknown) => {
     if (method === "system.revokeStaleWindowTokens") {
       if (reapFailures > 0) {
@@ -59,7 +78,9 @@ function fakeDaemon(opts?: {
         revokeFailures -= 1;
         throw new Error("revocation response lost");
       }
-      revoked.push((params as { tokenId: string }).tokenId);
+      const parsed = params as { tokenId: string; cause?: string };
+      revoked.push(parsed.tokenId);
+      revocations.push({ tokenId: parsed.tokenId, cause: parsed.cause ?? "generation-ended" });
       return { revoked: true, droppedConnections: 0 };
     }
     if (mintFailures > 0) {
@@ -90,6 +111,7 @@ function fakeDaemon(opts?: {
     request,
     mintCount: () => minted,
     revoked,
+    revocations,
   };
 }
 
@@ -238,6 +260,39 @@ describe("createBootstrapHandler (once per generation)", () => {
     expect(second.rendererParticipant.participantId).not.toBe(
       first.rendererParticipant.participantId,
     );
+  });
+
+  it("requests and reports only the exact process-gone generation, then remints behind revocation", async () => {
+    const daemon = fakeDaemon();
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
+    const s = fakeSender(1);
+    const first = await handler({ sender: s.wc });
+
+    expect(
+      handler.requestReplacement({
+        ...first.rendererParticipant,
+        incarnation: `${first.rendererParticipant.participantId}:document-forged`,
+      }),
+    ).toBe(false);
+    expect(handler.requestReplacement(first.rendererParticipant)).toBe(true);
+    expect(s.crashRequests()).toBe(1);
+    expect(daemon.revoked).toEqual([]);
+
+    s.processGone();
+    const secondPromise = handler({ sender: s.wc });
+    await vi.waitFor(() =>
+      expect(daemon.revocations).toEqual([
+        { tokenId: "tk_000000000001", cause: "render-process-gone" },
+      ]),
+    );
+    await vi.waitFor(() => expect(s.reloads()).toBe(1));
+    const second = await secondPromise;
+    expect(second.rendererParticipant.participantId).toBe(first.rendererParticipant.participantId);
+    expect(second.rendererParticipant.incarnation).not.toBe(first.rendererParticipant.incarnation);
   });
 
   it("retries exact revocation after a transient daemon link failure", async () => {

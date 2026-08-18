@@ -1,10 +1,13 @@
 import { randomBytes } from "node:crypto";
 import {
+  PLUGIN_LIMITS,
   PluginUpdateAckParams,
   PluginUpdateArtifact,
   type PluginUpdateCommand,
   PluginUpdateId,
   PluginUpdateParticipant,
+  type PluginUpdatePhase,
+  type PluginUpdateRecoveryTarget,
   PluginUpdateSnapshot,
   RendererParticipantIdentity,
 } from "@vibefield/contracts";
@@ -70,6 +73,27 @@ export interface PluginUpdateCoordinatorOptions {
   readonly currentArtifact: PluginUpdateArtifact;
   readonly commitEpoch?: number;
   readonly makeUpdateId?: () => string;
+  readonly deadlines?: Partial<PluginUpdateDeadlines>;
+  readonly now?: () => number;
+  /** A request to terminate one exact renderer boundary. Resolution is not
+   * death evidence; only a later crashRenderer() call may remove the vote. */
+  readonly requestRendererReplacement?: (
+    request: RendererBoundaryReplacementRequest,
+  ) => void | Promise<void>;
+}
+
+export interface PluginUpdateDeadlines {
+  readonly prepareMs: number;
+  readonly commitMs: number;
+  readonly recoveryMs: number;
+  readonly boundaryDeathMs: number;
+}
+
+export interface RendererBoundaryReplacementRequest {
+  readonly pluginId: string;
+  readonly updateId: string;
+  readonly phase: "committing" | "recovering-old";
+  readonly identity: RendererParticipantIdentity;
 }
 
 type Expected = "prepare" | "commit" | "recover-old" | "settled";
@@ -105,6 +129,10 @@ interface UpdateEpisode {
   serviceHandle: PreparedServiceUpdate | null;
   servicePrepare: Promise<PreparedServiceUpdate> | null;
   serviceRecovery: Promise<void> | null;
+  phaseDeadlineAt: number;
+  deathDeadlineAt: number | null;
+  phaseTimer: ReturnType<typeof setTimeout> | null;
+  deathTimer: ReturnType<typeof setTimeout> | null;
   terminal: boolean;
 }
 
@@ -131,10 +159,16 @@ export class PluginUpdateCoordinator {
   private stateValue: UpdateSnapshot["state"] = "active";
   private routeOpenValue = true;
   private readonly renderers = new Map<string, RendererSlot>();
+  private readonly recoveryTargets = new Map<string, PluginUpdateRecoveryTarget>();
   private readonly usedUpdateIds = new Set<string>();
   private episode: UpdateEpisode | null = null;
   private advanceTail: Promise<void> = Promise.resolve();
   private readonly makeUpdateId: () => string;
+  private readonly now: () => number;
+  private readonly deadlines: PluginUpdateDeadlines;
+  private readonly requestRendererReplacement: (
+    request: RendererBoundaryReplacementRequest,
+  ) => void | Promise<void>;
   private readonly listeners = new Set<(snapshot: UpdateSnapshot) => void>();
 
   constructor(options: PluginUpdateCoordinatorOptions) {
@@ -146,6 +180,26 @@ export class PluginUpdateCoordinator {
     if (!Number.isSafeInteger(this.commitEpochValue) || this.commitEpochValue <= 0)
       throw new Error("plugin update commit epoch must be positive");
     this.makeUpdateId = options.makeUpdateId ?? mintUpdateId;
+    this.now = options.now ?? Date.now;
+    this.deadlines = Object.freeze({
+      prepareMs: deadline(
+        options.deadlines?.prepareMs ?? PLUGIN_LIMITS.UPDATE_PREPARE_DEADLINE_MS,
+        "prepare",
+      ),
+      commitMs: deadline(
+        options.deadlines?.commitMs ?? PLUGIN_LIMITS.UPDATE_COMMIT_DEADLINE_MS,
+        "commit",
+      ),
+      recoveryMs: deadline(
+        options.deadlines?.recoveryMs ?? PLUGIN_LIMITS.UPDATE_RECOVERY_DEADLINE_MS,
+        "recovery",
+      ),
+      boundaryDeathMs: deadline(
+        options.deadlines?.boundaryDeathMs ?? PLUGIN_LIMITS.UPDATE_BOUNDARY_DEATH_DEADLINE_MS,
+        "boundary death",
+      ),
+    });
+    this.requestRendererReplacement = options.requestRendererReplacement ?? (() => undefined);
   }
 
   get currentArtifact(): PluginUpdateArtifact {
@@ -163,6 +217,15 @@ export class PluginUpdateCoordinator {
   subscribe(listener: (snapshot: UpdateSnapshot) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Stops deadline work and rejects an active episode without inventing a
+   * recovery edge. Daemon restart semantics remain a separate durability
+   * protocol; shutdown must at least leave no live timers or shell requests. */
+  dispose(reason = "plugin update coordinator is stopping"): void {
+    const episode = this.episode;
+    if (episode !== null && !episode.terminal) this.failClosed(episode, new Error(reason));
+    this.listeners.clear();
   }
 
   registerRenderer(input: RendererUpdateRegistration): "live" | "held" {
@@ -183,8 +246,13 @@ export class PluginUpdateCoordinator {
     }
 
     const artifact = input.artifact === null ? null : freezeArtifact(input.artifact);
+    const recovery = this.recoveryTargets.get(identity.participantId);
+    if (recovery?.retiredIncarnation === identity.incarnation) {
+      throw new Error(`${identity.participantId}: crashed renderer incarnation cannot reconnect`);
+    }
     const status =
       this.episode === null &&
+      recovery === undefined &&
       artifact !== null &&
       sameArtifact(artifact, this.currentArtifactValue)
         ? "live"
@@ -225,6 +293,33 @@ export class PluginUpdateCoordinator {
       if (member?.kind === "renderer") episode.members.delete(parsed.participantId);
     }
     this.renderers.delete(parsed.participantId);
+    this.recoveryTargets.delete(parsed.participantId);
+    this.changed();
+    if (episode !== null && !episode.terminal) await this.advance();
+    return true;
+  }
+
+  /** Positive Electron/host boundary-death evidence. Unlike orderly leave this
+   * records a stable-window recovery target. A timeout or socket loss must
+   * never call this method. */
+  async crashRenderer(identity: RendererParticipantIdentity): Promise<boolean> {
+    const parsed = freezeIdentity(identity);
+    const renderer = this.renderers.get(parsed.participantId);
+    if (renderer === undefined) return false;
+    if (renderer.incarnation !== parsed.incarnation)
+      throw new Error(`${parsed.participantId}: stale renderer incarnation`);
+    const episode = this.episode;
+    if (episode !== null) {
+      const member = episode.members.get(parsed.participantId);
+      if (member !== undefined && member.incarnation !== parsed.incarnation)
+        throw new Error(`${parsed.participantId}: frozen renderer incarnation changed`);
+      if (member?.kind === "renderer") episode.members.delete(parsed.participantId);
+    }
+    this.renderers.delete(parsed.participantId);
+    this.recoveryTargets.set(
+      parsed.participantId,
+      recoveryTargetFor(parsed, episode, this.currentArtifactValue, this.commitEpochValue),
+    );
     this.changed();
     if (episode !== null && !episode.terminal) await this.advance();
     return true;
@@ -240,6 +335,7 @@ export class PluginUpdateCoordinator {
     if (!renderer.connected) throw new Error(`${renderer.participantId} is disconnected`);
     renderer.status = "live";
     renderer.artifact = this.currentArtifactValue;
+    this.recoveryTargets.delete(renderer.participantId);
     this.changed();
     return Object.freeze({
       artifact: this.currentArtifactValue,
@@ -325,6 +421,10 @@ export class PluginUpdateCoordinator {
       serviceHandle: null,
       servicePrepare: null,
       serviceRecovery: null,
+      phaseDeadlineAt: 0,
+      deathDeadlineAt: null,
+      phaseTimer: null,
+      deathTimer: null,
       terminal: false,
     };
 
@@ -333,6 +433,7 @@ export class PluginUpdateCoordinator {
     this.episode = episode;
     this.routeOpenValue = false;
     this.stateValue = "preparing";
+    this.armPhaseDeadline(episode);
     for (const member of members.values()) {
       if (member.kind === "renderer") this.queueRendererCommand(member, prepareCommand(episode));
     }
@@ -468,6 +569,9 @@ export class PluginUpdateCoordinator {
       state: this.stateValue,
       currentArtifact: this.currentArtifactValue,
       commitEpoch: this.commitEpochValue,
+      recoveryTargets: [...this.recoveryTargets.values()].sort((left, right) =>
+        left.participantId.localeCompare(right.participantId),
+      ),
       episode:
         episode === null
           ? null
@@ -477,6 +581,8 @@ export class PluginUpdateCoordinator {
               oldArtifact: episode.oldArtifact,
               candidateArtifact: episode.candidateArtifact,
               ...(episode.phase === "committing" ? { commitEpoch: this.commitEpochValue } : {}),
+              phaseDeadlineAt: episode.phaseDeadlineAt,
+              deathDeadlineAt: episode.deathDeadlineAt,
               participants: [...episode.members.values()]
                 .map((member) => ({
                   kind: member.kind,
@@ -560,6 +666,8 @@ export class PluginUpdateCoordinator {
         this.commitEpochValue += 1;
         episode.phase = "committing";
         this.stateValue = "committing";
+        this.resolvePendingRecoveryTargets(episode.candidateArtifact, this.commitEpochValue);
+        this.armPhaseDeadline(episode);
         for (const member of episode.members.values()) {
           member.expected = member.kind === "service" ? "settled" : "commit";
         }
@@ -604,6 +712,9 @@ export class PluginUpdateCoordinator {
     if (episode.phase === "recovering-old") return;
     episode.phase = "recovering-old";
     this.stateValue = "recovering-old";
+    this.resolvePendingRecoveryTargets(episode.oldArtifact, episode.oldCommitEpoch);
+    this.armPhaseDeadline(episode);
+    this.changed();
     try {
       await episode.input.revokeCandidateSources?.();
       await episode.input.disposeCandidateModuleAuthority?.();
@@ -659,6 +770,7 @@ export class PluginUpdateCoordinator {
       currentArtifact: this.currentArtifactValue,
       commitEpoch: this.commitEpochValue,
     });
+    this.clearDeadlineTimers(episode);
     episode.terminal = true;
     this.episode = null;
     this.stateValue = "active";
@@ -681,6 +793,7 @@ export class PluginUpdateCoordinator {
       currentArtifact: episode.oldArtifact,
       commitEpoch: episode.oldCommitEpoch,
     });
+    this.clearDeadlineTimers(episode);
     episode.terminal = true;
     this.currentArtifactValue = episode.oldArtifact;
     this.commitEpochValue = episode.oldCommitEpoch;
@@ -695,6 +808,7 @@ export class PluginUpdateCoordinator {
     if (this.episode !== episode || episode.terminal) return;
     // The pointer may already be candidate-current. Keep the route closed for forward recovery;
     // never manufacture a retained-old edge after this point.
+    this.clearDeadlineTimers(episode);
     episode.terminal = true;
     this.stateValue = "failed";
     this.changed();
@@ -703,10 +817,118 @@ export class PluginUpdateCoordinator {
 
   private failClosed(episode: UpdateEpisode, error: Error): void {
     if (this.episode !== episode || episode.terminal) return;
+    this.clearDeadlineTimers(episode);
     episode.terminal = true;
     this.stateValue = "failed";
     this.changed();
     episode.completion.reject(error);
+  }
+
+  private armPhaseDeadline(episode: UpdateEpisode): void {
+    this.clearDeadlineTimers(episode);
+    const duration =
+      episode.phase === "preparing"
+        ? this.deadlines.prepareMs
+        : episode.phase === "committing"
+          ? this.deadlines.commitMs
+          : this.deadlines.recoveryMs;
+    const phase = episode.phase;
+    episode.phaseDeadlineAt = safeDeadlineAt(this.now(), duration);
+    episode.deathDeadlineAt = null;
+    episode.phaseTimer = setTimeout(() => {
+      episode.phaseTimer = null;
+      void this.phaseDeadlineExpired(episode, phase).catch((error) => {
+        this.failClosed(episode, asError(error));
+      });
+    }, duration);
+    episode.phaseTimer.unref?.();
+  }
+
+  private async phaseDeadlineExpired(
+    episode: UpdateEpisode,
+    phase: PluginUpdatePhase,
+  ): Promise<void> {
+    if (
+      this.episode !== episode ||
+      episode.terminal ||
+      episode.phase !== phase ||
+      episode.deathDeadlineAt !== null
+    ) {
+      return;
+    }
+    if (phase === "preparing") {
+      if (episode.commitStarted) {
+        this.failClosed(
+          episode,
+          new Error(`${episode.updateId}: artifact commit exceeded the prepare phase deadline`),
+        );
+        return;
+      }
+      await this.startOldRecovery(
+        episode,
+        new Error(`${episode.updateId}: renderer/service preparation deadline exceeded`),
+      );
+      await this.advance();
+      return;
+    }
+
+    episode.deathDeadlineAt = safeDeadlineAt(this.now(), this.deadlines.boundaryDeathMs);
+    episode.deathTimer = setTimeout(() => {
+      episode.deathTimer = null;
+      if (this.episode !== episode || episode.terminal || episode.phase !== phase) return;
+      const unresolved = [...episode.members.values()].filter(
+        (member) => member.expected !== "settled",
+      );
+      if (unresolved.length === 0) {
+        void this.advance();
+        return;
+      }
+      this.failClosed(
+        episode,
+        new Error(
+          `${episode.updateId}: ${phase} boundary-death evidence deadline exceeded for ${unresolved
+            .map((member) => member.participantId)
+            .sort()
+            .join(", ")}`,
+        ),
+      );
+    }, this.deadlines.boundaryDeathMs);
+    episode.deathTimer.unref?.();
+    const requests = [...episode.members.values()]
+      .filter(
+        (member): member is EpisodeMember & { readonly kind: "renderer" } =>
+          member.kind === "renderer" && member.expected !== "settled",
+      )
+      .map((member) =>
+        Promise.resolve(
+          this.requestRendererReplacement({
+            pluginId: this.pluginId,
+            updateId: episode.updateId,
+            phase,
+            identity: freezeIdentity({
+              participantId: member.participantId,
+              incarnation: member.incarnation,
+            }),
+          }),
+        ),
+      );
+    this.changed();
+    // Provider refusal/loss is not death and does not shorten the evidence grace.
+    void Promise.allSettled(requests);
+  }
+
+  private clearDeadlineTimers(episode: UpdateEpisode): void {
+    if (episode.phaseTimer !== null) clearTimeout(episode.phaseTimer);
+    if (episode.deathTimer !== null) clearTimeout(episode.deathTimer);
+    episode.phaseTimer = null;
+    episode.deathTimer = null;
+  }
+
+  private resolvePendingRecoveryTargets(artifact: PluginUpdateArtifact, commitEpoch: number): void {
+    for (const [participantId, target] of this.recoveryTargets) {
+      if (target.artifact !== null) continue;
+      this.recoveryTargets.set(participantId, Object.freeze({ ...target, artifact, commitEpoch }));
+    }
   }
 
   private queueRendererCommand(member: EpisodeMember, command: PluginUpdateCommand): void {
@@ -852,6 +1074,53 @@ function deferred<T>(): Deferred<T> {
     reject = fail;
   });
   return { promise, resolve, reject };
+}
+
+function deadline(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 2_147_483_647) {
+    throw new Error(`plugin update ${label} deadline must be a nonnegative timer duration`);
+  }
+  return value;
+}
+
+function safeDeadlineAt(now: number, duration: number): number {
+  const value = Math.trunc(now) + duration;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error("plugin update deadline clock is outside the safe integer range");
+  }
+  return value;
+}
+
+function recoveryTargetFor(
+  identity: RendererParticipantIdentity,
+  episode: UpdateEpisode | null,
+  currentArtifact: PluginUpdateArtifact,
+  currentCommitEpoch: number,
+): PluginUpdateRecoveryTarget {
+  const artifact =
+    episode === null
+      ? currentArtifact
+      : episode.phase === "preparing"
+        ? null
+        : episode.phase === "committing"
+          ? episode.candidateArtifact
+          : episode.oldArtifact;
+  const commitEpoch =
+    episode === null
+      ? currentCommitEpoch
+      : episode.phase === "preparing"
+        ? null
+        : episode.phase === "committing"
+          ? currentCommitEpoch
+          : episode.oldCommitEpoch;
+  return Object.freeze({
+    kind: "renderer",
+    participantId: identity.participantId,
+    retiredIncarnation: identity.incarnation,
+    artifact,
+    commitEpoch,
+    reason: "boundary-death",
+  });
 }
 
 function asError(error: unknown): Error {
