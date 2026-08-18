@@ -2918,3 +2918,52 @@ affected typechecks, preflight, the ICE/strata/Loro/React physical-singleton gua
 and bundle boundary, focused Biome, patch hygiene, and packaged clean/leak witnesses. This lands the
 runner and its falsifiability, not §24.6's duration: PRC-6c2b remains one uninterrupted 24-hour run
 with archived JSONL and a passing literal-duration verdict.
+
+## TC petitions land — ghosttea 0.10.0; G16 + G17 consumed (TC-D6b/c enforced)
+
+**Date:** 2026-08-18 · **Commits:** `ffdafc8` (pins) · `05372b7` (consumption)
+
+All seven terminal-custody petitions (G15–G21; four upstream review rounds to
+convergence, record in `draft/petitions/README.md`) landed upstream in ONE release.
+The EL8 bump moves cargo (`ghosttea` + `ghosttea-truffle` `=0.10.0`), the six npm
+override rows, the SwiftPM exact pin, and the preflight pin table together.
+Provenance triple-checked: npm `gitHead`, the crate's `.cargo_vcs_info.json`, and the
+`v0.10.0` tag agree at `43361e53`; the later `v0.10.0-retry.1` tag (Windows
+release-validation hardening + a `process_tree.rs` delta) shipped in NO published
+artifact. Served CONTROL minor 13 → 16; field-native's Rust client still announces
+1.9 — it consumes nothing new, and the G16/G17 consumer is fieldd's npm client.
+
+Consumed at the bump, closing TC-S0's two recorded honest gaps:
+
+- **G16 / TC-D6(c) ENFORCED.** `terminal.create` maps a DECLARED `workloadClass`
+  through the genned contracts table (AGENT 2 MiB · INTERACTIVE 10 MiB) to the floor's
+  per-session `scrollbackBytes` (gated at protocol 1.15); the floor validates
+  reject-not-clamp and echoes the effective cap in `SessionSummary`. Undeclared sends
+  nothing — the key never rides the wire and the floor's global default governs,
+  byte-identical to a pre-G16 create. The pinned client refuses a pre-1.15 floor
+  rather than pretend; fieldd classifies that refusal UNAVAILABLE/unsupported,
+  non-retryable. The TC-S0 "enforcement pends upstream" comments are deleted on both
+  sides of the seam.
+- **G17 / TC-D6(b) spawn-stage classification.** Wire refusals now carry typed
+  `{stage, code, osError}` beside a byte-identical message (`GhostteaRequestError` in
+  the client SDK). fieldd classifies by `code`: `file-descriptor-exhausted` →
+  RESOURCE_EXHAUSTED/fd_pressure · `executable-not-found` → NOT_FOUND ·
+  `permission-denied` → PRECONDITION_FAILED · an UNKNOWN code refuses the
+  caller's-input claim and lands INTERNAL retryable with the triple carried for
+  diagnosis. The openpty errno stays message-read (portable-pty stringifies it inside
+  `openpty()` — the negotiated exception), now FENCED by `stage` so spawn prose can
+  never borrow the match; the bare-string arm survives as the absent-metadata
+  fallback, its comment re-stated to the new boundary.
+
+Five new rows: four fake-floor (the class mapping including the no-key wire shape ·
+the pre-1.15 refusal proven never to reach the wire · four-code typed classification ·
+the stage fence in both directions) and one real-floor seam row (a classed create
+rides the negotiated 1.15 ladder end to end against real field-native + ghosttead
+0.10.0). Available but deliberately UNCONSUMED until TC-S6's compiler: G15 `mode_get`
+· G18 pending-wrap / wrap flags / hyperlink URI / `recovery_fragment()` · G19
+`SavedCursor` · G20 screen-parameterized reads · G21 hyperlink identity — each
+petition file's workaround-retirement section is the consumption checklist. G13
+(win32 env-strip case-fold) did NOT land; its `it.fails` witness row stays. The mac
+gate is blind to win32 (standing memory): the box gates re-run at the next WIN rung.
+
+Gates: `pnpm verify` verbatim green end to end (preflight with the moved pin table → typecheck 23 projects → biome → rustfmt/clippy → all TS suites → all cargo suites → gen:check), plus `pnpm smoke` `{"ok":true, nativeConnected:true}` with the terminal unit up on 0.10.0.
