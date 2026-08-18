@@ -51,10 +51,14 @@ export class RendererUpdateParticipant {
     command: PrepareCommand,
     candidate: RendererReplacementSource,
   ): Promise<PluginUpdateAckParams> {
+    const ownedCandidate = ownSource(candidate);
     const pluginId = command.candidateArtifact.pluginId;
-    if (this.closed)
+    if (this.closed) {
+      await releaseSource(ownedCandidate);
       return failed(command.updateId, pluginId, "prepare", "renderer-left", "renderer left");
+    }
     if (this.busy || this.attempt !== undefined) {
+      await releaseSource(ownedCandidate);
       return failed(
         command.updateId,
         pluginId,
@@ -78,7 +82,7 @@ export class RendererUpdateParticipant {
         updateId: command.updateId,
         oldArtifact: command.oldArtifact,
         candidateArtifact: command.candidateArtifact,
-        candidate,
+        candidate: ownedCandidate,
       });
       attempt.state = "episode";
       if (this.closed) {
@@ -104,6 +108,7 @@ export class RendererUpdateParticipant {
     } catch (error) {
       // Static/source refusal occurred before RuntimeTargetController accepted the candidate;
       // retained old remains live and may acknowledge recovery without a new import.
+      await releaseSource(ownedCandidate);
       return failed(
         command.updateId,
         pluginId,
@@ -163,6 +168,7 @@ export class RendererUpdateParticipant {
     command: RecoverOldCommand,
     source: RendererReplacementSource,
   ): Promise<PluginUpdateAckParams> {
+    const ownedSource = ownSource(source);
     const pluginId = command.oldArtifact.pluginId;
     const attempt = this.matchingAttempt(
       command.updateId,
@@ -170,9 +176,12 @@ export class RendererUpdateParticipant {
       undefined,
       command.oldArtifact,
     );
-    if (this.closed)
+    if (this.closed) {
+      await releaseSource(ownedSource);
       return failed(command.updateId, pluginId, "recover-old", "renderer-left", "renderer left");
+    }
     if (this.busy || attempt === undefined || attempt.state === "committed") {
+      await releaseSource(ownedSource);
       return failed(
         command.updateId,
         pluginId,
@@ -185,6 +194,7 @@ export class RendererUpdateParticipant {
     this.busy = true;
     try {
       if (attempt.state === "undisturbed") {
+        await releaseSource(ownedSource);
         if (!this.runtime.isActiveArtifact(command.oldArtifact)) {
           return failed(
             command.updateId,
@@ -206,7 +216,7 @@ export class RendererUpdateParticipant {
       const result = await this.runtime.recoverOld({
         updateId: command.updateId,
         oldArtifact: command.oldArtifact,
-        source,
+        source: ownedSource,
       });
       if (result.state === "recovered-old") {
         this.attempt = undefined;
@@ -217,6 +227,7 @@ export class RendererUpdateParticipant {
           oldArtifact: command.oldArtifact,
         });
       }
+      await releaseSource(ownedSource);
       return failed(
         command.updateId,
         pluginId,
@@ -227,6 +238,7 @@ export class RendererUpdateParticipant {
         result.error,
       );
     } catch (error) {
+      await releaseSource(ownedSource);
       return failed(
         command.updateId,
         pluginId,
@@ -299,4 +311,25 @@ function errorMessage(error: unknown): string {
 function boundedMessage(message: string): string {
   const trimmed = message.trim();
   return (trimmed.length === 0 ? "renderer update failed" : trimmed).slice(0, 500);
+}
+
+async function releaseSource(source: RendererReplacementSource): Promise<void> {
+  try {
+    await source.releaseAuthority?.();
+  } catch {
+    // The source is already unusable on these paths. Ack the primary update failure; coordinator
+    // revocation is the server-side safety backstop and diagnostics retain cleanup failure there.
+  }
+}
+
+function ownSource(source: RendererReplacementSource): RendererReplacementSource {
+  if (source.releaseAuthority === undefined) return source;
+  let task: Promise<void> | undefined;
+  return Object.freeze({
+    ...source,
+    releaseAuthority: () => {
+      task ??= Promise.resolve().then(source.releaseAuthority);
+      return task;
+    },
+  });
 }

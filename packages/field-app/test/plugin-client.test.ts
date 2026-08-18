@@ -280,4 +280,47 @@ describe("PluginClientLeaseBroker", () => {
     expect(h.clients).toHaveLength(1);
     expect(h.clients[0]?.rotations).toEqual(["token-2"]);
   });
+
+  it("seeds candidate authority without a live-row mint, then renews normally after promotion", async () => {
+    const h = harness(100);
+    h.broker.setBackend({ windowClient: h.backend });
+    expect(() =>
+      h.broker.createSeededProductClient(PLUGIN_ID, observation(2), {
+        token: "wrong-candidate-token",
+        pluginId: PLUGIN_ID,
+        manifestHash: `sha256:${"b".repeat(64)}`,
+        grantGeneration: 2,
+        expiresAt: 100_000,
+      }),
+    ).toThrow(/seed manifest/);
+    const proxy = h.broker.createSeededProductClient(PLUGIN_ID, observation(2), {
+      token: "candidate-token",
+      pluginId: PLUGIN_ID,
+      manifestHash: HASH,
+      grantGeneration: 2,
+      expiresAt: 100_000,
+    });
+
+    await proxy.request("doc.get");
+    expect(h.requests).toEqual([]);
+    expect(h.clients).toHaveLength(1);
+    expect(h.clients[0]?.initialToken).toBe("candidate-token");
+
+    // The coordinator has promoted the pointer by the time proactive renewal is needed, so the
+    // same connection rotates through the normal exact-live comparison.
+    h.backend.push(lease("live-token", 2, 300_000));
+    h.setNow(40_001);
+    await proxy.request("doc.list");
+    expect(h.requests).toEqual([
+      {
+        method: "plugins.openRendererSession",
+        params: { pluginId: PLUGIN_ID, manifestHash: HASH, grantGeneration: 2 },
+      },
+    ]);
+    expect(h.clients[0]?.rotations).toEqual(["live-token"]);
+
+    h.broker.retire(PLUGIN_ID);
+    expect(h.clients[0]?.closes).toBe(1);
+    await expect(proxy.request("doc.after-close")).rejects.toThrow("product client retired");
+  });
 });

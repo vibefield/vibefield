@@ -619,6 +619,8 @@ describe("PRC-5d renderer replacement participant", () => {
       request: async () => "candidate-authority",
       subscribe: async () => ({ snapshot: null, unsubscribe: () => undefined }),
     };
+    let candidateAuthorityReleases = 0;
+    const candidateRefreshes: number[] = [];
     const controller = new RendererPluginController(
       oldRecord,
       moduleRow(id),
@@ -662,6 +664,12 @@ describe("PRC-5d renderer replacement participant", () => {
       record: candidateRecordInput,
       module: candidateModuleInput,
       productClient: candidateClient,
+      refreshCredential: async (observation) => {
+        candidateRefreshes.push(observation.grantGeneration);
+      },
+      releaseAuthority: () => {
+        candidateAuthorityReleases += 1;
+      },
       load: async () => {
         events.push("candidate-import");
         expect(events).toContain("old-disposed");
@@ -748,8 +756,12 @@ describe("PRC-5d renderer replacement participant", () => {
     expect(host.textContent).toBe("candidate-renderer");
     expect(isCommandBound(`${id}.run`)).toBe(true);
 
+    await controller.reconcile({ ...candidateRecord, grantGeneration: 3 });
+    expect(candidateRefreshes).toEqual([3]);
+
     await act(async () => root.unmount());
     await runtime.close();
+    expect(candidateAuthorityReleases).toBe(1);
   });
 
   it("refuses a changed fixed widget projection before old authority closes", async () => {
@@ -1013,6 +1025,7 @@ describe("PRC-5d renderer replacement participant", () => {
     const candidateRecord = replacementRecord(oldRecord, "9");
     const release = deferred<void>();
     let imported = false;
+    let authorityReleases = 0;
     const controller = new RendererPluginController(
       oldRecord,
       moduleRow(id),
@@ -1040,11 +1053,15 @@ describe("PRC-5d renderer replacement participant", () => {
             imported = true;
             return { activate: () => undefined };
           },
+          releaseAuthority: () => {
+            authorityReleases += 1;
+          },
         },
       });
       await vi.advanceTimersByTimeAsync(PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS + 1);
       await expect(preparing).resolves.toMatchObject({ state: "boundary-required" });
       expect(imported).toBe(false);
+      expect(authorityReleases).toBe(1);
       expect(controller.snapshot).toMatchObject({
         desired: null,
         blocked: { phase: "unload" },
@@ -1068,6 +1085,7 @@ describe("PRC-5d renderer replacement participant", () => {
       }
       expect(controller.snapshot.state).toBe("inactive");
       expect(imported).toBe(false);
+      expect(authorityReleases).toBe(1);
       await expect(runtime.close()).resolves.toBeUndefined();
     } finally {
       release.resolve();

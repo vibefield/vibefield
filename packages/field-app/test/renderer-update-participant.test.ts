@@ -112,19 +112,37 @@ describe("RendererUpdateParticipant", () => {
     const runtime = new FakeRuntime();
     runtime.prepareError = new Error("fixed widget projection changed");
     const participant = new RendererUpdateParticipant(runtime);
+    let candidateReleases = 0;
+    let oldReleases = 0;
 
-    await expect(participant.prepare(prepareCommand(), source)).resolves.toMatchObject({
+    await expect(
+      participant.prepare(prepareCommand(), {
+        ...source,
+        releaseAuthority: () => {
+          candidateReleases += 1;
+        },
+      }),
+    ).resolves.toMatchObject({
       kind: "failed",
       at: "prepare",
       error: { code: "renderer-prepare-refused" },
     });
-    await expect(participant.recoverOld(recoverCommand(), source)).resolves.toEqual({
+    await expect(
+      participant.recoverOld(recoverCommand(), {
+        ...source,
+        releaseAuthority: () => {
+          oldReleases += 1;
+        },
+      }),
+    ).resolves.toEqual({
       kind: "recovered-old",
       updateId: "pupd_renderer_adapter",
       pluginId: oldArtifact.pluginId,
       oldArtifact,
     });
     expect(runtime.recoveries).toEqual([]);
+    expect(candidateReleases).toBe(1);
+    expect(oldReleases).toBe(1);
   });
 
   it("drives explicit retained-old recovery after a disturbed candidate failure", async () => {
@@ -142,6 +160,34 @@ describe("RendererUpdateParticipant", () => {
       oldArtifact,
     });
     expect(runtime.recoveries).toHaveLength(1);
+  });
+
+  it("releases old authority when recovery is refused before runtime ownership", async () => {
+    const runtime = new FakeRuntime();
+    const participant = new RendererUpdateParticipant(runtime);
+    let releases = 0;
+    const refusedSource = {
+      ...source,
+      releaseAuthority: () => {
+        releases += 1;
+      },
+    };
+
+    await expect(participant.recoverOld(recoverCommand(), refusedSource)).resolves.toMatchObject({
+      kind: "failed",
+      at: "recover-old",
+      error: { code: "renderer-old-recovery-refused" },
+    });
+    expect(releases).toBe(1);
+
+    participant.close();
+    await expect(participant.recoverOld(recoverCommand(), refusedSource)).resolves.toMatchObject({
+      kind: "failed",
+      at: "recover-old",
+      error: { code: "renderer-left" },
+    });
+    expect(releases).toBe(2);
+    expect(runtime.recoveries).toEqual([]);
   });
 
   it("never reopens old recovery after a logical commit command, even when local commit fails", async () => {

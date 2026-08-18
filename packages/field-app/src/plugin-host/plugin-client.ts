@@ -21,6 +21,16 @@ export interface PluginClientBackend {
   readonly windowClient: Pick<FielddClient, "request" | "url">;
 }
 
+/** PRC-5e credential minted from an exact update/member/source fence. It seeds a private broker;
+ * ordinary `plugins.openRendererSession` renewal remains unavailable until the candidate is live. */
+export interface PluginClientLeaseSeed {
+  readonly token: string;
+  readonly pluginId: string;
+  readonly manifestHash: string;
+  readonly grantGeneration: number;
+  readonly expiresAt: number;
+}
+
 interface LeaseConnection {
   connect(): void;
   rotateCredential(credential: string): void;
@@ -156,6 +166,62 @@ export class PluginClientLeaseBroker {
         return { snapshot: subscription.snapshot, unsubscribe: subscription.unsubscribe };
       },
     });
+  }
+
+  /** Install one already-authorized candidate credential without consulting the live-row mint.
+   * The connection remains this broker's exact state, so expiry renews through the ordinary path
+   * and `retire()` synchronously closes it with the owning activation scope. */
+  createSeededProductClient(
+    pluginId: string,
+    observation: PluginLeaseObservation,
+    seed: PluginClientLeaseSeed,
+  ): PluginProductClient {
+    if (seed.pluginId !== pluginId)
+      throw new Error(`plugin ${pluginId}: seed belongs to ${seed.pluginId}`);
+    if (observation.manifestHash === undefined || seed.manifestHash !== observation.manifestHash) {
+      throw new Error(
+        `plugin ${pluginId}: seed manifest ${seed.manifestHash} does not match ${String(observation.manifestHash)}`,
+      );
+    }
+    if (
+      observation.grantGeneration === undefined ||
+      seed.grantGeneration !== observation.grantGeneration
+    ) {
+      throw new Error(
+        `plugin ${pluginId}: seed generation ${seed.grantGeneration} does not match ${String(observation.grantGeneration)}`,
+      );
+    }
+    if (seed.token.trim().length === 0)
+      throw new Error(`plugin ${pluginId}: candidate seed is empty`);
+    if (!Number.isSafeInteger(seed.grantGeneration) || seed.grantGeneration < 0)
+      throw new Error(`plugin ${pluginId}: candidate seed generation is invalid`);
+    if (!Number.isFinite(seed.expiresAt) || seed.expiresAt <= this.now())
+      throw new Error(`plugin ${pluginId}: candidate seed is expired`);
+    const backend = this.backend;
+    if (backend === null)
+      throw new Error(`plugin ${pluginId}: no fieldd connection (daemon away or still booting)`);
+    const state = this.stateFor(pluginId);
+    if (state.client !== null || state.inflight !== null)
+      throw new Error(`plugin ${pluginId}: candidate broker is already initialized`);
+    this.observe(state, observation);
+    const observationEpoch = state.observationEpoch;
+    const backendEpoch = this.backendEpoch;
+    const client = this.createClient({
+      url: backend.windowClient.url,
+      token: seed.token,
+      clientKind: "renderer",
+    });
+    try {
+      client.connect();
+    } catch (error) {
+      client.close();
+      throw error;
+    }
+    state.client = client;
+    state.expiresAt = seed.expiresAt;
+    state.installedObservationEpoch = observationEpoch;
+    state.installedBackendEpoch = backendEpoch;
+    return this.createProductClient(pluginId, observation);
   }
 
   /** Update provenance without replacing the plugin-visible proxy or its live connection.

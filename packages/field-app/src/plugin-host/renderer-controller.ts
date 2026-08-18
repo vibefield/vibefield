@@ -70,6 +70,14 @@ export interface RendererReplacementSource {
   /** PRC-5e supplies an update-bound client. A candidate must never borrow the
    * retained old artifact's product credential during private activation. */
   readonly productClient?: PluginProductClient;
+  /** Refresh the same authority that backs `productClient` after observation-only grant motion. */
+  readonly refreshCredential?: (
+    observation: { readonly manifestHash: string; readonly grantGeneration: number },
+    signal: AbortSignal,
+  ) => Promise<void>;
+  /** Idempotent single-flight inverse for candidate module/client authority. Once activation
+   * starts the exact ActivationScope owns it; boundary-required exits release it directly. */
+  readonly releaseAuthority?: () => void | Promise<void>;
 }
 
 export interface PrepareRendererReplacementInput {
@@ -175,14 +183,19 @@ export class RendererPluginController {
     this.controller = new RuntimeTargetController(`renderer:${this.pluginId}:${this.windowId}`, {
       activate: (target, scope, signal) => this.activate(target, scope, signal),
       refresh: async (_candidate, _previous, next, signal) => {
-        await this.refreshCredential(
-          this.pluginId,
-          {
-            manifestHash: next.artifact.manifestHash,
-            grantGeneration: next.observedGrantGeneration,
-          },
-          signal,
-        );
+        const observation = {
+          manifestHash: next.artifact.manifestHash,
+          grantGeneration: next.observedGrantGeneration,
+        };
+        const desired = this.desiredSource;
+        if (
+          desired?.source.refreshCredential !== undefined &&
+          samePluginRuntimeObservation(desired.target, next)
+        ) {
+          await desired.source.refreshCredential(observation, signal);
+        } else {
+          await this.refreshCredential(this.pluginId, observation, signal);
+        }
         // `canvas.write` is part of renderer semantic authority, so it can never change in this
         // observation-only path. Do not recompute authorization from mutable registry state.
       },
@@ -371,6 +384,7 @@ export class RendererPluginController {
       this.controller.setDesired(null, {
         reason: { kind: "target-changed", detail: `${input.updateId}:boundary-required` },
       });
+      await releaseRendererSourceAuthority(candidateSource);
       this.applySettledState(candidateTarget, settled);
       return {
         state: "boundary-required",
@@ -611,6 +625,11 @@ export class RendererPluginController {
     let candidate: ControlledRendererCandidate | undefined;
     let inner: RendererActivationCandidate;
     try {
+      if (source.releaseAuthority !== undefined) {
+        scope.track("renderer:source-authority", {
+          dispose: source.releaseAuthority,
+        });
+      }
       const pluginModule = await source.load(signal);
       if (signal.aborted)
         throw new Error(`${this.pluginId}: renderer target superseded during import`);
@@ -635,7 +654,7 @@ export class RendererPluginController {
         this.lastFailure = error.activation;
         this.publishBindings();
       }
-      this.retireCredential(this.pluginId);
+      if (source.releaseAuthority === undefined) this.retireCredential(this.pluginId);
       throw error;
     }
 
@@ -701,7 +720,7 @@ export class RendererPluginController {
       dispose: async () => {
         signal.removeEventListener("abort", withdraw);
         withdraw();
-        this.retireCredential(this.pluginId);
+        if (source.releaseAuthority === undefined) this.retireCredential(this.pluginId);
         await inner.dispose();
       },
     };
@@ -773,7 +792,25 @@ function freezeRendererSource(source: RendererReplacementSource): RendererReplac
     module,
     load: source.load,
     ...(source.productClient === undefined ? {} : { productClient: source.productClient }),
+    ...(source.refreshCredential === undefined
+      ? {}
+      : { refreshCredential: source.refreshCredential }),
+    ...(source.releaseAuthority === undefined
+      ? {}
+      : { releaseAuthority: onceAsync(source.releaseAuthority) }),
   });
+}
+
+async function releaseRendererSourceAuthority(source: RendererReplacementSource): Promise<void> {
+  await source.releaseAuthority?.();
+}
+
+function onceAsync(dispose: () => void | Promise<void>): () => Promise<void> {
+  let task: Promise<void> | undefined;
+  return () => {
+    task ??= Promise.resolve().then(dispose);
+    return task;
+  };
 }
 
 function freezeSnapshot<T>(value: T): T {
