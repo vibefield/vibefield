@@ -157,10 +157,14 @@ async function main() {
     fail("could not resolve the Electron executable");
   }
   const stamp = new Date().toISOString().replace(/[:.]/gu, "-");
-  const outputPath = resolve(
-    desktopRoot,
-    options.output ?? `build/evidence/plugin-runtime-soak-${stamp}.jsonl`,
-  );
+  const outputPath =
+    options.output === undefined
+      ? resolve(
+          desktopRoot,
+          "../../draft/plugin-runtime-spike/evidence-runs",
+          `plugin-runtime-soak-${stamp}.jsonl`,
+        )
+      : resolve(desktopRoot, options.output);
   mkdirSync(dirname(outputPath), { recursive: true });
   const evidence = createWriteStream(outputPath, {
     fd: openSync(outputPath, "wx", 0o600),
