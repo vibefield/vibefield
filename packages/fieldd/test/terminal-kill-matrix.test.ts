@@ -377,4 +377,82 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     }
     await poll(async () => ((await listOf(rpc)).length === 0 ? true : undefined), 15_000);
   }, 120_000);
+
+  it("row S2-A: a cell SIGKILL is a supervised replacement — routes re-deliver, tickets re-mint, the loss is honest (TC-S2)", async () => {
+    // THE slice gate: the terminal ENGINE dies, the floor survives, and the
+    // whole ladder re-arms without a re-pair — supervisor respawn → a routes
+    // delta with a NEW cellBootId on the SAME mgmt link → fieldd's endpoints
+    // move → a fresh create lands on the replacement. The killed cell's
+    // session leaves the observed inventory: TC-S2's ceiling, stated by the
+    // S2 honesty string ("a terminal-engine crash loses only its class") in
+    // fieldd's receipt.
+    const native = await spawnNative();
+    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await connect(daemon);
+    const created = (await rpc.call("terminal.create", { shell: HOLD })) as { sessionId: string };
+    await poll(async () =>
+      (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+    );
+    const first = await poll(async () => {
+      const routes = daemon.native.terminalRoutes;
+      return routes?.cells[0] !== undefined ? routes : undefined;
+    });
+    const firstCell = first.cells[0];
+    if (firstCell === undefined) throw new Error("unreachable: polled for a cell");
+    expect(firstCell.pid).toBeGreaterThan(0);
+
+    process.kill(firstCell.pid, "SIGKILL");
+
+    const replacement = await poll(async () => {
+      const routes = daemon.native.terminalRoutes;
+      const cell = routes?.cells[0];
+      return cell !== undefined && cell.cellBootId !== firstCell.cellBootId ? routes : undefined;
+    }, 20_000);
+    expect(replacement.revision, "revision is monotonic across the replacement").toBeGreaterThan(
+      first.revision,
+    );
+    const replacementCell = replacement.cells[0];
+    if (replacementCell === undefined) throw new Error("unreachable: polled for a cell");
+    // endpoints re-delivered on the LIVE link — the seam TC-D15 exists for
+    // (pre-S2, new endpoints arrived only with a re-pair)
+    expect(daemon.native.terminalEndpoints?.controlSocket).toBe(
+      replacementCell.endpoints.controlSocket,
+    );
+    // the honest loss: the killed cell's session leaves the inventory
+    await poll(
+      async () =>
+        (await listOf(rpc)).every((t) => t.sessionId !== created.sessionId) ? true : undefined,
+      15_000,
+    );
+    // and the product plane works on the replacement without a re-pair
+    const second = (await rpc.call("terminal.create", { shell: HOLD })) as { sessionId: string };
+    await poll(
+      async () =>
+        (await listOf(rpc)).some((t) => t.sessionId === second.sessionId) ? true : undefined,
+      15_000,
+    );
+    await rpc.call("terminal.terminate", { sessionId: second.sessionId });
+  }, 90_000);
+
+  it("row S2-B: a floor SIGKILL reaps the cell — the leash leaves no orphan (TC-S2/TC-D14)", async () => {
+    // The stdin leash IS the orphan story: the floor's death closes the pipe,
+    // the cell sees EOF, drains, and exits — no process-group machinery, no
+    // grandchild for the harness (or a user) to hunt down.
+    const native = await spawnNative();
+    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const cellPid = await poll(async () => daemon.native.terminalRoutes?.cells[0]?.pid, 20_000);
+
+    native.child.kill("SIGKILL");
+
+    await poll(async () => {
+      try {
+        process.kill(cellPid, 0);
+        return undefined; // still alive — keep polling
+      } catch {
+        return true; // ESRCH: the leash reaped it
+      }
+    }, 15_000);
+  }, 60_000);
 });

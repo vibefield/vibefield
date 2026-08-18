@@ -69,9 +69,23 @@ fn short_tempdir() -> tempfile::TempDir {
 }
 
 async fn boot(dir: &Path) -> RunningDaemon {
-    bootstrap(NativeConfig::for_data_dir(dir.to_path_buf()))
+    let daemon = bootstrap(NativeConfig::for_data_dir(dir.to_path_buf()))
         .await
-        .expect("bootstrap")
+        .expect("bootstrap");
+    // TC-S2: every row here drives the live service, and since the extraction
+    // the hello omits `terminal` until the CELL's own hello lands (fresh
+    // spawn, font discovery). Waiting for the route snapshot's first cell in
+    // ONE place keeps fifteen rows honest about what they test — the unit's
+    // behavior WITH an engine — instead of each re-learning the birth window.
+    let mut routes = daemon.state.terminal_routes.clone();
+    tokio::time::timeout(
+        Duration::from_secs(20),
+        routes.wait_for(|snapshot| !snapshot.cells.is_empty()),
+    )
+    .await
+    .expect("the terminal cell announced within its hello budget")
+    .expect("the routes watch outlives boot");
+    daemon
 }
 
 /// What one read off the mgmt socket found. Timeout and end-of-stream are kept
@@ -399,16 +413,24 @@ async fn hello_carries_private_terminal_endpoints() {
     let control = terminal["controlSocket"].as_str().unwrap();
     let frame = terminal["frameSocket"].as_str().unwrap();
 
+    // TC-S2: the serving names are per-INSTANCE (a restart is never a
+    // rebind); the ordinal comes from the ack's own route snapshot, so this
+    // asserts the derivation law rather than a frozen spelling.
+    let instance = ack["terminalRoutes"]["cells"][0]["cellInstanceId"]
+        .as_u64()
+        .expect("cellInstanceId") as u32;
     #[cfg(unix)]
     {
         let run_dir = dir.path().join("native/run");
+        let control_name = field_native::endpoints::cell_socket_file("termctl.sock", instance);
+        let frame_name = field_native::endpoints::cell_socket_file("termframe.sock", instance);
         assert_eq!(
             control,
-            run_dir.join("termctl.sock").to_str().unwrap(),
-            "control socket must be the registries path under this daemon's run dir"
+            run_dir.join(&control_name).to_str().unwrap(),
+            "control socket must be the per-instance registries name under this daemon's run dir"
         );
-        assert_eq!(frame, run_dir.join("termframe.sock").to_str().unwrap());
-        for name in ["termctl.sock", "termframe.sock"] {
+        assert_eq!(frame, run_dir.join(&frame_name).to_str().unwrap());
+        for name in [control_name.as_str(), frame_name.as_str()] {
             let path = run_dir.join(name);
             let mode = std::fs::metadata(&path)
                 .unwrap_or_else(|e| panic!("stat {}: {e}", path.display()))
@@ -1557,7 +1579,14 @@ async fn stale_endpoints_are_rebound_on_the_next_boot() {
         wait_until_gone(pid, Duration::from_secs(5)).await,
         "the first boot's session must not survive its daemon"
     );
-    let socket_path = dir.path().join("native/run/termctl.sock");
+    // TC-S2: the first boot's cell was instance 1, so the leftover is the
+    // per-instance name — and the SECOND boot's cell 1 re-uses it, which is
+    // exactly the cross-boot stale-rebind case the cell's belt-and-braces
+    // removal exists for.
+    let socket_path = dir.path().join(format!(
+        "native/run/{}",
+        field_native::endpoints::cell_socket_file("termctl.sock", 1)
+    ));
     assert!(
         socket_path.exists(),
         "the socket file is expected to be left behind — that is what makes this a rebind"

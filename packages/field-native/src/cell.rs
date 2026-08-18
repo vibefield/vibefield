@@ -155,6 +155,14 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
         }
     };
 
+    // The serve future must OUTLIVE a leash-triggered drain: `select!` drops
+    // its losing futures before the winning arm's body runs, and dropping
+    // `serving` tears down every connection — the drain would then sweep
+    // sessions on a service whose witnesses were already disconnected
+    // (measured: a witness saw session-created, then only the close). A task
+    // keeps it alive through the shutdown, exactly as the in-process unit's
+    // serve task always did.
+    let mut serving = tokio::spawn(serving);
     tokio::select! {
         _ = leash => {
             // Requested (or orphaned — same answer): drain within the shared
@@ -162,6 +170,19 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
             // mirroring upstream's own sweep window.
             let budget = Duration::from_millis(registries::cell_supervision::DRAIN_BUDGET_MS);
             let report = handle.shutdown(budget).await;
+            // A completed shutdown is the one non-failure way serving ends —
+            // let it conclude so every broadcast the drain queued is flushed
+            // by a LIVING service before the runtime goes away.
+            let _ = tokio::time::timeout(WRITER_FLUSH_GRACE, &mut serving).await;
+            // The drain's exit broadcasts ride per-client writer TASKS the
+            // shutdown does not await — in-process they always flushed on the
+            // long-lived runtime, but this process is about to drop its
+            // runtime, which aborts unflushed writers and silently eats the
+            // very exits the sweep exists to announce (measured: a witness
+            // saw session-created, then only the close). A bounded grace lets
+            // them reach the socket; delivery stays best-effort, the bound
+            // keeps the leash contract prompt.
+            tokio::time::sleep(WRITER_FLUSH_GRACE).await;
             let line = CellExitReport {
                 drained: Some(format!("{report:?}")),
                 drain_unknown: None,
@@ -173,7 +194,8 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
             let _ = write_stdout_line(&serde_json::to_string(&line).unwrap_or_default());
             Ok(())
         }
-        outcome = serving => {
+        outcome = &mut serving => {
+            let outcome = outcome.unwrap_or_else(|join| Err(anyhow::anyhow!(join)));
             // The serve plane ended on its own — a crash by definition (the
             // requested path above never lets it finish first). No drain ran;
             // say so rather than pretend.
@@ -192,6 +214,11 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
         }
     }
 }
+
+/// How long a drained cell lingers so the drain's own exit broadcasts flush
+/// to witness sockets before the runtime (and its writer tasks) die with the
+/// process. Bounded and small: the leash promises a prompt exit.
+const WRITER_FLUSH_GRACE: Duration = Duration::from_millis(250);
 
 /// One protocol line to stdout, flushed, error surfaced to the caller — the
 /// only writer stdout has (diagnostics ride stderr).

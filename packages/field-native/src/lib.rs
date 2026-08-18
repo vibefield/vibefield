@@ -146,6 +146,10 @@ pub async fn bootstrap_with_logging(
         observed,
         mesh_handle,
         bridge_handle.clone(),
+        // TC-D15: the route snapshot watch — wiring, same law as the endpoint
+        // and inventory lines below (the mgmt plane reads state; the unit
+        // supervises cells; neither learns the other's job).
+        terminal_handle.routes_rx(),
         logging.clone(),
     );
 

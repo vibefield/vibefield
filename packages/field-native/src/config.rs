@@ -59,6 +59,11 @@ pub struct NativeConfig {
     /// a capability worth guessing at is long enough for that to buy nothing;
     /// per-device scoped tokens retire the question along with the shared secret.
     pub terminal_mirror_write: Option<String>,
+    /// TC-S2 — explicit `field-terminal-host` binary path (test/dev seam,
+    /// FIELD_NATIVE_CELL_BIN, the sidecar-override pattern); production falls
+    /// back to the sibling of this executable — cargo and the packaged app
+    /// both place the two binaries side by side.
+    pub cell_bin_override: Option<PathBuf>,
 }
 
 impl NativeConfig {
@@ -86,6 +91,7 @@ impl NativeConfig {
             .ok()
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
+        let cell_bin_override = std::env::var_os("FIELD_NATIVE_CELL_BIN").map(PathBuf::from);
         Ok(Self {
             data_dir,
             log_root,
@@ -94,6 +100,7 @@ impl NativeConfig {
             sidecar_override,
             terminal_mesh_enabled,
             terminal_mirror_write,
+            cell_bin_override,
         })
     }
 
@@ -107,6 +114,7 @@ impl NativeConfig {
             sidecar_override: None,
             terminal_mesh_enabled: false,
             terminal_mirror_write: None,
+            cell_bin_override: None,
         }
     }
 
@@ -121,6 +129,7 @@ impl NativeConfig {
             sidecar_override: None,
             terminal_mesh_enabled: false,
             terminal_mirror_write: None,
+            cell_bin_override: None,
         }
     }
 
@@ -186,6 +195,58 @@ impl NativeConfig {
             crate::registries::sockets::TERMINAL_FRAME,
             crate::registries::layout::TERMINAL_FRAME_SOCKET,
         )
+    }
+
+    /// TC-S2 — a cell's per-instance terminal endpoints: the SAME resolution
+    /// law with the instance-suffixed file name (`endpoints::cell_socket_file`,
+    /// vector-pinned). Fresh names per instance are what make a cell restart
+    /// never a rebind. `None` = the same non-UTF-8 refusal as every endpoint.
+    pub fn terminal_cell_control_endpoint(&self, instance: u32) -> Option<String> {
+        self.local_endpoint_for_file(&crate::endpoints::cell_socket_file(
+            crate::registries::sockets::TERMINAL_CONTROL,
+            instance,
+        ))
+    }
+    pub fn terminal_cell_frame_endpoint(&self, instance: u32) -> Option<String> {
+        self.local_endpoint_for_file(&crate::endpoints::cell_socket_file(
+            crate::registries::sockets::TERMINAL_FRAME,
+            instance,
+        ))
+    }
+
+    /// TC-S2 — where `field-terminal-host` lives: the explicit override
+    /// (FIELD_NATIVE_CELL_BIN — the sidecar-override pattern), else this
+    /// executable's sibling. cargo and the packaged app both place the two
+    /// binaries side by side; a missing sibling is the supervisor's honest
+    /// degraded state, not a panic.
+    pub fn cell_binary(&self) -> Option<PathBuf> {
+        if let Some(explicit) = &self.cell_bin_override {
+            return Some(explicit.clone());
+        }
+        let exe = std::env::current_exe().ok()?;
+        let name = if cfg!(windows) {
+            "field-terminal-host.exe"
+        } else {
+            "field-terminal-host"
+        };
+        // Sibling first (the packaged and `cargo run` layout), then one level
+        // up: an EMBEDDED test's current_exe lives in target/debug/deps/ while
+        // cargo puts bin targets in target/debug/ — existence-checked so the
+        // supervisor's "cannot be located" detail stays honest when neither
+        // holds a binary.
+        let parent = exe.parent()?;
+        let candidates = [parent.join(name), parent.parent()?.join(name)];
+        candidates.into_iter().find(|candidate| candidate.exists())
+    }
+
+    #[cfg(windows)]
+    fn local_endpoint_for_file(&self, socket_file: &str) -> Option<String> {
+        let root = self.data_dir.to_str()?;
+        Some(crate::endpoints::pipe_endpoint_for(root, socket_file))
+    }
+    #[cfg(not(windows))]
+    fn local_endpoint_for_file(&self, socket_file: &str) -> Option<String> {
+        self.run_dir().join(socket_file).to_str().map(str::to_owned)
     }
 
     #[cfg(windows)]

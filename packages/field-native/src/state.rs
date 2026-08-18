@@ -1,4 +1,6 @@
-use crate::contracts::{DesiredState, NativeHealth, ObservedState, TerminalEndpoints};
+use crate::contracts::{
+    DesiredState, NativeHealth, ObservedState, TerminalEndpoints, TerminalRouteSnapshot,
+};
 use crate::logging::NativeLogging;
 use crate::registries::mesh_control_limits;
 use crate::services::mesh::MeshHandle;
@@ -132,6 +134,13 @@ pub struct DaemonState {
     /// exactly the `HelloAck.terminal` absence the contract allows. Memory-only:
     /// the token never reaches a log, a config file, or any environment (EL7).
     pub terminal: OnceLock<TerminalEndpoints>,
+    /// TC-D15 (TC-S2) — the revisioned terminal route snapshot, watched from
+    /// the terminal unit's supervisor. In CELL mode this is the only truth
+    /// (the OnceLock above stays empty); in the flagged in-process mode it
+    /// stays at its {revision: 0, cells: []} initial and the OnceLock is the
+    /// legacy reading. `terminal_endpoints_now` folds the two for callers that
+    /// only want dial coordinates.
+    pub terminal_routes: watch::Receiver<TerminalRouteSnapshot>,
     /// Process-owned native diagnostic producer. Embedded unit tests omit it;
     /// the production main installs it before service composition.
     pub logging: Option<NativeLogging>,
@@ -140,6 +149,9 @@ pub struct DaemonState {
 }
 
 impl DaemonState {
+    // Wiring, not API: bootstrap hands every plane its seam in one place, and
+    // an args struct would only move the list somewhere harder to read.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         boot_id: String,
         secret: [u8; 32],
@@ -147,6 +159,7 @@ impl DaemonState {
         observed: ObservedState,
         mesh: MeshHandle,
         bridge: BridgeHandle,
+        terminal_routes: watch::Receiver<TerminalRouteSnapshot>,
         logging: Option<NativeLogging>,
     ) -> Arc<Self> {
         let (health_tx, _) = watch::channel(health);
@@ -161,10 +174,24 @@ impl DaemonState {
             mesh,
             bridge,
             terminal: OnceLock::new(),
+            terminal_routes,
             logging,
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),
         })
+    }
+
+    /// The CURRENT terminal dial coordinates, whichever mode is serving them:
+    /// the route snapshot's single cell (cell mode) or the legacy OnceLock
+    /// (in-process mode). `None` is the honest not-up-yet on both paths.
+    pub fn terminal_endpoints_now(&self) -> Option<TerminalEndpoints> {
+        let routed = self
+            .terminal_routes
+            .borrow()
+            .cells
+            .first()
+            .map(|cell| cell.endpoints.clone());
+        routed.or_else(|| self.terminal.get().cloned())
     }
 
     pub fn conn_id(&self) -> u64 {

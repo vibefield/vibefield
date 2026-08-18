@@ -28,6 +28,11 @@
 //!   socket. This is the literal sentence TC-D6(b) names, and no reader can undo
 //!   it from outside the process. Closing it needs upstream (`{error:#}`, or a
 //!   structured code on the error response) or the create seam moving in-tree.
+//!   *(2026-08-18: CLOSED upstream — ghosttea 0.10.0 ships G17's structured
+//!   `{stage, code, osError}` beside the byte-identical message, and fieldd
+//!   classifies spawn refusals by typed code. THIS module's wire classifier
+//!   keeps only the openpty half — portable-pty still stringifies that errno —
+//!   and the paragraph above stands as the boundary's history.)*
 //!
 //! So the ENOENT arm is answered where it still CAN be: `terminal_client`
 //! pre-flights the executable before the request, on this side of the
@@ -270,6 +275,61 @@ pub fn open_fd_count() -> Option<u64> {
 
     let entries = std::fs::read_dir(FD_DIR).ok()?;
     Some(entries.filter(|entry| entry.is_ok()).count() as u64)
+}
+
+/// TC-S2 — another process's open-descriptor count, for the plane that
+/// actually spends PTY fds: the terminal CELL. The cell inherits this floor's
+/// soft limit at spawn, so gauging its count against our limit is honest at
+/// the moment it matters (a raise after spawn diverges the two — acceptable,
+/// and the gauge errs by naming pressure early, the safe direction).
+///
+/// macOS: `proc_pidinfo(PROC_PIDLISTFDS)` — the SIZING call reports the fd
+/// TABLE's high-water mark (it never shrinks) and must not be read as a
+/// count; only the second call's return counts what is open (the harness
+/// learned this the measured way: its first draft "found" five leaked
+/// descriptors per session, all in the measurement). Linux: count
+/// `/proc/<pid>/fd`. Elsewhere: `None` — no honest input, no made-up gauge.
+#[cfg(target_os = "macos")]
+pub fn open_fd_count_for(pid: u32) -> Option<u64> {
+    let entry = std::mem::size_of::<libc::proc_fdinfo>();
+    // SAFETY: a null buffer with a zero length is the documented sizing form.
+    let sized = unsafe {
+        libc::proc_pidinfo(
+            pid as i32,
+            libc::PROC_PIDLISTFDS,
+            0,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if sized <= 0 {
+        return None;
+    }
+    let capacity = sized as usize / entry + 8;
+    let mut buffer = vec![0u8; capacity * entry];
+    // SAFETY: the buffer length is exactly what is passed; the kernel writes
+    // at most that many bytes and returns how many it used.
+    let used = unsafe {
+        libc::proc_pidinfo(
+            pid as i32,
+            libc::PROC_PIDLISTFDS,
+            0,
+            buffer.as_mut_ptr().cast(),
+            (buffer.len()) as i32,
+        )
+    };
+    (used >= 0).then_some(used as u64 / entry as u64)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn open_fd_count_for(pid: u32) -> Option<u64> {
+    let entries = std::fs::read_dir(format!("/proc/{pid}/fd")).ok()?;
+    Some(entries.filter(|entry| entry.is_ok()).count() as u64)
+}
+
+#[cfg(not(unix))]
+pub fn open_fd_count_for(_pid: u32) -> Option<u64> {
+    None
 }
 
 /// The current soft descriptor limit — the ceiling the sample is measured

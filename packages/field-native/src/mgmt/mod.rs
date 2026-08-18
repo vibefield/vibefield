@@ -271,6 +271,21 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
                     sub_id,
                 );
             }
+            "native.lifecycle.terminal.routes.subscribe" => {
+                // TC-D15 — snapshot now, FULL snapshots as deltas (state
+                // transfer, never edges: a missed delta is repaired by the
+                // next one, and reconnect re-subscribes). Same forwarder the
+                // observed stream rides.
+                let sub_id = state.sub_id();
+                let snapshot = serde_json::to_value(&*state.terminal_routes.borrow()).unwrap();
+                send(&tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
+                spawn_forwarder(
+                    tx.clone(),
+                    state.terminal_routes.clone(),
+                    "native.lifecycle.terminal.routes.delta",
+                    sub_id,
+                );
+            }
             "native.lifecycle.desired.set" => {
                 send(&tx, handle_desired_set(&state, conn_id, &params, id).await);
             }
@@ -438,8 +453,22 @@ async fn handle_hello(
     // them at every re-pair and they never enter env, config, or logs. Field
     // names come from the generated contract type, never retyped here. Absent
     // when no terminal unit is configured — tolerated by readers.
-    if let Some(endpoints) = state.terminal.get() {
+    //
+    // TC-D15 (TC-S2): `terminal` is now the LEGACY single-cell mirror, kept in
+    // lockstep with `terminalRoutes` — the revisioned snapshot new readers
+    // prefer. Cell mode fills both from the snapshot; the flagged in-process
+    // mode fills only the mirror from its OnceLock (its snapshot never leaves
+    // revision 0, and an unrevised snapshot is NOT emitted — absence is the
+    // pre-TC-S2 shape readers already tolerate).
+    if let Some(endpoints) = state.terminal_endpoints_now() {
         ack["terminal"] = serde_json::to_value(endpoints).expect("terminal endpoints serialize");
+    }
+    {
+        let routes = state.terminal_routes.borrow().clone();
+        if routes.revision > 0 {
+            ack["terminalRoutes"] =
+                serde_json::to_value(&routes).expect("terminal routes serialize");
+        }
     }
     (ok(id, ack), true)
 }
@@ -589,7 +618,7 @@ async fn handle_desired_set(
     // is the second of two independent reasons the reconcile cannot wedge
     // itself.
     let plane = if !prune.is_empty() || !repolicy.is_empty() {
-        let Some(endpoints) = state.terminal.get() else {
+        let Some(endpoints) = state.terminal_endpoints_now() else {
             return err(
                 id,
                 "UNAVAILABLE",

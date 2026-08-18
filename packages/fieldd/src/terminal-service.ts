@@ -7,6 +7,7 @@ import {
   GhostteaRequestError,
 } from "@vibecook/ghosttea-client";
 import {
+  CELL_SUPERVISION,
   ObservedState,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
   TERMINAL_SESSION_CAP,
@@ -58,6 +59,9 @@ export interface TerminalServiceOptions {
   /** Test seam for the unresponsive-floor classification; production leaves it
    * to the client's own 10s default. */
   requestTimeoutMs?: number;
+  /** TC-S2 test seam: the cell-birth wait budget. Production defaults to the
+   * cell's own hello deadline (the genned CELL_SUPERVISION authority). */
+  birthWaitMs?: number;
 }
 
 /** Free-shell spawn geometry until an attached view claims resize authority
@@ -555,6 +559,38 @@ export class TerminalService {
     });
   }
 
+  /** TC-S2 — the cell-birth wait. A create that arrives while the engine is
+   * being spawned (fresh floor boot, cell replacement) deserves the engine's
+   * own hello budget before an UNAVAILABLE, because the endpoints ARE coming:
+   * the routes delta lands the moment the cell hellos. One shared waiter per
+   * absence episode (a listener per CALL would accumulate on the link), and
+   * the timer resolves rather than rejects — `endpoints()` then refuses with
+   * the same honest shape as always. GT-1's spirit one level up: create may
+   * outrun the inventory, but it must not outrun the engine's BIRTH. */
+  private birthWait: Promise<void> | null = null;
+  private awaitEndpoints(): Promise<void> {
+    if (this.opts.link.terminalEndpoints !== undefined) return Promise.resolve();
+    // Wait ONLY on evidence a cell system exists: a route snapshot (even an
+    // empty one — the floor publishes {revision: 1, cells: []} before its
+    // first spawn). A floor that never spoke routes and never gave endpoints
+    // is absent, and absent refuses NOW — the pre-TC-S2 behavior.
+    if (this.opts.link.terminalRoutes === undefined) return Promise.resolve();
+    if (this.birthWait !== null) return this.birthWait;
+    this.birthWait = new Promise<void>((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        this.birthWait = null;
+        resolve();
+      };
+      this.opts.link.on("terminal-endpoints", done);
+      const timer = setTimeout(done, this.opts.birthWaitMs ?? CELL_SUPERVISION.HELLO_DEADLINE_MS);
+      timer.unref?.();
+    });
+    return this.birthWait;
+  }
+
   private endpoints(): TerminalEndpoints {
     const endpoints = this.opts.link.terminalEndpoints;
     if (endpoints === undefined) {
@@ -576,6 +612,7 @@ export class TerminalService {
    * process exited. Keyed by token, because two dials for two different native
    * boots are two different clients and joining them would be the bug. */
   private async connectedClient(): Promise<GhostteaAutomationClient> {
+    if (this.opts.link.terminalEndpoints === undefined) await this.awaitEndpoints();
     const endpoints = this.endpoints();
     if (this.client !== null && this.clientToken === endpoints.authToken) {
       return this.client;

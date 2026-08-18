@@ -1169,6 +1169,36 @@ describe("TerminalService (NF-3, mock native)", () => {
     }
   });
 
+  it("a create during the cell's birth waits for the endpoints, never refuses early (TC-S2)", async () => {
+    // The engine is being spawned: endpoints are ABSENT at call time and land
+    // moments later (the routes delta after the cell's hello). The create must
+    // ride the birth wait onto the fresh endpoints — an UNAVAILABLE here would
+    // teach every fresh boot's first create to fail.
+    const floor = await startFakeFloor();
+    let endpoints: TerminalEndpoints | undefined;
+    const listeners: Array<() => void> = [];
+    const service = new TerminalService({
+      link: {
+        subscribe: async () => ({ snapshot: {} }),
+        get terminalEndpoints() {
+          return endpoints;
+        },
+        // The evidence the wait keys on: the floor SPEAKS routes (an empty
+        // pre-first-cell snapshot), so absence means "coming", not "never".
+        terminalRoutes: { revision: 1, cells: [] },
+        on: (_event: "terminal-endpoints", fn: () => void) => listeners.push(fn),
+      },
+    });
+    cleanup.push(() => service.dispose());
+    const create = service.create({});
+    // the birth: endpoints arrive 50ms after the call
+    await new Promise((r) => setTimeout(r, 50));
+    endpoints = floor.endpoints;
+    for (const fn of listeners) fn();
+    const created = await create;
+    expect(created.sessionId).toBe(floor.createdSessionId);
+  });
+
   it("a floor too old for config documents says unsupported, not INTERNAL (GT-5b)", async () => {
     // Distinct from `no-overlay`: that is the SERVICE refusing a document it
     // was never pointed at, and this is the pinned CLIENT refusing to ask a
@@ -1402,7 +1432,14 @@ describe("TC-D15 — the routes consumer (TC-S2)", () => {
     const mock = await startMock(dataDir);
     mock.terminalRoutes = { revision: 3, cells: [] };
     mock.observedState = observed([]);
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    // Empty cells IS the birth-window shape (TC-S2's wait applies) — the row
+    // asserts the EVENTUAL honest refusal, on a test-sized budget.
+    const daemon = await bootstrap({
+      dataDir,
+      controlPort: 0,
+      dataPort: 0,
+      terminalBirthWaitMs: 100,
+    });
     cleanup.push(() => daemon.stop());
 
     const grant = daemon.tokens.mint(["terminal.attach"], "empty-cells-test");

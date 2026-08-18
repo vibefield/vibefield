@@ -168,3 +168,61 @@ fn two_instances_bind_disjoint_names_side_by_side() {
     assert!(wait_exit(a, Duration::from_secs(10)).success());
     assert!(wait_exit(b, Duration::from_secs(10)).success());
 }
+
+/// TC-S2 regression pin: the drain BROADCASTS. A witness control client must
+/// receive `session-exited` (classified as the service's own shutdown) when
+/// the leash asks the cell to drain — the sweep's honesty travels the wire,
+/// not just the process tree.
+#[tokio::test]
+async fn a_leash_drain_broadcasts_exits_to_witnesses() {
+    let root = short_root();
+    let (mut child, control, _frame) = spawn_cell(root.path(), 9);
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    writeln!(stdin, "{}", serde_json::json!({ "token": "tok-drain" })).expect("bootstrap");
+    let mut lines = BufReader::new(stdout).lines();
+    let _hello: field_native::cell::CellHello =
+        serde_json::from_str(&lines.next().expect("hello").expect("read hello")).expect("parse");
+
+    let (client, mut events) =
+        field_native::services::terminal_client::ControlClient::connect(&control, "tok-drain")
+            .await
+            .expect("dial the cell");
+    let session = client
+        .create_session(serde_json::json!({
+            "executable": "/bin/cat",
+            "args": [],
+            "cols": 80,
+            "rows": 24,
+            "persistence": "keep-until-exit",
+            "environment": {"mode": "clean", "variables": {}},
+        }))
+        .await
+        .expect("create");
+
+    drop(stdin); // the leash: drain now
+    let mut saw_exit = false;
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
+        match tokio::time::timeout(Duration::from_secs(2), events.recv()).await {
+            Ok(Some(event)) => {
+                eprintln!("WITNESS EVENT: {event}");
+                if event["type"] == "session-exited" && event["sessionId"] == session.id.as_str() {
+                    saw_exit = true;
+                    break;
+                }
+            }
+            Ok(None) => {
+                eprintln!("WITNESS: channel closed");
+                break;
+            }
+            Err(_) => eprintln!("WITNESS: 2s quiet"),
+        }
+    }
+    drop(client);
+    assert!(
+        saw_exit,
+        "the drain's exit broadcast must reach the witness"
+    );
+    let _ = wait_exit(child, Duration::from_secs(10));
+}

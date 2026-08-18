@@ -149,6 +149,9 @@ export interface FielddConfig {
   /** C5 test seam: the ws-ctor PeerLink dials peers with (tests inject a
    * sidecar-simulating wrapper — secret path + identity headers). */
   peerWebSocket?: WsCtor;
+  /** TC-S2 test seam: the terminal cell-birth wait budget (production
+   * defaults to the cell's genned hello deadline). */
+  terminalBirthWaitMs?: number;
   /** pid of a field-native the caller spawned (recorded in product.json for cleanup tooling) */
   nativePid?: number;
   /** TC-D1 — re-runs the caller's spawn (bin.ts's exact env composition) so
@@ -781,6 +784,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const terminals = new TerminalService({
       link: native,
       logger: logger.child({ component: "terminal.service" }),
+      ...(config.terminalBirthWaitMs !== undefined
+        ? { birthWaitMs: config.terminalBirthWaitMs }
+        : {}),
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();

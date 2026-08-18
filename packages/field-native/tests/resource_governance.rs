@@ -350,15 +350,29 @@ async fn run_arm(root: &Path, sabotage: bool, cap: usize) -> Arm {
     let pid = process.id();
 
     let mut mgmt = MgmtClient::connect(&socket).await;
-    let ack = mgmt.hello(&data_dir).await;
-    let control_socket = ack["terminal"]["controlSocket"]
-        .as_str()
-        .expect("controlSocket")
-        .to_string();
-    let token = ack["terminal"]["authToken"]
-        .as_str()
-        .expect("authToken")
-        .to_string();
+    // TC-S2: the hello omits `terminal` until the CELL's own hello lands
+    // (fresh names, real spawn, font discovery) — the absence the contract
+    // always allowed is now a real window. The product reads the routes
+    // subscription; this harness polls the hello the same bounded way.
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    let (control_socket, token) = loop {
+        let ack = mgmt.hello(&data_dir).await;
+        if let (Some(control), Some(token)) = (
+            ack["terminal"]["controlSocket"].as_str(),
+            ack["terminal"]["authToken"].as_str(),
+        ) {
+            break (control.to_string(), token.to_string());
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the terminal cell never announced endpoints: {ack}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        // One hello per connection is the mgmt law — retry on a fresh dial,
+        // and the loop leaves the LAST (helloed) connection bound for the rest
+        // of the arm.
+        mgmt = MgmtClient::connect(&socket).await;
+    };
 
     let (client, _events) = ControlClient::connect(&control_socket, &token)
         .await

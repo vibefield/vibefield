@@ -99,8 +99,12 @@
 //! the other's news.
 
 use crate::admission::AdmissionLedger;
+use crate::cell::{CellExitReport, CellHello};
 use crate::config::NativeConfig;
-use crate::contracts::{ObservedTerminal, TerminalEndpoints, UnitHealth, UnitState};
+use crate::contracts::{
+    ObservedTerminal, TerminalEndpoints, TerminalRouteCell, TerminalRouteSnapshot, UnitHealth,
+    UnitState,
+};
 use crate::manager::NativeService;
 use crate::registries;
 use crate::resource_pressure::{
@@ -225,6 +229,22 @@ struct Shared {
     /// string the contract (and ghosttea's config) require — the one path on
     /// which `HelloAck.terminal` is honestly absent.
     endpoints: Option<Endpoints>,
+    /// TC-D3/TC-S2 — which serve shape this unit runs. Cell mode is the
+    /// DEFAULT (the extraction); a mesh-requested boot keeps the in-process
+    /// serve, because a cell cannot borrow the floor's tailnet node across a
+    /// process boundary (the flagged fallback until the G14-class seam).
+    cell_mode: bool,
+    /// The supervisor's stop signal (cell mode): `stop()` flips it, the
+    /// supervisor drops the cell's leash and waits out the drain budget.
+    stopping: watch::Sender<bool>,
+    /// TC-D15 (TC-S2) — the revisioned route snapshot the cell supervisor
+    /// publishes: one cell row while a cell serves, empty between cells,
+    /// revision bumped on EVERY transition. The in-process (mesh-flagged)
+    /// mode never publishes past the {revision: 0, cells: []} initial — its
+    /// legacy OnceLock reading stays the truth there. Readers: the mgmt
+    /// hello and routes subscription (via DaemonState's receiver), and the
+    /// inventory pump, which redials per cell generation.
+    routes: watch::Sender<TerminalRouteSnapshot>,
     /// A watch and not a flag: the inventory pump cannot start before the
     /// service accepts connections, so it is woken rather than left to poll.
     serving: watch::Sender<bool>,
@@ -285,6 +305,16 @@ impl Shared {
     /// One descriptor-pressure sample. Runs the shared gauge and publishes only
     /// on a transition, so a sampler asserting "still fine" every two seconds
     /// wakes nobody.
+    /// TC-D15 — one route transition: bump the revision, replace the cells.
+    /// EVERY transition publishes (a cell up, a cell gone), because state
+    /// transfer is the protocol — readers repair from any snapshot.
+    fn publish_routes(&self, cells: Vec<TerminalRouteCell>) {
+        self.routes.send_modify(|snapshot| {
+            snapshot.revision += 1;
+            snapshot.cells = cells;
+        });
+    }
+
     fn observe_fd_pressure(&self, open: u64, limit: u64) {
         let transition = self.fd_gauge.lock().unwrap().observe(open, limit);
         match transition {
@@ -398,6 +428,13 @@ impl TerminalHandle {
         self.shared.endpoints.as_ref().map(Endpoints::contract)
     }
 
+    /// TC-D15 — the route snapshot watch, wired into DaemonState by bootstrap
+    /// so the mgmt plane can serve hello + the routes subscription without
+    /// learning how cells are supervised.
+    pub fn routes_rx(&self) -> watch::Receiver<TerminalRouteSnapshot> {
+        self.shared.routes.subscribe()
+    }
+
     /// TC-D6(e), the immediate half: a create the kernel refused for
     /// descriptors puts the unit in `fd_pressure` NOW rather than at the next
     /// sample. A refusal is stronger evidence than any sample — it already
@@ -455,26 +492,41 @@ pub struct TerminalUnit {
     /// `Off`, which is the structural half of "off means absent": with the flag
     /// unset this unit does not even hold a way to reach the mesh.
     mesh: Option<MeshHandle>,
+    /// TC-S2 — held for the cell supervisor: per-instance endpoint resolution
+    /// and the cell binary's location both come from the ONE derivation
+    /// authority rather than being re-spelled here.
+    config: NativeConfig,
 }
 
 impl TerminalUnit {
     pub fn new(config: &NativeConfig, ping: UnboundedSender<()>, mesh: MeshHandle) -> Self {
         let plan = MeshPlan::resolve(config);
         let mesh = (!plan.is_off()).then_some(mesh);
+        // TC-D3/TC-S2: the extraction owns the DEFAULT path; a mesh-requested
+        // boot keeps the in-process serve (the flagged fallback — a cell
+        // cannot borrow the floor's tailnet node across a process boundary).
+        let cell_mode = plan.is_off();
         let run_dir = config.run_dir();
         let config_file = config.terminal_config_file();
         // WIN-D1: endpoints come from the one resolution law in NativeConfig —
         // socket paths under the run dir on unix, scoped pipe names on win32.
-        let endpoints = config
-            .terminal_control_endpoint()
-            .zip(config.terminal_frame_endpoint())
-            .map(|(control, frame)| Endpoints {
-                control,
-                frame,
-                config: config_file,
-                token: mint_token(),
-            });
-        let detail = endpoints.is_none().then(|| {
+        // Minted ONLY for the in-process mode: a cell resolves per-instance
+        // names at each spawn, and leaving this `None` is what keeps the
+        // legacy OnceLock/hello mirror empty on the cell path.
+        let endpoints = (!cell_mode)
+            .then(|| {
+                config
+                    .terminal_control_endpoint()
+                    .zip(config.terminal_frame_endpoint())
+                    .map(|(control, frame)| Endpoints {
+                        control,
+                        frame,
+                        config: config_file.clone(),
+                        token: mint_token(),
+                    })
+            })
+            .flatten();
+        let detail = (!cell_mode && endpoints.is_none()).then(|| {
             format!(
                 "run directory is not valid UTF-8, which the endpoint contract requires: {}",
                 run_dir.display()
@@ -484,7 +536,7 @@ impl TerminalUnit {
             shared: Arc::new(Shared {
                 served: Mutex::new(UnitHealth {
                     unit: UNIT_ID.to_string(),
-                    state: if endpoints.is_some() {
+                    state: if cell_mode || endpoints.is_some() {
                         UnitState::Starting
                     } else {
                         UnitState::Degraded
@@ -494,6 +546,13 @@ impl TerminalUnit {
                 }),
                 ping,
                 endpoints,
+                cell_mode,
+                stopping: watch::channel(false).0,
+                routes: watch::channel(TerminalRouteSnapshot {
+                    revision: 0,
+                    cells: Vec::new(),
+                })
+                .0,
                 serving: watch::channel(false).0,
                 drain: Mutex::new(None),
                 inventory_fault: Mutex::new(None),
@@ -504,6 +563,7 @@ impl TerminalUnit {
             tasks: Mutex::new(Vec::new()),
             plan,
             mesh,
+            config: config.clone(),
         }
     }
 
@@ -524,6 +584,20 @@ impl NativeService for TerminalUnit {
     /// `bootstrap` before any unit starts, so this only owns the endpoints
     /// inside it.
     async fn start(&self) -> anyhow::Result<()> {
+        if self.shared.cell_mode {
+            // TC-D3: the extraction path. The supervisor owns spawn, hello,
+            // route publication, restart intensity, and the drain-on-stop;
+            // this unit's health cells are its reporting surface.
+            self.shared.set(
+                UnitState::Starting,
+                Some("spawning the terminal cell".into()),
+            );
+            let task = tokio::spawn(supervise_cells(self.shared.clone(), self.config.clone()));
+            self.tasks.lock().unwrap().push(TaskGuard(task));
+            let sampler = tokio::spawn(sample_fd_pressure(self.shared.clone()));
+            self.tasks.lock().unwrap().push(TaskGuard(sampler));
+            return Ok(());
+        }
         let Some(endpoints) = self.shared.endpoints.clone() else {
             return Ok(()); // already degraded with the reason; nothing to bind
         };
@@ -575,6 +649,31 @@ impl NativeService for TerminalUnit {
     /// (not borrowing it) is deliberate: the serve task's end path reads
     /// `drain.is_none()` as "this ending was requested".
     async fn stop(&self) -> anyhow::Result<()> {
+        if self.shared.cell_mode {
+            // Ask, then wait bounded: the supervisor drops the cell's leash
+            // (stdin EOF — the portable drain trigger) and publishes the empty
+            // snapshot once the cell has exited; past DRAIN + EXIT_GRACE the
+            // supervisor kills. The empty snapshot doubles as the completion
+            // signal here, and the TaskGuard clear beneath reaps whatever a
+            // pathological hang leaves.
+            let _ = self.shared.stopping.send(true);
+            let budget = Duration::from_millis(
+                registries::cell_supervision::DRAIN_BUDGET_MS
+                    + registries::cell_supervision::EXIT_GRACE_MS
+                    + 1_000,
+            );
+            let mut rx = self.shared.routes.subscribe();
+            let _ = tokio::time::timeout(budget, async {
+                while !rx.borrow().cells.is_empty() {
+                    if rx.changed().await.is_err() {
+                        break;
+                    }
+                }
+            })
+            .await;
+            self.tasks.lock().unwrap().clear();
+            return Ok(());
+        }
         let handle = self.shared.drain.lock().unwrap().take();
         if let Some(handle) = handle {
             match handle.shutdown(SWEEP_BUDGET).await {
@@ -806,13 +905,303 @@ async fn sample_fd_pressure(shared: Arc<Shared>) {
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         ticker.tick().await;
-        let (Some(open), Some(limit)) = (
+        let (Some(own), Some(limit)) = (
             resource_pressure::open_fd_count(),
             resource_pressure::soft_fd_limit(),
         ) else {
             continue;
         };
-        shared.observe_fd_pressure(open, limit);
+        // TC-S2: the PTY descriptors live in the CELL now, so the gauge reads
+        // the plane that actually spends them — the max of the two processes
+        // against the (inherited) limit. A dead or unreadable cell pid
+        // contributes nothing; the routes watch names the current one.
+        let cell_pid = shared
+            .routes
+            .borrow()
+            .cells
+            .first()
+            .map(|cell| cell.pid as u32);
+        let cell = cell_pid
+            .and_then(resource_pressure::open_fd_count_for)
+            .unwrap_or(0);
+        shared.observe_fd_pressure(own.max(cell), limit);
+    }
+}
+
+/// How one cell generation ended, as the supervisor classifies it.
+enum CellEnd {
+    /// `stop()` asked; the drain ran (or was escalated past); do not respawn.
+    Stopped,
+    /// The cell died or never came up — the detail is the receipt.
+    Crashed(String),
+}
+
+/// TC-S2 — the cell supervisor: spawn → bootstrap → hello (deadline) →
+/// publish the route row → wait → classify → intensity-bounded respawn.
+/// Every transition publishes routes (TC-D15: state transfer, never edges),
+/// and every ending is stated on the unit's health cells. A cell that cannot
+/// stay up is a fault to SURFACE — past the intensity window the unit goes
+/// `Crashed` and stays there (the manager law: no infinite in-process
+/// restarts; fieldd's floor supervision decides what happens next).
+async fn supervise_cells(shared: Arc<Shared>, config: NativeConfig) {
+    // Announce the ROUTES CAPABILITY before the first cell exists: an empty
+    // snapshot at revision 1 tells fieldd "this floor speaks TC-D15; no cell
+    // YET" — the evidence its cell-birth wait keys on. A floor with no
+    // terminal at all never publishes, and stays honestly absent.
+    shared.publish_routes(Vec::new());
+    let mut stopping = shared.stopping.subscribe();
+    let mut instance: u32 = 0;
+    let mut window: Vec<Instant> = Vec::new();
+    let respawn_window = Duration::from_millis(registries::cell_supervision::RESPAWN_WINDOW_MS);
+    loop {
+        if *stopping.borrow() {
+            return;
+        }
+        instance += 1;
+        let Some(bin) = config.cell_binary() else {
+            shared.set(
+                UnitState::Degraded,
+                Some(
+                    "the field-terminal-host binary cannot be located beside this executable"
+                        .into(),
+                ),
+            );
+            return;
+        };
+        let (Some(control), Some(frame)) = (
+            config.terminal_cell_control_endpoint(instance),
+            config.terminal_cell_frame_endpoint(instance),
+        ) else {
+            shared.set(
+                UnitState::Degraded,
+                Some(format!(
+                    "run directory is not valid UTF-8, which the endpoint contract requires: {}",
+                    config.run_dir().display()
+                )),
+            );
+            return;
+        };
+        // Intensity BEFORE the spawn: a cell that keeps dying must not consume
+        // the machine in a tight loop, and the refusal names the numbers.
+        let now = Instant::now();
+        window.retain(|started| now.duration_since(*started) < respawn_window);
+        if window.len() >= registries::cell_supervision::RESPAWN_MAX as usize {
+            shared.set(
+                UnitState::Crashed,
+                Some(format!(
+                    "terminal cell restart intensity exceeded ({} starts in {:?}); not                      respawning — the floor's supervisor owns the next move",
+                    window.len(),
+                    respawn_window
+                )),
+            );
+            return;
+        }
+        window.push(now);
+        match run_one_cell(
+            &shared,
+            &mut stopping,
+            &config,
+            &bin,
+            &control,
+            &frame,
+            instance,
+        )
+        .await
+        {
+            CellEnd::Stopped => {
+                shared.publish_routes(Vec::new());
+                return;
+            }
+            CellEnd::Crashed(detail) => {
+                shared.publish_routes(Vec::new());
+                tracing::error!(
+                    event = "field_native.terminal.cell_ended",
+                    component = "terminal",
+                    instance,
+                    detail = %detail,
+                    "The terminal cell ended; sessions on it are gone (TC-S2's honest ceiling)"
+                );
+                shared.set(
+                    UnitState::Starting,
+                    Some(format!("terminal cell exited ({detail}); respawning")),
+                );
+            }
+        }
+    }
+}
+
+/// One cell generation, spawn to grave. Returns how it ended; the caller owns
+/// respawn policy and the empty-snapshot publication.
+#[allow(clippy::too_many_arguments)]
+async fn run_one_cell(
+    shared: &Arc<Shared>,
+    stopping: &mut watch::Receiver<bool>,
+    config: &NativeConfig,
+    bin: &std::path::Path,
+    control: &str,
+    frame: &str,
+    instance: u32,
+) -> CellEnd {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    let config_file = config.terminal_config_file();
+    let token = mint_token();
+    let mut child = match tokio::process::Command::new(bin)
+        .arg("--control")
+        .arg(control)
+        .arg("--frame")
+        .arg(frame)
+        .arg("--config")
+        .arg(&config_file)
+        .arg("--instance")
+        .arg(instance.to_string())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) => return CellEnd::Crashed(format!("spawn failed: {error}")),
+    };
+    let mut stdin = child.stdin.take().expect("piped stdin");
+    let stdout = child.stdout.take().expect("piped stdout");
+    let stderr = child.stderr.take().expect("piped stderr");
+    // The cell's diagnostics become the floor's, labeled — the parent owns log
+    // routing (the cell writes plain lines to its stderr).
+    let stderr_forward = TaskGuard(tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            tracing::info!(
+                event = "field_native.terminal.cell_stderr",
+                component = "terminal",
+                line = %line,
+                "cell"
+            );
+        }
+    }));
+    // The bootstrap line: the token rides the pipe, never argv or env (EL7).
+    let bootstrap = format!(
+        "{}
+",
+        serde_json::json!({ "token": token })
+    );
+    if let Err(error) = stdin.write_all(bootstrap.as_bytes()).await {
+        let _ = child.start_kill();
+        let _ = child.wait().await;
+        return CellEnd::Crashed(format!("bootstrap write failed: {error}"));
+    }
+    let mut lines = BufReader::new(stdout).lines();
+    let hello_deadline = Duration::from_millis(registries::cell_supervision::HELLO_DEADLINE_MS);
+    let hello: CellHello = match tokio::time::timeout(hello_deadline, lines.next_line()).await {
+        Ok(Ok(Some(line))) => match serde_json::from_str(&line) {
+            Ok(hello) => hello,
+            Err(error) => {
+                let _ = child.start_kill();
+                let _ = child.wait().await;
+                return CellEnd::Crashed(format!("hello did not parse: {error}"));
+            }
+        },
+        Ok(Ok(None)) | Ok(Err(_)) => {
+            let _ = child.wait().await;
+            return CellEnd::Crashed("the cell exited before its hello".into());
+        }
+        Err(_) => {
+            let _ = child.start_kill();
+            let _ = child.wait().await;
+            return CellEnd::Crashed(format!("no hello within {hello_deadline:?} — killed"));
+        }
+    };
+    shared.publish_routes(vec![TerminalRouteCell {
+        cell_boot_id: hello.cell_boot_id.clone(),
+        cell_instance_id: i64::from(instance),
+        pid: i64::from(hello.pid),
+        endpoints: TerminalEndpoints {
+            control_socket: control.to_string(),
+            frame_socket: frame.to_string(),
+            auth_token: token.clone(),
+        },
+        token_generation: i64::from(instance),
+    }]);
+    shared.set(
+        UnitState::Up,
+        Some(format!("cell {instance} serving; pid {}", hello.pid)),
+    );
+    shared.serving.send_replace(true);
+    tracing::info!(
+        event = "field_native.terminal.cell_serving",
+        component = "terminal",
+        instance,
+        pid = hello.pid,
+        cell_boot_id = %hello.cell_boot_id,
+        control_socket = %control,
+        frame_socket = %frame,
+        "The terminal cell is serving"
+    );
+    let drain_budget = Duration::from_millis(
+        registries::cell_supervision::DRAIN_BUDGET_MS + registries::cell_supervision::EXIT_GRACE_MS,
+    );
+    let ended = tokio::select! {
+        // Wrapped so the arm's OUTPUT is `()`: `wait_for` yields a watch Ref
+        // (an RwLock read guard), and select keeps arm outputs alive through
+        // the arm body — a guard held across the awaits below would un-Send
+        // the whole future.
+        _ = async { let _ = stopping.wait_for(|stop| *stop).await; } => {
+            // The leash: EOF asks the cell to drain; past the budget, kill.
+            drop(stdin);
+            let waited = tokio::time::timeout(drain_budget, child.wait()).await;
+            if waited.is_err() {
+                let _ = child.start_kill();
+                let _ = child.wait().await;
+                tracing::warn!(
+                    event = "field_native.terminal.cell_drain_overrun",
+                    component = "terminal",
+                    instance,
+                    "The cell outlived its drain budget and was killed; drain unknown"
+                );
+            } else if let Ok(Ok(Some(line))) =
+                tokio::time::timeout(Duration::from_millis(500), lines.next_line()).await
+            {
+                log_cell_exit_report(instance, &line);
+            }
+            CellEnd::Stopped
+        }
+        status = child.wait() => {
+            // Crashed (a requested stop never reaches here first). The exit
+            // report is best-effort — a SIGKILLed cell wrote none.
+            let mut detail = format!("{status:?}");
+            if let Ok(Ok(Some(line))) =
+                tokio::time::timeout(Duration::from_millis(500), lines.next_line()).await
+            {
+                log_cell_exit_report(instance, &line);
+                detail = format!("{detail}; {line}");
+            }
+            CellEnd::Crashed(detail)
+        }
+    };
+    shared.serving.send_replace(false);
+    drop(stderr_forward);
+    ended
+}
+
+/// The cell's last stdout line, logged VERBATIM either way — `drained` carries
+/// upstream's own report rendering, `drainUnknown` its honest absence; a line
+/// that parses as neither is still worth keeping, unparsed.
+fn log_cell_exit_report(instance: u32, line: &str) {
+    match serde_json::from_str::<CellExitReport>(line) {
+        Ok(report) => tracing::info!(
+            event = "field_native.terminal.cell_exit_report",
+            component = "terminal",
+            instance,
+            drained = report.drained.as_deref().unwrap_or(""),
+            drain_unknown = report.drain_unknown.as_deref().unwrap_or(""),
+            "The cell reported its ending"
+        ),
+        Err(_) => tracing::info!(
+            event = "field_native.terminal.cell_exit_report",
+            component = "terminal",
+            instance,
+            line = %line,
+            "The cell's last line did not parse as an exit report"
+        ),
     }
 }
 
@@ -826,10 +1215,16 @@ pub fn install_inventory(
     ledger: Option<AdmissionLedger>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let Some(endpoints) = handle.shared.endpoints.clone() else {
+        // Legacy (in-process) mode dials a FIXED pair; cell mode re-reads the
+        // route snapshot per iteration and dials the CURRENT cell — the same
+        // re-read law fieldd follows (TC-D15). A unit that is neither (the
+        // non-UTF-8 degraded case) parks forever, as before.
+        let legacy = handle.shared.endpoints.clone();
+        if legacy.is_none() && !handle.shared.cell_mode {
             std::future::pending::<()>().await;
             return;
-        };
+        }
+        let mut routes = handle.shared.routes.subscribe();
         let mut watch = InventoryWatch::new(handle.clone());
         let mut admission = LedgerPump::new(ledger, handle.shared.clone());
         loop {
@@ -838,10 +1233,29 @@ pub fn install_inventory(
             // here forever instead of dialing a dead socket twice a second. The
             // unit's health already says the plane is gone; a retry storm would
             // only add noise to a fact fieldd has.
-            handle.wait_until_serving().await;
+            let (control, token) = match &legacy {
+                Some(endpoints) => {
+                    handle.wait_until_serving().await;
+                    (endpoints.control.clone(), endpoints.token.clone())
+                }
+                None => loop {
+                    let cell = routes.borrow().cells.first().map(|cell| {
+                        (
+                            cell.endpoints.control_socket.clone(),
+                            cell.endpoints.auth_token.clone(),
+                        )
+                    });
+                    if let Some(target) = cell {
+                        break target;
+                    }
+                    if routes.changed().await.is_err() {
+                        return;
+                    }
+                },
+            };
             // Dialing here rather than inside the pump is what lets a failed
             // DIAL be told apart from a pump that ran and then broke.
-            match ControlClient::connect(&endpoints.control, &endpoints.token).await {
+            match ControlClient::connect(&control, &token).await {
                 Ok((client, events)) => {
                     match pump_inventory(
                         Arc::new(client),
@@ -1606,6 +2020,13 @@ mod tests {
             }),
             ping: tokio::sync::mpsc::unbounded_channel().0,
             endpoints: None,
+            cell_mode: false,
+            stopping: watch::channel(false).0,
+            routes: watch::channel(TerminalRouteSnapshot {
+                revision: 0,
+                cells: Vec::new(),
+            })
+            .0,
             serving: watch::channel(false).0,
             drain: Mutex::new(None),
             inventory_fault: Mutex::new(None),

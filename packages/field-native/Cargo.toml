@@ -16,7 +16,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
 time = { version = "0.3.47", default-features = false, features = ["std"] }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "signal"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "io-util", "process", "sync", "time", "signal"] }
 tracing = "0.1.44"
 truffle-core.workspace = true
 tracing-subscriber = "0.3.23"
