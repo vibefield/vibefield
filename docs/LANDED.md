@@ -2647,3 +2647,36 @@ plugin-runtime **42/42**, and Electron staged-serving **6/6**; fieldd, plugin-ru
 and electron-shell typechecks; Biome and patch hygiene. No product update RPC or pointer interval was
 widened. **PRC-5d is next:** replace a live renderer controller/module namespace behind the held
 route before PRC-5e wires the coordinator.
+
+## PRC-E20 + PRC-5d — renderer replacement behind one stable slot
+
+**LANDED 2026-08-17** (`6cafd0a`). Renderer updates no longer replace the boot-created
+`RendererPluginController`, which would strand ICE's already-registered widget facades. One stable
+plugin/window slot now owns those facade identities while exact artifact activation sources replace
+behind it. Every source defensively snapshots its code-free record and module row, defers import
+until the common target controller has closed and quiesced old, and carries explicit candidate
+product-client authority rather than borrowing retained-old credentials.
+
+Preparation withdraws old commands, surfaces, styles, behaviors, and widget implementations at the
+synchronous close edge, waits cleanup, imports the candidate, and stops with all new publication
+private. A strict command adapter converts exact prepare/commit/recover commands to bounded,
+identity-free acknowledgements; future transport must derive participant identity from the window
+bearer. Commit publishes the candidate synchronously. The episode tolerates either registry-pointer
+or authenticated-command delivery first, including a queued old snapshot after commit, but any
+unrelated observation revokes the target. Once a commit command exists, old recovery is permanently
+unreachable even if local publication fails.
+
+The production audit added four refusal laws. A changed fixed widget projection requires a new
+document generation and is rejected before old closes. Candidate source objects are cloned and
+recursively frozen before the asynchronous ownership gap. A same-realm non-quiescent verdict clears
+the desired candidate, so even late cleanup cannot resume import; only positive renderer-boundary
+replacement may progress. Pre-commit retained-old recovery requires separately authorized bytes
+under a freshly minted module URL, avoiding the disposed browser ESM namespace. External effects
+from a failed candidate remain history and are never described as rollback.
+
+Acceptance: revised PRC-E20 **10/10**; renderer controller **15/15**, participant adapter **5/5**,
+and staged loader **19/19**; complete field-app **64 files / 495 tests**; plugin-runtime **42/42**;
+fieldd candidate/service seams **18/18**; Electron staged serving **6/6**; fieldd, plugin-runtime,
+field-app, and electron-shell typechecks; changed-file Biome and patch hygiene. PRC-5e now owns the
+authenticated update-id/participant-bound candidate-client mint and revocation, trusted source
+resolver, coordinator command/ack transport, pointer CAS interval, and held-newcomer admission.
