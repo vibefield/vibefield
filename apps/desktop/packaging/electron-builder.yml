@@ -88,8 +88,11 @@ files:
 # config does not break a build while bundled plugins (WP8) do not exist yet — a missing
 # extraResources source is a hard electron-builder error. Tray assets are generated and checked
 # before staging; an empty tray directory is now a package failure.
-# Executable bits: the stager sets field-native to 0755 and asserts it (§7.4); confirm it survived
-# the copy in the packaged-artifact check, since that assertion is about the stage, not the .app.
+# Executable bits: the stager sets BOTH native-plane binaries — field-native and its TC-S2
+# terminal cell field-terminal-host — to 0755 and asserts it (§7.4); confirm they survived the copy
+# in the packaged-artifact check, since that assertion is about the stage, not the .app. The two
+# ride in the same flat `bin/` because the floor resolves the cell as a SIBLING of its own
+# executable; splitting them across directories would break the resolution, not just the layout.
 extraResources:
   - from: build/stage/bin
     to: bin
@@ -128,9 +131,14 @@ mac:
   # Explicit nested-code inventory. It is inert while identity remains null,
   # but becomes the inside-out signing list when WP10 enables signing; the SCK
   # helper and its Node-API adapter must never be left as unsigned loose code.
+  # field-terminal-host is listed for the same reason it is staged (TC-S2): the
+  # floor spawns it as a child executable, so an unsigned or unnotarized cell is
+  # one Gatekeeper kills at spawn — the terminal would fail in the signed build
+  # and only in the signed build.
   binaries:
     - Contents/Resources/bin/fieldd
     - Contents/Resources/bin/field-native
+    - Contents/Resources/bin/field-terminal-host
     - Contents/Resources/bin/sidecar-slim
     - Contents/Resources/bin/live-surface-capture-helper
     - Contents/Resources/bin/live-surface-adapter.node

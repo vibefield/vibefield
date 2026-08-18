@@ -395,6 +395,11 @@ function sandboxEnv(home, dataDir, nativeBin) {
   };
 }
 
+// TC-S2 — field-native's terminal cell, spawned by the floor as its own sibling. No `.exe`
+// variant: this probe is unix-only throughout (it execs /usr/bin/pkill and pins PATH to
+// /usr/bin:/bin), so a win32 name here would be the only ported line in the file.
+const CELL_NAME = "field-terminal-host";
+
 /** The release field-native, or the debug one; `--native-bin` overrides both. */
 function findNativeBin() {
   const override = argValue("--native-bin");
@@ -472,6 +477,25 @@ async function verify({ exe, manifest }) {
   mkdirSync(dirname(nativeBin), { recursive: true });
   copyFileSync(nativeSource, nativeBin);
   chmodSync(nativeBin, 0o755);
+  // TC-S2 — the floor booted here is a REAL floor, and its terminal unit spawns the cell it
+  // resolves as its own sibling. Copying the cell from the floor's own directory reproduces that
+  // resolution law in the sandbox instead of booting a floor that could only report the cell
+  // missing; taking it from `dirname(nativeSource)` also keeps the pair matched, so a release
+  // floor is never paired with a debug cell.
+  const cellSource = join(dirname(nativeSource), CELL_NAME);
+  const cellPresent = existsSync(cellSource);
+  if (cellPresent) {
+    const cellBin = join(dirname(nativeBin), CELL_NAME);
+    copyFileSync(cellSource, cellBin);
+    chmodSync(cellBin, 0o755);
+  }
+  say(
+    cellPresent,
+    cellPresent
+      ? `terminal cell staged beside the floor — ${rel(cellSource)}`
+      : `no ${CELL_NAME} beside ${rel(nativeSource)}; that floor's terminal unit can only ` +
+          `report the cell missing. Build the pair: cargo build --release -p field-native`,
+  );
   try {
     const ancestors = ancestorsWithNodeModules(sandbox);
     say(

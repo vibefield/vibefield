@@ -356,14 +356,17 @@ if (unsupportedGlobs.length > 0) {
   console.log(`\nunrecognized pnpm-workspace globs (NOT censused): ${unsupportedGlobs.join(", ")}`);
 }
 
-// EDP-13: field-native is always a release-mode, architecture-specific, separately
-// signed sidecar staged into resources/bin — never a TS build product. Its absence is
-// the design, so it is stated rather than left looking like an oversight; Cargo's
-// `target/` is excluded for the same reason (and is ~8.5 GB of debug artifacts).
+// EDP-13: field-native is always release-mode, architecture-specific, separately signed
+// sidecars staged into resources/bin — never TS build products. Since TC-S2 the crate emits
+// TWO of them (the floor plus its terminal cell), and they stage side by side because the
+// floor resolves the cell as its sibling. Their absence here is the design, so it is stated
+// rather than left looking like an oversight; Cargo's `target/` is excluded for the same
+// reason (and is ~8.5 GB of debug artifacts).
 console.log(
   `\nnot in this census, by design:\n` +
-    `  packages/field-native — ships as a separately built release binary staged into\n` +
-    `    resources/bin (EDP-13); Cargo \`target/\` is not a TS build product and is excluded.`,
+    `  packages/field-native — ships as separately built release binaries (field-native and\n` +
+    `    its TC-S2 field-terminal-host cell) staged side by side into resources/bin (EDP-13);\n` +
+    `    Cargo \`target/\` is not a TS build product and is excluded.`,
 );
 
 if (acknowledged.length > 0) {

@@ -59,6 +59,8 @@ const MODES_ENFORCEABLE = process.platform !== "win32";
 // Sidecars are architecture-specific and flat under `bin/` (EDP-22/23) — per-arch subdirectories
 // arrive with the universal-build amendment, not before.
 const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
+// TC-S2 — field-native's second binary, the terminal cell. Same crate, same `cargo build`.
+const cellName = process.platform === "win32" ? "field-terminal-host.exe" : "field-terminal-host";
 const fielddName = process.platform === "win32" ? "fieldd.exe" : "fieldd";
 const truffleSidecarName = process.platform === "win32" ? "sidecar-slim.exe" : "sidecar-slim";
 const trufflePlatform = `${process.platform}-${process.arch}`;
@@ -135,6 +137,21 @@ const PLAN = [
     kind: "file",
     mode: EXEC_MODE,
     optional: "the field-native sidecar is absent — the packaged app will have no native plane",
+    produce: "cargo build --release -p field-native",
+  },
+  {
+    // TC-S2: the floor's terminal cell, produced by the SAME `cargo build -p field-native`.
+    // Flat under `bin/` is not a convenience here, it is the resolution law — the floor finds
+    // this binary as a SIBLING of its own executable (field-native `config.rs::cell_binary()`,
+    // with FIELD_NATIVE_CELL_BIN as a test-only override that packaging never sets). Staging
+    // the floor without it ships a native plane whose terminal unit can only ever report "the
+    // field-terminal-host binary cannot be located beside this executable", so the two are
+    // checked as a PAIR in verify() rather than only entry-by-entry here.
+    stage: `bin/${cellName}`,
+    from: `target/release/${cellName}`,
+    kind: "file",
+    mode: EXEC_MODE,
+    optional: "the terminal cell binary is absent — the native plane will have no terminal",
     produce: "cargo build --release -p field-native",
   },
   ...(process.platform === "darwin"
@@ -488,6 +505,26 @@ const verify = ({ files, manifest }) => {
         `LEAKS BUILD PATH  ${f.rel} — the build machine's repo path is inlined (§13.2)`,
       );
     }
+  }
+
+  // TC-S2 — the floor and its cell ship as a PAIR or not at all. Either being absent is a
+  // declared optional gap above (a preview package with no native plane, warned about loudly and
+  // fatal under --require-complete). A floor staged WITHOUT its cell is not a gap: the floor
+  // resolves the cell beside itself, so that package boots a native plane whose terminal unit is
+  // permanently Degraded. The half-state is reachable from a `target/release` predating TC-S2 —
+  // one that still holds field-native and has never built field-terminal-host — which is exactly
+  // the case that must fail here rather than pack silently. Asserted against the STAGE, so
+  // --verify catches it on a stage this process did not build.
+  const floorStaged = present.has(`bin/${nativeName}`);
+  const cellStaged = present.has(`bin/${cellName}`);
+  if (floorStaged !== cellStaged) {
+    problems.push(
+      floorStaged
+        ? `PAIR  bin/${nativeName} is staged without bin/${cellName} — the floor resolves its ` +
+            `terminal cell as a sibling and would find none (TC-S2); rebuild both with ` +
+            `\`cargo build --release -p field-native\``
+        : `PAIR  bin/${cellName} is staged without bin/${nativeName} — a cell with no floor`,
+    );
   }
 
   // The manifest is generated, so its contents are an assertion rather than a copy check.
