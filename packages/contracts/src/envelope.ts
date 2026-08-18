@@ -170,7 +170,7 @@ export type Principal =
   | { kind: "tailnet-guest"; login: string }
   | { kind: "mcp-agent"; sessionId: string; scopes: string[] }
   | { kind: "peer-fieldd"; deviceId: string }
-  | { kind: "plugin"; id: string; scopes: string[] }; // design-03 D20
+  | { kind: "plugin"; id: string; scopes: string[]; tokenId?: string }; // design-03 D20
 
 export type Transport =
   | "uds"

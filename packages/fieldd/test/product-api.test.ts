@@ -53,4 +53,91 @@ describe("ProductApi lifecycle", () => {
     expect(ws.terminate).toHaveBeenCalledOnce();
     expect(ws.send).not.toHaveBeenCalled();
   });
+
+  it("drops one exact plugin-token connection without touching sibling plugin leases", () => {
+    const api = new ProductApi({ port: 0, tokens: { verify: () => null } });
+    const exact = { terminate: vi.fn() };
+    const sibling = { terminate: vi.fn() };
+    const liveConns = (
+      api as unknown as {
+        liveConns: Set<{
+          ws: { terminate(): void };
+          state: {
+            ctx: { principal: { kind: "plugin"; id: string; scopes: []; tokenId: string } };
+          };
+        }>;
+      }
+    ).liveConns;
+    liveConns.add({
+      ws: exact,
+      state: {
+        ctx: {
+          principal: { kind: "plugin", id: "com.example.plugin", scopes: [], tokenId: "tk_exact" },
+        },
+      },
+    });
+    liveConns.add({
+      ws: sibling,
+      state: {
+        ctx: {
+          principal: {
+            kind: "plugin",
+            id: "com.example.plugin",
+            scopes: [],
+            tokenId: "tk_sibling",
+          },
+        },
+      },
+    });
+
+    expect(api.dropTokenConnections("tk_exact")).toBe(1);
+    expect(exact.terminate).toHaveBeenCalledOnce();
+    expect(sibling.terminate).not.toHaveBeenCalled();
+  });
+
+  it("starts a subscription only after its reply installs the subId", async () => {
+    const api = new ProductApi({ port: 0, tokens: { verify: () => null } });
+    const order: string[] = [];
+    api.registerSubscription("system.health.subscribe", () => ({
+      snapshot: { ok: true },
+      dispose: () => undefined,
+      start: () => order.push("start"),
+    }));
+    const internals = api as unknown as {
+      subHandlers: Map<string, unknown>;
+      execute(
+        ws: unknown,
+        state: unknown,
+        id: number,
+        method: string,
+        params: unknown,
+        handler: undefined,
+        subHandler: unknown,
+        reply: (value: unknown) => void,
+      ): Promise<void>;
+    };
+    const ws = { readyState: 1, bufferedAmount: 0, send: vi.fn(), terminate: vi.fn() };
+    const state = {
+      ctx: {
+        principal: { kind: "local-token", tokenId: "tk_window", scopes: [] },
+        transport: "ws-loopback",
+        receivedAt: 0,
+      },
+      subs: new Map(),
+    };
+
+    await internals.execute(
+      ws,
+      state,
+      1,
+      "system.health.subscribe",
+      {},
+      undefined,
+      internals.subHandlers.get("system.health.subscribe"),
+      () => order.push("reply"),
+    );
+
+    expect(order).toEqual(["reply", "start"]);
+    expect(state.subs.size).toBe(1);
+  });
 });

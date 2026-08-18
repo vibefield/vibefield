@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PluginModuleUrls, PluginRecord } from "./plugin-registry";
 import { PluginId } from "./plugins";
 
 // PRC-5a — local update-coordination vocabulary. These shapes do not register
@@ -222,6 +223,135 @@ export const PluginUpdateCommand = z
     }
   });
 export type PluginUpdateCommand = z.infer<typeof PluginUpdateCommand>;
+
+// PRC-5e — local renderer participant lane. These outer envelopes are strict because identity is
+// transport-derived and update sources carry ephemeral authority. Public registry/module schemas
+// remain tolerant elsewhere; this source response deliberately strips unknown top-level fields so
+// a future internal root/path cannot hitch a ride into a renderer.
+
+export const PluginUpdateSubscribeParams = z.object({ pluginId: PluginId }).strict();
+export type PluginUpdateSubscribeParams = z.infer<typeof PluginUpdateSubscribeParams>;
+
+export const PluginUpdateParticipantSnapshot = z
+  .object({
+    pluginId: PluginId,
+    status: z.enum(["live", "held"]),
+    artifact: PluginUpdateArtifact.strip().nullable(),
+    commitEpoch: z.number().int().positive().nullable(),
+    pendingCommand: PluginUpdateCommand.nullable(),
+  })
+  .strict()
+  .superRefine((snapshot, ctx) => {
+    if (snapshot.status === "held") {
+      if (
+        snapshot.artifact !== null ||
+        snapshot.commitEpoch !== null ||
+        snapshot.pendingCommand !== null
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["status"],
+          message: "a held renderer receives no artifact, epoch, or command",
+        });
+      }
+      return;
+    }
+    if (snapshot.artifact === null || snapshot.commitEpoch === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["artifact"],
+        message: "a live renderer requires an artifact and commit epoch",
+      });
+    }
+    if (snapshot.artifact !== null && snapshot.artifact.pluginId !== snapshot.pluginId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["artifact", "pluginId"],
+        message: "participant snapshot artifact belongs to another plugin",
+      });
+    }
+  });
+export type PluginUpdateParticipantSnapshot = z.infer<typeof PluginUpdateParticipantSnapshot>;
+
+export const PluginUpdateParticipantEvent = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("command"), command: PluginUpdateCommand }).strict(),
+  z
+    .object({
+      kind: z.literal("admitted"),
+      artifact: PluginUpdateArtifact.strip(),
+      commitEpoch: z.number().int().positive(),
+    })
+    .strict(),
+]);
+export type PluginUpdateParticipantEvent = z.infer<typeof PluginUpdateParticipantEvent>;
+
+export const PluginUpdateSourceParams = z
+  .object({
+    pluginId: PluginId,
+    updateId: PluginUpdateId,
+    purpose: z.enum(["candidate", "recover-old"]),
+  })
+  .strict();
+export type PluginUpdateSourceParams = z.infer<typeof PluginUpdateSourceParams>;
+
+export const PluginUpdateSourceLease = z
+  .object({
+    token: z.string().min(1),
+    pluginId: PluginId,
+    manifestHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    grantGeneration: z.number().int().nonnegative(),
+    expiresAt: z.number().int().positive(),
+  })
+  .strict();
+export type PluginUpdateSourceLease = z.infer<typeof PluginUpdateSourceLease>;
+
+export const PluginUpdateSourceResult = z
+  .object({
+    updateId: PluginUpdateId,
+    purpose: z.enum(["candidate", "recover-old"]),
+    artifact: PluginUpdateArtifact.strip(),
+    record: PluginRecord.strip(),
+    module: PluginModuleUrls.strip(),
+    lease: PluginUpdateSourceLease,
+  })
+  .strict()
+  .superRefine((source, ctx) => {
+    const identities = [source.record.id, source.module.pluginId, source.lease.pluginId];
+    if (identities.some((pluginId) => pluginId !== source.artifact.pluginId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["artifact", "pluginId"],
+        message: "source identities belong to different plugins",
+      });
+    }
+    if (
+      source.record.installRevision !== source.artifact.installRevision ||
+      source.module.installRevision !== source.artifact.installRevision ||
+      source.record.manifestHash !== source.artifact.manifestHash ||
+      source.module.manifestHash !== source.artifact.manifestHash ||
+      source.lease.manifestHash !== source.artifact.manifestHash ||
+      source.lease.grantGeneration !== source.record.grantGeneration
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["artifact"],
+        message: "source record, module, lease, and artifact fences disagree",
+      });
+    }
+    for (const [field, url] of [
+      ["moduleUrl", source.module.moduleUrl],
+      ["styleUrl", source.module.styleUrl],
+    ] as const) {
+      if (url !== undefined && !/^vibefield-plugin:\/\/[0-9a-f]{32}$/.test(url)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["module", field],
+          message: "update source contains a non-opaque module URL",
+        });
+      }
+    }
+  });
+export type PluginUpdateSourceResult = z.infer<typeof PluginUpdateSourceResult>;
 
 const AckBase = {
   updateId: PluginUpdateId,

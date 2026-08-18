@@ -3,7 +3,10 @@ import {
   PluginUpdateAckParams,
   PluginUpdateCommand,
   PluginUpdateEpisode,
+  PluginUpdateParticipantSnapshot,
   PluginUpdateSnapshot,
+  PluginUpdateSourceParams,
+  PluginUpdateSourceResult,
 } from "../src/plugin-update";
 
 const artifact = (installRevision: string) => ({
@@ -171,6 +174,91 @@ describe("PRC-5a update coordination contracts", () => {
         oldArtifact: artifact("r1"),
         candidateArtifact: { ...artifact("r2"), pluginId: "com.example.other" },
         participants: [participant],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps held participant snapshots authority-free and input identity-free", () => {
+    expect(
+      PluginUpdateParticipantSnapshot.parse({
+        pluginId: "com.example.update",
+        status: "held",
+        artifact: null,
+        commitEpoch: null,
+        pendingCommand: null,
+      }),
+    ).toMatchObject({ status: "held", artifact: null });
+    expect(
+      PluginUpdateParticipantSnapshot.safeParse({
+        pluginId: "com.example.update",
+        status: "held",
+        artifact: artifact("r1"),
+        commitEpoch: 1,
+        pendingCommand: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      PluginUpdateSourceParams.safeParse({
+        pluginId: "com.example.update",
+        updateId: "pupd_example_1",
+        purpose: "candidate",
+        participantId: participant.participantId,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("projects one exact path-free source and refuses mixed authority", () => {
+    const candidateArtifact = artifact("r2");
+    const source = {
+      updateId: "pupd_example_1",
+      purpose: "candidate" as const,
+      artifact: { ...candidateArtifact, root: "/secret/artifact" },
+      record: {
+        id: "com.example.update",
+        version: "1.0.0",
+        title: "Update",
+        source: "registry",
+        manifestHash: candidateArtifact.manifestHash,
+        installRevision: candidateArtifact.installRevision,
+        state: "enabled",
+        compatible: true,
+        enabled: true,
+        requestedCapabilities: [],
+        grantedCapabilities: [],
+        deniedCapabilities: [],
+        grantGeneration: 4,
+        contributions: {},
+        renderer: "active",
+        service: "none",
+        root: "/secret/record",
+      },
+      module: {
+        pluginId: "com.example.update",
+        moduleUrl: `vibefield-plugin://${"c".repeat(32)}`,
+        manifestHash: candidateArtifact.manifestHash,
+        installRevision: candidateArtifact.installRevision,
+        path: "/secret/module.js",
+      },
+      lease: {
+        token: "candidate-token",
+        pluginId: "com.example.update",
+        manifestHash: candidateArtifact.manifestHash,
+        grantGeneration: 4,
+        expiresAt: 10_000,
+      },
+    };
+    const parsed = PluginUpdateSourceResult.parse(source);
+    expect(JSON.stringify(parsed)).not.toContain("/secret/");
+    expect(
+      PluginUpdateSourceResult.safeParse({
+        ...source,
+        lease: { ...source.lease, grantGeneration: 5 },
+      }).success,
+    ).toBe(false);
+    expect(
+      PluginUpdateSourceResult.safeParse({
+        ...source,
+        module: { ...source.module, moduleUrl: "file:///secret/module.js" },
       }).success,
     ).toBe(false);
   });

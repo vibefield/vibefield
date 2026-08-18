@@ -58,14 +58,20 @@ export type Handler = (ctx: CallerContext, params: unknown) => Promise<unknown> 
 
 /** Returns the snapshot plus a dispose; `emit` pushes deltas until dispose.
  * MAY be async (P5 — settings snapshots read files); the dispatcher awaits. */
+export interface SubscriptionInstall {
+  readonly snapshot: unknown;
+  readonly dispose: () => void;
+  /** Called only after ProductAPI installed disposal and sent the subscribe reply. Producers use
+   * this to flush events that raced registration without delivering a delta before its subId. */
+  readonly start?: () => void;
+}
+
 export type SubscriptionHandler = (
   ctx: CallerContext,
   params: unknown,
   /** A producer reboot may replace the stream with a fresh snapshot. */
   emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
-) =>
-  | { snapshot: unknown; dispose: () => void }
-  | Promise<{ snapshot: unknown; dispose: () => void }>;
+) => SubscriptionInstall | Promise<SubscriptionInstall>;
 
 export interface ProductApiOptions {
   port: number; // 0 = ephemeral (tests)
@@ -188,7 +194,9 @@ export class ProductApi extends EventEmitter {
     for (const conn of [...this.liveConns]) {
       const principal = conn.state.ctx?.principal;
       if (
-        (principal?.kind === "local-token" || principal?.kind === "shell-main") &&
+        (principal?.kind === "local-token" ||
+          principal?.kind === "shell-main" ||
+          principal?.kind === "plugin") &&
         principal.tokenId === tokenId
       ) {
         conn.ws.terminate();
@@ -483,7 +491,12 @@ export class ProductApi extends EventEmitter {
         state.ctx = {
           principal:
             grant.pluginId !== undefined
-              ? { kind: "plugin", id: grant.pluginId, scopes: grant.scopes }
+              ? {
+                  kind: "plugin",
+                  id: grant.pluginId,
+                  scopes: grant.scopes,
+                  tokenId: grant.tokenId,
+                }
               : grant.shellMain === true &&
                   parsed.data.clientKind === "shell-main" &&
                   state.tailnetLogin === null
@@ -766,12 +779,19 @@ export class ProductApi extends EventEmitter {
             params: { subId, payload },
           });
       };
-      const { snapshot, dispose } = await subHandler(ctx, params, emit);
+      const { snapshot, dispose, start } = await subHandler(ctx, params, emit);
       state.subs.set(subId, () => {
         active = false;
         dispose();
       });
       reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
+      try {
+        start?.();
+      } catch {
+        state.subs.get(subId)?.();
+        state.subs.delete(subId);
+        ws.terminate();
+      }
       return;
     }
     const result = await handler!(ctx, params);
