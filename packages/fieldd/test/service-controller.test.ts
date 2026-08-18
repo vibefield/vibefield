@@ -286,6 +286,15 @@ describe("ServiceHost exact target controller (PRC-3c)", () => {
       ].filter((call) => call[0] === "fieldd.plugin_runtime.lifecycle");
     const logCount = () => lifecycleCalls().length;
     expect(rig.host.diagnostic(pluginId)?.state).toBe("active");
+    expect(rig.host.census()).toMatchObject({
+      entries: 1,
+      workers: 1,
+      activeControllerCandidates: 1,
+      providerCandidates: 1,
+      routeUnregisters: 1,
+      activeLeases: 1,
+      disposed: false,
+    });
     expect(logCount()).toBe(rig.host.diagnostic(pluginId)?.history.length);
     expect(changed).toHaveBeenCalledTimes(logCount());
 
@@ -295,9 +304,73 @@ describe("ServiceHost exact target controller (PRC-3c)", () => {
     await rig.host.stop(pluginId);
     expect(logCount()).toBe(rig.host.diagnostic(pluginId)?.history.length);
     expect(changed).toHaveBeenCalledTimes(logCount());
+    expect(rig.host.census()).toEqual({
+      entries: 1,
+      candidateEpisodes: 0,
+      workers: 0,
+      activeControllerCandidates: 0,
+      preparedControllerCandidates: 0,
+      providerCandidates: 0,
+      routeUnregisters: 0,
+      pendingCalls: 0,
+      subscriptions: 0,
+      restartTimers: 0,
+      stopTasks: 0,
+      drainWaiters: 0,
+      outputCaptures: 0,
+      activeLeases: 0,
+      leaseReleases: 0,
+      credentialWaiters: 0,
+      disposed: false,
+    });
     for (const call of lifecycleCalls()) {
       expect(call[0]).toBe("fieldd.plugin_runtime.lifecycle");
     }
+    await rig.host.stopAll();
+    expect(rig.host.diagnostic(pluginId)).toBeNull();
+    expect(rig.host.census()).toEqual({
+      entries: 0,
+      candidateEpisodes: 0,
+      workers: 0,
+      activeControllerCandidates: 0,
+      preparedControllerCandidates: 0,
+      providerCandidates: 0,
+      routeUnregisters: 0,
+      pendingCalls: 0,
+      subscriptions: 0,
+      restartTimers: 0,
+      stopTasks: 0,
+      drainWaiters: 0,
+      outputCaptures: 0,
+      activeLeases: 0,
+      leaseReleases: 0,
+      credentialWaiters: 0,
+      disposed: true,
+    });
+  });
+
+  it("keeps failed shutdown boundaries counted instead of dropping their last owner", async () => {
+    const rig = createRig();
+    await rig.host.start(pluginId);
+    const worker = rig.workers[0]!;
+    const terminate = vi
+      .spyOn(worker, "terminate")
+      .mockRejectedValue(new Error("boundary refused"));
+
+    await expect(rig.host.stopAll()).rejects.toThrow(/did not stop cleanly/);
+    expect(rig.host.census()).toMatchObject({
+      entries: 1,
+      workers: 1,
+      activeLeases: 1,
+      disposed: true,
+    });
+
+    terminate.mockRestore();
+    await worker.terminate();
+    await Promise.resolve();
+    await Promise.resolve();
+    await expect(rig.host.stopAll()).resolves.toBeUndefined();
+    expect(rig.host.census()).toMatchObject({ entries: 0, workers: 0, disposed: true });
   });
 
   it("keeps provider handlers private behind typed UNAVAILABLE until activated", async () => {

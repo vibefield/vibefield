@@ -107,6 +107,12 @@ describe("window behavior binding catalog", () => {
     const unsubscribe = runtime.behaviorCatalog.subscribe((rows) => {
       observations.push(rows.filter((row) => row.authorized).map((row) => row.id));
     });
+    expect(runtime.behaviorCatalog.state()).toEqual({
+      plugins: 2,
+      bindings: 2,
+      listeners: 1,
+      closed: false,
+    });
     try {
       const deniedA = record(aId, declareBehavior(A), {
         authorized: false,
@@ -135,6 +141,12 @@ describe("window behavior binding catalog", () => {
       await runtime.close();
     }
     expect(runtime.behaviorCatalog.snapshot()).toEqual([]);
+    expect(runtime.behaviorCatalog.state()).toEqual({
+      plugins: 0,
+      bindings: 0,
+      listeners: 0,
+      closed: true,
+    });
     expect(() => runtime.behaviorCatalog.subscribe(() => undefined)).toThrow(/closed/);
   });
 

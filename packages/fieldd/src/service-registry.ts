@@ -9,7 +9,7 @@ import {
   type ServicesSnapshot,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { Ajv, type ValidateFunction } from "ajv";
+import { Ajv, type AnySchema, type ValidateFunction } from "ajv";
 import { RpcCallError } from "./native-link";
 
 // ServiceRegistry — the dynamic-method router (plugin spec §14.4–14.7, P4).
@@ -90,6 +90,10 @@ const FIRST_SNAPSHOT_DEADLINE_MS = 5_000;
 
 export class ServiceRegistry extends EventEmitter {
   private readonly ajv = new Ajv({ allErrors: false, strict: false });
+  /** Ajv uses a strong Map keyed by schema object. Mirror live ownership so route withdrawal can
+   * remove validators from that cache instead of retaining every churned manifest forever. */
+  private readonly schemaRefs = new Map<AnySchema, number>();
+  private readonly providerSchemas = new Map<string, readonly AnySchema[]>();
   private readonly methods = new Map<string, MethodEntry>();
   private readonly providers = new Map<string, ServiceProviderBinding>();
   /** Activating and draining providers remain method-kind tombstones. Both are absent from public
@@ -98,6 +102,7 @@ export class ServiceRegistry extends EventEmitter {
   private readonly subs = new Set<LiveSub>();
   private readonly logger: Logger;
   private generation = 0;
+  private disposed = false;
 
   constructor(
     private readonly opts: {
@@ -122,6 +127,7 @@ export class ServiceRegistry extends EventEmitter {
   /** PRC-3c private activation stage. Validation and method-kind installation happen now, but the
    * provider stays out of snapshots and no handler can run until candidate.commit(). */
   stage(binding: ServiceProviderBinding): ServiceProviderCandidate {
+    if (this.disposed) throw new RpcCallError("UNAVAILABLE", "service registry is disposed", true);
     const { pluginId, namespace, declarations, implemented, handlers } = binding;
     if (namespace !== `${NAMESPACES.DYNAMIC_PREFIX}${pluginId}`)
       throw new RpcCallError(
@@ -158,42 +164,49 @@ export class ServiceRegistry extends EventEmitter {
         );
 
     const entries = new Map<string, MethodEntry>();
-    for (const decl of declarations) {
-      const full = `${namespace}.${decl.name}`;
-      if (this.methods.has(full) || entries.has(full))
-        throw new RpcCallError("CONFLICT", `${full} already has a live provider`, false);
-      let input: ValidateFunction;
-      let output: ValidateFunction | undefined;
-      let snapshot: ValidateFunction | undefined;
-      let delta: ValidateFunction | undefined;
-      try {
-        input = this.ajv.compile(decl.input);
-        if (decl.kind === "subscription") {
-          snapshot = this.ajv.compile(decl.snapshot);
-          delta = this.ajv.compile(decl.delta);
-        } else {
-          output = this.ajv.compile(decl.output);
+    const schemas: AnySchema[] = [];
+    try {
+      for (const decl of declarations) {
+        const full = `${namespace}.${decl.name}`;
+        if (this.methods.has(full) || entries.has(full))
+          throw new RpcCallError("CONFLICT", `${full} already has a live provider`, false);
+        let input: ValidateFunction;
+        let output: ValidateFunction | undefined;
+        let snapshot: ValidateFunction | undefined;
+        let delta: ValidateFunction | undefined;
+        try {
+          input = this.compileSchema(decl.input, schemas);
+          if (decl.kind === "subscription") {
+            snapshot = this.compileSchema(decl.snapshot, schemas);
+            delta = this.compileSchema(decl.delta, schemas);
+          } else {
+            output = this.compileSchema(decl.output, schemas);
+          }
+        } catch (e) {
+          throw new RpcCallError(
+            "PRECONDITION_FAILED",
+            `${full}: schema does not compile (${e instanceof Error ? e.message : String(e)})`,
+            false,
+          );
         }
-      } catch (e) {
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          `${full}: schema does not compile (${e instanceof Error ? e.message : String(e)})`,
-          false,
-        );
+        entries.set(full, {
+          pluginId,
+          namespace,
+          decl,
+          handlers,
+          input,
+          ...(output !== undefined ? { output } : {}),
+          ...(snapshot !== undefined ? { snapshot } : {}),
+          ...(delta !== undefined ? { delta } : {}),
+        });
       }
-      entries.set(full, {
-        pluginId,
-        namespace,
-        decl,
-        handlers,
-        input,
-        ...(output !== undefined ? { output } : {}),
-        ...(snapshot !== undefined ? { snapshot } : {}),
-        ...(delta !== undefined ? { delta } : {}),
-      });
+    } catch (error) {
+      this.releaseSchemas(schemas);
+      throw error;
     }
 
     this.providers.set(namespace, binding);
+    this.providerSchemas.set(namespace, Object.freeze(schemas));
     for (const [full, entry] of entries) this.methods.set(full, entry);
     this.unavailableNamespaces.set(namespace, "activating");
 
@@ -259,6 +272,8 @@ export class ServiceRegistry extends EventEmitter {
   ): void {
     if (expected !== undefined && this.providers.get(namespace) !== expected) return;
     if (!this.providers.delete(namespace)) return;
+    this.releaseSchemas(this.providerSchemas.get(namespace) ?? []);
+    this.providerSchemas.delete(namespace);
     this.unavailableNamespaces.delete(namespace);
     for (const [full, entry] of [...this.methods])
       if (entry.namespace === namespace) this.methods.delete(full);
@@ -300,6 +315,29 @@ export class ServiceRegistry extends EventEmitter {
       }))
       .sort((a, b) => a.namespace.localeCompare(b.namespace));
     return { generation: this.generation, providers };
+  }
+
+  /** Exact route/compiler/subscription census for soak and shutdown assertions. */
+  state(): {
+    readonly providers: number;
+    readonly methods: number;
+    readonly unavailableNamespaces: number;
+    readonly subscriptions: number;
+    readonly compiledSchemas: number;
+    readonly listeners: number;
+    readonly disposed: boolean;
+  } {
+    let listeners = 0;
+    for (const event of this.eventNames()) listeners += this.listenerCount(event);
+    return Object.freeze({
+      providers: this.providers.size,
+      methods: this.methods.size,
+      unavailableNamespaces: this.unavailableNamespaces.size,
+      subscriptions: this.subs.size,
+      compiledSchemas: this.schemaRefs.size,
+      listeners,
+      disposed: this.disposed,
+    });
   }
 
   async call(ctx: CallerContext, method: string, params: unknown): Promise<unknown> {
@@ -559,6 +597,8 @@ export class ServiceRegistry extends EventEmitter {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     for (const sub of [...this.subs]) {
       if (!sub.ended) {
         sub.ended = true;
@@ -570,7 +610,38 @@ export class ServiceRegistry extends EventEmitter {
       }
     }
     this.subs.clear();
+    this.providers.clear();
+    this.methods.clear();
+    this.unavailableNamespaces.clear();
+    this.providerSchemas.clear();
+    this.schemaRefs.clear();
+    this.ajv.removeSchema();
     this.removeAllListeners();
+  }
+
+  private compileSchema(schema: AnySchema, owner: AnySchema[]): ValidateFunction {
+    try {
+      const validate = this.ajv.compile(schema);
+      owner.push(schema);
+      this.schemaRefs.set(schema, (this.schemaRefs.get(schema) ?? 0) + 1);
+      return validate;
+    } catch (error) {
+      // Ajv can install a SchemaEnv before compilation discovers an invalid reference.
+      this.ajv.removeSchema(schema);
+      throw error;
+    }
+  }
+
+  private releaseSchemas(schemas: readonly AnySchema[]): void {
+    for (const schema of schemas) {
+      const refs = this.schemaRefs.get(schema);
+      if (refs === undefined || refs <= 1) {
+        this.schemaRefs.delete(schema);
+        this.ajv.removeSchema(schema);
+      } else {
+        this.schemaRefs.set(schema, refs - 1);
+      }
+    }
   }
 
   /** shared §14.4 steps 1–3: resolve → capability gate → validate input */

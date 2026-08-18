@@ -91,6 +91,26 @@ export interface PluginServiceLogRecord {
   event?: "plugin.log" | "plugin.output";
 }
 
+export interface ServiceHostCensus {
+  readonly entries: number;
+  readonly candidateEpisodes: number;
+  readonly workers: number;
+  readonly activeControllerCandidates: number;
+  readonly preparedControllerCandidates: number;
+  readonly providerCandidates: number;
+  readonly routeUnregisters: number;
+  readonly pendingCalls: number;
+  readonly subscriptions: number;
+  readonly restartTimers: number;
+  readonly stopTasks: number;
+  readonly drainWaiters: number;
+  readonly outputCaptures: number;
+  readonly activeLeases: number;
+  readonly leaseReleases: number;
+  readonly credentialWaiters: number;
+  readonly disposed: boolean;
+}
+
 interface Entry {
   state: PublicEntryState;
   worker: Worker | null;
@@ -243,6 +263,48 @@ export class ServiceHost {
    * does not allocate an Entry or activate work. */
   diagnostic(pluginId: string): RuntimeTargetControllerDiagnostic | null {
     return this.entries.get(pluginId)?.controller.diagnostic() ?? null;
+  }
+
+  /** Exact live-resource census for compressed and physical soak gates. Entry/history retention is
+   * named separately from worker, route, call, timer, subscription, and credential ownership. */
+  census(): ServiceHostCensus {
+    const state = {
+      entries: this.entries.size,
+      candidateEpisodes: this.candidateEpisodes.size,
+      workers: 0,
+      activeControllerCandidates: 0,
+      preparedControllerCandidates: 0,
+      providerCandidates: 0,
+      routeUnregisters: 0,
+      pendingCalls: 0,
+      subscriptions: 0,
+      restartTimers: 0,
+      stopTasks: 0,
+      drainWaiters: 0,
+      outputCaptures: 0,
+      activeLeases: 0,
+      leaseReleases: 0,
+      credentialWaiters: 0,
+      disposed: this.disposed,
+    } satisfies Record<keyof ServiceHostCensus, number | boolean>;
+    for (const entry of this.entries.values()) {
+      state.workers += entry.worker === null ? 0 : 1;
+      state.activeControllerCandidates += entry.controller.activeCandidate === undefined ? 0 : 1;
+      state.preparedControllerCandidates +=
+        entry.controller.preparedCandidate === undefined ? 0 : 1;
+      state.providerCandidates += entry.providerCandidates.size;
+      state.routeUnregisters += entry.unregisters.size;
+      state.pendingCalls += entry.pending.size;
+      state.subscriptions += entry.sinks.size;
+      state.restartTimers += entry.restartTimer === null ? 0 : 1;
+      state.stopTasks += entry.stopTask === null ? 0 : 1;
+      state.drainWaiters += entry.pendingChanged.size;
+      state.outputCaptures += entry.detachOutput === null ? 0 : 1;
+      state.activeLeases += entry.leaseTokenId === null ? 0 : 1;
+      state.leaseReleases += entry.leaseRelease === null ? 0 : 1;
+      state.credentialWaiters += entry.credentialWaiters.size;
+    }
+    return Object.freeze(state);
   }
 
   private observeLifecycle(pluginId: string, event: RuntimeTargetLifecycleEvent): void {
@@ -1087,7 +1149,43 @@ export class ServiceHost {
 
   async stopAll(): Promise<void> {
     this.disposed = true;
-    await Promise.all([...this.entries.keys()].map((id) => this.stop(id)));
+    const results = await Promise.allSettled([...this.entries.keys()].map((id) => this.stop(id)));
+    for (const episode of this.candidateEpisodes.values()) episode.state = "disposed";
+    this.candidateEpisodes.clear();
+    const failures: unknown[] = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    for (const [pluginId, entry] of this.entries) {
+      const residue = this.entryResidue(entry);
+      if (residue.length === 0) {
+        this.entries.delete(pluginId);
+      } else {
+        failures.push(new Error(`${pluginId}: service shutdown retained ${residue.join(", ")}`));
+      }
+    }
+    if (failures.length > 0) {
+      throw new AggregateError(failures, "one or more plugin services did not stop cleanly");
+    }
+  }
+
+  /** Never manufacture structural zero by dropping the last handle to a live/uncertain boundary. */
+  private entryResidue(e: Entry): readonly string[] {
+    const residue: string[] = [];
+    if (e.worker !== null) residue.push("worker");
+    if (e.controller.activeCandidate !== undefined) residue.push("active-candidate");
+    if (e.controller.preparedCandidate !== undefined) residue.push("prepared-candidate");
+    if (e.providerCandidates.size > 0) residue.push("provider-candidates");
+    if (e.unregisters.size > 0) residue.push("route-unregisters");
+    if (e.pending.size > 0) residue.push("pending-calls");
+    if (e.sinks.size > 0) residue.push("subscriptions");
+    if (e.restartTimer !== null) residue.push("restart-timer");
+    if (e.stopTask !== null) residue.push("stop-task");
+    if (e.pendingChanged.size > 0) residue.push("drain-waiters");
+    if (e.detachOutput !== null) residue.push("output-capture");
+    if (e.leaseTokenId !== null) residue.push("active-lease");
+    if (e.leaseRelease !== null) residue.push("lease-release");
+    if (e.credentialWaiters.size > 0) residue.push("credential-waiters");
+    return residue;
   }
 
   private failAllInflight(e: Entry, reason: string): void {
@@ -1386,9 +1484,7 @@ export class ServiceHost {
     const tokenId = e.leaseTokenId;
     if (tokenId === null) return e.leaseRelease ?? Promise.resolve();
     e.leaseTokenId = null;
-    const release = this.releaseLeaseToken(pluginId, tokenId, reason);
-    e.leaseRelease = release;
-    return release;
+    return this.trackLeaseRelease(e, this.releaseLeaseToken(pluginId, tokenId, reason));
   }
 
   private releaseCandidateLease(
@@ -1403,9 +1499,15 @@ export class ServiceHost {
     // The exact worker exit path may already have detached and started releasing this token.
     if (e.leaseTokenId !== tokenId) return e.leaseRelease ?? Promise.resolve();
     e.leaseTokenId = null;
-    const release = this.releaseLeaseToken(pluginId, tokenId, reason);
-    e.leaseRelease = release;
-    return release;
+    return this.trackLeaseRelease(e, this.releaseLeaseToken(pluginId, tokenId, reason));
+  }
+
+  private trackLeaseRelease(e: Entry, release: Promise<void>): Promise<void> {
+    const tracked = release.finally(() => {
+      if (e.leaseRelease === tracked) e.leaseRelease = null;
+    });
+    e.leaseRelease = tracked;
+    return tracked;
   }
 
   /** Plugin-owned stdout/stderr must never enter system/fieldd. Consume both

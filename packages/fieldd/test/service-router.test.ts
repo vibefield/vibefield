@@ -325,12 +325,14 @@ describe("ServiceRegistry registration (§14.4 / §14.6)", () => {
   });
 
   it("refuses a declaration whose input JSON Schema does not compile", () => {
+    const reg = registry();
     const p = makeProvider();
     const declarations = p.binding.declarations.map((d) =>
       d.name === "get" ? { ...d, input: { $ref: "#/$defs/missing" } } : d,
     );
     const bad = { ...p.binding, declarations };
-    expect(registerKind(registry(), bad)).toBe("PRECONDITION_FAILED");
+    expect(registerKind(reg, bad)).toBe("PRECONDITION_FAILED");
+    expect(reg.state().compiledSchemas).toBe(0);
   });
 
   it("refuses a duplicate live namespace with CONFLICT — the first provider keeps serving", async () => {
@@ -384,6 +386,14 @@ describe("ServiceRegistry registration (§14.4 / §14.6)", () => {
     const candidate = reg.stage(provider.binding);
 
     expect(reg.snapshot()).toEqual({ generation: generationBefore, providers: [] });
+    expect(reg.state()).toMatchObject({
+      providers: 1,
+      methods: provider.binding.declarations.length,
+      unavailableNamespaces: 1,
+      subscriptions: 0,
+      disposed: false,
+    });
+    expect(reg.state().compiledSchemas).toBeGreaterThan(0);
     expect(reg.kindOf(`${NS}.get`)).toBe("call");
     await expect(
       reg.call(localCtx(["workspace.read"]), `${NS}.get`, { k: "early" }),
@@ -401,6 +411,49 @@ describe("ServiceRegistry registration (§14.4 / §14.6)", () => {
     candidate.dispose();
     expect(reg.kindOf(`${NS}.get`)).toBeUndefined();
     expect(reg.snapshot().providers).toEqual([]);
+    expect(reg.state()).toEqual({
+      providers: 0,
+      methods: 0,
+      unavailableNamespaces: 0,
+      subscriptions: 0,
+      compiledSchemas: 0,
+      listeners: 0,
+      disposed: false,
+    });
+  });
+
+  it("releases compiler cache ownership across repeated manifest schema churn", () => {
+    const reg = registry();
+    for (let index = 0; index < 128; index += 1) {
+      const provider = makeProvider();
+      const declarations = provider.binding.declarations.map((declaration) =>
+        declaration.name === "get"
+          ? {
+              ...declaration,
+              input: {
+                type: "object",
+                properties: { [`key_${index}`]: { type: "string" } },
+                additionalProperties: false,
+              },
+            }
+          : declaration,
+      );
+      const candidate = reg.stage({ ...provider.binding, declarations });
+      expect(reg.state().compiledSchemas).toBeGreaterThan(0);
+      candidate.dispose();
+      expect(reg.state().compiledSchemas).toBe(0);
+    }
+    reg.dispose();
+    expect(reg.state()).toEqual({
+      providers: 0,
+      methods: 0,
+      unavailableNamespaces: 0,
+      subscriptions: 0,
+      compiledSchemas: 0,
+      listeners: 0,
+      disposed: true,
+    });
+    expect(() => reg.stage(makeProvider().binding)).toThrowError(/disposed/);
   });
 
   it("disposes an uncommitted stage without emitting a public generation", () => {

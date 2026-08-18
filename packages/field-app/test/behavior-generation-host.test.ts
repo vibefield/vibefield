@@ -138,6 +138,14 @@ describe("document behavior generation host", () => {
     });
     const connection = connectBehaviorGenerationHost(host, catalog);
 
+    expect(host.state()).toEqual({
+      desiredBindings: 2,
+      installedBindings: 1,
+      capturedErrors: 0,
+      ledgerListeners: 1,
+      closed: false,
+    });
+
     expect(host.diagnostics()).toEqual([
       expect.objectContaining({
         pluginId: aId,
@@ -171,10 +179,19 @@ describe("document behavior generation host", () => {
     expect(changed).toHaveBeenCalledTimes(beforePolling);
 
     connection.close("diagnostic-close");
-    expect(changed.mock.calls.at(-1)?.[0]).toEqual([
+    const finalDiagnostics = changed.mock.calls.at(-1)?.[0];
+    expect(finalDiagnostics).toEqual([
       expect.objectContaining({ pluginId: aId, state: "closed", closeReason: "diagnostic-close" }),
       expect.objectContaining({ pluginId: bId, state: "closed", closeReason: "diagnostic-close" }),
     ]);
+    expect(host.state()).toEqual({
+      desiredBindings: 0,
+      installedBindings: 0,
+      capturedErrors: 0,
+      ledgerListeners: 0,
+      closed: true,
+    });
+    expect(host.diagnostics()).toEqual(finalDiagnostics);
     engine.dispose();
   });
 
@@ -298,6 +315,63 @@ describe("document behavior generation host", () => {
 
     refuseUnregister = false;
     expect(host.close().state).toBe("closed");
+    expect(guest(engine, Behavior.name)).toBeUndefined();
+    engine.dispose();
+  });
+
+  it("keeps a failed close structurally visible and retries its exact inverse", () => {
+    const pluginId = "com.example.host-close-retry";
+    const Behavior = defineBehavior(`${pluginId}:layout`, { store: "runtime" });
+    const engine = createCanvasEngine();
+    const register = engine.behaviors.register.bind(engine.behaviors);
+    let refuseUnregister = true;
+    engine.behaviors.register = ((...args: Parameters<typeof register>) => {
+      const unregister = register(...args);
+      return () => {
+        if (refuseUnregister) throw new Error("close inverse refused");
+        unregister();
+      };
+    }) as typeof engine.behaviors.register;
+    const host = new BehaviorGenerationHost({
+      engine,
+      target: target("engine-close-retry", "doc-close-retry"),
+    });
+    const binding = {
+      ...rendererBinding(pluginId, Behavior, 0),
+      candidateToken: {},
+      rendererTarget: rendererTarget(pluginId),
+    } satisfies BehaviorCatalogBinding;
+    host.reconcile([binding]);
+
+    expect(host.close("window-close").state).toBe("failed");
+    expect(host.state()).toEqual({
+      desiredBindings: 1,
+      installedBindings: 1,
+      capturedErrors: 1,
+      ledgerListeners: 0,
+      closed: true,
+    });
+    expect(guest(engine, Behavior.name)).toBeDefined();
+
+    refuseUnregister = false;
+    expect(host.close("retry").state).toBe("closed");
+    expect(host.state()).toEqual({
+      desiredBindings: 0,
+      installedBindings: 0,
+      capturedErrors: 0,
+      ledgerListeners: 0,
+      closed: true,
+    });
+    expect(host.diagnostics()).toEqual([
+      expect.objectContaining({
+        pluginId,
+        state: "closed",
+        closeReason: "window-close",
+        desiredCount: 1,
+        installedCount: 0,
+        failedCount: 0,
+      }),
+    ]);
     expect(guest(engine, Behavior.name)).toBeUndefined();
     engine.dispose();
   });

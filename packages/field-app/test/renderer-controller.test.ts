@@ -228,6 +228,13 @@ describe("the renderer/window target controller", () => {
     );
     runtime.add(controller);
     expect(reports).toHaveBeenLastCalledWith(id, expect.any(Object), null);
+    expect(runtime.state()).toMatchObject({
+      controllers: 1,
+      controllerDiagnostics: 1,
+      behaviorDiagnostics: 0,
+      breakerEntries: 0,
+      closed: false,
+    });
 
     const behavior = PluginRuntimeBehaviorGenerationDiagnostic.parse({
       pluginId: id,
@@ -266,6 +273,17 @@ describe("the renderer/window target controller", () => {
 
     await runtime.close();
     expect(closeReporter).toHaveBeenCalledTimes(1);
+    expect(runtime.state()).toEqual({
+      controllers: 0,
+      controllerDiagnostics: 0,
+      behaviorDiagnostics: 0,
+      updateChannels: 0,
+      inFlight: 0,
+      breakerEntries: 0,
+      behaviorCatalog: { plugins: 0, bindings: 0, listeners: 0, closed: true },
+      closed: true,
+    });
+    expect(runtime.controller(id)).toBeUndefined();
   });
 
   it("logs each lifecycle transition once, reports latest state, and polling emits nothing", async () => {
@@ -716,6 +734,41 @@ describe("the renderer/window target controller", () => {
       await expect(controller.close()).resolves.toBeUndefined();
     } finally {
       release.resolve();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not manufacture a zero window census when one controller fails to quiesce", async () => {
+    vi.useFakeTimers();
+    const id = "prc.renderer.controller.window-nonquiescent-census";
+    const release = deferred<void>();
+    const controller = new RendererPluginController(
+      record(id, { commandsAndSurfaces: false }),
+      moduleRow(id),
+      {
+        activate() {
+          return { dispose: async () => release.promise } satisfies Disposable;
+        },
+      },
+      "field",
+      testDeps(),
+    );
+    const runtime = new RendererWindowController("field");
+    runtime.add(controller);
+    try {
+      await runtime.reconcile(snapshot(record(id, { commandsAndSurfaces: false })));
+      const closing = runtime.close();
+      const rejected = expect(closing).rejects.toThrow(/did not close cleanly/);
+      await vi.advanceTimersByTimeAsync(PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS + 1);
+      await rejected;
+      expect(runtime.state()).toMatchObject({
+        controllers: 1,
+        controllerDiagnostics: 1,
+        closed: true,
+      });
+    } finally {
+      release.resolve();
+      await vi.advanceTimersByTimeAsync(0);
       vi.useRealTimers();
     }
   });

@@ -400,6 +400,53 @@ describe("PluginRuntimeDiagnostics (PRC-6b)", () => {
     expect(emit).toHaveBeenCalledTimes(1);
   });
 
+  it("reports and releases every retained report/listener at disposal", async () => {
+    const { diagnostics, registrar, update } = fixture();
+    register(update);
+    const subscription = await registrar.subscribe(context(), {}, () => undefined);
+    await registrar.call("plugins.runtime.report", context(), report(1));
+    await Promise.resolve();
+    expect(diagnostics.state()).toEqual({
+      plugins: 1,
+      reports: 1,
+      listeners: 1,
+      flushScheduled: false,
+      disposed: false,
+    });
+
+    diagnostics.dispose();
+    expect(diagnostics.state()).toEqual({
+      plugins: 0,
+      reports: 0,
+      listeners: 0,
+      flushScheduled: false,
+      disposed: true,
+    });
+    subscription.dispose();
+    await expect(registrar.subscribe(context(), {}, () => undefined)).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+    });
+  });
+
+  it("cancels a queued diagnostic flush structurally at disposal", async () => {
+    const { diagnostics, registrar, update } = fixture();
+    register(update);
+    await registrar.subscribe(context(), {}, () => undefined);
+    diagnostics.notifyHostChanged();
+    expect(diagnostics.state().flushScheduled).toBe(true);
+
+    diagnostics.dispose();
+    expect(diagnostics.state()).toMatchObject({
+      plugins: 0,
+      reports: 0,
+      listeners: 0,
+      flushScheduled: false,
+      disposed: true,
+    });
+    await Promise.resolve();
+    expect(diagnostics.state().flushScheduled).toBe(false);
+  });
+
   it("derives Doctor issues without dropping the underlying exact reports", async () => {
     const failedService = controller("service", {
       state: "failed",

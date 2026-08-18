@@ -999,6 +999,29 @@ export class RendererWindowController {
     },
   ) {}
 
+  /** Structural census used by compressed and physical soak gates. */
+  state(): {
+    readonly controllers: number;
+    readonly controllerDiagnostics: number;
+    readonly behaviorDiagnostics: number;
+    readonly updateChannels: number;
+    readonly inFlight: number;
+    readonly breakerEntries: number;
+    readonly behaviorCatalog: ReturnType<BehaviorBindingCatalog["state"]>;
+    readonly closed: boolean;
+  } {
+    return Object.freeze({
+      controllers: this.controllers.size,
+      controllerDiagnostics: this.controllerDiagnostics.size,
+      behaviorDiagnostics: this.behaviorDiagnostics.size,
+      updateChannels: this.updateChannels.size,
+      inFlight: this.inFlight.size,
+      breakerEntries: this.behaviorLedger.size,
+      behaviorCatalog: this.behaviorCatalog.state(),
+      closed: this.closed,
+    });
+  }
+
   add(controller: RendererPluginController): void {
     if (this.closed) throw new Error("renderer window controller is closed");
     if (controller.windowId !== this.windowId)
@@ -1157,12 +1180,26 @@ export class RendererWindowController {
     const leaving = [...this.updateChannels].map(async (channel) => await channel.close());
     this.updateChannels.clear();
     // Every close edge runs now; only observation waits are asynchronous.
-    const closing = [...this.controllers.values()].map(async (controller) => controller.close());
+    const controllerClosures = [...this.controllers].map(([pluginId, controller]) => ({
+      pluginId,
+      // close() seals ingress synchronously before returning its observation promise.
+      task: controller.close(),
+    }));
+    const closing = controllerClosures.map(({ task }) => task);
     // Controller abort listeners have withdrawn their exact rows synchronously. This final fence
     // prevents any orphaned or reentrant publication from surviving window close.
     this.behaviorCatalog.close();
     void Promise.allSettled([...leaving, ...pending, ...closing]).then((results) => {
       this.diagnostics?.close();
+      const controllerOffset = leaving.length + pending.length;
+      for (const [index, closure] of controllerClosures.entries()) {
+        if (results[controllerOffset + index]?.status !== "fulfilled") continue;
+        this.controllers.delete(closure.pluginId);
+        this.controllerDiagnostics.delete(closure.pluginId);
+        this.behaviorDiagnostics.delete(closure.pluginId);
+      }
+      this.inFlight.clear();
+      if (this.controllers.size === 0) this.behaviorLedger.clear();
       const failures = results.flatMap((result) =>
         result.status === "rejected"
           ? [result.reason instanceof Error ? result.reason.message : String(result.reason)]

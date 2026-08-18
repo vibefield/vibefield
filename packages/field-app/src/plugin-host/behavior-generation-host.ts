@@ -46,6 +46,10 @@ export class BehaviorBreakerLedger {
   snapshot(): ReadonlyMap<string, GuestLedgerRecord> {
     return new Map(this.rows);
   }
+
+  clear(): void {
+    this.rows.clear();
+  }
 }
 
 export interface BehaviorGenerationTarget {
@@ -336,6 +340,7 @@ export class BehaviorGenerationHost {
   private desired: readonly BehaviorCatalogBinding[] = [];
   private closed = false;
   private readonly stopLedger: () => void;
+  private ledgerListening = true;
 
   constructor(
     private readonly options: {
@@ -382,6 +387,8 @@ export class BehaviorGenerationHost {
   private fallbackLedger: BehaviorBreakerLedger | undefined;
   private lastErrors: readonly CapturedBehaviorGenerationError[] = [];
   private closeReason: string | undefined;
+  /** Final plain-data fold retained after successful release of every code-bearing row. */
+  private closedDiagnostics: readonly PluginRuntimeBehaviorGenerationDiagnostic[] | undefined;
 
   reconcile(snapshot: readonly BehaviorCatalogBinding[]): BehaviorGenerationReport {
     if (this.closed) throw new Error("behavior generation host is closed");
@@ -398,9 +405,12 @@ export class BehaviorGenerationHost {
   }
 
   close(reason = "generation-close"): BehaviorGenerationReport {
-    if (this.closed) return this.lastReport;
-    this.closed = true;
-    this.closeReason = clipDiagnosticText(reason);
+    if (this.closed && this.installed.size === 0) return this.lastReport;
+    const firstClose = !this.closed;
+    if (firstClose) {
+      this.closed = true;
+      this.closeReason = clipDiagnosticText(reason);
+    }
     const errors: CapturedBehaviorGenerationError[] = [];
     for (const current of [...this.installed.values()].sort(reverseInstalled)) {
       try {
@@ -411,9 +421,38 @@ export class BehaviorGenerationHost {
         errors.push(this.captureError("unregister", current.binding, error));
       }
     }
-    this.stopLedger();
-    this.emit("close", undefined, { reason });
-    return this.commitReport(errors.length === 0 ? "closed" : "failed", errors);
+    if (firstClose) {
+      this.stopLedger();
+      this.ledgerListening = false;
+      this.emit("close", undefined, { reason });
+    }
+    const result = this.commitReport(errors.length === 0 ? "closed" : "failed", errors);
+    if (errors.length === 0) {
+      // Preserve the externally useful terminal fold, then release handles/tokens captured by the
+      // desired/error rows. A closed generation can never reconcile again.
+      this.closedDiagnostics = this.diagnostics();
+      this.desired = [];
+      this.lastErrors = [];
+      this.fallbackLedger = undefined;
+    }
+    return result;
+  }
+
+  /** Exact live-resource census. A successful close returns structural zero. */
+  state(): {
+    readonly desiredBindings: number;
+    readonly installedBindings: number;
+    readonly capturedErrors: number;
+    readonly ledgerListeners: number;
+    readonly closed: boolean;
+  } {
+    return Object.freeze({
+      desiredBindings: this.desired.length,
+      installedBindings: this.installed.size,
+      capturedErrors: this.lastErrors.length,
+      ledgerListeners: this.ledgerListening ? 1 : 0,
+      closed: this.closed,
+    });
   }
 
   breakerKey(binding: BehaviorCatalogBinding): string {
@@ -425,6 +464,7 @@ export class BehaviorGenerationHost {
    * set. At most two renderer targets describe that old→new transition without repeating full
    * authority identity on every declaration row. */
   diagnostics(): readonly PluginRuntimeBehaviorGenerationDiagnostic[] {
+    if (this.closedDiagnostics !== undefined) return this.closedDiagnostics;
     interface Group {
       readonly candidates: Map<string, BehaviorDiagnosticCandidate>;
       desiredCount: number;

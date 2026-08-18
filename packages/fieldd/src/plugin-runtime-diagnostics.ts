@@ -175,9 +175,31 @@ export class PluginRuntimeDiagnostics {
     return snapshot;
   }
 
+  /** Plain structural census; stored diagnostic values never escape. */
+  state(): {
+    readonly plugins: number;
+    readonly reports: number;
+    readonly listeners: number;
+    readonly flushScheduled: boolean;
+    readonly disposed: boolean;
+  } {
+    let reports = 0;
+    for (const pluginReports of this.reports.values()) reports += pluginReports.size;
+    return Object.freeze({
+      plugins: this.reports.size,
+      reports,
+      listeners: this.listeners.size,
+      flushScheduled: this.flushScheduled,
+      disposed: this.disposed,
+    });
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    // The queued microtask is not cancellable, but it owns no useful work after disposal. Keep the
+    // structural census truthful immediately; flush() will observe disposed and return.
+    this.flushScheduled = false;
     this.listeners.clear();
     this.reports.clear();
   }
@@ -310,6 +332,8 @@ export class PluginRuntimeDiagnostics {
     raw: unknown,
     emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
   ): { readonly snapshot: PluginRuntimeDiagnosticsSnapshot; readonly dispose: () => void } {
+    if (this.disposed)
+      throw new RpcCallError("UNAVAILABLE", "plugin runtime diagnostics are stopping", true);
     const parsed = PluginRuntimeDiagnosticsGetParams.safeParse(raw ?? {});
     if (!parsed.success)
       throw new RpcCallError(

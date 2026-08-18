@@ -43,6 +43,23 @@ export class BehaviorBindingCatalog {
     );
   }
 
+  /** Structural census for soak/teardown assertions. Code-bearing rows never escape this count. */
+  state(): {
+    readonly plugins: number;
+    readonly bindings: number;
+    readonly listeners: number;
+    readonly closed: boolean;
+  } {
+    let bindings = 0;
+    for (const entry of this.committedByPlugin.values()) bindings += entry.bindings.length;
+    return Object.freeze({
+      plugins: this.committedByPlugin.size,
+      bindings,
+      listeners: this.listeners.size,
+      closed: this.closed,
+    });
+  }
+
   subscribe(listener: BehaviorCatalogListener): () => void {
     if (this.closed) throw new Error("behavior binding catalog is closed");
     this.listeners.add(listener);
