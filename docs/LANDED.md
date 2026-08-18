@@ -2967,3 +2967,54 @@ petition file's workaround-retirement section is the consumption checklist. G13
 gate is blind to win32 (standing memory): the box gates re-run at the next WIN rung.
 
 Gates: `pnpm verify` verbatim green end to end (preflight with the moved pin table → typecheck 23 projects → biome → rustfmt/clippy → all TS suites → all cargo suites → gen:check), plus `pnpm smoke` `{"ok":true, nativeConnected:true}` with the terminal unit up on 0.10.0.
+
+## R3-0 — the mind-map pack's platform prep closes (five slices; three entries owed-late)
+
+**Date:** 2026-08-18 · **Commits:** `e66143a` (S2, keyboard-claim contract fields) ·
+`30fd403` (W1, the SDK wire door — the concrete PA-27 evidence) · `57c4720` (S3, SDK
+`useUndo`) · `a002dc5` (S1, MeasureQueue wiring, today) · P1 = a deliberately never-merged
+probe, verdict at `draft/predesign-mindmap-evidence.md` §F
+
+**Ledger repair, named plainly:** S2/W1/S3 landed 2026-08-14 with ROADMAP mentions and
+ZERO entries here — the same parallel-track miss the 2026-08-07 debt row documents (the
+milestone ritual walks the track being closed; work landing beside it is invisible by
+construction). Recorded now as one rung entry rather than three backdated ones.
+
+**S1 (`a002dc5`) — auto-size was a dead declaration; now it measures.** ICE installs
+`measureIngest` only when `createCanvasEngine` receives a `measureQueue`, and field-app
+never passed one. Now `createFieldEngine` mints one queue per engine, records the pairing
+in a `WeakMap` side table (`measureQueueFor`), and `CanvasStage` hands the SAME instance
+to `InfiniteCanvasGround` — two instances is the silent-nothing failure mode, so the
+pairing is structural. Five tests, each mutation-checked red-then-green, including the
+full loop headless: a real `MeasureEvent` → `ce.step(now)` → `MeasuredSize {w:320,h:214}`
+on the entity, plus ICE's ±1px dead band respected across ticks. `pnpm verify` verbatim
+exit 0 in the builder worktree; main fast-forwarded to the identical tree. Findings worth
+keeping (both now standing memories): with `exactOptionalPropertyTypes` an ICE prop typed
+`foo?: T` (no `| undefined`) must be conditionally SPREAD, never passed as a
+maybe-undefined expression (TS2375 — and this is why the original S1 session stalled);
+and `bundle:assert` requires a `pnpm build` a fresh worktree has never run (a different
+failure from the known Electron lazy-install race). One flake (plugin-playground
+behavior-conformance) was exonerated by a real control — passes standalone on base, on
+the change, and on the clean full-gate rerun; order/load-dependent, not this diff.
+
+**P1 — the CSP download probe RAN; both mechanisms work.** In the production window on
+the real `vibefield-app://` origin (mode integrity proven by the pinned 9410/9411 ports
+in the policy), blob AND data-URL `<a download>` anchors each produced `will-download`,
+completed, and matched main's own bytes exactly (135/135) — with the CSP demonstrably
+live and enforcing in the same document (two `img-src` control violations,
+`disposition: "enforce"`). `default-src 'self'` does not apply to anchor downloads; ship
+blob. The honest boundary: the probe installed its own `will-download` handler, and
+production has none on the default session (verified — the only two handlers live on
+other sessions and deny), so the bare-anchor UX is Electron's native save dialog,
+unexercised. A silent/audited export copies `runAuditedSupportExport`, not a new door.
+The scaffolding stays uncommitted in worktree `vf-wt-p1` for reruns; the run isolated
+itself from the live PRC-6c2b soak via `FIELDD_DATA_DIR` + `--user-data-dir` and left it
+untouched.
+
+**The rung's fifth slice never existed to build:** W2a–W2d (the ECS door) superseded into
+design-009 `defineBehavior` + PRC-4d/e and landed there — `thinking-plugin-ecs-door.md`
+is HISTORY/substrate, and `thinking-mindmap-pack.md` carries a 2026-08-18 as-built
+refresh mapping §2's vocabulary onto the landed surface (derived-at-`derive`, gesture
+suppression by default, `GuardedTx.move`, `maxFacetBytes` duty). **R3-0 is closed whole;
+the pack's build rungs (R3-1…R3-5) now wait on exactly one thing: MM-D1…D14
+ratification.**

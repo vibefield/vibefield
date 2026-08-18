@@ -3,7 +3,8 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-18 — PRC-6c2b PREFLIGHT GREEN.** PRC-5a–d
+> stays in the design docs + specs. Last rewritten: **2026-08-18 — PRC-6c2b PREFLIGHT
+> GREEN · R3-0 CLOSED, the mind-map runway is clear (gating: MM-D1…D14 alone).** PRC-5a–d
 > established exact renderer identity, immutable signed-artifact slots, explicit candidate
 > authority, and stable renderer replacement. PRC-5e assembled the authenticated coordinator and
 > source/ack transport in `7873e60` + `31a48c1` + `303374f` + `ffd1ae2` + `0c58fe7`; PRC-5f
@@ -42,8 +43,11 @@
 > threshold fix its rendering regression exposed, + two raw NUL bytes found making
 > schema-walk.ts binary to git/grep, re-encoded), **W1** `30fd403` (the SDK wire door:
 > Wire/WireFrom/WirePorts/WirePrefab/WireTo + widgetSpawnInits + door-shape test), **S3**
-> `57c4720` (`useUndo` — engine undo for claiming widgets). In flight: S1 (MeasureQueue
-> wiring) and P1 (CSP blob probe) in builder worktrees. Previously the LATE pass —
+> `57c4720` (`useUndo` — engine undo for claiming widgets). **R3-0 then CLOSED
+> 2026-08-18** (ledger §R3-0): S1 landed `a002dc5` (auto-size measures — the queue rides
+> the engine) and probe P1 ran (blob AND data anchor downloads both work under the
+> production CSP, control-proven; verdict in evidence §F; scaffolding never merged).
+> Previously the LATE pass —
 > **the mind map redirect, twice, landing ECS-NATIVE.** James redirected the pack's form AM
 > (one contained widget, v2) and again PM to the standing design, `thinking-mindmap-pack.md`
 > **v3** (MM-D1…D14, PROPOSAL awaiting James): each node its own entity, edges on the engine's
@@ -195,10 +199,13 @@ verdict runner with 44 authored states and honest `skipped-gl` rows. Roots: `pnp
 `a7d434f`, ledger §P8d-3). Remaining in P8d: **the measured ten-minute bar alone**, its
 subject in motion — the pack redirected twice and landed ECS-native; v3's MM-D14 proposes
 the bar decouple to a template toy (`thinking-mindmap-pack.md`, awaits James). Rung 3's
-R3-0 platform prep is underway: S2 `e66143a` · W1 `30fd403` · S3 `57c4720` LANDED; S1
-(measurement wiring) + P1 (CSP probe) in builder worktrees; **W2a–W2d, the ECS door
-(`thinking-plugin-ecs-door.md`), designed and awaiting James** — after his read, the door
-lands, then the build rungs open behind the binding visual-consistency read — DESIGN.md ·
+R3-0 platform prep is **CLOSED (2026-08-18, ledger §R3-0)**: S2 `e66143a` · W1 `30fd403` ·
+S3 `57c4720` · S1 `a002dc5` LANDED, and probe P1 ran (blob anchor export works under the
+production CSP; evidence §F). **W2a–W2d SUPERSEDED** — the ECS door's substance landed as
+design-009 `defineBehavior` + PRC-4d/e, `thinking-plugin-ecs-door.md` is HISTORY/substrate,
+and no door ratification is owed; `thinking-mindmap-pack.md` carries a 2026-08-18 as-built
+refresh (decisions unchanged). The build rungs open on **MM-D1…D14 ratification alone**,
+behind the binding visual-consistency read — DESIGN.md ·
 UI_SYSTEM · design-kit · existing widgets. P8c rides WP8; P8e gates any third-party
 listing.
 
@@ -538,27 +545,25 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
 ## Next up — the options on the table (James's call)
 
-- **PLUG → the mind map pack (ECS-native) + the ECS door** — the chosen thread. P8b and
-  the P8d kit are COMPLETE; the pack's design is `thinking-mindmap-pack.md` v3 (node
-  entities + engine Wire edges + ordered-ChildOf structure + a sweep-drag auto-growing
-  frame + geometry as DERIVED state maintained by a declared layout system; evidence
-  §A–§E). R3-0 is underway: S2/W1/S3 LANDED (`e66143a`/`30fd403`/`57c4720`), S1 + P1 in
-  builder worktrees. **PRC-D1…D13 are RATIFIED; PRC-0 `7e0a0e8`, PRC-1 `4831b0a`, PRC-2
-  `96fcd81`, PRC-3a `4c4755c`, PRC-3b `2dbb359`+`22a4f71`, and PRC-3c `2df838b` are LANDED**;
-  renderer/window controller adapter PRC-3d must land before W2 consumes lifecycle semantics.
-  **Gating now: two
-  ratifications** — `thinking-plugin-ecs-door.md`
-  (ED-D1…D12; James's redline made the systems gap a proper design: `ctx.canvas.systems.
-  bind` at the publish seam, PA-28 scheduler + suspension, generation replay, namespaced
-  runtime schema, `ctx.canvas.tx`, `ops.glide` on public surfaces) and
-  `thinking-mindmap-pack.md` MM-D1…D14. Then: W2a–W2d land, the pure core
+- **PLUG → the mind map pack (ECS-native)** — the chosen thread, and the runway is now
+  CLEAR. P8b and the P8d kit are COMPLETE; the pack's design is `thinking-mindmap-pack.md`
+  v3 (node entities + engine Wire edges + ordered-ChildOf structure + a sweep-drag
+  auto-growing frame + geometry as DERIVED state maintained by a declared behavior;
+  evidence §A–§F), carrying a **2026-08-18 as-built refresh** (decisions unchanged). The
+  platform it consumes all landed: the ECS door's substance arrived as **design-009
+  `defineBehavior` + PRC-4 (COMPLETE)**, dissolving the old door ratification, and
+  **R3-0 platform prep is CLOSED** (ledger §R3-0 — S2/W1/S3/S1 landed
+  `e66143a`/`30fd403`/`57c4720`/`a002dc5`; probe P1's verdict in evidence §F: blob anchor
+  export works under the production CSP). **Gating now: ONE ratification — MM-D1…D14**
+  (the pack doc's §8: the decisions, the MM-D14 bar call — a P8d gate change — the D5
+  drag stance, the D12 collapse deferral). Then R3-1…R3-5: the pure core
   (layout/opml/tx-shape suites), the visible map behind the binding visual-consistency
   read (`thinking-prod-dogfood-packs.md` §3), the living map (keyboard, focus store,
-  gesture txs, the layout system live), the OPML door, the signed `.vfplugin` joining the
-  smoke census — plus the upstream ICE demand entries (per-wire styling/labels · Hidden ·
-  tx-meta provenance; ops.glide RETIRED as host-implementable). MM-D14 (bar → template
-  toy) is a P8d gate change — James's call. Plan: `thinking-p8-loadable-artifact.md` ·
-  pack: `thinking-mindmap-pack.md` · door: `thinking-plugin-ecs-door.md`.
+  gesture txs, the layout behavior live), the OPML door, the signed `.vfplugin` joining
+  the smoke census — plus the upstream ICE demand entries argued from real use (per-wire
+  styling/labels · Hidden · spawn-focus; the tx-meta and move asks SHIPPED upstream and
+  left the list). Plan: `thinking-p8-loadable-artifact.md` · pack:
+  `thinking-mindmap-pack.md`.
 - **AH-4 closeout** — review and land the preview runtime, stage/sign the bundled browser
   plugin through WP8, then run the both-theme/native-picker plus desktop-B preview/refresh,
   Truffle symlink/allow, and cross-origin physical witnesses. AH-5 adds the phone list; the
