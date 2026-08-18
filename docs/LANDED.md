@@ -2860,8 +2860,9 @@ execution.
 
 ## PRC-6c2a — packaged physical runtime-soak runner
 
-**LANDED 2026-08-17 (`d2fd9e5`).** The existing production `--smoke-plugin-restart` witness now
-supports bounded cycle and wall-time modes without a soak-only composition root. One Electron owner
+**LANDED 2026-08-17 (`d2fd9e5` + `03c9adb` + `5b6a190`).** The existing production
+`--smoke-plugin-restart` witness now supports bounded cycle and wall-time modes without a soak-only
+composition root. One Electron owner
 keeps two production-origin windows, repeatedly SIGKILLs the exact supervisor-owned fieldd, waits
 for positive old-fieldd and old-renderer PID death, adopts a fresh boot, preserves window participant
 IDs, requires fresh document incarnations, and reconstructs staged service and behavior plugins.
@@ -2870,20 +2871,23 @@ Counts-only health projects the Electron bootstrap cache, both renderer runtime 
 service host/router/compiler, and passive diagnostics hub. Each quiescent sample also records the
 Electron process roster; main/fieldd/field-native FDs, threads, sockets, working sets, and optional
 macOS physical footprint; log category bytes/files; queue/drop counters; and full raw structural
-vectors. An external wrapper streams exclusive-create JSONL incrementally, verifies sample count
-against the verdict, and reserves `claimSatisfied: true` for an exact 24-hour passing run.
+vectors. An external wrapper streams exclusive-create JSONL incrementally into an ignored draft
+evidence directory that survives production rebuilds, verifies sample count against the verdict,
+and reserves `claimSatisfied: true` for an exact 24-hour passing run.
 
-Calibration changed two assumptions. A replacement fieldd adopts the already-live native floor and
+Calibration changed three assumptions. A replacement fieldd adopts the already-live native floor and
 therefore honestly reports `nativePid: null`; the runner retains and directly samples the original
 positive native PID, rejecting only a conflicting positive claim. Active Chromium descriptors also
 refuted exact-repeat quiescence. Each OS point is now the median of seven readings 125 ms apart with
 raw min/max ranges retained, and early/late plateau medians use at least three cycle observations.
-Exact plugin ownership and process-death gates remain exact.
+A later run found a transient Electron app-metrics row retiring after renderer-ready; complete
+seven-reading windows now retry for at most 10 seconds and report their count. Exact plugin
+ownership, positive old-PID death, and the accepted final process roster remain exact.
 
 The independent eight-cycle clean run holds all **13 exact maxima at zero**, with a constant
-**1 Browser + 1 GPU + 3 Utility + 2 Tab** roster. Post-warmup main FDs are **145→147** (maximum
-148); fieldd stays **48 FDs / 16 threads / 8 sockets** and field-native **30 / 13 / 0**. System and
-plugin logs stay at **10 / 4 files** with **275,130 / 27,885-byte** maxima; log queues and
+**1 Browser + 1 GPU + 3 Utility + 2 Tab** roster. Post-warmup main FDs are **145→145** (maximum
+147); fieldd stays **48 FDs / 16 threads / 8 sockets** and field-native **30 / 13 / 0**. System and
+plugin logs stay at **10 / 4 files** with **278,883 / 27,885-byte** maxima; log queues and
 unexplained drops remain zero. Its structured result is pass/calibration with
 `claimSatisfied: false`. The four-cycle negative control plants a real main-process listener per
 graded cycle and fails only the exact **1→2→3** residue. A final rebuilt three-cycle run also passes.
