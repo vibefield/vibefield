@@ -2680,3 +2680,40 @@ fieldd candidate/service seams **18/18**; Electron staged serving **6/6**; field
 field-app, and electron-shell typechecks; changed-file Biome and patch hygiene. PRC-5e now owns the
 authenticated update-id/participant-bound candidate-client mint and revocation, trusted source
 resolver, coordinator command/ack transport, pointer CAS interval, and held-newcomer admission.
+
+## TC-S0 + TC-S1 — resource governance and floor supervision (terminal custody opens)
+
+The terminal-custody track's first two slices, implemented from the evidence-complete spec
+(`draft/specs/terminal-custody.md` v0.2, awaiting ratification; §15 pre-cleared TC-S0/S1 as
+blocking on nothing). TC-S0 makes resource governance law: RLIMIT_NOFILE raised at the
+floor's boot, so the rehearsed silent death at session ~#47 under launchd's 256 is
+unreachable — the sabotage arm dies at 14 sessions, the real arm sails past 30 on the same
+inherited limit. Create refusals classify only what is provable: openpty errnos survive the
+wire and answer `fd_pressure` end-to-end; spawn-stage flattening (ENOENT and EMFILE leave
+ghosttea as one string) is an upstream fact, petitioned, never guessed at; absolute shells
+pre-flight to NotFound on both sides of the seam. fd/pty pressure are recovering health
+states with 80/70 hysteresis; the machine-wide flock'd admission ledger (TC-L1f) derives
+its root through the layout registry, reaps dead-pid entries by liveness, and holds its
+two-process contention row (exactly 12 of 24 asks admitted; LOCK_EX→LOCK_SH fails it). The
+per-class scrollback caps gen into Rust but stand UNENFORCED — ghosttea 0.9.3 has no
+per-session knob; the ask is recorded.
+
+TC-S1 closes the oldest as-built gap: design-00 §4.2's "fieldd restarts it" now exists.
+The supervisor respawns a dead floor behind the double-spawn probe under bounded intensity
+(3/60s), escalating to the permanent honest "gone" with `system.native.restart` as the
+affordance — which probes liveness before killing, because after an intensity trip the
+held pid is a corpse. The 100ms two-stage heartbeat makes wedge a first-class state:
+"unresponsive", distinct from "crashed", detection-to-state at the ≤250ms design budget,
+the destructive rung held behind 3s of confirmed silence, recovery behind two clean pongs.
+NativeLink gained request deadlines (it waited forever before), ping, and dialNow so a
+fresh floor is not served its predecessor's backoff.
+
+Acceptance: field-native 27 new tests including the fd-exhaustion kill-matrix row (both
+arms, mutation-failable) and the admission contention row; fieldd 11 new rows including
+three kill-matrix rows against the real binary (SIGKILL → respawn 3.9s end-to-end with a
+fresh pid; SIGSTOP → distinct state → same-pid recovery; intensity → gone → affordance);
+the full verify gate green through every stage with gen:check proven post-commit; clippy
+at -D warnings clean. Two pre-existing gate reds fixed en route with provenance recorded:
+the stale mesh_bridge supersession row (red since the presence-lanes close-fence; its
+subject was supersession, so it now opens its lane) and doc-sync's ENOTEMPTY teardown
+race (the cross-daemon harness's own retry idiom).
