@@ -50,41 +50,51 @@ async function main(): Promise<void> {
 
   let nativePid: number | undefined;
   const mgmtEndpoint = nativeMgmtEndpoint(dataDir);
-  if (nativeBin && !(await nativeAlive(mgmtEndpoint))) {
-    // The native plane outlives this fieldd (OS plane; launchd owns it later).
-    // field-native unlinks a stale socket itself before binding.
-    const child = spawn(nativeBin, [], {
-      env: {
-        ...process.env,
-        // fieldd passes the root it already resolved under the trusted shell
-        // mode decision. field-native never trusts an ambient override alone.
-        // WIN-D1 — and it is the SAME string the probe above resolved its
-        // endpoint from: on win32 both planes derive the pipe name from a hash of
-        // this root, so re-spelling it here (a resolve, a realpath, a trailing
-        // separator) is a pair that binds one name and dials another.
-        FIELD_NATIVE_DATA_DIR: dataDir,
-        FIELD_LOG_DIR: logRoot,
-        FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
-        // Level overrides remain development/test-only even though fieldd
-        // inherits a broad shell environment.
-        FIELD_NATIVE_LOG_FILTER:
-          process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1"
-            ? process.env["FIELD_NATIVE_LOG_FILTER"]
-            : undefined,
-        FIELD_NATIVE_ALLOW_LOG_FILTER:
-          process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1" &&
-          process.env["FIELD_NATIVE_ALLOW_LOG_FILTER"] === "1"
-            ? "1"
-            : undefined,
-      },
-      detached: true,
-      // Routine evidence is process-owned NDJSON now. stdout has no logging
-      // protocol; stderr is only the one-shot emergency fallback and inherits
-      // the launch chain without making fieldd its collector.
-      stdio: ["ignore", "ignore", "inherit"],
-    });
-    child.unref();
-    nativePid = child.pid;
+  // TC-D1 — ONE spawn serves the boot ensure AND every supervisor respawn:
+  // two derivations of this env composition would be the drift class wearing
+  // its usual hat. The supervisor re-runs it only after failed redials plus a
+  // fresh endpoint probe confirming no listener (the double-spawn guard).
+  const spawnNative =
+    nativeBin === undefined
+      ? undefined
+      : (): number | undefined => {
+          // The native plane outlives this fieldd (OS plane; launchd owns it
+          // later). field-native unlinks a stale socket itself before binding.
+          const child = spawn(nativeBin, [], {
+            env: {
+              ...process.env,
+              // fieldd passes the root it already resolved under the trusted shell
+              // mode decision. field-native never trusts an ambient override alone.
+              // WIN-D1 — and it is the SAME string the probe above resolved its
+              // endpoint from: on win32 both planes derive the pipe name from a hash of
+              // this root, so re-spelling it here (a resolve, a realpath, a trailing
+              // separator) is a pair that binds one name and dials another.
+              FIELD_NATIVE_DATA_DIR: dataDir,
+              FIELD_LOG_DIR: logRoot,
+              FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
+              // Level overrides remain development/test-only even though fieldd
+              // inherits a broad shell environment.
+              FIELD_NATIVE_LOG_FILTER:
+                process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1"
+                  ? process.env["FIELD_NATIVE_LOG_FILTER"]
+                  : undefined,
+              FIELD_NATIVE_ALLOW_LOG_FILTER:
+                process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1" &&
+                process.env["FIELD_NATIVE_ALLOW_LOG_FILTER"] === "1"
+                  ? "1"
+                  : undefined,
+            },
+            detached: true,
+            // Routine evidence is process-owned NDJSON now. stdout has no logging
+            // protocol; stderr is only the one-shot emergency fallback and inherits
+            // the launch chain without making fieldd its collector.
+            stdio: ["ignore", "ignore", "inherit"],
+          });
+          child.unref();
+          return child.pid;
+        };
+  if (spawnNative !== undefined && !(await nativeAlive(mgmtEndpoint))) {
+    nativePid = spawnNative();
   }
 
   const daemon = await bootstrap({
@@ -98,6 +108,7 @@ async function main(): Promise<void> {
     pluginRoots,
     serviceHarnessPath,
     ...(nativePid !== undefined ? { nativePid } : {}),
+    ...(spawnNative !== undefined ? { nativeSpawner: spawnNative } : {}),
     ...(process.env["FIELDD_BUILD_ID"] ? { buildId: process.env["FIELDD_BUILD_ID"] } : {}),
     ...(userId !== undefined ? { userId } : {}),
     onFatal: (reason) => {

@@ -13,6 +13,12 @@ export class MockMgmtServer {
   failNextHello = false;
   /** subscription methods in this set answer a persistent RPC error */
   rejectedSubscriptions = new Set<string>();
+  /** TC-D2 — methods in this set are read and NEVER answered (a wedged floor:
+   * transport up, control path silent). */
+  silentMethods = new Set<string>();
+  /** the boot id the ping ack carries (a changed value simulates a floor that
+   * restarted underneath a surviving socket) */
+  pingBootId = "mock-native-boot";
   /** when set, subscribe responses are followed by a delta IN THE SAME write */
   deltaInSameChunk = false;
   /** send SUPERSEDED immediately after the next subscribe response */
@@ -118,6 +124,20 @@ export class MockMgmtServer {
     sock: Socket,
     msg: { id: number; method: string; params?: Record<string, unknown> },
   ): void {
+    // TC-D2 tests — a WEDGED floor: the request is read and never answered
+    // (the socket stays open; only the reply is missing, exactly the wedge
+    // shape the deadline/heartbeat machinery exists to catch).
+    if (this.silentMethods.has(msg.method)) return;
+    if (msg.method === "native.lifecycle.ping") {
+      sock.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: { bootId: this.pingBootId, ts: Date.now() },
+        }) + "\n",
+      );
+      return;
+    }
     if (msg.method.startsWith("native.mesh.")) {
       this.onMesh(sock, msg);
       return;

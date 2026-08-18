@@ -5,6 +5,8 @@ import {
   CONTRACTS_VERSION,
   isPipeEndpoint,
   MESH_CONTROL_LIMITS,
+  NATIVE_SUPERVISION,
+  PingAck,
   TerminalEndpoints,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -45,6 +47,10 @@ export interface NativeLinkOptions {
   waitForDaemonMs?: number;
   /** Test seam; production uses NATIVE_MGMT_MAX_FRAME_BYTES. */
   maxFrameBytes?: number;
+  /** TC-D2 — default deadline for ordinary requests. Test seam; production
+   * uses NATIVE_SUPERVISION.REQUEST_DEADLINE_MS. Pre-TC-S1 this link waited
+   * FOREVER, so a wedged floor froze every caller silently. */
+  requestDeadlineMs?: number;
   logger?: Logger;
 }
 
@@ -433,6 +439,19 @@ export class NativeLink extends EventEmitter {
     }, delay);
   }
 
+  /** TC-D1 — the supervisor just (re)spawned the floor: dial NOW instead of
+   * waiting out the exponential backoff (worst 10s) earned dialing a corpse.
+   * A too-early dial just fails into a fresh 500ms schedule. */
+  dialNow(): void {
+    if (this.closed || this.superseded || this.sock) return;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.attempts = 0;
+    this.dial().catch(() => this.scheduleReconnect());
+  }
+
   private failPending(): void {
     for (const [, p] of this.pending) {
       p.reject(new RpcCallError("UNAVAILABLE", "mgmt connection closed", true));
@@ -494,18 +513,67 @@ export class NativeLink extends EventEmitter {
     }
   }
 
-  async request(method: string, params: unknown): Promise<unknown> {
-    return await this.rawRequest(method, params);
+  async request(method: string, params: unknown, opts?: { deadlineMs?: number }): Promise<unknown> {
+    return await this.rawRequest(method, params, undefined, opts?.deadlineMs);
   }
 
-  private async rawRequest(method: string, params: unknown, subKey?: number): Promise<unknown> {
+  /** TC-D2 — the heartbeat probe. Rides the SAME control path as every real
+   * request end-to-end (socket → framing → dispatch → reply) with a tight
+   * deadline, so a wedge anywhere on that path is exactly what it measures. */
+  async ping(deadlineMs: number): Promise<PingAck> {
+    const ack = await this.rawRequest("native.lifecycle.ping", {}, undefined, deadlineMs);
+    const parsed = PingAck.safeParse(ack);
+    if (!parsed.success)
+      throw new RpcCallError("INTERNAL", "the ping ack was not a PingAck", false);
+    return parsed.data;
+  }
+
+  private async rawRequest(
+    method: string,
+    params: unknown,
+    subKey?: number,
+    deadlineMs?: number,
+  ): Promise<unknown> {
     const sock = this.sock;
     if (!sock) throw new RpcCallError("UNAVAILABLE", "not connected", true);
     const id = this.nextId++;
     const line = `${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`;
+    const limit =
+      deadlineMs ?? this.opts.requestDeadlineMs ?? NATIVE_SUPERVISION.REQUEST_DEADLINE_MS;
     return await new Promise((resolve, reject) => {
-      const entry: Pending = { resolve, reject };
+      // TC-D2 — a request that outlives its deadline settles TIMEOUT; a late
+      // reply, if one ever comes, misses the pending map and is dropped. A
+      // deadline miss is wedge EVIDENCE, not a verdict — the supervisor's
+      // heartbeat owns the verdict.
+      let timer: NodeJS.Timeout | null = null;
+      const entry: Pending = {
+        resolve: (v) => {
+          if (timer) clearTimeout(timer);
+          resolve(v);
+        },
+        reject: (e) => {
+          if (timer) clearTimeout(timer);
+          reject(e);
+        },
+      };
       if (subKey !== undefined) entry.subKey = subKey;
+      timer = setTimeout(() => {
+        if (this.pending.get(id) !== entry) return;
+        this.pending.delete(id);
+        this.emit("deadline-miss", { method, deadlineMs: limit });
+        reject(
+          new RpcCallError(
+            "TIMEOUT",
+            `mgmt request exceeded its ${limit}ms deadline: ${method}`,
+            true,
+            {
+              method,
+              deadlineMs: limit,
+            },
+          ),
+        );
+      }, limit);
+      timer.unref?.();
       this.pending.set(id, entry);
       sock.write(line);
     });

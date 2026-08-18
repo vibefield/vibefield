@@ -28,6 +28,7 @@ import {
   METHODS,
   type MeshSyncPosture,
   type NativeHealth,
+  type NativeLinkState,
   PluginsDisableParams,
   PluginsEnableParams,
   PluginsGetParams,
@@ -82,7 +83,7 @@ import {
 } from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
-import { nativeMgmtEndpoint } from "./boot-env";
+import { nativeAlive, nativeMgmtEndpoint } from "./boot-env";
 import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -97,6 +98,7 @@ import { McpService } from "./mcp-service";
 import { MeshClient, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
+import { NativeSupervisor } from "./native-supervisor";
 import { PeerLink } from "./peer-link";
 import { RegistryInstallService } from "./plugin-install";
 import { PluginModuleAuthority } from "./plugin-modules";
@@ -144,6 +146,10 @@ export interface FielddConfig {
   peerWebSocket?: WsCtor;
   /** pid of a field-native the caller spawned (recorded in product.json for cleanup tooling) */
   nativePid?: number;
+  /** TC-D1 — re-runs the caller's spawn (bin.ts's exact env composition) so
+   * the supervisor can respawn a dead floor. Absent = adopted/external floor:
+   * no respawn authority, and the supervisor says so instead of guessing. */
+  nativeSpawner?: () => number | undefined;
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -173,8 +179,27 @@ export interface FielddConfig {
 }
 
 export interface FielddHealth {
-  fieldd: { state: "up"; bootId: string; contractsVersion: string; startedAt: number; pid: number };
+  fieldd: {
+    state: "up";
+    bootId: string;
+    contractsVersion: string;
+    startedAt: number;
+    pid: number;
+    /** TC-D6(a), fieldd half: Node cannot setrlimit itself, so fieldd MEASURES
+     * and surfaces (field-native raises its own; the packaged app's launchd
+     * plist is the spawner-side lever). null = unlimited or unreadable. */
+    fdSoftLimit: number | null;
+  };
   nativeConnected: boolean;
+  /** TC-D2 — fieldd's EXTERNAL judgment of the floor: "crashed" (socket gone)
+   * and "unresponsive" (alive, not answering the control path) are different
+   * facts and the product says which one it means. */
+  nativeLink: NativeLinkState;
+  nativeLinkDetail: string;
+  /** the floor pid this fieldd can vouch for (spawned this boot or by the
+   * supervisor since); null for adopted floors. product.json's record goes
+   * stale after the first respawn — this is the live answer. */
+  nativePid: number | null;
   /** GT-2d — the build label the paired field-native gave in its hello ack.
    * The native plane outlives fieldd and is ADOPTED, so the floor answering
    * this socket can be many builds older than the tree that started us; without
@@ -223,6 +248,9 @@ export interface FielddDaemon {
   shellToken: string;
   health(): FielddHealth;
   nativeHealth(): NativeHealth | null;
+  /** TC-D1/TC-D2 — floor supervision (tests drive requestRestart directly;
+   * the product path is system.native.restart). */
+  nativeSupervisor: NativeSupervisor;
   stop(): Promise<void>;
   /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
    * (its own graceful shutdown: stop() then exit). The `system.shutdown`
@@ -307,6 +335,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     ...(config.userId !== undefined ? { userId: config.userId } : {}),
     logger: logger.child({ component: "native_link" }),
   });
+  // TC-D1/TC-D2 (terminal-custody TC-S1): fieldd owns floor respawn + wedge
+  // detection. Constructed before connect() so no lifecycle event is missed.
+  const supervisor = new NativeSupervisor({
+    link: native,
+    probeAlive: () => nativeAlive(nativeMgmtEndpoint(config.dataDir)),
+    ...(config.nativeSpawner !== undefined ? { spawnNative: config.nativeSpawner } : {}),
+    killNative: (pid, signal) => {
+      try {
+        return process.kill(pid, signal);
+      } catch {
+        return false; // already gone — the ladder's job is done
+      }
+    },
+    ...(config.nativePid !== undefined ? { nativePid: config.nativePid } : {}),
+    logger: logger.child({ component: "native_supervisor" }),
+  });
+  // TC-D6(a), fieldd half — measure-and-surface (Node has no setrlimit).
+  const fdSoftLimit = readFdSoftLimit();
+  if (fdSoftLimit !== null && fdSoftLimit < 1024) {
+    logger.warn(
+      "fieldd.boot.fd_soft_limit_low",
+      "The fd soft limit is low for a daemon (launchd's 256 default?); raise it at the spawner",
+      { fdSoftLimit },
+    );
+  }
   let diagnostics: DiagnosticsService | null = null;
 
   // everything past pairing is transactional — never leak the client slot
@@ -618,8 +671,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         contractsVersion: CONTRACTS_VERSION,
         startedAt,
         pid: process.pid,
+        fdSoftLimit,
       },
       nativeConnected: native.connected,
+      nativeLink: supervisor.state,
+      nativeLinkDetail: supervisor.stateDetail,
+      nativePid: supervisor.currentPid ?? null,
       nativeBuild: native.nativeBuild ?? null,
       native: latestHealth,
       docs: docs.health(),
@@ -665,10 +722,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // link down/up flips stream immediately (each backoff attempt re-emits; cheap and honest)
     native.on("reconnecting", emitHealth);
     native.on("connected", emitHealth);
+    supervisor.on("transition", emitHealth);
     detachHealthSources = () => {
       audit.off("health", emitHealth);
       native.off("reconnecting", emitHealth);
       native.off("connected", emitHealth);
+      supervisor.off("transition", emitHealth);
       mesh.off("reconciled", emitHealth);
       mesh.off("serves-changed", emitHealth);
       plugins.off("changed", emitHealth);
@@ -780,6 +839,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const callback = shutdownRequested;
       setImmediate(() => callback());
       return { stopping: true };
+    });
+    // TC-D1 — the escalation affordance: after respawn intensity trips to the
+    // permanent honest "gone", a human (or the shell's restart button)
+    // overrides ON PURPOSE. Resets the window, runs one respawn cycle.
+    api.register("system.native.restart", async () => {
+      logger.info("fieldd.native_supervisor.manual_restart", "system.native.restart received");
+      await supervisor.requestRestart();
+      return { state: supervisor.state, detail: supervisor.stateDetail };
     });
     api.register("system.capabilities", () => ({
       methods: METHODS.filter((m) => m.surface === "product").map((m) => m.method),
@@ -1182,6 +1249,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(parsed.data.shell !== undefined ? { shell: parsed.data.shell } : {}),
             ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+            // TC-D6(c) — accepted + recorded; enforcement pends the upstream
+            // scrollback option (terminal-service.ts says why, honestly).
+            ...(parsed.data.workloadClass !== undefined
+              ? { workloadClass: parsed.data.workloadClass }
+              : {}),
           },
         },
         async () => await terminals.create(parsed.data),
@@ -2231,6 +2303,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
       // Refuse new work immediately, then preserve teardown audit ordering:
       // service leases revoke before the audit writer and logger close.
+      supervisor.stop(); // the new owner supervises the plane now, not us
       api.close();
       docLane.close();
       const reason = fatalReason;
@@ -2544,6 +2617,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       stopPromise ??= (async () => {
         logger.info("fieldd.lifecycle.stopping", "fieldd is stopping");
         try {
+          supervisor.stop(); // stop watching FIRST: a teardown is not a wedge
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
           detachHealthSources?.();
@@ -2611,6 +2685,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       shellToken: shellGrant.token,
       health,
       nativeHealth: () => latestHealth,
+      nativeSupervisor: supervisor,
       stop,
       onShutdownRequest(callback) {
         shutdownRequested = callback;
@@ -2623,5 +2698,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     logger.fatal("fieldd.lifecycle.bootstrap_failed", "fieldd bootstrap failed", e);
     await Promise.allSettled([audit.close(), closeLogging()]);
     throw e;
+  }
+}
+
+/** TC-D6(a) — Node's diagnostic report is the only stdlib window onto rlimits.
+ * "unlimited" (or an unreadable report) answers null: no pressure claim. */
+function readFdSoftLimit(): number | null {
+  try {
+    const report = process.report?.getReport() as unknown as
+      | { userLimits?: { open_files?: { soft?: number | string } } }
+      | undefined;
+    const soft = report?.userLimits?.open_files?.soft;
+    return typeof soft === "number" ? soft : null;
+  } catch {
+    return null;
   }
 }

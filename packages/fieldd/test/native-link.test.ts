@@ -236,3 +236,36 @@ describe("NativeLink concurrency", () => {
     expect(events.filter((e) => e === "flaky:snapshot").length).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("NativeLink deadlines + ping (TC-D2)", () => {
+  it("a request that outlives its deadline rejects TIMEOUT; the link stays usable", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    mock.silentMethods.add("x.hang"); // read, never answered — the wedge shape
+    await expect(link.request("x.hang", {}, { deadlineMs: 80 })).rejects.toMatchObject({
+      kind: "TIMEOUT",
+      retryable: true,
+    });
+    // a late/never reply must not poison the connection for the next request
+    const ok = await link.request("x.normal", {});
+    expect(ok).toEqual({});
+  });
+
+  it("ping answers a PingAck riding the full control path", async () => {
+    const { link } = await setup();
+    await link.connect();
+    const ack = await link.ping(1_000);
+    expect(ack.bootId).toBe("mock-native-boot");
+    expect(typeof ack.ts).toBe("number");
+  });
+
+  it("a wedged control path times ping out at its own tight deadline", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    mock.silentMethods.add("native.lifecycle.ping");
+    const t0 = Date.now();
+    await expect(link.ping(60)).rejects.toMatchObject({ kind: "TIMEOUT" });
+    // the deadline is the probe's own, not the 10s request default
+    expect(Date.now() - t0).toBeLessThan(2_000);
+  });
+});

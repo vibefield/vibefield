@@ -50,6 +50,7 @@ export { OutboundLaneIdAllocator } from "./lane-id";
 export { MeshClient, type ServeSpec, type ServeState } from "./mesh-client";
 export { MeshLaneLink, type MeshLaneLinkOptions } from "./mesh-lane";
 export { NativeLink, RpcCallError } from "./native-link";
+export { NativeSupervisor, type NativeSupervisorOptions } from "./native-supervisor";
 export { computePairingMac } from "./pairing";
 export { PeerLink, type PeerLinkOptions, type PeerLinkState } from "./peer-link";
 export {
