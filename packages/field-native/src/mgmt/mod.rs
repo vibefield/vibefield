@@ -618,36 +618,25 @@ async fn handle_desired_set(
     // is the second of two independent reasons the reconcile cannot wedge
     // itself.
     let plane = if !prune.is_empty() || !repolicy.is_empty() {
-        let Some(endpoints) = state.terminal_endpoints_now() else {
-            return err(
-                id,
-                "UNAVAILABLE",
-                -32006,
-                "the terminal plane has no endpoints, so the desired set's effects cannot be executed",
-                true,
-                Some(json!({
-                    "service": terminal::UNIT_ID,
-                    "state": terminal_state(state),
-                    "wouldPrune": prune.len(),
-                    "wouldRepolicy": repolicy.len(),
-                })),
-            );
-        };
-        match ControlClient::connect(&endpoints.control_socket, &endpoints.auth_token).await {
-            Ok(pair) => Some(pair),
-            Err(error) => {
+        let involved = prune
+            .iter()
+            .map(String::as_str)
+            .chain(repolicy.iter().map(|(session_id, _)| session_id.as_str()));
+        match connect_planes(state, involved).await {
+            Ok(router) => Some(router),
+            Err(detail) => {
                 tracing::warn!(
                     event = "field_native.lifecycle.plane_unreachable",
                     component = "mgmt",
                     generation = desired.generation,
-                    error = %error,
+                    error = %detail,
                     "The terminal control plane could not be reached; the desired set was refused"
                 );
                 return err(
                     id,
                     "UNAVAILABLE",
                     -32006,
-                    "the terminal control plane could not be reached, so the desired set was not applied",
+                    &format!("the desired set was not applied: {detail}"),
                     true,
                     Some(json!({
                         "service": terminal::UNIT_ID,
@@ -666,7 +655,7 @@ async fn handle_desired_set(
     // withdrawn by the same set still gets its retention decided by the new
     // policy when its ladder concludes.
     if !repolicy.is_empty() {
-        let (client, _events) = plane.as_ref().expect("plane is connected when work exists");
+        let router = plane.as_ref().expect("plane is connected when work exists");
         tracing::info!(
             event = "field_native.lifecycle.repolicy_attempt",
             component = "mgmt",
@@ -676,6 +665,18 @@ async fn handle_desired_set(
         );
         let mut failed_repolicy: Vec<&str> = Vec::new();
         for (session_id, persistence) in &repolicy {
+            // TC-S3 — the session's cell left the route snapshot: it died and
+            // took the session with it (the S3 ceiling), so its policy is
+            // moot — the ordinary race, in its per-cell shape.
+            let Some(client) = router.client_for(session_id) else {
+                tracing::debug!(
+                    event = "field_native.lifecycle.repolicy_skipped",
+                    component = "mgmt",
+                    session_id = %session_id,
+                    "A re-policied session's cell is gone; the session ended with it"
+                );
+                continue;
+            };
             match client.set_persistence(session_id, persistence).await {
                 Ok(()) => {}
                 Err(error) => match classify_prune_error(&format!("{error:#}")) {
@@ -724,7 +725,7 @@ async fn handle_desired_set(
     }
 
     if !prune.is_empty() {
-        let (client, _events) = plane.as_ref().expect("plane is connected when work exists");
+        let router = plane.as_ref().expect("plane is connected when work exists");
 
         // Attempt-before-effect (spec §8): the intent is on the record before a
         // single ladder fires, so a prune is accountable even if this daemon dies
@@ -745,6 +746,19 @@ async fn handle_desired_set(
         let mut pruned = 0_usize;
         let mut failed: Vec<&str> = Vec::new();
         for session_id in &prune {
+            // TC-S3 — a session tagged to a cell that left the route snapshot
+            // is already dead (the cell died; its PTYs died with it), so the
+            // desired end state holds without a ladder.
+            let Some(client) = router.client_for(session_id) else {
+                pruned += 1;
+                tracing::debug!(
+                    event = "field_native.lifecycle.prune_terminate_skipped",
+                    component = "mgmt",
+                    session_id = %session_id,
+                    "A pruned session's cell is gone; the desired end state already holds"
+                );
+                continue;
+            };
             // Fire the ladder and move on. Upstream's `terminate` starts it on
             // its own thread and returns (session.rs:1558-1584), so the ladders
             // overlap and this response never waits on an exit — the inventory
@@ -844,6 +858,104 @@ async fn handle_desired_set(
 /// mesh facade follows (C1: details carry the unit's state, never a literal).
 /// Read from the health the unit itself publishes; `null` only if the unit was
 /// never registered at all.
+/// TC-S3 — the desired set's effects must reach the cell that HOSTS each
+/// session: with K=2 class cells plus solos, one client cannot see every
+/// session, and asking the wrong cell answers "unknown or remote session" —
+/// which the race classifier would read as already-gone, silently skipping a
+/// termination. The router groups the involved sessions by their inventory
+/// `cell` tag and dials each involved cell once, before any effect
+/// (dial-before-store: an unreachable involved plane refuses the WHOLE set).
+/// The events receivers ride alongside for the reason the old single `plane`
+/// kept its: the exits a prune causes come back on these very connections,
+/// and a dropped receiver would make them undeliverable mid-prune.
+struct PlaneRouter {
+    clients: Vec<(ControlClient, tokio::sync::mpsc::UnboundedReceiver<Value>)>,
+    by_session: std::collections::HashMap<String, usize>,
+}
+
+impl PlaneRouter {
+    /// The client for this session's cell — or None when the tagged cell has
+    /// LEFT the route snapshot: the cell died and its sessions died with it
+    /// (the S3 ceiling), so a prune's end state already holds and a repolicy
+    /// is moot. Callers treat None as the already-gone race.
+    fn client_for(&self, session_id: &str) -> Option<&ControlClient> {
+        self.by_session
+            .get(session_id)
+            .map(|index| &self.clients[*index].0)
+    }
+}
+
+/// Dial every cell the involved sessions live on. Sessions without a tag
+/// (legacy floors, the in-process serve) ride the legacy single endpoints,
+/// exactly as before TC-S3. Err carries the human refusal detail.
+async fn connect_planes<'a>(
+    state: &Arc<DaemonState>,
+    involved: impl Iterator<Item = &'a str>,
+) -> Result<PlaneRouter, String> {
+    let mut legacy_group: Vec<String> = Vec::new();
+    let mut tagged: std::collections::HashMap<String, Vec<String>> = Default::default();
+    {
+        let observed = state.observed_tx.borrow();
+        for session_id in involved {
+            let tag = observed
+                .terminals
+                .iter()
+                .find(|row| row.session_id == session_id)
+                .and_then(|row| row.cell.as_ref())
+                .map(|cell| cell.cell_boot_id.clone());
+            match tag {
+                Some(boot) => tagged.entry(boot).or_default().push(session_id.to_string()),
+                None => legacy_group.push(session_id.to_string()),
+            }
+        }
+    }
+    let routes = state.terminal_routes.borrow().clone();
+    let mut router = PlaneRouter {
+        clients: Vec::new(),
+        by_session: Default::default(),
+    };
+    for (boot, sessions) in tagged {
+        let Some(row) = routes.cells.iter().find(|cell| cell.cell_boot_id == boot) else {
+            // The cell is gone from the snapshot: `client_for` answers None
+            // for these sessions and the caller classifies already-gone.
+            continue;
+        };
+        let pair = ControlClient::connect(&row.endpoints.control_socket, &row.endpoints.auth_token)
+            .await
+            .map_err(|error| {
+                format!(
+                    "terminal cell {} could not be reached: {error:#}",
+                    row.cell_instance_id
+                )
+            })?;
+        let index = router.clients.len();
+        router.clients.push(pair);
+        for session in sessions {
+            router.by_session.insert(session, index);
+        }
+    }
+    if !legacy_group.is_empty() {
+        let Some(endpoints) = state.terminal_endpoints_now() else {
+            return Err(
+                "the terminal plane has no endpoints, so the desired set's effects cannot be \
+                 executed"
+                    .into(),
+            );
+        };
+        let pair = ControlClient::connect(&endpoints.control_socket, &endpoints.auth_token)
+            .await
+            .map_err(|error| {
+                format!("the terminal control plane could not be reached: {error:#}")
+            })?;
+        let index = router.clients.len();
+        router.clients.push(pair);
+        for session in legacy_group {
+            router.by_session.insert(session, index);
+        }
+    }
+    Ok(router)
+}
+
 fn terminal_state(state: &DaemonState) -> Value {
     state
         .health_tx

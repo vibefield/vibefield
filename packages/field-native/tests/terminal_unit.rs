@@ -1621,3 +1621,63 @@ async fn stale_endpoints_are_rebound_on_the_next_boot() {
     second.shutdown().await;
     assert!(wait_until_gone(pid, Duration::from_secs(5)).await);
 }
+
+/// TC-S3 — the K=2 shape itself: a booted floor hosts one cell per class,
+/// each row carrying its class and the `class` role on disjoint per-instance
+/// endpoints, ordered interactive-first — which is what keeps the legacy
+/// single-cell mirror (`hello.terminal`, `cells[0]`) meaning "the cell every
+/// legacy create lands on".
+#[tokio::test]
+async fn the_floor_hosts_one_cell_per_class() {
+    use field_native::contracts::{TerminalCellRole, TerminalWorkloadClass};
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut routes = daemon.state.terminal_routes.clone();
+    let snapshot = timeout(
+        Duration::from_secs(20),
+        routes.wait_for(|snapshot| snapshot.cells.len() >= 2),
+    )
+    .await
+    .expect("both class cells announced within the hello budget")
+    .expect("the routes watch outlives boot")
+    .clone();
+    assert_eq!(
+        snapshot.cells.len(),
+        2,
+        "K=2 exactly: one host per class, no solos at rest"
+    );
+    let shape: Vec<_> = snapshot
+        .cells
+        .iter()
+        .map(|cell| (cell.workload_class, cell.role))
+        .collect();
+    assert_eq!(
+        shape,
+        vec![
+            (
+                Some(TerminalWorkloadClass::Interactive),
+                Some(TerminalCellRole::Class)
+            ),
+            (
+                Some(TerminalWorkloadClass::Agent),
+                Some(TerminalCellRole::Class)
+            ),
+        ],
+        "one class host each, interactive first (the legacy mirror's cell)"
+    );
+    let sockets: std::collections::HashSet<_> = snapshot
+        .cells
+        .iter()
+        .map(|cell| cell.endpoints.control_socket.as_str())
+        .collect();
+    assert_eq!(sockets.len(), 2, "disjoint per-instance endpoints");
+    let mirror = daemon
+        .state
+        .terminal_endpoints_now()
+        .expect("the legacy mirror serves while any cell does");
+    assert_eq!(
+        mirror.control_socket, snapshot.cells[0].endpoints.control_socket,
+        "the mirror and cells[0] are the same cell — the interactive host"
+    );
+    daemon.shutdown().await;
+}

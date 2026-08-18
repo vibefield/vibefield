@@ -44,6 +44,10 @@ pub struct CellArgs {
     pub frame: String,
     pub config: PathBuf,
     pub instance: u32,
+    /// TC-S3/TC-D4 — where to leave the crash breadcrumb. Optional so a bare
+    /// invocation (and the pre-S3 test rows) still runs; the floor always
+    /// passes it.
+    pub crumb: Option<PathBuf>,
 }
 
 /// stdin line 1. A struct rather than a bare string so the seam can grow
@@ -76,6 +80,25 @@ pub struct CellExitReport {
     pub drain_unknown: Option<String>,
 }
 
+/// TC-D4 — the crash breadcrumb, written on the way down and read (then
+/// deleted) by the floor after the wait. `cellBootId` fences generations: a
+/// crumb whose boot id is not the one the floor's hello named is stale
+/// evidence and classifies nothing. `sessionId` present ⇒ Exact{session};
+/// absent ⇒ Infrastructure — and at TC-S3 the embedded service's feed path is
+/// upstream's, so THIS binary can only ever write the sessionless form (the
+/// panic hook below). A session-naming writer arrives with custody (TC-S4+),
+/// when the feed path is ours to instrument. The file protocol is the seam
+/// the kill matrix exercises either way.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CellCrumb {
+    pub cell_boot_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
 /// Run the cell to completion. Ok(()) is the requested-drain ending; any Err
 /// is a crash the supervisor classifies.
 pub async fn run_cell(args: CellArgs) -> Result<()> {
@@ -89,6 +112,35 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
         .context("read the bootstrap line from stdin")?;
     let bootstrap: CellBootstrap =
         serde_json::from_str(first.trim()).context("parse the bootstrap line")?;
+
+    // Minted before any fallible work: the panic hook needs it, and the hello
+    // below reuses it — one identity per cell process, start to grave.
+    let cell_boot_id = hex::encode(rand::random::<[u8; 16]>());
+
+    // TC-D4 — the attribution hook. Every panic leaves a SESSIONLESS crumb
+    // (Infrastructure: this binary cannot see inside upstream's feed path, and
+    // a blame it cannot evidence is worse than none — never "last active").
+    // Chained so the default hook still prints to stderr, which the parent
+    // forwards; the write itself is best-effort — a hook must never panic.
+    // Written on EVERY panic, survivable ones included: a caught task panic's
+    // crumb may outlive it and color a later signal-death as Infrastructure
+    // with stale detail, which stays blame-free — the floor's Exact/None
+    // distinction is untouched, and the detail is diagnostic only.
+    if let Some(crumb_path) = args.crumb.clone() {
+        let hook_boot_id = cell_boot_id.clone();
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let crumb = CellCrumb {
+                cell_boot_id: hook_boot_id.clone(),
+                session_id: None,
+                detail: Some(info.to_string()),
+            };
+            if let Ok(line) = serde_json::to_string(&crumb) {
+                let _ = std::fs::write(&crumb_path, line);
+            }
+            previous(info);
+        }));
+    }
 
     // Per-instance names are FRESH by design, so stale removal is
     // belt-and-braces for a re-used ordinal after an unclean floor boot —
@@ -132,7 +184,7 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
     let (handle, serving) = service.serve_managed(TerminalServiceListeners::new(control, frames));
 
     let hello = CellHello {
-        cell_boot_id: hex::encode(rand::random::<[u8; 16]>()),
+        cell_boot_id,
         pid: std::process::id(),
         control: args.control.clone(),
         frame: args.frame.clone(),

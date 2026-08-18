@@ -12,6 +12,7 @@ fn parse_args() -> Result<CellArgs, String> {
     let mut frame = None;
     let mut config = None;
     let mut instance = None;
+    let mut crumb = None;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         let mut take = |name: &str| args.next().ok_or(format!("{name} wants a value"));
@@ -26,6 +27,9 @@ fn parse_args() -> Result<CellArgs, String> {
                         .map_err(|e| format!("--instance wants a u32: {e}"))?,
                 );
             }
+            // TC-S3/TC-D4 — the crash-breadcrumb path. Optional: a bare
+            // invocation runs without attribution rather than refusing.
+            "--crumb" => crumb = Some(PathBuf::from(take("--crumb")?)),
             other => return Err(format!("unknown flag: {other}")),
         }
     }
@@ -34,6 +38,7 @@ fn parse_args() -> Result<CellArgs, String> {
         frame: frame.ok_or("--frame is required")?,
         config: config.ok_or("--config is required")?,
         instance: instance.ok_or("--instance is required")?,
+        crumb,
     })
 }
 

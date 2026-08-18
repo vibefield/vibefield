@@ -99,8 +99,9 @@
 //! the other's news.
 
 use crate::admission::AdmissionLedger;
-use crate::cell::{CellExitReport, CellHello};
+use crate::cell::{CellCrumb, CellExitReport, CellHello};
 use crate::config::NativeConfig;
+use crate::contracts::ObservedTerminalCell;
 use crate::contracts::{
     ObservedTerminal, TerminalCellRole, TerminalEndpoints, TerminalRouteCell,
     TerminalRouteSnapshot, TerminalWorkloadClass, UnitHealth, UnitState,
@@ -119,6 +120,7 @@ use ghosttea::{
     TextEngine,
 };
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -218,6 +220,51 @@ impl Endpoints {
     }
 }
 
+/// TC-S3 — one class plane's state, as its supervisor reports it. `Failed` is
+/// the config-shaped dead end (no binary, unspellable run dir); `Crashed` is
+/// the intensity dead end. The unit health composes across classes in
+/// `Shared::set_class_state`.
+#[derive(Clone)]
+enum ClassPlaneState {
+    Starting(String),
+    Up(String),
+    Failed(String),
+    Crashed(String),
+}
+
+impl ClassPlaneState {
+    fn detail(&self) -> &str {
+        match self {
+            ClassPlaneState::Starting(detail)
+            | ClassPlaneState::Up(detail)
+            | ClassPlaneState::Failed(detail)
+            | ClassPlaneState::Crashed(detail) => detail,
+        }
+    }
+}
+
+fn class_label(class: TerminalWorkloadClass) -> &'static str {
+    match class {
+        TerminalWorkloadClass::Agent => "agent",
+        TerminalWorkloadClass::Interactive => "interactive",
+    }
+}
+
+/// TC-S3 — the snapshot's deterministic row order: interactive class host,
+/// agent class host, then solos by instance. `cells[0]` therefore stays the
+/// interactive host whenever one serves — the legacy single-cell mirror
+/// (hello `terminal`, `terminal_endpoints_now`) keeps meaning "the cell every
+/// legacy create lands on".
+fn compose_route_rows(rows: &BTreeMap<u32, TerminalRouteCell>) -> Vec<TerminalRouteCell> {
+    let mut cells: Vec<TerminalRouteCell> = rows.values().cloned().collect();
+    cells.sort_by_key(|cell| {
+        let solo = cell.role == Some(TerminalCellRole::Solo);
+        let agent = cell.workload_class == Some(TerminalWorkloadClass::Agent);
+        (solo, agent, cell.cell_instance_id)
+    });
+    cells
+}
+
 struct Shared {
     /// What the SERVE task knows — half of the unit's health, not all of it.
     /// `Shared::health` is what a reader gets; nothing outside this type sees
@@ -238,13 +285,43 @@ struct Shared {
     /// supervisor drops the cell's leash and waits out the drain budget.
     stopping: watch::Sender<bool>,
     /// TC-D15 (TC-S2) — the revisioned route snapshot the cell supervisor
-    /// publishes: one cell row while a cell serves, empty between cells,
-    /// revision bumped on EVERY transition. The in-process (mesh-flagged)
-    /// mode never publishes past the {revision: 0, cells: []} initial — its
-    /// legacy OnceLock reading stays the truth there. Readers: the mgmt
-    /// hello and routes subscription (via DaemonState's receiver), and the
-    /// inventory pump, which redials per cell generation.
+    /// publishes: one row per live cell (K=2 class hosts + solos since
+    /// TC-S3), revision bumped on EVERY transition. The in-process
+    /// (mesh-flagged) mode never publishes past the {revision: 0, cells: []}
+    /// initial — its legacy OnceLock reading stays the truth there. Readers:
+    /// the mgmt hello and routes subscription (via DaemonState's receiver),
+    /// and the inventory pump manager, which runs one pump per row.
     routes: watch::Sender<TerminalRouteSnapshot>,
+    /// TC-S3 — the row registry behind `routes`: each cell task upserts its
+    /// row at hello and removes it at its end; every mutation recomposes the
+    /// snapshot in the deterministic order the create-target discipline
+    /// assumes (interactive class, agent class, then solos by instance — so
+    /// the legacy `cells[0]` mirror stays the interactive host).
+    route_rows: Mutex<BTreeMap<u32, TerminalRouteCell>>,
+    /// TC-S3 — how many cells are serving right now; the count behind the
+    /// `serving` watch (any cell serving = the unit accepts work).
+    serving_cells: Mutex<u32>,
+    /// TC-S3 — per-class plane states, composed into the unit's health. Empty
+    /// in legacy mode (the serve task writes `served` directly there).
+    class_states: Mutex<BTreeMap<&'static str, ClassPlaneState>>,
+    /// TC-S3 — per-cell session counts, maintained by the inventory pumps.
+    /// The class supervisors watch it for solo target rotation (a target that
+    /// gained its session stops being the target) and solo reaping (an
+    /// emptied solo has nothing left to isolate).
+    occupancy: watch::Sender<BTreeMap<u32, u32>>,
+    /// TC-D4 — the Exact-only strike ledger, floor-lifetime. Only a crumb
+    /// that NAMES a session writes here; Infrastructure/Unknown deaths blame
+    /// nobody (row 13). Read at intensity breaches; kept whole for TC-S6's
+    /// bisection history.
+    strikes: Mutex<std::collections::HashMap<String, u32>>,
+    /// TC-S3 — the shared instance allocator: ordinals are unique across
+    /// classes and solos because they are also the socket-name suffixes
+    /// (restart ≠ rebind holds fleet-wide, not per class).
+    next_instance: std::sync::atomic::AtomicU32,
+    /// TC-S3 — per-cell inventory-pump faults, composed into the single
+    /// `inventory_fault` health cell (one truth for readers, per-cell news
+    /// for diagnosis).
+    inventory_faults: Mutex<BTreeMap<u32, String>>,
     /// A watch and not a flag: the inventory pump cannot start before the
     /// service accepts connections, so it is woken rather than left to poll.
     serving: watch::Sender<bool>,
@@ -302,19 +379,136 @@ impl Shared {
         let _ = self.ping.send(());
     }
 
-    /// One descriptor-pressure sample. Runs the shared gauge and publishes only
-    /// on a transition, so a sampler asserting "still fine" every two seconds
-    /// wakes nobody.
-    /// TC-D15 — one route transition: bump the revision, replace the cells.
-    /// EVERY transition publishes (a cell up, a cell gone), because state
-    /// transfer is the protocol — readers repair from any snapshot.
-    fn publish_routes(&self, cells: Vec<TerminalRouteCell>) {
+    /// TC-D15 — announce the routes CAPABILITY: an empty snapshot at revision
+    /// ≥1 tells fieldd "this floor speaks routes; no cell yet" — the evidence
+    /// its cell-birth wait keys on. Idempotent past the first call.
+    fn publish_routes_capability(&self) {
+        self.routes.send_modify(|snapshot| {
+            snapshot.revision += 1;
+        });
+    }
+
+    /// TC-D15/TC-S3 — one route transition: upsert this cell's row and
+    /// recompose. EVERY transition publishes (state transfer is the protocol —
+    /// readers repair from any snapshot).
+    fn route_upsert(&self, instance: u32, row: TerminalRouteCell) {
+        let cells = {
+            let mut rows = self.route_rows.lock().unwrap();
+            rows.insert(instance, row);
+            compose_route_rows(&rows)
+        };
         self.routes.send_modify(|snapshot| {
             snapshot.revision += 1;
             snapshot.cells = cells;
         });
     }
 
+    /// Returns whether a row was actually removed — a cell that never helloed
+    /// published nothing, and its ending must not decrement the serving count
+    /// it never incremented.
+    fn route_remove(&self, instance: u32) -> bool {
+        let cells = {
+            let mut rows = self.route_rows.lock().unwrap();
+            if rows.remove(&instance).is_none() {
+                return false;
+            }
+            compose_route_rows(&rows)
+        };
+        self.routes.send_modify(|snapshot| {
+            snapshot.revision += 1;
+            snapshot.cells = cells;
+        });
+        true
+    }
+
+    /// TC-S3 — the serving watch counts cells now: the unit accepts work while
+    /// ANY cell serves (per-class refusals are fieldd's routing business).
+    fn cell_serving(&self, up: bool) {
+        let mut count = self.serving_cells.lock().unwrap();
+        *count = if up {
+            *count + 1
+        } else {
+            count.saturating_sub(1)
+        };
+        self.serving.send_replace(*count > 0);
+    }
+
+    /// TC-S3 — one class's plane state moved; recompose the unit's health.
+    /// The composition law: all Up → Up · all Crashed → Crashed · any
+    /// Crashed/Failed → Degraded · else Starting. `Failed` is the config-shaped
+    /// dead end (missing binary, unspellable run dir) and maps to Degraded
+    /// even when every class hit it — a config problem is not a crash loop.
+    fn set_class_state(&self, class: TerminalWorkloadClass, next: ClassPlaneState) {
+        let mut states = self.class_states.lock().unwrap();
+        states.insert(class_label(class), next);
+        let all_up = states.values().all(|s| matches!(s, ClassPlaneState::Up(_)));
+        let all_crashed = states
+            .values()
+            .all(|s| matches!(s, ClassPlaneState::Crashed(_)));
+        let any_dead_end = states
+            .values()
+            .any(|s| matches!(s, ClassPlaneState::Crashed(_) | ClassPlaneState::Failed(_)));
+        let state = if all_up {
+            UnitState::Up
+        } else if all_crashed && !states.is_empty() {
+            UnitState::Crashed
+        } else if any_dead_end {
+            UnitState::Degraded
+        } else {
+            UnitState::Starting
+        };
+        let detail = states
+            .iter()
+            .map(|(label, s)| format!("{label}: {}", s.detail()))
+            .collect::<Vec<_>>()
+            .join("; ");
+        drop(states);
+        self.set(state, Some(detail));
+    }
+
+    /// TC-D4 — record an Exact strike. Only the Exact class ever reaches here;
+    /// the return is the session's running count (logged, and TC-S6's
+    /// bisection input).
+    fn record_strike(&self, session_id: &str) -> u32 {
+        let mut strikes = self.strikes.lock().unwrap();
+        let count = strikes.entry(session_id.to_string()).or_insert(0);
+        *count += 1;
+        *count
+    }
+
+    fn alloc_instance(&self) -> u32 {
+        self.next_instance
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1
+    }
+
+    /// TC-S3 — one cell pump's fault cell moved; recompose the single
+    /// inventory-fault truth the health surface reads.
+    fn set_cell_inventory_fault(&self, instance: u32, fault: Option<String>) {
+        let composed = {
+            let mut faults = self.inventory_faults.lock().unwrap();
+            match fault {
+                Some(fault) => {
+                    faults.insert(instance, fault);
+                }
+                None => {
+                    faults.remove(&instance);
+                }
+            }
+            (!faults.is_empty()).then(|| {
+                faults
+                    .iter()
+                    .map(|(instance, fault)| format!("cell {instance}: {fault}"))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            })
+        };
+        self.set_inventory_fault(composed);
+    }
+
+    /// One descriptor-pressure sample. Runs the shared gauge and publishes only
+    /// on a transition, so a sampler asserting "still fine" every two seconds
+    /// wakes nobody.
     fn observe_fd_pressure(&self, open: u64, limit: u64) {
         let transition = self.fd_gauge.lock().unwrap().observe(open, limit);
         match transition {
@@ -553,7 +747,30 @@ impl TerminalUnit {
                     cells: Vec::new(),
                 })
                 .0,
+                route_rows: Mutex::new(BTreeMap::new()),
                 serving: watch::channel(false).0,
+                serving_cells: Mutex::new(0),
+                // Seeded so the composition has both classes from the first
+                // health read — an absent class would compose as "all up" the
+                // moment the other served.
+                class_states: Mutex::new(if cell_mode {
+                    BTreeMap::from([
+                        (
+                            class_label(TerminalWorkloadClass::Agent),
+                            ClassPlaneState::Starting("spawning".into()),
+                        ),
+                        (
+                            class_label(TerminalWorkloadClass::Interactive),
+                            ClassPlaneState::Starting("spawning".into()),
+                        ),
+                    ])
+                } else {
+                    BTreeMap::new()
+                }),
+                occupancy: watch::channel(BTreeMap::new()).0,
+                strikes: Mutex::new(std::collections::HashMap::new()),
+                next_instance: std::sync::atomic::AtomicU32::new(0),
+                inventory_faults: Mutex::new(BTreeMap::new()),
                 drain: Mutex::new(None),
                 inventory_fault: Mutex::new(None),
                 fd_pressure: Mutex::new(None),
@@ -911,139 +1128,754 @@ async fn sample_fd_pressure(shared: Arc<Shared>) {
         ) else {
             continue;
         };
-        // TC-S2: the PTY descriptors live in the CELL now, so the gauge reads
-        // the plane that actually spends them — the max of the two processes
-        // against the (inherited) limit. A dead or unreadable cell pid
-        // contributes nothing; the routes watch names the current one.
-        let cell_pid = shared
+        // TC-S2/S3: the PTY descriptors live in the CELLS now, so the gauge
+        // reads the planes that actually spend them — the max across the floor
+        // and every live cell against the (inherited) limit. A dead or
+        // unreadable pid contributes nothing; the routes watch names them.
+        let cell_pids: Vec<u32> = shared
             .routes
             .borrow()
             .cells
-            .first()
-            .map(|cell| cell.pid as u32);
-        let cell = cell_pid
-            .and_then(resource_pressure::open_fd_count_for)
+            .iter()
+            .map(|cell| cell.pid as u32)
+            .collect();
+        let cells = cell_pids
+            .into_iter()
+            .filter_map(resource_pressure::open_fd_count_for)
+            .max()
             .unwrap_or(0);
-        shared.observe_fd_pressure(own.max(cell), limit);
+        shared.observe_fd_pressure(own.max(cells), limit);
     }
 }
 
-/// How one cell generation ended, as the supervisor classifies it.
-enum CellEnd {
-    /// `stop()` asked; the drain ran (or was escalated past); do not respawn.
-    Stopped,
-    /// The cell died or never came up — the detail is the receipt.
-    Crashed(String),
+/// TC-S3 — what a cell is FOR: its class, and whether it is the shared class
+/// host or a solo isolation host. Placement metadata only — cells are
+/// byte-identical processes either way (class is a hint, never a permanent
+/// failure domain: TC-D4).
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct CellPlan {
+    class: TerminalWorkloadClass,
+    role: TerminalCellRole,
 }
 
-/// TC-S2 — the cell supervisor: spawn → bootstrap → hello (deadline) →
-/// publish the route row → wait → classify → intensity-bounded respawn.
-/// Every transition publishes routes (TC-D15: state transfer, never edges),
-/// and every ending is stated on the unit's health cells. A cell that cannot
-/// stay up is a fault to SURFACE — past the intensity window the unit goes
-/// `Crashed` and stays there (the manager law: no infinite in-process
-/// restarts; fieldd's floor supervision decides what happens next).
+/// TC-D4 — how a cell death is classified at TC-S3 fidelity. `Exact` comes
+/// only from a crumb NAMING a session; a sessionless crumb (the cell's own
+/// panic hook) is `Infrastructure`; no evidence at all — a SIGKILL, an OOM
+/// kill, a vanished process — is `Unknown`. Only Exact earns strikes; the
+/// other two blame NO session, never "last active" (closure row 13).
+/// Suspected/Cohort arrive with real cohort evidence at TC-S6.
+#[derive(Clone)]
+enum Attribution {
+    Exact {
+        session_id: String,
+        detail: Option<String>,
+    },
+    Infrastructure {
+        detail: String,
+    },
+    Unknown,
+}
+
+/// How one cell generation ended, as its own task classifies it.
+enum CellEnd {
+    /// The global stop or a targeted reap asked; the drain ran (or was
+    /// escalated past); do not respawn.
+    Stopped,
+    /// The cell died or never came up — the detail is the receipt and the
+    /// attribution is TC-D4's verdict on the evidence.
+    Crashed {
+        detail: String,
+        attribution: Attribution,
+    },
+}
+
+/// One cell task's final word to its class supervisor. Exactly one per
+/// generation, sent after the route row is removed.
+struct CellReport {
+    instance: u32,
+    end: CellEnd,
+}
+
+/// A live cell, as its class supervisor tracks it.
+struct LiveCell {
+    role: TerminalCellRole,
+    /// The targeted-reap trigger (an emptied solo has nothing left to
+    /// isolate; the global stop rides a different watch).
+    reap: watch::Sender<bool>,
+    /// Set once the occupancy watch shows a session on it: target→occupied
+    /// rotates the spawn target, occupied→empty reaps.
+    was_occupied: bool,
+    _task: TaskGuard,
+}
+
+/// TC-S2/S3 — the cell supervisor: K=2 class supervisors over one instance
+/// allocator and one composed route snapshot. Every transition publishes
+/// routes (TC-D15: state transfer, never edges), and every ending is stated
+/// on the unit's health cells.
 async fn supervise_cells(shared: Arc<Shared>, config: NativeConfig) {
     // Announce the ROUTES CAPABILITY before the first cell exists: an empty
     // snapshot at revision 1 tells fieldd "this floor speaks TC-D15; no cell
     // YET" — the evidence its cell-birth wait keys on. A floor with no
     // terminal at all never publishes, and stays honestly absent.
-    shared.publish_routes(Vec::new());
+    shared.publish_routes_capability();
+    let mut agent = TaskGuard(tokio::spawn(supervise_class(
+        shared.clone(),
+        config.clone(),
+        TerminalWorkloadClass::Agent,
+    )));
+    let mut interactive = TaskGuard(tokio::spawn(supervise_class(
+        shared.clone(),
+        config,
+        TerminalWorkloadClass::Interactive,
+    )));
+    // Join both: each returns on the global stop or its own dead end. If THIS
+    // task is aborted instead (unit drop without stop), the guards abort the
+    // supervisors and every cell task with them — and each dropped task drops
+    // its child's stdin, which is the leash: the cells drain themselves out.
+    let _ = (&mut agent.0).await;
+    let _ = (&mut interactive.0).await;
+}
+
+/// One class's supervisor: keep the shared class host up under intensity
+/// bounds; on a breach WITH an Exact offender, switch to spawn-isolation
+/// (solo cells) for the window; on a breach without one, stop and say so —
+/// no session is blamed without evidence (TC-D4, row 13). A class that
+/// reached either dead end still services its lingering solos until the
+/// global stop.
+async fn supervise_class(shared: Arc<Shared>, config: NativeConfig, class: TerminalWorkloadClass) {
     let mut stopping = shared.stopping.subscribe();
-    let mut instance: u32 = 0;
-    let mut window: Vec<Instant> = Vec::new();
+    let mut occupancy = shared.occupancy.subscribe();
+    let (report_tx, mut report_rx) = tokio::sync::mpsc::unbounded_channel::<CellReport>();
+    let respawn_window = Duration::from_millis(registries::cell_supervision::RESPAWN_WINDOW_MS);
+    // Intensity BEFORE each spawn (starts, not deaths — the S2 law), and the
+    // window's Exact evidence beside it, freshest last.
+    let mut starts: Vec<Instant> = Vec::new();
+    let mut exact_in_window: Vec<(Instant, String)> = Vec::new();
+    // Every live cell this class owns; the shared host is named separately.
+    let mut cells: BTreeMap<u32, LiveCell> = BTreeMap::new();
+    let mut shared_cell: Option<u32> = None;
+
+    'life: loop {
+        if *stopping.borrow() {
+            break 'life;
+        }
+        // A cell that keeps dying must not consume the machine in a tight
+        // loop, and the refusal names the numbers.
+        let now = Instant::now();
+        starts.retain(|started| now.duration_since(*started) < respawn_window);
+        exact_in_window.retain(|(at, _)| now.duration_since(*at) < respawn_window);
+        if starts.len() >= registries::cell_supervision::RESPAWN_MAX as usize {
+            match exact_in_window.last().cloned() {
+                // TC-S3 — the breach has an Exact offender: spawn-isolation
+                // instead of the dead end. The class keeps serving, and the
+                // recurring workload can only crash itself.
+                Some((_, offender)) => {
+                    let end = run_isolation(
+                        &shared,
+                        &config,
+                        class,
+                        &offender,
+                        &mut cells,
+                        &mut report_rx,
+                        &report_tx,
+                        &mut occupancy,
+                        &mut stopping,
+                        &mut exact_in_window,
+                    )
+                    .await;
+                    match end {
+                        IsolationEnd::StopRequested => break 'life,
+                        IsolationEnd::WindowElapsed => {
+                            starts.clear();
+                            exact_in_window.clear();
+                            shared.set_class_state(
+                                class,
+                                ClassPlaneState::Starting(
+                                    "isolation window elapsed; restoring the shared class host"
+                                        .into(),
+                                ),
+                            );
+                            continue 'life;
+                        }
+                        IsolationEnd::GaveOut => {
+                            park_with_solos(
+                                &shared,
+                                &mut cells,
+                                &mut report_rx,
+                                &mut occupancy,
+                                &mut stopping,
+                                &mut exact_in_window,
+                            )
+                            .await;
+                            break 'life;
+                        }
+                    }
+                }
+                None => {
+                    // No Exact evidence: no isolation and NO blame — the
+                    // honest dead end (row 13's first half). The floor's own
+                    // supervisor one level up owns the next move.
+                    shared.set_class_state(
+                        class,
+                        ClassPlaneState::Crashed(format!(
+                            "terminal cell restart intensity exceeded ({} starts in {:?}) with \
+                             no attributable offender; not respawning — no session is blamed \
+                             without Exact evidence (TC-D4)",
+                            starts.len(),
+                            respawn_window
+                        )),
+                    );
+                    park_with_solos(
+                        &shared,
+                        &mut cells,
+                        &mut report_rx,
+                        &mut occupancy,
+                        &mut stopping,
+                        &mut exact_in_window,
+                    )
+                    .await;
+                    break 'life;
+                }
+            }
+        }
+        starts.push(now);
+        let instance = shared.alloc_instance();
+        let (reap_tx, reap_rx) = watch::channel(false);
+        let plan = CellPlan {
+            class,
+            role: TerminalCellRole::Class,
+        };
+        match spawn_cell_task(&shared, &config, plan, instance, reap_rx, report_tx.clone()) {
+            Ok(task) => {
+                cells.insert(
+                    instance,
+                    LiveCell {
+                        role: TerminalCellRole::Class,
+                        reap: reap_tx,
+                        was_occupied: false,
+                        _task: task,
+                    },
+                );
+                shared_cell = Some(instance);
+            }
+            Err(state) => {
+                // Config-shaped dead end (no binary, unspellable run dir):
+                // surfaced, not retried — retrying cannot find a binary.
+                shared.set_class_state(class, state);
+                park_with_solos(
+                    &shared,
+                    &mut cells,
+                    &mut report_rx,
+                    &mut occupancy,
+                    &mut stopping,
+                    &mut exact_in_window,
+                )
+                .await;
+                break 'life;
+            }
+        }
+        // Wait for the shared host's ending while servicing solo lifecycle
+        // (lingering solos from an earlier isolation live here too).
+        loop {
+            tokio::select! {
+                report = report_rx.recv() => {
+                    let Some(report) = report else { break 'life };
+                    cells.remove(&report.instance);
+                    if shared_cell == Some(report.instance) {
+                        shared_cell = None;
+                        match report.end {
+                            CellEnd::Stopped => break 'life,
+                            CellEnd::Crashed { detail, attribution } => {
+                                note_cell_crash(
+                                    &shared,
+                                    class,
+                                    TerminalCellRole::Class,
+                                    report.instance,
+                                    &detail,
+                                    &attribution,
+                                    &mut exact_in_window,
+                                );
+                                shared.set_class_state(
+                                    class,
+                                    ClassPlaneState::Starting(format!(
+                                        "cell exited ({detail}); respawning"
+                                    )),
+                                );
+                                continue 'life;
+                            }
+                        }
+                    } else {
+                        note_solo_end(&shared, class, report, &mut exact_in_window);
+                    }
+                }
+                changed = occupancy.changed() => {
+                    if changed.is_err() { break 'life; }
+                    let occ = occupancy.borrow_and_update().clone();
+                    rotate_and_reap_solos(&mut cells, &occ, None);
+                }
+                // Wrapped so the arm's OUTPUT is `()`: `wait_for` yields a
+                // watch Ref (an RwLock read guard), and select keeps arm
+                // outputs alive through the arm body.
+                _ = async { let _ = stopping.wait_for(|stop| *stop).await; } => break 'life,
+            }
+        }
+    }
+    // The stop path: every cell task watches the same stopping watch and
+    // drains itself; collect their endings (bounded) so each row is removed
+    // by its owner — which is what stop()'s routes-empty wait observes.
+    let deadline = tokio::time::Instant::now()
+        + Duration::from_millis(
+            registries::cell_supervision::DRAIN_BUDGET_MS
+                + registries::cell_supervision::EXIT_GRACE_MS
+                + 1_000,
+        );
+    while shared_cell.is_some() || !cells.is_empty() {
+        match tokio::time::timeout_at(deadline, report_rx.recv()).await {
+            Ok(Some(report)) => {
+                cells.remove(&report.instance);
+                if shared_cell == Some(report.instance) {
+                    shared_cell = None;
+                }
+            }
+            Ok(None) | Err(_) => break,
+        }
+    }
+}
+
+/// Why an isolation episode ended.
+enum IsolationEnd {
+    StopRequested,
+    WindowElapsed,
+    /// The empty target itself kept dying, or a config dead end — the class
+    /// state carries the receipt.
+    GaveOut,
+}
+
+/// TC-S3/TC-D4 — spawn-isolation: the class's creates land on a chain of
+/// fresh single-session solo cells, so the recurring poison workload can only
+/// crash itself. The chain: one EMPTY target at a time; the moment it takes a
+/// session, a new empty target spawns (the create-target discipline — the
+/// highest-instance solo row is always the empty one). Occupied solos serve
+/// their one session until it ends, then reap. MAX_SOLO_CELLS is the
+/// TC-D6(f) bound: at the cap the newest solo stays target as the honest
+/// overflow, logged.
+#[allow(clippy::too_many_arguments)]
+async fn run_isolation(
+    shared: &Arc<Shared>,
+    config: &NativeConfig,
+    class: TerminalWorkloadClass,
+    offender: &str,
+    cells: &mut BTreeMap<u32, LiveCell>,
+    report_rx: &mut tokio::sync::mpsc::UnboundedReceiver<CellReport>,
+    report_tx: &tokio::sync::mpsc::UnboundedSender<CellReport>,
+    occupancy: &mut watch::Receiver<BTreeMap<u32, u32>>,
+    stopping: &mut watch::Receiver<bool>,
+    exact_in_window: &mut Vec<(Instant, String)>,
+) -> IsolationEnd {
+    let label = class_label(class);
+    let window = config.isolation_window();
+    let deadline = tokio::time::Instant::now() + window;
+    tracing::warn!(
+        event = "field_native.terminal.isolation_entered",
+        component = "terminal",
+        class = label,
+        offender_session_id = %offender,
+        window_ms = window.as_millis() as u64,
+        max_solo_cells = registries::cell_isolation::MAX_SOLO_CELLS,
+        "Restart intensity breached with an Exact offender; the class moves to solo placement \
+         (TC-D4 spawn-isolation)"
+    );
+    let mut routes = shared.routes.subscribe();
+    let mut target: Option<u32> = None;
+    let mut target_starts: Vec<Instant> = Vec::new();
+    let mut overflow_logged = false;
     let respawn_window = Duration::from_millis(registries::cell_supervision::RESPAWN_WINDOW_MS);
     loop {
         if *stopping.borrow() {
-            return;
+            return IsolationEnd::StopRequested;
         }
-        instance += 1;
-        let Some(bin) = config.cell_binary() else {
-            shared.set(
-                UnitState::Degraded,
-                Some(
-                    "the field-terminal-host binary cannot be located beside this executable"
-                        .into(),
-                ),
-            );
-            return;
-        };
-        let (Some(control), Some(frame)) = (
-            config.terminal_cell_control_endpoint(instance),
-            config.terminal_cell_frame_endpoint(instance),
-        ) else {
-            shared.set(
-                UnitState::Degraded,
-                Some(format!(
-                    "run directory is not valid UTF-8, which the endpoint contract requires: {}",
-                    config.run_dir().display()
-                )),
-            );
-            return;
-        };
-        // Intensity BEFORE the spawn: a cell that keeps dying must not consume
-        // the machine in a tight loop, and the refusal names the numbers.
-        let now = Instant::now();
-        window.retain(|started| now.duration_since(*started) < respawn_window);
-        if window.len() >= registries::cell_supervision::RESPAWN_MAX as usize {
-            shared.set(
-                UnitState::Crashed,
-                Some(format!(
-                    "terminal cell restart intensity exceeded ({} starts in {:?}); not                      respawning — the floor's supervisor owns the next move",
-                    window.len(),
-                    respawn_window
-                )),
-            );
-            return;
-        }
-        window.push(now);
-        match run_one_cell(
-            &shared,
-            &mut stopping,
-            &config,
-            &bin,
-            &control,
-            &frame,
-            instance,
-        )
-        .await
-        {
-            CellEnd::Stopped => {
-                shared.publish_routes(Vec::new());
-                return;
+        // Ensure a spawn target exists, within the TC-D6(f) bound.
+        if target.is_none() {
+            let live_solos = cells
+                .values()
+                .filter(|cell| cell.role == TerminalCellRole::Solo)
+                .count();
+            if live_solos >= registries::cell_isolation::MAX_SOLO_CELLS as usize {
+                if !overflow_logged {
+                    overflow_logged = true;
+                    tracing::warn!(
+                        event = "field_native.terminal.isolation_overflow",
+                        component = "terminal",
+                        class = label,
+                        cap = registries::cell_isolation::MAX_SOLO_CELLS,
+                        "The solo-cell cap is reached; the newest solo is the shared overflow \
+                         target until one empties"
+                    );
+                }
+            } else {
+                // An empty target that keeps dying is its own intensity case:
+                // nothing is on it, so nothing is blamed — the class gives
+                // out honestly.
+                let now = Instant::now();
+                target_starts.retain(|started| now.duration_since(*started) < respawn_window);
+                if target_starts.len() >= registries::cell_supervision::RESPAWN_MAX as usize {
+                    shared.set_class_state(
+                        class,
+                        ClassPlaneState::Crashed(format!(
+                            "the isolation target cell keeps dying empty ({} starts in {:?}); \
+                             not respawning",
+                            target_starts.len(),
+                            respawn_window
+                        )),
+                    );
+                    return IsolationEnd::GaveOut;
+                }
+                target_starts.push(now);
+                let instance = shared.alloc_instance();
+                let (reap_tx, reap_rx) = watch::channel(false);
+                let plan = CellPlan {
+                    class,
+                    role: TerminalCellRole::Solo,
+                };
+                match spawn_cell_task(shared, config, plan, instance, reap_rx, report_tx.clone()) {
+                    Ok(task) => {
+                        cells.insert(
+                            instance,
+                            LiveCell {
+                                role: TerminalCellRole::Solo,
+                                reap: reap_tx,
+                                was_occupied: false,
+                                _task: task,
+                            },
+                        );
+                        target = Some(instance);
+                    }
+                    Err(state) => {
+                        shared.set_class_state(class, state);
+                        return IsolationEnd::GaveOut;
+                    }
+                }
             }
-            CellEnd::Crashed(detail) => {
-                shared.publish_routes(Vec::new());
-                tracing::error!(
-                    event = "field_native.terminal.cell_ended",
+        }
+        tokio::select! {
+            report = report_rx.recv() => {
+                let Some(report) = report else { return IsolationEnd::StopRequested };
+                cells.remove(&report.instance);
+                if target == Some(report.instance) {
+                    target = None;
+                }
+                note_solo_end(shared, class, report, exact_in_window);
+            }
+            changed = occupancy.changed() => {
+                if changed.is_err() { return IsolationEnd::StopRequested; }
+                let occ = occupancy.borrow_and_update().clone();
+                if let Some(current) = target {
+                    if occ.get(&current).copied().unwrap_or(0) > 0 {
+                        if let Some(cell) = cells.get_mut(&current) {
+                            cell.was_occupied = true;
+                        }
+                        // Rotate: the occupied solo keeps its session; the
+                        // next loop iteration spawns a fresh empty target.
+                        target = None;
+                    }
+                }
+                rotate_and_reap_solos(cells, &occ, target);
+            }
+            changed = routes.changed() => {
+                if changed.is_err() { return IsolationEnd::StopRequested; }
+                // The target's row appearing is its hello: the class is
+                // serving again, in isolation posture — said so, honestly.
+                if let Some(current) = target {
+                    let serving = routes
+                        .borrow_and_update()
+                        .cells
+                        .iter()
+                        .any(|cell| cell.cell_instance_id == i64::from(current));
+                    if serving {
+                        shared.set_class_state(
+                            class,
+                            ClassPlaneState::Up(format!(
+                                "isolating (offender {offender} contained; solo placement until \
+                                 the window elapses)"
+                            )),
+                        );
+                    }
+                }
+            }
+            _ = tokio::time::sleep_until(deadline) => {
+                // Exit: reap the empty target (nothing on it); occupied solos
+                // live on until their sessions end. The shared class host
+                // returns in the caller.
+                if let Some(current) = target.take() {
+                    if let Some(cell) = cells.get(&current) {
+                        if !cell.was_occupied {
+                            let _ = cell.reap.send(true);
+                        }
+                    }
+                }
+                tracing::info!(
+                    event = "field_native.terminal.isolation_exited",
                     component = "terminal",
-                    instance,
-                    detail = %detail,
-                    "The terminal cell ended; sessions on it are gone (TC-S2's honest ceiling)"
+                    class = label,
+                    occupied_solos = cells.values().filter(|cell| cell.was_occupied).count(),
+                    "The isolation window elapsed; the shared class host returns"
                 );
-                shared.set(
-                    UnitState::Starting,
-                    Some(format!("terminal cell exited ({detail}); respawning")),
-                );
+                return IsolationEnd::WindowElapsed;
+            }
+            _ = async { let _ = stopping.wait_for(|stop| *stop).await; } => {
+                return IsolationEnd::StopRequested;
             }
         }
     }
 }
 
-/// One cell generation, spawn to grave. Returns how it ended; the caller owns
-/// respawn policy and the empty-snapshot publication.
-#[allow(clippy::too_many_arguments)]
-async fn run_one_cell(
+/// A class that reached its dead end still owes its lingering solos their
+/// lifecycle: their sessions keep serving, their endings are classified, and
+/// they reap as they empty — until the global stop.
+async fn park_with_solos(
     shared: &Arc<Shared>,
+    cells: &mut BTreeMap<u32, LiveCell>,
+    report_rx: &mut tokio::sync::mpsc::UnboundedReceiver<CellReport>,
+    occupancy: &mut watch::Receiver<BTreeMap<u32, u32>>,
     stopping: &mut watch::Receiver<bool>,
+    exact_in_window: &mut Vec<(Instant, String)>,
+) {
+    loop {
+        if *stopping.borrow() {
+            return;
+        }
+        tokio::select! {
+            report = report_rx.recv() => {
+                let Some(report) = report else { return };
+                cells.remove(&report.instance);
+                // The class label on the receipt is knowable from the row the
+                // cell published; Unknown-class here would be over-modeling —
+                // the receipt carries the instance either way.
+                if let CellEnd::Crashed { detail, attribution } = report.end {
+                    note_cell_crash(
+                        shared,
+                        TerminalWorkloadClass::Interactive,
+                        TerminalCellRole::Solo,
+                        report.instance,
+                        &detail,
+                        &attribution,
+                        exact_in_window,
+                    );
+                }
+            }
+            changed = occupancy.changed() => {
+                if changed.is_err() { return; }
+                let occ = occupancy.borrow_and_update().clone();
+                rotate_and_reap_solos(cells, &occ, None);
+            }
+            _ = async { let _ = stopping.wait_for(|stop| *stop).await; } => return,
+        }
+    }
+}
+
+/// TC-S3 — reap solos with nothing left to isolate: a solo that HAS held a
+/// session and now holds none is done. The empty spawn TARGET is excluded —
+/// empty is its job.
+fn rotate_and_reap_solos(
+    cells: &mut BTreeMap<u32, LiveCell>,
+    occupancy: &BTreeMap<u32, u32>,
+    target: Option<u32>,
+) {
+    for (instance, cell) in cells.iter_mut() {
+        if cell.role != TerminalCellRole::Solo || Some(*instance) == target {
+            continue;
+        }
+        match occupancy.get(instance).copied() {
+            Some(count) if count > 0 => cell.was_occupied = true,
+            Some(0) if cell.was_occupied => {
+                // Idempotent: a watch resend is a no-op downstream.
+                let _ = cell.reap.send(true);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// One solo ending, classified and logged; a reaped (Stopped) solo is the
+/// planned ending and says nothing.
+fn note_solo_end(
+    shared: &Arc<Shared>,
+    class: TerminalWorkloadClass,
+    report: CellReport,
+    exact_in_window: &mut Vec<(Instant, String)>,
+) {
+    if let CellEnd::Crashed {
+        detail,
+        attribution,
+    } = report.end
+    {
+        note_cell_crash(
+            shared,
+            class,
+            TerminalCellRole::Solo,
+            report.instance,
+            &detail,
+            &attribution,
+            exact_in_window,
+        );
+    }
+}
+
+/// The crash receipt: sessions on the cell are gone (the S2/S3 honest
+/// ceiling), the attribution is TC-D4's verdict, and ONLY Exact writes the
+/// strike ledger.
+fn note_cell_crash(
+    shared: &Arc<Shared>,
+    class: TerminalWorkloadClass,
+    role: TerminalCellRole,
+    instance: u32,
+    detail: &str,
+    attribution: &Attribution,
+    exact_in_window: &mut Vec<(Instant, String)>,
+) {
+    let label = class_label(class);
+    let role_label = match role {
+        TerminalCellRole::Class => "class",
+        TerminalCellRole::Solo => "solo",
+    };
+    match attribution {
+        Attribution::Exact {
+            session_id,
+            detail: evidence,
+        } => {
+            let strikes = shared.record_strike(session_id);
+            exact_in_window.push((Instant::now(), session_id.clone()));
+            tracing::error!(
+                event = "field_native.terminal.cell_ended",
+                component = "terminal",
+                class = label,
+                role = role_label,
+                instance,
+                detail = %detail,
+                attribution = "exact",
+                session_id = %session_id,
+                strikes,
+                evidence = evidence.as_deref().unwrap_or(""),
+                "The terminal cell ended; sessions on it are gone (the honest ceiling) — \
+                 attributed Exact, one strike recorded (TC-D4)"
+            );
+        }
+        Attribution::Infrastructure { detail: why } => tracing::error!(
+            event = "field_native.terminal.cell_ended",
+            component = "terminal",
+            class = label,
+            role = role_label,
+            instance,
+            detail = %detail,
+            attribution = "infrastructure",
+            evidence = %why,
+            "The terminal cell ended; sessions on it are gone (the honest ceiling) — \
+             Infrastructure blames NO session (TC-D4, row 13)"
+        ),
+        Attribution::Unknown => tracing::error!(
+            event = "field_native.terminal.cell_ended",
+            component = "terminal",
+            class = label,
+            role = role_label,
+            instance,
+            detail = %detail,
+            attribution = "unknown",
+            "The terminal cell ended; sessions on it are gone (the honest ceiling) — \
+             no evidence, no blame (TC-D4, row 13; never last-active)"
+        ),
+    }
+}
+
+/// Resolve one cell's spawn inputs and start its generation task. The Err is
+/// the class-plane state to surface — config-shaped dead ends, not crashes.
+fn spawn_cell_task(
+    shared: &Arc<Shared>,
     config: &NativeConfig,
+    plan: CellPlan,
+    instance: u32,
+    reap: watch::Receiver<bool>,
+    report: tokio::sync::mpsc::UnboundedSender<CellReport>,
+) -> Result<TaskGuard, ClassPlaneState> {
+    let Some(bin) = config.cell_binary() else {
+        return Err(ClassPlaneState::Failed(
+            "the field-terminal-host binary cannot be located beside this executable".into(),
+        ));
+    };
+    let (Some(control), Some(frame)) = (
+        config.terminal_cell_control_endpoint(instance),
+        config.terminal_cell_frame_endpoint(instance),
+    ) else {
+        return Err(ClassPlaneState::Failed(format!(
+            "run directory is not valid UTF-8, which the endpoint contract requires: {}",
+            config.run_dir().display()
+        )));
+    };
+    let crumb = config.terminal_cell_crumb_file(instance);
+    let config_file = config.terminal_config_file();
+    Ok(TaskGuard(tokio::spawn(run_cell_generation(
+        shared.clone(),
+        plan,
+        instance,
+        bin,
+        control,
+        frame,
+        config_file,
+        crumb,
+        reap,
+        report,
+    ))))
+}
+
+/// One cell generation, spawn to grave, as its own task. Owns its route row
+/// (upsert at hello, remove at the end) and always sends exactly one report.
+#[allow(clippy::too_many_arguments)]
+async fn run_cell_generation(
+    shared: Arc<Shared>,
+    plan: CellPlan,
+    instance: u32,
+    bin: PathBuf,
+    control: String,
+    frame: String,
+    config_file: PathBuf,
+    crumb: PathBuf,
+    mut reap: watch::Receiver<bool>,
+    report: tokio::sync::mpsc::UnboundedSender<CellReport>,
+) {
+    let end = run_cell_generation_inner(
+        &shared,
+        plan,
+        instance,
+        &bin,
+        &control,
+        &frame,
+        &config_file,
+        &crumb,
+        &mut reap,
+    )
+    .await;
+    if shared.route_remove(instance) {
+        shared.cell_serving(false);
+    }
+    let _ = report.send(CellReport { instance, end });
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_cell_generation_inner(
+    shared: &Arc<Shared>,
+    plan: CellPlan,
+    instance: u32,
     bin: &std::path::Path,
     control: &str,
     frame: &str,
-    instance: u32,
+    config_file: &std::path::Path,
+    crumb: &std::path::Path,
+    reap: &mut watch::Receiver<bool>,
 ) -> CellEnd {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-    let config_file = config.terminal_config_file();
+    let mut stopping = shared.stopping.subscribe();
+    // A stale crumb from a re-used ordinal after an unclean floor boot must
+    // not color this generation (the cell also fences by boot id).
+    let _ = std::fs::remove_file(crumb);
     let token = mint_token();
     let mut child = match tokio::process::Command::new(bin)
         .arg("--control")
@@ -1051,43 +1883,51 @@ async fn run_one_cell(
         .arg("--frame")
         .arg(frame)
         .arg("--config")
-        .arg(&config_file)
+        .arg(config_file)
         .arg("--instance")
         .arg(instance.to_string())
+        .arg("--crumb")
+        .arg(crumb)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
     {
         Ok(child) => child,
-        Err(error) => return CellEnd::Crashed(format!("spawn failed: {error}")),
+        Err(error) => {
+            return CellEnd::Crashed {
+                detail: format!("spawn failed: {error}"),
+                attribution: Attribution::Unknown,
+            }
+        }
     };
     let mut stdin = child.stdin.take().expect("piped stdin");
     let stdout = child.stdout.take().expect("piped stdout");
     let stderr = child.stderr.take().expect("piped stderr");
     // The cell's diagnostics become the floor's, labeled — the parent owns log
-    // routing (the cell writes plain lines to its stderr).
-    let stderr_forward = TaskGuard(tokio::spawn(async move {
+    // routing (the cell writes plain lines to its stderr). The guard lives to
+    // the end of this generation.
+    let _stderr_forward = TaskGuard(tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
             tracing::info!(
                 event = "field_native.terminal.cell_stderr",
                 component = "terminal",
+                instance,
                 line = %line,
                 "cell"
             );
         }
     }));
     // The bootstrap line: the token rides the pipe, never argv or env (EL7).
-    let bootstrap = format!(
-        "{}
-",
-        serde_json::json!({ "token": token })
-    );
+    let bootstrap = format!("{}\n", serde_json::json!({ "token": token }));
     if let Err(error) = stdin.write_all(bootstrap.as_bytes()).await {
         let _ = child.start_kill();
         let _ = child.wait().await;
-        return CellEnd::Crashed(format!("bootstrap write failed: {error}"));
+        return CellEnd::Crashed {
+            detail: format!("bootstrap write failed: {error}"),
+            attribution: read_crumb_attribution(crumb, None),
+        };
     }
     let mut lines = BufReader::new(stdout).lines();
     let hello_deadline = Duration::from_millis(registries::cell_supervision::HELLO_DEADLINE_MS);
@@ -1097,43 +1937,59 @@ async fn run_one_cell(
             Err(error) => {
                 let _ = child.start_kill();
                 let _ = child.wait().await;
-                return CellEnd::Crashed(format!("hello did not parse: {error}"));
+                return CellEnd::Crashed {
+                    detail: format!("hello did not parse: {error}"),
+                    attribution: read_crumb_attribution(crumb, None),
+                };
             }
         },
         Ok(Ok(None)) | Ok(Err(_)) => {
             let _ = child.wait().await;
-            return CellEnd::Crashed("the cell exited before its hello".into());
+            return CellEnd::Crashed {
+                detail: "the cell exited before its hello".into(),
+                attribution: read_crumb_attribution(crumb, None),
+            };
         }
         Err(_) => {
             let _ = child.start_kill();
             let _ = child.wait().await;
-            return CellEnd::Crashed(format!("no hello within {hello_deadline:?} — killed"));
+            return CellEnd::Crashed {
+                detail: format!("no hello within {hello_deadline:?} — killed"),
+                attribution: read_crumb_attribution(crumb, None),
+            };
         }
     };
-    shared.publish_routes(vec![TerminalRouteCell {
-        cell_boot_id: hello.cell_boot_id.clone(),
-        cell_instance_id: i64::from(instance),
-        pid: i64::from(hello.pid),
-        endpoints: TerminalEndpoints {
-            control_socket: control.to_string(),
-            frame_socket: frame.to_string(),
-            auth_token: token.clone(),
+    shared.route_upsert(
+        instance,
+        TerminalRouteCell {
+            cell_boot_id: hello.cell_boot_id.clone(),
+            cell_instance_id: i64::from(instance),
+            pid: i64::from(hello.pid),
+            endpoints: TerminalEndpoints {
+                control_socket: control.to_string(),
+                frame_socket: frame.to_string(),
+                auth_token: token.clone(),
+            },
+            token_generation: i64::from(instance),
+            workload_class: Some(plan.class),
+            role: Some(plan.role),
         },
-        token_generation: i64::from(instance),
-        // TC-S3 transition state: the single-cell supervisor's one row is the
-        // interactive class host (the tolerant default every legacy create
-        // lands on); the K=2 supervisor replaces this call site.
-        workload_class: Some(TerminalWorkloadClass::Interactive),
-        role: Some(TerminalCellRole::Class),
-    }]);
-    shared.set(
-        UnitState::Up,
-        Some(format!("cell {instance} serving; pid {}", hello.pid)),
     );
-    shared.serving.send_replace(true);
+    shared.cell_serving(true);
+    if plan.role == TerminalCellRole::Class {
+        shared.set_class_state(
+            plan.class,
+            ClassPlaneState::Up(format!("cell {instance} serving; pid {}", hello.pid)),
+        );
+    }
     tracing::info!(
         event = "field_native.terminal.cell_serving",
         component = "terminal",
+        class = class_label(plan.class),
+        role = match plan.role {
+            TerminalCellRole::Class => "class",
+            TerminalCellRole::Solo => "solo",
+        },
         instance,
         pid = hello.pid,
         cell_boot_id = %hello.cell_boot_id,
@@ -1144,12 +2000,18 @@ async fn run_one_cell(
     let drain_budget = Duration::from_millis(
         registries::cell_supervision::DRAIN_BUDGET_MS + registries::cell_supervision::EXIT_GRACE_MS,
     );
-    let ended = tokio::select! {
-        // Wrapped so the arm's OUTPUT is `()`: `wait_for` yields a watch Ref
-        // (an RwLock read guard), and select keeps arm outputs alive through
-        // the arm body — a guard held across the awaits below would un-Send
-        // the whole future.
-        _ = async { let _ = stopping.wait_for(|stop| *stop).await; } => {
+    // The two requested endings (global stop, targeted reap) share one drain.
+    // Wrapped so each arm's OUTPUT is `()` — `wait_for` yields a watch Ref
+    // (an RwLock read guard), and select keeps arm outputs alive through the
+    // arm body.
+    let requested = async {
+        tokio::select! {
+            _ = async { let _ = stopping.wait_for(|stop| *stop).await; } => {}
+            _ = async { let _ = reap.wait_for(|reap| *reap).await; } => {}
+        }
+    };
+    tokio::select! {
+        _ = requested => {
             // The leash: EOF asks the cell to drain; past the budget, kill.
             drop(stdin);
             let waited = tokio::time::timeout(drain_budget, child.wait()).await;
@@ -1179,12 +2041,51 @@ async fn run_one_cell(
                 log_cell_exit_report(instance, &line);
                 detail = format!("{detail}; {line}");
             }
-            CellEnd::Crashed(detail)
+            let attribution = read_crumb_attribution(crumb, Some(&hello.cell_boot_id));
+            CellEnd::Crashed { detail, attribution }
+        }
+    }
+}
+
+/// TC-D4 at S3 fidelity: the crumb file is the only evidence. Naming a
+/// session ⇒ Exact (the seam a custody-era cell will write through); the
+/// cell's own panic hook writes the sessionless Infrastructure form; nothing
+/// at all ⇒ Unknown. Consumed on read (delete), and a crumb from another
+/// generation — boot id mismatch — is stale evidence that classifies nothing.
+fn read_crumb_attribution(crumb: &std::path::Path, cell_boot_id: Option<&str>) -> Attribution {
+    let raw = match std::fs::read_to_string(crumb) {
+        Ok(raw) => raw,
+        Err(_) => return Attribution::Unknown,
+    };
+    let _ = std::fs::remove_file(crumb);
+    let parsed: CellCrumb = match serde_json::from_str(raw.trim()) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            tracing::warn!(
+                event = "field_native.terminal.crumb_unreadable",
+                component = "terminal",
+                error = %error,
+                "A crash crumb did not parse; classifying Unknown"
+            );
+            return Attribution::Unknown;
         }
     };
-    shared.serving.send_replace(false);
-    drop(stderr_forward);
-    ended
+    if let Some(expected) = cell_boot_id {
+        if parsed.cell_boot_id != expected {
+            return Attribution::Unknown;
+        }
+    }
+    match parsed.session_id {
+        Some(session_id) => Attribution::Exact {
+            session_id,
+            detail: parsed.detail,
+        },
+        None => Attribution::Infrastructure {
+            detail: parsed
+                .detail
+                .unwrap_or_else(|| "a sessionless crumb with no detail".into()),
+        },
+    }
 }
 
 /// The cell's last stdout line, logged VERBATIM either way — `drained` carries
@@ -1220,72 +2121,281 @@ pub fn install_inventory(
     ledger: Option<AdmissionLedger>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        // Legacy (in-process) mode dials a FIXED pair; cell mode re-reads the
-        // route snapshot per iteration and dials the CURRENT cell — the same
-        // re-read law fieldd follows (TC-D15). A unit that is neither (the
-        // non-UTF-8 degraded case) parks forever, as before.
+        // Legacy (in-process) mode dials a FIXED pair. Cell mode (TC-S3) runs
+        // ONE PUMP PER ROUTE ROW — each cell's sessions are observed on that
+        // cell's own control socket and merged under its `cell` tag; the pump
+        // manager follows the snapshot (TC-D15's re-read law, floor-side). A
+        // unit that is neither (the non-UTF-8 degraded case) parks forever.
         let legacy = handle.shared.endpoints.clone();
-        if legacy.is_none() && !handle.shared.cell_mode {
+        if let Some(endpoints) = legacy {
+            legacy_inventory_loop(handle, state, ledger, endpoints).await;
+            return;
+        }
+        if !handle.shared.cell_mode {
             std::future::pending::<()>().await;
             return;
         }
+        let merged = Arc::new(MergedInventory::new(
+            state,
+            handle.shared.clone(),
+            LedgerPump::new(ledger, handle.shared.clone()),
+        ));
         let mut routes = handle.shared.routes.subscribe();
-        let mut watch = InventoryWatch::new(handle.clone());
-        let mut admission = LedgerPump::new(ledger, handle.shared.clone());
+        let mut pumps: BTreeMap<u32, PumpEntry> = BTreeMap::new();
         loop {
-            // Inside the loop, not before it: a torn connection reconnects at
-            // once while the service is still up, and a service that DIED parks
-            // here forever instead of dialing a dead socket twice a second. The
-            // unit's health already says the plane is gone; a retry storm would
-            // only add noise to a fact fieldd has.
-            let (control, token) = match &legacy {
-                Some(endpoints) => {
-                    handle.wait_until_serving().await;
-                    (endpoints.control.clone(), endpoints.token.clone())
-                }
-                None => loop {
-                    let cell = routes.borrow().cells.first().map(|cell| {
+            let desired: BTreeMap<u32, (String, TerminalEndpoints, ObservedTerminalCell)> = routes
+                .borrow_and_update()
+                .cells
+                .iter()
+                .map(|cell| {
+                    (
+                        cell.cell_instance_id as u32,
                         (
-                            cell.endpoints.control_socket.clone(),
-                            cell.endpoints.auth_token.clone(),
-                        )
-                    });
-                    if let Some(target) = cell {
-                        break target;
-                    }
-                    if routes.changed().await.is_err() {
-                        return;
-                    }
-                },
-            };
-            // Dialing here rather than inside the pump is what lets a failed
-            // DIAL be told apart from a pump that ran and then broke.
-            match ControlClient::connect(&control, &token).await {
-                Ok((client, events)) => {
-                    match pump_inventory(
-                        Arc::new(client),
-                        events,
-                        &state,
-                        &mut watch,
-                        &mut admission,
+                            cell.cell_boot_id.clone(),
+                            cell.endpoints.clone(),
+                            ObservedTerminalCell {
+                                cell_instance_id: cell.cell_instance_id,
+                                cell_boot_id: cell.cell_boot_id.clone(),
+                                workload_class: cell.workload_class,
+                                role: cell.role,
+                            },
+                        ),
                     )
-                    .await
-                    {
-                        Ok(()) => watch.disconnected(),
-                        Err(error) => watch.failed(&error),
-                    }
-                }
-                Err(error) => watch.failed(&error),
+                })
+                .collect();
+            // A row that vanished took its sessions with it — cell death IS
+            // session death at S3, and the snapshot is the supervisor's own
+            // word — so the pump goes AND its rows go. This is deliberately
+            // different from a mere connection fault (where the last inventory
+            // stays): there the floor cannot see; here it knows. A row whose
+            // boot id moved on a re-used ordinal is a different cell: same.
+            let stale: Vec<u32> = pumps
+                .iter()
+                .filter(|(instance, entry)| {
+                    desired
+                        .get(instance)
+                        .map(|(boot, _, _)| *boot != entry.cell_boot_id)
+                        .unwrap_or(true)
+                })
+                .map(|(instance, _)| *instance)
+                .collect();
+            for instance in stale {
+                pumps.remove(&instance);
+                merged.remove(instance);
             }
-            // The last published inventory deliberately STAYS. A dead control
-            // connection does not kill PTYs, so clearing the rows would claim
-            // sessions ended when we simply cannot see them. What does NOT stay
-            // is the claim that the plane is fine: past `INVENTORY_FAULT_STREAK`
-            // the watch puts the pump's own error on the unit's health, which is
-            // what carries "this plane is degraded" (honest states, not blanks).
-            tokio::time::sleep(RECONNECT_DELAY).await;
+            for (instance, (boot, endpoints, cell)) in &desired {
+                if !pumps.contains_key(instance) {
+                    let task = TaskGuard(tokio::spawn(pump_cell(
+                        endpoints.clone(),
+                        cell.clone(),
+                        *instance,
+                        merged.clone(),
+                    )));
+                    pumps.insert(
+                        *instance,
+                        PumpEntry {
+                            cell_boot_id: boot.clone(),
+                            _task: task,
+                        },
+                    );
+                }
+            }
+            if routes.changed().await.is_err() {
+                return;
+            }
         }
     })
+}
+
+/// One live per-cell pump, keyed to the boot id it was spawned for.
+struct PumpEntry {
+    cell_boot_id: String,
+    _task: TaskGuard,
+}
+
+/// The S2 single-plane loop, unchanged: wait until the in-process service
+/// serves, dial the fixed pair, pump, reconnect on failure.
+async fn legacy_inventory_loop(
+    handle: TerminalHandle,
+    state: Arc<DaemonState>,
+    ledger: Option<AdmissionLedger>,
+    endpoints: Endpoints,
+) {
+    let mut watch = InventoryWatch::new(handle.clone());
+    let mut admission = LedgerPump::new(ledger, handle.shared.clone());
+    loop {
+        // Inside the loop, not before it: a torn connection reconnects at
+        // once while the service is still up, and a service that DIED parks
+        // here forever instead of dialing a dead socket twice a second. The
+        // unit's health already says the plane is gone; a retry storm would
+        // only add noise to a fact fieldd has.
+        handle.wait_until_serving().await;
+        // Dialing here rather than inside the pump is what lets a failed
+        // DIAL be told apart from a pump that ran and then broke.
+        match ControlClient::connect(&endpoints.control, &endpoints.token).await {
+            Ok((client, events)) => {
+                match pump_inventory(Arc::new(client), events, &state, &mut watch, &mut admission)
+                    .await
+                {
+                    Ok(()) => watch.disconnected(),
+                    Err(error) => watch.failed(&error),
+                }
+            }
+            Err(error) => watch.failed(&error),
+        }
+        // The last published inventory deliberately STAYS. A dead control
+        // connection does not kill PTYs, so clearing the rows would claim
+        // sessions ended when we simply cannot see them. What does NOT stay
+        // is the claim that the plane is fine: past `INVENTORY_FAULT_STREAK`
+        // the watch puts the pump's own error on the unit's health, which is
+        // what carries "this plane is degraded" (honest states, not blanks).
+        tokio::time::sleep(RECONNECT_DELAY).await;
+    }
+}
+
+/// One cell's inventory pump: dial its fixed coordinates, subscribe,
+/// reconcile — the S2 loop bound to one cell, publishing under its tag. The
+/// manager aborts this task when the row leaves the snapshot, so a dead
+/// cell's socket is never redialed forever.
+async fn pump_cell(
+    endpoints: TerminalEndpoints,
+    cell: ObservedTerminalCell,
+    instance: u32,
+    merged: Arc<MergedInventory>,
+) {
+    let mut watch = InventoryWatch::for_cell(instance, merged.shared());
+    loop {
+        match ControlClient::connect(&endpoints.control_socket, &endpoints.auth_token).await {
+            Ok((client, events)) => {
+                match pump_inventory_cell(
+                    Arc::new(client),
+                    events,
+                    instance,
+                    &cell,
+                    &merged,
+                    &mut watch,
+                )
+                .await
+                {
+                    Ok(()) => watch.disconnected(),
+                    Err(error) => watch.failed(&error),
+                }
+            }
+            Err(error) => watch.failed(&error),
+        }
+        tokio::time::sleep(RECONNECT_DELAY).await;
+    }
+}
+
+/// TC-S3 — the merged observed inventory. Every cell pump owns its rows here,
+/// and every mutation republishes three composed truths at once: the observed
+/// inventory (rows in instance order, each cell's rows session-sorted), the
+/// per-cell occupancy watch the class supervisors rotate and reap on, and
+/// this floor's TOTAL governed count into the admission ledger — one meaning
+/// of "a session on this device" across all three (TC-L1f).
+struct MergedInventory {
+    state: Arc<DaemonState>,
+    shared: Arc<Shared>,
+    inner: Mutex<MergedInner>,
+}
+
+struct MergedInner {
+    rows: BTreeMap<u32, Vec<ObservedTerminal>>,
+    governed: BTreeMap<u32, u32>,
+    ledger: LedgerPump,
+}
+
+impl MergedInventory {
+    fn new(state: Arc<DaemonState>, shared: Arc<Shared>, ledger: LedgerPump) -> Self {
+        Self {
+            state,
+            shared,
+            inner: Mutex::new(MergedInner {
+                rows: BTreeMap::new(),
+                governed: BTreeMap::new(),
+                ledger,
+            }),
+        }
+    }
+
+    fn shared(&self) -> Arc<Shared> {
+        self.shared.clone()
+    }
+
+    fn set_rows(&self, instance: u32, rows: Vec<ObservedTerminal>) {
+        let (composed, occupancy) = {
+            let mut inner = self.inner.lock().unwrap();
+            inner.rows.insert(instance, rows);
+            (
+                compose_observed(&inner.rows),
+                compose_occupancy(&inner.rows),
+            )
+        };
+        let count = composed.len();
+        self.state
+            .observed_tx
+            .send_modify(|observed| observed.terminals = composed);
+        self.shared.occupancy.send_replace(occupancy);
+        tracing::debug!(
+            event = "field_native.terminal.inventory_published",
+            component = "terminal",
+            terminals = count,
+            "The terminal inventory changed"
+        );
+    }
+
+    fn remove(&self, instance: u32) {
+        let (composed, occupancy) = {
+            let mut inner = self.inner.lock().unwrap();
+            inner.rows.remove(&instance);
+            inner.governed.remove(&instance);
+            let total: u32 = inner.governed.values().sum();
+            inner.ledger.observe(total);
+            (
+                compose_observed(&inner.rows),
+                compose_occupancy(&inner.rows),
+            )
+        };
+        self.state
+            .observed_tx
+            .send_modify(|observed| observed.terminals = composed);
+        self.shared.occupancy.send_replace(occupancy);
+        self.shared.set_cell_inventory_fault(instance, None);
+    }
+
+    fn observe_governed(&self, instance: u32, governed: u32) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.governed.insert(instance, governed);
+        let total: u32 = inner.governed.values().sum();
+        inner.ledger.observe(total);
+    }
+
+    /// The pump's per-cell change guard seed (what this cell last published).
+    fn rows_value(&self, instance: u32) -> Value {
+        let inner = self.inner.lock().unwrap();
+        inventory_value(inner.rows.get(&instance).map(Vec::as_slice).unwrap_or(&[]))
+    }
+
+    /// The session ids this CELL has already published — the per-cell memory
+    /// behind the gap re-govern (GT-D11), captured before a reconcile applies.
+    fn session_ids(&self, instance: u32) -> std::collections::HashSet<String> {
+        let inner = self.inner.lock().unwrap();
+        inner
+            .rows
+            .get(&instance)
+            .map(|rows| rows.iter().map(|row| row.session_id.clone()).collect())
+            .unwrap_or_default()
+    }
+}
+
+fn compose_observed(rows: &BTreeMap<u32, Vec<ObservedTerminal>>) -> Vec<ObservedTerminal> {
+    rows.values().flatten().cloned().collect()
+}
+
+fn compose_occupancy(rows: &BTreeMap<u32, Vec<ObservedTerminal>>) -> BTreeMap<u32, u32> {
+    rows.iter()
+        .map(|(instance, rows)| (*instance, rows.len() as u32))
+        .collect()
 }
 
 /// How long the ledger may go untouched while this floor's own count is
@@ -1385,15 +2495,42 @@ impl LedgerPump {
 /// length stays recoverable from the log, and the recovery is news again exactly
 /// once.
 struct InventoryWatch {
-    handle: TerminalHandle,
+    sink: FaultSink,
     failures: u32,
     recovery_owed: bool,
+}
+
+/// TC-S3 — where a pump's fault verdict lands: the unit's single fault cell
+/// (legacy mode) or the per-cell composition (cell mode). Same streak logic
+/// either way; only the sink differs.
+enum FaultSink {
+    Unit(TerminalHandle),
+    Cell { instance: u32, shared: Arc<Shared> },
+}
+
+impl FaultSink {
+    fn set(&self, fault: Option<String>) {
+        match self {
+            FaultSink::Unit(handle) => handle.shared.set_inventory_fault(fault),
+            FaultSink::Cell { instance, shared } => {
+                shared.set_cell_inventory_fault(*instance, fault)
+            }
+        }
+    }
 }
 
 impl InventoryWatch {
     fn new(handle: TerminalHandle) -> Self {
         Self {
-            handle,
+            sink: FaultSink::Unit(handle),
+            failures: 0,
+            recovery_owed: false,
+        }
+    }
+
+    fn for_cell(instance: u32, shared: Arc<Shared>) -> Self {
+        Self {
+            sink: FaultSink::Cell { instance, shared },
             failures: 0,
             recovery_owed: false,
         }
@@ -1422,9 +2559,7 @@ impl InventoryWatch {
             );
         }
         if self.failures >= INVENTORY_FAULT_STREAK {
-            self.handle
-                .shared
-                .set_inventory_fault(Some(format!("{error:#}")));
+            self.sink.set(Some(format!("{error:#}")));
         }
     }
 
@@ -1434,7 +2569,7 @@ impl InventoryWatch {
     /// recovered nothing — and the streak restarts, so a plane that reconciles
     /// once between failures has to earn its degraded state again.
     fn reconciled(&mut self) {
-        self.handle.shared.set_inventory_fault(None);
+        self.sink.set(None);
         if self.recovery_owed {
             self.recovery_owed = false;
             tracing::info!(
@@ -1554,6 +2689,116 @@ async fn pump_inventory(
             },
         }
     }
+}
+
+/// TC-S3 — one cell's connection worth of inventory maintenance: the same
+/// loop as `pump_inventory` (reconcile on connect, then on events and the
+/// backstop; births re-governed per GT-D11), publishing through the merged
+/// registry under this cell's tag instead of straight onto the channel.
+async fn pump_inventory_cell(
+    client: Arc<ControlClient>,
+    mut events: tokio::sync::mpsc::UnboundedReceiver<Value>,
+    instance: u32,
+    cell: &ObservedTerminalCell,
+    merged: &Arc<MergedInventory>,
+    watch: &mut InventoryWatch,
+) -> anyhow::Result<()> {
+    let mut published = merged.rows_value(instance);
+    let mut last_reconcile = Instant::now();
+
+    let (births_tx, births_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (governed_tx, mut governed_rx) = tokio::sync::mpsc::unbounded_channel();
+    let _governor = TaskGuard(tokio::spawn(govern_births(
+        Arc::clone(&client),
+        births_rx,
+        governed_tx,
+    )));
+
+    // A connection that has only just opened was not watching a moment ago, so
+    // its first reconcile closes an observation gap by definition.
+    let known = merged.session_ids(instance);
+    let reconciled = reconcile_cell(&client, instance, cell, merged, published).await?;
+    watch.reconciled();
+    published = reconciled.published;
+    regovern_unseen(&births_tx, &known, &reconciled.sessions);
+
+    let mut ticker = tokio::time::interval(RECONCILE_FLOOR);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut dirty = false;
+    let mut gap = false;
+    loop {
+        tokio::select! {
+            event = events.recv() => match event {
+                Some(event) => {
+                    if let Some(birth) = birth_to_govern(&event) {
+                        let _ = births_tx.send(birth);
+                    }
+                    if event.get("type").and_then(Value::as_str) == Some(EVENTS_LOST) {
+                        gap = true;
+                    }
+                    dirty = true;
+                }
+                None => return Ok(()),
+            },
+            Some(()) = governed_rx.recv() => dirty = true,
+            _ = ticker.tick() => {
+                if dirty || last_reconcile.elapsed() >= BACKSTOP_INTERVAL {
+                    dirty = false;
+                    let known = std::mem::take(&mut gap).then(|| merged.session_ids(instance));
+                    let started = Instant::now();
+                    let reconciled = reconcile_cell(&client, instance, cell, merged, published).await?;
+                    watch.reconciled();
+                    published = reconciled.published;
+                    if let Some(known) = known {
+                        regovern_unseen(&births_tx, &known, &reconciled.sessions);
+                    }
+                    last_reconcile = started;
+                }
+            },
+        }
+    }
+}
+
+/// `list-sessions` is truth (spec §10.5), scoped to one cell: rows are
+/// stamped with its tag, the per-cell governed count feeds the ledger total
+/// on EVERY reconcile (the LEDGER_INTERVAL refresh law), and rows publish
+/// only on a real change.
+async fn reconcile_cell(
+    client: &ControlClient,
+    instance: u32,
+    cell: &ObservedTerminalCell,
+    merged: &Arc<MergedInventory>,
+    published: Value,
+) -> anyhow::Result<Reconciled> {
+    let mut sessions = client.list_sessions().await?;
+    sessions.sort_by(|a, b| a.id.cmp(&b.id));
+    let terminals: Vec<ObservedTerminal> = sessions
+        .iter()
+        .filter(|session| is_governed_here(session))
+        .map(|session| observed_row_for_cell(session, cell))
+        .collect();
+    let snapshot = inventory_value(&terminals);
+    let governed = terminals.len() as u32;
+    merged.observe_governed(instance, governed);
+    if snapshot != published {
+        merged.set_rows(instance, terminals);
+    }
+    Ok(Reconciled {
+        published: snapshot,
+        sessions,
+        governed,
+    })
+}
+
+/// The contract row plus the hosting cell's tag (TC-S3): the join key for
+/// fieldd's ticket routing and per-cell loss receipts.
+fn observed_row_for_cell(
+    session: &SessionSummary,
+    cell: &ObservedTerminalCell,
+) -> ObservedTerminal {
+    let mut row = observed_row(session);
+    row.cell = Some(cell.clone());
+    row
 }
 
 /// GT-D11, the floor persistence law: re-govern an **ownerless** birth that
@@ -2035,7 +3280,14 @@ mod tests {
                 cells: Vec::new(),
             })
             .0,
+            route_rows: Mutex::new(BTreeMap::new()),
             serving: watch::channel(false).0,
+            serving_cells: Mutex::new(0),
+            class_states: Mutex::new(BTreeMap::new()),
+            occupancy: watch::channel(BTreeMap::new()).0,
+            strikes: Mutex::new(std::collections::HashMap::new()),
+            next_instance: std::sync::atomic::AtomicU32::new(0),
+            inventory_faults: Mutex::new(BTreeMap::new()),
             drain: Mutex::new(None),
             inventory_fault: Mutex::new(None),
             fd_pressure: Mutex::new(None),
@@ -2287,6 +3539,203 @@ mod tests {
             shared.health().detail.as_deref(),
             Some("serving; text engine Menlo"),
             "no ledger means no claim about a budget — never a made-up one"
+        );
+    }
+
+    // ---- TC-S3: the class-cell machinery's pure halves ----
+
+    /// The snapshot's deterministic order IS the create-target discipline's
+    /// substrate: interactive class first (the legacy mirror's cell), agent
+    /// class second, solos last by instance.
+    #[test]
+    fn route_rows_compose_interactive_first_then_agent_then_solos() {
+        fn row(
+            instance: u32,
+            class: TerminalWorkloadClass,
+            role: TerminalCellRole,
+        ) -> TerminalRouteCell {
+            TerminalRouteCell {
+                cell_boot_id: format!("boot-{instance}"),
+                cell_instance_id: i64::from(instance),
+                pid: 1,
+                endpoints: TerminalEndpoints {
+                    control_socket: format!("c{instance}"),
+                    frame_socket: format!("f{instance}"),
+                    auth_token: "t".into(),
+                },
+                token_generation: i64::from(instance),
+                workload_class: Some(class),
+                role: Some(role),
+            }
+        }
+        let mut rows = BTreeMap::new();
+        rows.insert(
+            5,
+            row(5, TerminalWorkloadClass::Agent, TerminalCellRole::Solo),
+        );
+        rows.insert(
+            2,
+            row(2, TerminalWorkloadClass::Agent, TerminalCellRole::Class),
+        );
+        rows.insert(
+            4,
+            row(
+                4,
+                TerminalWorkloadClass::Interactive,
+                TerminalCellRole::Class,
+            ),
+        );
+        rows.insert(
+            3,
+            row(3, TerminalWorkloadClass::Agent, TerminalCellRole::Solo),
+        );
+        let order: Vec<i64> = compose_route_rows(&rows)
+            .iter()
+            .map(|cell| cell.cell_instance_id)
+            .collect();
+        assert_eq!(order, vec![4, 2, 3, 5]);
+    }
+
+    /// The unit-health composition across class planes: all Up → Up; one
+    /// intensity dead end → Degraded; both → Crashed; a config-shaped Failed
+    /// stays Degraded even alone — a missing binary is not a crash loop.
+    #[test]
+    fn class_states_compose_honestly() {
+        let shared = test_shared();
+        shared.set_class_state(
+            TerminalWorkloadClass::Agent,
+            ClassPlaneState::Up("cell 1 serving".into()),
+        );
+        shared.set_class_state(
+            TerminalWorkloadClass::Interactive,
+            ClassPlaneState::Up("cell 2 serving".into()),
+        );
+        assert_eq!(shared.health().state, UnitState::Up);
+        shared.set_class_state(
+            TerminalWorkloadClass::Agent,
+            ClassPlaneState::Crashed("intensity exceeded".into()),
+        );
+        let health = shared.health();
+        assert_eq!(
+            health.state,
+            UnitState::Degraded,
+            "one dead class degrades the unit while the other serves"
+        );
+        let detail = health.detail.expect("a degraded unit states why");
+        assert!(detail.contains("agent: intensity exceeded"), "{detail}");
+        assert!(detail.contains("interactive: cell 2 serving"), "{detail}");
+        shared.set_class_state(
+            TerminalWorkloadClass::Interactive,
+            ClassPlaneState::Crashed("intensity exceeded".into()),
+        );
+        assert_eq!(shared.health().state, UnitState::Crashed);
+        shared.set_class_state(
+            TerminalWorkloadClass::Interactive,
+            ClassPlaneState::Failed("no binary".into()),
+        );
+        assert_eq!(
+            shared.health().state,
+            UnitState::Degraded,
+            "a config dead end is Degraded, not a crash claim"
+        );
+    }
+
+    /// TC-D4's classification at the crumb seam: a session-naming crumb is
+    /// Exact; the sessionless panic-hook form is Infrastructure; nothing — a
+    /// SIGKILL, an OOM kill — is Unknown; a stale generation's crumb (boot id
+    /// mismatch) classifies NOTHING; and the file is consumed on read.
+    #[test]
+    fn crumbs_classify_exact_only_when_a_session_is_named() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let crumb = dir.path().join("termcell.9.crumb");
+
+        assert!(matches!(
+            read_crumb_attribution(&crumb, Some("boot-a")),
+            Attribution::Unknown
+        ));
+
+        std::fs::write(
+            &crumb,
+            r#"{"cellBootId":"boot-a","sessionId":"sess-1","detail":"feed panic"}"#,
+        )
+        .unwrap();
+        match read_crumb_attribution(&crumb, Some("boot-a")) {
+            Attribution::Exact { session_id, .. } => assert_eq!(session_id, "sess-1"),
+            _ => panic!("a session-naming crumb is Exact"),
+        }
+        assert!(!crumb.exists(), "the crumb is consumed on read");
+
+        std::fs::write(
+            &crumb,
+            r#"{"cellBootId":"boot-a","detail":"panicked at ..."}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            read_crumb_attribution(&crumb, Some("boot-a")),
+            Attribution::Infrastructure { .. }
+        ));
+
+        std::fs::write(
+            &crumb,
+            r#"{"cellBootId":"boot-STALE","sessionId":"sess-1"}"#,
+        )
+        .unwrap();
+        assert!(
+            matches!(
+                read_crumb_attribution(&crumb, Some("boot-a")),
+                Attribution::Unknown
+            ),
+            "another generation's crumb is stale evidence and blames nobody"
+        );
+    }
+
+    /// Only Exact writes the ledger — row 13's floor-side half in one
+    /// assertion pair. Strikes accumulate per session across generations.
+    #[test]
+    fn only_exact_attributions_strike() {
+        let shared = test_shared();
+        let mut window: Vec<(Instant, String)> = Vec::new();
+        note_cell_crash(
+            &shared,
+            TerminalWorkloadClass::Agent,
+            TerminalCellRole::Class,
+            1,
+            "signal: 9 (SIGKILL)",
+            &Attribution::Unknown,
+            &mut window,
+        );
+        note_cell_crash(
+            &shared,
+            TerminalWorkloadClass::Agent,
+            TerminalCellRole::Class,
+            2,
+            "abort",
+            &Attribution::Infrastructure {
+                detail: "allocator death".into(),
+            },
+            &mut window,
+        );
+        assert!(
+            shared.strikes.lock().unwrap().is_empty() && window.is_empty(),
+            "Unknown and Infrastructure blame NO session (TC-D4, row 13)"
+        );
+        note_cell_crash(
+            &shared,
+            TerminalWorkloadClass::Agent,
+            TerminalCellRole::Class,
+            3,
+            "exit status: 101",
+            &Attribution::Exact {
+                session_id: "sess-9".into(),
+                detail: None,
+            },
+            &mut window,
+        );
+        assert_eq!(shared.strikes.lock().unwrap().get("sess-9"), Some(&1));
+        assert_eq!(
+            window.len(),
+            1,
+            "the window holds the offender for the breach check"
         );
     }
 }

@@ -64,6 +64,12 @@ pub struct NativeConfig {
     /// back to the sibling of this executable — cargo and the packaged app
     /// both place the two binaries side by side.
     pub cell_bin_override: Option<PathBuf>,
+    /// TC-S3 — spawn-isolation window override in ms (test seam,
+    /// FIELD_NATIVE_ISOLATION_WINDOW_MS): the kill matrix cannot wait out the
+    /// production five minutes to watch a class LEAVE isolation. Floor-side
+    /// env is our own domain — EL7's strip discipline is about what enters
+    /// CELLS, and this value never does.
+    pub isolation_window_override: Option<u64>,
 }
 
 impl NativeConfig {
@@ -92,6 +98,9 @@ impl NativeConfig {
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
         let cell_bin_override = std::env::var_os("FIELD_NATIVE_CELL_BIN").map(PathBuf::from);
+        let isolation_window_override = std::env::var("FIELD_NATIVE_ISOLATION_WINDOW_MS")
+            .ok()
+            .and_then(|value| value.trim().parse::<u64>().ok());
         Ok(Self {
             data_dir,
             log_root,
@@ -101,6 +110,7 @@ impl NativeConfig {
             terminal_mesh_enabled,
             terminal_mirror_write,
             cell_bin_override,
+            isolation_window_override,
         })
     }
 
@@ -115,6 +125,7 @@ impl NativeConfig {
             terminal_mesh_enabled: false,
             terminal_mirror_write: None,
             cell_bin_override: None,
+            isolation_window_override: None,
         }
     }
 
@@ -130,6 +141,7 @@ impl NativeConfig {
             terminal_mesh_enabled: false,
             terminal_mirror_write: None,
             cell_bin_override: None,
+            isolation_window_override: None,
         }
     }
 
@@ -212,6 +224,26 @@ impl NativeConfig {
             crate::registries::sockets::TERMINAL_FRAME,
             instance,
         ))
+    }
+
+    /// TC-S3 — a cell's crash-breadcrumb file (TC-D4's attribution seam): the
+    /// floor passes this path to the cell via `--crumb`; the cell writes it on
+    /// the way down when it can say anything, and the floor reads-and-deletes
+    /// it after the wait. A run-dir artifact of one boot, floor↔cell internal —
+    /// never a cross-plane contract, so the ONE spelling lives here. Unlinked
+    /// before every spawn so a stale generation cannot color a fresh death.
+    pub fn terminal_cell_crumb_file(&self, instance: u32) -> PathBuf {
+        self.run_dir().join(format!("termcell.{instance}.crumb"))
+    }
+
+    /// TC-S3 — how long a class stays in spawn-isolation after an intensity
+    /// breach with an Exact offender. The genned registry is the production
+    /// authority; the override is the kill matrix's clock.
+    pub fn isolation_window(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(
+            self.isolation_window_override
+                .unwrap_or(crate::registries::cell_isolation::ISOLATION_WINDOW_MS),
+        )
     }
 
     /// TC-S2 — where `field-terminal-host` lives: the explicit override
