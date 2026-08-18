@@ -609,4 +609,21 @@ describe("RuntimeTargetController", () => {
     );
     expect(JSON.stringify(diagnostic.history)).not.toContain('revision":"r');
   });
+
+  it("projects canonical runtime targets without promising adapter-private subtype fields", async () => {
+    type AdapterTarget = RendererRuntimeTarget & { readonly privateAuthorityFlag: boolean };
+    const controller = new RuntimeTargetController<AdapterTarget, RuntimeTargetCandidate>(
+      "renderer/adapter-target",
+      { activate: () => ({ commit() {}, dispose() {} }) },
+    );
+    const desired = { ...target("adapter"), privateAuthorityFlag: true };
+    controller.setDesired(desired);
+    await controller.settle();
+
+    const diagnostic = controller.diagnostic();
+    expect(diagnostic.desired).not.toHaveProperty("privateAuthorityFlag");
+    expect(diagnostic.committed).not.toHaveProperty("privateAuthorityFlag");
+    controller.setDesired(null);
+    await controller.settle();
+  });
 });

@@ -85,27 +85,27 @@ export interface RuntimeTargetLifecycleEvent {
   readonly force?: BoundaryTerminationReport;
 }
 
-export interface RuntimeBoundaryForceDiagnostic<T extends PluginRuntimeTarget> {
+export interface RuntimeBoundaryForceDiagnostic {
   readonly state: "confirmed" | "unconfirmed" | "error";
   readonly phase: string;
-  readonly target: T;
+  readonly target: PluginRuntimeTarget;
   readonly outcome?: BoundaryTerminationReport;
   readonly error?: string;
 }
 
-export interface RuntimeTargetControllerDiagnostic<T extends PluginRuntimeTarget> {
+export interface RuntimeTargetControllerDiagnostic {
   readonly label: string;
   readonly state: RuntimeTargetControllerState;
-  readonly desired: T | null;
-  readonly committed: T | null;
+  readonly desired: PluginRuntimeTarget | null;
+  readonly committed: PluginRuntimeTarget | null;
   readonly desiredRevision: number;
   readonly error?: string;
-  readonly blocked: { readonly phase: string; readonly target: T } | null;
+  readonly blocked: { readonly phase: string; readonly target: PluginRuntimeTarget } | null;
   readonly scope: ActivationScopeDiagnostic | null;
   readonly lastClose: ActivationCloseReport | null;
   readonly force: {
     readonly confirmedCount: number;
-    readonly last: RuntimeBoundaryForceDiagnostic<T> | null;
+    readonly last: RuntimeBoundaryForceDiagnostic | null;
   };
   readonly history: readonly RuntimeTargetLifecycleEvent[];
   readonly omittedHistory: number;
@@ -242,7 +242,7 @@ function copyReason(reason: ActivationCloseReason | undefined): ActivationCloseR
   });
 }
 
-function copyTarget<T extends PluginRuntimeTarget>(target: T): T {
+function copyTarget(target: PluginRuntimeTarget): PluginRuntimeTarget {
   const artifact = Object.freeze({
     installRevision: target.artifact.installRevision,
     manifestHash: target.artifact.manifestHash,
@@ -266,13 +266,13 @@ function copyTarget<T extends PluginRuntimeTarget>(target: T): T {
         ...base,
         face: "service",
         instanceKey: Object.freeze({ deviceId: target.instanceKey.deviceId }),
-      }) as T;
+      });
     case "renderer":
       return Object.freeze({
         ...base,
         face: "renderer",
         instanceKey: Object.freeze({ windowId: target.instanceKey.windowId }),
-      }) as T;
+      });
     case "behavior":
       return Object.freeze({
         ...base,
@@ -283,7 +283,7 @@ function copyTarget<T extends PluginRuntimeTarget>(target: T): T {
           behaviorDeclarationId: target.instanceKey.behaviorDeclarationId,
         }),
         runtimeGeneration: target.runtimeGeneration,
-      }) as T;
+      });
   }
 }
 
@@ -448,7 +448,7 @@ export class RuntimeTargetController<
   private stateValue: RuntimeTargetControllerState = "inactive";
   private forcedCountValue = 0;
   private lastCloseValue: ActivationCloseReport | null = null;
-  private lastForceValue: RuntimeBoundaryForceDiagnostic<T> | null = null;
+  private lastForceValue: RuntimeBoundaryForceDiagnostic | null = null;
   private nextEventSequence = 1;
   private omittedHistoryValue = 0;
   private readonly events: RuntimeTargetLifecycleEvent[] = [];
@@ -657,7 +657,7 @@ export class RuntimeTargetController<
 
   /** Serialization-safe, globally bounded projection for host diagnostics. It never exposes a
    * candidate, disposer, scope object, worker, port, promise, or termination adapter. */
-  diagnostic(): RuntimeTargetControllerDiagnostic<T> {
+  diagnostic(): RuntimeTargetControllerDiagnostic {
     const blocked = this.blockedValue;
     const scope =
       blocked?.scope ??
