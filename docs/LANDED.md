@@ -3031,7 +3031,8 @@ prefix sites; provenance `ad97fdb` across npm gitHead, crate vcs-info, and the s
 tag), and 0.10.1 also ships the `process_tree.rs` hardening the v0.10.0-retry.1 tag
 had left unpublished. Pins moved in lockstep (cargo, npm, SwiftPM, preflight);
 kill-matrix row 6b dropped `.fails` exactly as the G13 filing pre-registered. The mac
-gate is green verbatim; the row itself is win32-only, so the next box-gate run is its
-first live assertion (this session's file transfer to the box was permission-blocked
-— the flip rides on the artifact verification plus upstream's real-Windows validation:
-118 tests, clippy, a live ConPTY inheritance witness, smoke).
+gate is green verbatim; the row itself is win32-only, so the box gate is its sole
+witness — and it ran the same day: James carried the tree transfer past the session's
+permission-blocked file path, and **row 6b passed LIVE on WORKSTATION4090** (all six
+kill-matrix rows green at 0.10.1, 402ms for the witness — a case-variant private
+prefix is stripped from a real ConPTY spawn).
