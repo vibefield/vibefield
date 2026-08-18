@@ -307,8 +307,19 @@ describe("createBootstrapHandler (once per generation)", () => {
     const oldA = await handler({ sender: a.wc });
     const oldB = await handler({ sender: b.wc });
 
+    expect(handler.state()).toEqual({
+      generations: 2,
+      hookedSenders: 2,
+      windowIdentities: 2,
+      documentIdentities: 2,
+      retirements: 0,
+      replacementsRequested: 0,
+      staleBootReapers: 1,
+    });
+
     expect(handler.requestAllReplacements()).toEqual({ requested: 2, unavailable: 0 });
     expect(handler.requestAllReplacements()).toEqual({ requested: 0, unavailable: 0 });
+    expect(handler.state().replacementsRequested).toBe(2);
     expect(a.crashRequests()).toBe(1);
     expect(b.crashRequests()).toBe(1);
     expect(daemon.revocations).toEqual([]);
@@ -325,6 +336,17 @@ describe("createBootstrapHandler (once per generation)", () => {
       expect(b.reloads()).toBe(1);
     });
     const [newA, newB] = await Promise.all([nextA, nextB]);
+    await vi.waitFor(() =>
+      expect(handler.state()).toEqual({
+        generations: 2,
+        hookedSenders: 2,
+        windowIdentities: 2,
+        documentIdentities: 2,
+        retirements: 0,
+        replacementsRequested: 0,
+        staleBootReapers: 1,
+      }),
+    );
     expect(newA.rendererParticipant.participantId).toBe(oldA.rendererParticipant.participantId);
     expect(newB.rendererParticipant.participantId).toBe(oldB.rendererParticipant.participantId);
     expect(newA.rendererParticipant.incarnation).not.toBe(oldA.rendererParticipant.incarnation);

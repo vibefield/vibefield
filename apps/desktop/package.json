@@ -21,6 +21,8 @@
     "smoke:godview": "pnpm build:all && electron . --smoke-godview",
     "smoke:canvas": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-canvas",
     "smoke:plugin-restart": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-plugin-restart",
+    "lab:plugin-runtime:soak": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-plugin-runtime-soak.mjs",
+    "lab:plugin-runtime:soak:24h": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-plugin-runtime-soak.mjs --hours 24 --cycle-delay-ms 45000 --warmup-samples 8 --minimum-graded-samples 24 --footprint",
     "icons:generate": "node packaging/generate-icons.mjs",
     "icons:check": "node packaging/generate-icons.mjs --check",
     "verify:live-surfaces-native": "pnpm run build:live-surfaces-native && node packaging/verify-live-surface-capture.mjs --enumerate-only",

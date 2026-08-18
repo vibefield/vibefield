@@ -37,6 +37,19 @@ export interface WindowRendererBoundary {
   /** Requests every current document generation after fieldd's boot authority
    * changes. The later process-gone events remain the positive death facts. */
   requestAllReplacements(): { requested: number; unavailable: number };
+  /** Counts-only ownership census for Doctor/physical soak. Reading it never
+   * waits a mint/revocation or retains a renderer generation. */
+  state(): WindowRendererBoundaryState;
+}
+
+export interface WindowRendererBoundaryState {
+  readonly generations: number;
+  readonly hookedSenders: number;
+  readonly windowIdentities: number;
+  readonly documentIdentities: number;
+  readonly retirements: number;
+  readonly replacementsRequested: number;
+  readonly staleBootReapers: number;
 }
 
 export interface WindowBootstrapHandler extends WindowRendererBoundary {
@@ -259,6 +272,21 @@ export function createBootstrapHandler(deps: {
       else unavailable += 1;
     }
     return Object.freeze({ requested, unavailable });
+  };
+  handle.state = () => {
+    let replacementsRequested = 0;
+    for (const generation of generations.values()) {
+      if (generation.replacementRequested) replacementsRequested += 1;
+    }
+    return Object.freeze({
+      generations: generations.size,
+      hookedSenders: hooked.size,
+      windowIdentities: windowIdentities.size,
+      documentIdentities: documentIdentities.size,
+      retirements: retirements.size,
+      replacementsRequested,
+      staleBootReapers: reaper === null ? 0 : 1,
+    });
   };
   return handle;
 }

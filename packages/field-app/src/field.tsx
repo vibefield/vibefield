@@ -105,18 +105,32 @@ export function FieldView({
 
   const stagedPlugins = plugins?.staged.length ?? 0;
   useEffect(() => {
-    // after mount commit — the smoke's pass condition covers InfiniteCanvas itself
-    const widgetTypes = registry.allWidgets().size;
-    const registered = registry.all().length;
-    getRendererLogger()
-      .child({ component: "canvas" })
-      .info("renderer.canvas.ready", "The canvas renderer is ready", {
-        widgetTypes,
-        plugins: registered,
-        stagedPlugins,
-      });
-    emitCanvasReadyMarker(widgetTypes, registered, stagedPlugins);
-  }, [registry, stagedPlugins]);
+    // The console marker is a smoke adapter, so make its runtime census a
+    // quiescent fact: the earlier reconcile effect may have entered its first
+    // async controller transition in this same passive-effect turn.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const publish = (): void => {
+      const runtime = plugins?.runtime?.state();
+      if (runtime !== undefined && runtime.inFlight > 0) {
+        timer = setTimeout(publish, 25);
+        return;
+      }
+      const widgetTypes = registry.allWidgets().size;
+      const registered = registry.all().length;
+      getRendererLogger()
+        .child({ component: "canvas" })
+        .info("renderer.canvas.ready", "The canvas renderer is ready", {
+          widgetTypes,
+          plugins: registered,
+          stagedPlugins,
+        });
+      emitCanvasReadyMarker(widgetTypes, registered, stagedPlugins, runtime);
+    };
+    publish();
+    return () => {
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, [registry, stagedPlugins, plugins?.runtime]);
 
   const [trayOpen, setTrayOpenRaw] = useState(false);
   const [docsOpen, setDocsOpenRaw] = useState(false);

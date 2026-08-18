@@ -1139,6 +1139,8 @@ async function main(
       handle: await fielddReady,
       onHandle: (listener) => fielddHandles!.onHandle(listener),
       supervisor,
+      rendererBoundary: windowRendererBoundary!,
+      logging: shellLogging,
       root,
       registry,
       preloadPath: PRELOAD_PATH,

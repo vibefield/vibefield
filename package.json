@@ -18,6 +18,8 @@
     "plugin": "node tooling/plugin-cli/bin/vibefield-plugin.mjs",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",
     "lab:live-surfaces": "pnpm --filter @vibefield/desktop lab:live-surfaces",
+    "lab:plugin-runtime:soak": "pnpm --filter @vibefield/desktop lab:plugin-runtime:soak",
+    "lab:plugin-runtime:soak:24h": "pnpm --filter @vibefield/desktop lab:plugin-runtime:soak:24h",
     "bench:logging-baseline": "node scripts/bench-logging-baseline.mjs",
     "bench:logging-native": "cargo test --release -p field-native logging_reference_benchmark -- --ignored --nocapture",
     "build": "nx run @vibefield/desktop:build",

@@ -24,6 +24,7 @@ import {
 } from "electron";
 import { CLOSE_WINDOW_ITEM_ID } from "../main/app-menu-model";
 import { APP_ORIGIN } from "../main/app-protocol";
+import type { WindowRendererBoundary } from "../main/bootstrap";
 import { BrowserControlTargetRegistry } from "../main/live-surfaces/browser-control-target";
 import { ElectronBrowserSurfaceNative } from "../main/live-surfaces/browser-electron-native";
 import { BrowserLiveSurfaceRuntime } from "../main/live-surfaces/browser-producer";
@@ -51,6 +52,7 @@ import {
 } from "../main/live-surfaces/texture-forwarder";
 import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
+import type { ElectronLogging } from "../main/logging";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
@@ -71,6 +73,27 @@ import {
   LIVE_SURFACE_LAB_TICKETS,
   type LiveSurfaceLabRendererResult,
 } from "./live-surface-lab-contract";
+import {
+  type CountVector,
+  countVector,
+  type ElectronProcessSample,
+  LOG_CENSUS_CEILINGS,
+  logCensus,
+  loggingCensus,
+  PLUGIN_RUNTIME_SOAK_EXACT_KEYS,
+  type ProcessResourceSample,
+  pidAlive,
+  pluginRuntimeSoakConfig,
+  sampleElectronProcesses,
+  sampleProcessFootprintKb,
+  sampleProcessResources,
+  vectorMismatches,
+} from "./plugin-runtime-physical";
+import {
+  evaluatePhysicalSoak,
+  type PhysicalSoakOptions,
+  type PhysicalSoakSample,
+} from "./plugin-runtime-soak";
 
 // Smoke/spike runners (ESR §5.2.6 / ESR-12): a SEPARATE build artifact
 // (dist/testing/smoke.cjs) that the production main bundle never contains —
@@ -167,6 +190,9 @@ interface CanvasFacts {
   /** P8b-3 — how many plugins came through the STAGED path (fieldd approval →
    * plugin origin → import map → async activate) rather than merely registering. */
   stagedPlugins: number;
+  /** PRC-6c physical census emitted from the actual prepared runtime after
+   * layout effects attached the document behavior generation. */
+  runtime?: object;
 }
 
 /** The census this smoke defends, and why it takes two numbers (P8-D2).
@@ -286,13 +312,333 @@ function waitForReplacementHandle(
   });
 }
 
-/** PRC-5g physical witness: two real sandboxed renderer documents load the
- * production custom origin, the shell-owned fieldd is SIGKILLed, supervisor
- * recovery adopts a new boot, and the boot fence replaces both documents. */
+interface PluginRuntimeHealth {
+  readonly fieldd: { readonly pid: number };
+  readonly nativePid: number | null;
+  readonly logging: Parameters<typeof loggingCensus>[1][number];
+  readonly pluginLogging: Parameters<typeof loggingCensus>[1][number];
+  readonly pluginRuntime: unknown;
+}
+
+interface SettledPluginRuntimeHealth {
+  readonly health: PluginRuntimeHealth;
+  readonly vector: CountVector;
+}
+
+interface PluginRuntimePhysicalSample extends PhysicalSoakSample {
+  readonly phase: "restart" | "terminal";
+  readonly bootId: string;
+  readonly fielddPid: number;
+  readonly nativePid: number;
+  readonly rendererPids: readonly number[];
+  readonly raw: Readonly<Record<string, unknown>>;
+}
+
+function rendererRuntimeVector(canvas: readonly CanvasFacts[]): CountVector {
+  const windows: Record<string, unknown> = {};
+  for (const [index, facts] of canvas.entries()) {
+    if (facts.runtime === undefined) {
+      throw new Error(`window ${index + 1} emitted no renderer runtime census`);
+    }
+    windows[`window${index + 1}`] = facts.runtime;
+  }
+  return countVector(windows, "rendererRuntime");
+}
+
+function pluginRuntimeHealth(raw: unknown): PluginRuntimeHealth {
+  if (raw === null || typeof raw !== "object") throw new Error("fieldd health is not an object");
+  const candidate = raw as Partial<PluginRuntimeHealth>;
+  if (
+    candidate.fieldd === undefined ||
+    !Number.isSafeInteger(candidate.fieldd.pid) ||
+    candidate.fieldd.pid <= 0 ||
+    candidate.pluginRuntime === undefined
+  ) {
+    throw new Error("fieldd health omitted its process/runtime census");
+  }
+  return candidate as PluginRuntimeHealth;
+}
+
+function remoteLoggingIdle(health: PluginRuntimeHealth): boolean {
+  for (const row of [health.logging, health.pluginLogging]) {
+    if (row === null || row === undefined) return false;
+    if ((row.queue?.records ?? -1) !== 0 || (row.queue?.bytes ?? -1) !== 0) return false;
+  }
+  return true;
+}
+
+async function settlePluginRuntimeHealth(
+  handle: FielddHandle,
+  expected?: CountVector,
+): Promise<SettledPluginRuntimeHealth> {
+  const deadline = Date.now() + 10_000;
+  let lastFingerprint = "";
+  let stableSince = Date.now();
+  let last: SettledPluginRuntimeHealth | null = null;
+  while (Date.now() < deadline) {
+    const health = pluginRuntimeHealth(await handle.client.request("system.health"));
+    const vector = countVector(health.pluginRuntime, "fieldd.pluginRuntime");
+    last = { health, vector };
+    const fingerprint = JSON.stringify(vector);
+    if (fingerprint !== lastFingerprint) {
+      lastFingerprint = fingerprint;
+      stableSince = Date.now();
+    }
+    const expectedReached = expected === undefined || vectorMismatches(expected, vector) === 0;
+    if (expectedReached && remoteLoggingIdle(health) && Date.now() - stableSince >= 500)
+      return last;
+    await sleep(100);
+  }
+  if (last === null) throw new Error("fieldd emitted no runtime health sample");
+  return last;
+}
+
+interface SettledPhysicalResources {
+  readonly main: ProcessResourceSample;
+  readonly fieldd: ProcessResourceSample;
+  readonly native: ProcessResourceSample;
+  readonly electron: ElectronProcessSample;
+  readonly ranges: Readonly<Record<string, { readonly minimum: number; readonly maximum: number }>>;
+}
+
+function medianPresent(values: readonly (number | null)[]): number | null {
+  const present = values.filter((value): value is number => value !== null).sort((a, b) => a - b);
+  if (present.length === 0) return null;
+  return present[Math.floor(present.length / 2)]!;
+}
+
+function resourceMedian(samples: readonly ProcessResourceSample[]): ProcessResourceSample {
+  return {
+    pid: samples[0]!.pid,
+    alive: samples.every((sample) => sample.alive),
+    fds: medianPresent(samples.map((sample) => sample.fds)),
+    networkSockets: medianPresent(samples.map((sample) => sample.networkSockets)),
+    threads: medianPresent(samples.map((sample) => sample.threads)),
+    physicalFootprintKb: null,
+  };
+}
+
+function noteRange(
+  ranges: Record<string, { minimum: number; maximum: number }>,
+  key: string,
+  values: readonly (number | null)[],
+): void {
+  const present = values.filter((value): value is number => value !== null);
+  if (present.length > 0)
+    ranges[key] = { minimum: Math.min(...present), maximum: Math.max(...present) };
+}
+
+async function samplePhysicalResourceWindow(
+  windows: readonly BrowserWindow[],
+  fielddPid: number,
+  nativePid: number,
+): Promise<SettledPhysicalResources> {
+  const observations: Array<{
+    main: ProcessResourceSample;
+    fieldd: ProcessResourceSample;
+    native: ProcessResourceSample;
+    electron: ElectronProcessSample;
+  }> = [];
+  for (let index = 0; index < 7; index += 1) {
+    const [main, fieldd, native, electron] = await Promise.all([
+      sampleProcessResources(process.pid, false),
+      sampleProcessResources(fielddPid, false),
+      sampleProcessResources(nativePid, false),
+      sampleElectronProcesses(windows),
+    ]);
+    observations.push({ main, fieldd, native, electron });
+    if (index < 6) await sleep(125);
+  }
+  const electronFingerprints = new Set(
+    observations.map(({ electron }) =>
+      JSON.stringify({
+        processCount: electron.processCount,
+        rendererPids: electron.rendererPids,
+        roster: Object.entries(electron.roster).sort(([left], [right]) =>
+          left.localeCompare(right),
+        ),
+      }),
+    ),
+  );
+  if (electronFingerprints.size !== 1) {
+    throw new Error("Electron process roster changed inside the OS observation window");
+  }
+  const ranges: Record<string, { minimum: number; maximum: number }> = {};
+  for (const owner of ["main", "fieldd", "native"] as const) {
+    const samples = observations.map((observation) => observation[owner]);
+    noteRange(
+      ranges,
+      `${owner}Fds`,
+      samples.map((sample) => sample.fds),
+    );
+    noteRange(
+      ranges,
+      `${owner}Threads`,
+      samples.map((sample) => sample.threads),
+    );
+    noteRange(
+      ranges,
+      `${owner}NetworkSockets`,
+      samples.map((sample) => sample.networkSockets),
+    );
+  }
+  const electron = observations[3]!.electron;
+  return {
+    main: resourceMedian(observations.map((observation) => observation.main)),
+    fieldd: resourceMedian(observations.map((observation) => observation.fieldd)),
+    native: resourceMedian(observations.map((observation) => observation.native)),
+    electron: {
+      ...electron,
+      processCount: medianPresent(
+        observations.map((observation) => observation.electron.processCount),
+      )!,
+      workingSetKb: medianPresent(
+        observations.map((observation) => observation.electron.workingSetKb),
+      )!,
+      rendererWorkingSetKb: medianPresent(
+        observations.map((observation) => observation.electron.rendererWorkingSetKb),
+      )!,
+    },
+    ranges: Object.freeze(ranges),
+  };
+}
+
+function plantedMainListenerCount(): number {
+  let count = 0;
+  for (const event of process.eventNames()) {
+    if (typeof event === "string" && event.startsWith("vf:prc6:planted:")) {
+      count += process.listenerCount(event);
+    }
+  }
+  return count;
+}
+
+function physicalSoakOptions(
+  config: ReturnType<typeof pluginRuntimeSoakConfig>,
+): PhysicalSoakOptions {
+  const long = config.claim === "24h";
+  const osMetricsAvailable = process.platform === "darwin" || process.platform === "linux";
+  const requireOsMetrics = long || osMetricsAvailable;
+  const noSlopeGate = Number.MAX_SAFE_INTEGER;
+  const MiB = 1024 * 1024;
+  return {
+    warmupSamples: config.warmupSamples,
+    minimumGradedSamples: config.minimumGradedSamples,
+    ...(long ? { minimumDurationMs: 24 * 60 * 60 * 1_000 } : {}),
+    exactZero: PLUGIN_RUNTIME_SOAK_EXACT_KEYS,
+    plateau: {
+      electronProcessCount: {
+        maximumAboveBaseline: 1,
+        maximumGrowth: 0,
+        maximumSlopePerHour: noSlopeGate,
+      },
+      mainFds: {
+        required: requireOsMetrics,
+        maximumAboveBaseline: 4,
+        maximumGrowth: 2,
+        maximumSlopePerHour: noSlopeGate,
+      },
+      mainThreads: {
+        required: requireOsMetrics,
+        maximumAboveBaseline: 6,
+        maximumGrowth: 3,
+        maximumSlopePerHour: noSlopeGate,
+      },
+      fielddFds: {
+        required: requireOsMetrics,
+        maximumAboveBaseline: 2,
+        maximumGrowth: 1,
+        maximumSlopePerHour: noSlopeGate,
+      },
+      fielddThreads: {
+        required: requireOsMetrics,
+        maximumAboveBaseline: 2,
+        maximumGrowth: 1,
+        maximumSlopePerHour: noSlopeGate,
+      },
+      nativeFds: {
+        required: requireOsMetrics,
+        maximumAboveBaseline: 2,
+        maximumGrowth: 1,
+        maximumSlopePerHour: noSlopeGate,
+      },
+      nativeThreads: {
+        required: requireOsMetrics,
+        maximumAboveBaseline: 2,
+        maximumGrowth: 1,
+        maximumSlopePerHour: noSlopeGate,
+      },
+      mainNetworkSockets: {
+        required: requireOsMetrics,
+        maximumAboveBaseline: 2,
+        maximumGrowth: 1,
+        maximumSlopePerHour: noSlopeGate,
+      },
+      fielddNetworkSockets: {
+        required: requireOsMetrics,
+        maximumAboveBaseline: 2,
+        maximumGrowth: 1,
+        maximumSlopePerHour: noSlopeGate,
+      },
+      nativeNetworkSockets: {
+        required: requireOsMetrics,
+        maximumAboveBaseline: 2,
+        maximumGrowth: 1,
+        maximumSlopePerHour: noSlopeGate,
+      },
+    },
+    trend: {
+      mainHeapUsedBytes: {
+        maximumGrowth: long ? 32 * MiB : Number.MAX_SAFE_INTEGER,
+        maximumSlopePerHour: long ? 4 * MiB : Number.MAX_SAFE_INTEGER,
+      },
+      mainExternalBytes: {
+        maximumGrowth: long ? 32 * MiB : Number.MAX_SAFE_INTEGER,
+        maximumSlopePerHour: long ? 4 * MiB : Number.MAX_SAFE_INTEGER,
+      },
+      electronWorkingSetKb: {
+        maximumGrowth: long ? 128 * 1024 : Number.MAX_SAFE_INTEGER,
+        maximumSlopePerHour: long ? 16 * 1024 : Number.MAX_SAFE_INTEGER,
+      },
+      rendererWorkingSetKb: {
+        maximumGrowth: long ? 64 * 1024 : Number.MAX_SAFE_INTEGER,
+        maximumSlopePerHour: long ? 8 * 1024 : Number.MAX_SAFE_INTEGER,
+      },
+      mainPhysicalFootprintKb: {
+        required: long && config.footprint && process.platform === "darwin",
+        maximumGrowth: long ? 64 * 1024 : Number.MAX_SAFE_INTEGER,
+        maximumSlopePerHour: long ? 8 * 1024 : Number.MAX_SAFE_INTEGER,
+      },
+      fielddPhysicalFootprintKb: {
+        required: long && config.footprint && process.platform === "darwin",
+        maximumGrowth: long ? 32 * 1024 : Number.MAX_SAFE_INTEGER,
+        maximumSlopePerHour: long ? 4 * 1024 : Number.MAX_SAFE_INTEGER,
+      },
+      nativePhysicalFootprintKb: {
+        required: long && config.footprint && process.platform === "darwin",
+        maximumGrowth: long ? 16 * 1024 : Number.MAX_SAFE_INTEGER,
+        maximumSlopePerHour: long ? 2 * 1024 : Number.MAX_SAFE_INTEGER,
+      },
+    },
+    ceiling: {
+      systemLogBytes: { maximum: LOG_CENSUS_CEILINGS.systemBytes },
+      systemLogFiles: { maximum: LOG_CENSUS_CEILINGS.systemFiles },
+      pluginLogBytes: { maximum: LOG_CENSUS_CEILINGS.pluginBytes },
+      pluginLogFiles: { maximum: LOG_CENSUS_CEILINGS.pluginFiles },
+    },
+  };
+}
+
+/** PRC-5g/PRC-6c2 physical witness: two real sandboxed renderer documents
+ * load the production custom origin. The bounded soak mode repeats the exact
+ * supervisor crash/boot-fence path inside one Electron owner and emits a
+ * machine-readable structural + OS sample after every quiescent cycle. */
 export async function runSmokePluginRestart(opts: {
   handle: FielddHandle;
   onHandle: (listener: (handle: FielddHandle) => void) => () => void;
   supervisor: FielddSupervisor;
+  rendererBoundary: WindowRendererBoundary;
+  logging: ElectronLogging;
   root: string;
   registry: WindowRegistry;
   preloadPath: string;
@@ -300,6 +646,7 @@ export async function runSmokePluginRestart(opts: {
   beforeExit: () => Promise<void>;
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
+  const config = pluginRuntimeSoakConfig();
   const primary = createMainWindow({
     mode: "smoke-plugin-restart",
     preloadPath: opts.preloadPath,
@@ -315,6 +662,13 @@ export async function runSmokePluginRestart(opts: {
   opts.onWindow?.(primary);
   opts.onWindow?.(auxiliary);
   const windows = [primary, auxiliary] as const;
+  const localLogSinks = [
+    opts.logging.desktop,
+    opts.logging.renderer,
+    opts.logging.utility,
+    opts.logging.pluginRenderer,
+  ] as const;
+  const plantedEvents: string[] = [];
   if (process.env["VF_SMOKE_DEBUG"]) {
     windows.forEach((win, index) => {
       win.webContents.on("console-message", (...args: unknown[]) => {
@@ -328,74 +682,262 @@ export async function runSmokePluginRestart(opts: {
     await Promise.all(
       windows.map((win) => loadRenderer(win, "smoke-plugin-restart", opts.viteUrl)),
     );
-    const initialCanvas = (await Promise.all(initialReady)).map(
+    let currentCanvas = (await Promise.all(initialReady)).map(
       (raw) => JSON.parse(raw) as CanvasFacts,
     );
-    console.log(`SMOKE_PLUGIN_RESTART_INITIAL ${JSON.stringify(initialCanvas)}`);
-    const initialProblems = initialCanvas.flatMap((facts, index) =>
+    console.log(`SMOKE_PLUGIN_RESTART_INITIAL ${JSON.stringify(currentCanvas)}`);
+    const initialProblems = currentCanvas.flatMap((facts, index) =>
       censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
     );
     if (initialProblems.length > 0) throw new Error(initialProblems.join(" · "));
-    const oldConnections = await Promise.all(windows.map(rendererConnection));
-    const childPid = opts.handle.childPid;
-    if (opts.handle.ownership !== "spawned" || childPid === undefined) {
-      throw new Error("restart smoke requires the isolated supervisor to own fieldd");
+
+    const expectedBootstrap = countVector(
+      {
+        generations: 2,
+        hookedSenders: 2,
+        windowIdentities: 2,
+        documentIdentities: 2,
+        retirements: 0,
+        replacementsRequested: 0,
+        staleBootReapers: 1,
+      },
+      "expectedBootstrap",
+    );
+    const initialBootstrap = countVector(opts.rendererBoundary.state(), "bootstrap");
+    if (vectorMismatches(expectedBootstrap, initialBootstrap) !== 0) {
+      throw new Error(`initial bootstrap census was ${JSON.stringify(initialBootstrap)}`);
+    }
+    const expectedRendererRuntime = rendererRuntimeVector(currentCanvas);
+    let currentHandle = opts.handle;
+    let currentConnections = await Promise.all(windows.map(rendererConnection));
+    const initialFieldd = await settlePluginRuntimeHealth(currentHandle);
+    const expectedFielddRuntime = initialFieldd.vector;
+    const nativePid = initialFieldd.health.nativePid;
+    if (nativePid === null || !pidAlive(nativePid)) {
+      throw new Error("restart smoke requires one live field-native process");
+    }
+    const startedAt = Date.now();
+    const deadline = config.durationMs === null ? null : startedAt + config.durationMs;
+    const samples: PluginRuntimePhysicalSample[] = [];
+    const oldBootIds: string[] = [];
+    let cycle = 0;
+
+    const collectSample = async (
+      phase: PluginRuntimePhysicalSample["phase"],
+      settled: SettledPluginRuntimeHealth,
+      oldFielddPids: readonly number[],
+      oldRendererPids: readonly number[],
+    ): Promise<PluginRuntimePhysicalSample> => {
+      await Promise.all(localLogSinks.map((sink) => sink.flush()));
+      const resources = await samplePhysicalResourceWindow(
+        windows,
+        settled.health.fieldd.pid,
+        nativePid,
+      );
+      const [mainFootprint, fielddFootprint, nativeFootprint] = await Promise.all([
+        sampleProcessFootprintKb(process.pid, config.footprint),
+        sampleProcessFootprintKb(settled.health.fieldd.pid, config.footprint),
+        sampleProcessFootprintKb(nativePid, config.footprint),
+      ]);
+      const mainResources = { ...resources.main, physicalFootprintKb: mainFootprint };
+      const fielddResources = { ...resources.fieldd, physicalFootprintKb: fielddFootprint };
+      const nativeResources = { ...resources.native, physicalFootprintKb: nativeFootprint };
+      const electron = resources.electron;
+      const logs = logCensus(opts.logging.logRoot);
+      const logging = loggingCensus(localLogSinks, [
+        settled.health.logging,
+        settled.health.pluginLogging,
+      ]);
+      const bootstrap = countVector(opts.rendererBoundary.state(), "bootstrap");
+      const rendererRuntime = rendererRuntimeVector(currentCanvas);
+      const memory = process.memoryUsage();
+      const rendererPids = electron.rendererPids.filter((pid) => pid > 0);
+      const sample: PluginRuntimePhysicalSample = {
+        phase,
+        cycle,
+        elapsedMs: Date.now() - startedAt,
+        bootId: currentHandle.info.bootId,
+        fielddPid: settled.health.fieldd.pid,
+        nativePid,
+        rendererPids,
+        exact: {
+          bootstrapVectorMismatches: vectorMismatches(expectedBootstrap, bootstrap),
+          rendererRuntimeVectorMismatches: vectorMismatches(
+            expectedRendererRuntime,
+            rendererRuntime,
+          ),
+          fielddRuntimeVectorMismatches: vectorMismatches(expectedFielddRuntime, settled.vector),
+          oldFielddProcesses: oldFielddPids.filter(pidAlive).length,
+          oldRendererProcesses: oldRendererPids.filter(pidAlive).length,
+          rendererProcessCountDeviation:
+            Math.abs(new Set(rendererPids).size - windows.length) +
+            rendererPids.filter((pid) => pid <= 0).length,
+          fielddHandleDeviation:
+            currentHandle.ownership === "spawned" &&
+            currentHandle.childPid === settled.health.fieldd.pid
+              ? 0
+              : 1,
+          // A replacement fieldd adopts the floor and intentionally reports
+          // null (it cannot vouch that it spawned that PID). The original
+          // positive owner is sampled directly above; only a conflicting
+          // positive claim is structural residue here.
+          nativePidDeviation:
+            settled.health.nativePid === null || settled.health.nativePid === nativePid ? 0 : 1,
+          sampledProcessDeaths:
+            Number(!mainResources.alive) +
+            Number(!fielddResources.alive) +
+            Number(!nativeResources.alive),
+          loggingQueueRecords: logging.queueRecords,
+          loggingQueueBytes: logging.queueBytes,
+          unexplainedLogDrops: logging.unexplainedDrops,
+          plantedMainListeners: plantedMainListenerCount(),
+        },
+        series: {
+          electronProcessCount: electron.processCount,
+          mainFds: mainResources.fds,
+          mainThreads: mainResources.threads,
+          mainNetworkSockets: mainResources.networkSockets,
+          mainPhysicalFootprintKb: mainResources.physicalFootprintKb,
+          fielddFds: fielddResources.fds,
+          fielddThreads: fielddResources.threads,
+          fielddNetworkSockets: fielddResources.networkSockets,
+          fielddPhysicalFootprintKb: fielddResources.physicalFootprintKb,
+          nativeFds: nativeResources.fds,
+          nativeThreads: nativeResources.threads,
+          nativeNetworkSockets: nativeResources.networkSockets,
+          nativePhysicalFootprintKb: nativeResources.physicalFootprintKb,
+          mainHeapUsedBytes: memory.heapUsed,
+          mainExternalBytes: memory.external,
+          electronWorkingSetKb: electron.workingSetKb,
+          rendererWorkingSetKb: electron.rendererWorkingSetKb,
+          systemLogBytes: logs.systemBytes,
+          systemLogFiles: logs.systemFiles,
+          pluginLogBytes: logs.pluginBytes,
+          pluginLogFiles: logs.pluginFiles,
+        },
+        raw: {
+          bootstrap,
+          rendererRuntime,
+          fielddRuntime: settled.vector,
+          reportedNativePid: settled.health.nativePid,
+          electronRoster: electron.roster,
+          mainResources,
+          fielddResources,
+          nativeResources,
+          osObservationRanges: resources.ranges,
+          logs,
+          logging,
+        },
+      };
+      samples.push(sample);
+      console.log(`PLUGIN_RUNTIME_SOAK_SAMPLE ${JSON.stringify(sample)}`);
+      cycle += 1;
+      return sample;
+    };
+
+    while (
+      cycle < 10_000 &&
+      (config.cycles !== null ? cycle < config.cycles : Date.now() < (deadline ?? 0))
+    ) {
+      const childPid = currentHandle.childPid;
+      if (currentHandle.ownership !== "spawned" || childPid === undefined) {
+        throw new Error("restart smoke requires the isolated supervisor to own fieldd");
+      }
+      const oldHandle = currentHandle;
+      const oldRendererPids = windows.map((window) => window.webContents.getOSProcessId());
+      const replacementReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
+      const replacementHandle = waitForReplacementHandle(
+        opts.onHandle,
+        oldHandle.info.bootId,
+        15_000,
+      );
+      process.kill(childPid, "SIGKILL");
+      await waitForCondition("owned fieldd handle retirement", 10_000, () => {
+        return oldHandle.client.status === "closed";
+      });
+      currentHandle = await replacementHandle;
+      if (currentHandle.info.bootId === oldHandle.info.bootId) {
+        throw new Error("supervisor recovery returned the dead daemon boot id");
+      }
+      oldBootIds.push(oldHandle.info.bootId);
+
+      currentCanvas = (await Promise.all(replacementReady)).map(
+        (raw) => JSON.parse(raw) as CanvasFacts,
+      );
+      console.log(`SMOKE_PLUGIN_RESTART_RECOVERED ${JSON.stringify(currentCanvas)}`);
+      const replacementProblems = currentCanvas.flatMap((facts, index) =>
+        censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
+      );
+      if (replacementProblems.length > 0) throw new Error(replacementProblems.join(" · "));
+      const newConnections = await Promise.all(windows.map(rendererConnection));
+      for (let index = 0; index < windows.length; index += 1) {
+        const oldIdentity = currentConnections[index]?.rendererParticipant;
+        const newIdentity = newConnections[index]?.rendererParticipant;
+        if (oldIdentity === undefined || newIdentity === undefined) {
+          throw new Error(`window ${index + 1} has no renderer participant identity`);
+        }
+        if (newIdentity.participantId !== oldIdentity.participantId) {
+          throw new Error(`window ${index + 1} lost its stable participant id`);
+        }
+        if (newIdentity.incarnation === oldIdentity.incarnation) {
+          throw new Error(`window ${index + 1} reused its dead document incarnation`);
+        }
+      }
+      currentConnections = newConnections;
+      await waitForCondition("old fieldd process death", 10_000, () => !pidAlive(childPid));
+      await waitForCondition("old renderer process death", 10_000, () =>
+        oldRendererPids.every((pid) => !pidAlive(pid)),
+      );
+      const settled = await settlePluginRuntimeHealth(currentHandle, expectedFielddRuntime);
+      if (config.injection === "main-listener" && cycle >= config.warmupSamples) {
+        const event = `vf:prc6:planted:${cycle}`;
+        process.on(event, () => undefined);
+        plantedEvents.push(event);
+      }
+      await collectSample("restart", settled, [childPid], oldRendererPids);
+      if (config.cycleDelayMs > 0) {
+        const remaining = deadline === null ? config.cycleDelayMs : deadline - Date.now();
+        if (remaining > 0) await sleep(Math.min(config.cycleDelayMs, remaining));
+      }
     }
 
-    const replacementReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
-    const replacementHandle = waitForReplacementHandle(
-      opts.onHandle,
-      opts.handle.info.bootId,
-      15_000,
-    );
-    process.kill(childPid, "SIGKILL");
-    await waitForCondition("owned fieldd handle retirement", 10_000, () => {
-      return opts.handle.client.status === "closed";
-    });
-    const replacement = await replacementHandle;
-    if (replacement.info.bootId === opts.handle.info.bootId) {
-      throw new Error("supervisor recovery returned the dead daemon boot id");
+    if (deadline !== null && samples.at(-1)!.elapsedMs < config.durationMs!) {
+      const remaining = deadline - Date.now();
+      if (remaining > 0) await sleep(remaining);
+      const settled = await settlePluginRuntimeHealth(currentHandle, expectedFielddRuntime);
+      await collectSample("terminal", settled, [], []);
     }
 
-    const replacementCanvas = (await Promise.all(replacementReady)).map(
-      (raw) => JSON.parse(raw) as CanvasFacts,
+    const verdict = evaluatePhysicalSoak(samples, physicalSoakOptions(config));
+    console.log(
+      `PLUGIN_RUNTIME_SOAK ${JSON.stringify({
+        claim: config.claim,
+        claimSatisfied: config.claim === "24h" && verdict.verdict === "pass",
+        injection: config.injection,
+        config,
+        verdict,
+      })}`,
     );
-    console.log(`SMOKE_PLUGIN_RESTART_RECOVERED ${JSON.stringify(replacementCanvas)}`);
-    const replacementProblems = replacementCanvas.flatMap((facts, index) =>
-      censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
-    );
-    if (replacementProblems.length > 0) throw new Error(replacementProblems.join(" · "));
-    const newConnections = await Promise.all(windows.map(rendererConnection));
-    for (let index = 0; index < windows.length; index += 1) {
-      const oldIdentity = oldConnections[index]?.rendererParticipant;
-      const newIdentity = newConnections[index]?.rendererParticipant;
-      if (oldIdentity === undefined || newIdentity === undefined) {
-        throw new Error(`window ${index + 1} has no renderer participant identity`);
-      }
-      if (newIdentity.participantId !== oldIdentity.participantId) {
-        throw new Error(`window ${index + 1} lost its stable participant id`);
-      }
-      if (newIdentity.incarnation === oldIdentity.incarnation) {
-        throw new Error(`window ${index + 1} reused its dead document incarnation`);
-      }
-    }
     console.log(
       `SMOKE_PLUGIN_RESTART ${JSON.stringify({
         windows: windows.length,
-        oldBootId: opts.handle.info.bootId,
-        newBootId: replacement.info.bootId,
+        cycles: oldBootIds.length,
+        oldBootIds,
+        newBootId: currentHandle.info.bootId,
         stableParticipants: true,
         freshIncarnations: true,
-        widgetTypes: replacementCanvas.map((facts) => facts.widgetTypes),
-        stagedPlugins: replacementCanvas.map((facts) => facts.stagedPlugins),
+        widgetTypes: currentCanvas.map((facts) => facts.widgetTypes),
+        stagedPlugins: currentCanvas.map((facts) => facts.stagedPlugins),
+        soakVerdict: verdict.verdict,
       })}`,
     );
-    ok = true;
+    ok = verdict.verdict === "pass";
   } catch (error) {
     console.error(
       `SMOKE_PLUGIN_RESTART failed: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+  for (const event of plantedEvents) process.removeAllListeners(event);
   await teardown(opts.supervisor, opts.root, opts.beforeExit);
   app.exit(ok ? 0 : 2);
 }

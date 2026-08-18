@@ -11,10 +11,9 @@ export function emitCanvasReadyMarker(
   widgetTypes: number,
   plugins: number,
   stagedPlugins: number,
+  runtime?: object,
 ): void {
-  console.log(
-    `CANVAS_READY {"widgetTypes":${widgetTypes},"plugins":${plugins},"stagedPlugins":${stagedPlugins}}`,
-  );
+  console.log(`CANVAS_READY ${JSON.stringify({ widgetTypes, plugins, stagedPlugins, runtime })}`);
 }
 
 /** What the Godview deck currently IS, as one line per settled change.

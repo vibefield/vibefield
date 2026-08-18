@@ -115,6 +115,7 @@ import { ProductApi } from "./product-api";
 import {
   type PluginServiceLogRecord,
   ServiceHost,
+  type ServiceHostCensus,
   type ServiceLeaseObservation,
 } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
@@ -218,6 +219,14 @@ export interface FielddHealth {
   docs: { state: string; docCount: number };
   plugins: { count: number; enabled: number; invalid: number };
   logging: LoggingHealthV1 | null;
+  pluginLogging: LoggingHealthV1 | null;
+  /** PRC-6c — counts-only live ownership. This projection contains no
+   * reports, schemas, workers, ports, promises, disposers, or credentials. */
+  pluginRuntime: {
+    serviceHost: ServiceHostCensus | null;
+    serviceRegistry: ReturnType<ServiceRegistry["state"]>;
+    diagnostics: ReturnType<PluginRuntimeDiagnostics["state"]> | null;
+  };
   audit: AuditHealthV1;
   /** AH-1 — private-intent durability and source-probe truth are not mesh
    * health, so they have a first-class projection of their own. */
@@ -548,6 +557,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // assigned after listen (workers dial the bound port); handlers guard null
     let serviceHost: ServiceHost | null = null;
+    // Assigned with the update manager below. Health may be emitted during
+    // bootstrap, so pre-composition is represented as null rather than a
+    // fabricated empty owner.
+    let runtimeDiagnostics: PluginRuntimeDiagnostics | null = null;
     // P7 §16.6 — assigned at the bootstrap tail (needs serviceHost for
     // restarts); handlers guard null and publish local truth into the doc
     let reconciler: InstallSetReconciler | null = null;
@@ -690,6 +703,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs: docs.health(),
       plugins: plugins.health(),
       logging: logging?.health() ?? null,
+      pluginLogging: pluginLogging?.health() ?? null,
+      pluginRuntime: {
+        serviceHost: serviceHost?.census() ?? null,
+        serviceRegistry: services.state(),
+        diagnostics: runtimeDiagnostics?.state() ?? null,
+      },
       audit: audit.health(),
       artifacts: artifactsRef?.health() ?? {
         count: 0,
@@ -1654,7 +1673,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         : { deadlines: config.pluginUpdateDeadlines }),
     });
     pluginUpdatesForCleanup = updateManager;
-    const runtimeDiagnostics = new PluginRuntimeDiagnostics({
+    runtimeDiagnostics = new PluginRuntimeDiagnostics({
       plugins,
       serviceDiagnostic: (pluginId) => serviceHost?.diagnostic(pluginId) ?? null,
       existingCoordinatorFor: (pluginId) => updateManager.existingCoordinatorFor(pluginId),

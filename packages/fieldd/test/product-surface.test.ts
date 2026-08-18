@@ -136,6 +136,16 @@ describe("system.mintWindowToken", () => {
     await helloAs(win, minted.token);
     const health = (await win.call("system.health", {})) as FielddHealth;
     expect(health.nativeConnected).toBe(true);
+    expect(health.pluginRuntime.serviceHost).toMatchObject({ disposed: false });
+    expect(health.pluginRuntime.serviceRegistry).toMatchObject({
+      subscriptions: 0,
+      disposed: false,
+    });
+    expect(health.pluginRuntime.diagnostics).toMatchObject({
+      flushScheduled: false,
+      disposed: false,
+    });
+    expect(JSON.parse(JSON.stringify(health.pluginRuntime))).toEqual(health.pluginRuntime);
 
     // …but lacks tokens.mint: the registry scope gate refuses it
     const denied = await win.callErr("system.mintWindowToken", { scopes: [], label: "nope" });
