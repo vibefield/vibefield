@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { isCommandBound } from "../src/plugin-host/command-registry";
 import { activateStagedRenderer } from "../src/plugin-host/renderer-harness";
 import {
+  createRendererModuleLoader,
   ensureStyleLink,
   prepareRendererPlugins,
   type StagedLoaderDeps,
@@ -18,6 +19,48 @@ import { getSurfacesSnapshot } from "../src/plugin-host/surface-registry";
 // the §10.4 deadline — and a real protocol handler would only make each of them
 // depend on Electron being up. The end-to-end path (mint → serve → import) is
 // the smoke's job, and the smoke asserts it on every run.
+
+describe("the deferred replacement module loader", () => {
+  it("evaluates only when invoked and accepts the default-export module spelling", async () => {
+    const imports: string[] = [];
+    const load = createRendererModuleLoader("vibefield-plugin://candidate-token", async (url) => {
+      imports.push(url);
+      return { default: { activate: () => undefined } };
+    });
+    expect(imports).toEqual([]);
+
+    const module = await load(new AbortController().signal);
+    expect(typeof module.activate).toBe("function");
+    expect(imports).toEqual(["vibefield-plugin://candidate-token"]);
+  });
+
+  it("does not import an already superseded source and refuses a superseded completion", async () => {
+    let imports = 0;
+    const before = new AbortController();
+    before.abort();
+    const never = createRendererModuleLoader("vibefield-plugin://never", async () => {
+      imports += 1;
+      return { activate: () => undefined };
+    });
+    await expect(never(before.signal)).rejects.toThrow(/superseded/);
+    expect(imports).toBe(0);
+
+    let resolveImport!: (value: unknown) => void;
+    const pending = new Promise<unknown>((resolve) => {
+      resolveImport = resolve;
+    });
+    const during = new AbortController();
+    const load = createRendererModuleLoader("vibefield-plugin://during", async () => {
+      imports += 1;
+      return await pending;
+    });
+    const loading = load(during.signal);
+    during.abort();
+    resolveImport({ activate: () => undefined });
+    await expect(loading).rejects.toThrow(/superseded/);
+    expect(imports).toBe(1);
+  });
+});
 
 /** A record shaped the way fieldd's snapshot ships one, declaring one widget. */
 const record = (id: string, over: Record<string, unknown> = {}): PluginRecord =>

@@ -282,6 +282,22 @@ function asRendererModule(imported: unknown): RendererPluginModule | null {
   return null;
 }
 
+/** PRC-5d deferred import seam. Constructing this closure evaluates no plugin code; invocation is
+ * owned by RuntimeTargetController activation after retained-old quiescence. */
+export function createRendererModuleLoader(
+  moduleUrl: string,
+  importModule: (url: string) => Promise<unknown> = defaultImport,
+): (signal: AbortSignal) => Promise<RendererPluginModule> {
+  return async (signal) => {
+    if (signal.aborted) throw new Error("renderer module import was superseded");
+    const imported = await importModule(moduleUrl);
+    if (signal.aborted) throw new Error("renderer module import was superseded");
+    const module = asRendererModule(imported);
+    if (module === null) throw new Error("the module exports no activate (§10.1)");
+    return module;
+  };
+}
+
 /** The real import. The vite-ignore hint is required, not decorative: the URL
  * is DATA from the daemon, so the bundler must be told not to analyse it as a
  * build-time specifier and try to resolve a chunk for it. */
