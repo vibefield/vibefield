@@ -9,6 +9,11 @@ async fn main() -> anyhow::Result<()> {
     let boot_id = new_boot_id();
     let logging = NativeLogging::install(&config, &boot_id)?;
     install_panic_hook(logging.clone());
+    // TC-D6(a): before any listener binds, and after the subscriber exists so
+    // the before/after numbers are actually recorded. A process launched by
+    // launchd inherits a 256-fd soft limit, which the 24+5N measurement puts
+    // one session past at #47 — the rehearsed silent death this raise ends.
+    field_native::rlimit::raise_file_limit();
     let running =
         match field_native::bootstrap_with_logging(config, boot_id, Some(logging.clone())).await {
             Ok(running) => running,

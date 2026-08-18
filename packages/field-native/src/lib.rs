@@ -1,6 +1,8 @@
 // field-native — the Rust native-plane daemon (design-02 §2).
 // `contracts` is typify-generated from @vibefield/contracts gen/jsonschema/bundle.json
 // (regenerate: `pnpm --filter @vibefield/contracts gen:rust`); golden fixtures pin it.
+/// TC-L1f — the machine-wide custody admission ledger.
+pub mod admission;
 pub mod config;
 pub mod contracts;
 pub mod endpoints;
@@ -11,6 +13,10 @@ pub mod mgmt;
 pub mod pairing;
 /// GENERATED (NF-D9) — registries-as-code from @vibefield/contracts; `pnpm gen`.
 pub mod registries;
+/// TC-D6(b)/(e) — refusal classification and descriptor-pressure gauging.
+pub mod resource_pressure;
+/// TC-D6(a) — the descriptor-limit raise every boot owes itself.
+pub mod rlimit;
 pub mod services;
 pub mod state;
 
@@ -149,7 +155,14 @@ pub async fn bootstrap_with_logging(
     if let Some(endpoints) = terminal_handle.endpoints() {
         let _ = state.terminal.set(endpoints);
     }
-    let terminal_inventory = services::terminal::install_inventory(terminal_handle, state.clone());
+    // TC-L1f: resolving the machine-wide ledger is WIRING for the same reason
+    // the two lines above are — the unit must not learn how a data root becomes
+    // a machine root, and the ledger must not learn what a session is. `None`
+    // means this platform has no honest budget to keep (win32), and the pump
+    // then runs with the kernel as the only admission authority.
+    let admission = admission::AdmissionLedger::resolve(&config.data_dir, &boot_id);
+    let terminal_inventory =
+        services::terminal::install_inventory(terminal_handle, state.clone(), admission);
 
     let health_refresh = tokio::spawn({
         let mgr = mgr.clone();

@@ -2,6 +2,11 @@ mod record;
 mod segment;
 mod stderr;
 
+/// The one process-liveness probe in this crate, borrowed by the admission
+/// ledger (TC-L1f) to reap entries a crashed daemon left behind. Re-exported
+/// rather than made public wholesale: the segment writer stays private.
+pub(crate) use segment::pid_is_alive;
+
 use crate::config::NativeConfig;
 use anyhow::{anyhow, Context as _, Result};
 use record::{encode_event, epoch_millis, CapturedFields, EncodedRecord, PathAliases};

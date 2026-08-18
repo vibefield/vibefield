@@ -98,10 +98,14 @@
 //! the serve task and the pump each state what they know and neither clobbers
 //! the other's news.
 
+use crate::admission::AdmissionLedger;
 use crate::config::NativeConfig;
 use crate::contracts::{ObservedTerminal, TerminalEndpoints, UnitHealth, UnitState};
 use crate::manager::NativeService;
 use crate::registries;
+use crate::resource_pressure::{
+    self, CreateRefusal, FdPressureGauge, PressureClass, HIGH_WATER_PERCENT,
+};
 use crate::services::mesh::MeshHandle;
 use crate::services::terminal_client::{ControlClient, SessionSummary};
 use crate::services::terminal_mesh::{self, Attachment, MeshPlan};
@@ -152,6 +156,16 @@ const BACKSTOP_INTERVAL: Duration = Duration::from_secs(5);
 /// A torn control connection is reconciled by reconnecting, never by guessing
 /// (spec §10.5: `list-sessions` is truth).
 const RECONNECT_DELAY: Duration = Duration::from_millis(500);
+
+/// How often the unit samples its own descriptor pressure (TC-D6(e)).
+///
+/// The sample is a directory read of `/dev/fd`, which costs one descriptor and
+/// no syscall a busy daemon would notice, so the interval is set by how quickly
+/// the news should travel rather than by what it costs. Two seconds is inside
+/// the human timescale of the health surface that reads it and well inside the
+/// kill matrix's "< 2s" inventory row, so a plane that starts refusing creates
+/// does not read `up` for a noticeable moment first.
+const FD_SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
 
 /// How many consecutive failed inventory attempts make the plane DEGRADED
 /// rather than momentarily torn.
@@ -224,6 +238,24 @@ struct Shared {
     /// writers are independent, and either overwriting the other's state would
     /// lose exactly the news the reader needs.
     inventory_fault: Mutex<Option<String>>,
+    /// TC-D6(e) — resource pressure, ONE CELL PER CLASS, for the same reason
+    /// there is a second health cell at all: these writers are independent of
+    /// the serve task, of the pump, and of each other. Descriptor pressure is
+    /// measured by this process about itself; the PTY budget is a fact about the
+    /// whole machine that the admission ledger owns. A plane serving perfectly
+    /// while the machine has nothing left to give it is exactly the honest state
+    /// the health surface exists for.
+    ///
+    /// Each detail carries a `RESOURCE_PRESSURE_STATES` spelling verbatim —
+    /// that is what a reader matches on.
+    fd_pressure: Mutex<Option<String>>,
+    pty_pressure: Mutex<Option<String>>,
+    /// The hysteresis behind `fd_pressure`, shared by BOTH of its writers: the
+    /// periodic sampler and the immediate create-refusal path. If the refusal
+    /// path set the cell without moving this gauge, the sampler would see no
+    /// transition to report and the unit would stay degraded forever — health
+    /// that cannot recover is not health.
+    fd_gauge: Mutex<FdPressureGauge>,
 }
 
 impl Shared {
@@ -250,27 +282,91 @@ impl Shared {
         let _ = self.ping.send(());
     }
 
+    /// One descriptor-pressure sample. Runs the shared gauge and publishes only
+    /// on a transition, so a sampler asserting "still fine" every two seconds
+    /// wakes nobody.
+    fn observe_fd_pressure(&self, open: u64, limit: u64) {
+        let transition = self.fd_gauge.lock().unwrap().observe(open, limit);
+        match transition {
+            Some(true) => self.set_fd_pressure(Some(format!(
+                "{}: {open} of {limit} descriptors are in use, past the {HIGH_WATER_PERCENT}% \
+                 mark at which new sessions start being refused",
+                PressureClass::FdPressure.as_str()
+            ))),
+            Some(false) => self.set_fd_pressure(None),
+            None => {}
+        }
+    }
+
+    /// The immediate half: a kernel refusal moves the SAME gauge, so the next
+    /// sample below the low-water mark clears it through the ordinary path.
+    fn note_fd_refusal(&self) {
+        if self.fd_gauge.lock().unwrap().refused().is_some() {
+            self.set_fd_pressure(Some(format!(
+                "{}: the terminal floor refused a create because the machine is out of \
+                 descriptors",
+                PressureClass::FdPressure.as_str()
+            )));
+        }
+    }
+
+    fn set_fd_pressure(&self, detail: Option<String>) {
+        let mut held = self.fd_pressure.lock().unwrap();
+        if *held == detail {
+            return;
+        }
+        *held = detail;
+        drop(held);
+        let _ = self.ping.send(());
+    }
+
+    /// The admission ledger's verdict on the machine-wide PTY budget. Idempotent
+    /// for the same reason the fault cell is — the pump asserts it on every
+    /// reconcile.
+    fn set_pty_pressure(&self, detail: Option<String>) {
+        let mut held = self.pty_pressure.lock().unwrap();
+        if *held == detail {
+            return;
+        }
+        *held = detail;
+        drop(held);
+        let _ = self.ping.send(());
+    }
+
     /// The unit's health as a reader sees it: the serve task's state, corrected
-    /// by what the pump knows.
+    /// by what the pump and the pressure gauges know.
     ///
-    /// A stale inventory only DOWNGRADES a serving floor — on any other base
-    /// state the serve task is already telling the worse and truer story
-    /// (`starting` has no inventory to be stale, `crashed`/`degraded` name a
-    /// cause the pump's error is merely a symptom of).
+    /// A stale inventory or a resource ceiling only DOWNGRADES a serving floor —
+    /// on any other base state the serve task is already telling the worse and
+    /// truer story (`starting` has no inventory to be stale, `crashed`/`degraded`
+    /// name a cause the others are merely symptoms of).
+    ///
+    /// Both corrections are reported when both hold. They are independent facts
+    /// — a floor can be out of descriptors AND unable to list its sessions — and
+    /// dropping either to keep the string short would hide the one the reader
+    /// needed.
     fn health(&self) -> UnitHealth {
         let base = self.served.lock().unwrap().clone();
-        let fault = self.inventory_fault.lock().unwrap().clone();
-        let (Some(fault), UnitState::Up) = (fault, base.state) else {
+        if base.state != UnitState::Up {
             return base;
-        };
+        }
+        let fault = self.inventory_fault.lock().unwrap().clone();
+        let fd = self.fd_pressure.lock().unwrap().clone();
+        let pty = self.pty_pressure.lock().unwrap().clone();
+        if fault.is_none() && fd.is_none() && pty.is_none() {
+            return base;
+        }
+        let mut parts: Vec<String> = base.detail.iter().cloned().collect();
+        if let Some(fault) = fault {
+            parts.push(format!(
+                "the observed inventory is no longer current: {fault}"
+            ));
+        }
+        parts.extend(fd);
+        parts.extend(pty);
         UnitHealth {
             state: UnitState::Degraded,
-            detail: Some(match &base.detail {
-                Some(detail) => {
-                    format!("{detail}; the observed inventory is no longer current: {fault}")
-                }
-                None => format!("the observed inventory is no longer current: {fault}"),
-            }),
+            detail: Some(parts.join("; ")),
             ..base
         }
     }
@@ -300,6 +396,36 @@ impl TerminalHandle {
     /// health, never from a missing field.
     pub fn endpoints(&self) -> Option<TerminalEndpoints> {
         self.shared.endpoints.as_ref().map(Endpoints::contract)
+    }
+
+    /// TC-D6(e), the immediate half: a create the kernel refused for
+    /// descriptors puts the unit in `fd_pressure` NOW rather than at the next
+    /// sample. A refusal is stronger evidence than any sample — it already
+    /// happened — and the two-second interval is exactly the window in which a
+    /// user would otherwise read `up` on a floor that just told them no.
+    ///
+    /// Anything the classifier could not name leaves health alone: an
+    /// unclassified refusal is not evidence of pressure, and reporting one as
+    /// pressure would send a reader hunting for a leak that is not there.
+    pub fn note_create_refusal(&self, refusal: &CreateRefusal) {
+        let Some(class) = refusal.pressure() else {
+            return;
+        };
+        tracing::warn!(
+            event = "field_native.terminal.create_refused",
+            component = "terminal",
+            state = class.as_str(),
+            error = refusal.message(),
+            "A terminal create was refused by a resource ceiling"
+        );
+        match class {
+            PressureClass::FdPressure => self.shared.note_fd_refusal(),
+            // The ledger owns this state and answers on every reconcile, so a
+            // refusal carrying it needs no separate cell write — and inventing
+            // one here would let a stale refusal outlive the budget that caused
+            // it.
+            PressureClass::PtyExhausted => {}
+        }
     }
 
     /// Park until the service is serving. Never resolves if it never serves,
@@ -371,6 +497,9 @@ impl TerminalUnit {
                 serving: watch::channel(false).0,
                 drain: Mutex::new(None),
                 inventory_fault: Mutex::new(None),
+                fd_pressure: Mutex::new(None),
+                pty_pressure: Mutex::new(None),
+                fd_gauge: Mutex::new(FdPressureGauge::new()),
             }),
             tasks: Mutex::new(Vec::new()),
             plan,
@@ -429,6 +558,11 @@ impl NativeService for TerminalUnit {
             self.mesh.clone(),
         ));
         self.tasks.lock().unwrap().push(TaskGuard(task));
+        // TC-D6(e): started with the unit and torn down with it. It watches this
+        // PROCESS's descriptors, which is what every PTY on this floor is spent
+        // from, so it is the unit's own news rather than the pump's.
+        let sampler = tokio::spawn(sample_fd_pressure(self.shared.clone()));
+        self.tasks.lock().unwrap().push(TaskGuard(sampler));
         Ok(())
     }
 
@@ -657,6 +791,31 @@ async fn serve(
     shared.set(UnitState::Crashed, Some(detail));
 }
 
+/// TC-D6(e), the periodic half: watch this process's descriptor headroom and
+/// put the honest state on the unit before the kernel starts refusing.
+///
+/// Sampling rather than counting: the daemon's descriptors are spent by PTYs,
+/// sockets, log segments and whatever ghosttea opens per session, and a counter
+/// this unit maintained would be a second source of truth that could only ever
+/// drift from the one the kernel keeps. `/dev/fd` IS the kernel's answer.
+///
+/// A platform that cannot answer (win32 — see `resource_pressure`) simply never
+/// reports, which leaves the unit saying exactly what it knows.
+async fn sample_fd_pressure(shared: Arc<Shared>) {
+    let mut ticker = tokio::time::interval(FD_SAMPLE_INTERVAL);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        ticker.tick().await;
+        let (Some(open), Some(limit)) = (
+            resource_pressure::open_fd_count(),
+            resource_pressure::soft_fd_limit(),
+        ) else {
+            continue;
+        };
+        shared.observe_fd_pressure(open, limit);
+    }
+}
+
 /// Wire the unit's inventory to the mgmt watch channel (NF-D7/§4.3). Called
 /// from `bootstrap`, not from the unit, for the reason the lane transport is:
 /// joining a unit to the mgmt plane is WIRING — the unit never learns what a
@@ -664,6 +823,7 @@ async fn serve(
 pub fn install_inventory(
     handle: TerminalHandle,
     state: Arc<DaemonState>,
+    ledger: Option<AdmissionLedger>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let Some(endpoints) = handle.shared.endpoints.clone() else {
@@ -671,6 +831,7 @@ pub fn install_inventory(
             return;
         };
         let mut watch = InventoryWatch::new(handle.clone());
+        let mut admission = LedgerPump::new(ledger, handle.shared.clone());
         loop {
             // Inside the loop, not before it: a torn connection reconnects at
             // once while the service is still up, and a service that DIED parks
@@ -682,7 +843,15 @@ pub fn install_inventory(
             // DIAL be told apart from a pump that ran and then broke.
             match ControlClient::connect(&endpoints.control, &endpoints.token).await {
                 Ok((client, events)) => {
-                    match pump_inventory(Arc::new(client), events, &state, &mut watch).await {
+                    match pump_inventory(
+                        Arc::new(client),
+                        events,
+                        &state,
+                        &mut watch,
+                        &mut admission,
+                    )
+                    .await
+                    {
                         Ok(()) => watch.disconnected(),
                         Err(error) => watch.failed(&error),
                     }
@@ -698,6 +867,93 @@ pub fn install_inventory(
             tokio::time::sleep(RECONNECT_DELAY).await;
         }
     })
+}
+
+/// How long the ledger may go untouched while this floor's own count is
+/// unchanged. Another pair's sessions move the machine total without moving
+/// ours, so "publish on change" alone would let this floor report `up` while the
+/// machine had nothing left; a flock and a small JSON read at this cadence is
+/// far cheaper than that dishonesty.
+const LEDGER_INTERVAL: Duration = Duration::from_secs(5);
+
+/// TC-L1f's production seam: this floor's claim on the machine-wide budget, kept
+/// current from the inventory rather than from events.
+///
+/// `list-sessions` is truth (spec §10.5), so the ledger is TOLD the count
+/// instead of trusted to have counted every create and exit. That is what makes
+/// a missed event or a torn connection unable to leak budget: the next reconcile
+/// corrects the entry outright.
+///
+/// A ledger failure is logged once per streak and never fatal. Admission is
+/// advisory (the module note on `crate::admission`), so a floor that cannot
+/// reach the file keeps serving with the kernel as its only authority — which is
+/// exactly the guarantee that was there before the ledger existed.
+struct LedgerPump {
+    ledger: Option<AdmissionLedger>,
+    shared: Arc<Shared>,
+    published: Option<u32>,
+    last: Option<Instant>,
+    complained: bool,
+}
+
+impl LedgerPump {
+    fn new(ledger: Option<AdmissionLedger>, shared: Arc<Shared>) -> Self {
+        Self {
+            ledger,
+            shared,
+            published: None,
+            last: None,
+            complained: false,
+        }
+    }
+
+    /// Publish this floor's governed count and read back what the machine holds.
+    fn observe(&mut self, governed: u32) {
+        let Some(ledger) = self.ledger.as_ref() else {
+            return;
+        };
+        let due = self
+            .last
+            .is_none_or(|last| last.elapsed() >= LEDGER_INTERVAL);
+        if self.published == Some(governed) && !due {
+            return;
+        }
+        self.last = Some(Instant::now());
+        let outcome = ledger
+            .publish(governed)
+            .and_then(|_| ledger.machine_total());
+        match outcome {
+            Ok(machine_total) => {
+                self.published = Some(governed);
+                self.complained = false;
+                let budget = ledger.budget();
+                self.shared
+                    .set_pty_pressure((machine_total >= budget).then(|| {
+                        format!(
+                            "{}: the machine-wide custody budget of {budget} PTYs is spent \
+                         ({machine_total} held across every VibeField pair on this machine); \
+                         new sessions are refused until one ends",
+                            PressureClass::PtyExhausted.as_str()
+                        )
+                    }));
+            }
+            Err(error) => {
+                // The count is NOT remembered as published on a failure, so the
+                // next reconcile retries rather than believing a write that did
+                // not happen.
+                if !std::mem::replace(&mut self.complained, true) {
+                    tracing::warn!(
+                        event = "field_native.admission.unavailable",
+                        component = "terminal",
+                        ledger = %ledger.path().display(),
+                        error = %error,
+                        "The machine-wide admission ledger could not be updated; the kernel \
+                         remains the only admission authority"
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// The pump's bookkeeping across reconnects: how long it has been failing,
@@ -804,6 +1060,7 @@ async fn pump_inventory(
     mut events: tokio::sync::mpsc::UnboundedReceiver<Value>,
     state: &Arc<DaemonState>,
     watch: &mut InventoryWatch,
+    admission: &mut LedgerPump,
 ) -> anyhow::Result<()> {
     // Seeded from what the channel already holds so an unchanged inventory
     // wakes no subscriber.
@@ -825,6 +1082,7 @@ async fn pump_inventory(
     let known = known_session_ids(state);
     let reconciled = reconcile(&client, state, published).await?;
     watch.reconciled();
+    admission.observe(reconciled.governed);
     published = reconciled.published;
     regovern_unseen(&births_tx, &known, &reconciled.sessions);
 
@@ -867,6 +1125,7 @@ async fn pump_inventory(
                     let started = Instant::now();
                     let reconciled = reconcile(&client, state, published).await?;
                     watch.reconciled();
+                    admission.observe(reconciled.governed);
                     published = reconciled.published;
                     if let Some(known) = known {
                         regovern_unseen(&births_tx, &known, &reconciled.sessions);
@@ -1039,6 +1298,12 @@ async fn govern_births(
 struct Reconciled {
     published: Value,
     sessions: Vec<SessionSummary>,
+    /// How many of those rows this floor GOVERNS — the number the admission
+    /// ledger publishes as this pair's claim on the machine budget. Counted
+    /// here, from the same filter the inventory uses, so the ledger and the
+    /// published inventory can never mean two different things by "a session
+    /// on this device".
+    governed: u32,
 }
 
 /// `list-sessions` is truth (spec §10.5). Publishes only on a real change, and
@@ -1060,10 +1325,12 @@ async fn reconcile(
         .map(observed_row)
         .collect();
     let snapshot = inventory_value(&terminals);
+    let governed = terminals.len() as u32;
     if snapshot == published {
         return Ok(Reconciled {
             published,
             sessions,
+            governed,
         });
     }
     let count = terminals.len();
@@ -1079,6 +1346,7 @@ async fn reconcile(
     Ok(Reconciled {
         published: snapshot,
         sessions,
+        governed,
     })
 }
 
@@ -1341,6 +1609,9 @@ mod tests {
             serving: watch::channel(false).0,
             drain: Mutex::new(None),
             inventory_fault: Mutex::new(None),
+            fd_pressure: Mutex::new(None),
+            pty_pressure: Mutex::new(None),
+            fd_gauge: Mutex::new(FdPressureGauge::new()),
         })
     }
 
@@ -1397,6 +1668,7 @@ mod tests {
             let shared = test_shared();
             shared.set(state, Some("the terminal service failed: boom".into()));
             shared.set_inventory_fault(Some("connection refused".into()));
+            shared.observe_fd_pressure(900, 1000);
             let health = shared.health();
             assert_eq!(health.state, state, "{name} is not a serving floor");
             assert_eq!(
@@ -1405,5 +1677,184 @@ mod tests {
                 "{name} keeps the serve task's own account"
             );
         }
+    }
+
+    /// TC-D6(e), both directions. A floor that is out of descriptors is not a
+    /// floor that is fine, and — the half that matters as much — a floor whose
+    /// pressure has passed must stop saying it is.
+    #[test]
+    fn descriptor_pressure_degrades_the_unit_and_then_recovers_it() {
+        let shared = test_shared();
+        assert_eq!(shared.health().state, UnitState::Up);
+
+        shared.observe_fd_pressure(700, 1000);
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "70% is not pressure; a unit that cried wolf here would be ignored at 90%"
+        );
+
+        shared.observe_fd_pressure(820, 1000);
+        let degraded = shared.health();
+        assert_eq!(degraded.state, UnitState::Degraded);
+        let detail = degraded.detail.expect("a degraded unit states why");
+        assert!(
+            detail.contains(PressureClass::FdPressure.as_str()),
+            "the contract spelling is what a reader matches on: {detail}"
+        );
+        assert!(
+            detail.contains("820 of 1000"),
+            "and the numbers are the evidence, not a mood: {detail}"
+        );
+        assert!(
+            detail.contains("text engine Menlo"),
+            "the serve task's news survives beside it: {detail}"
+        );
+
+        shared.observe_fd_pressure(650, 1000);
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "pressure that has passed must clear — health that cannot recover is not health"
+        );
+    }
+
+    /// The immediate half of TC-D6(e), and the reason both writers share one
+    /// gauge: a refusal degrades the unit NOW, and the ordinary sampler is still
+    /// what clears it. With two gauges this recovery never arrives.
+    #[test]
+    fn a_refused_create_degrades_the_unit_before_the_next_sample() {
+        let shared = test_shared();
+        let handle = TerminalHandle {
+            shared: shared.clone(),
+        };
+
+        handle.note_create_refusal(&CreateRefusal::Unclassified {
+            message: "failed to spawn PTY command".into(),
+        });
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "a refusal nobody could classify is not evidence of pressure"
+        );
+
+        handle.note_create_refusal(&CreateRefusal::ResourceExhausted {
+            class: PressureClass::FdPressure,
+            message: "failed to openpty: Os { code: 24, … }".into(),
+        });
+        let degraded = shared.health();
+        assert_eq!(degraded.state, UnitState::Degraded);
+        assert!(
+            degraded
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains(PressureClass::FdPressure.as_str())),
+            "the refusal puts the contract state on the unit at once"
+        );
+
+        shared.observe_fd_pressure(100, 1000);
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "and a sample under the low-water mark clears what the refusal set"
+        );
+    }
+
+    /// TC-L1f's state reaches health the same way, and is INDEPENDENT of the
+    /// descriptor gauge: the machine's PTY budget and this process's descriptors
+    /// are different facts, and neither may clear the other's.
+    #[test]
+    fn the_machine_budget_and_the_descriptor_gauge_are_reported_independently() {
+        let shared = test_shared();
+        shared.set_pty_pressure(Some(format!(
+            "{}: the machine-wide custody budget of 100 PTYs is spent",
+            PressureClass::PtyExhausted.as_str()
+        )));
+        shared.observe_fd_pressure(900, 1000);
+        shared.set_inventory_fault(Some("connection refused".into()));
+
+        let detail = shared
+            .health()
+            .detail
+            .expect("a degraded unit states every reason it has");
+        for expected in [
+            "text engine Menlo",
+            "connection refused",
+            PressureClass::FdPressure.as_str(),
+            PressureClass::PtyExhausted.as_str(),
+        ] {
+            assert!(
+                detail.contains(expected),
+                "three independent faults, all reported — {expected} is missing from: {detail}"
+            );
+        }
+
+        shared.observe_fd_pressure(10, 1000);
+        let detail = shared.health().detail.expect("still degraded");
+        assert!(
+            !detail.contains(PressureClass::FdPressure.as_str()),
+            "descriptors recovered: {detail}"
+        );
+        assert!(
+            detail.contains(PressureClass::PtyExhausted.as_str()),
+            "but the machine's budget is still spent, and clearing it would be a lie: {detail}"
+        );
+    }
+
+    /// The ledger's seam onto health, driven through a real flock'd file: a
+    /// floor holding the whole machine budget says `pty_exhausted`, and says
+    /// nothing once the sessions end.
+    #[test]
+    fn the_ledger_pump_puts_the_spent_budget_on_the_unit() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let shared = test_shared();
+        let ledger = crate::admission::AdmissionLedger::at(
+            dir.path().join(registries::files::CUSTODY_ADMISSION_LEDGER),
+            2,
+            "boot-under-test",
+        );
+        let mut pump = LedgerPump::new(Some(ledger), shared.clone());
+
+        pump.observe(1);
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "one session against a budget of two is a floor with room"
+        );
+
+        pump.observe(2);
+        let detail = shared.health().detail.expect("a spent budget is stated");
+        assert!(
+            detail.contains(PressureClass::PtyExhausted.as_str()),
+            "the machine budget is spent and the unit says so: {detail}"
+        );
+        assert!(
+            detail.contains("budget of 2 PTYs"),
+            "with the number that was spent: {detail}"
+        );
+
+        pump.observe(0);
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "sessions ended, budget freed — and the ledger was told by the inventory, not by \
+             an event it might have missed"
+        );
+    }
+
+    /// A floor with no ledger (win32, or a root the derivation refused) must
+    /// behave exactly as it did before TC-S0: serving, with the kernel as the
+    /// only admission authority and no invented state on its health.
+    #[test]
+    fn a_floor_without_a_ledger_reports_nothing_about_a_budget_it_cannot_see() {
+        let shared = test_shared();
+        let mut pump = LedgerPump::new(None, shared.clone());
+        pump.observe(4_000);
+        assert_eq!(shared.health().state, UnitState::Up);
+        assert_eq!(
+            shared.health().detail.as_deref(),
+            Some("serving; text engine Menlo"),
+            "no ledger means no claim about a budget — never a made-up one"
+        );
     }
 }

@@ -1,10 +1,13 @@
+import { existsSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
+import { isAbsolute } from "node:path";
 import {
   GhostteaAutomationClient,
   GhostteaConfigDocumentConflictError,
 } from "@vibecook/ghosttea-client";
 import {
   ObservedState,
+  TERMINAL_SESSION_CAP,
   type TerminalConfigDocument,
   type TerminalConfigWriteResult,
   type TerminalCreateParams,
@@ -205,6 +208,36 @@ export class TerminalService {
    * ticket (GT-1), but that mint is its own audited grant, so the daemon
    * composes the two rather than this method quietly handing out a credential. */
   async create(params: TerminalCreateParams): Promise<{ sessionId: string }> {
+    // TC-D6(d) — the per-pair session cap at the create seam, counted from the
+    // observed inventory WHEN THERE IS ONE. Before the first observation the
+    // cap has nothing to count and create must NOT gate on observation —
+    // that is GT-1's whole point (create outruns the inventory by design; the
+    // first draft here called list(), which re-fenced create behind
+    // requireObserved and two gate rows caught it). The native admission
+    // ledger and the kernel stay the authorities beneath either way. Inside
+    // create — not in front of the audit — so a refused attempt is a RECORDED
+    // attempt with a failed outcome, never a silent bounce.
+    if (this.observation() !== undefined && this.terminals.length >= TERMINAL_SESSION_CAP) {
+      throw new RpcCallError(
+        "RESOURCE_EXHAUSTED",
+        `the terminal session cap is reached (${TERMINAL_SESSION_CAP}); terminate sessions before creating more`,
+        false,
+        { service: "terminal", state: "session_cap" },
+      );
+    }
+    // TC-D6(c) — `workloadClass` is accepted, validated, and audited at the
+    // product seam; per-session scrollback ENFORCEMENT waits on upstream:
+    // ghosttea-protocol 0.9.3's CreateSessionOptions carries no scrollback
+    // field (verified at TC-S0), so the class→bytes mapping cannot reach the
+    // floor yet. No fake plumb — the ask is recorded in the TC petition set.
+    //
+    // TC-D6(b) — pre-flight an ABSOLUTE shell before the wire: upstream
+    // flattens spawn failures to one string ("failed to spawn PTY command",
+    // anyhow context rendered top-only), so ENOENT is answered HERE while it
+    // still can be. PATH-relative names stay the spawner's business — a
+    // second resolver would only disagree with the real one.
+    if (params.shell !== undefined && isAbsolute(params.shell) && !existsSync(params.shell))
+      throw new RpcCallError("NOT_FOUND", `shell not found: ${params.shell}`, false);
     const client = await this.connectedClient();
     const explicit = params.shell !== undefined;
     const executable = params.shell ?? this.defaultShell();
@@ -235,6 +268,20 @@ export class TerminalService {
       // know whether the spawn landed.
       if (isRequestTimeout(error)) throw this.unresponsive("create", error);
       const message = errorMessage(error);
+      // TC-D6(b), the fieldd half of the native-side classification: openpty
+      // refusals KEEP their errno on the wire (portable-pty renders the
+      // io::Error debug form, `Os { code: 24 … }`), so fd exhaustion is
+      // readable here. Spawn-stage EMFILE is NOT — the same upstream
+      // flattening as above — and stays generic until the error-chain
+      // petition lands. Same spelling authority as the native emitters:
+      // contracts RESOURCE_PRESSURE_STATES.
+      if (classifyOpenptyPressure(message) !== null)
+        throw new RpcCallError(
+          "RESOURCE_EXHAUSTED",
+          `create refused: file descriptors are exhausted at the floor — terminate sessions before creating more (${message})`,
+          false,
+          { service: "terminal", state: "fd_pressure" },
+        );
       // A spawn refusal on a live connection is the caller's input (bad
       // executable/cwd), not a daemon fault — but only THIS refusal. The test
       // was an unanchored /spawn/i over free prose, which also caught the
@@ -627,6 +674,18 @@ function isUnknownSession(error: unknown): boolean {
  * exhaustion at spawn time, and fieldd cannot tell them apart. It classifies
  * the case it can name and leaves everything else INTERNAL. */
 const SPAWN_REFUSAL = /^failed to spawn PTY command$/;
+
+/** TC-D6(b) — the one refusal class whose errno SURVIVES the wire: portable-pty
+ * bails openpty with the raw io::Error (debug-rendered, `Os { code: 24 … }`)
+ * and ghosttea propagates it uncontexted, so fd exhaustion is readable here.
+ * 24 = EMFILE, 23 = ENFILE. Everything else — including spawn-stage EMFILE —
+ * arrives flattened by upstream's `.context()` and must stay UNCLASSIFIED: a
+ * guess dressed as a classifier is worse than a gap (the error-chain petition
+ * is the fix). Exported for its unit rows. */
+export function classifyOpenptyPressure(message: string): "fd_pressure" | null {
+  if (!/failed to openpty/i.test(message)) return null;
+  return /code:\s*2[34]\b|EMFILE|ENFILE/.test(message) ? "fd_pressure" : null;
+}
 
 /** The pinned CLIENT's own refusal when the server's protocol minor is below
  * the config-document floor (1.11) — thrown before anything reaches the wire,

@@ -21,6 +21,7 @@
 //! (service.rs:1593-1620) — so this client's ids start at 1.
 
 use crate::local_ipc;
+use crate::resource_pressure::{self, CreateRefusal};
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -226,15 +227,56 @@ impl ControlClient {
     /// `terminal.create` will use at NF-3; creation over the product plane is
     /// deliberately NOT a mgmt method (design-02 §2.7 — no interactive ops
     /// there).
+    ///
+    /// TC-D6(b): a refusal that comes back is CLASSIFIED before it is returned,
+    /// so "the machine is out of descriptors" and "that shell does not exist"
+    /// stop being the same sentence. `create_session_classified` is the door for
+    /// a caller that needs the class itself rather than a message.
     pub async fn create_session(&self, options: Value) -> Result<SessionSummary> {
+        self.create_session_classified(options)
+            .await
+            .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))
+    }
+
+    /// The classifying create. The refusal type is the return value rather than
+    /// an opaque error because the CLASS is what a health surface and a UI both
+    /// act on — TC-D6(e)'s states are keyed on it.
+    pub async fn create_session_classified(
+        &self,
+        options: Value,
+    ) -> std::result::Result<SessionSummary, CreateRefusal> {
+        // The ENOENT arm, answered on THIS side of the wire. ghosttea renders
+        // only an error's top context (`service.rs:2960-2965`), and its spawn
+        // failure is contexted as "failed to spawn PTY command", so a missing
+        // shell arrives with its errno already gone — see `resource_pressure`.
+        // Asking the filesystem first is what recovers the answer.
+        //
+        // Absolute paths only, deliberately: a bare `zsh` is resolved against
+        // PATH by the spawner, and re-implementing that lookup here would be a
+        // second resolver to disagree with the real one. The kernel stays the
+        // final authority either way — a pre-flight that passes decides nothing.
+        if let Some(executable) = options.get("executable").and_then(Value::as_str) {
+            let path = std::path::Path::new(executable);
+            if path.is_absolute() && !path.exists() {
+                return Err(CreateRefusal::NotFound {
+                    message: format!("shell not found: {executable}"),
+                });
+            }
+        }
         let response = self
             .call(json!({"type": "create-session", "options": options}))
-            .await?;
-        let session = response
-            .get("session")
-            .cloned()
-            .context("create-session answered without a session")?;
-        serde_json::from_value(session).context("parse created session")
+            .await
+            .map_err(|error| resource_pressure::classify_wire_message(&format!("{error:#}")))?;
+        let session =
+            response
+                .get("session")
+                .cloned()
+                .ok_or_else(|| CreateRefusal::Unclassified {
+                    message: "create-session answered without a session".into(),
+                })?;
+        serde_json::from_value(session).map_err(|error| CreateRefusal::Unclassified {
+            message: format!("parse created session: {error}"),
+        })
     }
 
     /// Terminate one session. `source` is on the wire as a kebab-case

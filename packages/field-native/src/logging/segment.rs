@@ -756,7 +756,11 @@ fn epoch_millis() -> u64 {
         })
 }
 
-fn pid_is_alive(pid: u32) -> bool {
+/// `pub(crate)` since TC-S0: the admission ledger reaps entries whose owning
+/// daemon is gone and needs the same liveness answer this writer's lock
+/// reclamation does. One unsafe probe per repo — a second copy of it would be
+/// the drift class, not a convenience.
+pub(crate) fn pid_is_alive(pid: u32) -> bool {
     #[cfg(unix)]
     {
         // SAFETY: kill(pid, 0) performs permission/existence probing only and
