@@ -371,4 +371,48 @@ describe("plugins.* (PLUG-P2 registry surface)", () => {
     const denied = await rpc.callErr("plugins.disable", { id: "vibefield.fixture.alpha" });
     expect(denied.data?.kind).toBe("FORBIDDEN_SCOPE");
   });
+
+  it("composes the authenticated renderer update lane and orderly identity-derived leave", async () => {
+    const { daemon } = await setupWithPlugins();
+    const shell = await openRpc(daemon.controlPort);
+    await helloAs(shell, daemon.shellToken, "shell-main");
+    const identity = rendererParticipant("update-lane");
+    const minted = (await shell.call("system.mintWindowToken", {
+      scopes: ["plugins.read"],
+      label: "update-lane",
+      rendererParticipant: identity,
+    })) as { token: string };
+    const renderer = await openRpc(daemon.controlPort);
+    await helloAs(renderer, minted.token, "renderer");
+
+    const subscription = (await renderer.call("plugins.update.subscribe", {
+      pluginId: "vibefield.fixture.alpha",
+    })) as {
+      subId: string;
+      snapshot: {
+        pluginId: string;
+        status: string;
+        artifact: { pluginId: string } | null;
+        pendingCommand: unknown;
+      };
+    };
+    expect(subscription.snapshot).toMatchObject({
+      pluginId: "vibefield.fixture.alpha",
+      status: "live",
+      artifact: { pluginId: "vibefield.fixture.alpha" },
+      pendingCommand: null,
+    });
+
+    const forged = await renderer.callErr("plugins.update.leave", {
+      pluginId: "vibefield.fixture.alpha",
+      participantId: identity.participantId,
+    });
+    expect(forged.data?.kind).toBe("PRECONDITION_FAILED");
+    await expect(
+      renderer.call("plugins.update.leave", { pluginId: "vibefield.fixture.alpha" }),
+    ).resolves.toEqual({ retired: true });
+    await expect(
+      renderer.call("system.unsubscribe", { subId: subscription.subId }),
+    ).resolves.toEqual({ removed: true });
+  });
 });

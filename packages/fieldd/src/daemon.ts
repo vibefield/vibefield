@@ -105,6 +105,8 @@ import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
+import { PluginUpdateManager } from "./plugin-update-manager";
+import { PluginUpdateTransport } from "./plugin-update-transport";
 import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, pluginChildEnv } from "./process-service";
 import { ProductApi } from "./product-api";
@@ -361,6 +363,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     );
   }
   let diagnostics: DiagnosticsService | null = null;
+  let pluginUpdatesForCleanup: PluginUpdateManager | null = null;
 
   // everything past pairing is transactional — never leak the client slot
   try {
@@ -857,6 +860,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return { snapshot: health(), dispose: () => healthListeners.delete(fn) };
     });
     const windowTokenIds = new Set<string>();
+    const windowTokenParticipants = new Map<
+      string,
+      ReturnType<typeof RendererParticipantIdentity.parse>
+    >();
     const requireShellWindowTokenAuthority = (ctx: {
       transport: string;
       principal: { kind: string };
@@ -877,10 +884,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!windowTokenIds.has(tokenId)) {
         return { revoked: false, droppedConnections: 0 };
       }
-      const effect = () => {
+      const participant = windowTokenParticipants.get(tokenId);
+      let retirementTask: Promise<number> | undefined;
+      const effect = async () => {
         windowTokenIds.delete(tokenId);
+        windowTokenParticipants.delete(tokenId);
         const revoked = tokens.revoke(tokenId);
         const droppedConnections = api.dropTokenConnections(tokenId);
+        if (participant !== undefined && pluginUpdatesForCleanup !== null) {
+          retirementTask ??= pluginUpdatesForCleanup.retireRendererEverywhere(participant);
+          await retirementTask;
+        }
         return { revoked, droppedConnections };
       };
       try {
@@ -901,7 +915,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       } catch (error) {
         // Revocation is safety-preserving. Evidence failure is still surfaced
         // to the shell, but may never leave a bearer live.
-        effect();
+        await effect();
         throw error;
       }
     };
@@ -966,6 +980,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
       );
       windowTokenIds.add(grant.tokenId);
+      windowTokenParticipants.set(grant.tokenId, rendererParticipant.data);
       return {
         token: grant.token,
         tokenId: grant.tokenId,
@@ -1480,6 +1495,117 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // RESTRICT here (an agent claiming "renderer" still needs plugins.read,
     // which agent tokens never carry).
     const LEASE_TTL_MS = 10 * 60_000;
+    const updateRetirements = new Map<string, ReturnType<TokenService["revokeByPlugin"]>>();
+    const updateManager = new PluginUpdateManager({
+      plugins,
+      modules: pluginModules,
+      serviceHost: () => serviceHost,
+      retireOldAuthority: async (pluginId, updateId) => {
+        const revoked = tokens.revokeByPlugin(pluginId);
+        api.dropPluginConnections(pluginId);
+        await processes.killPlugin(pluginId);
+        endpoints.withdrawPlugin(pluginId);
+        mcp.withdrawPlugin(pluginId);
+        updateRetirements.set(updateId, revoked);
+      },
+      mintSourceLease: async ({ updateId, purpose, identity, record }) => {
+        const scopes = projectPluginAuthority(
+          "renderer",
+          record.grantedCapabilities,
+        ).capabilities.filter((capability): capability is Scope =>
+          (SCOPES as readonly string[]).includes(capability),
+        );
+        const tokenId = tokens.reserveTokenId();
+        const grant = await audit.requiredSystem(
+          {
+            action: "token.plugin_update_source.mint",
+            target: { kind: "token", id: tokenId, parentId: record.id },
+            attrs: {
+              pluginId: record.id,
+              updateId,
+              purpose,
+              participantId: identity.participantId,
+              incarnation: identity.incarnation,
+              manifestHash: record.manifestHash,
+              grantGeneration: record.grantGeneration,
+              scopeCount: scopes.length,
+              ttlMs: LEASE_TTL_MS,
+            },
+          },
+          () =>
+            tokens.mint(scopes, `plugin:${record.id}:update:${purpose}`, {
+              ttlMs: LEASE_TTL_MS,
+              pluginId: record.id,
+              tokenId,
+            }),
+          (minted) => ({
+            attrs: {
+              pluginId: record.id,
+              updateId,
+              purpose,
+              grantId: minted.tokenId,
+              scopeCount: minted.scopes.length,
+              expiresAt: minted.expiresAt ?? Date.now() + LEASE_TTL_MS,
+            },
+          }),
+          (minted) => {
+            tokens.revoke(minted.tokenId);
+          },
+        );
+        return {
+          tokenId: grant.tokenId,
+          token: grant.token,
+          pluginId: record.id,
+          expiresAt: grant.expiresAt ?? Date.now() + LEASE_TTL_MS,
+        };
+      },
+      revokeSourceLease: async ({ tokenId, pluginId, updateId, purpose, reason }) => {
+        const effect = async () => {
+          const revoked = tokens.revoke(tokenId);
+          const droppedConnections = api.dropTokenConnections(tokenId);
+          if (reason === "candidate-failed") {
+            await processes.killPlugin(pluginId);
+            endpoints.withdrawPlugin(pluginId);
+            mcp.withdrawPlugin(pluginId);
+          }
+          return { revoked, droppedConnections };
+        };
+        try {
+          await audit.requiredSystem(
+            {
+              action: "token.plugin_update_source.revoke",
+              target: { kind: "token", id: tokenId, parentId: pluginId },
+              attrs: { pluginId, updateId, purpose, reason },
+            },
+            effect,
+            (result) => ({
+              outcome: result.revoked ? "succeeded" : "cancelled",
+              ...(result.revoked ? {} : { reasonCode: "TOKEN_ALREADY_REVOKED" }),
+              attrs: {
+                pluginId,
+                updateId,
+                purpose,
+                reason,
+                droppedConnections: result.droppedConnections,
+              },
+            }),
+          );
+        } catch (error) {
+          // The audit writer may fail, but token and authenticated-connection revocation are
+          // unconditional safety effects. Candidate cleanup is idempotent as well.
+          await effect();
+          throw error;
+        }
+      },
+    });
+    pluginUpdatesForCleanup = updateManager;
+    new PluginUpdateTransport({
+      coordinatorFor: (pluginId) => updateManager.coordinatorFor(pluginId),
+      acquireSource: async (request) => await updateManager.acquireSource(request),
+      releaseSource: async (request) => await updateManager.releaseSource(request),
+      retireRenderer: async (pluginId, identity) =>
+        await updateManager.retireRenderer(pluginId, identity),
+    }).register(api);
     // P8b (ESP §8.4) — approved module URLs. The safe projection carries no
     // filesystem path, so it rides the same principals as the registry snapshot
     // the renderer already holds.
@@ -1735,14 +1861,57 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           },
         },
         async () => {
-          const revoked =
-            upgrading && parsed.data.id !== undefined
-              ? await teardownPluginWithResult(parsed.data.id)
-              : { count: 0, tokenIds: [] };
-          const { id } = await installer.install(parsed.data); // refresh() inside
+          const existing = parsed.data.id === undefined ? undefined : plugins.get(parsed.data.id);
+          // Disabled installs have no runtime authority to coordinate. First installs and this
+          // code-absent fast path keep the compatibility wrapper; every enabled replacement widens
+          // the pointer gap only inside the exact participant barrier.
+          if (existing === undefined || !existing.enabled) {
+            const { id } = await installer.install(parsed.data);
+            const record = plugins.get(id);
+            if (record?.enabled === true && record.service !== "none")
+              void serviceHost?.restartFresh(id).catch(() => undefined);
+            if (record !== undefined) void reconciler?.publish(record, "install");
+            return { record: record ?? { id }, revoked: { count: 0, tokenIds: [] } };
+          }
+
+          const prepared = await installer.prepare(parsed.data);
+          let started: ReturnType<PluginUpdateManager["beginRegistryUpdate"]>;
+          try {
+            started = updateManager.beginRegistryUpdate({
+              runtime: prepared.runtime,
+              commitArtifact: async () => {
+                await installer.commit(prepared);
+              },
+              discardArtifact: async () => {
+                await installer.discard(prepared);
+              },
+            });
+          } catch (error) {
+            await installer.discard(prepared).catch(() => false);
+            throw error;
+          }
+          let outcome: Awaited<typeof started.completion>;
+          try {
+            outcome = await started.completion;
+          } catch (error) {
+            updateRetirements.delete(started.updateId);
+            throw error;
+          }
+          const revoked = updateRetirements.get(started.updateId) ?? {
+            count: 0,
+            tokenIds: [],
+          };
+          updateRetirements.delete(started.updateId);
+          if (outcome.outcome !== "committed") {
+            throw new RpcCallError(
+              "PRECONDITION_FAILED",
+              `${prepared.id}: candidate failed; retained old recovered`,
+              true,
+              { pluginKind: "PLUGIN_ACTIVATION_FAILED", updateId: started.updateId },
+            );
+          }
+          const id = prepared.id;
           const record = plugins.get(id);
-          if (record?.enabled === true && record.service !== "none")
-            void serviceHost?.restartFresh(id).catch(() => undefined);
           if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
           return { record: record ?? { id }, revoked };
         },
@@ -2309,6 +2478,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const reason = fatalReason;
       void (async () => {
         await Promise.allSettled([
+          updateManager.dispose(),
           serviceHost?.stopAll() ?? Promise.resolve(),
           processes.stopAll(),
         ]);
@@ -2353,6 +2523,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       detachHealthSources?.();
       api.close();
       docLane.close(); // release the lane port before the outer rollback runs
+      await updateManager.dispose();
       await presenceRooms?.stop();
       docSync?.stop();
       laneLink.close();
@@ -2476,7 +2647,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         observation: ServiceLeaseObservation,
       ) => {
         const currentScopes = (): Scope[] => {
-          const record = plugins.get(pluginId);
+          const record =
+            observation.updateId === undefined
+              ? plugins.get(pluginId)
+              : updateManager.serviceCandidateRecord(pluginId, observation.updateId);
           const authority =
             record === undefined
               ? undefined
@@ -2484,6 +2658,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           if (
             record === undefined ||
             !record.enabled ||
+            record.installRevision !== observation.installRevision ||
             record.manifestHash !== observation.manifestHash ||
             record.grantGeneration !== observation.grantGeneration ||
             authority?.fingerprint !== observation.authorityFingerprint
@@ -2618,6 +2793,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         logger.info("fieldd.lifecycle.stopping", "fieldd is stopping");
         try {
           supervisor.stop(); // stop watching FIRST: a teardown is not a wedge
+          await updateManager.dispose();
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
           detachHealthSources?.();
@@ -2694,6 +2870,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   } catch (e) {
     detachHealthSources?.();
     diagnostics?.dispose();
+    await pluginUpdatesForCleanup?.dispose();
     native.close(); // rollback: release the mgmt client slot
     logger.fatal("fieldd.lifecycle.bootstrap_failed", "fieldd bootstrap failed", e);
     await Promise.allSettled([audit.close(), closeLogging()]);

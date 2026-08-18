@@ -224,6 +224,26 @@ describe("PluginUpdateCoordinator (PRC-5e)", () => {
     await expect(started.completion).resolves.toMatchObject({ outcome: "committed" });
   });
 
+  it("lets a positive orderly leave release an exact frozen vote", async () => {
+    const update = coordinator();
+    const a = commandSink();
+    const b = commandSink();
+    update.registerRenderer({ identity: A, artifact: OLD, send: a.send });
+    update.registerRenderer({ identity: B, artifact: OLD, send: b.send });
+    const started = update.begin(candidate());
+
+    await update.acknowledge(A, prepared(started.updateId));
+    update.disconnectRenderer(B);
+    await expect(update.retireRenderer({ ...B, incarnation: "document-b2" })).rejects.toThrow(
+      /stale renderer incarnation/,
+    );
+    await expect(update.retireRenderer(B)).resolves.toBe(true);
+    expect(a.commands.map((command) => command.kind)).toEqual(["prepare", "commit"]);
+    await update.acknowledge(A, committed(started.updateId));
+    await expect(started.completion).resolves.toMatchObject({ outcome: "committed" });
+    await expect(update.retireRenderer(B)).resolves.toBe(false);
+  });
+
   it("holds a post-freeze newcomer outside the vote and source authority", async () => {
     const update = coordinator();
     const a = commandSink();

@@ -43,9 +43,12 @@ import type { TokenGrant, TokenService } from "./token-service";
 // daemon-internal and may know them.
 
 export interface ServiceLeaseObservation {
+  readonly installRevision: string;
   readonly manifestHash: string;
   readonly grantGeneration: number;
   readonly authorityFingerprint: string;
+  /** Present only while an explicit immutable update candidate is private. */
+  readonly updateId?: string;
 }
 
 export interface ServiceHostConfig {
@@ -452,9 +455,11 @@ export class ServiceHost {
       (SCOPES as readonly string[]).includes(capability),
     );
     const leaseObservation: ServiceLeaseObservation = {
+      installRevision: target.artifact.installRevision,
       manifestHash: target.artifact.manifestHash,
       grantGeneration: target.observedGrantGeneration,
       authorityFingerprint: target.authorityFingerprint,
+      ...(updateEpisode === undefined ? {} : { updateId: updateEpisode.updateId }),
     };
     await e.leaseRelease;
     e.leaseRelease = null;
@@ -1158,6 +1163,7 @@ export class ServiceHost {
       (SCOPES as readonly string[]).includes(capability),
     );
     const observation: ServiceLeaseObservation = {
+      installRevision: target.artifact.installRevision,
       manifestHash: target.artifact.manifestHash,
       grantGeneration: target.observedGrantGeneration,
       authorityFingerprint: target.authorityFingerprint,

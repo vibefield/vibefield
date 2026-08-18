@@ -319,6 +319,7 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
 
     expect(prepareFieldPlugins).toHaveBeenCalledWith({
       request: expect.any(Function),
+      subscribe: expect.any(Function),
       pluginClientBackend: { windowClient: h.clientStub },
       windowId: rendererParticipant.participantId,
     });

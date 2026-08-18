@@ -11,8 +11,11 @@ import { type PluginClientBackend, setPluginClientBackend } from "./plugin-clien
 import { getPluginRegistrySnapshot } from "./plugin-registry-store";
 import { RendererPluginController, RendererWindowController } from "./renderer-controller";
 import type { ActivatedRenderer } from "./renderer-harness";
+import { asRendererModule, importRendererModule } from "./renderer-module-loader";
+import { RendererUpdateChannel } from "./renderer-update-channel";
 
 export { ensureStyleLink } from "./plugin-style";
+export { createRendererModuleLoader } from "./renderer-module-loader";
 
 // THE STAGED RENDERER LOADER (plugin spec §11.6/§10.4/§19.2, P8b-3) — the
 // consumer half of the pipeline P8b-1 and P8b-2 built.
@@ -82,6 +85,12 @@ export const EMPTY_PREPARED: PreparedRendererPlugins = {
 export interface StagedLoaderDeps {
   /** One-shot RPC against the window's own fieldd connection. */
   request(method: string, params?: unknown): Promise<unknown>;
+  /** Authenticated update subscription on the same exact window connection. */
+  subscribe?(
+    method: string,
+    params: unknown,
+    onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+  ): Promise<{ readonly snapshot: unknown; readonly unsubscribe: () => void }>;
   /** Makes ctx.client usable during activate, before FieldView effects mount. */
   pluginClientBackend?: PluginClientBackend;
   /** The registry snapshot, if the renderer already holds one. At BOOT it does
@@ -122,12 +131,64 @@ export async function prepareRendererPlugins(
   if (modules.length === 0) return { generation, staged: [], bundled: [] };
   const runtime = new RendererWindowController(deps.windowId);
 
+  const channels = new Map<string, RendererUpdateChannel>();
+  if (deps.subscribe !== undefined && deps.pluginClientBackend !== undefined) {
+    await Promise.all(
+      modules.map(async (module) => {
+        try {
+          const channel = await RendererUpdateChannel.open(module.pluginId, {
+            request: deps.request,
+            subscribe: deps.subscribe!,
+            backend: deps.pluginClientBackend!,
+            ...(deps.importModule === undefined ? {} : { importModule: deps.importModule }),
+            logger: log.child({ pluginId: module.pluginId }),
+          });
+          channels.set(module.pluginId, channel);
+          runtime.addUpdateChannel(channel);
+        } catch (error) {
+          log.error(
+            "renderer.plugins.update_subscribe_failed",
+            "A plugin could not establish its update lane and was skipped",
+            error,
+            { pluginId: module.pluginId },
+          );
+        }
+      }),
+    );
+  }
+
   // Imports run in parallel and one plugin's failure is its own (§11.4): a
   // module that will not load leaves the others staged rather than emptying the
   // set. The activation the harness returns for a failure is a `failed` row,
   // which is what buildRegistry needs to draw honest failed faces.
   const staged = await Promise.all(
-    modules.map(async (module) => await stageOne(module, records, deps, log, runtime)),
+    modules.map(async (module) => {
+      const channel = channels.get(module.pluginId);
+      if (
+        deps.subscribe !== undefined &&
+        deps.pluginClientBackend !== undefined &&
+        channel === undefined
+      )
+        return null;
+      let selectedModule = module;
+      let selectedRecords = records;
+      if (channel !== undefined) {
+        const authorized = await channel.artifact();
+        if (!moduleMatchesArtifact(selectedModule, authorized)) {
+          const refreshed = await readApproved(deps, true);
+          const replacement = refreshed?.modules.find((entry) =>
+            moduleMatchesArtifact(entry, authorized),
+          );
+          if (refreshed === null || replacement === undefined) {
+            await channel.close().catch(() => undefined);
+            return null;
+          }
+          selectedModule = replacement;
+          selectedRecords = refreshed.records;
+        }
+      }
+      return await stageOne(selectedModule, selectedRecords, deps, log, runtime, channel);
+    }),
   );
   return {
     generation,
@@ -146,8 +207,11 @@ interface ApprovedSet {
 /** Both reads, in parallel, tolerantly parsed. Returns null when the authority
  * could not be read at all — indistinguishable, on purpose, from "it approved
  * nothing": both mean this renderer stages no plugins right now. */
-async function readApproved(deps: StagedLoaderDeps): Promise<ApprovedSet | null> {
-  const held = (deps.snapshot ?? getPluginRegistrySnapshot)();
+async function readApproved(
+  deps: StagedLoaderDeps,
+  forceSnapshot = false,
+): Promise<ApprovedSet | null> {
+  const held = forceSnapshot ? null : (deps.snapshot ?? getPluginRegistrySnapshot)();
   try {
     const [rawModules, rawSnapshot] = await Promise.all([
       deps.request("plugins.modules"),
@@ -177,6 +241,7 @@ async function stageOne(
   deps: StagedLoaderDeps,
   log: RendererLogger,
   runtime: RendererWindowController,
+  updateChannel?: RendererUpdateChannel,
 ): Promise<PreparedStagedPlugin | null> {
   const record = records.get(module.pluginId);
   if (record === undefined) {
@@ -188,9 +253,10 @@ async function stageOne(
       "An approved plugin module has no registry record and was skipped",
       { pluginId: module.pluginId },
     );
+    await updateChannel?.close().catch(() => undefined);
     return null;
   }
-  const importModule = deps.importModule ?? defaultImport;
+  const importModule = deps.importModule ?? importRendererModule;
   let imported: unknown;
   try {
     imported = await importModule(module.moduleUrl);
@@ -202,6 +268,7 @@ async function stageOne(
       error,
       { pluginId: module.pluginId },
     );
+    await updateChannel?.close().catch(() => undefined);
     return {
       record,
       module,
@@ -216,6 +283,7 @@ async function stageOne(
       undefined,
       { pluginId: module.pluginId },
     );
+    await updateChannel?.close().catch(() => undefined);
     return {
       record,
       module,
@@ -229,9 +297,7 @@ async function stageOne(
   }
   const doc = deps.document ?? (typeof document === "undefined" ? undefined : document);
   const controller = new RendererPluginController(record, module, mod, runtime.windowId, {
-    ...(module.styleUrl === undefined || doc === undefined
-      ? {}
-      : { style: { document: doc, href: module.styleUrl } }),
+    ...(doc === undefined ? {} : { style: { document: doc } }),
   });
   runtime.add(controller);
   try {
@@ -243,6 +309,7 @@ async function stageOne(
         behaviors: new Map(),
         error: "renderer target is unavailable",
       } as const);
+    updateChannel?.attach(runtime);
     return { record, module, activation, controller };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -252,6 +319,7 @@ async function stageOne(
       error,
       { pluginId: module.pluginId },
     );
+    updateChannel?.attach(runtime);
     return {
       record,
       module,
@@ -261,48 +329,15 @@ async function stageOne(
   }
 }
 
-/** The §10.1 module shape, from either spelling: a namespace carrying
- * `activate`, or one whose `default` does. Nothing else is a plugin module. */
-function asRendererModule(imported: unknown): RendererPluginModule | null {
-  const candidates = [
-    imported,
-    typeof imported === "object" && imported !== null
-      ? (imported as { default?: unknown }).default
-      : undefined,
-  ];
-  for (const candidate of candidates) {
-    if (
-      typeof candidate === "object" &&
-      candidate !== null &&
-      typeof (candidate as { activate?: unknown }).activate === "function"
-    ) {
-      return candidate as RendererPluginModule;
-    }
-  }
-  return null;
-}
-
-/** PRC-5d deferred import seam. Constructing this closure evaluates no plugin code; invocation is
- * owned by RuntimeTargetController activation after retained-old quiescence. */
-export function createRendererModuleLoader(
-  moduleUrl: string,
-  importModule: (url: string) => Promise<unknown> = defaultImport,
-): (signal: AbortSignal) => Promise<RendererPluginModule> {
-  return async (signal) => {
-    if (signal.aborted) throw new Error("renderer module import was superseded");
-    const imported = await importModule(moduleUrl);
-    if (signal.aborted) throw new Error("renderer module import was superseded");
-    const module = asRendererModule(imported);
-    if (module === null) throw new Error("the module exports no activate (§10.1)");
-    return module;
-  };
-}
-
-/** The real import. The vite-ignore hint is required, not decorative: the URL
- * is DATA from the daemon, so the bundler must be told not to analyse it as a
- * build-time specifier and try to resolve a chunk for it. */
-async function defaultImport(url: string): Promise<unknown> {
-  return await import(/* @vite-ignore */ url);
+function moduleMatchesArtifact(
+  module: PluginModuleUrls,
+  artifact: { pluginId: string; installRevision: string; manifestHash: string },
+): boolean {
+  return (
+    module.pluginId === artifact.pluginId &&
+    module.installRevision === artifact.installRevision &&
+    module.manifestHash === artifact.manifestHash
+  );
 }
 
 /** Resolve with the work's answer, or the string "overdue" once the budget is

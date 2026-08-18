@@ -254,6 +254,13 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
           const prepareClient = client;
           pluginsPromise = mod.prepareFieldPlugins({
             request: async (method, params) => await prepareClient.request(method, params),
+            subscribe: async (method, params, onEvent) => {
+              const subscription = await prepareClient.subscribe(method, params, onEvent);
+              return {
+                snapshot: subscription.snapshot,
+                unsubscribe: subscription.unsubscribe,
+              };
+            },
             // Renderer modules activate behind the splash, before FieldView can install its
             // effect. Hand the same exact window client to the lazy lease broker at that edge.
             pluginClientBackend: { windowClient: prepareClient },

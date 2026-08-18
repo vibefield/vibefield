@@ -1,8 +1,11 @@
 import {
   type CallerContext,
   PluginUpdateAckParams,
+  PluginUpdateAckResult,
   type PluginUpdateArtifact,
   type PluginUpdateCommand,
+  PluginUpdateLeaveParams,
+  PluginUpdateLeaveResult,
   PluginUpdateParticipantEvent,
   PluginUpdateParticipantSnapshot,
   PluginUpdateSourceParams,
@@ -55,6 +58,10 @@ export interface PluginUpdateTransportOptions {
     request: PluginUpdateSourceRequest,
   ): AcquiredPluginUpdateSource | Promise<AcquiredPluginUpdateSource>;
   releaseSource(request: PluginUpdateSourceReleaseRequest): boolean | Promise<boolean>;
+  retireRenderer(
+    pluginId: string,
+    identity: RendererParticipantIdentity,
+  ): boolean | Promise<boolean>;
 }
 
 /** Authenticated Product API adapter for one renderer's PRC-5 update participation.
@@ -74,6 +81,7 @@ export class PluginUpdateTransport {
     api.register("plugins.update.ack", (ctx, raw) => this.acknowledge(ctx, raw));
     api.register("plugins.update.source", (ctx, raw) => this.source(ctx, raw));
     api.register("plugins.update.source.release", (ctx, raw) => this.releaseSource(ctx, raw));
+    api.register("plugins.update.leave", (ctx, raw) => this.leave(ctx, raw));
   }
 
   private subscribe(
@@ -214,7 +222,10 @@ export class PluginUpdateTransport {
     }
   }
 
-  private async acknowledge(ctx: CallerContext, raw: unknown): Promise<{ accepted: true }> {
+  private async acknowledge(
+    ctx: CallerContext,
+    raw: unknown,
+  ): Promise<ReturnType<typeof PluginUpdateAckResult.parse>> {
     const identity = rendererIdentity(ctx);
     const parsed = PluginUpdateAckParams.safeParse(raw);
     if (!parsed.success) throw invalidParams("plugins.update.ack");
@@ -225,7 +236,7 @@ export class PluginUpdateTransport {
       if (error instanceof RpcCallError) throw error;
       throw conflict("renderer update acknowledgement was refused", error);
     }
-    return Object.freeze({ accepted: true as const });
+    return PluginUpdateAckResult.parse({ accepted: true });
   }
 
   private async source(ctx: CallerContext, raw: unknown): Promise<SourceResult> {
@@ -316,6 +327,22 @@ export class PluginUpdateTransport {
     } catch (error) {
       if (error instanceof RpcCallError) throw error;
       throw conflict("renderer update source release was refused", error);
+    }
+  }
+
+  private async leave(
+    ctx: CallerContext,
+    raw: unknown,
+  ): Promise<ReturnType<typeof PluginUpdateLeaveResult.parse>> {
+    const identity = rendererIdentity(ctx);
+    const parsed = PluginUpdateLeaveParams.safeParse(raw);
+    if (!parsed.success) throw invalidParams("plugins.update.leave");
+    try {
+      const retired = await this.options.retireRenderer(parsed.data.pluginId, identity);
+      return PluginUpdateLeaveResult.parse({ retired });
+    } catch (error) {
+      if (error instanceof RpcCallError) throw error;
+      throw conflict("renderer update departure was refused", error);
     }
   }
 

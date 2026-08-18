@@ -213,7 +213,7 @@ describe("the renderer/window target controller", () => {
         },
       },
       "field",
-      testDeps({ style: { document: doc, href: styleUrl } }),
+      testDeps({ style: { document: doc } }),
     );
     const runtime = new RendererWindowController("field");
     runtime.add(controller);

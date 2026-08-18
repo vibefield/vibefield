@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -33,7 +41,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const KV_DIR = join(HERE, "..", "..", "..", "examples", "plugins", "kv-service");
 const KV_ID = "vibefield.example.kv";
 
-async function setup(): Promise<{
+async function setup(options: { withUpdate?: boolean } = {}): Promise<{
   daemon: FielddDaemon;
   dataDir: string;
   registryDir: string;
@@ -52,9 +60,23 @@ async function setup(): Promise<{
   // pack the REAL example plugin and publish it into a signed fixture registry
   const { bytes } = await packVfplugin({ rootDir: KV_DIR });
   const keys = generateRegistryKeypair();
+  const releases = [{ manifestDir: KV_DIR, artifactBytes: bytes }];
+  if (options.withUpdate === true) {
+    const updateRoot = join(registryDir, "kv-0.2.0-source");
+    cpSync(KV_DIR, updateRoot, { recursive: true });
+    const updateManifestPath = join(updateRoot, "vibefield.plugin.json");
+    const updateManifest = JSON.parse(readFileSync(updateManifestPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    updateManifest.version = "0.2.0";
+    writeFileSync(updateManifestPath, `${JSON.stringify(updateManifest, null, 2)}\n`);
+    const update = await packVfplugin({ rootDir: updateRoot });
+    releases.unshift({ manifestDir: updateRoot, artifactBytes: update.bytes });
+  }
   buildFixtureRegistry({
     dir: registryDir,
-    plugins: [{ manifestDir: KV_DIR, artifactBytes: bytes }],
+    plugins: releases,
     secretKey: keys.secretKey,
   });
 
@@ -125,6 +147,43 @@ describe("registry install — §5.3.1 end to end (the dogfood chain)", () => {
     expect(existsSync(join(dataDir, "plugins", KV_ID, "data", "kv.json"))).toBe(true);
     const off = await rpc.callErr(`${kv}.get`, { key: "a" });
     expect(off.data?.kind).toBe("NOT_FOUND");
+  });
+
+  it("updates an enabled service through the coordinated private-candidate barrier", {
+    timeout: 40_000,
+  }, async () => {
+    const { daemon } = await setup({ withUpdate: true });
+    const rpc = await shellRpc(daemon);
+
+    const installed = (await rpc.call("plugins.install", {
+      id: KV_ID,
+      version: "0.1.0",
+    })) as { version: string; installRevision: string };
+    await until(
+      () =>
+        daemon.plugins.snapshot().plugins.find((record) => record.id === KV_ID)?.service ===
+        "active",
+      15_000,
+    );
+    const oldRevision = installed.installRevision;
+
+    const updated = (await rpc.call("plugins.install", { id: KV_ID })) as {
+      version: string;
+      installRevision: string;
+      service: string;
+    };
+    expect(updated.version).toBe("0.2.0");
+    expect(updated.installRevision).not.toBe(oldRevision);
+    expect(daemon.plugins.get(KV_ID)?.installRevision).toBe(updated.installRevision);
+    await until(
+      () =>
+        daemon.plugins.snapshot().plugins.find((record) => record.id === KV_ID)?.service ===
+        "active",
+      15_000,
+    );
+    await expect(
+      rpc.call("x.vibefield.example.kv.set", { key: "after-update", value: "ready" }),
+    ).resolves.toEqual({ ok: true });
   });
 
   it("a tampered artifact is PLUGIN_ARTIFACT_MISMATCH, discarded, never partial", async () => {

@@ -169,12 +169,17 @@ function installTransport(
   }),
   releaseSource: ConstructorParameters<typeof PluginUpdateTransport>[0]["releaseSource"] = () =>
     false,
+  retireRenderer: ConstructorParameters<typeof PluginUpdateTransport>[0]["retireRenderer"] = (
+    _pluginId,
+    identity,
+  ) => update.retireRenderer(identity),
 ): FakeRegistrar {
   const registrar = new FakeRegistrar();
   new PluginUpdateTransport({
     coordinatorFor: (pluginId) => (pluginId === PLUGIN_ID ? update : undefined),
     acquireSource,
     releaseSource,
+    retireRenderer,
   }).register(registrar);
   return registrar;
 }
@@ -447,6 +452,29 @@ describe("PluginUpdateTransport (PRC-5e)", () => {
     ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
   });
 
+  it("retires only the transport-derived incarnation on orderly leave", async () => {
+    const update = coordinator();
+    const retireRenderer = vi.fn((_pluginId, identity) => update.retireRenderer(identity));
+    const registrar = installTransport(update, undefined, undefined, retireRenderer);
+    const subscription = await registrar.subscribe(context(), { pluginId: PLUGIN_ID });
+    subscription.start?.();
+
+    await expect(
+      registrar.call("plugins.update.leave", context(), { pluginId: PLUGIN_ID }),
+    ).resolves.toEqual({ retired: true });
+    expect(retireRenderer).toHaveBeenCalledWith(PLUGIN_ID, A);
+    await expect(
+      registrar.call("plugins.update.leave", context(), {
+        pluginId: PLUGIN_ID,
+        participantId: A.participantId,
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    await expect(
+      registrar.call("plugins.update.leave", context(), { pluginId: PLUGIN_ID }),
+    ).resolves.toEqual({ retired: false });
+    subscription.dispose();
+  });
+
   it("discards a source whose member barrier advances while acquisition is pending", async () => {
     const update = coordinator();
     const pending = deferred<AcquiredPluginUpdateSource>();
@@ -495,6 +523,9 @@ describe("PluginUpdateTransport (PRC-5e)", () => {
     await expect(
       registrar.call("plugins.update.source.release", wrongDoor, {}),
     ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    await expect(registrar.call("plugins.update.leave", wrongDoor, {})).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+    });
     await expect(
       registrar.subscribe(context(), { pluginId: "com.example.missing" }),
     ).rejects.toMatchObject({ kind: "NOT_FOUND" });

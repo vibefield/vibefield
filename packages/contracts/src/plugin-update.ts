@@ -232,6 +232,14 @@ export type PluginUpdateCommand = z.infer<typeof PluginUpdateCommand>;
 export const PluginUpdateSubscribeParams = z.object({ pluginId: PluginId }).strict();
 export type PluginUpdateSubscribeParams = z.infer<typeof PluginUpdateSubscribeParams>;
 
+/** Orderly renderer departure. Identity remains transport-derived; unlike a socket disconnect,
+ * this positive host-owned signal may remove the exact incarnation from a frozen vote. */
+export const PluginUpdateLeaveParams = z.object({ pluginId: PluginId }).strict();
+export type PluginUpdateLeaveParams = z.infer<typeof PluginUpdateLeaveParams>;
+
+export const PluginUpdateLeaveResult = z.object({ retired: z.boolean() }).strict();
+export type PluginUpdateLeaveResult = z.infer<typeof PluginUpdateLeaveResult>;
+
 export const PluginUpdateParticipantSnapshot = z
   .object({
     pluginId: PluginId,
@@ -430,3 +438,6 @@ export const PluginUpdateAckParams = z
     }
   });
 export type PluginUpdateAckParams = z.infer<typeof PluginUpdateAckParams>;
+
+export const PluginUpdateAckResult = z.object({ accepted: z.literal(true) }).strict();
+export type PluginUpdateAckResult = z.infer<typeof PluginUpdateAckResult>;

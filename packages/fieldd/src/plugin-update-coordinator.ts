@@ -209,6 +209,27 @@ export class PluginUpdateCoordinator {
     this.changed();
   }
 
+  /** Positive host-owned departure, distinct from transport loss. It removes only the exact
+   * incarnation and may therefore release a frozen barrier member. */
+  async retireRenderer(identity: RendererParticipantIdentity): Promise<boolean> {
+    const parsed = freezeIdentity(identity);
+    const renderer = this.renderers.get(parsed.participantId);
+    if (renderer === undefined) return false;
+    if (renderer.incarnation !== parsed.incarnation)
+      throw new Error(`${parsed.participantId}: stale renderer incarnation`);
+    const episode = this.episode;
+    if (episode !== null) {
+      const member = episode.members.get(parsed.participantId);
+      if (member !== undefined && member.incarnation !== parsed.incarnation)
+        throw new Error(`${parsed.participantId}: frozen renderer incarnation changed`);
+      if (member?.kind === "renderer") episode.members.delete(parsed.participantId);
+    }
+    this.renderers.delete(parsed.participantId);
+    this.changed();
+    if (episode !== null && !episode.terminal) await this.advance();
+    return true;
+  }
+
   admitHeld(identity: RendererParticipantIdentity): {
     readonly artifact: PluginUpdateArtifact;
     readonly commitEpoch: number;

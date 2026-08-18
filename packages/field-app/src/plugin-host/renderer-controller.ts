@@ -57,7 +57,7 @@ export interface RendererPluginControllerDeps extends RendererActivationDeps {
   ) => Promise<void>;
   readonly retireCredential?: (pluginId: string) => void;
   /** Host-mediated stylesheet publication for this exact imported artifact. */
-  readonly style?: { readonly document: Document; readonly href: string };
+  readonly style?: { readonly document: Document };
 }
 
 /** One exact renderer artifact's activation authority. `load` is invoked by the
@@ -899,6 +899,7 @@ export class RendererWindowController {
   readonly behaviorLedger = new BehaviorBreakerLedger();
 
   private readonly controllers = new Map<string, RendererPluginController>();
+  private readonly updateChannels = new Set<{ close(): Promise<void> }>();
   private readonly inFlight = new Set<Promise<void>>();
   private closeTask: Promise<void> | undefined;
   private closed = false;
@@ -915,6 +916,11 @@ export class RendererWindowController {
       throw new Error(`renderer controller already exists for ${controller.pluginId}`);
     controller.attachBehaviorCatalog(this.behaviorCatalog);
     this.controllers.set(controller.pluginId, controller);
+  }
+
+  addUpdateChannel(channel: { close(): Promise<void> }): void {
+    if (this.closed) throw new Error("renderer window controller is closed");
+    this.updateChannels.add(channel);
   }
 
   controller(pluginId: string): RendererPluginController | undefined {
@@ -1018,12 +1024,14 @@ export class RendererWindowController {
       rejectClose = reject;
     });
     const pending = [...this.inFlight];
+    const leaving = [...this.updateChannels].map(async (channel) => await channel.close());
+    this.updateChannels.clear();
     // Every close edge runs now; only observation waits are asynchronous.
     const closing = [...this.controllers.values()].map(async (controller) => controller.close());
     // Controller abort listeners have withdrawn their exact rows synchronously. This final fence
     // prevents any orphaned or reentrant publication from surviving window close.
     this.behaviorCatalog.close();
-    void Promise.allSettled([...pending, ...closing]).then((results) => {
+    void Promise.allSettled([...leaving, ...pending, ...closing]).then((results) => {
       const failures = results.flatMap((result) =>
         result.status === "rejected"
           ? [result.reason instanceof Error ? result.reason.message : String(result.reason)]

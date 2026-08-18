@@ -12,7 +12,7 @@ import type {
 } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import type { PluginRegistryService } from "../src/plugin-registry";
-import { ServiceHost } from "../src/service-host";
+import { ServiceHost, type ServiceLeaseObservation } from "../src/service-host";
 import { ServiceRegistry } from "../src/service-registry";
 import type { TokenGrant, TokenService } from "../src/token-service";
 
@@ -122,6 +122,7 @@ function createRig(
   registry: ServiceRegistry;
   workers: ControllerWorker[];
   minted: number[];
+  observations: ServiceLeaseObservation[];
   revoked: string[];
   states: string[];
   workerOptions: WorkerOptions[];
@@ -159,6 +160,7 @@ function createRig(
   const registry = new ServiceRegistry({ grantedCapabilities: () => [] });
   const workers: ControllerWorker[] = [];
   const minted: number[] = [];
+  const observations: ServiceLeaseObservation[] = [];
   const revoked: string[] = [];
   const firstWorker = deferred<ControllerWorker>();
   const host = new ServiceHost({
@@ -177,6 +179,7 @@ function createRig(
     },
     mintServiceLease: async (_id, scopes, observation) => {
       minted.push(observation.grantGeneration);
+      observations.push({ ...observation });
       if (mintLease !== undefined) return await mintLease(scopes, observation.grantGeneration);
       return {
         tokenId: `lease-${observation.grantGeneration}`,
@@ -196,6 +199,7 @@ function createRig(
     registry,
     workers,
     minted,
+    observations,
     revoked,
     states,
     workerOptions,
@@ -420,6 +424,12 @@ describe("ServiceHost exact target controller (PRC-3c)", () => {
       expect(
         (rig.workerOptions[1]?.workerData as { entryPath?: string } | undefined)?.entryPath,
       ).toBe(join(candidateRoot, "service.js"));
+      expect(rig.observations[1]).toMatchObject({
+        installRevision: nextRecord.installRevision,
+        manifestHash: nextRecord.manifestHash,
+        grantGeneration: nextRecord.grantGeneration,
+        updateId: "pupd_service_candidate",
+      });
       expect(() => prepared!.commit()).toThrow(/stale service candidate/);
 
       // Pointer/registry movement is simulated only now; the exact prepared

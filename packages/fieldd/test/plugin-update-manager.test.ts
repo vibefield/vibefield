@@ -477,6 +477,34 @@ describe("PluginUpdateManager (PRC-5e)", () => {
     await rig.manager.dispose();
   });
 
+  it("revokes an orderly leaver's source before releasing its frozen vote", async () => {
+    const rig = fixture();
+    const started = rig.manager.beginRegistryUpdate(rig.candidate);
+    const sourceHandle = await rig.manager.acquireSource({
+      identity: A,
+      fence: rig.coordinator.sourceFence(A, started.updateId, "candidate"),
+    });
+    const source = PluginUpdateSourceResult.parse(sourceHandle.value);
+    expect(rig.manager.serviceCandidateRecord(PLUGIN_ID, started.updateId)).toBe(
+      rig.candidateRecord,
+    );
+    await expect(rig.manager.retireRenderer(PLUGIN_ID, B)).resolves.toBe(false);
+
+    await expect(rig.manager.retireRenderer(PLUGIN_ID, A)).resolves.toBe(true);
+    await expect(started.completion).resolves.toMatchObject({ outcome: "committed" });
+    expect(rig.revocations).toEqual([
+      expect.objectContaining({
+        tokenId: source.lease.leaseId,
+        reason: "renderer-left",
+      }),
+    ]);
+    expect(rig.events.indexOf("source.candidate.revoke:renderer-left")).toBeLessThan(
+      rig.events.indexOf("pointer.commit"),
+    );
+    expect(rig.manager.serviceCandidateRecord(PLUGIN_ID, started.updateId)).toBeUndefined();
+    await rig.manager.dispose();
+  });
+
   it("expires an unreleased source once and makes its inverse idempotent", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-17T12:00:00.000Z"));

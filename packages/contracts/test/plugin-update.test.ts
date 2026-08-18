@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   PluginUpdateAckParams,
+  PluginUpdateAckResult,
   PluginUpdateCommand,
   PluginUpdateEpisode,
+  PluginUpdateLeaveParams,
+  PluginUpdateLeaveResult,
   PluginUpdateParticipantSnapshot,
   PluginUpdateSnapshot,
   PluginUpdateSourceParams,
@@ -148,6 +151,10 @@ describe("PRC-5a update coordination contracts", () => {
         candidateArtifact: { ...artifact("r2"), pluginId: "com.example.other" },
       }).success,
     ).toBe(false);
+    expect(PluginUpdateAckResult.parse({ accepted: true })).toEqual({ accepted: true });
+    expect(
+      PluginUpdateAckResult.safeParse({ accepted: true, participantId: "forged" }).success,
+    ).toBe(false);
   });
 
   it("refuses mismatched snapshot/episode phases and cross-plugin artifacts", () => {
@@ -205,6 +212,16 @@ describe("PRC-5a update coordination contracts", () => {
         participantId: participant.participantId,
       }).success,
     ).toBe(false);
+    expect(PluginUpdateLeaveParams.parse({ pluginId: "com.example.update" })).toEqual({
+      pluginId: "com.example.update",
+    });
+    expect(
+      PluginUpdateLeaveParams.safeParse({
+        pluginId: "com.example.update",
+        participantId: participant.participantId,
+      }).success,
+    ).toBe(false);
+    expect(PluginUpdateLeaveResult.parse({ retired: true })).toEqual({ retired: true });
   });
 
   it("projects one exact path-free source and refuses mixed authority", () => {

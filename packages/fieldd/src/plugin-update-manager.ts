@@ -49,7 +49,13 @@ export interface PluginUpdateSourceRevokeRequest {
   readonly pluginId: string;
   readonly updateId: string;
   readonly purpose: "candidate" | "recover-old";
-  readonly reason: "discarded" | "candidate-failed" | "released" | "expired" | "shutdown";
+  readonly reason:
+    | "discarded"
+    | "candidate-failed"
+    | "renderer-left"
+    | "released"
+    | "expired"
+    | "shutdown";
 }
 
 export interface PluginUpdateManagerOptions {
@@ -60,7 +66,7 @@ export interface PluginUpdateManagerOptions {
     "prepareCandidate" | "restartFresh" | "stop"
   > | null;
   /** Runs after the coordinator's synchronous freeze/route-close edge and before candidates stage. */
-  readonly retireOldAuthority: (pluginId: string) => void | Promise<void>;
+  readonly retireOldAuthority: (pluginId: string, updateId: string) => void | Promise<void>;
   readonly mintSourceLease: (
     request: PluginUpdateSourceMintRequest,
   ) => PluginUpdateSourceGrant | Promise<PluginUpdateSourceGrant>;
@@ -198,6 +204,57 @@ export class PluginUpdateManager {
     return Object.freeze({ updateId: started.updateId, completion });
   }
 
+  /** Candidate service credentials cannot compare against the still-old live registry row. This
+   * narrow lookup exposes only the exact record already owned by the active manager episode. */
+  serviceCandidateRecord(pluginId: string, updateId: string): PluginRecord | undefined {
+    const episode = this.episodes.get(updateId);
+    if (
+      this.disposed ||
+      episode === undefined ||
+      episode.pluginId !== pluginId ||
+      episode.updateId !== updateId ||
+      episode.candidateSourcesRevoked
+    ) {
+      return undefined;
+    }
+    return episode.candidate.runtime.record;
+  }
+
+  /** Orderly per-plugin renderer departure. Source revocation completes before its vote can leave
+   * the barrier; a mere subscription disconnect never calls this path. */
+  async retireRenderer(pluginId: string, identity: RendererParticipantIdentity): Promise<boolean> {
+    const revocations = await Promise.allSettled(
+      [...this.sourceLeases.values()]
+        .filter((issued) => issued.pluginId === pluginId && sameIdentity(issued.identity, identity))
+        .map((issued) => this.releaseIssued(issued, "renderer-left")),
+    );
+    const coordinator = this.coordinators.get(pluginId);
+    const retired = coordinator === undefined ? false : await coordinator.retireRenderer(identity);
+    const failure = revocations.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (failure !== undefined) throw failure.reason;
+    return retired;
+  }
+
+  async retireRendererEverywhere(identity: RendererParticipantIdentity): Promise<number> {
+    const pluginIds = new Set(this.coordinators.keys());
+    for (const issued of this.sourceLeases.values()) {
+      if (sameIdentity(issued.identity, identity)) pluginIds.add(issued.pluginId);
+    }
+    const results = await Promise.allSettled(
+      [...pluginIds].map(async (pluginId) => await this.retireRenderer(pluginId, identity)),
+    );
+    const failure = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (failure !== undefined) throw failure.reason;
+    return results.filter(
+      (result): result is PromiseFulfilledResult<boolean> =>
+        result.status === "fulfilled" && result.value,
+    ).length;
+  }
+
   async acquireSource(request: PluginUpdateSourceRequest): Promise<AcquiredPluginUpdateSource> {
     if (this.disposed) throw new RpcCallError("UNAVAILABLE", "plugin update manager is stopping");
     const episode = this.episodes.get(request.fence.updateId);
@@ -210,6 +267,8 @@ export class PluginUpdateManager {
     }
     if (request.signal?.aborted)
       throw new RpcCallError("CONFLICT", "plugin update source request was cancelled", true);
+    if (!this.retainedObservationIsCurrent(episode))
+      throw new RpcCallError("CONFLICT", "plugin update base observation moved", true);
 
     let record: PluginRecord;
     let module: PluginModuleUrls | undefined;
@@ -273,6 +332,16 @@ export class PluginUpdateManager {
     if (incumbent !== undefined) {
       await this.releaseIssued(incumbent, "discarded");
       throw new RpcCallError("INTERNAL", "update source lease id was reused", false);
+    }
+    if (!this.retainedObservationIsCurrent(episode)) {
+      await this.options.revokeSourceLease({
+        tokenId: grant.tokenId,
+        pluginId: record.id,
+        updateId: request.fence.updateId,
+        purpose: request.fence.purpose,
+        reason: "discarded",
+      });
+      throw new RpcCallError("CONFLICT", "plugin update base observation moved", true);
     }
     const issued: IssuedSourceLease = {
       leaseId: grant.tokenId,
@@ -362,8 +431,8 @@ export class PluginUpdateManager {
   }
 
   private async prepareEpisodeWork(episode: UpdateEpisodeRuntime): Promise<PreparedServiceUpdate> {
-    await this.options.retireOldAuthority(episode.pluginId);
     const updateId = episode.updateId!;
+    await this.options.retireOldAuthority(episode.pluginId, updateId);
     const moduleTask = this.options.modules.prepareCandidate({
       updateId,
       baseInstallRevision: episode.oldRecord.installRevision,
@@ -487,6 +556,11 @@ export class PluginUpdateManager {
       reason,
     });
   }
+
+  private retainedObservationIsCurrent(episode: UpdateEpisodeRuntime): boolean {
+    const current = this.options.plugins.get(episode.pluginId);
+    return current !== undefined && sameAuthorityObservation(current, episode.oldRecord);
+  }
 }
 
 function artifactFor(record: PluginRecord): PluginUpdateArtifact {
@@ -521,4 +595,16 @@ function sameIdentity(
   right: RendererParticipantIdentity,
 ): boolean {
   return left.participantId === right.participantId && left.incarnation === right.incarnation;
+}
+
+function sameAuthorityObservation(left: PluginRecord, right: PluginRecord): boolean {
+  return (
+    left.id === right.id &&
+    left.state === right.state &&
+    left.enabled === right.enabled &&
+    left.installRevision === right.installRevision &&
+    left.manifestHash === right.manifestHash &&
+    left.grantGeneration === right.grantGeneration &&
+    JSON.stringify(left.grantedCapabilities) === JSON.stringify(right.grantedCapabilities)
+  );
 }

@@ -160,6 +160,58 @@ describe("the staged loader", () => {
     await prepared.runtime?.close();
   });
 
+  it("joins the authenticated update lane before evaluating an approved module", async () => {
+    const id = "update-wired";
+    const order: string[] = [];
+    const unsubscribe = vi.fn();
+    const prepared = await prepareRendererPlugins(
+      deps(id, {
+        request: async (method) => {
+          order.push(method);
+          if (method === "plugins.modules") return { generation: 7, modules: [moduleRow(id)] };
+          if (method === "plugins.list") return snapshotOf(record(id));
+          if (method === "plugins.update.leave") return { retired: true };
+          throw new Error(`unexpected method ${method}`);
+        },
+        subscribe: async (method, params) => {
+          order.push(method);
+          expect(params).toEqual({ pluginId: id });
+          return {
+            snapshot: {
+              pluginId: id,
+              status: "live",
+              artifact: {
+                pluginId: id,
+                installRevision: "rev-1",
+                manifestHash: `sha256:${"b".repeat(64)}`,
+              },
+              commitEpoch: 1,
+              pendingCommand: null,
+            },
+            unsubscribe,
+          };
+        },
+        pluginClientBackend: {
+          windowClient: {
+            url: "ws://127.0.0.1:1",
+            request: async () => ({}),
+          },
+        } as NonNullable<StagedLoaderDeps["pluginClientBackend"]>,
+        importModule: async () => {
+          order.push("import");
+          return bindingModule(id);
+        },
+      }),
+    );
+
+    expect(order.indexOf("plugins.update.subscribe")).toBeGreaterThan(-1);
+    expect(order.indexOf("plugins.update.subscribe")).toBeLessThan(order.indexOf("import"));
+    expect(prepared.staged).toHaveLength(1);
+    await prepared.runtime?.close();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(order).toContain("plugins.update.leave");
+  });
+
   it("wires the imported artifact into its window controller and live registry observations", async () => {
     const id = "controlled";
     const contributions = {
