@@ -413,14 +413,16 @@ async fn hello_carries_private_terminal_endpoints() {
     let control = terminal["controlSocket"].as_str().unwrap();
     let frame = terminal["frameSocket"].as_str().unwrap();
 
-    // TC-S2: the serving names are per-INSTANCE (a restart is never a
-    // rebind); the ordinal comes from the ack's own route snapshot, so this
-    // asserts the derivation law rather than a frozen spelling.
-    let instance = ack["terminalRoutes"]["cells"][0]["cellInstanceId"]
-        .as_u64()
-        .expect("cellInstanceId") as u32;
     #[cfg(unix)]
     {
+        // TC-S2: the serving names are per-INSTANCE (a restart is never a
+        // rebind); the ordinal comes from the ack's own route snapshot, so
+        // this asserts the derivation law rather than a frozen spelling.
+        // Read inside the unix block — the win32 half asserts the pipe shape
+        // below and never needs the ordinal (the box clippy said so).
+        let instance = ack["terminalRoutes"]["cells"][0]["cellInstanceId"]
+            .as_u64()
+            .expect("cellInstanceId") as u32;
         let run_dir = dir.path().join("native/run");
         let control_name = field_native::endpoints::cell_socket_file("termctl.sock", instance);
         let frame_name = field_native::endpoints::cell_socket_file("termframe.sock", instance);

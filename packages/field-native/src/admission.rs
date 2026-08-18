@@ -524,6 +524,7 @@ pub fn pty_pool_max() -> Option<u32> {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     fn ledger_in(dir: &Path) -> AdmissionLedger {
         AdmissionLedger::at(
             dir.join(registries::files::CUSTODY_ADMISSION_LEDGER),
