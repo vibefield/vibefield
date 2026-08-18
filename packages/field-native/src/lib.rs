@@ -3,6 +3,7 @@
 // (regenerate: `pnpm --filter @vibefield/contracts gen:rust`); golden fixtures pin it.
 /// TC-L1f — the machine-wide custody admission ledger.
 pub mod admission;
+pub mod cell;
 pub mod config;
 pub mod contracts;
 pub mod endpoints;
