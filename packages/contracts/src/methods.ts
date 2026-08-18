@@ -247,6 +247,17 @@ export const METHODS: MethodDef[] = [
     locality: "local",
     subscription: true,
   }),
+  // TC-D15 (TC-S2): the revisioned terminal route snapshot. Snapshot on
+  // subscribe, FULL snapshots as deltas — state transfer, never edges, so a
+  // missed delta is repaired by the next one and reconnect re-subscribes.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.lifecycle.terminal.routes.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
   defineMethod({
     surface: "mgmt",
     method: "native.diagnostics.query",

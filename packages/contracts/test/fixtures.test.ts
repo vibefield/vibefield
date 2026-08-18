@@ -28,7 +28,7 @@ import {
   LaneHelloOk,
   LanePutMeta,
 } from "../src/docs";
-import { Hello, HelloAck, RpcRequest, RpcResponse } from "../src/envelope";
+import { Hello, HelloAck, RpcRequest, RpcResponse, TerminalRouteSnapshot } from "../src/envelope";
 import { ErrorData } from "../src/errors";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
 import {
@@ -93,6 +93,7 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "audit-record": AuditRecordV1,
   "support-manifest": SupportBundleManifestV1,
   "terminal-ticket": TerminalTicket,
+  "terminal-routes": TerminalRouteSnapshot,
   "terminal-create-params": TerminalCreateParams,
 };
 

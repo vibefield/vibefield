@@ -71,6 +71,22 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
   INTERACTIVE: 10 * 1024 * 1024,
 } as const;
 
+/** TC-S2 — the floor's supervision budget for a `field-terminal-host` cell
+ * (TC-D3's extraction; NO panic-abort until custody separates at TC-S4).
+ * The shape mirrors NATIVE_SUPERVISION one level down. HELLO covers a cold
+ * font discovery (the cell's slowest start step, measured seconds on a cold
+ * cache); DRAIN mirrors upstream's own sweep budget (G7's 6s); EXIT_GRACE is
+ * the gap between pipe-EOF and the kill escalation. Respawns are
+ * intensity-bounded — a cell that cannot stay up is a fault to SURFACE, not
+ * to hide behind infinite restarts. */
+export const CELL_SUPERVISION = {
+  HELLO_DEADLINE_MS: 15_000,
+  DRAIN_BUDGET_MS: 6_000,
+  EXIT_GRACE_MS: 2_000,
+  RESPAWN_MAX: 3,
+  RESPAWN_WINDOW_MS: 60_000,
+} as const;
+
 /** Mesh namespaces. `ss:*` is reserved to SyncedStore; `x.<pluginId>.*` is the dynamic service namespace (D19). */
 export const NAMESPACES = {
   RPC: "field.rpc",

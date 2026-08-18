@@ -7,7 +7,7 @@ use field_native::contracts::{
     DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, Hello, HelloAck,
     LogRecordV1, LoggingHealthV1, MeshLaneCloseRequest, MeshLaneClosed, MeshLaneOpenRequest,
     MeshLanePeerOpened, NativeHealth, ObservedState, PeerInfo, RpcRequest, RpcResponse,
-    ServeConfig, ServeEntry, StoreSnapshot,
+    ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
 };
 use serde_json::Value;
 use std::{fs, path::PathBuf};
@@ -47,6 +47,16 @@ fn hello_ack_fixture() {
     // NF-D8 — the mgmt ack carrying terminal endpoints; field-native EMITS this
     // shape, so it is strict.
     roundtrip::<HelloAck>("hello-ack.terminal.json", true);
+    // TC-D15 (TC-S2) — the ack carrying the revisioned route snapshot beside
+    // the legacy single-cell mirror, in lockstep. Emitted here, so strict.
+    roundtrip::<HelloAck>("hello-ack.terminal-routes.json", true);
+}
+
+#[test]
+fn terminal_routes_fixture() {
+    // TC-D15 — the subscribe surface's delta payload IS the full snapshot; a
+    // cell replacement is a new row under a bumped revision, never an edge.
+    roundtrip::<TerminalRouteSnapshot>("terminal-routes.replaced.json", true);
 }
 
 #[test]

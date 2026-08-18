@@ -56,6 +56,16 @@ pub mod terminal_scrollback_class_bytes {
     pub const INTERACTIVE: usize = 10485760;
 }
 
+/// TC-S2 — the floor's supervision budget for a field-terminal-host cell.
+/// One authority with the TS side; see registries.ts for the rationale.
+pub mod cell_supervision {
+    pub const HELLO_DEADLINE_MS: u64 = 15000;
+    pub const DRAIN_BUDGET_MS: u64 = 6000;
+    pub const EXIT_GRACE_MS: u64 = 2000;
+    pub const RESPAWN_MAX: u64 = 3;
+    pub const RESPAWN_WINDOW_MS: u64 = 60000;
+}
+
 /// File names beneath a daemon's own data directory. The plane that OWNS the
 /// file joins the name to its data dir; readers ask that plane for the path.
 pub mod files {

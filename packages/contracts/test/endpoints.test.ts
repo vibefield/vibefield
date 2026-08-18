@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   canonicalDataRootForScope,
+  cellSocketFile,
   isPipeEndpoint,
   PIPE_SOCKET_NAMES,
   pipeEndpointFor,
@@ -53,5 +54,12 @@ describe("endpoint resolution (golden vector)", () => {
 
   it("unix paths are not pipe endpoints", () => {
     expect(isPipeEndpoint("/data/native/run/mgmt.sock")).toBe(false);
+  });
+
+  it("derives a cell's per-instance name and refuses non-socket or zero ordinals (TC-S2)", () => {
+    expect(cellSocketFile("termctl.sock", 2)).toBe("termctl.2.sock");
+    expect(cellSocketFile("termframe.sock", 1)).toBe("termframe.1.sock");
+    expect(() => cellSocketFile("termctl", 1)).toThrow(/SOCKETS name/);
+    expect(() => cellSocketFile("termctl.sock", 0)).toThrow(/1-based/);
   });
 });

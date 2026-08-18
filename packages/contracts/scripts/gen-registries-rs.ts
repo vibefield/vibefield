@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   APP_ID,
+  CELL_SUPERVISION,
   ENV_PREFIXES,
   FILES,
   LAYOUT,
@@ -57,6 +58,12 @@ const lines: string[] = [
   ...Object.entries(TERMINAL_SCROLLBACK_CLASS_BYTES).map(
     ([k, v]) => `    pub const ${k}: usize = ${v};`,
   ),
+  "}",
+  "",
+  "/// TC-S2 — the floor's supervision budget for a field-terminal-host cell.",
+  "/// One authority with the TS side; see registries.ts for the rationale.",
+  "pub mod cell_supervision {",
+  ...Object.entries(CELL_SUPERVISION).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
   "}",
   "",
   "/// File names beneath a daemon's own data directory. The plane that OWNS the",

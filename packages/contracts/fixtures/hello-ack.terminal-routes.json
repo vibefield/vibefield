@@ -1,0 +1,27 @@
+{
+  "contractsVersion": "0.1.0",
+  "serverKind": "field-native",
+  "grantedScopes": [],
+  "nativeBuild": "field-native/0.1.0+dev-4f3a91c07b2e5d68a1c40b93",
+  "terminal": {
+    "controlSocket": "/data/native/run/termctl.1.sock",
+    "frameSocket": "/data/native/run/termframe.1.sock",
+    "authToken": "per-cell-token-gen-1"
+  },
+  "terminalRoutes": {
+    "revision": 1,
+    "cells": [
+      {
+        "cellInstanceId": 1,
+        "cellBootId": "01JCELLBOOT0000000000000001",
+        "pid": 4242,
+        "endpoints": {
+          "controlSocket": "/data/native/run/termctl.1.sock",
+          "frameSocket": "/data/native/run/termframe.1.sock",
+          "authToken": "per-cell-token-gen-1"
+        },
+        "tokenGeneration": 1
+      }
+    ]
+  }
+}

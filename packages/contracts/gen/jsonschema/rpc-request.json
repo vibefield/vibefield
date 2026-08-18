@@ -66,6 +66,53 @@
       ],
       "additionalProperties": true
     },
+    "TerminalRouteCell": {
+      "type": "object",
+      "properties": {
+        "cellInstanceId": {
+          "type": "integer"
+        },
+        "cellBootId": {
+          "type": "string"
+        },
+        "pid": {
+          "type": "integer"
+        },
+        "endpoints": {
+          "$ref": "#/definitions/TerminalEndpoints"
+        },
+        "tokenGeneration": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cellInstanceId",
+        "cellBootId",
+        "pid",
+        "endpoints",
+        "tokenGeneration"
+      ],
+      "additionalProperties": true
+    },
+    "TerminalRouteSnapshot": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer"
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TerminalRouteCell"
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "cells"
+      ],
+      "additionalProperties": true
+    },
     "ErrorKind": {
       "type": "string",
       "enum": [

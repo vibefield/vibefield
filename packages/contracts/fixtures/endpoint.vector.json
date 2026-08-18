@@ -1,5 +1,5 @@
 {
-  "note": "WIN-D1 — the endpoint-resolution law's cross-language vector. TS (src/endpoints.ts, pinned by test/endpoints.test.ts) and Rust (field-native/src/endpoints.rs, pinned by tests/endpoint_vector.rs) must both derive these exact strings. winA and winA-alt are two spellings of ONE directory and must share a scope — that collapse is the point of canonicalization. A deliberate change to the law edits this file in the same commit.",
+  "note": "WIN-D1 \u2014 the endpoint-resolution law's cross-language vector. TS (src/endpoints.ts, pinned by test/endpoints.test.ts) and Rust (field-native/src/endpoints.rs, pinned by tests/endpoint_vector.rs) must both derive these exact strings. winA and winA-alt are two spellings of ONE directory and must share a scope \u2014 that collapse is the point of canonicalization. A deliberate change to the law edits this file in the same commit. The termctl.2/termframe.2 rows are TC-S2's per-instance cell names (cellSocketFile/cell_socket_file) riding the same law.",
   "vectors": [
     {
       "tag": "winA",
@@ -10,7 +10,9 @@
         "mgmt.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-mgmt",
         "meshdata.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-meshdata",
         "termctl.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-termctl",
-        "termframe.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-termframe"
+        "termframe.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-termframe",
+        "termctl.2.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-termctl.2",
+        "termframe.2.sock": "\\\\.\\pipe\\vibefield-ef2ecfd8a6f57831-termframe.2"
       }
     },
     {
@@ -32,7 +34,7 @@
     },
     {
       "tag": "winCJK",
-      "dataRoot": "C:\\Users\\赵敏\\AppData\\Roaming\\VibeField",
+      "dataRoot": "C:\\Users\\\u8d75\u654f\\AppData\\Roaming\\VibeField",
       "scope": "39fc4e2df6c60f2b",
       "endpoints": {
         "mgmt.sock": "\\\\.\\pipe\\vibefield-39fc4e2df6c60f2b-mgmt"

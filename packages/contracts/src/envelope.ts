@@ -70,6 +70,48 @@ export const TerminalEndpoints = z
   .passthrough();
 export type TerminalEndpoints = z.infer<typeof TerminalEndpoints>;
 
+/** TC-D15 — one cell's row in the terminal route snapshot. TC-S2 has exactly
+ * one; the vector IS the shape's future (K=2 class cells at TC-S3). The row
+ * carries FULL dial coordinates including the token — the snapshot rides only
+ * the paired mgmt channel, the same trust the hello ack's `terminal` field has
+ * always carried (NF-D8). */
+export const TerminalRouteCell = z
+  .object({
+    /** the floor supervisor's spawn ordinal — 1-based, monotonic within a
+     * floor boot; also the suffix in the cell's per-instance socket names
+     * (`termctl.<n>.sock`), which is what makes a restart NEVER a rebind:
+     * fresh names sidestep both the stale-unlink hazard (ADOPT-1's law) and
+     * win32's first-pipe-instance hold. */
+    cellInstanceId: z.number().int(),
+    /** the cell process's own boot identity, minted per start. THE identity —
+     * pids recycle, ordinals repeat across floor boots; this never does. */
+    cellBootId: z.string(),
+    /** the cell's OS pid — diagnostics and kill-matrix targeting, never
+     * authority. */
+    pid: z.number().int(),
+    endpoints: TerminalEndpoints,
+    /** increments at every token mint (== every cell start today). Names the
+     * ordering key `authToken` was accidentally serving as (GT-5b's rotation
+     * checks keyed on the token value; a generation is comparable). */
+    tokenGeneration: z.number().int(),
+  })
+  .passthrough();
+export type TerminalRouteCell = z.infer<typeof TerminalRouteCell>;
+
+/** TC-D15 — routes are revisioned STATE; notifications are hints. The floor
+ * owns this snapshot; every reader re-reads on hint, on reconnect, and on
+ * route errors — a missed edge is repaired by the next read. `revision` is
+ * monotonic within a floor generation (pair with the hello's `bootId` to
+ * order across floor restarts). Empty `cells` is an honest state (no cell
+ * up), never an error. */
+export const TerminalRouteSnapshot = z
+  .object({
+    revision: z.number().int(),
+    cells: z.array(TerminalRouteCell),
+  })
+  .passthrough();
+export type TerminalRouteSnapshot = z.infer<typeof TerminalRouteSnapshot>;
+
 export const HelloAck = z
   .object({
     contractsVersion: SemverString,
@@ -77,8 +119,17 @@ export const HelloAck = z
     grantedScopes: z.array(z.string()),
     /** mgmt surface only (NF-D8); absent on every product-surface ack, and
      * absent until the terminal unit is up (tolerant readers treat absence as
-     * "no terminal endpoints yet", never an error). */
+     * "no terminal endpoints yet", never an error). Since TC-S2 this is the
+     * LEGACY single-cell mirror of `terminalRoutes` — kept in lockstep by the
+     * floor so pre-routes readers keep working; new readers prefer the
+     * snapshot. */
     terminal: TerminalEndpoints.optional(),
+    /** TC-D15 (TC-S2+): the revisioned route snapshot at pairing time. The
+     * hello delivers the CURRENT state; subsequent changes ride
+     * `native.lifecycle.terminal.routes.subscribe` deltas — each delta is the
+     * FULL snapshot, so a missed edge is repaired by the next one. Absent
+     * from a pre-TC-S2 floor (tolerant readers fall back to `terminal`). */
+    terminalRoutes: TerminalRouteSnapshot.optional(),
     /** GT-2d — who actually answered. field-native outlives everything and is
      * adopted by design, so the floor a shell pairs with can be far older than
      * the tree that built it; this label is how that becomes visible instead of

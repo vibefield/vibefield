@@ -1,0 +1,16 @@
+{
+  "revision": 3,
+  "cells": [
+    {
+      "cellInstanceId": 2,
+      "cellBootId": "01JCELLBOOT0000000000000002",
+      "pid": 4310,
+      "endpoints": {
+        "controlSocket": "/data/native/run/termctl.2.sock",
+        "frameSocket": "/data/native/run/termframe.2.sock",
+        "authToken": "per-cell-token-gen-2"
+      },
+      "tokenGeneration": 2
+    }
+  ]
+}

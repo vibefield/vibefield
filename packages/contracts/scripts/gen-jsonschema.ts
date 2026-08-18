@@ -32,6 +32,8 @@ import {
   SemverString,
   ServerKind,
   TerminalEndpoints,
+  TerminalRouteCell,
+  TerminalRouteSnapshot,
 } from "../src/envelope";
 import { ErrorData, ErrorKind, UnavailableDetails } from "../src/errors";
 import {
@@ -98,6 +100,10 @@ const BASE_SHARED = {
   // NF-D8 — rides HelloAck (mgmt surface); named so the $ref stays
   // typify-resolvable.
   TerminalEndpoints,
+  // TC-D15 (TC-S2) — the revisioned route snapshot + its cell row; both
+  // named for the same typify reason.
+  TerminalRouteCell,
+  TerminalRouteSnapshot,
   ErrorKind,
   UnavailableDetails,
   ErrorData,

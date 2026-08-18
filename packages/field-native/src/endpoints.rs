@@ -65,3 +65,17 @@ pub fn pipe_endpoint_for(data_root: &str, socket_file: &str) -> String {
 pub fn is_pipe_endpoint(endpoint: &str) -> bool {
     endpoint.starts_with(PIPE_PREFIX)
 }
+
+/// TC-S2 — the per-instance socket FILE name for a terminal-host cell:
+/// `termctl.sock` + 2 → `termctl.2.sock`. Fresh names per cell instance make
+/// a restart never a rebind (the unix stale-unlink hazard and win32's
+/// first-pipe-instance hold both dissolve); the derived name then flows
+/// through the same resolution law as any SOCKETS name. TS twin:
+/// `cellSocketFile` in contracts/src/endpoints.ts, pinned by the instance
+/// rows in fixtures/endpoint.vector.json.
+pub fn cell_socket_file(socket_file: &str, instance: u32) -> String {
+    debug_assert!(socket_file.ends_with(".sock"), "wants a SOCKETS name");
+    debug_assert!(instance >= 1, "wants a 1-based instance ordinal");
+    let base = socket_file.strip_suffix(".sock").unwrap_or(socket_file);
+    format!("{base}.{instance}.sock")
+}

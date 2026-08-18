@@ -43,3 +43,17 @@ fn spellings_of_one_windows_directory_share_a_scope() {
         field_native::endpoints::pipe_scope("c:/a/b"),
     );
 }
+
+#[test]
+fn cell_socket_names_match_the_ts_twin() {
+    // TC-S2 — the per-instance derivation; the fixture's termctl.2 rows pin
+    // the DERIVED name through the pipe law, this row pins the derivation.
+    assert_eq!(
+        field_native::endpoints::cell_socket_file("termctl.sock", 2),
+        "termctl.2.sock"
+    );
+    assert_eq!(
+        field_native::endpoints::cell_socket_file("termframe.sock", 1),
+        "termframe.1.sock"
+    );
+}

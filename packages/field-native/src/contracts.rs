@@ -877,6 +877,9 @@ impl Hello {
 #[doc = "    \"terminal\": {"]
 #[doc = "      \"$ref\": \"#/definitions/TerminalEndpoints\""]
 #[doc = "    },"]
+#[doc = "    \"terminalRoutes\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalRouteSnapshot\""]
+#[doc = "    },"]
 #[doc = "    \"userId\": {"]
 #[doc = "      \"type\": ["]
 #[doc = "        \"string\","]
@@ -904,6 +907,12 @@ pub struct HelloAck {
     pub server_kind: ServerKind,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub terminal: ::std::option::Option<TerminalEndpoints>,
+    #[serde(
+        rename = "terminalRoutes",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub terminal_routes: ::std::option::Option<TerminalRouteSnapshot>,
     #[serde(
         rename = "userId",
         default,
@@ -5681,6 +5690,93 @@ impl TerminalEndpoints {
         Default::default()
     }
 }
+#[doc = "`TerminalRouteCell`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"cellBootId\","]
+#[doc = "    \"cellInstanceId\","]
+#[doc = "    \"endpoints\","]
+#[doc = "    \"pid\","]
+#[doc = "    \"tokenGeneration\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"cellBootId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"cellInstanceId\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"endpoints\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalEndpoints\""]
+#[doc = "    },"]
+#[doc = "    \"pid\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"tokenGeneration\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct TerminalRouteCell {
+    #[serde(rename = "cellBootId")]
+    pub cell_boot_id: ::std::string::String,
+    #[serde(rename = "cellInstanceId")]
+    pub cell_instance_id: i64,
+    pub endpoints: TerminalEndpoints,
+    pub pid: i64,
+    #[serde(rename = "tokenGeneration")]
+    pub token_generation: i64,
+}
+impl TerminalRouteCell {
+    pub fn builder() -> builder::TerminalRouteCell {
+        Default::default()
+    }
+}
+#[doc = "`TerminalRouteSnapshot`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"cells\","]
+#[doc = "    \"revision\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"cells\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/TerminalRouteCell\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"revision\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct TerminalRouteSnapshot {
+    pub cells: ::std::vec::Vec<TerminalRouteCell>,
+    pub revision: i64,
+}
+impl TerminalRouteSnapshot {
+    pub fn builder() -> builder::TerminalRouteSnapshot {
+        Default::default()
+    }
+}
 #[doc = "`UnavailableDetails`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -6832,6 +6928,10 @@ pub mod builder {
             ::std::option::Option<super::TerminalEndpoints>,
             ::std::string::String,
         >,
+        terminal_routes: ::std::result::Result<
+            ::std::option::Option<super::TerminalRouteSnapshot>,
+            ::std::string::String,
+        >,
         user_id: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
@@ -6845,6 +6945,7 @@ pub mod builder {
                 native_build: Ok(Default::default()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
                 terminal: Ok(Default::default()),
+                terminal_routes: Ok(Default::default()),
                 user_id: Ok(Default::default()),
             }
         }
@@ -6900,6 +7001,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for terminal: {e}"));
             self
         }
+        pub fn terminal_routes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalRouteSnapshot>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.terminal_routes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for terminal_routes: {e}"));
+            self
+        }
         pub fn user_id<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
@@ -6920,6 +7031,7 @@ pub mod builder {
                 native_build: value.native_build?,
                 server_kind: value.server_kind?,
                 terminal: value.terminal?,
+                terminal_routes: value.terminal_routes?,
                 user_id: value.user_id?,
             })
         }
@@ -6932,6 +7044,7 @@ pub mod builder {
                 native_build: Ok(value.native_build),
                 server_kind: Ok(value.server_kind),
                 terminal: Ok(value.terminal),
+                terminal_routes: Ok(value.terminal_routes),
                 user_id: Ok(value.user_id),
             }
         }
@@ -10163,6 +10276,157 @@ pub mod builder {
                 auth_token: Ok(value.auth_token),
                 control_socket: Ok(value.control_socket),
                 frame_socket: Ok(value.frame_socket),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct TerminalRouteCell {
+        cell_boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        cell_instance_id: ::std::result::Result<i64, ::std::string::String>,
+        endpoints: ::std::result::Result<super::TerminalEndpoints, ::std::string::String>,
+        pid: ::std::result::Result<i64, ::std::string::String>,
+        token_generation: ::std::result::Result<i64, ::std::string::String>,
+    }
+    impl ::std::default::Default for TerminalRouteCell {
+        fn default() -> Self {
+            Self {
+                cell_boot_id: Err("no value supplied for cell_boot_id".to_string()),
+                cell_instance_id: Err("no value supplied for cell_instance_id".to_string()),
+                endpoints: Err("no value supplied for endpoints".to_string()),
+                pid: Err("no value supplied for pid".to_string()),
+                token_generation: Err("no value supplied for token_generation".to_string()),
+            }
+        }
+    }
+    impl TerminalRouteCell {
+        pub fn cell_boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cell_boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cell_boot_id: {e}"));
+            self
+        }
+        pub fn cell_instance_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cell_instance_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cell_instance_id: {e}"));
+            self
+        }
+        pub fn endpoints<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::TerminalEndpoints>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.endpoints = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for endpoints: {e}"));
+            self
+        }
+        pub fn pid<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pid = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pid: {e}"));
+            self
+        }
+        pub fn token_generation<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.token_generation = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for token_generation: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<TerminalRouteCell> for super::TerminalRouteCell {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: TerminalRouteCell,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                cell_boot_id: value.cell_boot_id?,
+                cell_instance_id: value.cell_instance_id?,
+                endpoints: value.endpoints?,
+                pid: value.pid?,
+                token_generation: value.token_generation?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::TerminalRouteCell> for TerminalRouteCell {
+        fn from(value: super::TerminalRouteCell) -> Self {
+            Self {
+                cell_boot_id: Ok(value.cell_boot_id),
+                cell_instance_id: Ok(value.cell_instance_id),
+                endpoints: Ok(value.endpoints),
+                pid: Ok(value.pid),
+                token_generation: Ok(value.token_generation),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct TerminalRouteSnapshot {
+        cells:
+            ::std::result::Result<::std::vec::Vec<super::TerminalRouteCell>, ::std::string::String>,
+        revision: ::std::result::Result<i64, ::std::string::String>,
+    }
+    impl ::std::default::Default for TerminalRouteSnapshot {
+        fn default() -> Self {
+            Self {
+                cells: Err("no value supplied for cells".to_string()),
+                revision: Err("no value supplied for revision".to_string()),
+            }
+        }
+    }
+    impl TerminalRouteSnapshot {
+        pub fn cells<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::TerminalRouteCell>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cells = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cells: {e}"));
+            self
+        }
+        pub fn revision<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.revision = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for revision: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<TerminalRouteSnapshot> for super::TerminalRouteSnapshot {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: TerminalRouteSnapshot,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                cells: value.cells?,
+                revision: value.revision?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::TerminalRouteSnapshot> for TerminalRouteSnapshot {
+        fn from(value: super::TerminalRouteSnapshot) -> Self {
+            Self {
+                cells: Ok(value.cells),
+                revision: Ok(value.revision),
             }
         }
     }

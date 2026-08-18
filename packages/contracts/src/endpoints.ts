@@ -78,5 +78,24 @@ export function isPipeEndpoint(endpoint: string): boolean {
   return endpoint.startsWith(PIPE_PREFIX);
 }
 
+/** TC-S2 — the per-instance socket FILE name for a terminal-host cell:
+ * `termctl.sock` + 2 → `termctl.2.sock`. The instance suffix is what makes a
+ * cell restart NEVER a rebind — fresh names sidestep the stale-unlink hazard
+ * (ADOPT-1's never-unlink-a-live-listener law) on unix and the
+ * first-pipe-instance hold on win32 (a name stays held until its holder's
+ * PROCESS exits). The derived name then flows through the SAME resolution law
+ * as any SOCKETS name (`pipeEndpointFor` on win32, the LAYOUT join on unix);
+ * the Rust twin is `cell_socket_file` in field-native/src/endpoints.rs, pinned
+ * by the instance rows in fixtures/endpoint.vector.json. */
+export function cellSocketFile(socketFile: string, instance: number): string {
+  if (!socketFile.endsWith(".sock")) {
+    throw new Error(`cellSocketFile wants a SOCKETS name (*.sock), got: ${socketFile}`);
+  }
+  if (!Number.isInteger(instance) || instance < 1) {
+    throw new Error(`cellSocketFile wants a 1-based instance ordinal, got: ${instance}`);
+  }
+  return `${socketFile.slice(0, -".sock".length)}.${instance}.sock`;
+}
+
 /** Every socket name resolvable through this law — the fixture walks these. */
 export const PIPE_SOCKET_NAMES: readonly string[] = Object.values(SOCKETS);
