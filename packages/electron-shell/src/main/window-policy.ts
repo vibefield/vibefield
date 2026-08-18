@@ -67,6 +67,7 @@ export interface WindowSession {
 }
 
 interface ManagedWindowSession extends WindowSession {
+  readonly primary: boolean;
   closing: boolean;
 }
 
@@ -99,22 +100,39 @@ export class WindowRegistry {
         `single-primary-window invariant violated: ${current.id} is already registered`,
       );
     }
+    return this.adoptSession(window, true);
+  }
+
+  /** Register a host-owned auxiliary renderer realm without changing which
+   * window tray/lifecycle operations treat as primary. This narrow seam is
+   * also what lets the physical restart harness prove a multi-window fence. */
+  adoptAuxiliary(window: BrowserWindow): WindowSession {
+    return this.adoptSession(window, false);
+  }
+
+  private adoptSession(window: BrowserWindow, primary: boolean): WindowSession {
     const existing = this.sessions.get(window.id);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) {
+      if (existing.primary !== primary) {
+        throw new Error(`${window.id}: renderer window cannot change primary role after adoption`);
+      }
+      return existing;
+    }
     const session: ManagedWindowSession = {
       window,
+      primary,
       closing: false,
       dispose: () => {
         if (!this.sessions.delete(window.id)) return;
-        this.emitPrimaryChanged();
+        if (session.primary) this.emitPrimaryChanged();
       },
     };
     this.sessions.set(window.id, session);
     window.on("closed", () => {
       session.dispose();
-      this.launchQueuedReopen();
+      if (session.primary) this.launchQueuedReopen();
     });
-    this.emitPrimaryChanged();
+    if (session.primary) this.emitPrimaryChanged();
     return session;
   }
 
@@ -129,7 +147,7 @@ export class WindowRegistry {
 
   primary(): BrowserWindow | null {
     for (const s of this.sessions.values()) {
-      if (!s.window.isDestroyed()) return s.window;
+      if (s.primary && !s.window.isDestroyed()) return s.window;
     }
     return null;
   }

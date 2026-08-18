@@ -165,6 +165,18 @@ describe("WindowRegistry.owns", () => {
     a.destroy();
     expect(reg.owns(a.webContents)).toBe(false);
   });
+
+  it("owns auxiliary renderer realms without changing the primary", () => {
+    const reg = new WindowRegistry();
+    const primary = makeFakeWindow(1);
+    const auxiliary = makeFakeWindow(2);
+    reg.adopt(primary.window);
+    reg.adoptAuxiliary(auxiliary.window);
+
+    expect(reg.primary()).toBe(primary.window);
+    expect(reg.owns(primary.webContents)).toBe(true);
+    expect(reg.owns(auxiliary.webContents)).toBe(true);
+  });
 });
 
 describe("WindowRegistry.primary", () => {

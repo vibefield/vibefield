@@ -1933,8 +1933,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           try {
             started = updateManager.beginRegistryUpdate({
               runtime: prepared.runtime,
-              commitArtifact: async () => {
-                await installer.commit(prepared);
+              commitArtifact: async (commitEpoch) => {
+                await installer.commit(prepared, commitEpoch);
               },
               discardArtifact: async () => {
                 await installer.discard(prepared);

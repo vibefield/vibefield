@@ -18,7 +18,7 @@ import {
 } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
 import { RpcCallError } from "./native-link";
-import { resolveInstalledArtifactRoot } from "./plugin-artifact-store";
+import { resolveInstalledArtifact } from "./plugin-artifact-store";
 
 // PluginRegistryService (plugin spec §9, slice P2): discovery → validation →
 // install records → sanitized snapshot. NO plugin module is ever imported here
@@ -109,6 +109,9 @@ export class PluginRegistryService extends EventEmitter {
   /** plugin dir absolute paths — DAEMON-INTERNAL (never in any snapshot); the
    * service host resolves entries.service against them. */
   private rootPaths = new Map<string, string>();
+  /** DAEMON-INTERNAL durable publication epochs discovered from registry
+   * pointers. They seed update coordinators after every fieldd restart. */
+  private commitEpochs = new Map<string, number>();
   /** P4 — live service-entry states asserted by the ServiceHost; an overlay so
    * a refresh() rebuild never erases runtime truth (§9.3 states). */
   private serviceStates = new Map<string, PluginRecord["service"]>();
@@ -135,6 +138,7 @@ export class PluginRegistryService extends EventEmitter {
     const records = await this.loadRecords();
     const rows = new Map<string, PluginRecord>();
     const rootPaths = new Map<string, string>();
+    const commitEpochs = new Map<string, number>();
     const nextDecls = new Map<string, PluginManifestV1["contributes"]>();
     const problems: PluginRegistryProblem[] = [];
 
@@ -163,11 +167,13 @@ export class PluginRegistryService extends EventEmitter {
       }
       for (const dir of children) {
         let pluginRoot = join(root, dir);
+        let commitEpoch = 1;
         if (source === "registry") {
           try {
-            const selected = await resolveInstalledArtifactRoot(root, dir);
+            const selected = await resolveInstalledArtifact(root, dir);
             if (selected === null) continue;
-            pluginRoot = selected;
+            pluginRoot = selected.root;
+            commitEpoch = selected.commitEpoch;
           } catch (error) {
             problems.push({
               root: dir,
@@ -254,11 +260,13 @@ export class PluginRegistryService extends EventEmitter {
         }
         rows.set(row.id, row);
         rootPaths.set(row.id, pluginRoot);
+        commitEpochs.set(row.id, commitEpoch);
       }
     }
 
     this.rows = rows;
     this.rootPaths = rootPaths;
+    this.commitEpochs = commitEpochs;
     this.serviceDecls = nextDecls;
     this.problems = problems;
     this.publish();
@@ -428,6 +436,12 @@ export class PluginRegistryService extends EventEmitter {
   /** DAEMON-INTERNAL: the plugin dir path (service-entry resolution). */
   rootPath(id: string): string | undefined {
     return this.rootPaths.get(id);
+  }
+
+  /** DAEMON-INTERNAL: epoch paired atomically with the selected artifact.
+   * Bundled/dev/legacy roots begin at epoch 1. */
+  commitEpoch(id: string): number | undefined {
+    return this.commitEpochs.get(id);
   }
 
   /** P4 — the ServiceHost asserts live §9.3 service-entry states here. */

@@ -517,6 +517,34 @@ describe("PluginUpdateCoordinator (PRC-5e)", () => {
     ]);
   });
 
+  it("fails closed on indeterminate publication instead of commanding old recovery", async () => {
+    const update = coordinator();
+    const a = commandSink();
+    update.registerRenderer({ identity: A, artifact: OLD, send: a.send });
+    const error = Object.assign(new Error("directory fsync failed after rename"), {
+      publication: "indeterminate" as const,
+    });
+    const input = candidate({
+      commitArtifact: async () => {
+        input.events.push("pointer.indeterminate");
+        throw error;
+      },
+    });
+    const started = update.begin(input);
+
+    await update.acknowledge(A, prepared(started.updateId));
+    await expect(started.completion).rejects.toBe(error);
+    expect(update.snapshot()).toMatchObject({
+      state: "failed",
+      currentArtifact: OLD,
+      commitEpoch: 1,
+      episode: { phase: "preparing" },
+    });
+    expect(update.routeOpen).toBe(false);
+    expect(a.commands.map((command) => command.kind)).toEqual(["prepare"]);
+    expect(input.events).toEqual(["pointer.indeterminate"]);
+  });
+
   it("contains a synchronous service prepare failure inside retained-old recovery", async () => {
     const update = coordinator();
     const serviceEvents: string[] = [];
@@ -655,5 +683,25 @@ describe("PluginUpdateCoordinator (PRC-5e)", () => {
     nextId = "pupd_empty_2";
     const second = update.begin(candidate({ oldArtifact: CANDIDATE, candidateArtifact: OTHER }));
     await expect(second.completion).resolves.toMatchObject({ commitEpoch: 3 });
+  });
+
+  it("passes the exact next durable epoch into the artifact pointer commit", async () => {
+    const observed: number[] = [];
+    const update = new PluginUpdateCoordinator({
+      pluginId: PLUGIN_ID,
+      currentArtifact: OLD,
+      commitEpoch: 7,
+      makeUpdateId: () => "pupd_restart_epoch",
+    });
+    const started = update.begin(
+      candidate({
+        commitArtifact: async (commitEpoch) => {
+          observed.push(commitEpoch);
+        },
+      }),
+    );
+
+    await expect(started.completion).resolves.toMatchObject({ commitEpoch: 8 });
+    expect(observed).toEqual([8]);
   });
 });

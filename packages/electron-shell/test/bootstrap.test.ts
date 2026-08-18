@@ -295,6 +295,46 @@ describe("createBootstrapHandler (once per generation)", () => {
     expect(second.rendererParticipant.incarnation).not.toBe(first.rendererParticipant.incarnation);
   });
 
+  it("fences two current windows once and reloads each only after exact process death", async () => {
+    const daemon = fakeDaemon();
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
+    const a = fakeSender(1);
+    const b = fakeSender(2);
+    const oldA = await handler({ sender: a.wc });
+    const oldB = await handler({ sender: b.wc });
+
+    expect(handler.requestAllReplacements()).toEqual({ requested: 2, unavailable: 0 });
+    expect(handler.requestAllReplacements()).toEqual({ requested: 0, unavailable: 0 });
+    expect(a.crashRequests()).toBe(1);
+    expect(b.crashRequests()).toBe(1);
+    expect(daemon.revocations).toEqual([]);
+    expect(a.reloads()).toBe(0);
+    expect(b.reloads()).toBe(0);
+
+    a.processGone();
+    b.processGone();
+    const nextA = handler({ sender: a.wc });
+    const nextB = handler({ sender: b.wc });
+    await vi.waitFor(() => expect(daemon.revocations).toHaveLength(2));
+    await vi.waitFor(() => {
+      expect(a.reloads()).toBe(1);
+      expect(b.reloads()).toBe(1);
+    });
+    const [newA, newB] = await Promise.all([nextA, nextB]);
+    expect(newA.rendererParticipant.participantId).toBe(oldA.rendererParticipant.participantId);
+    expect(newB.rendererParticipant.participantId).toBe(oldB.rendererParticipant.participantId);
+    expect(newA.rendererParticipant.incarnation).not.toBe(oldA.rendererParticipant.incarnation);
+    expect(newB.rendererParticipant.incarnation).not.toBe(oldB.rendererParticipant.incarnation);
+    expect(daemon.revocations).toEqual([
+      { tokenId: "tk_000000000001", cause: "render-process-gone" },
+      { tokenId: "tk_000000000002", cause: "render-process-gone" },
+    ]);
+  });
+
   it("retries exact revocation after a transient daemon link failure", async () => {
     const daemon = fakeDaemon({ failFirstRevoke: true });
     const onRevokeError = vi.fn();

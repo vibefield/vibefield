@@ -116,7 +116,11 @@ async function eventually(predicate: () => boolean, message = "condition did not
 }
 
 function fixture(
-  options: { readonly leaseMs?: number; readonly candidateModuleGate?: Promise<void> } = {},
+  options: {
+    readonly leaseMs?: number;
+    readonly candidateModuleGate?: Promise<void>;
+    readonly afterPointerCommit?: () => void | Promise<void>;
+  } = {},
 ) {
   const oldRecord = record("a");
   const candidateRecord = record("b");
@@ -128,6 +132,7 @@ function fixture(
   const mints: PluginUpdateSourceMintRequest[] = [];
   const revocations: PluginUpdateSourceRevokeRequest[] = [];
   let current = oldRecord;
+  let currentCommitEpoch = 1;
   let tokenSequence = 0;
 
   const candidateModulesDisposed = vi.fn(() => events.push("modules.candidate.dispose"));
@@ -197,10 +202,12 @@ function fixture(
   };
   const candidate: PluginRegistryUpdateCandidate = {
     runtime,
-    async commitArtifact() {
+    async commitArtifact(commitEpoch) {
       // Deliberately read through `this`: the manager must preserve installer method binding.
       current = this.runtime.record;
+      currentCommitEpoch = commitEpoch;
       events.push("pointer.commit");
+      await options.afterPointerCommit?.();
     },
     async discardArtifact() {
       if (this.runtime !== runtime) throw new Error("candidate receiver was lost");
@@ -210,6 +217,7 @@ function fixture(
   const manager = new PluginUpdateManager({
     plugins: {
       get: (pluginId) => (pluginId === PLUGIN_ID ? current : undefined),
+      commitEpoch: (pluginId) => (pluginId === PLUGIN_ID ? currentCommitEpoch : undefined),
     },
     modules,
     serviceHost: () => serviceHost,
@@ -283,6 +291,38 @@ function committed(updateId: string, candidate: PluginRecord) {
 }
 
 describe("PluginUpdateManager (PRC-5e)", () => {
+  it("accepts its exact candidate epoch during the durable-publication handoff", async () => {
+    const commitRelease = deferred<void>();
+    const rig = fixture({ afterPointerCommit: () => commitRelease.promise });
+    const started = rig.manager.beginRegistryUpdate(rig.candidate);
+
+    const prepareAck = rig.coordinator.acknowledge(
+      A,
+      prepared(started.updateId, rig.candidateRecord),
+    );
+    await eventually(() => rig.events.includes("pointer.commit"));
+
+    expect(rig.current()).toBe(rig.candidateRecord);
+    expect(rig.manager.coordinatorFor(PLUGIN_ID)).toBe(rig.coordinator);
+    expect(
+      rig.coordinator.registerRenderer({
+        identity: B,
+        artifact: artifact(rig.candidateRecord),
+        send: () => undefined,
+      }),
+    ).toBe("held");
+
+    commitRelease.resolve();
+    await prepareAck;
+    await rig.coordinator.acknowledge(A, committed(started.updateId, rig.candidateRecord));
+    await expect(started.completion).resolves.toMatchObject({
+      outcome: "committed",
+      commitEpoch: 2,
+    });
+    expect(rig.manager.coordinatorFor(PLUGIN_ID)).toBe(rig.coordinator);
+    await rig.manager.dispose();
+  });
+
   it("owns private module/service/source authority through one committed barrier", async () => {
     const rig = fixture();
     const started = rig.manager.beginRegistryUpdate(rig.candidate);

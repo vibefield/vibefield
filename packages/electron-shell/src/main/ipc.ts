@@ -43,6 +43,14 @@ export function registerWindowBootstrap(
         details,
       );
     },
+    onReplacementError: (error, details) => {
+      logger?.error(
+        "desktop.ipc.renderer_replacement_failed",
+        "Electron could not request renderer process replacement",
+        error,
+        details,
+      );
+    },
   });
   ipcMain.handle(IPC_CHANNELS.windowBootstrap, async (event) => {
     try {

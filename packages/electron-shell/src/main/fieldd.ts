@@ -19,7 +19,14 @@ import type { DesktopResources } from "./resources";
 export function dataRoot(mode: ShellMode): string {
   const injected = process.env["FIELDD_DATA_DIR"];
   if (injected) return injected;
-  if (isSmokeLike(mode)) return mkdtempSync(join(tmpdir(), "vf-smoke-"));
+  if (isSmokeLike(mode)) {
+    // Unix domain sockets inherit macOS's 104-byte sun_path ceiling. Its
+    // per-session tmpdir is already roughly 50 bytes long, and the user-root
+    // suffix can push an otherwise valid isolated smoke root over the edge.
+    // `/tmp` is the deliberate short-root authority on Unix; Windows has named
+    // pipes rather than sun_path and must keep using its platform temp root.
+    return mkdtempSync(join(process.platform === "win32" ? tmpdir() : "/tmp", "vf-smoke-"));
+  }
   return join(app.getPath("appData"), "VibeField");
 }
 

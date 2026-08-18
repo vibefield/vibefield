@@ -11,6 +11,7 @@ import {
   TerminalCreateResult,
   TerminalListResult,
   TerminalTicket,
+  type WindowConnection,
 } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import {
@@ -235,6 +236,165 @@ export async function runSmokeCanvas(opts: {
     ok = true;
   } catch (e) {
     console.error(`SMOKE_CANVAS failed: ${e instanceof Error ? e.message : e}`);
+  }
+  await teardown(opts.supervisor, opts.root, opts.beforeExit);
+  app.exit(ok ? 0 : 2);
+}
+
+async function waitForCondition(
+  label: string,
+  timeoutMs: number,
+  predicate: () => boolean,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await sleep(25);
+  }
+  throw new Error(`${label} did not happen within ${timeoutMs}ms`);
+}
+
+async function rendererConnection(win: BrowserWindow): Promise<WindowConnection> {
+  return (await win.webContents.executeJavaScript(
+    "globalThis.vibefield.getConnection()",
+    true,
+  )) as WindowConnection;
+}
+
+function waitForReplacementHandle(
+  subscribe: (listener: (handle: FielddHandle) => void) => () => void,
+  oldBootId: string,
+  timeoutMs: number,
+): Promise<FielddHandle> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let stop = (): void => undefined;
+    const timeout = setTimeout(() => {
+      settled = true;
+      stop();
+      reject(new Error(`fieldd was not automatically replaced within ${timeoutMs}ms`));
+    }, timeoutMs);
+    stop = subscribe((candidate) => {
+      if (candidate.info.bootId === oldBootId) return;
+      settled = true;
+      clearTimeout(timeout);
+      stop();
+      resolve(candidate);
+    });
+    // onHandle may synchronously deliver an already-current replacement.
+    if (settled) stop();
+  });
+}
+
+/** PRC-5g physical witness: two real sandboxed renderer documents load the
+ * production custom origin, the shell-owned fieldd is SIGKILLed, supervisor
+ * recovery adopts a new boot, and the boot fence replaces both documents. */
+export async function runSmokePluginRestart(opts: {
+  handle: FielddHandle;
+  onHandle: (listener: (handle: FielddHandle) => void) => () => void;
+  supervisor: FielddSupervisor;
+  root: string;
+  registry: WindowRegistry;
+  preloadPath: string;
+  viteUrl: string;
+  beforeExit: () => Promise<void>;
+  onWindow?: (window: BrowserWindow) => void;
+}): Promise<void> {
+  const primary = createMainWindow({
+    mode: "smoke-plugin-restart",
+    preloadPath: opts.preloadPath,
+    show: false,
+  });
+  const auxiliary = createMainWindow({
+    mode: "smoke-plugin-restart",
+    preloadPath: opts.preloadPath,
+    show: false,
+  });
+  opts.registry.adopt(primary);
+  opts.registry.adoptAuxiliary(auxiliary);
+  opts.onWindow?.(primary);
+  opts.onWindow?.(auxiliary);
+  const windows = [primary, auxiliary] as const;
+  if (process.env["VF_SMOKE_DEBUG"]) {
+    windows.forEach((win, index) => {
+      win.webContents.on("console-message", (...args: unknown[]) => {
+        console.log(`[renderer-${index + 1}] ${args.map((arg) => JSON.stringify(arg)).join(" ")}`);
+      });
+    });
+  }
+  let ok = false;
+  try {
+    const initialReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
+    await Promise.all(
+      windows.map((win) => loadRenderer(win, "smoke-plugin-restart", opts.viteUrl)),
+    );
+    const initialCanvas = (await Promise.all(initialReady)).map(
+      (raw) => JSON.parse(raw) as CanvasFacts,
+    );
+    console.log(`SMOKE_PLUGIN_RESTART_INITIAL ${JSON.stringify(initialCanvas)}`);
+    const initialProblems = initialCanvas.flatMap((facts, index) =>
+      censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
+    );
+    if (initialProblems.length > 0) throw new Error(initialProblems.join(" · "));
+    const oldConnections = await Promise.all(windows.map(rendererConnection));
+    const childPid = opts.handle.childPid;
+    if (opts.handle.ownership !== "spawned" || childPid === undefined) {
+      throw new Error("restart smoke requires the isolated supervisor to own fieldd");
+    }
+
+    const replacementReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
+    const replacementHandle = waitForReplacementHandle(
+      opts.onHandle,
+      opts.handle.info.bootId,
+      15_000,
+    );
+    process.kill(childPid, "SIGKILL");
+    await waitForCondition("owned fieldd handle retirement", 10_000, () => {
+      return opts.handle.client.status === "closed";
+    });
+    const replacement = await replacementHandle;
+    if (replacement.info.bootId === opts.handle.info.bootId) {
+      throw new Error("supervisor recovery returned the dead daemon boot id");
+    }
+
+    const replacementCanvas = (await Promise.all(replacementReady)).map(
+      (raw) => JSON.parse(raw) as CanvasFacts,
+    );
+    console.log(`SMOKE_PLUGIN_RESTART_RECOVERED ${JSON.stringify(replacementCanvas)}`);
+    const replacementProblems = replacementCanvas.flatMap((facts, index) =>
+      censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
+    );
+    if (replacementProblems.length > 0) throw new Error(replacementProblems.join(" · "));
+    const newConnections = await Promise.all(windows.map(rendererConnection));
+    for (let index = 0; index < windows.length; index += 1) {
+      const oldIdentity = oldConnections[index]?.rendererParticipant;
+      const newIdentity = newConnections[index]?.rendererParticipant;
+      if (oldIdentity === undefined || newIdentity === undefined) {
+        throw new Error(`window ${index + 1} has no renderer participant identity`);
+      }
+      if (newIdentity.participantId !== oldIdentity.participantId) {
+        throw new Error(`window ${index + 1} lost its stable participant id`);
+      }
+      if (newIdentity.incarnation === oldIdentity.incarnation) {
+        throw new Error(`window ${index + 1} reused its dead document incarnation`);
+      }
+    }
+    console.log(
+      `SMOKE_PLUGIN_RESTART ${JSON.stringify({
+        windows: windows.length,
+        oldBootId: opts.handle.info.bootId,
+        newBootId: replacement.info.bootId,
+        stableParticipants: true,
+        freshIncarnations: true,
+        widgetTypes: replacementCanvas.map((facts) => facts.widgetTypes),
+        stagedPlugins: replacementCanvas.map((facts) => facts.stagedPlugins),
+      })}`,
+    );
+    ok = true;
+  } catch (error) {
+    console.error(
+      `SMOKE_PLUGIN_RESTART failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
   await teardown(opts.supervisor, opts.root, opts.beforeExit);
   app.exit(ok ? 0 : 2);

@@ -108,6 +108,10 @@ export class PluginModuleAuthority {
   private readonly recoveryEpisodes = new Map<string, RecoveryEpisode>();
   /** The generation `grants`/`urls` were built from; `-1` means "never built". */
   private mintedFor = -1;
+  /** A registry generation has exactly one live-token mint. Without this
+   * single-flight, concurrent window boots each minted a different table and
+   * the last assignment invalidated URLs already handed to the first. */
+  private rebuildTask: Promise<void> | null = null;
 
   constructor(deps: PluginModuleAuthorityDeps) {
     this.deps = deps;
@@ -116,8 +120,7 @@ export class PluginModuleAuthority {
   /** The renderer-safe projection (`plugins.modules`). Rebuilds when the
    * registry has moved; otherwise hands back the current set. */
   async modules(): Promise<PluginModulesResult> {
-    const { generation } = this.deps.plugins.snapshot();
-    await this.rebuildIfStale(generation);
+    const generation = await this.ensureLiveGrants();
     return { generation, modules: this.liveUrls };
   }
 
@@ -126,8 +129,7 @@ export class PluginModuleAuthority {
    * is unknown by construction: the caller cannot tell "never existed" from
    * "no longer authorized", which is the right amount to tell it. */
   async resolve(token: string): Promise<PluginModuleResolution | undefined> {
-    const { generation } = this.deps.plugins.snapshot();
-    await this.rebuildIfStale(generation);
+    const generation = await this.ensureLiveGrants();
     const candidate = this.candidateGrants.get(token);
     const recovery = this.recoveryGrants.get(token);
     const grant = this.liveGrants.get(token) ?? candidate?.grant ?? recovery?.grant;
@@ -296,12 +298,32 @@ export class PluginModuleAuthority {
     }
   }
 
-  private async rebuildIfStale(generation: number): Promise<void> {
-    if (this.mintedFor === generation) return;
+  private async ensureLiveGrants(): Promise<number> {
+    for (;;) {
+      const generation = this.deps.plugins.snapshot().generation;
+      if (this.mintedFor === generation) return generation;
+      const active = this.rebuildTask;
+      if (active !== null) {
+        await active;
+        continue;
+      }
+      const task = this.rebuildGeneration(generation);
+      this.rebuildTask = task;
+      try {
+        await task;
+      } finally {
+        if (this.rebuildTask === task) this.rebuildTask = null;
+      }
+    }
+  }
+
+  private async rebuildGeneration(generation: number): Promise<void> {
+    const snapshot = this.deps.plugins.snapshot();
+    if (snapshot.generation !== generation) return;
     const grants = new Map<string, Grant>();
     const urls: PluginModuleUrls[] = [];
 
-    for (const record of this.deps.plugins.snapshot().plugins) {
+    for (const record of snapshot.plugins) {
       // Enablement and compatibility are the registry's verdict, not ours: a
       // row that is not `enabled` has no loadable module, full stop.
       if (record.state !== "enabled") continue;
@@ -313,6 +335,9 @@ export class PluginModuleAuthority {
       if (row !== undefined) urls.push(row);
     }
 
+    // A refresh during filesystem inspection invalidates the whole private
+    // build. Never publish tokens paired with a generation they did not scan.
+    if (this.deps.plugins.snapshot().generation !== generation) return;
     this.liveGrants = grants;
     this.liveUrls = urls;
     this.mintedFor = generation;

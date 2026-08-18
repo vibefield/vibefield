@@ -89,6 +89,7 @@ describe("PRC-5b registry installer slots", () => {
     expect(plugins.get(KV_ID)?.version).toBe("0.1.0");
     expect(plugins.get(KV_ID)?.installRevision).toBe(first.artifact.slot);
     expect(oldRoot).toBe(first.artifact.root);
+    expect(plugins.commitEpoch(KV_ID)).toBe(1);
 
     const candidate = await installer.prepare({ id: KV_ID });
     expect(candidate.version).toBe("0.2.0");
@@ -105,8 +106,18 @@ describe("PRC-5b registry installer slots", () => {
     expect(plugins.get(KV_ID)?.version).toBe("0.2.0");
     expect(plugins.get(KV_ID)?.installRevision).toBe(candidate.artifact.slot);
     expect(plugins.rootPath(KV_ID)).toBe(candidate.artifact.root);
+    expect(plugins.commitEpoch(KV_ID)).toBe(2);
     expect(readFileSync(join(oldRoot!, "vibefield.plugin.json"), "utf8")).toContain(
       '"version": "0.1.0"',
     );
+
+    const restarted = new PluginRegistryService({
+      dataDir,
+      roots: { bundled: [], devLinked: [], installed: [installedRoot] },
+    });
+    cleanup.push(() => restarted.dispose());
+    await restarted.refresh();
+    expect(restarted.get(KV_ID)?.version).toBe("0.2.0");
+    expect(restarted.commitEpoch(KV_ID)).toBe(2);
   });
 });

@@ -49,7 +49,7 @@ import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts
 import { installDevSignalQuit } from "./dev-signals";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
-import { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
+import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import { GodviewRegistry, installGodviewDoubleShift } from "./godview";
 import {
   registerGodviewToggle,
@@ -789,6 +789,20 @@ async function main(
     const stopPluginModuleClient = bundle.handles.onHandle((handle) => {
       pluginModuleClient = handle.client;
     });
+    const daemonBootFence = new FielddDaemonBootFence();
+    const stopDaemonBootFence = bundle.handles.onHandle((handle) => {
+      const transition = daemonBootFence.observe(handle);
+      if (transition === null) return;
+      const replacement = windowRendererBoundary?.requestAllReplacements() ?? {
+        requested: 0,
+        unavailable: 0,
+      };
+      logger.warn(
+        "desktop.fieldd.boot_authority_changed",
+        "fieldd restarted; every surviving renderer document was fenced",
+        { ...transition, ...replacement },
+      );
+    });
     const shellProvider = new RecoveringShellProvider(
       bundle.handles,
       {
@@ -806,6 +820,7 @@ async function main(
       dispose: () => {
         observers.dispose();
         shellProvider.dispose();
+        stopDaemonBootFence();
         stopPluginModuleClient();
         pluginModuleClient = null;
       },
@@ -1043,7 +1058,7 @@ async function main(
   // godview harness. `smoke` and `spike-loro` have already returned by here;
   // `smoke-canvas`'s window is hidden, so it would be installing accelerators
   // for nobody.
-  if (MODE !== "smoke-canvas") {
+  if (MODE !== "smoke-canvas" && MODE !== "smoke-plugin-restart") {
     redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
       toggleGodview,
       closeWindow,
@@ -1089,6 +1104,40 @@ async function main(
   if (MODE === "smoke-canvas") {
     await (await testing()).runSmokeCanvas({
       handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      viteUrl: VITE_URL,
+      beforeExit: closeEvidence,
+      onWindow: (window) => {
+        installLiveSurfaceHost(window, logger);
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch((error) => {
+              logger.error(
+                "desktop.crash.refresh_failed",
+                "Electron could not refresh crash evidence after a renderer exited",
+                error,
+              );
+            });
+          },
+        });
+        installDiagnostics(window);
+      },
+    });
+    return;
+  }
+
+  if (MODE === "smoke-plugin-restart") {
+    await (await testing()).runSmokePluginRestart({
+      handle: await fielddReady,
+      onHandle: (listener) => fielddHandles!.onHandle(listener),
       supervisor,
       root,
       registry,

@@ -38,8 +38,9 @@ export interface PluginUpdateCandidate {
   readonly oldArtifact: PluginUpdateArtifact;
   readonly candidateArtifact: PluginUpdateArtifact;
   readonly service?: ServiceUpdateParticipant;
-  /** The one durable pointer CAS. Resolution means registry discovery is candidate-current. */
-  commitArtifact(): Promise<void>;
+  /** The one durable pointer CAS. Resolution means registry discovery is candidate-current.
+   * The epoch moves in the same atomic pointer as the artifact. */
+  commitArtifact(commitEpoch: number): Promise<void>;
   /** Runs only after retained-old recovery converges. Immutable bytes remain until then. */
   discardArtifact(): Promise<void>;
   /** Promote the candidate module-resolution episode immediately after pointer publication. */
@@ -48,6 +49,10 @@ export interface PluginUpdateCandidate {
   revokeCandidateSources?(): void | Promise<void>;
   /** Retire the temporary module-resolution episode after either barrier outcome converges. */
   disposeCandidateModuleAuthority?(): void | Promise<void>;
+}
+
+interface IndeterminateCommitFailure {
+  readonly publication: "indeterminate";
 }
 
 export interface PluginUpdateOutcome {
@@ -652,9 +657,17 @@ export class PluginUpdateCoordinator {
       ) {
         episode.commitStarted = true;
         this.changed();
+        const nextCommitEpoch = this.commitEpochValue + 1;
         try {
-          await episode.input.commitArtifact();
+          await episode.input.commitArtifact(nextCommitEpoch);
         } catch (error) {
+          if (isIndeterminateCommitFailure(error)) {
+            // Rename may already have selected the candidate. Retained-old
+            // recovery would cross the irreversible edge backwards; restart
+            // must reconstruct from the durable pointer.
+            this.forwardFailure(episode, asError(error));
+            return;
+          }
           episode.commitStarted = false;
           await this.startOldRecovery(episode, asError(error));
           continue;
@@ -663,7 +676,7 @@ export class PluginUpdateCoordinator {
 
         episode.logicalCommit = true;
         this.currentArtifactValue = episode.candidateArtifact;
-        this.commitEpochValue += 1;
+        this.commitEpochValue = nextCommitEpoch;
         episode.phase = "committing";
         this.stateValue = "committing";
         this.resolvePendingRecoveryTargets(episode.candidateArtifact, this.commitEpochValue);
@@ -1125,6 +1138,14 @@ function recoveryTargetFor(
 
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
+}
+
+function isIndeterminateCommitFailure(value: unknown): value is IndeterminateCommitFailure {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { publication?: unknown }).publication === "indeterminate"
+  );
 }
 
 function mintUpdateId(): string {

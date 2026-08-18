@@ -34,6 +34,9 @@ export interface WindowRendererBoundary {
   /** Requests termination of only the exact still-current renderer generation.
    * True means Electron accepted the request, not that process death occurred. */
   requestReplacement(identity: RendererParticipantIdentityValue): boolean;
+  /** Requests every current document generation after fieldd's boot authority
+   * changes. The later process-gone events remain the positive death facts. */
+  requestAllReplacements(): { requested: number; unavailable: number };
 }
 
 export interface WindowBootstrapHandler extends WindowRendererBoundary {
@@ -46,6 +49,7 @@ export function createBootstrapHandler(deps: {
   /** Stable for one Electron main process. Renderer code never selects it. */
   desktopBootId: string;
   onRevokeError?: (error: unknown, details: { senderId: number; tokenId: string }) => void;
+  onReplacementError?: (error: unknown, details: { senderId: number }) => void;
 }): WindowBootstrapHandler {
   interface MintedGeneration {
     connection: WindowConnection;
@@ -220,23 +224,41 @@ export function createBootstrapHandler(deps: {
     generations.set(sender.id, generation);
     return generation.connection;
   }) as WindowBootstrapHandler;
+  const requestGenerationReplacement = (generation: Generation): boolean => {
+    if (generation.retired || generation.replacementRequested) return false;
+    const sender = generation.sender as unknown as SenderLike;
+    if (sender.isDestroyed()) return false;
+    generation.replacementRequested = true;
+    try {
+      sender.forcefullyCrashRenderer();
+      return true;
+    } catch (error) {
+      generation.replacementRequested = false;
+      deps.onReplacementError?.(error, { senderId: sender.id });
+      return false;
+    }
+  };
   handle.requestReplacement = (identity): boolean => {
     const parsed = RendererParticipantIdentity.parse(identity);
     for (const generation of generations.values()) {
       if (
-        generation.retired ||
-        generation.identity.participantId !== parsed.participantId ||
-        generation.identity.incarnation !== parsed.incarnation
+        generation.identity.participantId === parsed.participantId &&
+        generation.identity.incarnation === parsed.incarnation
       ) {
-        continue;
+        return requestGenerationReplacement(generation);
       }
-      const sender = generation.sender as unknown as SenderLike;
-      if (sender.isDestroyed()) return false;
-      generation.replacementRequested = true;
-      sender.forcefullyCrashRenderer();
-      return true;
     }
     return false;
+  };
+  handle.requestAllReplacements = () => {
+    let requested = 0;
+    let unavailable = 0;
+    for (const generation of [...generations.values()]) {
+      if (generation.retired || generation.replacementRequested) continue;
+      if (requestGenerationReplacement(generation)) requested += 1;
+      else unavailable += 1;
+    }
+    return Object.freeze({ requested, unavailable });
   };
   return handle;
 }

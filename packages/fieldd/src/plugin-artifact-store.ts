@@ -31,12 +31,23 @@ const REVISION_DIRECTORY = "revisions";
 const SHA256 = /^sha256:([0-9a-f]{64})$/;
 const SLOT = /^[0-9a-f]{64}$/;
 
-export interface PluginArtifactPointerV1 {
+interface StoredPluginArtifactPointerV1 {
   version: 1;
   pluginId: string;
   slot: string;
   artifactSha256: string;
   committedAt: number;
+}
+
+export interface PluginArtifactPointerV2 {
+  version: 2;
+  pluginId: string;
+  slot: string;
+  artifactSha256: string;
+  committedAt: number;
+  /** Monotonic per-plugin logical publication epoch. It moves atomically with
+   * the selected artifact instead of being reconstructed from daemon memory. */
+  commitEpoch: number;
 }
 
 interface PluginArtifactMarkerV1 {
@@ -55,13 +66,37 @@ export interface ImmutablePluginArtifact {
 }
 
 export interface ResolvedPluginArtifact {
-  pointer: PluginArtifactPointerV1;
+  /** Always normalized to the current format. Legacy v1 pointers read as
+   * epoch 1 and are replaced by v2 on the next successful update. */
+  pointer: PluginArtifactPointerV2;
   root: string;
+}
+
+export interface InstalledPluginArtifactSelection {
+  root: string;
+  commitEpoch: number;
+  pointer: PluginArtifactPointerV2 | null;
+}
+
+/** The rename completed, so callers may not infer that the old pointer is
+ * still current. Restart/re-read is the only safe recovery direction. */
+export class PluginArtifactCommitIndeterminateError extends Error {
+  readonly publication = "indeterminate" as const;
+  readonly cause: unknown;
+
+  constructor(pluginId: string, cause: unknown) {
+    super(`${pluginId}: artifact pointer publication is indeterminate; restart recovery required`);
+    this.name = "PluginArtifactCommitIndeterminateError";
+    this.cause = cause;
+  }
 }
 
 export interface PluginArtifactStoreTestHooks {
   /** Runs after the temp pointer is fsynced but before its atomic rename. */
-  beforeCurrentPublish?(pointer: PluginArtifactPointerV1): void | Promise<void>;
+  beforeCurrentPublish?(pointer: PluginArtifactPointerV2): void | Promise<void>;
+  /** Runs after rename but before the containing directory fsync. Failure here
+   * is deliberately publication-indeterminate. */
+  afterCurrentPublish?(pointer: PluginArtifactPointerV2): void | Promise<void>;
 }
 
 export class PluginArtifactStore {
@@ -174,12 +209,18 @@ export class PluginArtifactStore {
   async commit(
     artifact: ImmutablePluginArtifact,
     expectedSlot: string | null,
-  ): Promise<{ previous: PluginArtifactPointerV1 | null; current: PluginArtifactPointerV1 }> {
+    commitEpoch: number,
+  ): Promise<{ previous: PluginArtifactPointerV2 | null; current: PluginArtifactPointerV2 }> {
     this.assertOwnedArtifact(artifact);
     await validateRevision(artifact.root, artifact);
     const before = await this.current(artifact.pluginId);
     const actualSlot = before?.pointer.slot ?? null;
     if (actualSlot === artifact.slot) {
+      if (before?.pointer.commitEpoch !== commitEpoch) {
+        throw new Error(
+          `${artifact.pluginId}: current artifact retry expected epoch ${before?.pointer.commitEpoch}, received ${commitEpoch}`,
+        );
+      }
       return { previous: before?.pointer ?? null, current: before!.pointer };
     }
     if (actualSlot !== expectedSlot) {
@@ -187,19 +228,29 @@ export class PluginArtifactStore {
         `${artifact.pluginId}: stale current pointer; expected ${expectedSlot ?? "absent"}, found ${actualSlot ?? "absent"}`,
       );
     }
-    const pointer: PluginArtifactPointerV1 = {
-      version: 1,
+    const expectedCommitEpoch = (before?.pointer.commitEpoch ?? 0) + 1;
+    if (
+      !Number.isSafeInteger(commitEpoch) ||
+      commitEpoch <= 0 ||
+      commitEpoch !== expectedCommitEpoch
+    ) {
+      throw new Error(
+        `${artifact.pluginId}: expected commit epoch ${expectedCommitEpoch}, received ${commitEpoch}`,
+      );
+    }
+    const pointer: PluginArtifactPointerV2 = {
+      version: 2,
       pluginId: artifact.pluginId,
       slot: artifact.slot,
       artifactSha256: artifact.artifactSha256,
       committedAt: Date.now(),
+      commitEpoch,
     };
     await atomicWriteCurrent(this.pluginRoot(artifact.pluginId), pointer, this.testHooks);
-    const published = await this.current(artifact.pluginId);
-    if (published === null || published.pointer.slot !== artifact.slot) {
-      throw new Error(`${artifact.pluginId}: current pointer did not publish the candidate`);
-    }
-    return { previous: before?.pointer ?? null, current: published.pointer };
+    // All fallible durability work completed inside atomicWriteCurrent. A
+    // verification read here would reintroduce an ambiguous post-publication
+    // rejection; return the exact bytes just durably published instead.
+    return { previous: before?.pointer ?? null, current: pointer };
   }
 
   /** Remove a failed, uncommitted candidate. Current bytes are never removed. */
@@ -235,7 +286,7 @@ export class PluginArtifactStore {
       artifactSha256,
       prepare: async (stagingRoot) => copyLegacyTree(legacyRoot, stagingRoot),
     });
-    await this.commit(staged, null);
+    await this.commit(staged, null, 1);
     return await this.current(pluginId);
   }
 
@@ -260,11 +311,28 @@ export async function resolveInstalledArtifactRoot(
   installedRoot: string,
   pluginDirectoryName: string,
 ): Promise<string | null> {
+  return (await resolveInstalledArtifact(installedRoot, pluginDirectoryName))?.root ?? null;
+}
+
+/** Registry discovery with the durable logical epoch retained for coordinator
+ * reconstruction. A legacy flat install predates epochs and is epoch 1. */
+export async function resolveInstalledArtifact(
+  installedRoot: string,
+  pluginDirectoryName: string,
+): Promise<InstalledPluginArtifactSelection | null> {
   const store = new PluginArtifactStore(installedRoot);
   const current = await store.current(pluginDirectoryName);
-  if (current !== null) return current.root;
+  if (current !== null) {
+    return {
+      root: current.root,
+      commitEpoch: current.pointer.commitEpoch,
+      pointer: current.pointer,
+    };
+  }
   const legacyRoot = store.pluginRoot(pluginDirectoryName);
-  return (await exists(join(legacyRoot, "vibefield.plugin.json"))) ? legacyRoot : null;
+  return (await exists(join(legacyRoot, "vibefield.plugin.json")))
+    ? { root: legacyRoot, commitEpoch: 1, pointer: null }
+    : null;
 }
 
 function assertPluginId(pluginId: string): void {
@@ -277,10 +345,19 @@ function slotFor(artifactSha256: string): string {
   return match[1] as string;
 }
 
-function parsePointer(raw: string, expectedPluginId: string): PluginArtifactPointerV1 {
-  const value = parseJson(raw) as Partial<PluginArtifactPointerV1>;
+function parsePointer(raw: string, expectedPluginId: string): PluginArtifactPointerV2 {
+  const value = parseJson(raw) as Partial<Omit<StoredPluginArtifactPointerV1, "version">> & {
+    version?: unknown;
+    commitEpoch?: unknown;
+  };
+  const legacy = value.version === 1 && value.commitEpoch === undefined;
+  const current =
+    value.version === 2 &&
+    typeof value.commitEpoch === "number" &&
+    Number.isSafeInteger(value.commitEpoch) &&
+    value.commitEpoch > 0;
   if (
-    value.version !== 1 ||
+    (!legacy && !current) ||
     value.pluginId !== expectedPluginId ||
     typeof value.slot !== "string" ||
     !SLOT.test(value.slot) ||
@@ -292,7 +369,14 @@ function parsePointer(raw: string, expectedPluginId: string): PluginArtifactPoin
   ) {
     throw new Error(`${expectedPluginId}: invalid current artifact pointer`);
   }
-  return value as PluginArtifactPointerV1;
+  return {
+    version: 2,
+    pluginId: expectedPluginId,
+    slot: value.slot,
+    artifactSha256: value.artifactSha256,
+    committedAt: value.committedAt,
+    commitEpoch: legacy ? 1 : (value.commitEpoch as number),
+  };
 }
 
 function parseJson(raw: string): unknown {
@@ -330,7 +414,7 @@ async function validateRevision(
 
 async function atomicWriteCurrent(
   pluginRoot: string,
-  pointer: PluginArtifactPointerV1,
+  pointer: PluginArtifactPointerV2,
   hooks: PluginArtifactStoreTestHooks,
 ): Promise<void> {
   await mkdir(pluginRoot, { recursive: true });
@@ -339,6 +423,7 @@ async function atomicWriteCurrent(
     pluginRoot,
     `${PLUGIN_CURRENT_POINTER_FILE}.tmp-${randomBytes(8).toString("hex")}`,
   );
+  let published = false;
   try {
     const handle = await open(temp, "wx", 0o600);
     try {
@@ -349,11 +434,14 @@ async function atomicWriteCurrent(
     }
     await hooks.beforeCurrentPublish?.(pointer);
     await rename(temp, target);
+    published = true;
+    await hooks.afterCurrentPublish?.(pointer);
+    await syncDirectory(pluginRoot);
   } catch (error) {
     await rm(temp, { force: true }).catch(() => undefined);
+    if (published) throw new PluginArtifactCommitIndeterminateError(pointer.pluginId, error);
     throw error;
   }
-  await syncDirectory(pluginRoot);
 }
 
 async function copyLegacyTree(source: string, destination: string): Promise<void> {

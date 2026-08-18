@@ -1,6 +1,9 @@
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { describe, expect, it, vi } from "vitest";
-import { FielddHandleCoordinator } from "../src/main/fieldd-handle-coordinator";
+import {
+  FielddDaemonBootFence,
+  FielddHandleCoordinator,
+} from "../src/main/fieldd-handle-coordinator";
 import { RecoveringFielddObservers } from "../src/main/recovering-fieldd-observers";
 
 function deferred<T>() {
@@ -38,6 +41,21 @@ function handle(
 }
 
 describe("fieldd main-process recovery", () => {
+  it("treats only a changed daemon boot id as an authority transition", () => {
+    const fence = new FielddDaemonBootFence();
+    const first = handle("boot-1", []);
+    const sameBootNewHandle = handle("boot-1", []);
+    const restarted = handle("boot-2", []);
+
+    expect(fence.observe(first)).toBeNull();
+    expect(fence.observe(sameBootNewHandle)).toBeNull();
+    expect(fence.observe(restarted)).toEqual({
+      previousBootId: "boot-1",
+      nextBootId: "boot-2",
+    });
+    expect(fence.observe(restarted)).toBeNull();
+  });
+
   it("publishes a handle after an initial ensure failure and a later renderer retry", async () => {
     const readyHandle = handle("boot-2", []);
     const upstream = vi
@@ -54,6 +72,75 @@ describe("fieldd main-process recovery", () => {
     await expect(coordinator.ensure()).resolves.toBe(readyHandle);
     expect(observed).toEqual([readyHandle]);
     expect(failures).toHaveLength(1);
+  });
+
+  it("automatically replaces a handle that becomes terminal", async () => {
+    const statusListeners = new Set<() => void>();
+    const oldHandle = handle("boot-1", []);
+    const oldClient = oldHandle.client as unknown as { status: string };
+    oldHandle.client.onStatusChange = (listener) => {
+      statusListeners.add(listener);
+      return () => statusListeners.delete(listener);
+    };
+    const newHandle = handle("boot-2", []);
+    const upstream = vi
+      .fn()
+      .mockResolvedValueOnce(oldHandle)
+      .mockResolvedValueOnce(newHandle) as unknown as FielddSupervisor["ensure"];
+    const coordinator = new FielddHandleCoordinator(upstream);
+    const observed: FielddHandle[] = [];
+    coordinator.onHandle((value) => observed.push(value));
+
+    await coordinator.ensure();
+    oldClient.status = "closed";
+    for (const listener of [...statusListeners]) listener();
+
+    await vi.waitFor(() => expect(observed).toEqual([oldHandle, newHandle]));
+    expect(upstream).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-probes an adopted handle whose reconnect loop outlives the grace period", async () => {
+    vi.useFakeTimers();
+    try {
+      let status = "ready";
+      const statusListeners = new Set<() => void>();
+      const close = vi.fn(() => {
+        status = "closed";
+        for (const listener of [...statusListeners]) listener();
+      });
+      const oldHandle = {
+        info: { bootId: "boot-1", port: 4242 },
+        client: {
+          get status() {
+            return status;
+          },
+          close,
+          onStatusChange(listener: () => void) {
+            statusListeners.add(listener);
+            return () => statusListeners.delete(listener);
+          },
+        },
+      } as unknown as FielddHandle;
+      const newHandle = handle("boot-2", []);
+      const upstream = vi
+        .fn()
+        .mockResolvedValueOnce(oldHandle)
+        .mockResolvedValueOnce(newHandle) as unknown as FielddSupervisor["ensure"];
+      const coordinator = new FielddHandleCoordinator(upstream, undefined, undefined, 25);
+      const observed: FielddHandle[] = [];
+      coordinator.onHandle((value) => observed.push(value));
+
+      await coordinator.ensure();
+      status = "reconnecting";
+      for (const listener of [...statusListeners]) listener();
+      await vi.advanceTimersByTimeAsync(24);
+      expect(close).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await vi.waitFor(() => expect(observed).toEqual([oldHandle, newHandle]));
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("isolates observer failures from a healthy ensure and from sibling observers", async () => {

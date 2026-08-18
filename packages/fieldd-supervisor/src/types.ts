@@ -71,6 +71,7 @@ export type SupervisorLifecycleEventName =
   | "fieldd.supervisor.spawned"
   | "fieldd.supervisor.spawn_race_lost"
   | "fieldd.supervisor.ready"
+  | "fieldd.supervisor.owned_child_exited"
   | "fieldd.supervisor.stop_requested"
   | "fieldd.supervisor.shutdown_requested_rpc"
   | "fieldd.supervisor.force_killed"

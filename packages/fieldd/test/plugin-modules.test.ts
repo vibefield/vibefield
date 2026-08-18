@@ -186,6 +186,20 @@ describe("PluginModuleAuthority (ESP §8.4)", () => {
     expect(resolved?.path.endsWith(join("dist", "renderer.js"))).toBe(true);
   });
 
+  it("shares one live-token mint across concurrent renderer windows", async () => {
+    const { authority } = await fixture();
+    const [first, second] = await Promise.all([authority.modules(), authority.modules()]);
+    expect(second).toEqual(first);
+
+    const tokens = first.modules.flatMap((module) =>
+      [module.moduleUrl, module.styleUrl]
+        .filter((url): url is string => url !== undefined)
+        .map((url) => url.slice(`${PLUGIN_MODULE_SCHEME}://`.length)),
+    );
+    const resolved = await Promise.all(tokens.map((token) => authority.resolve(token)));
+    expect(resolved.every((entry) => entry !== undefined)).toBe(true);
+  });
+
   it("refuses a token that was never minted", async () => {
     const { authority } = await fixture();
     expect(await authority.resolve("f".repeat(32))).toBeUndefined();

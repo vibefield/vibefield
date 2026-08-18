@@ -14,7 +14,11 @@ import {
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { unpackVfplugin, verifyRegistryIndex } from "@vibefield/plugin-build";
 import { RpcCallError } from "./native-link";
-import { type ImmutablePluginArtifact, PluginArtifactStore } from "./plugin-artifact-store";
+import {
+  type ImmutablePluginArtifact,
+  PluginArtifactCommitIndeterminateError,
+  PluginArtifactStore,
+} from "./plugin-artifact-store";
 import {
   contractsRangeSatisfied,
   type PluginRegistryCandidate,
@@ -49,6 +53,7 @@ export interface PreparedRegistryInstall {
   readonly id: string;
   readonly version: string;
   readonly baseSlot: string | null;
+  readonly baseCommitEpoch: number;
   readonly artifact: ImmutablePluginArtifact;
   readonly runtime: PluginRegistryCandidate;
 }
@@ -184,7 +189,9 @@ export class RegistryInstallService {
     // P7 flat installs are copied into their first immutable revision before
     // an update. The old live bytes remain selected throughout preparation.
     await this.artifacts.adoptLegacy(params.id);
-    const baseSlot = (await this.artifacts.current(params.id))?.pointer.slot ?? null;
+    const base = await this.artifacts.current(params.id);
+    const baseSlot = base?.pointer.slot ?? null;
+    const baseCommitEpoch = base?.pointer.commitEpoch ?? 0;
     const artifact = await this.artifacts.stage({
       pluginId: params.id,
       artifactSha256: release.sha256,
@@ -235,7 +242,14 @@ export class RegistryInstallService {
         root: artifact.root,
         artifactSha256: artifact.artifactSha256,
       });
-      return { id: params.id, version: release.version, baseSlot, artifact, runtime };
+      return {
+        id: params.id,
+        version: release.version,
+        baseSlot,
+        baseCommitEpoch,
+        artifact,
+        runtime,
+      };
     } catch (error) {
       await this.artifacts.discard(artifact).catch(() => false);
       throw error;
@@ -244,14 +258,26 @@ export class RegistryInstallService {
 
   /** The only discovery-visible mutation: compare-and-swap the small pointer,
    * then rebuild the registry snapshot from that exact immutable root. */
-  async commit(candidate: PreparedRegistryInstall): Promise<{ id: string; version: string }> {
-    await this.artifacts.commit(candidate.artifact, candidate.baseSlot);
-    this.log.info("fieldd.plugin_install.installed", "Registry plugin installed", {
-      pluginId: candidate.id,
-      version: candidate.version,
-      artifactSha256: candidate.artifact.artifactSha256,
-    });
-    await this.cfg.plugins.refresh();
+  async commit(
+    candidate: PreparedRegistryInstall,
+    commitEpoch = candidate.artifact.slot === candidate.baseSlot
+      ? candidate.baseCommitEpoch
+      : candidate.baseCommitEpoch + 1,
+  ): Promise<{ id: string; version: string }> {
+    await this.artifacts.commit(candidate.artifact, candidate.baseSlot, commitEpoch);
+    try {
+      this.log.info("fieldd.plugin_install.installed", "Registry plugin installed", {
+        pluginId: candidate.id,
+        version: candidate.version,
+        artifactSha256: candidate.artifact.artifactSha256,
+        commitEpoch,
+      });
+      await this.cfg.plugins.refresh();
+    } catch (error) {
+      // The durable pointer already moved. Never let the coordinator interpret
+      // a registry rebuild failure as permission to recover retained-old.
+      throw new PluginArtifactCommitIndeterminateError(candidate.id, error);
+    }
     return { id: candidate.id, version: candidate.version };
   }
 

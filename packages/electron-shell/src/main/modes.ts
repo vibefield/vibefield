@@ -6,6 +6,7 @@ export type ShellMode =
   | "dev"
   | "smoke"
   | "smoke-canvas"
+  | "smoke-plugin-restart"
   | "smoke-godview"
   | "live-surfaces-lab"
   | "spike-loro";
@@ -14,6 +15,7 @@ export type ShellMode =
 export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--live-surfaces-lab")) return "live-surfaces-lab";
   if (argv.includes("--spike-loro")) return "spike-loro";
+  if (argv.includes("--smoke-plugin-restart")) return "smoke-plugin-restart";
   if (argv.includes("--smoke-godview")) return "smoke-godview";
   if (argv.includes("--smoke")) return "smoke";
   if (argv.includes("--smoke-canvas")) return "smoke-canvas";
@@ -28,6 +30,7 @@ export function isSmokeLike(mode: ShellMode): boolean {
   return (
     mode === "smoke" ||
     mode === "smoke-canvas" ||
+    mode === "smoke-plugin-restart" ||
     mode === "smoke-godview" ||
     mode === "live-surfaces-lab" ||
     mode === "spike-loro"
@@ -45,7 +48,10 @@ export function isSmokeLike(mode: ShellMode): boolean {
  * they touch no daemon, so have nothing to stop and no right to stop another
  * process's. */
 export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" {
-  return mode === "smoke" || mode === "smoke-canvas" || mode === "smoke-godview"
+  return mode === "smoke" ||
+    mode === "smoke-canvas" ||
+    mode === "smoke-plugin-restart" ||
+    mode === "smoke-godview"
     ? "stop-owned"
     : "leave-running";
 }

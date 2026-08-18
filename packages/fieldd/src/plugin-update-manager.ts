@@ -28,7 +28,7 @@ import type { PreparedServiceCandidate, ServiceHost } from "./service-host";
 
 export interface PluginRegistryUpdateCandidate {
   readonly runtime: PluginRegistryCandidate;
-  commitArtifact(): Promise<void>;
+  commitArtifact(commitEpoch: number): Promise<void>;
   discardArtifact(): Promise<void>;
 }
 
@@ -62,7 +62,7 @@ export interface PluginUpdateSourceRevokeRequest {
 }
 
 export interface PluginUpdateManagerOptions {
-  readonly plugins: Pick<PluginRegistryService, "get">;
+  readonly plugins: Pick<PluginRegistryService, "get" | "commitEpoch">;
   readonly modules: Pick<PluginModuleAuthority, "prepareCandidate" | "prepareRecovery">;
   readonly serviceHost: () => Pick<
     ServiceHost,
@@ -131,12 +131,36 @@ export class PluginUpdateManager {
     const record = this.options.plugins.get(pluginId);
     if (record === undefined || record.state !== "enabled") return undefined;
     const artifact = artifactFor(record);
+    const commitEpoch = this.options.plugins.commitEpoch(pluginId);
+    if (commitEpoch === undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${pluginId}: registry has no durable commit epoch`,
+        false,
+      );
+    }
     const existing = this.coordinators.get(pluginId);
     if (existing !== undefined) {
-      if (!sameArtifact(existing.currentArtifact, artifact)) {
+      if (
+        !sameArtifact(existing.currentArtifact, artifact) ||
+        existing.commitEpoch !== commitEpoch
+      ) {
+        // Durable pointer publication refreshes the registry before the awaited commit callback
+        // returns to the coordinator. During that one-way interval, reconnects must still find
+        // the exact coordinator that owns the candidate/next-epoch transition. No other mismatch
+        // is tolerated, and the exception disappears with the active episode.
+        const active = this.activeByPlugin.get(pluginId);
+        if (
+          active !== undefined &&
+          sameArtifact(existing.currentArtifact, active.oldArtifact) &&
+          sameArtifact(artifact, active.candidateArtifact) &&
+          commitEpoch === existing.commitEpoch + 1
+        ) {
+          return existing;
+        }
         throw new RpcCallError(
           "CONFLICT",
-          `${pluginId}: registry artifact moved outside the update coordinator`,
+          `${pluginId}: registry artifact or epoch moved outside the update coordinator`,
           false,
         );
       }
@@ -145,6 +169,7 @@ export class PluginUpdateManager {
     const coordinator = new PluginUpdateCoordinator({
       pluginId,
       currentArtifact: artifact,
+      commitEpoch,
       requestRendererReplacement: this.options.requestRendererReplacement,
       ...(this.options.deadlines === undefined ? {} : { deadlines: this.options.deadlines }),
     });
@@ -198,7 +223,7 @@ export class PluginUpdateManager {
         oldArtifact,
         candidateArtifact,
         service,
-        commitArtifact: () => candidate.commitArtifact(),
+        commitArtifact: (commitEpoch) => candidate.commitArtifact(commitEpoch),
         discardArtifact: () => candidate.discardArtifact(),
         promoteCandidateAuthority: () => episode.candidateModules?.promote(),
         revokeCandidateSources: async () => await this.revokeCandidateSources(episode),

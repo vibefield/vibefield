@@ -270,6 +270,33 @@ describe("spawn: no adoptable fieldd exists", () => {
     expect(starts).toHaveLength(1);
   });
 
+  it("positive owned-child exit retires the ready handle instead of reconnecting forever", async () => {
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    const logs: FielddSupervisorEvent[] = [];
+    const sup = spawnSup(
+      root,
+      FIXTURE_READY,
+      { TEST_PRODUCT_PORT: String(port), SHELL_TOKEN: token },
+      logs,
+    );
+    const first = await sup.ensure();
+    h.trackPid(first.childPid);
+    expect(first.childPid).toBeGreaterThan(0);
+
+    process.kill(first.childPid as number, "SIGKILL");
+    expect(await waitDead(first.childPid as number)).toBe(true);
+    await expect.poll(() => first.client.status).toBe("closed");
+    expect(hasLifecycle(logs, "fieldd.supervisor.owned_child_exited")).toBe(true);
+
+    // This fixture's ProductApi lives in the test process, so the new attempt
+    // adopts its still-live endpoint. The critical fact is that ensure does
+    // run a new attempt and cannot hand the dead child's handle back.
+    const second = await sup.ensure();
+    expect(second).not.toBe(first);
+    expect(second.client.status).toBe("ready");
+  });
+
   it("ignores observer failures so diagnostics cannot control daemon ownership", async () => {
     const { port, token } = await h.startProduct();
     const root = h.mkRoot();

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   PLUGIN_CURRENT_POINTER_FILE,
+  PluginArtifactCommitIndeterminateError,
   PluginArtifactStore,
   resolveInstalledArtifactRoot,
 } from "../src/plugin-artifact-store";
@@ -63,7 +64,7 @@ describe("PRC-5b immutable plugin artifact slots", () => {
     expect((await value.current(PLUGIN_ID))?.root).toBe(old?.root);
     expect(await readFile(join(candidate.root, "dist", "renderer.js"), "utf8")).toContain("2.0.0");
 
-    await value.commit(candidate, old?.pointer.slot ?? null);
+    await value.commit(candidate, old?.pointer.slot ?? null, 2);
     expect((await value.current(PLUGIN_ID))?.root).toBe(candidate.root);
     expect(await readFile(join(old!.root, "dist", "renderer.js"), "utf8")).toContain("1.0.0");
     expect(
@@ -74,7 +75,7 @@ describe("PRC-5b immutable plugin artifact slots", () => {
   it("discards a failed pre-commit candidate but never the current artifact", async () => {
     const value = await store();
     const first = await stage(value, "1.0.0", sha("a"));
-    await value.commit(first, null);
+    await value.commit(first, null, 1);
     const failed = await stage(value, "2.0.0", sha("b"));
 
     await expect(value.discard(failed)).resolves.toBe(true);
@@ -86,7 +87,7 @@ describe("PRC-5b immutable plugin artifact slots", () => {
   it("a failure after pointer fsync but before rename leaves old current", async () => {
     const initial = await store();
     const first = await stage(initial, "1.0.0", sha("a"));
-    await initial.commit(first, null);
+    await initial.commit(first, null, 1);
     const candidate = await stage(initial, "2.0.0", sha("b"));
     const failing = new PluginArtifactStore(initial.installedRoot, {
       beforeCurrentPublish: () => {
@@ -94,7 +95,7 @@ describe("PRC-5b immutable plugin artifact slots", () => {
       },
     });
 
-    await expect(failing.commit(candidate, first.slot)).rejects.toThrow("simulated power loss");
+    await expect(failing.commit(candidate, first.slot, 2)).rejects.toThrow("simulated power loss");
     expect((await initial.current(PLUGIN_ID))?.root).toBe(first.root);
     expect(await readFile(join(candidate.root, "dist", "renderer.js"), "utf8")).toContain("2.0.0");
     expect(
@@ -104,15 +105,69 @@ describe("PRC-5b immutable plugin artifact slots", () => {
     ).toEqual([]);
   });
 
+  it("a failure after rename is indeterminate and restart selects the complete candidate epoch", async () => {
+    const initial = await store();
+    const first = await stage(initial, "1.0.0", sha("a"));
+    await initial.commit(first, null, 1);
+    const candidate = await stage(initial, "2.0.0", sha("b"));
+    const failing = new PluginArtifactStore(initial.installedRoot, {
+      afterCurrentPublish: () => {
+        throw new Error("simulated process death after pointer rename");
+      },
+    });
+
+    await expect(failing.commit(candidate, first.slot, 2)).rejects.toBeInstanceOf(
+      PluginArtifactCommitIndeterminateError,
+    );
+    const restarted = new PluginArtifactStore(initial.installedRoot);
+    expect((await restarted.current(PLUGIN_ID))?.pointer).toMatchObject({
+      slot: candidate.slot,
+      artifactSha256: candidate.artifactSha256,
+      commitEpoch: 2,
+    });
+  });
+
+  it("reads a legacy v1 pointer as epoch 1 and writes the next artifact and epoch as v2", async () => {
+    const value = await store();
+    const first = await stage(value, "1.0.0", sha("a"));
+    await value.commit(first, null, 1);
+    const pointerPath = join(value.pluginRoot(PLUGIN_ID), PLUGIN_CURRENT_POINTER_FILE);
+    const pointer = JSON.parse(await readFile(pointerPath, "utf8")) as Record<string, unknown>;
+    delete pointer.commitEpoch;
+    pointer.version = 1;
+    await writeFile(pointerPath, `${JSON.stringify(pointer)}\n`);
+
+    expect(
+      (await new PluginArtifactStore(value.installedRoot).current(PLUGIN_ID))?.pointer,
+    ).toMatchObject({ version: 2, slot: first.slot, commitEpoch: 1 });
+    const second = await stage(value, "2.0.0", sha("b"));
+    await value.commit(second, first.slot, 2);
+    expect(JSON.parse(await readFile(pointerPath, "utf8"))).toMatchObject({
+      version: 2,
+      slot: second.slot,
+      commitEpoch: 2,
+    });
+  });
+
+  it("refuses skipped epochs and same-artifact retries carrying a different epoch", async () => {
+    const value = await store();
+    const first = await stage(value, "1.0.0", sha("a"));
+    await expect(value.commit(first, null, 2)).rejects.toThrow(/expected commit epoch 1/);
+    await value.commit(first, null, 1);
+    await expect(value.commit(first, null, 2)).rejects.toThrow(/retry expected epoch 1/);
+    const second = await stage(value, "2.0.0", sha("b"));
+    await expect(value.commit(second, first.slot, 3)).rejects.toThrow(/expected commit epoch 2/);
+  });
+
   it("compare-and-swap refuses a late concurrent candidate", async () => {
     const value = await store();
     const first = await stage(value, "1.0.0", sha("a"));
-    await value.commit(first, null);
+    await value.commit(first, null, 1);
     const second = await stage(value, "2.0.0", sha("b"));
     const third = await stage(value, "3.0.0", sha("c"));
 
-    await value.commit(second, first.slot);
-    await expect(value.commit(third, first.slot)).rejects.toThrow(/stale current pointer/);
+    await value.commit(second, first.slot, 2);
+    await expect(value.commit(third, first.slot, 3)).rejects.toThrow(/stale current pointer/);
     expect((await value.current(PLUGIN_ID))?.root).toBe(second.root);
   });
 
@@ -138,7 +193,7 @@ describe("PRC-5b immutable plugin artifact slots", () => {
   it("boot recovery removes only hidden staging/pointer temps", async () => {
     const value = await store();
     const first = await stage(value, "1.0.0", sha("a"));
-    await value.commit(first, null);
+    await value.commit(first, null, 1);
     await mkdir(join(value.installedRoot, ".staging-orphan"));
     await writeFile(
       join(value.pluginRoot(PLUGIN_ID), `${PLUGIN_CURRENT_POINTER_FILE}.tmp-orphan`),

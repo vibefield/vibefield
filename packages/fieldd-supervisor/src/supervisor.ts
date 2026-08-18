@@ -288,7 +288,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
   ): FielddHandle {
     const ownedChild = ownership === "spawned" ? child : null;
     let stopping: Promise<void> | null = null;
-    return {
+    const result: FielddHandle = {
       ownership,
       info: probe.info,
       client: probe.client,
@@ -299,6 +299,27 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
         return stopping;
       },
     };
+    if (ownedChild !== null) {
+      const invalidate = (code: number | null, signal: NodeJS.Signals | null): void => {
+        // A reconnecting client does not prove that its server process still
+        // exists. Positive child exit retires this exact handle so the next
+        // ensure() may probe/spawn a fresh boot instead of returning it forever.
+        probe.client.close();
+        if (stopping === null && !disposed) {
+          lifecycle("fieldd.supervisor.owned_child_exited", "Owned fieldd exited after readiness", {
+            ...(ownedChild.pid !== undefined ? { pid: ownedChild.pid } : {}),
+            code,
+            signal,
+          });
+        }
+      };
+      if (ownedChild.exitCode !== null || ownedChild.signalCode !== null) {
+        invalidate(ownedChild.exitCode, ownedChild.signalCode);
+      } else {
+        ownedChild.once("exit", invalidate);
+      }
+    }
+    return result;
   }
 
   async function stopChild(

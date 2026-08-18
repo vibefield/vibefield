@@ -10,6 +10,7 @@ const ALL_MODES: readonly ShellMode[] = [
   "dev",
   "smoke",
   "smoke-canvas",
+  "smoke-plugin-restart",
   "smoke-godview",
   "live-surfaces-lab",
   "spike-loro",
@@ -26,6 +27,7 @@ describe("parseMode", () => {
     expect(parseMode(["--dev"])).toBe("dev");
     expect(parseMode(["--smoke"])).toBe("smoke");
     expect(parseMode(["--smoke-canvas"])).toBe("smoke-canvas");
+    expect(parseMode(["--smoke-plugin-restart"])).toBe("smoke-plugin-restart");
     expect(parseMode(["--smoke-godview"])).toBe("smoke-godview");
     expect(parseMode(["--live-surfaces-lab"])).toBe("live-surfaces-lab");
     expect(parseMode(["--spike-loro"])).toBe("spike-loro");
@@ -37,7 +39,7 @@ describe("parseMode", () => {
     expect(parseMode(["a", "b", "c", "--spike-loro"])).toBe("spike-loro");
   });
 
-  it("honors precedence lab > spike-loro > smoke-godview > smoke > smoke-canvas > dev", () => {
+  it("honors precedence lab > spike-loro > restart > godview > smoke > canvas > dev", () => {
     expect(parseMode(["--spike-loro", "--live-surfaces-lab"])).toBe("live-surfaces-lab");
     expect(parseMode(["--dev", "--smoke-canvas", "--smoke", "--spike-loro"])).toBe("spike-loro");
     expect(parseMode(["--dev", "--smoke-canvas", "--smoke"])).toBe("smoke");
@@ -45,6 +47,7 @@ describe("parseMode", () => {
     expect(parseMode(["--dev", "--smoke"])).toBe("smoke");
     expect(parseMode(["--smoke-canvas", "--spike-loro"])).toBe("spike-loro");
     expect(parseMode(["--dev", "--spike-loro"])).toBe("spike-loro");
+    expect(parseMode(["--smoke-godview", "--smoke-plugin-restart"])).toBe("smoke-plugin-restart");
     // --smoke-godview is its own argv element, so the --smoke test never sees
     // it as a prefix; the ordering below is about a caller passing both.
     expect(parseMode(["--smoke", "--smoke-godview"])).toBe("smoke-godview");
@@ -57,6 +60,7 @@ describe("isSmokeLike", () => {
   const smokeLike = new Set<ShellMode>([
     "smoke",
     "smoke-canvas",
+    "smoke-plugin-restart",
     "smoke-godview",
     "live-surfaces-lab",
     "spike-loro",
@@ -77,6 +81,7 @@ describe("shutdownPolicy", () => {
     dev: "leave-running",
     smoke: "stop-owned",
     "smoke-canvas": "stop-owned",
+    "smoke-plugin-restart": "stop-owned",
     "smoke-godview": "stop-owned",
     "live-surfaces-lab": "leave-running",
     "spike-loro": "leave-running",
