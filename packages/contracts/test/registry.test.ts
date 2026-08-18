@@ -57,6 +57,12 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
         locality: "local",
         subscription: false,
       },
+      {
+        method: "plugins.update.source.release",
+        scope: "plugins.read",
+        locality: "local",
+        subscription: false,
+      },
     ]);
   });
 

@@ -610,6 +610,13 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.update.source.release",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+  }),
   // P3b — the renderer principal lease (§11.2). Scope is necessary, never
   // sufficient: the handler additionally gates on principal kind (renderer/
   // shell-main local-token callers only) — a scope alone cannot open sessions.

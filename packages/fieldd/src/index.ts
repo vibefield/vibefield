@@ -57,6 +57,7 @@ export {
   PluginModuleAuthority,
   type PluginModuleAuthorityDeps,
   type PreparedCandidateModules,
+  type PreparedRecoveryModules,
 } from "./plugin-modules";
 export {
   contractsRangeSatisfied,
@@ -66,8 +67,17 @@ export {
   PluginRegistryService,
 } from "./plugin-registry";
 export {
+  type PluginRegistryUpdateCandidate,
+  PluginUpdateManager,
+  type PluginUpdateManagerOptions,
+  type PluginUpdateSourceGrant,
+  type PluginUpdateSourceMintRequest,
+  type PluginUpdateSourceRevokeRequest,
+} from "./plugin-update-manager";
+export {
   type AcquiredPluginUpdateSource,
   type PluginUpdateRegistrar,
+  type PluginUpdateSourceReleaseRequest,
   type PluginUpdateSourceRequest,
   PluginUpdateTransport,
   type PluginUpdateTransportOptions,

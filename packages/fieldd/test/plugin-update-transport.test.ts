@@ -149,6 +149,7 @@ function sourceValue(fence: PluginUpdateSourceFence): unknown {
       installRevision: fence.artifact.installRevision,
     },
     lease: {
+      leaseId: "tk_cccccccccccc",
       token: "candidate-token",
       pluginId: PLUGIN_ID,
       manifestHash: fence.artifact.manifestHash,
@@ -166,11 +167,14 @@ function installTransport(
     value: sourceValue(fence),
     discard: () => undefined,
   }),
+  releaseSource: ConstructorParameters<typeof PluginUpdateTransport>[0]["releaseSource"] = () =>
+    false,
 ): FakeRegistrar {
   const registrar = new FakeRegistrar();
   new PluginUpdateTransport({
     coordinatorFor: (pluginId) => (pluginId === PLUGIN_ID ? update : undefined),
     acquireSource,
+    releaseSource,
   }).register(registrar);
   return registrar;
 }
@@ -413,6 +417,36 @@ describe("PluginUpdateTransport (PRC-5e)", () => {
     subscription.dispose();
   });
 
+  it("releases a source through the same exact transport identity", async () => {
+    const update = coordinator();
+    const releaseSource = vi.fn(() => true);
+    const registrar = installTransport(update, undefined, releaseSource);
+
+    await expect(
+      registrar.call("plugins.update.source.release", context(), {
+        pluginId: PLUGIN_ID,
+        updateId: "pupd_transport_1",
+        leaseId: "tk_cccccccccccc",
+      }),
+    ).resolves.toEqual({ released: true });
+    expect(releaseSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity: A,
+        pluginId: PLUGIN_ID,
+        updateId: "pupd_transport_1",
+        leaseId: "tk_cccccccccccc",
+      }),
+    );
+    await expect(
+      registrar.call("plugins.update.source.release", context(), {
+        pluginId: PLUGIN_ID,
+        updateId: "pupd_transport_1",
+        leaseId: "tk_cccccccccccc",
+        participantId: A.participantId,
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+  });
+
   it("discards a source whose member barrier advances while acquisition is pending", async () => {
     const update = coordinator();
     const pending = deferred<AcquiredPluginUpdateSource>();
@@ -458,6 +492,9 @@ describe("PluginUpdateTransport (PRC-5e)", () => {
     await expect(registrar.call("plugins.update.source", wrongDoor, {})).rejects.toMatchObject({
       kind: "PRECONDITION_FAILED",
     });
+    await expect(
+      registrar.call("plugins.update.source.release", wrongDoor, {}),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
     await expect(
       registrar.subscribe(context(), { pluginId: "com.example.missing" }),
     ).rejects.toMatchObject({ kind: "NOT_FOUND" });

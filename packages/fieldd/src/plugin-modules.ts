@@ -26,6 +26,7 @@ import {
   type PluginModulesResult,
   type PluginModuleUrls,
   type PluginRecord,
+  type PluginUpdateArtifact,
 } from "@vibefield/contracts";
 import type { PluginRegistryCandidate, PluginRegistryService } from "./plugin-registry";
 
@@ -56,6 +57,13 @@ export interface PreparedCandidateModules {
   dispose(): void;
 }
 
+export interface PreparedRecoveryModules {
+  readonly updateId: string;
+  readonly pluginId: string;
+  readonly module: PluginModuleUrls;
+  dispose(): void;
+}
+
 interface CandidateEpisode {
   readonly updateId: string;
   readonly pluginId: string;
@@ -74,6 +82,20 @@ interface CandidateGrant {
   readonly grant: Grant;
 }
 
+interface RecoveryEpisode {
+  readonly updateId: string;
+  readonly pluginId: string;
+  readonly artifact: PluginUpdateArtifact;
+  readonly observationFingerprint: string;
+  readonly tokens: Set<string>;
+  state: "prepared" | "disposed";
+}
+
+interface RecoveryGrant {
+  readonly episode: RecoveryEpisode;
+  readonly grant: Grant;
+}
+
 export class PluginModuleAuthority {
   private readonly deps: PluginModuleAuthorityDeps;
   /** token → grant, valid only for `mintedFor`. */
@@ -82,6 +104,8 @@ export class PluginModuleAuthority {
   private readonly candidateGrants = new Map<string, CandidateGrant>();
   private readonly candidateEpisodes = new Map<string, CandidateEpisode>();
   private readonly candidatePluginOwners = new Map<string, string>();
+  private readonly recoveryGrants = new Map<string, RecoveryGrant>();
+  private readonly recoveryEpisodes = new Map<string, RecoveryEpisode>();
   /** The generation `grants`/`urls` were built from; `-1` means "never built". */
   private mintedFor = -1;
 
@@ -105,8 +129,13 @@ export class PluginModuleAuthority {
     const { generation } = this.deps.plugins.snapshot();
     await this.rebuildIfStale(generation);
     const candidate = this.candidateGrants.get(token);
-    const grant = this.liveGrants.get(token) ?? candidate?.grant;
-    if (grant === undefined || (candidate !== undefined && !this.candidateIsAuthorized(candidate)))
+    const recovery = this.recoveryGrants.get(token);
+    const grant = this.liveGrants.get(token) ?? candidate?.grant ?? recovery?.grant;
+    if (
+      grant === undefined ||
+      (candidate !== undefined && !this.candidateIsAuthorized(candidate)) ||
+      (recovery !== undefined && !this.recoveryIsAuthorized(recovery))
+    )
       return undefined;
     // SYMLINK CONTAINMENT, RE-PROVEN HERE (EL7: a same-uid process can plant a
     // link). The mint-time check compares path STRINGS, which a symlink at
@@ -208,6 +237,65 @@ export class PluginModuleAuthority {
     }
   }
 
+  /** A pre-commit renderer recovery must use a fresh browser module identity even though the live
+   * registry generation still names retained old. This episode mints a second opaque URL against
+   * that exact current artifact and disappears when the recovery barrier converges. */
+  async prepareRecovery(input: {
+    updateId: string;
+    artifact: PluginUpdateArtifact;
+  }): Promise<PreparedRecoveryModules> {
+    if (!/^pupd_[A-Za-z0-9_-]+$/.test(input.updateId) || input.updateId.length > 128)
+      throw new Error("invalid plugin update id");
+    if (this.recoveryEpisodes.has(input.updateId))
+      throw new Error(`${input.updateId}: retained-old module authority already exists`);
+    const record = this.deps.plugins.get(input.artifact.pluginId);
+    if (
+      record === undefined ||
+      record.state !== "enabled" ||
+      record.installRevision !== input.artifact.installRevision ||
+      record.manifestHash !== input.artifact.manifestHash
+    ) {
+      throw new Error(`${input.updateId}: retained-old artifact is not current`);
+    }
+    const root = this.deps.plugins.rootPath(record.id);
+    if (root === undefined) throw new Error(`${record.id}: retained-old root is unavailable`);
+    const entryRel = await readRendererEntry(root);
+    if (entryRel === undefined)
+      throw new Error(`${record.id}: retained-old renderer entry is unavailable`);
+    const episode: RecoveryEpisode = {
+      updateId: input.updateId,
+      pluginId: record.id,
+      artifact: Object.freeze({
+        pluginId: input.artifact.pluginId,
+        installRevision: input.artifact.installRevision,
+        manifestHash: input.artifact.manifestHash,
+      }),
+      observationFingerprint: pluginObservationFingerprint(record),
+      tokens: new Set(),
+      state: "prepared",
+    };
+    this.recoveryEpisodes.set(input.updateId, episode);
+    try {
+      const grants = new Map<string, Grant>();
+      const module = await this.mintRendererUrls(record, root, entryRel, grants, true);
+      if (module === undefined)
+        throw new Error(`${record.id}: retained-old renderer module is unavailable`);
+      for (const [token, grant] of grants) {
+        episode.tokens.add(token);
+        this.recoveryGrants.set(token, { episode, grant });
+      }
+      return Object.freeze({
+        updateId: input.updateId,
+        pluginId: record.id,
+        module,
+        dispose: () => this.disposeRecoveryEpisode(episode),
+      });
+    } catch (error) {
+      this.disposeRecoveryEpisode(episode);
+      throw error;
+    }
+  }
+
   private async rebuildIfStale(generation: number): Promise<void> {
     if (this.mintedFor === generation) return;
     const grants = new Map<string, Grant>();
@@ -280,7 +368,12 @@ export class PluginModuleAuthority {
 
   private uniqueToken(local: Map<string, Grant>): string {
     let token = mintToken();
-    while (local.has(token) || this.liveGrants.has(token) || this.candidateGrants.has(token)) {
+    while (
+      local.has(token) ||
+      this.liveGrants.has(token) ||
+      this.candidateGrants.has(token) ||
+      this.recoveryGrants.has(token)
+    ) {
       token = mintToken();
     }
     return token;
@@ -312,6 +405,25 @@ export class PluginModuleAuthority {
     this.candidateEpisodes.delete(episode.updateId);
     if (this.candidatePluginOwners.get(episode.pluginId) === episode.updateId)
       this.candidatePluginOwners.delete(episode.pluginId);
+  }
+
+  private recoveryIsAuthorized(recovery: RecoveryGrant): boolean {
+    const { episode } = recovery;
+    if (episode.state === "disposed") return false;
+    const live = this.deps.plugins.get(episode.pluginId);
+    return (
+      live?.state === "enabled" &&
+      live.installRevision === episode.artifact.installRevision &&
+      live.manifestHash === episode.artifact.manifestHash &&
+      pluginObservationFingerprint(live) === episode.observationFingerprint
+    );
+  }
+
+  private disposeRecoveryEpisode(episode: RecoveryEpisode): void {
+    if (episode.state === "disposed") return;
+    episode.state = "disposed";
+    for (const token of episode.tokens) this.recoveryGrants.delete(token);
+    this.recoveryEpisodes.delete(episode.updateId);
   }
 }
 

@@ -6,6 +6,8 @@ import {
   PluginUpdateParticipantEvent,
   PluginUpdateParticipantSnapshot,
   PluginUpdateSourceParams,
+  PluginUpdateSourceReleaseParams,
+  PluginUpdateSourceReleaseResult,
   PluginUpdateSourceResult,
   PluginUpdateSubscribeParams,
   type RendererParticipantIdentity,
@@ -32,6 +34,14 @@ export interface PluginUpdateSourceRequest {
   readonly signal?: AbortSignal;
 }
 
+export interface PluginUpdateSourceReleaseRequest {
+  readonly identity: RendererParticipantIdentity;
+  readonly pluginId: string;
+  readonly updateId: string;
+  readonly leaseId: string;
+  readonly signal?: AbortSignal;
+}
+
 /** Source minting may perform asynchronous work. Until the transport rechecks the exact member
  * fence, the resulting authority is provisional and must remain synchronously revocable. */
 export interface AcquiredPluginUpdateSource {
@@ -44,6 +54,7 @@ export interface PluginUpdateTransportOptions {
   acquireSource(
     request: PluginUpdateSourceRequest,
   ): AcquiredPluginUpdateSource | Promise<AcquiredPluginUpdateSource>;
+  releaseSource(request: PluginUpdateSourceReleaseRequest): boolean | Promise<boolean>;
 }
 
 /** Authenticated Product API adapter for one renderer's PRC-5 update participation.
@@ -62,6 +73,7 @@ export class PluginUpdateTransport {
     );
     api.register("plugins.update.ack", (ctx, raw) => this.acknowledge(ctx, raw));
     api.register("plugins.update.source", (ctx, raw) => this.source(ctx, raw));
+    api.register("plugins.update.source.release", (ctx, raw) => this.releaseSource(ctx, raw));
   }
 
   private subscribe(
@@ -285,6 +297,26 @@ export class PluginUpdateTransport {
       );
     }
     return result.data;
+  }
+
+  private async releaseSource(
+    ctx: CallerContext,
+    raw: unknown,
+  ): Promise<ReturnType<typeof PluginUpdateSourceReleaseResult.parse>> {
+    const identity = rendererIdentity(ctx);
+    const parsed = PluginUpdateSourceReleaseParams.safeParse(raw);
+    if (!parsed.success) throw invalidParams("plugins.update.source.release");
+    try {
+      const released = await this.options.releaseSource({
+        identity,
+        ...parsed.data,
+        ...(ctx.signal === undefined ? {} : { signal: ctx.signal }),
+      });
+      return PluginUpdateSourceReleaseResult.parse({ released });
+    } catch (error) {
+      if (error instanceof RpcCallError) throw error;
+      throw conflict("renderer update source release was refused", error);
+    }
   }
 
   private coordinator(pluginId: string): PluginUpdateCoordinator {

@@ -334,3 +334,34 @@ describe("PluginModuleAuthority candidate episodes (PRC-5c)", () => {
     ).resolves.toBeDefined();
   });
 });
+
+describe("PluginModuleAuthority retained-old recovery episodes (PRC-5e)", () => {
+  it("mints a fresh exact-current URL and revokes it on convergence", async () => {
+    const rig = await candidateFixture();
+    const live = (await rig.authority.modules()).modules[0]!;
+    const recovery = await rig.authority.prepareRecovery({
+      updateId: "pupd_recover_old",
+      artifact: {
+        pluginId: rig.oldRecord.id,
+        installRevision: rig.oldRecord.installRevision,
+        manifestHash: rig.oldRecord.manifestHash,
+      },
+    });
+
+    expect(recovery.module).toMatchObject({
+      pluginId: rig.oldRecord.id,
+      installRevision: rig.oldRecord.installRevision,
+    });
+    expect(recovery.module.moduleUrl).not.toBe(live.moduleUrl);
+    expect(JSON.stringify(recovery.module)).not.toContain(tmpdir());
+    const token = recovery.module.moduleUrl.slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    expect((await rig.authority.resolve(token))?.path).toContain(join("old", "dist"));
+
+    rig.setCurrent(rig.candidate.record);
+    expect(await rig.authority.resolve(token)).toBeUndefined();
+    rig.setCurrent(rig.oldRecord);
+    expect(await rig.authority.resolve(token)).toBeDefined();
+    recovery.dispose();
+    expect(await rig.authority.resolve(token)).toBeUndefined();
+  });
+});

@@ -240,6 +240,7 @@ describe("PRC-5a update coordination contracts", () => {
         path: "/secret/module.js",
       },
       lease: {
+        leaseId: "tk_aaaaaaaaaaaa",
         token: "candidate-token",
         pluginId: "com.example.update",
         manifestHash: candidateArtifact.manifestHash,

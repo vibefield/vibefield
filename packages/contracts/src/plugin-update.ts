@@ -296,6 +296,9 @@ export type PluginUpdateSourceParams = z.infer<typeof PluginUpdateSourceParams>;
 
 export const PluginUpdateSourceLease = z
   .object({
+    /** Safe public handle for the inverse RPC. The bearer remains secret and is never used as an
+     * identifier; fieldd binds this id to the update plus transport-derived participant tuple. */
+    leaseId: z.string().regex(/^tk_[0-9a-f]{12}$/),
     token: z.string().min(1),
     pluginId: PluginId,
     manifestHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
@@ -304,6 +307,18 @@ export const PluginUpdateSourceLease = z
   })
   .strict();
 export type PluginUpdateSourceLease = z.infer<typeof PluginUpdateSourceLease>;
+
+export const PluginUpdateSourceReleaseParams = z
+  .object({
+    pluginId: PluginId,
+    updateId: PluginUpdateId,
+    leaseId: z.string().regex(/^tk_[0-9a-f]{12}$/),
+  })
+  .strict();
+export type PluginUpdateSourceReleaseParams = z.infer<typeof PluginUpdateSourceReleaseParams>;
+
+export const PluginUpdateSourceReleaseResult = z.object({ released: z.boolean() }).strict();
+export type PluginUpdateSourceReleaseResult = z.infer<typeof PluginUpdateSourceReleaseResult>;
 
 export const PluginUpdateSourceResult = z
   .object({
