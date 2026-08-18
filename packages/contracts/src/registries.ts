@@ -61,6 +61,16 @@ export const MESH_CONTROL_LIMITS = {
   PRODUCT_QUEUED_BYTES: 128 * 1024 * 1024,
 } as const;
 
+/** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
+ * seam (so they live in the genned registry, one authority both planes read).
+ * THE fleet-memory lever — and a BYTE cap, not a row cap: styled 80-col
+ * content costs ≈721B/row vs ≈62B plain (spike BASE-1), an order of magnitude
+ * of retained history for the same bytes. Agents < interactive. */
+export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
+  AGENT: 2 * 1024 * 1024,
+  INTERACTIVE: 10 * 1024 * 1024,
+} as const;
+
 /** Mesh namespaces. `ss:*` is reserved to SyncedStore; `x.<pluginId>.*` is the dynamic service namespace (D19). */
 export const NAMESPACES = {
   RPC: "field.rpc",
@@ -292,6 +302,11 @@ export const FILES = {
   /** The app-owned Ghostty-syntax overlay the embedded terminal service loads
    * AFTER the user's own Ghostty files (GT-3 rider; ghosttea `with_config_path`). */
   TERMINAL_CONFIG: "config.ghostty",
+  /** TC-L1f — the machine-wide custody admission ledger (flock'd; PTY budget
+   * shared across EVERY user-pair on the machine). Resolves under the
+   * VibeField ROOT — never under a user root: per-vault caps are subordinate
+   * to one machine-wide budget, and kernel refusal stays the final authority. */
+  CUSTODY_ADMISSION_LEDGER: "custody-admission.v1.json",
 } as const;
 
 /** UA-D10 — the on-disk layout under a data root, as REGISTRY DATA: relative

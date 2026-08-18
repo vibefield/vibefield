@@ -248,6 +248,18 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
                     sub_id,
                 );
             }
+            "native.lifecycle.ping" => {
+                // TC-D2 — the heartbeat probe rides the full control path
+                // (socket → framing → dispatch → reply): a wedge anywhere on
+                // that path is what the caller is measuring. The boot id lets
+                // a supervisor notice a floor that restarted underneath a
+                // surviving socket.
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0);
+                send(&tx, ok(id, json!({"bootId": state.boot_id, "ts": ts})));
+            }
             "native.lifecycle.observed.subscribe" => {
                 let sub_id = state.sub_id();
                 let snapshot = serde_json::to_value(&*state.observed_tx.borrow()).unwrap();

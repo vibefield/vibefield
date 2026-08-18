@@ -112,9 +112,23 @@ export const TerminalCreateParams = z
     /** ghosttea persistence-policy name, opaque passthrough. Default =
      * keep-until-exit (NF-D3: daemon-lifetime is the product promise). */
     persistence: z.string().optional(),
+    /** TC-D6(c) — workload class selects the scrollback byte cap (agents <
+     * interactive; scrollback is ~92% of a loaded session's memory, measured).
+     * Absent = "interactive", the generous cap — the tolerant-reader default. */
+    workloadClass: z.enum(["agent", "interactive"]).optional(),
   })
   .passthrough();
 export type TerminalCreateParams = z.infer<typeof TerminalCreateParams>;
+
+/** TC-D6(c) — the per-class scrollback caps live in the genned registry (one
+ * authority both planes read); re-exported here beside the param they govern. */
+export { TERMINAL_SCROLLBACK_CLASS_BYTES } from "./registries";
+
+/** TC-D6(d) — the per-pair session cap at the product create seam. The
+ * machine-wide admission ledger (TC-L1f, native side) is the custody authority
+ * beneath it, and kernel refusal remains the final one; this is the policy
+ * gate in front of both. 100 matches TC-G6's measured envelope. */
+export const TERMINAL_SESSION_CAP = 100;
 
 /** terminal.create result. The `ticket` is GT-1's structural answer to the
  * GT-0 finding: `openTicket` gates on fieldd's OBSERVED inventory, a mgmt round

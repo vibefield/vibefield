@@ -122,6 +122,17 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // TC-D1 (terminal-custody TC-S1) — the escalation affordance: after the
+  // floor's respawn intensity trips to the permanent honest "gone" state, a
+  // human overrides ON PURPOSE. Resets the intensity window and runs one
+  // respawn cycle. Same trust posture as system.shutdown: local admin only.
+  defineMethod({
+    surface: "product",
+    method: "system.native.restart",
+    scope: "native.admin",
+    idempotent: false,
+    locality: "local",
+  }),
 
   // LOG-L6 — append-only audit ingress for shell-owned actions. The scope is
   // absent from every federated/plugin preset, and fieldd additionally proves

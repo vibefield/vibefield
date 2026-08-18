@@ -101,6 +101,52 @@ export const ObservedState = z
   .passthrough();
 export type ObservedState = z.infer<typeof ObservedState>;
 
+// ---- TC-S1 supervision (specs/terminal-custody.md TC-D1/TC-D2) ----
+
+/** fieldd's EXTERNAL judgment of the floor + its link, surfaced in FielddHealth
+ * and as UNAVAILABLE {service:"native", state} on doors that need the floor.
+ * Deliberately NOT UnitState: a wedged floor cannot self-report — the whole
+ * point (TC-D2) is distinguishing "crashed" (socket gone, kernel says so) from
+ * "unresponsive" (alive, not answering the control path). */
+export const NativeLinkState = z.enum(["connecting", "up", "unresponsive", "respawning", "gone"]);
+export type NativeLinkState = z.infer<typeof NativeLinkState>;
+
+/** native.lifecycle.ping — the TC-D2 heartbeat probe. Rides the SAME control
+ * path as every real request end-to-end (socket → framing → dispatch → reply),
+ * so a wedge anywhere on that path is exactly what it measures. The ack echoes
+ * the boot id so a supervisor also notices a floor that restarted underneath a
+ * surviving socket. */
+export const PingAck = z.object({ bootId: z.string(), ts: z.number().int() }).passthrough();
+export type PingAck = z.infer<typeof PingAck>;
+
+/** TC-D1/TC-D2 supervision timings (fieldd-side). Detection-to-STATE is ≤250ms
+ * (two misses of interval+deadline 100/100); the DESTRUCTIVE step (kill +
+ * respawn of a wedged floor) waits out WEDGE_CONFIRM_MS of continued misses,
+ * because a loaded-host scheduling stall (measured: vault-free round trips p99
+ * 24–37ms at load ~40, max 69ms — spike LOCK-1) must never kill a healthy
+ * floor. State is reversible; SIGKILL is not. */
+export const NATIVE_SUPERVISION = {
+  /** default deadline for ordinary mgmt requests (pre-TC-S1, rawRequest waited forever) */
+  REQUEST_DEADLINE_MS: 10_000,
+  HEARTBEAT_INTERVAL_MS: 100,
+  HEARTBEAT_DEADLINE_MS: 100,
+  /** stage 2 — fired immediately after a first miss */
+  HEARTBEAT_PROBE_DEADLINE_MS: 50,
+  HEARTBEAT_MISS_THRESHOLD: 2,
+  /** unresponsive → kill+respawn only after this much CONTINUED silence */
+  WEDGE_CONFIRM_MS: 3_000,
+  /** TC-D1 — respawn only after this many failed redials AND a fresh endpoint
+   * probe confirming no listener (the double-spawn probe stays in force) */
+  RESPAWN_AFTER_REDIALS: 3,
+  /** bounded intensity; past it: permanent honest degraded state + the restart verb */
+  RESPAWN_MAX: 3,
+  RESPAWN_WINDOW_MS: 60_000,
+} as const;
+
+/** TC-D6(e) — resource-pressure state spellings shared by emitters and readers
+ * (UnavailableDetails.state / UnitHealth.detail). */
+export const RESOURCE_PRESSURE_STATES = ["fd_pressure", "pty_exhausted"] as const;
+
 // ---- mesh facade (P0 subset: peers / store / serve) ----
 
 /** The spoof-safe Tailscale-User-* triple, injected at the sidecar bridge. */

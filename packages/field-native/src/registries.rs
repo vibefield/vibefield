@@ -49,10 +49,18 @@ pub mod mesh_control_limits {
     pub const PRODUCT_QUEUED_BYTES: usize = 134217728;
 }
 
+/// TC-D6(c) — per-class scrollback BYTE caps, enforced at the native create
+/// seam (agents < interactive; the fleet-memory lever).
+pub mod terminal_scrollback_class_bytes {
+    pub const AGENT: usize = 2097152;
+    pub const INTERACTIVE: usize = 10485760;
+}
+
 /// File names beneath a daemon's own data directory. The plane that OWNS the
 /// file joins the name to its data dir; readers ask that plane for the path.
 pub mod files {
     pub const TERMINAL_CONFIG: &str = "config.ghostty";
+    pub const CUSTODY_ADMISSION_LEDGER: &str = "custody-admission.v1.json";
 }
 
 /// UA-D10 — the on-disk layout under a data root, as segments. One authority;

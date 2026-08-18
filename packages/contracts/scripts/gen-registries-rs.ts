@@ -14,6 +14,7 @@ import {
   PORTS,
   SOCKETS,
   STORES,
+  TERMINAL_SCROLLBACK_CLASS_BYTES,
 } from "../src/registries";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -48,6 +49,14 @@ const lines: string[] = [
   "",
   "pub mod mesh_control_limits {",
   ...Object.entries(MESH_CONTROL_LIMITS).map(([k, v]) => `    pub const ${k}: usize = ${v};`),
+  "}",
+  "",
+  "/// TC-D6(c) — per-class scrollback BYTE caps, enforced at the native create",
+  "/// seam (agents < interactive; the fleet-memory lever).",
+  "pub mod terminal_scrollback_class_bytes {",
+  ...Object.entries(TERMINAL_SCROLLBACK_CLASS_BYTES).map(
+    ([k, v]) => `    pub const ${k}: usize = ${v};`,
+  ),
   "}",
   "",
   "/// File names beneath a daemon's own data directory. The plane that OWNS the",
