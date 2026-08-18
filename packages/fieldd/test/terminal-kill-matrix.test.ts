@@ -5,7 +5,7 @@
 // through the D6 ticket; churn leaves no residue. Row 2 (field-native's own
 // SIGTERM sweep) is pinned Rust-side in field-native/tests/terminal_unit.rs.
 import { type ChildProcess, spawn } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
@@ -100,6 +100,21 @@ async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T>
 
 const listOf = async (rpc: WsRpc): Promise<TerminalInfo[]> =>
   ((await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] }).terminals;
+
+// TC-S3 helpers — rows select cells by CLASS, never by array position: the
+// snapshot's order is a mirror convenience, and during a respawn window the
+// surviving class is cells[0].
+type RouteSnapshot = NonNullable<FielddDaemon["native"]["terminalRoutes"]>;
+type RouteCell = RouteSnapshot["cells"][number];
+const classCellOf = (
+  routes: RouteSnapshot | undefined,
+  workloadClass: "agent" | "interactive",
+): RouteCell | undefined =>
+  routes?.cells.find((cell) => cell.workloadClass === workloadClass && cell.role !== "solo");
+const interactiveClassCell = (routes: RouteSnapshot | undefined): RouteCell | undefined =>
+  classCellOf(routes, "interactive");
+const agentSoloCells = (routes: RouteSnapshot | undefined): RouteCell[] =>
+  (routes?.cells ?? []).filter((cell) => cell.workloadClass === "agent" && cell.role === "solo");
 
 // WIN-6: ConPTY terminal hosting is live on Windows (the Rust kill matrix runs on
 // the box in field-native/tests/terminal_unit.rs), so this NF-4 matrix runs on
@@ -394,11 +409,15 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     await poll(async () =>
       (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
     );
+    // TC-S3: the session above was created classless → the INTERACTIVE cell.
+    // Track that CLASS's row, not cells[0] — during the respawn window the
+    // agent cell is the only row and cells[0] would resolve to it, "passing"
+    // the replacement poll with a cell nobody killed.
     const first = await poll(async () => {
       const routes = daemon.native.terminalRoutes;
-      return routes?.cells[0] !== undefined ? routes : undefined;
+      return interactiveClassCell(routes) !== undefined ? routes : undefined;
     });
-    const firstCell = first.cells[0];
+    const firstCell = interactiveClassCell(first);
     if (firstCell === undefined) throw new Error("unreachable: polled for a cell");
     expect(firstCell.pid).toBeGreaterThan(0);
 
@@ -406,13 +425,13 @@ describe("the kill matrix (NF-4, real field-native)", () => {
 
     const replacement = await poll(async () => {
       const routes = daemon.native.terminalRoutes;
-      const cell = routes?.cells[0];
+      const cell = interactiveClassCell(routes);
       return cell !== undefined && cell.cellBootId !== firstCell.cellBootId ? routes : undefined;
     }, 20_000);
     expect(replacement.revision, "revision is monotonic across the replacement").toBeGreaterThan(
       first.revision,
     );
-    const replacementCell = replacement.cells[0];
+    const replacementCell = interactiveClassCell(replacement);
     if (replacementCell === undefined) throw new Error("unreachable: polled for a cell");
     // endpoints re-delivered on the LIVE link — the seam TC-D15 exists for
     // (pre-S2, new endpoints arrived only with a re-pair)
@@ -455,4 +474,205 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       }
     }, 15_000);
   }, 60_000);
+
+  it("row S3-A: a class-A crash leaves class-B streaming — the blast is one class, counted (TC-S3)", async () => {
+    // THE K=2 gate: kill the agent cell under a live interactive witness. The
+    // interactive session must stream THROUGH the kill (same cell, same
+    // control connection, epoch input still landing), the agent session is
+    // the WHOLE counted blast, and the agent class comes back supervised.
+    const native = await spawnNative();
+    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await connect(daemon);
+    const agent = (await rpc.call("terminal.create", {
+      shell: HOLD,
+      workloadClass: "agent",
+    })) as { sessionId: string };
+    const interactive = (await rpc.call("terminal.create", { shell: HOLD })) as {
+      sessionId: string;
+    };
+    // Both observed, on DIFFERENT cells — the inventory `cell` tag is the join
+    const tags = await poll(async () => {
+      const list = await listOf(rpc);
+      const a = list.find((t) => t.sessionId === agent.sessionId)?.cell;
+      const b = list.find((t) => t.sessionId === interactive.sessionId)?.cell;
+      return a !== undefined && b !== undefined ? { a, b } : undefined;
+    }, 15_000);
+    expect(tags.a.workloadClass).toBe("agent");
+    expect(tags.b.workloadClass).toBe("interactive");
+    expect(tags.a.cellBootId).not.toBe(tags.b.cellBootId);
+    // The streaming witness: a live control connection to the INTERACTIVE cell
+    const ticket = (await rpc.call("terminal.openTicket", {
+      sessionId: interactive.sessionId,
+    })) as TerminalTicket;
+    const witness = new GhostteaAutomationClient(
+      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      { clientBuild: "kill-matrix" },
+    );
+    cleanup.push(() => witness.dispose());
+    await witness.connect();
+    const epoch = await witness.humanInputEpoch(interactive.sessionId);
+
+    const agentCell = classCellOf(daemon.native.terminalRoutes, "agent");
+    if (agentCell === undefined) throw new Error("unreachable: the agent tag proved the cell");
+    process.kill(agentCell.pid, "SIGKILL");
+
+    // The agent class returns as a supervised replacement…
+    const replacement = await poll(async () => {
+      const cell = classCellOf(daemon.native.terminalRoutes, "agent");
+      return cell !== undefined && cell.cellBootId !== agentCell.cellBootId ? cell : undefined;
+    }, 20_000);
+    // …the blast is EXACTLY the agent session (counted per cell, TC-S3)…
+    await poll(
+      async () =>
+        (await listOf(rpc)).every((t) => t.sessionId !== agent.sessionId) ? true : undefined,
+      15_000,
+    );
+    const survivors = await listOf(rpc);
+    expect(survivors.map((t) => t.sessionId)).toEqual([interactive.sessionId]);
+    expect(survivors[0]?.cell?.cellBootId).toBe(tags.b.cellBootId);
+    // …and class B streamed through it: the SAME connection accepts input at
+    // the SAME epoch — no reconnect, no re-mint, no epoch bump.
+    const landed = await witness.input(
+      interactive.sessionId,
+      { kind: "text", text: "still-streaming" },
+      epoch,
+    );
+    expect(landed.accepted).toBe(true);
+    // A fresh agent create lands on the replacement cell without a re-pair.
+    const second = (await rpc.call("terminal.create", {
+      shell: HOLD,
+      workloadClass: "agent",
+    })) as { sessionId: string };
+    const secondTag = await poll(
+      async () => (await listOf(rpc)).find((t) => t.sessionId === second.sessionId)?.cell,
+      15_000,
+    );
+    expect(secondTag.cellBootId).toBe(replacement.cellBootId);
+  }, 120_000);
+
+  it("row S3-B / row 13: an evidence-free crash storm blames NO session — no isolation, the honest dead end (TC-D4)", async () => {
+    // Row 13's first half, as built: SIGKILL leaves no crumb, so every death
+    // classifies Unknown — and Unknown NEVER strikes. Past the intensity
+    // window the class must go to its honest dead end, not "blame the only
+    // session that was there" (never last-active). No solo cell may ever
+    // appear; the other class keeps serving.
+    const native = await spawnNative();
+    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await connect(daemon);
+    const bait = (await rpc.call("terminal.create", {
+      shell: HOLD,
+      workloadClass: "agent",
+    })) as { sessionId: string };
+    await poll(async () =>
+      (await listOf(rpc)).some((t) => t.sessionId === bait.sessionId) ? true : undefined,
+    );
+    // The storm: the boot start plus two respawns spend the intensity window
+    // (3 starts / 60s), so the third kill must be the last word.
+    let agentCell = classCellOf(daemon.native.terminalRoutes, "agent");
+    if (agentCell === undefined) throw new Error("unreachable: the bait proved the cell");
+    for (let kill = 0; kill < 3; kill++) {
+      const dead: RouteCell = agentCell;
+      process.kill(dead.pid, "SIGKILL");
+      if (kill === 2) break;
+      agentCell = await poll(async () => {
+        const cell = classCellOf(daemon.native.terminalRoutes, "agent");
+        return cell !== undefined && cell.cellBootId !== dead.cellBootId ? cell : undefined;
+      }, 20_000);
+    }
+    // The dead end: the agent class does NOT come back — and nothing was
+    // isolated, because nothing was attributable (no crumb ⇒ Unknown ⇒ no
+    // strike). Sampled past the respawn cadence the storm itself proved.
+    await new Promise((resolve) => setTimeout(resolve, 4_000));
+    const routes = daemon.native.terminalRoutes;
+    expect(classCellOf(routes, "agent"), "no agent class respawn past intensity").toBeUndefined();
+    expect(agentSoloCells(routes), "no solo cell without Exact evidence (row 13)").toEqual([]);
+    // The other class is untouched by its sibling's dead end.
+    const interactive = (await rpc.call("terminal.create", { shell: HOLD })) as {
+      sessionId: string;
+    };
+    const tag = await poll(
+      async () => (await listOf(rpc)).find((t) => t.sessionId === interactive.sessionId)?.cell,
+      15_000,
+    );
+    expect(tag.workloadClass).toBe("interactive");
+  }, 120_000);
+
+  it("row S3-C: Exact strikes isolate the offender's class to solo hosts at next spawn (TC-S3/TC-D4)", async () => {
+    // The other half of the pair: the SAME storm WITH the crumb naming a
+    // session flips the breach into spawn-isolation — the class keeps
+    // serving, creates land on fresh single-session solo cells, and the
+    // target rotates the moment it takes a session (the create-target
+    // discipline, end to end). The crumb rides the real attribution seam:
+    // the file the cell itself writes on the way down.
+    const native = await spawnNative();
+    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await connect(daemon);
+    const offender = (await rpc.call("terminal.create", {
+      shell: HOLD,
+      workloadClass: "agent",
+    })) as { sessionId: string };
+    await poll(async () =>
+      (await listOf(rpc)).some((t) => t.sessionId === offender.sessionId) ? true : undefined,
+    );
+    let agentCell = classCellOf(daemon.native.terminalRoutes, "agent");
+    if (agentCell === undefined) throw new Error("unreachable: the offender proved the cell");
+    for (let kill = 0; kill < 3; kill++) {
+      const dead: RouteCell = agentCell;
+      writeFileSync(
+        join(native.dir, "native", "run", `termcell.${dead.cellInstanceId}.crumb`),
+        JSON.stringify({
+          cellBootId: dead.cellBootId,
+          sessionId: offender.sessionId,
+          detail: "induced: kill-matrix row S3-C",
+        }),
+      );
+      process.kill(dead.pid, "SIGKILL");
+      if (kill === 2) break;
+      agentCell = await poll(async () => {
+        const cell = classCellOf(daemon.native.terminalRoutes, "agent");
+        return cell !== undefined && cell.cellBootId !== dead.cellBootId ? cell : undefined;
+      }, 20_000);
+    }
+    // Isolation: the class's spawn target is now a SOLO cell.
+    const firstTarget = await poll(
+      async () => agentSoloCells(daemon.native.terminalRoutes)[0],
+      20_000,
+    );
+    // The offender-class create lands ON the solo host, one session alone.
+    const isolated = (await rpc.call("terminal.create", {
+      shell: HOLD,
+      workloadClass: "agent",
+    })) as { sessionId: string };
+    const isolatedTag = await poll(
+      async () => (await listOf(rpc)).find((t) => t.sessionId === isolated.sessionId)?.cell,
+      15_000,
+    );
+    expect(isolatedTag.role).toBe("solo");
+    expect(isolatedTag.cellBootId).toBe(firstTarget.cellBootId);
+    // The chain rotates: a NEWER empty solo spawns once the target is taken,
+    // and the next create lands there — never beside the first session.
+    const nextTarget = await poll(async () => {
+      const newer = agentSoloCells(daemon.native.terminalRoutes).find(
+        (cell) => cell.cellInstanceId > firstTarget.cellInstanceId,
+      );
+      return newer;
+    }, 20_000);
+    const second = (await rpc.call("terminal.create", {
+      shell: HOLD,
+      workloadClass: "agent",
+    })) as { sessionId: string };
+    const secondTag = await poll(
+      async () => (await listOf(rpc)).find((t) => t.sessionId === second.sessionId)?.cell,
+      15_000,
+    );
+    expect(secondTag.role).toBe("solo");
+    expect(secondTag.cellBootId).toBe(nextTarget.cellBootId);
+    expect(secondTag.cellBootId).not.toBe(isolatedTag.cellBootId);
+    // The sibling class never moved: same interactive cell, before and after.
+    const interactiveCell = interactiveClassCell(daemon.native.terminalRoutes);
+    expect(interactiveCell, "the interactive class is untouched by isolation").toBeDefined();
+  }, 180_000);
 });

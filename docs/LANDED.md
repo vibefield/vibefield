@@ -3098,3 +3098,83 @@ boundary — the G14-class seam owns that future), and the legacy hello mirror
 keeps every pre-routes reader working.
 
 Gates: `pnpm verify` verbatim green end to end over the completed slice (all TS suites, all cargo suites including the 15-row terminal_unit matrix and 4-row cell lifecycle, clippy `-D warnings`, gen freshness).
+
+## TC-S3 — K=2 class cells: routing, attribution, spawn-isolation
+
+**Date:** 2026-08-18 · **Commits:** `4ba9df7` (wire truth) · `fd48777` (the K=2 floor) · fieldd consumer + gate rows (this commit's parents; see bodies)
+
+The terminal floor now hosts one cell per workload class (agents | interactive)
+plus on-demand solo isolation hosts — TC-D4's placement contract at S3 fidelity,
+deliberately upstream-free. The gate: a class-A crash leaves class-B streaming
+THROUGH the kill (same control connection, same epoch, input landing), the blast
+is counted per cell, and row 13's no-false-blame half holds against an induced
+evidence-free storm.
+
+The load-bearing mechanics:
+
+- **The create-target discipline** (contracts-documented, derivable from any
+  snapshot alone — no new verb): a class's target is its `role:"class"` row,
+  else its HIGHEST-instance `role:"solo"` row. The floor spawns a fresh empty
+  solo the moment the previous one takes a session, so the newest solo is
+  always the empty one; at MAX_SOLO_CELLS the newest stays target as the
+  honest overflow (TC-D6(f): a bound and a named shed strategy).
+- **TC-D4 attribution through a crumb seam** (`termcell.<n>.crumb`, floor-passed
+  via `--crumb`, consumed on read, generation-fenced by cellBootId): a crumb
+  NAMING a session ⇒ Exact; the cell's own panic hook writes the sessionless
+  form ⇒ Infrastructure; no evidence (SIGKILL, OOM kill) ⇒ Unknown. **Only
+  Exact strikes.** The cell can only ever write the sessionless form today —
+  upstream owns the feed path until custody separates (TC-S4+) — so production
+  crashes classify Infrastructure/Unknown and blame NOBODY; the session-naming
+  writer arrives with custody, and the file protocol is the seam the kill
+  matrix exercises meanwhile.
+- **Spawn-isolation** (TC-S6's quarantine migration replaces it): an intensity
+  breach WITH an Exact offender in the window flips the class to solo
+  placement for ISOLATION_WINDOW_MS instead of the S2 dead end — each create
+  lands alone, so the recurring poison workload can only crash itself. A
+  breach WITHOUT evidence keeps the honest dead end: no isolation, no blame,
+  the sibling class unaffected (row 13, measured).
+- **The inventory `cell` tag** (`ObservedTerminalCell` on every observed row):
+  the join key. fieldd routes creates by class, mints a session's ticket from
+  ITS OWN cell (never the create target), terminates via the hosting cell, and
+  counts loss receipts per vanished cellBootId ("blast counted"). The floor's
+  mgmt desired-set reconciler routes prunes/repolicies the same way — one
+  client would read the other cell's "unknown session" as the benign race and
+  silently skip real terminations.
+- **Per-cell inventory pumps**, merged: one pump per route row, rows tagged,
+  faults composed per cell into one health cell, occupancy per instance
+  driving solo rotation/reaping, and ONE governed total into the admission
+  ledger (TC-L1f's single meaning of "a session on this device"). A vanished
+  route row removes its rows — the supervisor's own word the cell died —
+  deliberately unlike a mere connection fault, where the last inventory stays.
+- **Health composes per class**: all Up → Up · all Crashed → Crashed · any
+  dead end → Degraded (a config-shaped failure is never a crash claim). The
+  legacy mirror stays the INTERACTIVE host (snapshot ordered interactive-first),
+  so pre-routes readers keep landing where legacy creates land.
+
+**The gate** (all green, first run): row S3-A — agent-cell SIGKILL under a live
+interactive witness: same connection, same epoch, input lands post-kill; blast
+= exactly the agent session; fresh agent create on the replacement (682ms).
+Row S3-B / row 13 — three evidence-free SIGKILLs: NO solo ever appears, the
+class ends honest-dead, interactive keeps serving (4.9s). Row S3-C — the same
+storm WITH crumbs naming a session: isolation entered, the create lands SOLO
+on the target, the target rotates, the second create lands on the NEWER solo,
+interactive untouched (1.3s). Row S2-A was made class-aware in the same pass
+(cells[0] resolved to the surviving class during the respawn window — the
+array-position trap the helpers now forbid). Full matrix, seam, terminal_unit
+16 (incl. the new K=2 shape row), lib 94 (attribution/order/composition units),
+fieldd terminal-service + native-link 65 across both, clippy clean.
+
+**Named debts, recorded not hidden**: (1) an untagged session inside GT-1's
+observation window (62–117ms) falls to the interactive target for
+terminate/ticket — on a K=2 floor that can answer `{terminated:false}` for a
+live agent session; the fix is a floor "which cell holds X" verb or a fan-out
+(TC-S6 scope). (2) a config write reloads only the cell that served it; other
+cells restyle at their next respawn (floor-side fan-out verb, TC-S6). (3) the
+win32 dual for the S3 rows awaits the next box run (rows are platform-portable
+by construction; the tarball ships them).
+
+Packaging (same day, separate commit): `field-terminal-host` now stages beside
+`field-native` — the stager's PAIR assertion fails a package holding a floor
+without its cell, the macOS nested-code list signs it, and the SEA `--verify`
+sandbox stages it. The half-pair refusal FIRED on live repo state (this
+checkout's release tree predates the cell), which is the gate working.
