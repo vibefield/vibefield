@@ -188,9 +188,16 @@ async fn a_leash_drain_broadcasts_exits_to_witnesses() {
         field_native::services::terminal_client::ControlClient::connect(&control, "tok-drain")
             .await
             .expect("dial the cell");
+    // WIN-6's role collapse: cmd.exe holds the PTY on windows, /bin/cat on
+    // unix (the box gate caught this row shipping a /bin literal — the exact
+    // class the mac-blind grep list names).
+    #[cfg(windows)]
+    let hold = std::env::var("COMSPEC").unwrap_or_else(|_| "C:\\Windows\\System32\\cmd.exe".into());
+    #[cfg(not(windows))]
+    let hold = "/bin/cat".to_string();
     let session = client
         .create_session(serde_json::json!({
-            "executable": "/bin/cat",
+            "executable": hold,
             "args": [],
             "cols": 80,
             "rows": 24,
