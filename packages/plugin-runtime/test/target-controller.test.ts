@@ -464,4 +464,149 @@ describe("RuntimeTargetController", () => {
       expect(candidates.every((entry) => !entry.live && entry.disposeCalls === 1)).toBe(true);
     }
   });
+
+  it("projects the in-flight loading scope without exposing its candidate", async () => {
+    const gate = deferred<void>();
+    const controller = new RuntimeTargetController("renderer/loading-diagnostic", {
+      async activate(_next, scope) {
+        scope.track("loading-listener", { dispose() {} });
+        await gate.promise;
+        return { commit() {}, dispose() {} };
+      },
+    });
+
+    controller.setDesired(target("loading"));
+    await until(() => controller.state === "loading");
+    const loading = controller.diagnostic();
+    expect(loading.state).toBe("loading");
+    expect(loading.scope).toMatchObject({
+      state: "open",
+      liveCount: 2,
+      effects: [
+        { id: 0, parentId: null, label: "activate", kind: "scope" },
+        { id: 1, parentId: 0, label: "loading-listener", kind: "resource" },
+      ],
+    });
+    expect(loading).not.toHaveProperty("candidate");
+    expect(loading.history.every((event) => !("candidate" in event))).toBe(true);
+
+    gate.resolve();
+    await controller.settle();
+    expect(controller.state).toBe("active");
+    controller.setDesired(null);
+    await controller.settle();
+  });
+
+  it("retains one bounded close report after the runtime objects retire", async () => {
+    const controller = new RuntimeTargetController("renderer/last-close", {
+      activate(_next, scope) {
+        scope.track("broken-listener", {
+          dispose() {
+            throw new Error(`cleanup failed ${"x".repeat(1_000)}`);
+          },
+        });
+        return { commit() {}, dispose() {} };
+      },
+    });
+
+    controller.setDesired(target("active"));
+    await controller.settle();
+    controller.setDesired(null, {
+      reason: { kind: "disable", detail: `disabled ${"d".repeat(1_000)}` },
+    });
+    await controller.settle();
+
+    const diagnostic = controller.diagnostic();
+    expect(diagnostic.state).toBe("inactive");
+    expect(diagnostic.scope).toBeNull();
+    expect(diagnostic.lastClose).toMatchObject({
+      reason: { kind: "disable" },
+      quiescent: true,
+      liveCount: 0,
+      stats: { disposeErrors: 1 },
+    });
+    expect(diagnostic.lastClose?.reason?.detail).toHaveLength(512);
+    expect(diagnostic.lastClose?.errors[0]?.message).toHaveLength(512);
+    expect(diagnostic.history.at(-1)).toMatchObject({
+      event: "unloaded",
+      close: { reason: { kind: "disable" }, quiescent: true, disposeErrors: 1 },
+    });
+    expect(diagnostic.history.at(-1)).not.toHaveProperty("close.errors");
+  });
+
+  it("reports the exact positive boundary-force outcome separately from quiescence", async () => {
+    const release = deferred<void>();
+    const controller = new RuntimeTargetController("service/forced-diagnostic", {
+      disposalDeadlineMs: 1,
+      termination: {
+        kind: "worker",
+        force: async () => ({
+          terminated: true,
+          forced: true,
+          detail: `worker exited ${"x".repeat(1_000)}`,
+        }),
+      },
+      activate() {
+        return {
+          commit() {},
+          async dispose() {
+            await release.promise;
+          },
+        };
+      },
+    });
+
+    controller.setDesired(target("worker"));
+    await controller.settle();
+    controller.setDesired(null, { reason: { kind: "disable" } });
+    await controller.settle();
+
+    const diagnostic = controller.diagnostic();
+    expect(diagnostic.state).toBe("inactive");
+    expect(diagnostic.lastClose).toMatchObject({ quiescent: false, reason: { kind: "disable" } });
+    expect(diagnostic.force).toMatchObject({
+      confirmedCount: 1,
+      last: {
+        state: "confirmed",
+        phase: "unload",
+        outcome: { terminated: true, forced: true },
+      },
+    });
+    expect(diagnostic.force.last?.outcome?.detail).toHaveLength(512);
+    expect(diagnostic.history.some((event) => event.event === "force-confirmed")).toBe(true);
+    release.resolve();
+  });
+
+  it("contains lifecycle observers and reports bounded history loss", async () => {
+    const observed: unknown[] = [];
+    const controller = new RuntimeTargetController("renderer/history-diagnostic", {
+      historyLimit: 4,
+      observeLifecycle(event) {
+        observed.push(event);
+        if (observed.length % 2 === 0) return Promise.reject(new Error("async sink failed"));
+        throw new Error("sync diagnostic sink failed");
+      },
+      activate(next) {
+        return { commit() {}, dispose() {}, revision: next.artifact.installRevision };
+      },
+    });
+
+    for (let revision = 0; revision < 4; revision += 1) {
+      controller.setDesired(target(`r${revision}`));
+      await controller.settle();
+    }
+    controller.setDesired(null);
+    await controller.settle();
+
+    const diagnostic = controller.diagnostic();
+    expect(controller.state).toBe("inactive");
+    expect(observed.length).toBeGreaterThan(diagnostic.history.length);
+    expect(observed.every((event) => Object.isFrozen(event))).toBe(true);
+    expect(diagnostic.history).toHaveLength(4);
+    expect(diagnostic.omittedHistory).toBe(observed.length - 4);
+    expect(diagnostic.history.map((event) => event.sequence)).toEqual(
+      [...diagnostic.history.map((event) => event.sequence)].sort((a, b) => a - b),
+    );
+    expect(JSON.stringify(diagnostic.history)).not.toContain('revision":"r');
+  });
 });

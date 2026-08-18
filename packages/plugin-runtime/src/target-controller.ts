@@ -3,6 +3,7 @@ import {
   type ActivationCloseReport,
   ActivationEffectSetupError,
   ActivationScope,
+  type ActivationScopeDiagnostic,
   type ActivationScopeSnapshot,
   type ActivationTerminationAdapter,
   type BoundaryTerminationReport,
@@ -22,6 +23,93 @@ export type RuntimeTargetControllerState =
   | "unloading"
   | "failed"
   | "non-quiescent";
+
+export type RuntimeLifecycleEventKind =
+  | "close-edge"
+  | "controller-error"
+  | "desired"
+  | "force-confirmed"
+  | "force-error"
+  | "force-unconfirmed"
+  | "late-quiescence"
+  | "load-commit"
+  | "load-failed"
+  | "load-prepared"
+  | "load-stale"
+  | "load-start"
+  | "load-timeout"
+  | "non-quiescent"
+  | "prepared-commit"
+  | "prepared-commit-failed"
+  | "prepared-commit-stale"
+  | "prepared-unloaded"
+  | "refresh-commit"
+  | "refresh-failed"
+  | "refresh-stale"
+  | "refresh-start"
+  | "unloaded";
+
+/** Compact target identity for recent lifecycle history. Current desired/committed targets remain
+ * exact and structured on the controller diagnostic; repeating the authority vector in every
+ * event would turn a count-bounded ring into an avoidable byte amplifier. */
+export interface RuntimeLifecycleTarget {
+  readonly face: PluginRuntimeTarget["face"];
+  readonly pluginId: string;
+  readonly instanceKey: string;
+  readonly installRevision: string;
+  readonly manifestHash: string;
+  readonly observedGrantGeneration: number;
+  readonly runtimeGeneration?: string;
+}
+
+export interface RuntimeCloseSummary {
+  readonly reason?: ActivationCloseReason;
+  readonly quiescent: boolean;
+  readonly liveCount: number;
+  readonly pendingSetups: number;
+  readonly lateCleanups: number;
+  readonly disposeErrors: number;
+  readonly omittedErrors: number;
+}
+
+export interface RuntimeTargetLifecycleEvent {
+  readonly sequence: number;
+  readonly event: RuntimeLifecycleEventKind;
+  readonly state: RuntimeTargetControllerState;
+  readonly revision?: number;
+  readonly phase?: string;
+  readonly target?: RuntimeLifecycleTarget | null;
+  readonly reason?: ActivationCloseReason;
+  readonly error?: string;
+  readonly close?: RuntimeCloseSummary;
+  readonly force?: BoundaryTerminationReport;
+}
+
+export interface RuntimeBoundaryForceDiagnostic<T extends PluginRuntimeTarget> {
+  readonly state: "confirmed" | "unconfirmed" | "error";
+  readonly phase: string;
+  readonly target: T;
+  readonly outcome?: BoundaryTerminationReport;
+  readonly error?: string;
+}
+
+export interface RuntimeTargetControllerDiagnostic<T extends PluginRuntimeTarget> {
+  readonly label: string;
+  readonly state: RuntimeTargetControllerState;
+  readonly desired: T | null;
+  readonly committed: T | null;
+  readonly desiredRevision: number;
+  readonly error?: string;
+  readonly blocked: { readonly phase: string; readonly target: T } | null;
+  readonly scope: ActivationScopeDiagnostic | null;
+  readonly lastClose: ActivationCloseReport | null;
+  readonly force: {
+    readonly confirmedCount: number;
+    readonly last: RuntimeBoundaryForceDiagnostic<T> | null;
+  };
+  readonly history: readonly RuntimeTargetLifecycleEvent[];
+  readonly omittedHistory: number;
+}
 
 /** Adapter-owned work remains private until commit. ActivationScope adopts the candidate's exact
  * inverse before the controller can call commit. `commit` must be synchronous; a candidate whose
@@ -46,6 +134,9 @@ export interface RuntimeTargetControllerOptions<
   disposalDeadlineMs?: number;
   scopeFactory?: (label: string) => ActivationScope;
   historyLimit?: number;
+  /** Host-owned lifecycle log/metric sink. It receives immutable compact values only; faults and
+   * rejected promises are contained and can never interrupt reconciliation. */
+  observeLifecycle?(event: RuntimeTargetLifecycleEvent): void | Promise<void>;
 }
 
 export interface RuntimeTargetDesiredOptions {
@@ -70,7 +161,8 @@ export interface RuntimeTargetControllerSnapshot<T extends PluginRuntimeTarget> 
   readonly forcedCount: number;
   readonly blocked: RuntimeTargetControllerBlocked<T> | null;
   readonly activeScope: ActivationScopeSnapshot | null;
-  readonly history: readonly Readonly<Record<string, unknown>>[];
+  readonly history: readonly RuntimeTargetLifecycleEvent[];
+  readonly omittedHistory: number;
 }
 
 interface Active<T extends PluginRuntimeTarget, C extends RuntimeTargetCandidate> {
@@ -92,6 +184,17 @@ interface Prepared<T extends PluginRuntimeTarget, C extends RuntimeTargetCandida
 
 interface Blocked<T extends PluginRuntimeTarget> extends RuntimeTargetControllerBlocked<T> {
   readonly token: object;
+  readonly scope: ActivationScope;
+}
+
+interface RuntimeLifecycleEventData<T extends PluginRuntimeTarget> {
+  readonly revision?: number;
+  readonly phase?: string;
+  readonly target?: T | null;
+  readonly reason?: ActivationCloseReason;
+  readonly error?: string;
+  readonly report?: ActivationCloseReport;
+  readonly outcome?: BoundaryTerminationReport;
 }
 
 type TimedOutcome<T> =
@@ -104,9 +207,155 @@ function normalizedDeadline(value: number | undefined): number {
   return Math.max(0, value);
 }
 
-function positiveInteger(value: number | undefined, fallback: number): number {
+function boundedPositiveInteger(
+  value: number | undefined,
+  fallback: number,
+  maximum: number,
+): number {
   if (value === undefined || !Number.isFinite(value)) return fallback;
-  return Math.max(1, Math.floor(value));
+  return Math.min(maximum, Math.max(1, Math.floor(value)));
+}
+
+const DEFAULT_HISTORY_LIMIT = 64;
+const MAX_CONTROLLER_TEXT_LENGTH = 512;
+const MAX_CONTROLLER_PHASE_LENGTH = 80;
+const MAX_LIFECYCLE_TARGET_PART_LENGTH = 512;
+
+function boundedText(value: string, maxLength: number, fallback: string): string {
+  const normalized = [...value.slice(0, maxLength)]
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 31 || code === 127 ? " " : character;
+    })
+    .join("")
+    .trim();
+  return (normalized || fallback).slice(0, maxLength);
+}
+
+function copyReason(reason: ActivationCloseReason | undefined): ActivationCloseReason | undefined {
+  if (reason === undefined) return undefined;
+  return Object.freeze({
+    kind: reason.kind,
+    ...(reason.detail === undefined
+      ? {}
+      : { detail: boundedText(reason.detail, MAX_CONTROLLER_TEXT_LENGTH, reason.kind) }),
+  });
+}
+
+function copyTarget<T extends PluginRuntimeTarget>(target: T): T {
+  const artifact = Object.freeze({
+    installRevision: target.artifact.installRevision,
+    manifestHash: target.artifact.manifestHash,
+    ...(target.artifact.approvedModuleGeneration === undefined
+      ? {}
+      : { approvedModuleGeneration: target.artifact.approvedModuleGeneration }),
+  });
+  const base = {
+    face: target.face,
+    pluginId: target.pluginId,
+    artifact,
+    authorityFingerprint: target.authorityFingerprint,
+    observedGrantGeneration: target.observedGrantGeneration,
+    ...(target.runtimeGeneration === undefined
+      ? {}
+      : { runtimeGeneration: target.runtimeGeneration }),
+  };
+  switch (target.face) {
+    case "service":
+      return Object.freeze({
+        ...base,
+        face: "service",
+        instanceKey: Object.freeze({ deviceId: target.instanceKey.deviceId }),
+      }) as T;
+    case "renderer":
+      return Object.freeze({
+        ...base,
+        face: "renderer",
+        instanceKey: Object.freeze({ windowId: target.instanceKey.windowId }),
+      }) as T;
+    case "behavior":
+      return Object.freeze({
+        ...base,
+        face: "behavior",
+        instanceKey: Object.freeze({
+          windowId: target.instanceKey.windowId,
+          documentId: target.instanceKey.documentId,
+          behaviorDeclarationId: target.instanceKey.behaviorDeclarationId,
+        }),
+        runtimeGeneration: target.runtimeGeneration,
+      }) as T;
+  }
+}
+
+function lifecycleTarget(target: PluginRuntimeTarget): RuntimeLifecycleTarget {
+  const instanceKey =
+    target.face === "service"
+      ? target.instanceKey.deviceId
+      : target.face === "renderer"
+        ? target.instanceKey.windowId
+        : `${target.instanceKey.windowId}/${target.instanceKey.documentId}/${target.instanceKey.behaviorDeclarationId}`;
+  return Object.freeze({
+    face: target.face,
+    pluginId: boundedText(target.pluginId, MAX_LIFECYCLE_TARGET_PART_LENGTH, "unknown-plugin"),
+    instanceKey: boundedText(instanceKey, MAX_LIFECYCLE_TARGET_PART_LENGTH, "unknown-instance"),
+    installRevision: boundedText(
+      target.artifact.installRevision,
+      MAX_LIFECYCLE_TARGET_PART_LENGTH,
+      "unknown-revision",
+    ),
+    manifestHash: boundedText(
+      target.artifact.manifestHash,
+      MAX_LIFECYCLE_TARGET_PART_LENGTH,
+      "unknown-manifest",
+    ),
+    observedGrantGeneration: target.observedGrantGeneration,
+    ...(target.runtimeGeneration === undefined
+      ? {}
+      : {
+          runtimeGeneration: boundedText(
+            target.runtimeGeneration,
+            MAX_LIFECYCLE_TARGET_PART_LENGTH,
+            "unknown-generation",
+          ),
+        }),
+  });
+}
+
+function copyCloseReport(report: ActivationCloseReport): ActivationCloseReport {
+  return Object.freeze({
+    label: report.label,
+    state: report.state,
+    ...(report.reason === undefined ? {} : { reason: copyReason(report.reason)! }),
+    quiescent: report.quiescent,
+    liveCount: report.liveCount,
+    pendingSetups: report.pendingSetups,
+    lateCleanups: report.lateCleanups,
+    stats: Object.freeze({ ...report.stats }),
+    errors: Object.freeze(report.errors.map((error) => Object.freeze({ ...error }))),
+    omittedErrors: report.omittedErrors,
+  });
+}
+
+function closeSummary(report: ActivationCloseReport): RuntimeCloseSummary {
+  return Object.freeze({
+    ...(report.reason === undefined ? {} : { reason: copyReason(report.reason)! }),
+    quiescent: report.quiescent,
+    liveCount: report.liveCount,
+    pendingSetups: report.pendingSetups,
+    lateCleanups: report.lateCleanups,
+    disposeErrors: report.stats.disposeErrors,
+    omittedErrors: report.omittedErrors,
+  });
+}
+
+function copyTerminationReport(report: BoundaryTerminationReport): BoundaryTerminationReport {
+  return Object.freeze({
+    terminated: report.terminated,
+    forced: report.forced,
+    ...(report.detail === undefined
+      ? {}
+      : { detail: boundedText(report.detail, MAX_CONTROLLER_TEXT_LENGTH, "no detail") }),
+  });
 }
 
 async function outcomeBefore<T>(task: Promise<T>, deadlineMs: number): Promise<TimedOutcome<T>> {
@@ -198,14 +447,22 @@ export class RuntimeTargetController<
   private errorValue: string | undefined;
   private stateValue: RuntimeTargetControllerState = "inactive";
   private forcedCountValue = 0;
-  private readonly events: Array<Record<string, unknown>> = [];
+  private lastCloseValue: ActivationCloseReport | null = null;
+  private lastForceValue: RuntimeBoundaryForceDiagnostic<T> | null = null;
+  private nextEventSequence = 1;
+  private omittedHistoryValue = 0;
+  private readonly events: RuntimeTargetLifecycleEvent[] = [];
 
   constructor(label: string, options: RuntimeTargetControllerOptions<T, C>) {
     this.label = label;
     this.options = options;
     this.activationDeadlineMs = normalizedDeadline(options.activationDeadlineMs);
     this.disposalDeadlineMs = normalizedDeadline(options.disposalDeadlineMs);
-    this.historyLimit = positiveInteger(options.historyLimit, 256);
+    this.historyLimit = boundedPositiveInteger(
+      options.historyLimit,
+      DEFAULT_HISTORY_LIMIT,
+      DEFAULT_HISTORY_LIMIT,
+    );
     this.scopeFactory =
       options.scopeFactory ??
       ((scopeLabel) =>
@@ -393,14 +650,84 @@ export class RuntimeTargetController<
             },
       activeScope:
         this.activeValue?.scope.snapshot() ?? this.preparedValue?.scope.snapshot() ?? null,
-      history: this.events.map((event) => ({ ...event })),
+      history: [...this.events],
+      omittedHistory: this.omittedHistoryValue,
     };
   }
 
-  private record(event: string, data: Record<string, unknown> = {}): void {
-    this.events.push({ event, state: this.stateValue, ...data });
+  /** Serialization-safe, globally bounded projection for host diagnostics. It never exposes a
+   * candidate, disposer, scope object, worker, port, promise, or termination adapter. */
+  diagnostic(): RuntimeTargetControllerDiagnostic<T> {
+    const blocked = this.blockedValue;
+    const scope =
+      blocked?.scope ??
+      this.loadingValue?.scope ??
+      this.preparedValue?.scope ??
+      this.activeValue?.scope ??
+      null;
+    return {
+      label: this.label,
+      state: this.stateValue,
+      desired: this.desiredValue === null ? null : copyTarget(this.desiredValue),
+      committed: this.committedValue === null ? null : copyTarget(this.committedValue),
+      desiredRevision: this.desiredRevisionValue,
+      ...(this.errorValue === undefined
+        ? {}
+        : { error: boundedText(this.errorValue, MAX_CONTROLLER_TEXT_LENGTH, "Error") }),
+      blocked:
+        blocked === undefined ? null : { phase: blocked.phase, target: copyTarget(blocked.target) },
+      scope: scope?.diagnostic() ?? null,
+      lastClose: this.lastCloseValue === null ? null : copyCloseReport(this.lastCloseValue),
+      force: {
+        confirmedCount: this.forcedCountValue,
+        last:
+          this.lastForceValue === null
+            ? null
+            : Object.freeze({
+                ...this.lastForceValue,
+                target: copyTarget(this.lastForceValue.target),
+                ...(this.lastForceValue.outcome === undefined
+                  ? {}
+                  : { outcome: copyTerminationReport(this.lastForceValue.outcome) }),
+              }),
+      },
+      history: [...this.events],
+      omittedHistory: this.omittedHistoryValue,
+    };
+  }
+
+  private record(event: RuntimeLifecycleEventKind, data: RuntimeLifecycleEventData<T> = {}): void {
+    const next = Object.freeze({
+      sequence: this.nextEventSequence,
+      event,
+      state: this.stateValue,
+      ...(data.revision === undefined ? {} : { revision: data.revision }),
+      ...(data.phase === undefined
+        ? {}
+        : { phase: boundedText(data.phase, MAX_CONTROLLER_PHASE_LENGTH, "unknown") }),
+      ...(!Object.hasOwn(data, "target")
+        ? {}
+        : { target: data.target === null ? null : lifecycleTarget(data.target as T) }),
+      ...(data.reason === undefined ? {} : { reason: copyReason(data.reason)! }),
+      ...(data.error === undefined
+        ? {}
+        : { error: boundedText(data.error, MAX_CONTROLLER_TEXT_LENGTH, "Error") }),
+      ...(data.report === undefined ? {} : { close: closeSummary(data.report) }),
+      ...(data.outcome === undefined ? {} : { force: copyTerminationReport(data.outcome) }),
+    }) satisfies RuntimeTargetLifecycleEvent;
+    this.nextEventSequence += 1;
+    this.events.push(next);
     if (this.events.length > this.historyLimit) {
-      this.events.splice(0, this.events.length - this.historyLimit);
+      const removed = this.events.length - this.historyLimit;
+      this.events.splice(0, removed);
+      this.omittedHistoryValue += removed;
+    }
+    try {
+      const observed = this.options.observeLifecycle?.(next) as unknown;
+      if (isThenable(observed)) void Promise.resolve(observed).catch(() => undefined);
+    } catch {
+      // Observability is never lifecycle authority. A broken log/metric sink cannot interrupt the
+      // state machine and is deliberately not recorded here, which would recurse into the sink.
     }
   }
 
@@ -447,36 +774,70 @@ export class RuntimeTargetController<
     phase: string,
     reason: ActivationCloseReason,
   ): Promise<boolean> {
+    this.lastCloseValue = copyCloseReport(report);
     if (report.quiescent) return true;
 
     const termination = this.options.termination;
     if (termination?.kind !== "same-realm" && termination?.force !== undefined) {
       let outcome: BoundaryTerminationReport | undefined;
+      let forceFailed = false;
       try {
         outcome = await termination.force(reason);
       } catch (error) {
-        this.record("force-error", { phase, target, error: errorMessage(error) });
+        forceFailed = true;
+        const message = errorMessage(error);
+        this.lastForceValue = Object.freeze({
+          state: "error",
+          phase: boundedText(phase, MAX_CONTROLLER_PHASE_LENGTH, "unknown"),
+          target: copyTarget(target),
+          error: message,
+        });
+        this.record("force-error", { phase, target, error: message });
       }
       if (outcome?.terminated === true) {
+        const copied = copyTerminationReport(outcome);
         this.forcedCountValue += 1;
-        this.record("force-confirmed", { phase, target, outcome });
+        this.lastForceValue = Object.freeze({
+          state: "confirmed",
+          phase: boundedText(phase, MAX_CONTROLLER_PHASE_LENGTH, "unknown"),
+          target: copyTarget(target),
+          outcome: copied,
+        });
+        this.record("force-confirmed", { phase, target, outcome: copied });
         return true;
       }
-      this.record("force-unconfirmed", { phase, target, outcome });
+      if (outcome !== undefined) {
+        const copied = copyTerminationReport(outcome);
+        this.lastForceValue = Object.freeze({
+          state: "unconfirmed",
+          phase: boundedText(phase, MAX_CONTROLLER_PHASE_LENGTH, "unknown"),
+          target: copyTarget(target),
+          outcome: copied,
+        });
+        this.record("force-unconfirmed", { phase, target, outcome: copied });
+      } else if (!forceFailed) {
+        this.lastForceValue = Object.freeze({
+          state: "unconfirmed",
+          phase: boundedText(phase, MAX_CONTROLLER_PHASE_LENGTH, "unknown"),
+          target: copyTarget(target),
+        });
+        this.record("force-unconfirmed", { phase, target });
+      }
     }
 
     this.stateValue = "non-quiescent";
     const token = {};
-    this.blockedValue = { token, phase, target, report };
+    this.blockedValue = { token, phase, target, report, scope };
     this.record("non-quiescent", { phase, target, report });
-    void scope.whenQuiescent().then(() => {
+    void scope.whenQuiescent().then((lateReport) => {
       if (this.blockedValue?.token !== token) return;
+      this.lastCloseValue = copyCloseReport(lateReport);
       if (this.activeValue?.scope === scope) this.activeValue = null;
       if (this.loadingValue?.scope === scope) this.loadingValue = null;
       if (this.preparedValue?.scope === scope) this.preparedValue = null;
       this.blockedValue = undefined;
       this.stateValue = "inactive";
-      this.record("late-quiescence", { phase, target });
+      this.record("late-quiescence", { phase, target, report: lateReport });
       this.ensureLoop();
     });
     return false;
@@ -531,7 +892,7 @@ export class RuntimeTargetController<
     if (active === null || target === null) return;
     const revision = this.desiredRevisionValue;
     this.stateValue = "refreshing";
-    this.record("refresh-start", { previous: active.target, target, revision });
+    this.record("refresh-start", { target, revision });
     try {
       await this.options.refresh?.(active.candidate, active.target, target, active.scope.signal);
     } catch (error) {

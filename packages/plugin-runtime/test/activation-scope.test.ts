@@ -377,4 +377,81 @@ describe("ActivationScope", () => {
     expect(after.errors.every((error) => error.message.length <= 512)).toBe(true);
     expect(after.omittedErrors).toBe(2);
   });
+
+  it("applies one flat effect budget across the complete live tree", async () => {
+    const scope = new ActivationScope("diagnostics", {
+      maxDiagnosticEffects: 5,
+      maxDiagnosticErrors: 2,
+      maxLabelLength: 16,
+    });
+    for (let childIndex = 0; childIndex < 4; childIndex += 1) {
+      const child = scope.child(`child-${childIndex}`);
+      for (let effectIndex = 0; effectIndex < 4; effectIndex += 1) {
+        child.track(`effect-${effectIndex}`, { dispose() {} });
+      }
+    }
+
+    const diagnostic = scope.diagnostic();
+    expect(diagnostic.liveCount).toBe(20);
+    expect(diagnostic.effects).toHaveLength(5);
+    expect(diagnostic.omittedEffects).toBe(15);
+    expect(diagnostic.effects.slice(0, 4)).toMatchObject([
+      { id: 0, parentId: null, label: "child-0", kind: "scope" },
+      { id: 1, parentId: null, label: "child-1", kind: "scope" },
+      { id: 2, parentId: null, label: "child-2", kind: "scope" },
+      { id: 3, parentId: null, label: "child-3", kind: "scope" },
+    ]);
+    expect(diagnostic.effects[4]).toMatchObject({ id: 4, parentId: 0, kind: "resource" });
+    expect(
+      diagnostic.effects.every((effect) => effect.parentId === null || effect.parentId < effect.id),
+    ).toBe(true);
+
+    scope.close({ kind: "manual" });
+    await scope.whenQuiescent();
+  });
+
+  it("bounds close-reason detail before retaining it", async () => {
+    const scope = new ActivationScope("reason");
+    scope.close({ kind: "manual", detail: `detail-${"x".repeat(2_000)}` });
+    const report = await scope.whenQuiescent();
+
+    expect(report.reason?.kind).toBe("manual");
+    expect(report.reason?.detail).toHaveLength(512);
+  });
+
+  it("refuses pathological ownership depth before close/report can overflow the stack", async () => {
+    const root = new ActivationScope("root", { maxDepth: 3 });
+    const first = root.child("first");
+    const second = first.child("second");
+    const third = second.child("third");
+
+    expect(() => third.child("too-deep")).toThrow(/3-level ownership depth limit/);
+    expect(root.diagnostic()).toMatchObject({ liveCount: 3, omittedEffects: 0 });
+    root.close({ kind: "manual" });
+    await expect(root.whenQuiescent()).resolves.toMatchObject({ quiescent: true });
+  });
+
+  it("treats diagnostic option values as reductions, never wire-bound expansions", async () => {
+    const scope = new ActivationScope("hard-bounds", {
+      maxDiagnosticEffects: 10_000,
+      maxDiagnosticErrors: 10_000,
+      maxLabelLength: 10_000,
+    });
+    for (let index = 0; index < 129; index += 1) {
+      scope.track(`resource-${index}-${"l".repeat(200)}`, {
+        dispose() {
+          throw new Error(`failure-${index}-${"m".repeat(1_000)}`);
+        },
+      });
+    }
+
+    const before = scope.diagnostic();
+    expect(before.effects).toHaveLength(128);
+    expect(before.omittedEffects).toBe(1);
+    expect(before.effects.every((effect) => effect.label.length <= 120)).toBe(true);
+    scope.close({ kind: "manual" });
+    const after = await scope.whenQuiescent();
+    expect(after.errors).toHaveLength(32);
+    expect(after.omittedErrors).toBe(97);
+  });
 });

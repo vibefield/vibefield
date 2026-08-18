@@ -66,6 +66,23 @@ export interface ActivationEffectSnapshot {
   readonly child?: ActivationScopeSnapshot;
 }
 
+/** Serialization-safe flat ownership row. `parentId` points at an earlier scope row, preserving
+ * exact ancestry without repeating a potentially long label path on every descendant. */
+export interface ActivationDiagnosticEffect {
+  readonly id: number;
+  readonly parentId: number | null;
+  readonly label: string;
+  readonly kind: "resource" | "scope";
+  readonly status: "live" | "disposing";
+}
+
+/** Whole-scope diagnostic projection. Unlike the rich recursive snapshot, its effect budget is
+ * global across the complete live tree and therefore safe to place on a bounded host wire. */
+export interface ActivationScopeDiagnostic extends ActivationCloseReport {
+  readonly effects: readonly ActivationDiagnosticEffect[];
+  readonly omittedEffects: number;
+}
+
 export interface ActivationScopeSnapshot extends ActivationCloseReport {
   readonly effects: readonly ActivationEffectSnapshot[];
   readonly omittedEffects: number;
@@ -79,6 +96,10 @@ export interface ActivationScopeOptions {
   readonly maxDiagnosticEffects?: number;
   readonly maxDiagnosticErrors?: number;
   readonly maxLabelLength?: number;
+  /** Ownership-tree safety limit. The runtime recursively seals and aggregates a scope ancestry;
+   * refusing pathological depth prevents plugin code from turning close/diagnostics into a stack
+   * overflow. Breadth remains exact and is represented through aggregate counters. */
+  readonly maxDepth?: number;
 }
 
 export interface BoundaryTerminationReport {
@@ -120,8 +141,10 @@ interface Deferred<T> {
 const DEFAULT_MAX_DIAGNOSTIC_EFFECTS = 128;
 const DEFAULT_MAX_DIAGNOSTIC_ERRORS = 32;
 const DEFAULT_MAX_LABEL_LENGTH = 120;
+const DEFAULT_MAX_SCOPE_DEPTH = 64;
 const MAX_DIAGNOSTIC_ERROR_NAME_LENGTH = 80;
 const MAX_DIAGNOSTIC_ERROR_MESSAGE_LENGTH = 512;
+const MAX_DIAGNOSTIC_CLOSE_DETAIL_LENGTH = 512;
 
 function deferred<T>(): Deferred<T> {
   let resolvePromise: ((value: T) => void) | undefined;
@@ -150,9 +173,13 @@ function normalizedDeadline(deadlineMs: number): number {
   return Number.isFinite(deadlineMs) ? Math.max(0, deadlineMs) : Number.POSITIVE_INFINITY;
 }
 
-function positiveInteger(value: number | undefined, fallback: number): number {
+function boundedPositiveInteger(
+  value: number | undefined,
+  fallback: number,
+  maximum: number,
+): number {
   if (value === undefined || !Number.isFinite(value)) return fallback;
-  return Math.max(1, Math.floor(value));
+  return Math.min(maximum, Math.max(1, Math.floor(value)));
 }
 
 async function observeBefore(task: Promise<void>, deadlineMs: number): Promise<boolean> {
@@ -220,6 +247,8 @@ export class ActivationScope {
   private readonly maxDiagnosticEffects: number;
   private readonly maxDiagnosticErrors: number;
   private readonly maxLabelLength: number;
+  private readonly maxDepth: number;
+  private currentDepth = 0;
   private readonly stats: MutableStats = {
     acquired: 0,
     disposed: 0,
@@ -232,14 +261,25 @@ export class ActivationScope {
   private cleanupStarted = false;
 
   constructor(label: string, options: ActivationScopeOptions = {}) {
-    this.maxLabelLength = positiveInteger(options.maxLabelLength, DEFAULT_MAX_LABEL_LENGTH);
-    this.maxDiagnosticEffects = positiveInteger(
+    this.maxLabelLength = boundedPositiveInteger(
+      options.maxLabelLength,
+      DEFAULT_MAX_LABEL_LENGTH,
+      DEFAULT_MAX_LABEL_LENGTH,
+    );
+    this.maxDiagnosticEffects = boundedPositiveInteger(
       options.maxDiagnosticEffects,
       DEFAULT_MAX_DIAGNOSTIC_EFFECTS,
+      DEFAULT_MAX_DIAGNOSTIC_EFFECTS,
     );
-    this.maxDiagnosticErrors = positiveInteger(
+    this.maxDiagnosticErrors = boundedPositiveInteger(
       options.maxDiagnosticErrors,
       DEFAULT_MAX_DIAGNOSTIC_ERRORS,
+      DEFAULT_MAX_DIAGNOSTIC_ERRORS,
+    );
+    this.maxDepth = boundedPositiveInteger(
+      options.maxDepth,
+      DEFAULT_MAX_SCOPE_DEPTH,
+      DEFAULT_MAX_SCOPE_DEPTH,
     );
     this.failureCleanupDeadlineMs = normalizedDeadline(
       options.failureCleanupDeadlineMs ?? Number.POSITIVE_INFINITY,
@@ -398,6 +438,55 @@ export class ActivationScope {
     };
   }
 
+  /**
+   * Returns one globally bounded, flat projection for Plugin Manager/Doctor transport.
+   *
+   * The recursive snapshot above intentionally remains useful for in-process debugging, but its
+   * per-scope cap is not a whole-tree cap. This projection visits breadth-first so a broad set of
+   * parent scopes remains visible before deep detail consumes the shared row budget. Exact live
+   * cardinality comes from the aggregate report, so omitted rows remain honest even after traversal
+   * stops at the budget.
+   */
+  diagnostic(): ActivationScopeDiagnostic {
+    const report = this.report();
+    const effects: ActivationDiagnosticEffect[] = [];
+    const queue: Array<{ scope: ActivationScope; parentId: number | null }> = [
+      { scope: this, parentId: null },
+    ];
+
+    for (
+      let cursor = 0;
+      cursor < queue.length && effects.length < this.maxDiagnosticEffects;
+      cursor += 1
+    ) {
+      const { scope, parentId } = queue[cursor]!;
+      const remaining = this.maxDiagnosticEffects - effects.length;
+      // When one scope alone exceeds the remaining budget, the newest acquisitions are the most
+      // useful detail. Aggregate counters still include every omitted earlier acquisition.
+      const visible = scope.records.slice(-remaining);
+      for (const record of visible) {
+        const id = effects.length;
+        effects.push({
+          id,
+          parentId,
+          label: record.label,
+          kind: record.kind,
+          status: record.status === "disposed" ? "disposing" : record.status,
+        });
+        if (record.child !== undefined && !record.childMerged) {
+          queue.push({ scope: record.child, parentId: id });
+        }
+        if (effects.length >= this.maxDiagnosticEffects) break;
+      }
+    }
+
+    return {
+      ...report,
+      effects,
+      omittedEffects: Math.max(0, report.liveCount - effects.length),
+    };
+  }
+
   private boundLabel(label: string): string {
     const normalized =
       [...label.slice(0, this.maxLabelLength)]
@@ -469,13 +558,20 @@ export class ActivationScope {
   }
 
   private createChild(label: string, internalLate = false): ActivationScope {
+    if (this.currentDepth >= this.maxDepth) {
+      throw new RangeError(
+        `activation scope ${this.label} exceeds the ${this.maxDepth}-level ownership depth limit`,
+      );
+    }
     const childLabel = this.boundLabel(label);
     const child = new ActivationScope(`${this.label}/${childLabel}`, {
       failureCleanupDeadlineMs: this.failureCleanupDeadlineMs,
       maxDiagnosticEffects: this.maxDiagnosticEffects,
       maxDiagnosticErrors: this.maxDiagnosticErrors,
       maxLabelLength: this.maxLabelLength,
+      maxDepth: this.maxDepth,
     });
+    child.currentDepth = this.currentDepth + 1;
     const record = this.record(
       childLabel,
       async () => {
@@ -575,7 +671,18 @@ export class ActivationScope {
    * Cleanup is deliberately not started here; the owning records still invoke it in LIFO order. */
   private sealTree(reason: ActivationCloseReason, sealed: ActivationScope[]): void {
     if (this.currentState !== "open") return;
-    this.closeReason = Object.freeze({ ...reason });
+    this.closeReason = Object.freeze({
+      kind: reason.kind,
+      ...(reason.detail === undefined
+        ? {}
+        : {
+            detail: this.boundDiagnosticText(
+              reason.detail,
+              MAX_DIAGNOSTIC_CLOSE_DETAIL_LENGTH,
+              reason.kind,
+            ),
+          }),
+    });
     this.currentState = "closing";
     sealed.push(this);
     for (const record of [...this.records]) {
