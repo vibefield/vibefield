@@ -102,8 +102,8 @@ use crate::admission::AdmissionLedger;
 use crate::cell::{CellExitReport, CellHello};
 use crate::config::NativeConfig;
 use crate::contracts::{
-    ObservedTerminal, TerminalEndpoints, TerminalRouteCell, TerminalRouteSnapshot, UnitHealth,
-    UnitState,
+    ObservedTerminal, TerminalCellRole, TerminalEndpoints, TerminalRouteCell,
+    TerminalRouteSnapshot, TerminalWorkloadClass, UnitHealth, UnitState,
 };
 use crate::manager::NativeService;
 use crate::registries;
@@ -1120,6 +1120,11 @@ async fn run_one_cell(
             auth_token: token.clone(),
         },
         token_generation: i64::from(instance),
+        // TC-S3 transition state: the single-cell supervisor's one row is the
+        // interactive class host (the tolerant default every legacy create
+        // lands on); the K=2 supervisor replaces this call site.
+        workload_class: Some(TerminalWorkloadClass::Interactive),
+        role: Some(TerminalCellRole::Class),
     }]);
     shared.set(
         UnitState::Up,
@@ -1791,6 +1796,9 @@ fn observed_row(session: &SessionSummary) -> ObservedTerminal {
         persistence: session.persistence.clone(),
         title: session.title.clone(),
         cwd: session.cwd.clone(),
+        // TC-S3: the legacy in-process serve has no cell; the per-cell pump
+        // stamps the tag on the rows it owns.
+        cell: None,
     }
 }
 

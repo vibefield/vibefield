@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TerminalWorkloadClass } from "./envelope";
 import { ObservedTerminal } from "./mgmt";
 
 // The terminal floor's PRODUCT surface (native-floor spec §6, NF-D5). TS-only
@@ -113,9 +114,10 @@ export const TerminalCreateParams = z
      * keep-until-exit (NF-D3: daemon-lifetime is the product promise). */
     persistence: z.string().optional(),
     /** TC-D6(c) — workload class selects the scrollback byte cap (agents <
-     * interactive; scrollback is ~92% of a loaded session's memory, measured).
+     * interactive; scrollback is ~92% of a loaded session's memory, measured)
+     * — and, since TC-S3, WHICH CELL hosts the session (the placement hint).
      * Absent = "interactive", the generous cap — the tolerant-reader default. */
-    workloadClass: z.enum(["agent", "interactive"]).optional(),
+    workloadClass: TerminalWorkloadClass.optional(),
   })
   .passthrough();
 export type TerminalCreateParams = z.infer<typeof TerminalCreateParams>;

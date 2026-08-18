@@ -8,7 +8,13 @@
       "createdAt": 1784930400,
       "persistence": "keep-until-exit",
       "title": "claude — vibe-field",
-      "cwd": "/Users/james/Projects/vibe-field"
+      "cwd": "/Users/james/Projects/vibe-field",
+      "cell": {
+        "cellInstanceId": 2,
+        "cellBootId": "01JCELLBOOT0000000000000002",
+        "workloadClass": "agent",
+        "role": "class"
+      }
     }
   ],
   "workers": [{ "id": "w1", "state": "up" }]

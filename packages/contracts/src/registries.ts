@@ -87,6 +87,19 @@ export const CELL_SUPERVISION = {
   RESPAWN_WINDOW_MS: 60_000,
 } as const;
 
+/** TC-S3/TC-D4 — spawn-isolation policy. An intensity breach whose window
+ * holds an Exact-attributed offender (only Exact strikes count; Infrastructure
+ * and Unknown blame NO session — row 13) flips the class to solo placement:
+ * creates land on fresh single-session cells, so a recurring poison workload
+ * can only crash itself. WINDOW bounds how long the class stays in that mode
+ * (TC-S6's quarantine migration replaces the whole mechanism); MAX_SOLO_CELLS
+ * is the TC-D6(f) bound — at the cap the newest solo cell becomes the shared
+ * overflow target, logged, rather than unbounded process growth. */
+export const CELL_ISOLATION = {
+  ISOLATION_WINDOW_MS: 300_000,
+  MAX_SOLO_CELLS: 8,
+} as const;
+
 /** Mesh namespaces. `ss:*` is reserved to SyncedStore; `x.<pluginId>.*` is the dynamic service namespace (D19). */
 export const NAMESPACES = {
   RPC: "field.rpc",

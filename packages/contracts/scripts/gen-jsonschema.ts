@@ -31,9 +31,11 @@ import {
   RpcSuccess,
   SemverString,
   ServerKind,
+  TerminalCellRole,
   TerminalEndpoints,
   TerminalRouteCell,
   TerminalRouteSnapshot,
+  TerminalWorkloadClass,
 } from "../src/envelope";
 import { ErrorData, ErrorKind, UnavailableDetails } from "../src/errors";
 import {
@@ -76,6 +78,7 @@ import {
   NativeHealth,
   ObservedState,
   ObservedTerminal,
+  ObservedTerminalCell,
   ObservedWorker,
   PeerInfo,
   ServeConfig,
@@ -101,9 +104,13 @@ const BASE_SHARED = {
   // typify-resolvable.
   TerminalEndpoints,
   // TC-D15 (TC-S2) — the revisioned route snapshot + its cell row; both
-  // named for the same typify reason.
+  // named for the same typify reason. TC-S3 adds the class/role enums and
+  // the inventory's cell tag.
+  TerminalWorkloadClass,
+  TerminalCellRole,
   TerminalRouteCell,
   TerminalRouteSnapshot,
+  ObservedTerminalCell,
   ErrorKind,
   UnavailableDetails,
   ErrorData,

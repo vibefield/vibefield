@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   APP_ID,
+  CELL_ISOLATION,
   CELL_SUPERVISION,
   ENV_PREFIXES,
   FILES,
@@ -64,6 +65,12 @@ const lines: string[] = [
   "/// One authority with the TS side; see registries.ts for the rationale.",
   "pub mod cell_supervision {",
   ...Object.entries(CELL_SUPERVISION).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
+  "}",
+  "",
+  "/// TC-S3/TC-D4 — spawn-isolation policy (Exact-only strikes; solo-cell cap",
+  "/// is the TC-D6(f) bound). See registries.ts for the rationale.",
+  "pub mod cell_isolation {",
+  ...Object.entries(CELL_ISOLATION).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
   "}",
   "",
   "/// File names beneath a daemon's own data directory. The plane that OWNS the",

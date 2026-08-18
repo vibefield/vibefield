@@ -3959,6 +3959,9 @@ impl ObservedState {
 #[doc = "    \"sessionId\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"cell\": {"]
+#[doc = "      \"$ref\": \"#/definitions/ObservedTerminalCell\""]
+#[doc = "    },"]
 #[doc = "    \"createdAt\": {"]
 #[doc = "      \"type\": \"integer\""]
 #[doc = "    },"]
@@ -3984,6 +3987,8 @@ impl ObservedState {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct ObservedTerminal {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub cell: ::std::option::Option<ObservedTerminalCell>,
     #[serde(
         rename = "createdAt",
         default,
@@ -4003,6 +4008,55 @@ pub struct ObservedTerminal {
 }
 impl ObservedTerminal {
     pub fn builder() -> builder::ObservedTerminal {
+        Default::default()
+    }
+}
+#[doc = "`ObservedTerminalCell`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"cellBootId\","]
+#[doc = "    \"cellInstanceId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"cellBootId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"cellInstanceId\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"role\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalCellRole\""]
+#[doc = "    },"]
+#[doc = "    \"workloadClass\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalWorkloadClass\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ObservedTerminalCell {
+    #[serde(rename = "cellBootId")]
+    pub cell_boot_id: ::std::string::String,
+    #[serde(rename = "cellInstanceId")]
+    pub cell_instance_id: i64,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub role: ::std::option::Option<TerminalCellRole>,
+    #[serde(
+        rename = "workloadClass",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub workload_class: ::std::option::Option<TerminalWorkloadClass>,
+}
+impl ObservedTerminalCell {
+    pub fn builder() -> builder::ObservedTerminalCell {
         Default::default()
     }
 }
@@ -5649,6 +5703,78 @@ impl StoreSnapshot {
         Default::default()
     }
 }
+#[doc = "`TerminalCellRole`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"class\","]
+#[doc = "    \"solo\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum TerminalCellRole {
+    #[serde(rename = "class")]
+    Class,
+    #[serde(rename = "solo")]
+    Solo,
+}
+impl ::std::fmt::Display for TerminalCellRole {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Class => f.write_str("class"),
+            Self::Solo => f.write_str("solo"),
+        }
+    }
+}
+impl ::std::str::FromStr for TerminalCellRole {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "class" => Ok(Self::Class),
+            "solo" => Ok(Self::Solo),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for TerminalCellRole {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for TerminalCellRole {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for TerminalCellRole {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 #[doc = "`TerminalEndpoints`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -5717,8 +5843,14 @@ impl TerminalEndpoints {
 #[doc = "    \"pid\": {"]
 #[doc = "      \"type\": \"integer\""]
 #[doc = "    },"]
+#[doc = "    \"role\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalCellRole\""]
+#[doc = "    },"]
 #[doc = "    \"tokenGeneration\": {"]
 #[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"workloadClass\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalWorkloadClass\""]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": true"]
@@ -5733,8 +5865,16 @@ pub struct TerminalRouteCell {
     pub cell_instance_id: i64,
     pub endpoints: TerminalEndpoints,
     pub pid: i64,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub role: ::std::option::Option<TerminalCellRole>,
     #[serde(rename = "tokenGeneration")]
     pub token_generation: i64,
+    #[serde(
+        rename = "workloadClass",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub workload_class: ::std::option::Option<TerminalWorkloadClass>,
 }
 impl TerminalRouteCell {
     pub fn builder() -> builder::TerminalRouteCell {
@@ -5775,6 +5915,78 @@ pub struct TerminalRouteSnapshot {
 impl TerminalRouteSnapshot {
     pub fn builder() -> builder::TerminalRouteSnapshot {
         Default::default()
+    }
+}
+#[doc = "`TerminalWorkloadClass`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"agent\","]
+#[doc = "    \"interactive\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum TerminalWorkloadClass {
+    #[serde(rename = "agent")]
+    Agent,
+    #[serde(rename = "interactive")]
+    Interactive,
+}
+impl ::std::fmt::Display for TerminalWorkloadClass {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Agent => f.write_str("agent"),
+            Self::Interactive => f.write_str("interactive"),
+        }
+    }
+}
+impl ::std::str::FromStr for TerminalWorkloadClass {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "agent" => Ok(Self::Agent),
+            "interactive" => Ok(Self::Interactive),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for TerminalWorkloadClass {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for TerminalWorkloadClass {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for TerminalWorkloadClass {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
     }
 }
 #[doc = "`UnavailableDetails`"]
@@ -8995,6 +9207,10 @@ pub mod builder {
     }
     #[derive(Clone, Debug)]
     pub struct ObservedTerminal {
+        cell: ::std::result::Result<
+            ::std::option::Option<super::ObservedTerminalCell>,
+            ::std::string::String,
+        >,
         created_at: ::std::result::Result<::std::option::Option<i64>, ::std::string::String>,
         cwd: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
@@ -9014,6 +9230,7 @@ pub mod builder {
     impl ::std::default::Default for ObservedTerminal {
         fn default() -> Self {
             Self {
+                cell: Ok(Default::default()),
                 created_at: Ok(Default::default()),
                 cwd: Ok(Default::default()),
                 persistence: Ok(Default::default()),
@@ -9024,6 +9241,16 @@ pub mod builder {
         }
     }
     impl ObservedTerminal {
+        pub fn cell<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::ObservedTerminalCell>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cell = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cell: {e}"));
+            self
+        }
         pub fn created_at<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<i64>>,
@@ -9091,6 +9318,7 @@ pub mod builder {
             value: ObservedTerminal,
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
+                cell: value.cell?,
                 created_at: value.created_at?,
                 cwd: value.cwd?,
                 persistence: value.persistence?,
@@ -9103,12 +9331,101 @@ pub mod builder {
     impl ::std::convert::From<super::ObservedTerminal> for ObservedTerminal {
         fn from(value: super::ObservedTerminal) -> Self {
             Self {
+                cell: Ok(value.cell),
                 created_at: Ok(value.created_at),
                 cwd: Ok(value.cwd),
                 persistence: Ok(value.persistence),
                 pid: Ok(value.pid),
                 session_id: Ok(value.session_id),
                 title: Ok(value.title),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct ObservedTerminalCell {
+        cell_boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        cell_instance_id: ::std::result::Result<i64, ::std::string::String>,
+        role: ::std::result::Result<
+            ::std::option::Option<super::TerminalCellRole>,
+            ::std::string::String,
+        >,
+        workload_class: ::std::result::Result<
+            ::std::option::Option<super::TerminalWorkloadClass>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for ObservedTerminalCell {
+        fn default() -> Self {
+            Self {
+                cell_boot_id: Err("no value supplied for cell_boot_id".to_string()),
+                cell_instance_id: Err("no value supplied for cell_instance_id".to_string()),
+                role: Ok(Default::default()),
+                workload_class: Ok(Default::default()),
+            }
+        }
+    }
+    impl ObservedTerminalCell {
+        pub fn cell_boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cell_boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cell_boot_id: {e}"));
+            self
+        }
+        pub fn cell_instance_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cell_instance_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cell_instance_id: {e}"));
+            self
+        }
+        pub fn role<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalCellRole>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.role = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for role: {e}"));
+            self
+        }
+        pub fn workload_class<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalWorkloadClass>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.workload_class = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for workload_class: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ObservedTerminalCell> for super::ObservedTerminalCell {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ObservedTerminalCell,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                cell_boot_id: value.cell_boot_id?,
+                cell_instance_id: value.cell_instance_id?,
+                role: value.role?,
+                workload_class: value.workload_class?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::ObservedTerminalCell> for ObservedTerminalCell {
+        fn from(value: super::ObservedTerminalCell) -> Self {
+            Self {
+                cell_boot_id: Ok(value.cell_boot_id),
+                cell_instance_id: Ok(value.cell_instance_id),
+                role: Ok(value.role),
+                workload_class: Ok(value.workload_class),
             }
         }
     }
@@ -10285,7 +10602,15 @@ pub mod builder {
         cell_instance_id: ::std::result::Result<i64, ::std::string::String>,
         endpoints: ::std::result::Result<super::TerminalEndpoints, ::std::string::String>,
         pid: ::std::result::Result<i64, ::std::string::String>,
+        role: ::std::result::Result<
+            ::std::option::Option<super::TerminalCellRole>,
+            ::std::string::String,
+        >,
         token_generation: ::std::result::Result<i64, ::std::string::String>,
+        workload_class: ::std::result::Result<
+            ::std::option::Option<super::TerminalWorkloadClass>,
+            ::std::string::String,
+        >,
     }
     impl ::std::default::Default for TerminalRouteCell {
         fn default() -> Self {
@@ -10294,7 +10619,9 @@ pub mod builder {
                 cell_instance_id: Err("no value supplied for cell_instance_id".to_string()),
                 endpoints: Err("no value supplied for endpoints".to_string()),
                 pid: Err("no value supplied for pid".to_string()),
+                role: Ok(Default::default()),
                 token_generation: Err("no value supplied for token_generation".to_string()),
+                workload_class: Ok(Default::default()),
             }
         }
     }
@@ -10339,6 +10666,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for pid: {e}"));
             self
         }
+        pub fn role<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalCellRole>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.role = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for role: {e}"));
+            self
+        }
         pub fn token_generation<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<i64>,
@@ -10347,6 +10684,16 @@ pub mod builder {
             self.token_generation = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for token_generation: {e}"));
+            self
+        }
+        pub fn workload_class<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalWorkloadClass>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.workload_class = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for workload_class: {e}"));
             self
         }
     }
@@ -10360,7 +10707,9 @@ pub mod builder {
                 cell_instance_id: value.cell_instance_id?,
                 endpoints: value.endpoints?,
                 pid: value.pid?,
+                role: value.role?,
                 token_generation: value.token_generation?,
+                workload_class: value.workload_class?,
             })
         }
     }
@@ -10371,7 +10720,9 @@ pub mod builder {
                 cell_instance_id: Ok(value.cell_instance_id),
                 endpoints: Ok(value.endpoints),
                 pid: Ok(value.pid),
+                role: Ok(value.role),
                 token_generation: Ok(value.token_generation),
+                workload_class: Ok(value.workload_class),
             }
         }
     }

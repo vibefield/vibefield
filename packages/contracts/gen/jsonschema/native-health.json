@@ -66,6 +66,20 @@
       ],
       "additionalProperties": true
     },
+    "TerminalWorkloadClass": {
+      "type": "string",
+      "enum": [
+        "agent",
+        "interactive"
+      ]
+    },
+    "TerminalCellRole": {
+      "type": "string",
+      "enum": [
+        "class",
+        "solo"
+      ]
+    },
     "TerminalRouteCell": {
       "type": "object",
       "properties": {
@@ -83,6 +97,12 @@
         },
         "tokenGeneration": {
           "type": "integer"
+        },
+        "workloadClass": {
+          "$ref": "#/definitions/TerminalWorkloadClass"
+        },
+        "role": {
+          "$ref": "#/definitions/TerminalCellRole"
         }
       },
       "required": [
@@ -110,6 +130,28 @@
       "required": [
         "revision",
         "cells"
+      ],
+      "additionalProperties": true
+    },
+    "ObservedTerminalCell": {
+      "type": "object",
+      "properties": {
+        "cellInstanceId": {
+          "type": "integer"
+        },
+        "cellBootId": {
+          "type": "string"
+        },
+        "workloadClass": {
+          "$ref": "#/definitions/TerminalWorkloadClass"
+        },
+        "role": {
+          "$ref": "#/definitions/TerminalCellRole"
+        }
+      },
+      "required": [
+        "cellInstanceId",
+        "cellBootId"
       ],
       "additionalProperties": true
     },
@@ -362,6 +404,9 @@
         },
         "cwd": {
           "type": "string"
+        },
+        "cell": {
+          "$ref": "#/definitions/ObservedTerminalCell"
         }
       },
       "required": [

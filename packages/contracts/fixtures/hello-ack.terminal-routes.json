@@ -20,7 +20,9 @@
           "frameSocket": "/data/native/run/termframe.1.sock",
           "authToken": "per-cell-token-gen-1"
         },
-        "tokenGeneration": 1
+        "tokenGeneration": 1,
+        "workloadClass": "interactive",
+        "role": "class"
       }
     ]
   }

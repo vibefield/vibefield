@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TerminalCellRole, TerminalWorkloadClass } from "./envelope";
 
 // Management channel (design-01 §5.2, M2 subset): native.lifecycle.* + the mesh
 // facade P0 subset (peers / store / serve). Laws honored here:
@@ -73,6 +74,22 @@ export const DesiredState = z
   .passthrough();
 export type DesiredState = z.infer<typeof DesiredState>;
 
+/** TC-S3 — which cell a session lives on: the inventory's `cell` tag (§5).
+ * Identity mirrors the route row (`cellBootId` is THE identity; the ordinal is
+ * the socket-name suffix), so a reader can join inventory rows onto routes —
+ * ticket routing, per-cell loss receipts ("blast counted"), and the observed
+ * side of spawn-isolation all key on this. Deliberately WITHOUT endpoints or
+ * token: the tag names placement, the route snapshot owns coordinates. */
+export const ObservedTerminalCell = z
+  .object({
+    cellInstanceId: z.number().int(),
+    cellBootId: z.string(),
+    workloadClass: TerminalWorkloadClass.optional(),
+    role: TerminalCellRole.optional(),
+  })
+  .passthrough();
+export type ObservedTerminalCell = z.infer<typeof ObservedTerminalCell>;
+
 export const ObservedTerminal = z
   .object({
     sessionId: z.string(),
@@ -83,6 +100,10 @@ export const ObservedTerminal = z
     persistence: z.string().optional(),
     title: z.string().optional(),
     cwd: z.string().optional(),
+    /** TC-S3 — the hosting cell. ABSENT on a pre-TC-S3 floor and in the
+     * mesh-flagged in-process serve (there is no cell; tolerant readers fall
+     * back to the legacy single-cell reading). */
+    cell: ObservedTerminalCell.optional(),
   })
   .passthrough();
 export type ObservedTerminal = z.infer<typeof ObservedTerminal>;

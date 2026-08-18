@@ -70,11 +70,26 @@ export const TerminalEndpoints = z
   .passthrough();
 export type TerminalEndpoints = z.infer<typeof TerminalEndpoints>;
 
-/** TC-D15 — one cell's row in the terminal route snapshot. TC-S2 has exactly
- * one; the vector IS the shape's future (K=2 class cells at TC-S3). The row
- * carries FULL dial coordinates including the token — the snapshot rides only
- * the paired mgmt channel, the same trust the hello ack's `terminal` field has
- * always carried (NF-D8). */
+/** TC-D4/TC-D6(c) — the two workload classes. Class is a PLACEMENT HINT and a
+ * policy selector (scrollback caps), never a permanent failure domain. One
+ * authority for both planes: the route snapshot, the observed inventory's
+ * `cell` tag, and `terminal.create` all spell it from here. */
+export const TerminalWorkloadClass = z.enum(["agent", "interactive"]);
+export type TerminalWorkloadClass = z.infer<typeof TerminalWorkloadClass>;
+
+/** TC-S3 — what a cell is FOR. `class` = the shared per-class host; `solo` = a
+ * spawn-isolation host born under an intensity breach with an Exact offender
+ * (TC-D4): it takes one session so a recurring poison workload can only crash
+ * itself. Solo cells are the S3 interim; TC-S6's quarantine MIGRATION replaces
+ * them. */
+export const TerminalCellRole = z.enum(["class", "solo"]);
+export type TerminalCellRole = z.infer<typeof TerminalCellRole>;
+
+/** TC-D15 — one cell's row in the terminal route snapshot. TC-S2 had exactly
+ * one; TC-S3 carries one per class (agents | interactive) plus any solo
+ * isolation hosts. The row carries FULL dial coordinates including the token —
+ * the snapshot rides only the paired mgmt channel, the same trust the hello
+ * ack's `terminal` field has always carried (NF-D8). */
 export const TerminalRouteCell = z
   .object({
     /** the floor supervisor's spawn ordinal — 1-based, monotonic within a
@@ -94,6 +109,12 @@ export const TerminalRouteCell = z
      * ordering key `authToken` was accidentally serving as (GT-5b's rotation
      * checks keyed on the token value; a generation is comparable). */
     tokenGeneration: z.number().int(),
+    /** TC-S3 — which class this cell hosts. ABSENT = a pre-TC-S3 single-cell
+     * floor (every class lands there); tolerant readers route accordingly. */
+    workloadClass: TerminalWorkloadClass.optional(),
+    /** TC-S3 — `class` (shared host, the default reading of absence) or
+     * `solo` (a spawn-isolation host; takes exactly one session). */
+    role: TerminalCellRole.optional(),
   })
   .passthrough();
 export type TerminalRouteCell = z.infer<typeof TerminalRouteCell>;
@@ -103,7 +124,16 @@ export type TerminalRouteCell = z.infer<typeof TerminalRouteCell>;
  * route errors — a missed edge is repaired by the next read. `revision` is
  * monotonic within a floor generation (pair with the hello's `bootId` to
  * order across floor restarts). Empty `cells` is an honest state (no cell
- * up), never an error. */
+ * up), never an error.
+ *
+ * TC-S3 — the CREATE-TARGET discipline, derivable from any snapshot alone
+ * (no extra verb): a class's create target is its `role:"class"` row when
+ * one is present, else its HIGHEST-instance `role:"solo"` row (the floor
+ * spawns a fresh empty solo the moment the previous one takes a session, so
+ * the newest solo is the empty one; at the solo cap the newest stays target
+ * as the honest overflow). Rows that are not the target still serve their
+ * EXISTING sessions — ticket routing for a session goes through its
+ * inventory `cell` tag to that cell's row, never through the target rule. */
 export const TerminalRouteSnapshot = z
   .object({
     revision: z.number().int(),

@@ -66,6 +66,13 @@ pub mod cell_supervision {
     pub const RESPAWN_WINDOW_MS: u64 = 60000;
 }
 
+/// TC-S3/TC-D4 — spawn-isolation policy (Exact-only strikes; solo-cell cap
+/// is the TC-D6(f) bound). See registries.ts for the rationale.
+pub mod cell_isolation {
+    pub const ISOLATION_WINDOW_MS: u64 = 300000;
+    pub const MAX_SOLO_CELLS: u64 = 8;
+}
+
 /// File names beneath a daemon's own data directory. The plane that OWNS the
 /// file joins the name to its data dir; readers ask that plane for the path.
 pub mod files {
