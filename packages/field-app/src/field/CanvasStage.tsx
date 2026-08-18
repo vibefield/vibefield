@@ -23,6 +23,7 @@ import { createPortal } from "react-dom";
 import { PMREMGenerator, type Texture } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { installCursorHalo } from "../cursor";
+import { measureQueueFor } from "../field-engine";
 import { InfiniteCanvasGround } from "./InfiniteCanvasGround";
 
 // CanvasStage (§5.4.3): renderer-local ICE/DOM/GL composition and
@@ -181,9 +182,18 @@ export function CanvasStage({
     [devtoolsRef],
   );
 
+  // The ResizeObserver half of auto-size measurement. Same instance the engine
+  // ingests from (field-engine.ts owns the pairing), and stable for the engine's
+  // lifetime — a new identity would re-boot the canvas mount. SPREAD rather than
+  // passed: ICE declares the prop absent-or-present, and under
+  // exactOptionalPropertyTypes an explicit `undefined` is not the same thing.
+  const measure = measureQueueFor(ce);
+  const measureProp = measure === undefined ? {} : { measureQueue: measure };
+
   return (
     <InfiniteCanvasGround
       engine={ce}
+      {...measureProp}
       grid={grid}
       keymapOverrides={keymapOverrides}
       glRoute={glRoute}

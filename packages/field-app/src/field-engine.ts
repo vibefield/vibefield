@@ -1,8 +1,10 @@
 import {
   type CanvasEngine,
   createCanvasEngine,
+  createMeasureQueue,
   type DocSession,
   type Entity,
+  type MeasureQueue,
   PrefabId,
   type WidgetType,
   Wire,
@@ -347,13 +349,31 @@ function seedWire(
   );
 }
 
+// Auto-size measurement needs the SAME queue on both halves of the pipeline:
+// `createCanvasEngine({ measureQueue })` installs the ingest system that drains
+// it, and the canvas component's `measureQueue` prop owns the ResizeObserver
+// that fills it. Two different instances is not an error anywhere — the RO fills
+// one, ingest drains the other, and nothing ever measures. The queue therefore
+// rides the engine handle in a side table: the pairing cannot come apart, and
+// the host-kit door keeps returning a plain CanvasEngine.
+const measureQueues = new WeakMap<CanvasEngine, MeasureQueue>();
+
+/** The engine's measurement queue, for the canvas component's `measureQueue`
+ * prop. Undefined for an engine built by any other path — ICE's documented
+ * absent case, where measurement is simply skipped. */
+export function measureQueueFor(ce: CanvasEngine): MeasureQueue | undefined {
+  return measureQueues.get(ce);
+}
+
 export function createFieldEngine(
   registry: PluginRegistry<WidgetType>,
   /** P3c — envelope-derived ghost stubs for the pending doc (absent plugins) */
   ghosts: readonly WidgetType[] = [],
 ): CanvasEngine {
-  return createCanvasEngine({
+  const measureQueue = createMeasureQueue();
+  const ce = createCanvasEngine({
     widgets: [...registry.allWidgets().values(), ...ghosts],
+    measureQueue,
     // ICE keeps generic guest diagnostics and behavior-specific provenance as complementary
     // routes. Preserve both; the renderer logger owns transport, bounds, and redaction.
     onGuestFault(id, error) {
@@ -401,6 +421,8 @@ export function createFieldEngine(
       chrome: { liftScale: 1.05 },
     },
   });
+  measureQueues.set(ce, measureQueue);
+  return ce;
 }
 
 function pluginIdForBehavior(behaviorId: string): string | undefined {
