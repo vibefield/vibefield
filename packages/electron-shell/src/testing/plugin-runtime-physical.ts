@@ -24,6 +24,7 @@ export const PLUGIN_RUNTIME_SOAK_EXACT_KEYS = [
   "loggingQueueBytes",
   "unexplainedLogDrops",
   "plantedMainListeners",
+  "powerSaveBlockerDeviation",
 ] as const;
 
 export interface PluginRuntimeSoakConfig {

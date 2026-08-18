@@ -24,6 +24,7 @@ export interface PhysicalSoakOptions {
   readonly warmupSamples: number;
   readonly minimumGradedSamples: number;
   readonly minimumDurationMs?: number;
+  readonly maximumSampleGapMs?: number;
   readonly exactZero?: readonly string[];
   readonly plateau?: Readonly<Record<string, PhysicalSoakMetricBudget>>;
   readonly trend?: Readonly<Record<string, PhysicalSoakTrendBudget>>;
@@ -35,6 +36,7 @@ export interface PhysicalSoakOptions {
 export interface PhysicalSoakFailure {
   readonly kind:
     | "insufficient-duration"
+    | "sample-gap"
     | "structural-residue"
     | "missing-series"
     | "plateau-growth"
@@ -130,8 +132,8 @@ function numericSeries(
 }
 
 /** Deterministic physical-soak oracle. Exact residue is graded from cycle one;
- * allocator trends use wall time so changing the sampling cadence cannot make
- * the same retained bytes look safer or worse. */
+ * allocator trends use monotonic elapsed time so changing the sampling cadence
+ * cannot make the same retained bytes look safer or worse. */
 export function evaluatePhysicalSoak(
   samples: readonly PhysicalSoakSample[],
   options: PhysicalSoakOptions,
@@ -142,6 +144,7 @@ export function evaluatePhysicalSoak(
   warmupSamples: number;
   gradedSamples: number;
   durationMs: number;
+  maximumObservedGapMs: number;
   exactMaxima: Readonly<Record<string, number>>;
   plateaus: Readonly<Record<string, unknown>>;
   trends: Readonly<Record<string, unknown>>;
@@ -161,12 +164,19 @@ export function evaluatePhysicalSoak(
   if (samples.length - warmupSamples < minimumGradedSamples) {
     throw new RangeError("physical soak does not contain enough post-warmup samples");
   }
-  let previousElapsed = -1;
+  let previousElapsed = 0;
+  let maximumObservedGapMs = 0;
+  let maximumObservedGapCycle = samples[0]!.cycle;
   for (const [index, sample] of samples.entries()) {
     nonNegativeInteger(sample.cycle, `samples[${index}].cycle`);
     const elapsed = finite(sample.elapsedMs, `samples[${index}].elapsedMs`);
-    if (elapsed < 0 || elapsed < previousElapsed) {
+    if (elapsed < 0 || (index > 0 && elapsed < previousElapsed)) {
       throw new TypeError("physical soak elapsedMs must be non-negative and monotonic");
+    }
+    const gap = elapsed - previousElapsed;
+    if (gap > maximumObservedGapMs) {
+      maximumObservedGapMs = gap;
+      maximumObservedGapCycle = sample.cycle;
     }
     previousElapsed = elapsed;
   }
@@ -185,6 +195,21 @@ export function evaluatePhysicalSoak(
       maximum: minimumDurationMs,
       message: `physical soak covered ${durationMs}ms, below the required ${minimumDurationMs}ms`,
     });
+  }
+  const maximumSampleGapMs = options.maximumSampleGapMs;
+  if (maximumSampleGapMs !== undefined) {
+    const maximumGap = finite(maximumSampleGapMs, "maximumSampleGapMs");
+    if (maximumGap < 0) throw new TypeError("maximumSampleGapMs must be non-negative");
+    if (maximumObservedGapMs > maximumGap) {
+      failures.push({
+        kind: "sample-gap",
+        metric: "sampleGapMs",
+        sample: maximumObservedGapCycle,
+        actual: maximumObservedGapMs,
+        maximum: maximumGap,
+        message: `physical soak went ${maximumObservedGapMs}ms without a completed observation`,
+      });
+    }
   }
 
   const exactMaxima: Record<string, number> = {};
@@ -294,6 +319,7 @@ export function evaluatePhysicalSoak(
     warmupSamples,
     gradedSamples: graded.length,
     durationMs,
+    maximumObservedGapMs,
     exactMaxima: Object.freeze(exactMaxima),
     plateaus: Object.freeze(plateaus),
     trends: Object.freeze(trends),

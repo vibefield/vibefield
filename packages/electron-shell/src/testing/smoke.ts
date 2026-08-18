@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import {
   TerminalConfigDocument,
@@ -19,6 +20,7 @@ import {
   BrowserWindow,
   Menu,
   MessageChannelMain,
+  powerSaveBlocker,
   type WebContents,
   webContents,
 } from "electron";
@@ -334,6 +336,8 @@ interface PluginRuntimePhysicalSample extends PhysicalSoakSample {
   readonly raw: Readonly<Record<string, unknown>>;
 }
 
+const PLUGIN_RUNTIME_SOAK_MAX_SAMPLE_GAP_MS = 5 * 60 * 1_000;
+
 function rendererRuntimeVector(canvas: readonly CanvasFacts[]): CountVector {
   const windows: Record<string, unknown> = {};
   for (const [index, facts] of canvas.entries()) {
@@ -540,6 +544,9 @@ function physicalSoakOptions(
     warmupSamples: config.warmupSamples,
     minimumGradedSamples: config.minimumGradedSamples,
     ...(long ? { minimumDurationMs: 24 * 60 * 60 * 1_000 } : {}),
+    ...(config.durationMs !== null
+      ? { maximumSampleGapMs: PLUGIN_RUNTIME_SOAK_MAX_SAMPLE_GAP_MS }
+      : {}),
     exactZero: PLUGIN_RUNTIME_SOAK_EXACT_KEYS,
     plateau: {
       electronProcessCount: {
@@ -684,6 +691,7 @@ export async function runSmokePluginRestart(opts: {
     opts.logging.pluginRenderer,
   ] as const;
   const plantedEvents: string[] = [];
+  let powerSaveBlockerId: number | null = null;
   if (process.env["VF_SMOKE_DEBUG"]) {
     windows.forEach((win, index) => {
       win.webContents.on("console-message", (...args: unknown[]) => {
@@ -693,6 +701,12 @@ export async function runSmokePluginRestart(opts: {
   }
   let ok = false;
   try {
+    // A duration claim must not be earned while the app is idle-suspended.
+    // The display may still sleep, and every physical sample below proves the
+    // blocker remained active for the observed interval.
+    if (config.durationMs !== null) {
+      powerSaveBlockerId = powerSaveBlocker.start("prevent-app-suspension");
+    }
     const initialReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
     await Promise.all(
       windows.map((win) => loadRenderer(win, "smoke-plugin-restart", opts.viteUrl)),
@@ -731,7 +745,7 @@ export async function runSmokePluginRestart(opts: {
     if (nativePid === null || !pidAlive(nativePid)) {
       throw new Error("restart smoke requires one live field-native process");
     }
-    const startedAt = Date.now();
+    const startedAt = performance.now();
     const deadline = config.durationMs === null ? null : startedAt + config.durationMs;
     const samples: PluginRuntimePhysicalSample[] = [];
     const oldBootIds: string[] = [];
@@ -770,7 +784,7 @@ export async function runSmokePluginRestart(opts: {
       const sample: PluginRuntimePhysicalSample = {
         phase,
         cycle,
-        elapsedMs: Date.now() - startedAt,
+        elapsedMs: performance.now() - startedAt,
         bootId: currentHandle.info.bootId,
         fielddPid: settled.health.fieldd.pid,
         nativePid,
@@ -806,6 +820,11 @@ export async function runSmokePluginRestart(opts: {
           loggingQueueBytes: logging.queueBytes,
           unexplainedLogDrops: logging.unexplainedDrops,
           plantedMainListeners: plantedMainListenerCount(),
+          powerSaveBlockerDeviation:
+            config.durationMs === null ||
+            (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId))
+              ? 0
+              : 1,
         },
         series: {
           electronProcessCount: electron.processCount,
@@ -843,6 +862,10 @@ export async function runSmokePluginRestart(opts: {
           osObservationRanges: resources.ranges,
           logs,
           logging,
+          powerSaveBlocker: {
+            enabled: powerSaveBlockerId !== null,
+            active: powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId),
+          },
         },
       };
       samples.push(sample);
@@ -853,7 +876,7 @@ export async function runSmokePluginRestart(opts: {
 
     while (
       cycle < 10_000 &&
-      (config.cycles !== null ? cycle < config.cycles : Date.now() < (deadline ?? 0))
+      (config.cycles !== null ? cycle < config.cycles : performance.now() < (deadline ?? 0))
     ) {
       const childPid = currentHandle.childPid;
       if (currentHandle.ownership !== "spawned" || childPid === undefined) {
@@ -912,13 +935,13 @@ export async function runSmokePluginRestart(opts: {
       }
       await collectSample("restart", settled, [childPid], oldRendererPids);
       if (config.cycleDelayMs > 0) {
-        const remaining = deadline === null ? config.cycleDelayMs : deadline - Date.now();
+        const remaining = deadline === null ? config.cycleDelayMs : deadline - performance.now();
         if (remaining > 0) await sleep(Math.min(config.cycleDelayMs, remaining));
       }
     }
 
     if (deadline !== null && samples.at(-1)!.elapsedMs < config.durationMs!) {
-      const remaining = deadline - Date.now();
+      const remaining = deadline - performance.now();
       if (remaining > 0) await sleep(remaining);
       const settled = await settlePluginRuntimeHealth(currentHandle, expectedFielddRuntime);
       await collectSample("terminal", settled, [], []);
@@ -954,7 +977,13 @@ export async function runSmokePluginRestart(opts: {
     );
   }
   for (const event of plantedEvents) process.removeAllListeners(event);
-  await teardown(opts.supervisor, opts.root, opts.beforeExit);
+  try {
+    await teardown(opts.supervisor, opts.root, opts.beforeExit);
+  } finally {
+    if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
+      powerSaveBlocker.stop(powerSaveBlockerId);
+    }
+  }
   app.exit(ok ? 0 : 2);
 }
 

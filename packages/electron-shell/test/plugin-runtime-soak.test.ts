@@ -55,6 +55,42 @@ describe("physical plugin runtime soak oracle", () => {
     expect(short.failures.some((failure) => failure.kind === "insufficient-duration")).toBe(true);
   });
 
+  it("rejects an observation gap from the run origin or between samples", () => {
+    const originGapped = samples().map((sample) => ({
+      ...sample,
+      elapsedMs: sample.elapsedMs + 70 * 60_000,
+    }));
+    const originVerdict = evaluatePhysicalSoak(originGapped, {
+      ...options,
+      maximumSampleGapMs: 65 * 60_000,
+    });
+    expect(originVerdict.maximumObservedGapMs).toBe(70 * 60_000);
+    expect(originVerdict.failures).toContainEqual(
+      expect.objectContaining({ kind: "sample-gap", sample: 0 }),
+    );
+
+    const betweenGapped = samples().map((sample, index) => ({
+      ...sample,
+      elapsedMs: sample.elapsedMs + (index >= 5 ? 10 * 60_000 : 0),
+    }));
+    const betweenVerdict = evaluatePhysicalSoak(betweenGapped, {
+      ...options,
+      maximumSampleGapMs: 65 * 60_000,
+    });
+
+    expect(betweenVerdict.verdict).toBe("fail");
+    expect(betweenVerdict.maximumObservedGapMs).toBe(70 * 60_000);
+    expect(betweenVerdict.failures).toContainEqual(
+      expect.objectContaining({
+        kind: "sample-gap",
+        metric: "sampleGapMs",
+        sample: 5,
+        actual: 70 * 60_000,
+        maximum: 65 * 60_000,
+      }),
+    );
+  });
+
   it("uses run-origin elapsed time and discounts one-sample endpoint jitter", () => {
     const jittered = [20, 18, 20, 22, 20].map(
       (fds, cycle): PhysicalSoakSample => ({
