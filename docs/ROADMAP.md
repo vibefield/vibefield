@@ -3,7 +3,7 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-17 — PRC-5 COMPLETE.** PRC-5a–d
+> stays in the design docs + specs. Last rewritten: **2026-08-17 — PRC-6a LANDED.** PRC-5a–d
 > established exact renderer identity, immutable signed-artifact slots, explicit candidate
 > authority, and stable renderer replacement. PRC-5e assembled the authenticated coordinator and
 > source/ack transport in `7873e60` + `31a48c1` + `303374f` + `ffd1ae2` + `0c58fe7`; PRC-5f
@@ -15,7 +15,12 @@
 > fresh incarnations, and automatically adopts a new boot. Complete gates are fieldd **566 passed +
 > 1 platform skip**, Electron **574/574**, and supervisor **54/54**. Literal hardware power loss and
 > a Windows filesystem run remain explicit release/portability witnesses, not inferred from macOS
-> SIGKILL. **Now: PRC-6 bounded diagnostics and soak.** The real-tailnet QUIC witness remains
+> SIGKILL. PRC-6a `26fcfdf` now provides the serialization-safe shared runtime projection: one
+> global 128-effect/32-error budget, compact 64-event lifecycle history with explicit omissions,
+> exact desired/committed/close/force facts, passive contained observers, and a 64-level ownership
+> safety ceiling. Adversarial reports stay below 64 KiB and do not retain retired runtime objects;
+> 2,388 live effects measured 1.29 ms p99. **Now: PRC-6b host aggregation + lifecycle logs, then
+> PRC-6c the compressed and literal 24-hour soak.** The real-tailnet QUIC witness remains
 > **1/1 in 35.11 s** across two ephemeral nodes, including fragmentation, STOP/reopen, replay
 > deduplication, and vanished-peer repair.
 > Earlier milestone context follows for continuity: R3-0 landed three slices
@@ -128,8 +133,9 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-0 through PRC-3d landed; **PRC-4 COMPLETE** on ICE 0.9.0 / strata 0.13.0; **PRC-5 COMPLETE** through restart convergence `137f086`. | `specs/plugin-architecture.md` §8.8/§12.7/§18.5/§21.9 · `thinking-plugin-runtime-composability.md` · `thinking-prc4-behavior-adapter.md` · `thinking-prc5-update-coordinator.md` | **PRC-6 now:** bounded diagnostics and soak. P8c rides WP8; P8e gates third-party listing. |
+| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-0 through PRC-3d landed; **PRC-4/PRC-5 COMPLETE**; **PRC-6a LANDED `26fcfdf`**. | `specs/plugin-architecture.md` §8.8/§12.7/§18.5/§21.9/§23/§24.4 · `thinking-plugin-runtime-composability.md` · `thinking-prc6-diagnostics-soak.md` | **PRC-6b now:** passive service/renderer/update aggregation + lifecycle logs; then PRC-6c resource soak. P8c rides WP8; P8e gates third-party listing. |
 | PLUG — PRC-5 update coordinator | **COMPLETE.** PRC-5a identity `c5dcca9`; 5b slots `6817116`; 5c candidate authority `3fa514f` + `1602654`; 5d renderer replacement `6cafd0a`; 5e coordinated authority through `0c58fe7`; 5f positive death `b35f73d`; 5g durable epoch/boot fence/physical two-window restart `137f086`. | plugin-architecture §18.5 · `thinking-prc5-update-coordinator.md` | Release portability only: literal power-loss and Windows filesystem witness. Protocol follow-on is PRC-6. |
+| PLUG — PRC-6 diagnostics + soak | **IN FLIGHT. PRC-6a `26fcfdf`:** flat globally bounded scope projection, compact typed history, retained close/force facts, loading/blocked visibility, passive event observer, 64-level ancestry safety. Runtime 50/50; GC/cardinality 3/3; 2.4k/9.6k overhead controls green. | plugin-architecture §23/§24.4/§24.6 · `thinking-prc6-diagnostics-soak.md` | **PRC-6b:** prove and land host aggregation/log seam without coupling diagnostics to PRC-5 votes. **PRC-6c:** clean/leak oracles + physical 24h run. |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -374,7 +380,12 @@ authenticated source/ack lane, exact revocation inverse, held-newcomer gate, and
 renderer/service install barrier through `0c58fe7`. **PRC-5f `b35f73d`** separated bounded
 replacement requests from positive renderer-death evidence. **PRC-5g `137f086`** made the
 artifact/epoch pointer the journal, fenced surviving realms on daemon boot change, and passed real
-pre/post-rename child death plus a packaged two-window restart. PRC-5 is complete; PRC-6 is now.
+pre/post-rename child death plus a packaged two-window restart. PRC-5 is complete. **PRC-6a
+`26fcfdf`** then separated the rich recursive debug snapshot from a globally bounded flat wire
+projection, replaced open event objects with a compact typed 64-row ring plus omission count,
+retained exact close/force facts without runtime objects, and turned a measured 2,000-deep stack
+overflow into a deterministic 64-level ownership ceiling. Forced-GC retention and 2.4k/9.6k
+timing controls pass. PRC-6b host aggregation/logging is now; the 24-hour claim remains PRC-6c.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through

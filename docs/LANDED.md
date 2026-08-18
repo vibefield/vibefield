@@ -2766,3 +2766,39 @@ typechecks; changed-file Biome; bundle assertion; patch hygiene; and the physica
 The independent real-tailnet lane remains **1/1 in 35.11 s**. A literal hardware power cut and a
 Windows filesystem run remain named release/portability witnesses; macOS process SIGKILL is not
 presented as stronger storage-hardware evidence. PRC-6 now owns bounded diagnostics and soak.
+
+## PRC-6a — bounded shared runtime diagnostics
+
+**LANDED 2026-08-17 (`26fcfdf`).** The shared renderer/service controller now has a distinct
+serialization-safe diagnostic projection. The rich recursive snapshot remains available for
+in-process control/debugging, but it is no longer mistaken for a bounded wire shape: an adversarial
+4-wide/5-deep tree proved that `maxDiagnosticEffects: 8` could emit more than 1,000 rows and 256 KiB
+because the old cap applied at every scope.
+
+`ActivationScope.diagnostic()` emits a globally capped, breadth-first flat tree. Parent-indexed
+`{id,parentId,label}` rows preserve exact ancestry without repeating whole paths; root aggregate
+counters retain every omitted live/pending/late/error fact. The hard maxima are 128 effects, 32
+errors, 120-code-point labels, 512-code-point messages/close details, and 64 ownership levels.
+Configuration can reduce them, never expand them. The depth ceiling came from a real counterexample:
+around 2,000 nested scopes overflowed `report()`'s stack and threatened close as well; level 65 now
+refuses before recording a partial child.
+
+Controller history is no longer an open `Record<string, unknown>` ring repeating full targets and
+close reports. It is a closed compact 64-event vocabulary with monotonic sequence and
+`omittedHistory`; exact current desired/committed targets stay at the top, one bounded `lastClose`
+retains cleanup errors, and `lastForce` separately records target, phase,
+confirmed/unconfirmed/error state, and the real boundary outcome. Loading, prepared, active,
+unloading, and blocked scopes are all visible. A host lifecycle observer receives immutable compact
+events; sync throws and rejected promises cannot interrupt reconciliation. No candidate, disposer,
+scope, worker, port, promise, or termination adapter crosses the projection.
+
+Acceptance: plugin-runtime **50/50**; production cardinality/plain-wire/forced-GC retention **3/3**;
+candidate controls **2/2**; plugin-runtime, field-app, and fieldd typechecks; R1–R18 zero violations;
+Biome and patch hygiene. At 2,388 live records the 128-row projection measured 9,829 bytes and
+1.29 ms p99; at 9,556 it remained 9,829 bytes and measured 8.34 ms p99. WeakRef collection is
+supportive evidence; the stronger retention invariant is field-by-field construction of a closed
+plain-data schema.
+
+PRC-6b still owns the passive service/renderer/update aggregation and lifecycle log mapping. PRC-6c
+owns calibrated clean/leak controls, the compressed gate, and the literal 24-hour physical soak;
+none of PRC-6a's fast loops claim that duration.
