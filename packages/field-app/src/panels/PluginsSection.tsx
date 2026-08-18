@@ -165,6 +165,51 @@ function ControllerSummary({
   );
 }
 
+function BehaviorSummary({
+  behavior,
+}: {
+  behavior: NonNullable<PluginRuntimePluginDiagnostic["renderers"][number]["behaviorGeneration"]>;
+}): ReactElement {
+  return (
+    <div className="rounded-[12px] border border-black/5 bg-black/[0.02] p-3 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[12px] font-medium text-black/75 dark:text-white/75">
+          Behaviors · {behavior.target.documentId}
+        </span>
+        <SettingsPill>{behavior.state}</SettingsPill>
+      </div>
+      <div className={`mt-1 ${labelCls}`}>
+        generation {behavior.target.runtimeGeneration} · {behavior.installedCount}/
+        {behavior.desiredCount} installed · {behavior.blockedCount} blocked ·{" "}
+        {behavior.suspendedCount} suspended · {behavior.failedCount} failed
+        {behavior.closeReason === undefined ? "" : ` · close ${behavior.closeReason}`}
+      </div>
+      {behavior.declarations.length > 0 && (
+        <div className={`mt-2 space-y-1 ${labelCls}`}>
+          {behavior.declarations.map((declaration) => (
+            <div key={`${declaration.declarationId}:${declaration.rendererTarget}`}>
+              {declaration.declarationId} · {declaration.status} · target{" "}
+              {behavior.rendererTargets[declaration.rendererTarget]?.artifact.installRevision ??
+                "unknown"}
+              {declaration.blockedReason === undefined ? "" : ` · ${declaration.blockedReason}`}
+              {declaration.breaker === null
+                ? ""
+                : ` · ${declaration.breaker.strikes} strike${declaration.breaker.strikes === 1 ? "" : "s"}${declaration.breaker.suspended ? " · breaker suspended" : ""}`}
+              {declaration.error === undefined ? "" : ` · ${declaration.error.message}`}
+            </div>
+          ))}
+        </div>
+      )}
+      {behavior.omittedDeclarations > 0 && (
+        <p className={`mt-1 ${labelCls}`}>
+          {behavior.omittedDeclarations} behavior declaration row
+          {behavior.omittedDeclarations === 1 ? "" : "s"} omitted.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PluginRuntimeDetails({
   runtime,
 }: {
@@ -182,12 +227,16 @@ function PluginRuntimeDetails({
       </div>
       <ControllerSummary title="Service" controller={runtime.serviceController} />
       {runtime.renderers.map((renderer) => (
-        <ControllerSummary
-          key={`${renderer.participantId}:${renderer.incarnation}`}
-          title={`Renderer · ${renderer.participantId}`}
-          controller={renderer.controller}
-          connected={renderer.connected}
-        />
+        <div key={`${renderer.participantId}:${renderer.incarnation}`} className="space-y-2">
+          <ControllerSummary
+            title={`Renderer · ${renderer.participantId}`}
+            controller={renderer.controller}
+            connected={renderer.connected}
+          />
+          {renderer.behaviorGeneration !== null && (
+            <BehaviorSummary behavior={renderer.behaviorGeneration} />
+          )}
+        </div>
       ))}
       {(runtime.serviceControllerOmitted || runtime.omittedRenderers > 0) && (
         <p className={labelCls}>

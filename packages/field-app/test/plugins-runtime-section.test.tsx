@@ -71,6 +71,42 @@ function runtimeSnapshot() {
             sequence: 2,
             receivedAt: 99,
             controller: controller(),
+            behaviorGeneration: {
+              pluginId: PLUGIN_ID,
+              state: "active",
+              target: {
+                windowId: "field",
+                documentId: "doc-a",
+                runtimeGeneration: "engine-a",
+              },
+              rendererTargets: [
+                {
+                  face: "renderer",
+                  pluginId: PLUGIN_ID,
+                  artifact: {
+                    installRevision: "revision-1",
+                    manifestHash: `sha256:${"a".repeat(64)}`,
+                  },
+                  authorityFingerprint: "[]",
+                  observedGrantGeneration: 0,
+                  instanceKey: { windowId: "field" },
+                },
+              ],
+              desiredCount: 1,
+              installedCount: 1,
+              blockedCount: 0,
+              failedCount: 0,
+              suspendedCount: 1,
+              declarations: [
+                {
+                  declarationId: `${PLUGIN_ID}:layout`,
+                  rendererTarget: 0,
+                  status: "installed",
+                  breaker: { strikes: 3, suspended: true },
+                },
+              ],
+              omittedDeclarations: 0,
+            },
           },
         ],
         omittedRenderers: 0,
@@ -161,6 +197,10 @@ describe("PluginsSection runtime diagnostics", () => {
     expect(container?.textContent).toContain("commit epoch 4");
     expect(container?.textContent).toContain("0 connected · 1 renderer report");
     expect(container?.textContent).toContain("disconnected · active");
+    expect(container?.textContent).toContain("Behaviors · doc-a");
+    expect(container?.textContent).toContain("1/1 installed · 0 blocked · 1 suspended");
+    expect(container?.textContent).toContain("target revision-1");
+    expect(container?.textContent).toContain("3 strikes · breaker suspended");
     expect(container?.textContent).toContain("the last bounded report is retained");
   });
 });

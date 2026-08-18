@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS,
+  PluginRuntimeBehaviorGenerationDiagnostic,
   PluginRuntimeControllerDiagnostic,
   PluginRuntimeDiagnosticsSnapshot,
   PluginRuntimeReportParams,
@@ -90,6 +91,80 @@ describe("PRC-6b runtime diagnostics contracts", () => {
           { id: 2, parentId: 1, label: "child", kind: "resource", status: "live" },
           { id: 1, parentId: null, label: "parent", kind: "scope", status: "live" },
         ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps failed old→new behavior transitions exact through a two-target table", () => {
+    const pluginId = "com.example.diagnostics";
+    const behavior = {
+      pluginId,
+      state: "failed",
+      target: { windowId: "field", documentId: "doc-a", runtimeGeneration: "engine-a" },
+      rendererTargets: [
+        target(pluginId),
+        {
+          ...target(pluginId),
+          artifact: { installRevision: "revision-2", manifestHash: "sha256:artifact-2" },
+        },
+      ],
+      desiredCount: 1,
+      installedCount: 0,
+      blockedCount: 0,
+      failedCount: 1,
+      suspendedCount: 0,
+      declarations: [
+        {
+          declarationId: `${pluginId}:layout`,
+          rendererTarget: 0,
+          status: "failed",
+          error: { operation: "unregister", message: "old target did not stop" },
+          breaker: null,
+        },
+        {
+          declarationId: `${pluginId}:layout`,
+          rendererTarget: 1,
+          status: "inactive",
+          breaker: null,
+        },
+      ],
+      omittedDeclarations: 0,
+    };
+    expect(PluginRuntimeBehaviorGenerationDiagnostic.safeParse(behavior).success).toBe(true);
+    expect(
+      PluginRuntimeBehaviorGenerationDiagnostic.safeParse({
+        ...behavior,
+        declarations: [{ ...behavior.declarations[0]!, rendererTarget: 2 }],
+      }).success,
+    ).toBe(false);
+    expect(
+      PluginRuntimeBehaviorGenerationDiagnostic.safeParse({
+        ...behavior,
+        declarations: [
+          {
+            ...behavior.declarations[0]!,
+            status: "installed",
+            error: behavior.declarations[0]!.error,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      PluginRuntimeBehaviorGenerationDiagnostic.safeParse({
+        ...behavior,
+        rendererTargets: [
+          {
+            ...behavior.rendererTargets[0]!,
+            instanceKey: { windowId: "another-window" },
+          },
+        ],
+        declarations: [{ ...behavior.declarations[0]!, rendererTarget: 0 }],
+      }).success,
+    ).toBe(false);
+    expect(
+      PluginRuntimeBehaviorGenerationDiagnostic.safeParse({
+        ...behavior,
+        state: "active",
       }).success,
     ).toBe(false);
   });

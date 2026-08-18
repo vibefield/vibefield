@@ -103,7 +103,7 @@ function target(face: "renderer" | "service"): RendererRuntimeTarget | ServiceRu
     observedGrantGeneration: 0,
   } as const;
   return face === "renderer"
-    ? { ...base, face, instanceKey: { windowId: "field" } }
+    ? { ...base, face, instanceKey: { windowId: A.participantId } }
     : { ...base, face, instanceKey: { deviceId: "device-a" } };
 }
 
@@ -128,8 +128,44 @@ function controller(
   };
 }
 
-function report(sequence: number, value = controller()) {
-  return PluginRuntimeReportParams.parse({ pluginId: PLUGIN_ID, sequence, controller: value });
+function report(sequence: number, value = controller(), behaviorGeneration?: unknown) {
+  return PluginRuntimeReportParams.parse({
+    pluginId: PLUGIN_ID,
+    sequence,
+    controller: value,
+    ...(behaviorGeneration === undefined ? {} : { behaviorGeneration }),
+  });
+}
+
+function behaviorDiagnostic() {
+  return {
+    pluginId: PLUGIN_ID,
+    state: "failed",
+    target: { windowId: A.participantId, documentId: "doc-a", runtimeGeneration: "engine-a" },
+    rendererTargets: [target("renderer")],
+    desiredCount: 2,
+    installedCount: 0,
+    blockedCount: 1,
+    failedCount: 1,
+    suspendedCount: 1,
+    declarations: [
+      {
+        declarationId: `${PLUGIN_ID}:faulty`,
+        rendererTarget: 0,
+        status: "failed",
+        error: { operation: "register", message: "behavior registration failed" },
+        breaker: { strikes: 3, suspended: true },
+      },
+      {
+        declarationId: `${PLUGIN_ID}:presence`,
+        rendererTarget: 0,
+        status: "blocked",
+        blockedReason: "presence-unavailable",
+        breaker: null,
+      },
+    ],
+    omittedDeclarations: 0,
+  } as const;
 }
 
 function fixture(options: { service?: RuntimeTargetControllerDiagnostic | null } = {}) {
@@ -182,6 +218,36 @@ describe("PluginRuntimeDiagnostics (PRC-6b)", () => {
         report(1),
       ),
     ).rejects.toMatchObject({ kind: "CONFLICT" });
+
+    await expect(
+      registrar.call("plugins.runtime.report", context(), {
+        ...report(1),
+        controller: controller("renderer", {
+          desired: {
+            ...target("renderer"),
+            instanceKey: { windowId: "renderer:forged-window" },
+          },
+        }),
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+
+    const forgedBehavior = behaviorDiagnostic();
+    await expect(
+      registrar.call(
+        "plugins.runtime.report",
+        context(),
+        report(1, controller(), {
+          ...forgedBehavior,
+          target: { ...forgedBehavior.target, windowId: "renderer:forged-window" },
+          rendererTargets: [
+            {
+              ...target("renderer"),
+              instanceKey: { windowId: "renderer:forged-window" },
+            },
+          ],
+        }),
+      ),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
 
     await expect(registrar.call("plugins.runtime.report", context(), report(1))).resolves.toEqual({
       accepted: true,
@@ -354,7 +420,11 @@ describe("PluginRuntimeDiagnostics (PRC-6b)", () => {
     });
     const { diagnostics, registrar, update } = fixture({ service: failedService });
     register(update);
-    await registrar.call("plugins.runtime.report", context(), report(1));
+    await registrar.call(
+      "plugins.runtime.report",
+      context(),
+      report(1, controller(), behaviorDiagnostic()),
+    );
     update.disconnectRenderer(A);
 
     const plugin = diagnostics.snapshot(PLUGIN_ID).plugins[0];
@@ -364,6 +434,9 @@ describe("PluginRuntimeDiagnostics (PRC-6b)", () => {
         "controller-failed",
         "scope-non-quiescent",
         "cleanup-errors",
+        "behavior-generation-failed",
+        "behavior-blocked",
+        "behavior-suspended",
         "renderer-disconnected",
       ]),
     );

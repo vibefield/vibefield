@@ -5,6 +5,7 @@ import {
   type PluginModuleUrls,
   type PluginRecord,
   type PluginRegistrySnapshot,
+  type PluginRuntimeBehaviorGenerationDiagnostic,
   type PluginUpdateArtifact,
 } from "@vibefield/contracts";
 import { UnavailableState } from "@vibefield/design-kit";
@@ -979,6 +980,8 @@ export class RendererWindowController {
   readonly behaviorLedger = new BehaviorBreakerLedger();
 
   private readonly controllers = new Map<string, RendererPluginController>();
+  private readonly controllerDiagnostics = new Map<string, RuntimeTargetControllerDiagnostic>();
+  private behaviorDiagnostics = new Map<string, PluginRuntimeBehaviorGenerationDiagnostic>();
   private readonly updateChannels = new Set<{ close(): Promise<void> }>();
   private readonly inFlight = new Set<Promise<void>>();
   private closeTask: Promise<void> | undefined;
@@ -987,7 +990,11 @@ export class RendererWindowController {
   constructor(
     readonly windowId = DEFAULT_RENDERER_WINDOW_ID,
     private readonly diagnostics?: {
-      publish(pluginId: string, diagnostic: RuntimeTargetControllerDiagnostic): void;
+      publish(
+        pluginId: string,
+        diagnostic: RuntimeTargetControllerDiagnostic,
+        behaviorGeneration: PluginRuntimeBehaviorGenerationDiagnostic | null,
+      ): void;
       close(): void;
     },
   ) {}
@@ -1002,17 +1009,48 @@ export class RendererWindowController {
       throw new Error(`renderer controller already exists for ${controller.pluginId}`);
     controller.attachBehaviorCatalog(this.behaviorCatalog);
     this.controllers.set(controller.pluginId, controller);
-    this.diagnostics?.publish(controller.pluginId, controller.diagnostic());
+    this.controllerDiagnostics.set(controller.pluginId, controller.diagnostic());
+    this.publishCombinedDiagnostic(controller.pluginId);
   }
 
   publishDiagnostic(pluginId: string, diagnostic: RuntimeTargetControllerDiagnostic): void {
     if (this.closed) return;
-    this.diagnostics?.publish(pluginId, diagnostic);
+    this.controllerDiagnostics.set(pluginId, diagnostic);
+    this.publishCombinedDiagnostic(pluginId);
+  }
+
+  /** Replaces the one active document-generation fold. Missing plugin rows are real withdrawal,
+   * so their next combined report carries behaviorGeneration:null. */
+  publishBehaviorDiagnostics(
+    diagnostics: readonly PluginRuntimeBehaviorGenerationDiagnostic[],
+  ): void {
+    if (this.closed) return;
+    const next = new Map<string, PluginRuntimeBehaviorGenerationDiagnostic>();
+    for (const diagnostic of diagnostics) {
+      if (diagnostic.target.windowId !== this.windowId) {
+        throw new Error(
+          `behavior diagnostic window ${diagnostic.target.windowId} does not belong to ${this.windowId}`,
+        );
+      }
+      if (next.has(diagnostic.pluginId)) {
+        throw new Error(`duplicate behavior diagnostic for ${diagnostic.pluginId}`);
+      }
+      next.set(diagnostic.pluginId, diagnostic);
+    }
+    const affected = new Set([...this.behaviorDiagnostics.keys(), ...next.keys()]);
+    this.behaviorDiagnostics = next;
+    for (const pluginId of affected) this.publishCombinedDiagnostic(pluginId);
   }
 
   addUpdateChannel(channel: { close(): Promise<void> }): void {
     if (this.closed) throw new Error("renderer window controller is closed");
     this.updateChannels.add(channel);
+  }
+
+  private publishCombinedDiagnostic(pluginId: string): void {
+    const controller = this.controllerDiagnostics.get(pluginId);
+    if (controller === undefined) return;
+    this.diagnostics?.publish(pluginId, controller, this.behaviorDiagnostics.get(pluginId) ?? null);
   }
 
   controller(pluginId: string): RendererPluginController | undefined {

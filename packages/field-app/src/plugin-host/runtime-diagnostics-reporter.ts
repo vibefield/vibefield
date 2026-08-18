@@ -28,7 +28,11 @@ export class RendererRuntimeDiagnosticsReporter {
 
   constructor(private readonly deps: RendererRuntimeDiagnosticsReporterDeps) {}
 
-  publish(pluginId: string, controller: RuntimeTargetControllerDiagnostic): void {
+  publish(
+    pluginId: string,
+    controller: RuntimeTargetControllerDiagnostic,
+    behaviorGeneration: PluginRuntimeReportValue["behaviorGeneration"] = null,
+  ): void {
     if (this.closed) return;
     if (
       !this.sequences.has(pluginId) &&
@@ -39,7 +43,12 @@ export class RendererRuntimeDiagnosticsReporter {
     }
     const previous = this.sequences.get(pluginId) ?? 0;
     const sequence = Math.min(Number.MAX_SAFE_INTEGER, previous + 1);
-    const parsed = PluginRuntimeReportParams.safeParse({ pluginId, sequence, controller });
+    const parsed = PluginRuntimeReportParams.safeParse({
+      pluginId,
+      sequence,
+      controller,
+      behaviorGeneration,
+    });
     if (!parsed.success) {
       this.logFailure(
         pluginId,

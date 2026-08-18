@@ -6,9 +6,13 @@ import {
   p,
   type WidgetType,
 } from "@vibecook/ice";
-import { type BehaviorDefinition, PLUGIN_LIMITS } from "@vibefield/contracts";
+import {
+  type BehaviorDefinition,
+  PLUGIN_LIMITS,
+  PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS,
+} from "@vibefield/contracts";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createFieldEngine } from "../src/field-engine";
 import {
   getRendererLogger,
@@ -117,6 +121,258 @@ function recordingLogger(
 }
 
 describe("document behavior generation host", () => {
+  it("projects one bounded plugin-local generation fold and polling emits nothing", () => {
+    const aId = "com.example.host-diagnostic-a";
+    const bId = "com.example.host-diagnostic-b";
+    const A = defineBehavior(`${aId}:layout`, { store: "runtime" });
+    const B = defineBehavior(`${bId}:layout`, { store: "runtime" });
+    const catalog = new BehaviorBindingCatalog();
+    publish(catalog, aId, [A], { authorized: false });
+    publish(catalog, bId, [B]);
+    const engine = createCanvasEngine();
+    const changed = vi.fn();
+    const host = new BehaviorGenerationHost({
+      engine,
+      target: target("engine-diagnostic", "doc-diagnostic"),
+      onDiagnosticsChanged: changed,
+    });
+    const connection = connectBehaviorGenerationHost(host, catalog);
+
+    expect(host.diagnostics()).toEqual([
+      expect.objectContaining({
+        pluginId: aId,
+        state: "active",
+        target: {
+          windowId: "field",
+          documentId: "doc-diagnostic",
+          runtimeGeneration: "engine-diagnostic",
+        },
+        desiredCount: 1,
+        installedCount: 0,
+        blockedCount: 1,
+        declarations: [
+          expect.objectContaining({
+            declarationId: A.name,
+            status: "blocked",
+            blockedReason: "canvas-write-denied",
+          }),
+        ],
+      }),
+      expect.objectContaining({
+        pluginId: bId,
+        desiredCount: 1,
+        installedCount: 1,
+        blockedCount: 0,
+        declarations: [expect.objectContaining({ declarationId: B.name, status: "installed" })],
+      }),
+    ]);
+    const beforePolling = changed.mock.calls.length;
+    for (let index = 0; index < 100; index += 1) host.diagnostics();
+    expect(changed).toHaveBeenCalledTimes(beforePolling);
+
+    connection.close("diagnostic-close");
+    expect(changed.mock.calls.at(-1)?.[0]).toEqual([
+      expect.objectContaining({ pluginId: aId, state: "closed", closeReason: "diagnostic-close" }),
+      expect.objectContaining({ pluginId: bId, state: "closed", closeReason: "diagnostic-close" }),
+    ]);
+    engine.dispose();
+  });
+
+  it("retains exact old and new renderer targets when old withdrawal fails", () => {
+    const pluginId = "com.example.host-diagnostic-transition";
+    const Behavior = defineBehavior(`${pluginId}:layout`, { store: "runtime" });
+    const engine = createCanvasEngine();
+    const ledger = new BehaviorBreakerLedger();
+    ledger.set(`field\0${pluginId}\0${Behavior.name}`, { strikes: 3, suspended: true });
+    const register = engine.behaviors.register.bind(engine.behaviors);
+    let refuseUnregister = false;
+    engine.behaviors.register = ((...args: Parameters<typeof register>) => {
+      const unregister = register(...args);
+      return () => {
+        if (refuseUnregister) throw new Error("old target would not unregister");
+        unregister();
+      };
+    }) as typeof engine.behaviors.register;
+    const host = new BehaviorGenerationHost({
+      engine,
+      target: target("engine-transition", "doc-transition"),
+      ledger,
+    });
+    const old = {
+      ...rendererBinding(pluginId, Behavior, 0),
+      candidateToken: {},
+      rendererTarget: rendererTarget(pluginId),
+    } satisfies BehaviorCatalogBinding;
+    expect(host.reconcile([old]).state).toBe("active");
+
+    refuseUnregister = true;
+    const next = {
+      ...rendererBinding(pluginId, Behavior, 0),
+      candidateToken: {},
+      rendererTarget: {
+        ...rendererTarget(pluginId),
+        artifact: {
+          installRevision: "behavior-host-rev-2",
+          manifestHash: `sha256:${"e".repeat(64)}`,
+        },
+      },
+    } satisfies BehaviorCatalogBinding;
+    expect(host.reconcile([next]).state).toBe("failed");
+    const diagnostic = host.diagnostics()[0];
+    expect(guest(engine, Behavior.name)).toBeDefined();
+    expect(diagnostic?.installedCount).toBe(1);
+    expect(diagnostic?.suspendedCount).toBe(1);
+    expect(diagnostic?.declarations.every((row) => row.breaker?.suspended === true)).toBe(true);
+    expect(diagnostic?.rendererTargets.map((target) => target.artifact.installRevision)).toEqual([
+      "behavior-host-rev-1",
+      "behavior-host-rev-2",
+    ]);
+    expect(diagnostic?.declarations).toEqual([
+      expect.objectContaining({
+        declarationId: Behavior.name,
+        rendererTarget: 0,
+        status: "failed",
+        error: { operation: "unregister", message: "old target would not unregister" },
+      }),
+      expect.objectContaining({
+        declarationId: Behavior.name,
+        rendererTarget: 1,
+        status: "inactive",
+      }),
+    ]);
+    refuseUnregister = false;
+    host.close();
+    expect(guest(engine, Behavior.name)).toBeUndefined();
+    engine.dispose();
+  });
+
+  it("keeps a failed withdrawn registration owned until close retries it", () => {
+    const pluginId = "com.example.host-diagnostic-withdrawal";
+    const Behavior = defineBehavior(`${pluginId}:layout`, { store: "runtime" });
+    const engine = createCanvasEngine();
+    const register = engine.behaviors.register.bind(engine.behaviors);
+    let refuseUnregister = false;
+    engine.behaviors.register = ((...args: Parameters<typeof register>) => {
+      const unregister = register(...args);
+      return () => {
+        if (refuseUnregister) throw new Error("withdrawn behavior remained live");
+        unregister();
+      };
+    }) as typeof engine.behaviors.register;
+    const ledger = new BehaviorBreakerLedger();
+    const host = new BehaviorGenerationHost({
+      engine,
+      target: target("engine-withdrawal", "doc-withdrawal"),
+      ledger,
+    });
+    const binding = {
+      ...rendererBinding(pluginId, Behavior, 0),
+      candidateToken: {},
+      rendererTarget: rendererTarget(pluginId),
+    } satisfies BehaviorCatalogBinding;
+    ledger.set(host.breakerKey(binding), { strikes: 3, suspended: true });
+    expect(host.reconcile([binding]).state).toBe("active");
+
+    refuseUnregister = true;
+    expect(host.reconcile([])).toMatchObject({ state: "failed", installed: [Behavior.name] });
+    expect(host.diagnostics()).toEqual([
+      expect.objectContaining({
+        pluginId,
+        desiredCount: 0,
+        installedCount: 1,
+        failedCount: 1,
+        suspendedCount: 1,
+        declarations: [
+          expect.objectContaining({
+            declarationId: Behavior.name,
+            status: "failed",
+            error: {
+              operation: "unregister",
+              message: "withdrawn behavior remained live",
+            },
+          }),
+        ],
+      }),
+    ]);
+    expect(guest(engine, Behavior.name)).toBeDefined();
+
+    refuseUnregister = false;
+    expect(host.close().state).toBe("closed");
+    expect(guest(engine, Behavior.name)).toBeUndefined();
+    engine.dispose();
+  });
+
+  it("preserves both exact transition targets while shedding detail below 32 KiB", () => {
+    const pluginId = `c.${"d".repeat(62)}`;
+    const behaviors = Array.from({ length: PLUGIN_LIMITS.BEHAVIORS_MAX }, (_, index) =>
+      defineBehavior(`${pluginId}:${index.toString().padStart(2, "0")}${"x".repeat(61)}`, {
+        store: "runtime",
+      }),
+    );
+    const windowId = "w".repeat(PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS.TARGET_PART_CHARS);
+    const exactRendererTarget = (marker: string) => ({
+      face: "renderer" as const,
+      pluginId,
+      artifact: {
+        installRevision: marker.repeat(PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS.TARGET_PART_CHARS),
+        manifestHash: marker.repeat(PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS.TARGET_PART_CHARS),
+        approvedModuleGeneration: Number.MAX_SAFE_INTEGER,
+      },
+      authorityFingerprint: marker.repeat(
+        PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS.AUTHORITY_FINGERPRINT_CHARS,
+      ),
+      observedGrantGeneration: Number.MAX_SAFE_INTEGER,
+      runtimeGeneration: marker.repeat(PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS.TARGET_PART_CHARS),
+      instanceKey: { windowId },
+    });
+    const engine = createCanvasEngine();
+    const register = engine.behaviors.register.bind(engine.behaviors);
+    const refused = new Set(behaviors.slice(0, -1).map((behavior) => behavior.name));
+    let refuseUnregister = false;
+    engine.behaviors.register = ((...args: Parameters<typeof register>) => {
+      const unregister = register(...args);
+      return () => {
+        if (refuseUnregister && refused.has(args[0].name)) {
+          throw new Error("e".repeat(4_096));
+        }
+        unregister();
+      };
+    }) as typeof engine.behaviors.register;
+    const host = new BehaviorGenerationHost({
+      engine,
+      target: {
+        windowId,
+        documentId: "d".repeat(PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS.TARGET_PART_CHARS),
+        runtimeGeneration: "g".repeat(PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS.TARGET_PART_CHARS),
+      },
+    });
+    const bindings = (rendererTarget: ReturnType<typeof exactRendererTarget>, token: object) =>
+      behaviors.map(
+        (behavior, index) =>
+          ({
+            ...rendererBinding(pluginId, behavior, index),
+            candidateToken: token,
+            rendererTarget,
+          }) satisfies BehaviorCatalogBinding,
+      );
+    expect(host.reconcile(bindings(exactRendererTarget("a"), {})).state).toBe("active");
+
+    refuseUnregister = true;
+    expect(host.reconcile(bindings(exactRendererTarget("z"), {})).state).toBe("failed");
+    const diagnostic = host.diagnostics()[0];
+    if (diagnostic === undefined) throw new Error("maximal behavior diagnostic missing");
+    const bytes = new TextEncoder().encode(JSON.stringify(diagnostic)).byteLength;
+    expect(diagnostic.rendererTargets).toHaveLength(2);
+    expect(diagnostic.declarations.some((row) => row.rendererTarget === 0)).toBe(true);
+    expect(diagnostic.declarations.some((row) => row.rendererTarget === 1)).toBe(true);
+    expect(diagnostic.omittedDeclarations).toBeGreaterThan(0);
+    expect(bytes).toBeLessThanOrEqual(PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS.BEHAVIOR_BYTES);
+
+    refuseUnregister = false;
+    host.close();
+    engine.dispose();
+  });
+
   it("registers the initial catalog before open and reverse-unregisters before close", async () => {
     const lifecycle: string[] = [];
     const ticks: string[] = [];
@@ -254,6 +510,11 @@ describe("document behavior generation host", () => {
     if (row === undefined) throw new Error("catalog row missing");
     const breakerKey = hostA.breakerKey(row);
     expect(ledger.get(breakerKey)).toEqual({ strikes: 3, suspended: true });
+    expect(hostA.diagnostics()[0]).toMatchObject({
+      pluginId,
+      suspendedCount: 1,
+      declarations: [expect.objectContaining({ breaker: { strikes: 3, suspended: true } })],
+    });
     connectionA.close("engine-replaced");
     first.docs.close();
     first.dispose();
@@ -518,6 +779,9 @@ describe("document behavior generation host", () => {
       target: target("engine-diagnostic-sink"),
       onEvent: () => {
         throw new Error("diagnostic sink failed");
+      },
+      onDiagnosticsChanged: () => {
+        throw new Error("aggregate sink failed");
       },
     });
     const connection = connectBehaviorGenerationHost(host, catalog);

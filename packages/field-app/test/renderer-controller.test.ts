@@ -3,6 +3,7 @@ import {
   type PluginModuleUrls,
   type PluginRecord,
   type PluginRegistrySnapshot,
+  PluginRuntimeBehaviorGenerationDiagnostic,
 } from "@vibefield/contracts";
 import type {
   Disposable,
@@ -210,6 +211,63 @@ function lifecycleLogger() {
 }
 
 describe("the renderer/window target controller", () => {
+  it("joins and withdraws the one document-generation behavior fold per plugin report", async () => {
+    const id = "prc.renderer.behavior-diagnostics";
+    const reports = vi.fn();
+    const closeReporter = vi.fn();
+    const runtime = new RendererWindowController("field", {
+      publish: reports,
+      close: closeReporter,
+    });
+    const controller = new RendererPluginController(
+      record(id),
+      moduleRow(id),
+      { activate() {} },
+      "field",
+      testDeps(),
+    );
+    runtime.add(controller);
+    expect(reports).toHaveBeenLastCalledWith(id, expect.any(Object), null);
+
+    const behavior = PluginRuntimeBehaviorGenerationDiagnostic.parse({
+      pluginId: id,
+      state: "active",
+      target: { windowId: "field", documentId: "doc-a", runtimeGeneration: "engine-a" },
+      rendererTargets: [
+        {
+          face: "renderer",
+          pluginId: id,
+          artifact: {
+            installRevision: moduleRow(id).installRevision,
+            manifestHash: moduleRow(id).manifestHash,
+          },
+          authorityFingerprint: "[]",
+          observedGrantGeneration: 0,
+          instanceKey: { windowId: "field" },
+        },
+      ],
+      desiredCount: 0,
+      installedCount: 0,
+      blockedCount: 0,
+      failedCount: 0,
+      suspendedCount: 0,
+      declarations: [],
+      omittedDeclarations: 0,
+    });
+    runtime.publishBehaviorDiagnostics([behavior]);
+    expect(reports).toHaveBeenLastCalledWith(id, expect.any(Object), behavior);
+    runtime.publishBehaviorDiagnostics([]);
+    expect(reports).toHaveBeenLastCalledWith(id, expect.any(Object), null);
+    expect(() =>
+      runtime.publishBehaviorDiagnostics([
+        { ...behavior, target: { ...behavior.target, windowId: "another-window" } },
+      ]),
+    ).toThrow(/does not belong/);
+
+    await runtime.close();
+    expect(closeReporter).toHaveBeenCalledTimes(1);
+  });
+
   it("logs each lifecycle transition once, reports latest state, and polling emits nothing", async () => {
     const id = "prc.renderer.controller.diagnostics";
     const { logger, calls } = lifecycleLogger();

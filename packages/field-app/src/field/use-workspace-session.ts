@@ -185,6 +185,8 @@ export function useWorkspaceSession(
           ledger: behaviorRuntime.behaviorLedger,
           presenceAvailable: () => ce.docs.presence() !== undefined,
           onEvent: logBehaviorGenerationEvent,
+          onDiagnosticsChanged: (diagnostics) =>
+            behaviorRuntime.publishBehaviorDiagnostics(diagnostics),
         }),
         behaviorRuntime.behaviorCatalog,
       );

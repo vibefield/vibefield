@@ -1,3 +1,4 @@
+import { PluginRuntimeBehaviorGenerationDiagnostic } from "@vibefield/contracts";
 import {
   type RendererRuntimeTarget,
   type RuntimeTargetCandidate,
@@ -44,6 +45,39 @@ function diagnostic() {
   return controller.diagnostic();
 }
 
+function behaviorDiagnostic() {
+  const pluginId = "com.example.reporter";
+  return PluginRuntimeBehaviorGenerationDiagnostic.parse({
+    pluginId,
+    state: "active",
+    target: { windowId: "field", documentId: "doc-a", runtimeGeneration: "engine-a" },
+    rendererTargets: [
+      {
+        face: "renderer",
+        pluginId,
+        artifact: { installRevision: "revision-1", manifestHash: "sha256:artifact-1" },
+        authorityFingerprint: "[]",
+        observedGrantGeneration: 0,
+        instanceKey: { windowId: "field" },
+      },
+    ],
+    desiredCount: 1,
+    installedCount: 1,
+    blockedCount: 0,
+    failedCount: 0,
+    suspendedCount: 0,
+    declarations: [
+      {
+        declarationId: `${pluginId}:layout`,
+        rendererTarget: 0,
+        status: "installed",
+        breaker: null,
+      },
+    ],
+    omittedDeclarations: 0,
+  });
+}
+
 describe("RendererRuntimeDiagnosticsReporter (PRC-6b)", () => {
   it("retains one in-flight request and only the latest plain report behind it", async () => {
     const first = deferred<unknown>();
@@ -57,7 +91,7 @@ describe("RendererRuntimeDiagnosticsReporter (PRC-6b)", () => {
     const reporter = new RendererRuntimeDiagnosticsReporter({ request, logger: log.value });
     const value = diagnostic();
 
-    reporter.publish("com.example.reporter", value);
+    reporter.publish("com.example.reporter", value, behaviorDiagnostic());
     await Promise.resolve();
     for (let index = 0; index < 10_000; index += 1) {
       reporter.publish("com.example.reporter", value);
@@ -74,6 +108,9 @@ describe("RendererRuntimeDiagnosticsReporter (PRC-6b)", () => {
     first.resolve({ accepted: true, generation: 1 });
     await vi.waitFor(() => expect(requests).toHaveLength(2));
     expect(requests[0]).toMatchObject({ sequence: 1 });
+    expect(requests[0]).toMatchObject({
+      behaviorGeneration: { pluginId: "com.example.reporter", installedCount: 1 },
+    });
     expect(requests[1]).toMatchObject({ sequence: 10_001 });
     await vi.waitFor(() =>
       expect(reporter.state()).toEqual({

@@ -149,7 +149,10 @@ describe("coordinated renderer update over the production Product API", () => {
     const daemon = await setup();
     const shell = await openRpc(daemon);
     await helloAs(shell, daemon.shellToken, "shell-main");
-    await shell.call("plugins.install", { id: PLUGIN_ID, version: "1.0.0" });
+    const installed = (await shell.call("plugins.install", {
+      id: PLUGIN_ID,
+      version: "1.0.0",
+    })) as { installRevision: string; manifestHash: string };
 
     const windowGrant = (await shell.call("system.mintWindowToken", {
       scopes: ["plugins.read"],
@@ -182,6 +185,42 @@ describe("coordinated renderer update over the production Product API", () => {
         history: [],
         omittedHistory: 0,
       },
+      behaviorGeneration: {
+        pluginId: PLUGIN_ID,
+        state: "active",
+        target: {
+          windowId: identity.participantId,
+          documentId: "doc-a",
+          runtimeGeneration: "engine-a",
+        },
+        rendererTargets: [
+          {
+            face: "renderer",
+            pluginId: PLUGIN_ID,
+            artifact: {
+              installRevision: installed.installRevision,
+              manifestHash: installed.manifestHash,
+            },
+            authorityFingerprint: "[]",
+            observedGrantGeneration: 0,
+            instanceKey: { windowId: identity.participantId },
+          },
+        ],
+        desiredCount: 1,
+        installedCount: 1,
+        blockedCount: 0,
+        failedCount: 0,
+        suspendedCount: 0,
+        declarations: [
+          {
+            declarationId: `${PLUGIN_ID}:layout`,
+            rendererTarget: 0,
+            status: "installed",
+            breaker: null,
+          },
+        ],
+        omittedDeclarations: 0,
+      },
     };
     expect(
       PluginRuntimeReportResult.parse(await renderer.call("plugins.runtime.report", report)),
@@ -202,6 +241,10 @@ describe("coordinated renderer update over the production Product API", () => {
         incarnation: identity.incarnation,
         connected: true,
         sequence: 1,
+        behaviorGeneration: expect.objectContaining({
+          pluginId: PLUGIN_ID,
+          installedCount: 1,
+        }),
       }),
     ]);
     await expect(

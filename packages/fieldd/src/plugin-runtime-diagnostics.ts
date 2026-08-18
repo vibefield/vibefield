@@ -2,6 +2,7 @@ import {
   type CallerContext,
   PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS,
   type PluginRecord,
+  type PluginRuntimeBehaviorGenerationDiagnostic,
   PluginRuntimeControllerDiagnostic,
   PluginRuntimeDiagnosticsGetParams,
   type PluginRuntimeDiagnosticsSnapshot,
@@ -43,6 +44,9 @@ interface StoredRendererReport {
   readonly sequence: number;
   readonly receivedAt: number;
   readonly controller: ReturnType<typeof PluginRuntimeControllerDiagnostic.parse>;
+  readonly behaviorGeneration: ReturnType<
+    typeof PluginRuntimeBehaviorGenerationDiagnostic.parse
+  > | null;
 }
 
 interface DiagnosticsSubscription {
@@ -194,6 +198,9 @@ export class PluginRuntimeDiagnostics {
       );
     if (
       jsonBytes(parsed.data.controller) > limits.CONTROLLER_BYTES ||
+      (parsed.data.behaviorGeneration !== undefined &&
+        parsed.data.behaviorGeneration !== null &&
+        jsonBytes(parsed.data.behaviorGeneration) > limits.BEHAVIOR_BYTES) ||
       jsonBytes(parsed.data) > limits.REPORT_BYTES
     ) {
       throw new RpcCallError(
@@ -210,6 +217,38 @@ export class PluginRuntimeDiagnostics {
         "CONFLICT",
         "plugin runtime report does not belong to a current renderer participant",
         true,
+      );
+    }
+    const controllerTargets = [
+      parsed.data.controller.desired,
+      parsed.data.controller.committed,
+      parsed.data.controller.blocked?.target,
+      parsed.data.controller.force.last?.target,
+    ].filter((target): target is PluginRuntimeTarget => target !== null && target !== undefined);
+    const behavior = parsed.data.behaviorGeneration;
+    if (
+      controllerTargets.some(
+        (target) =>
+          target.face !== "renderer" || target.instanceKey.windowId !== identity.participantId,
+      ) ||
+      parsed.data.controller.history.some(
+        (event) =>
+          event.target !== undefined &&
+          event.target !== null &&
+          event.target.instanceKey !== identity.participantId,
+      ) ||
+      (behavior !== undefined &&
+        behavior !== null &&
+        (behavior.target.windowId !== identity.participantId ||
+          behavior.rendererTargets.some(
+            (target) =>
+              target.face !== "renderer" || target.instanceKey.windowId !== identity.participantId,
+          )))
+    ) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "plugin runtime projection does not belong to the authenticated renderer window",
+        false,
       );
     }
 
@@ -244,6 +283,7 @@ export class PluginRuntimeDiagnostics {
       sequence: parsed.data.sequence,
       receivedAt: safeNow(this.now()),
       controller: parsed.data.controller,
+      behaviorGeneration: parsed.data.behaviorGeneration ?? null,
     });
     this.changed();
     return PluginRuntimeReportResult.parse({ accepted: true, generation: this.generation });
@@ -329,6 +369,7 @@ export class PluginRuntimeDiagnostics {
         sequence: report.sequence,
         receivedAt: report.receivedAt,
         controller: report.controller,
+        behaviorGeneration: report.behaviorGeneration,
       });
     }
     return rows.sort((left, right) => left.participantId.localeCompare(right.participantId));
@@ -395,6 +436,14 @@ function doctorIssues(
       currentArtifact,
       renderer.participantId,
     );
+    if (renderer.behaviorGeneration !== null) {
+      appendBehaviorIssues(
+        issues,
+        renderer.behaviorGeneration,
+        currentArtifact,
+        renderer.participantId,
+      );
+    }
     if (!renderer.connected) {
       issues.push(
         PluginRuntimeDoctorIssue.parse({
@@ -431,6 +480,61 @@ function doctorIssues(
   }
   const projected = issues.slice(0, limits.ISSUES_PER_PLUGIN);
   return { issues: projected, omitted: issues.length - projected.length };
+}
+
+function appendBehaviorIssues(
+  issues: PluginRuntimeDoctorIssueValue[],
+  behavior: ReturnType<typeof PluginRuntimeBehaviorGenerationDiagnostic.parse>,
+  currentArtifact: { readonly installRevision: string; readonly manifestHash: string },
+  participantId: string,
+): void {
+  const base = { face: "behavior" as const, participantId };
+  if (behavior.state === "failed" || behavior.failedCount > 0) {
+    issues.push(
+      PluginRuntimeDoctorIssue.parse({
+        ...base,
+        code: "behavior-generation-failed",
+        severity: "error",
+        message: `${behavior.failedCount} behavior operation${behavior.failedCount === 1 ? "" : "s"} failed in the current document generation.`,
+      }),
+    );
+  }
+  if (behavior.blockedCount > 0) {
+    issues.push(
+      PluginRuntimeDoctorIssue.parse({
+        ...base,
+        code: "behavior-blocked",
+        severity: "warning",
+        message: `${behavior.blockedCount} behavior declaration${behavior.blockedCount === 1 ? " is" : "s are"} blocked by current authority or coeffects.`,
+      }),
+    );
+  }
+  if (behavior.suspendedCount > 0) {
+    issues.push(
+      PluginRuntimeDoctorIssue.parse({
+        ...base,
+        code: "behavior-suspended",
+        severity: "error",
+        message: `${behavior.suspendedCount} behavior breaker${behavior.suspendedCount === 1 ? " is" : "s are"} suspended.`,
+      }),
+    );
+  }
+  if (
+    behavior.rendererTargets.some(
+      (target) =>
+        target.artifact.installRevision !== currentArtifact.installRevision ||
+        target.artifact.manifestHash !== currentArtifact.manifestHash,
+    )
+  ) {
+    issues.push(
+      PluginRuntimeDoctorIssue.parse({
+        ...base,
+        code: "target-not-current",
+        severity: "error",
+        message: "Behavior generation retains a non-current renderer artifact target.",
+      }),
+    );
+  }
 }
 
 function appendControllerIssues(

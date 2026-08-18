@@ -8,8 +8,9 @@ import { PluginId } from "./plugins";
  * not a per-plugin multiplier. */
 export const PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS = Object.freeze({
   CONTROLLER_BYTES: 64 * 1024,
-  REPORT_BYTES: 72 * 1024,
-  SNAPSHOT_BYTES: 12 * 1024 * 1024,
+  BEHAVIOR_BYTES: 32 * 1024,
+  REPORT_BYTES: 104 * 1024,
+  SNAPSHOT_BYTES: 16 * 1024 * 1024,
   PLUGINS: 256,
   CONTROLLERS: 128,
   RENDERERS_PER_PLUGIN: 64,
@@ -17,6 +18,8 @@ export const PLUGIN_RUNTIME_DIAGNOSTIC_LIMITS = Object.freeze({
   EFFECTS: 128,
   CLEANUP_ERRORS: 32,
   HISTORY: 64,
+  BEHAVIORS_PER_PLUGIN: 16,
+  BEHAVIOR_RENDERER_TARGETS: 2,
   LABEL_CHARS: 120,
   CONTROLLER_LABEL_CHARS: 512,
   TEXT_CHARS: 512,
@@ -306,6 +309,222 @@ export const PluginRuntimeControllerDiagnostic = z
   .strict();
 export type PluginRuntimeControllerDiagnostic = z.infer<typeof PluginRuntimeControllerDiagnostic>;
 
+export const PluginRuntimeBehaviorBlockedReason = z.enum([
+  "canvas-write-denied",
+  "presence-unavailable",
+  "presence-budget-exceeded",
+]);
+export type PluginRuntimeBehaviorBlockedReason = z.infer<typeof PluginRuntimeBehaviorBlockedReason>;
+
+export const PluginRuntimeBehaviorError = z
+  .object({
+    operation: z.enum(["register", "unregister", "rollback"]),
+    message: DiagnosticText,
+  })
+  .strict();
+export type PluginRuntimeBehaviorError = z.infer<typeof PluginRuntimeBehaviorError>;
+
+export const PluginRuntimeBehaviorDeclarationDiagnostic = z
+  .object({
+    declarationId: TargetPart,
+    rendererTarget: SafeCount,
+    status: z.enum(["installed", "blocked", "failed", "inactive"]),
+    blockedReason: PluginRuntimeBehaviorBlockedReason.optional(),
+    error: PluginRuntimeBehaviorError.optional(),
+    breaker: z.object({ strikes: SafeCount, suspended: z.boolean() }).strict().nullable(),
+  })
+  .strict()
+  .superRefine((row, ctx) => {
+    if ((row.status === "blocked") !== (row.blockedReason !== undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["blockedReason"],
+        message: "only a blocked behavior declaration carries a blocked reason",
+      });
+    }
+    if ((row.status === "failed") !== (row.error !== undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["error"],
+        message: "only a failed behavior declaration carries an error",
+      });
+    }
+  });
+export type PluginRuntimeBehaviorDeclarationDiagnostic = z.infer<
+  typeof PluginRuntimeBehaviorDeclarationDiagnostic
+>;
+
+export const PluginRuntimeBehaviorGenerationDiagnostic = z
+  .object({
+    pluginId: PluginId,
+    state: z.enum(["active", "failed", "closed"]),
+    target: z
+      .object({
+        windowId: TargetPart,
+        documentId: TargetPart,
+        runtimeGeneration: TargetPart,
+      })
+      .strict(),
+    /** Normally one exact committed renderer target. A failed old→new transition may need both. */
+    rendererTargets: z.array(PluginRuntimeTarget).min(1).max(limits.BEHAVIOR_RENDERER_TARGETS),
+    desiredCount: SafeCount,
+    installedCount: SafeCount,
+    blockedCount: SafeCount,
+    failedCount: SafeCount,
+    suspendedCount: SafeCount,
+    declarations: z
+      .array(PluginRuntimeBehaviorDeclarationDiagnostic)
+      .max(limits.BEHAVIORS_PER_PLUGIN),
+    omittedDeclarations: SafeCount,
+    closeReason: DiagnosticText.optional(),
+  })
+  .strict()
+  .superRefine((diagnostic, ctx) => {
+    const rendererTargetKeys = new Set<string>();
+    for (const [index, target] of diagnostic.rendererTargets.entries()) {
+      if (target.face !== "renderer" || target.pluginId !== diagnostic.pluginId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["rendererTargets", index],
+          message: "behavior renderer targets must name the diagnostic plugin and renderer face",
+        });
+        continue;
+      }
+      if (target.instanceKey.windowId !== diagnostic.target.windowId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["rendererTargets", index, "instanceKey", "windowId"],
+          message: "behavior renderer targets must belong to the diagnostic window",
+        });
+      }
+      const targetKey = JSON.stringify(target);
+      if (rendererTargetKeys.has(targetKey)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["rendererTargets", index],
+          message: "behavior renderer target table entries must be unique",
+        });
+      }
+      rendererTargetKeys.add(targetKey);
+    }
+    const declarations = new Set<string>();
+    const detailedCounts = {
+      installed: 0,
+      blocked: 0,
+      failed: 0,
+    };
+    const detailedSuspended = new Set<string>();
+    for (const [index, declaration] of diagnostic.declarations.entries()) {
+      const key = `${declaration.declarationId}\0${declaration.rendererTarget}`;
+      if (declarations.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["declarations", index],
+          message: "behavior declaration/target rows must be unique",
+        });
+      }
+      declarations.add(key);
+      if (declaration.rendererTarget >= diagnostic.rendererTargets.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["declarations", index, "rendererTarget"],
+          message: "behavior declaration references a missing renderer target",
+        });
+      }
+      if (!declaration.declarationId.startsWith(`${diagnostic.pluginId}:`)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["declarations", index, "declarationId"],
+          message: "behavior declaration must belong to the diagnostic plugin",
+        });
+      }
+      if (declaration.status === "installed") detailedCounts.installed += 1;
+      if (declaration.status === "blocked") detailedCounts.blocked += 1;
+      if (declaration.status === "failed") detailedCounts.failed += 1;
+      if (declaration.breaker?.suspended === true) {
+        detailedSuspended.add(declaration.declarationId);
+      }
+    }
+    if (diagnostic.desiredCount > limits.BEHAVIORS_PER_PLUGIN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["desiredCount"],
+        message: "behavior desired count exceeds the signed per-plugin declaration limit",
+      });
+    }
+    if (diagnostic.failedCount > limits.BEHAVIORS_PER_PLUGIN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["failedCount"],
+        message: "behavior failed count exceeds one bounded transition",
+      });
+    }
+    if (diagnostic.installedCount > diagnostic.desiredCount + diagnostic.failedCount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["installedCount"],
+        message: "behavior installed count exceeds desired plus failed retained declarations",
+      });
+    }
+    if (
+      diagnostic.suspendedCount > limits.BEHAVIORS_PER_PLUGIN ||
+      diagnostic.suspendedCount > diagnostic.desiredCount + diagnostic.failedCount
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["suspendedCount"],
+        message: "behavior suspended count exceeds the bounded declaration union",
+      });
+    }
+    if (diagnostic.blockedCount > diagnostic.desiredCount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["blockedCount"],
+        message: "behavior diagnostic count exceeds desired declarations",
+      });
+    }
+    for (const [detail, count] of [
+      ["installed", diagnostic.installedCount],
+      ["blocked", diagnostic.blockedCount],
+      ["failed", diagnostic.failedCount],
+    ] as const) {
+      if (detailedCounts[detail] > count) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["declarations"],
+          message: `behavior ${detail} detail exceeds its exact aggregate count`,
+        });
+      }
+    }
+    if (detailedSuspended.size > diagnostic.suspendedCount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["declarations"],
+        message: "behavior suspended detail exceeds its exact aggregate count",
+      });
+    }
+    if ((diagnostic.state === "failed") !== diagnostic.failedCount > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["state"],
+        message: "behavior failed state and failed count must agree",
+      });
+    }
+    if (
+      diagnostic.declarations.length + diagnostic.omittedDeclarations >
+      diagnostic.desiredCount + diagnostic.failedCount
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["omittedDeclarations"],
+        message: "behavior detail exceeds desired plus failed transition rows",
+      });
+    }
+  });
+export type PluginRuntimeBehaviorGenerationDiagnostic = z.infer<
+  typeof PluginRuntimeBehaviorGenerationDiagnostic
+>;
+
 /** Renderer identity is deliberately absent. The exact tuple comes from the authenticated
  * connection, and the handler additionally requires existing PRC-5 participant membership. */
 export const PluginRuntimeReportParams = z
@@ -313,6 +532,7 @@ export const PluginRuntimeReportParams = z
     pluginId: PluginId,
     sequence: SafePositive,
     controller: PluginRuntimeControllerDiagnostic,
+    behaviorGeneration: PluginRuntimeBehaviorGenerationDiagnostic.nullable().optional(),
   })
   .strict()
   .superRefine((report, ctx) => {
@@ -345,6 +565,17 @@ export const PluginRuntimeReportParams = z
         });
       }
     }
+    if (
+      report.behaviorGeneration !== undefined &&
+      report.behaviorGeneration !== null &&
+      report.behaviorGeneration.pluginId !== report.pluginId
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["behaviorGeneration", "pluginId"],
+        message: "behavior generation must name the reported plugin",
+      });
+    }
   });
 export type PluginRuntimeReportParams = z.infer<typeof PluginRuntimeReportParams>;
 
@@ -373,12 +604,16 @@ export const PluginRuntimeRendererDiagnostic = z
     sequence: SafePositive,
     receivedAt: SafeCount,
     controller: PluginRuntimeControllerDiagnostic,
+    behaviorGeneration: PluginRuntimeBehaviorGenerationDiagnostic.nullable(),
   })
   .strict();
 export type PluginRuntimeRendererDiagnostic = z.infer<typeof PluginRuntimeRendererDiagnostic>;
 
 export const PluginRuntimeDoctorIssueCode = z.enum([
   "cleanup-errors",
+  "behavior-blocked",
+  "behavior-generation-failed",
+  "behavior-suspended",
   "controller-failed",
   "renderer-disconnected",
   "scope-non-quiescent",
@@ -392,7 +627,7 @@ export const PluginRuntimeDoctorIssue = z
   .object({
     code: PluginRuntimeDoctorIssueCode,
     severity: z.enum(["warning", "error"]),
-    face: z.enum(["service", "renderer", "update"]),
+    face: z.enum(["service", "renderer", "behavior", "update"]),
     participantId: TargetPart.optional(),
     message: DiagnosticText,
   })
