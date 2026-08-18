@@ -584,6 +584,32 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // PRC-5e — one shell-minted renderer incarnation participates in the disruptive update barrier.
+  // Identity is absent from every request body and derived again by each handler from the exact
+  // local window bearer. Candidate/retained-old authority crosses only the separately fenced
+  // source method; commands themselves remain path- and credential-free.
+  defineMethod({
+    surface: "product",
+    method: "plugins.update.subscribe",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.update.ack",
+    scope: "plugins.read",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.update.source",
+    scope: "plugins.read",
+    idempotent: false,
+    locality: "local",
+  }),
   // P3b — the renderer principal lease (§11.2). Scope is necessary, never
   // sufficient: the handler additionally gates on principal kind (renderer/
   // shell-main local-token callers only) — a scope alone cannot open sessions.

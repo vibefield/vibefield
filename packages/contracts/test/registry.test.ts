@@ -30,6 +30,36 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
+  it("keeps the renderer update participant lane local and identity-gated by handlers", () => {
+    expect(
+      METHODS.filter((method) => method.method.startsWith("plugins.update.")).map((method) => ({
+        method: method.method,
+        scope: method.scope,
+        locality: method.locality,
+        subscription: method.subscription ?? false,
+      })),
+    ).toEqual([
+      {
+        method: "plugins.update.subscribe",
+        scope: "plugins.read",
+        locality: "local",
+        subscription: true,
+      },
+      {
+        method: "plugins.update.ack",
+        scope: "plugins.read",
+        locality: "local",
+        subscription: false,
+      },
+      {
+        method: "plugins.update.source",
+        scope: "plugins.read",
+        locality: "local",
+        subscription: false,
+      },
+    ]);
+  });
+
   it("socket names fit the tightest path budget (UA-D9 — sun_path)", () => {
     // The tightest real prefix is the repo-nested dev root's users/<fuid>
     // tree; 14 chars keeps every socket under the 103-byte macOS sun_path

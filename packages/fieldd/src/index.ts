@@ -66,6 +66,13 @@ export {
   PluginRegistryService,
 } from "./plugin-registry";
 export {
+  type AcquiredPluginUpdateSource,
+  type PluginUpdateRegistrar,
+  type PluginUpdateSourceRequest,
+  PluginUpdateTransport,
+  type PluginUpdateTransportOptions,
+} from "./plugin-update-transport";
+export {
   type PresenceLaneBytes,
   type PresenceLaneControl,
   PresenceRoomRouter,
