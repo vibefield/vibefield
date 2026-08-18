@@ -13,6 +13,7 @@ import { RendererPluginController, RendererWindowController } from "./renderer-c
 import type { ActivatedRenderer } from "./renderer-harness";
 import { asRendererModule, importRendererModule } from "./renderer-module-loader";
 import { RendererUpdateChannel } from "./renderer-update-channel";
+import { RendererRuntimeDiagnosticsReporter } from "./runtime-diagnostics-reporter";
 
 export { ensureStyleLink } from "./plugin-style";
 export { createRendererModuleLoader } from "./renderer-module-loader";
@@ -129,7 +130,11 @@ export async function prepareRendererPlugins(
   if (approved === null) return EMPTY_PREPARED;
   const { generation, modules, records } = approved;
   if (modules.length === 0) return { generation, staged: [], bundled: [] };
-  const runtime = new RendererWindowController(deps.windowId);
+  const runtimeDiagnostics =
+    deps.subscribe === undefined || deps.pluginClientBackend === undefined
+      ? undefined
+      : new RendererRuntimeDiagnosticsReporter({ request: deps.request, logger: log });
+  const runtime = new RendererWindowController(deps.windowId, runtimeDiagnostics);
 
   const channels = new Map<string, RendererUpdateChannel>();
   if (deps.subscribe !== undefined && deps.pluginClientBackend !== undefined) {
@@ -298,6 +303,8 @@ async function stageOne(
   const doc = deps.document ?? (typeof document === "undefined" ? undefined : document);
   const controller = new RendererPluginController(record, module, mod, runtime.windowId, {
     ...(doc === undefined ? {} : { style: { document: doc } }),
+    logger: log.child({ pluginId: record.id }),
+    onDiagnosticsChanged: (diagnostic) => runtime.publishDiagnostic(record.id, diagnostic),
   });
   runtime.add(controller);
   try {

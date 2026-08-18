@@ -17,6 +17,7 @@ import {
   type PluginUpdateStart,
   type PreparedServiceUpdate,
   type RendererBoundaryReplacementRequest,
+  type RendererUpdateDiagnosticStatus,
   type ServiceUpdateParticipant,
 } from "./plugin-update-coordinator";
 import type {
@@ -123,9 +124,41 @@ export class PluginUpdateManager {
   private readonly activeByPlugin = new Map<string, UpdateEpisodeRuntime>();
   private readonly episodes = new Map<string, UpdateEpisodeRuntime>();
   private readonly sourceLeases = new Map<string, IssuedSourceLease>();
+  private readonly diagnosticsListeners = new Set<() => void>();
+  private readonly rendererRetirementListeners = new Set<
+    (pluginId: string, identity: RendererParticipantIdentity) => void
+  >();
+  private readonly coordinatorDiagnosticDisposers = new Map<string, () => void>();
   private disposed = false;
 
   constructor(private readonly options: PluginUpdateManagerOptions) {}
+
+  /** Observation-only lookup. Unlike coordinatorFor(), this can never allocate coordinator state
+   * or validate/advance the durable plugin pointer. */
+  existingCoordinatorFor(pluginId: string): PluginUpdateCoordinator | undefined {
+    return this.coordinators.get(pluginId);
+  }
+
+  rendererDiagnosticStatus(
+    pluginId: string,
+    identity: RendererParticipantIdentity,
+  ): RendererUpdateDiagnosticStatus | undefined {
+    return this.existingCoordinatorFor(pluginId)?.rendererDiagnosticStatus(identity);
+  }
+
+  subscribeDiagnostics(listener: () => void): () => void {
+    if (this.disposed) return () => undefined;
+    this.diagnosticsListeners.add(listener);
+    return () => this.diagnosticsListeners.delete(listener);
+  }
+
+  subscribeRendererRetirements(
+    listener: (pluginId: string, identity: RendererParticipantIdentity) => void,
+  ): () => void {
+    if (this.disposed) return () => undefined;
+    this.rendererRetirementListeners.add(listener);
+    return () => this.rendererRetirementListeners.delete(listener);
+  }
 
   coordinatorFor(pluginId: string): PluginUpdateCoordinator | undefined {
     const record = this.options.plugins.get(pluginId);
@@ -174,6 +207,11 @@ export class PluginUpdateManager {
       ...(this.options.deadlines === undefined ? {} : { deadlines: this.options.deadlines }),
     });
     this.coordinators.set(pluginId, coordinator);
+    this.coordinatorDiagnosticDisposers.set(
+      pluginId,
+      coordinator.subscribe(() => this.emitDiagnosticsChanged()),
+    );
+    this.emitDiagnosticsChanged();
     return coordinator;
   }
 
@@ -275,6 +313,7 @@ export class PluginUpdateManager {
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
     if (failure !== undefined) throw failure.reason;
+    if (retired) this.emitRendererRetired(pluginId, identity);
     return retired;
   }
 
@@ -311,6 +350,7 @@ export class PluginUpdateManager {
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
     if (failure !== undefined) throw failure.reason;
+    if (crashed) this.emitRendererRetired(pluginId, identity);
     return crashed;
   }
 
@@ -486,6 +526,10 @@ export class PluginUpdateManager {
     if (this.disposed) return;
     this.disposed = true;
     for (const coordinator of this.coordinators.values()) coordinator.dispose();
+    for (const dispose of this.coordinatorDiagnosticDisposers.values()) dispose();
+    this.coordinatorDiagnosticDisposers.clear();
+    this.diagnosticsListeners.clear();
+    this.rendererRetirementListeners.clear();
     await Promise.allSettled(
       [...this.sourceLeases.values()].map((issued) => this.releaseIssued(issued, "shutdown")),
     );
@@ -638,6 +682,26 @@ export class PluginUpdateManager {
   private retainedObservationIsCurrent(episode: UpdateEpisodeRuntime): boolean {
     const current = this.options.plugins.get(episode.pluginId);
     return current !== undefined && sameAuthorityObservation(current, episode.oldRecord);
+  }
+
+  private emitDiagnosticsChanged(): void {
+    for (const listener of [...this.diagnosticsListeners]) {
+      try {
+        listener();
+      } catch {
+        // Runtime observation is never update authority.
+      }
+    }
+  }
+
+  private emitRendererRetired(pluginId: string, identity: RendererParticipantIdentity): void {
+    for (const listener of [...this.rendererRetirementListeners]) {
+      try {
+        listener(pluginId, identity);
+      } catch {
+        // Retirement already happened; a passive cache observer cannot alter that fact.
+      }
+    }
   }
 }
 

@@ -101,6 +101,13 @@ export interface RendererBoundaryReplacementRequest {
   readonly identity: RendererParticipantIdentity;
 }
 
+/** Read-only participant projection for sibling diagnostics. It deliberately carries no send
+ * callback, pending command, or mutator. */
+export interface RendererUpdateDiagnosticStatus {
+  readonly connected: boolean;
+  readonly status: "live" | "held";
+}
+
 type Expected = "prepare" | "commit" | "recover-old" | "settled";
 
 interface RendererSlot {
@@ -222,6 +229,16 @@ export class PluginUpdateCoordinator {
   subscribe(listener: (snapshot: UpdateSnapshot) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Exact-incarnation lookup for passive host joins. Absence includes stale incarnations. */
+  rendererDiagnosticStatus(
+    identity: RendererParticipantIdentity,
+  ): RendererUpdateDiagnosticStatus | undefined {
+    const parsed = freezeIdentity(identity);
+    const renderer = this.renderers.get(parsed.participantId);
+    if (renderer === undefined || renderer.incarnation !== parsed.incarnation) return undefined;
+    return Object.freeze({ connected: renderer.connected, status: renderer.status });
   }
 
   /** Stops deadline work and rejects an active episode without inventing a

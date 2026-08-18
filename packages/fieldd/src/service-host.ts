@@ -19,6 +19,8 @@ import {
   projectPluginAuthority,
   type RuntimeTargetCandidate,
   RuntimeTargetController,
+  type RuntimeTargetControllerDiagnostic,
+  type RuntimeTargetLifecycleEvent,
   type ServiceRuntimeTarget,
   samePluginRuntimeObservation,
   samePluginRuntimeTarget,
@@ -77,6 +79,8 @@ export interface ServiceHostConfig {
   revokeServiceLease?: (pluginId: string, tokenId: string, reason: string) => Promise<void>;
   logger?: Logger;
   pluginLog?: (record: PluginServiceLogRecord) => void;
+  /** Passive PRC-6 aggregate invalidation. A fault is contained by the controller observer. */
+  onDiagnosticsChanged?: () => void;
 }
 
 export interface PluginServiceLogRecord {
@@ -201,6 +205,7 @@ export class ServiceHost {
           // one scheduling turn to report before the outer controller asks for boundary force.
           disposalDeadlineMs:
             (this.cfg.deadlines?.deactivateMs ?? PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS) + 25,
+          observeLifecycle: (event) => this.observeLifecycle(pluginId, event),
         },
       );
       created = {
@@ -232,6 +237,83 @@ export class ServiceHost {
 
   state(pluginId: string): PublicEntryState {
     return this.entries.get(pluginId)?.state ?? "none";
+  }
+
+  /** Plain-data, bounded controller projection. Merely observing an undeclared/unstarted service
+   * does not allocate an Entry or activate work. */
+  diagnostic(pluginId: string): RuntimeTargetControllerDiagnostic | null {
+    return this.entries.get(pluginId)?.controller.diagnostic() ?? null;
+  }
+
+  private observeLifecycle(pluginId: string, event: RuntimeTargetLifecycleEvent): void {
+    const attrs = {
+      pluginId,
+      face: "service",
+      lifecycleEvent: event.event,
+      controllerState: event.state,
+      sequence: event.sequence,
+      ...(event.revision === undefined ? {} : { revision: event.revision }),
+      ...(event.phase === undefined ? {} : { phase: event.phase }),
+      ...(event.target === undefined || event.target === null
+        ? {}
+        : {
+            targetInstance: event.target.instanceKey,
+            installRevision: event.target.installRevision,
+            manifestHash: event.target.manifestHash,
+            observedGrantGeneration: event.target.observedGrantGeneration,
+            ...(event.target.runtimeGeneration === undefined
+              ? {}
+              : { runtimeGeneration: event.target.runtimeGeneration }),
+          }),
+      ...(event.reason === undefined ? {} : { closeReason: event.reason.kind }),
+      ...(event.close === undefined
+        ? {}
+        : {
+            quiescent: event.close.quiescent,
+            liveCount: event.close.liveCount,
+            pendingSetups: event.close.pendingSetups,
+            lateCleanups: event.close.lateCleanups,
+            disposeErrors: event.close.disposeErrors,
+          }),
+      ...(event.force === undefined
+        ? {}
+        : { terminated: event.force.terminated, forced: event.force.forced }),
+      ...(event.error === undefined ? {} : { error: event.error }),
+    };
+    const message = "Plugin service runtime lifecycle changed";
+    try {
+      if (
+        event.event === "controller-error" ||
+        event.event === "force-error" ||
+        event.event === "load-failed" ||
+        event.event === "load-timeout" ||
+        event.event === "non-quiescent" ||
+        event.event === "prepared-commit-failed" ||
+        event.event === "refresh-failed"
+      ) {
+        this.logger.error("fieldd.plugin_runtime.lifecycle", message, undefined, attrs);
+      } else if (event.event === "force-unconfirmed") {
+        this.logger.warn("fieldd.plugin_runtime.lifecycle", message, attrs);
+      } else if (
+        event.event === "force-confirmed" ||
+        event.event === "late-quiescence" ||
+        event.event === "load-commit" ||
+        event.event === "load-prepared" ||
+        event.event === "prepared-commit" ||
+        event.event === "refresh-commit"
+      ) {
+        this.logger.info("fieldd.plugin_runtime.lifecycle", message, attrs);
+      } else {
+        this.logger.debug("fieldd.plugin_runtime.lifecycle", message, attrs);
+      }
+    } catch {
+      // A first-party logging adapter remains observation, never lifecycle authority.
+    }
+    try {
+      this.cfg.onDiagnosticsChanged?.();
+    } catch {
+      // Aggregate invalidation is passive and best-effort.
+    }
   }
 
   /** start every enabled plugin whose manifest declares entries.service and

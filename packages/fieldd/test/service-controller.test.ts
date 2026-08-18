@@ -10,7 +10,8 @@ import type {
   PluginRecord,
   PublicEntryState,
 } from "@vibefield/contracts";
-import { describe, expect, it } from "vitest";
+import type { Logger } from "@vibefield/logging";
+import { describe, expect, it, vi } from "vitest";
 import type { PluginRegistryService } from "../src/plugin-registry";
 import { ServiceHost, type ServiceLeaseObservation } from "../src/service-host";
 import { ServiceRegistry } from "../src/service-registry";
@@ -117,6 +118,7 @@ function createRig(
     });
   },
   mintLease?: (scopes: TokenGrant["scopes"], generation: number) => Promise<TokenGrant>,
+  observation?: { readonly logger: Logger; readonly changed: () => void },
 ): {
   host: ServiceHost;
   registry: ServiceRegistry;
@@ -193,6 +195,9 @@ function createRig(
       revoked.push(tokenId);
     },
     deadlines: { activateMs: 500, deactivateMs: 100 },
+    ...(observation === undefined
+      ? {}
+      : { logger: observation.logger, onDiagnosticsChanged: observation.changed }),
   });
   return {
     host,
@@ -209,6 +214,23 @@ function createRig(
       record = change(record);
     },
   };
+}
+
+function lifecycleLogger() {
+  const calls = {
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+  };
+  const logger: Logger = {
+    child: () => logger,
+    ...calls,
+    isLevelEnabled: () => true,
+  };
+  return { logger, calls };
 }
 
 function localCaller(): CallerContext {
@@ -246,6 +268,38 @@ function candidateRecord(base: TestRecord, slot: string): PluginRecord {
 }
 
 describe("ServiceHost exact target controller (PRC-3c)", () => {
+  it("projects passively and logs exactly once per service lifecycle transition", async () => {
+    const { logger, calls } = lifecycleLogger();
+    const changed = vi.fn();
+    const rig = createRig(undefined, undefined, { logger, changed });
+    expect(rig.host.diagnostic(pluginId)).toBeNull();
+
+    await rig.host.start(pluginId);
+    const lifecycleCalls = () =>
+      [
+        ...calls.trace.mock.calls,
+        ...calls.debug.mock.calls,
+        ...calls.info.mock.calls,
+        ...calls.warn.mock.calls,
+        ...calls.error.mock.calls,
+        ...calls.fatal.mock.calls,
+      ].filter((call) => call[0] === "fieldd.plugin_runtime.lifecycle");
+    const logCount = () => lifecycleCalls().length;
+    expect(rig.host.diagnostic(pluginId)?.state).toBe("active");
+    expect(logCount()).toBe(rig.host.diagnostic(pluginId)?.history.length);
+    expect(changed).toHaveBeenCalledTimes(logCount());
+
+    const beforePoll = logCount();
+    for (let index = 0; index < 100; index += 1) rig.host.diagnostic(pluginId);
+    expect(logCount()).toBe(beforePoll);
+    await rig.host.stop(pluginId);
+    expect(logCount()).toBe(rig.host.diagnostic(pluginId)?.history.length);
+    expect(changed).toHaveBeenCalledTimes(logCount());
+    for (const call of lifecycleCalls()) {
+      expect(call[0]).toBe("fieldd.plugin_runtime.lifecycle");
+    }
+  });
+
   it("keeps provider handlers private behind typed UNAVAILABLE until activated", async () => {
     const rig = createRig((worker) => queueMicrotask(() => worker.provide()));
     const start = rig.host.start(pluginId);

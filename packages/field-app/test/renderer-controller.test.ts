@@ -13,6 +13,7 @@ import type {
 import { act, type ComponentType, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
+import type { RendererLogger } from "../src/logging";
 import { isCommandBound } from "../src/plugin-host/command-registry";
 import {
   RendererPluginController,
@@ -191,7 +192,67 @@ function testDeps(
   };
 }
 
+function lifecycleLogger() {
+  const calls = {
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+  };
+  const logger: RendererLogger = {
+    child: () => logger,
+    ...calls,
+    isLevelEnabled: () => true,
+  };
+  return { logger, calls };
+}
+
 describe("the renderer/window target controller", () => {
+  it("logs each lifecycle transition once, reports latest state, and polling emits nothing", async () => {
+    const id = "prc.renderer.controller.diagnostics";
+    const { logger, calls } = lifecycleLogger();
+    const reports = vi.fn();
+    const controller = new RendererPluginController(
+      record(id),
+      moduleRow(id),
+      {
+        activate(ctx) {
+          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
+        },
+      },
+      "field",
+      testDeps({ logger, onDiagnosticsChanged: reports }),
+    );
+
+    await controller.reconcile(record(id));
+    const logCount = () =>
+      calls.trace.mock.calls.length +
+      calls.debug.mock.calls.length +
+      calls.info.mock.calls.length +
+      calls.warn.mock.calls.length +
+      calls.error.mock.calls.length +
+      calls.fatal.mock.calls.length;
+    expect(logCount()).toBe(controller.diagnostic().history.length);
+    expect(reports).toHaveBeenCalledTimes(logCount());
+    const beforePoll = logCount();
+    for (let index = 0; index < 100; index += 1) controller.diagnostic();
+    expect(logCount()).toBe(beforePoll);
+
+    await controller.close();
+    expect(logCount()).toBe(controller.diagnostic().history.length);
+    expect(reports).toHaveBeenCalledTimes(logCount());
+    for (const call of [
+      ...calls.debug.mock.calls,
+      ...calls.info.mock.calls,
+      ...calls.warn.mock.calls,
+      ...calls.error.mock.calls,
+    ]) {
+      expect(call[0]).toBe("renderer.plugin_runtime.lifecycle");
+    }
+  });
+
   it("keeps every host publication private through setup and withdraws it at the disable edge", async () => {
     const id = "prc.renderer.controller.private";
     const activated = deferred<void>();

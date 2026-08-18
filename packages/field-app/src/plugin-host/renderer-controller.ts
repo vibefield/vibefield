@@ -14,7 +14,9 @@ import {
   type RendererRuntimeTarget,
   type RuntimeTargetCandidate,
   RuntimeTargetController,
+  type RuntimeTargetControllerDiagnostic,
   type RuntimeTargetControllerSnapshot,
+  type RuntimeTargetLifecycleEvent,
   samePluginRuntimeObservation,
 } from "@vibefield/plugin-runtime";
 import type {
@@ -23,6 +25,7 @@ import type {
   WidgetBinding,
 } from "@vibefield/plugin-sdk";
 import { type ComponentType, createElement, type ReactElement, useSyncExternalStore } from "react";
+import type { RendererLogger } from "../logging";
 import { BehaviorBindingCatalog } from "./behavior-binding-catalog";
 import { BehaviorBreakerLedger } from "./behavior-generation-host";
 import { refreshPluginProductClient, retirePluginProductClient } from "./plugin-client";
@@ -58,6 +61,10 @@ export interface RendererPluginControllerDeps extends RendererActivationDeps {
   readonly retireCredential?: (pluginId: string) => void;
   /** Host-mediated stylesheet publication for this exact imported artifact. */
   readonly style?: { readonly document: Document };
+  /** First-party lifecycle route; plugin code never receives this event-first logger. */
+  readonly logger?: RendererLogger;
+  /** Passive latest-only renderer report sink. */
+  readonly onDiagnosticsChanged?: (diagnostic: RuntimeTargetControllerDiagnostic) => void;
 }
 
 /** One exact renderer artifact's activation authority. `load` is invoked by the
@@ -204,6 +211,7 @@ export class RendererPluginController {
       // timers from assigning different failure meanings to the same attempt.
       activationDeadlineMs: PLUGIN_LIMITS.RENDERER_ACTIVATE_DEADLINE_MS + 50,
       disposalDeadlineMs: PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS,
+      observeLifecycle: (event) => this.observeLifecycle(event),
     });
   }
 
@@ -213,6 +221,78 @@ export class RendererPluginController {
 
   get snapshot() {
     return this.controller.snapshot();
+  }
+
+  diagnostic(): RuntimeTargetControllerDiagnostic {
+    return this.controller.diagnostic();
+  }
+
+  private observeLifecycle(event: RuntimeTargetLifecycleEvent): void {
+    const logger = this.deps.logger;
+    if (logger !== undefined) {
+      const attrs = {
+        pluginId: this.pluginId,
+        face: "renderer",
+        windowId: this.windowId,
+        lifecycleEvent: event.event,
+        controllerState: event.state,
+        sequence: event.sequence,
+        ...(event.revision === undefined ? {} : { revision: event.revision }),
+        ...(event.phase === undefined ? {} : { phase: event.phase }),
+        ...(event.target === undefined || event.target === null
+          ? {}
+          : {
+              targetInstance: event.target.instanceKey,
+              installRevision: event.target.installRevision,
+              manifestHash: event.target.manifestHash,
+              observedGrantGeneration: event.target.observedGrantGeneration,
+              ...(event.target.runtimeGeneration === undefined
+                ? {}
+                : { runtimeGeneration: event.target.runtimeGeneration }),
+            }),
+        ...(event.reason === undefined ? {} : { closeReason: event.reason.kind }),
+        ...(event.close === undefined
+          ? {}
+          : {
+              quiescent: event.close.quiescent,
+              liveCount: event.close.liveCount,
+              pendingSetups: event.close.pendingSetups,
+              lateCleanups: event.close.lateCleanups,
+              disposeErrors: event.close.disposeErrors,
+            }),
+        ...(event.error === undefined ? {} : { error: event.error }),
+      };
+      const message = "Plugin renderer runtime lifecycle changed";
+      try {
+        if (
+          event.event === "controller-error" ||
+          event.event === "load-failed" ||
+          event.event === "load-timeout" ||
+          event.event === "non-quiescent" ||
+          event.event === "prepared-commit-failed" ||
+          event.event === "refresh-failed"
+        ) {
+          logger.error("renderer.plugin_runtime.lifecycle", message, undefined, attrs);
+        } else if (
+          event.event === "late-quiescence" ||
+          event.event === "load-commit" ||
+          event.event === "load-prepared" ||
+          event.event === "prepared-commit" ||
+          event.event === "refresh-commit"
+        ) {
+          logger.info("renderer.plugin_runtime.lifecycle", message, attrs);
+        } else {
+          logger.debug("renderer.plugin_runtime.lifecycle", message, attrs);
+        }
+      } catch {
+        // A first-party logging adapter remains observation, never lifecycle authority.
+      }
+    }
+    try {
+      this.deps.onDiagnosticsChanged?.(this.controller.diagnostic());
+    } catch {
+      // A diagnostics sender is passive and best-effort.
+    }
   }
 
   isActiveArtifact(artifact: PluginUpdateArtifact): boolean {
@@ -904,7 +984,13 @@ export class RendererWindowController {
   private closeTask: Promise<void> | undefined;
   private closed = false;
 
-  constructor(readonly windowId = DEFAULT_RENDERER_WINDOW_ID) {}
+  constructor(
+    readonly windowId = DEFAULT_RENDERER_WINDOW_ID,
+    private readonly diagnostics?: {
+      publish(pluginId: string, diagnostic: RuntimeTargetControllerDiagnostic): void;
+      close(): void;
+    },
+  ) {}
 
   add(controller: RendererPluginController): void {
     if (this.closed) throw new Error("renderer window controller is closed");
@@ -916,6 +1002,12 @@ export class RendererWindowController {
       throw new Error(`renderer controller already exists for ${controller.pluginId}`);
     controller.attachBehaviorCatalog(this.behaviorCatalog);
     this.controllers.set(controller.pluginId, controller);
+    this.diagnostics?.publish(controller.pluginId, controller.diagnostic());
+  }
+
+  publishDiagnostic(pluginId: string, diagnostic: RuntimeTargetControllerDiagnostic): void {
+    if (this.closed) return;
+    this.diagnostics?.publish(pluginId, diagnostic);
   }
 
   addUpdateChannel(channel: { close(): Promise<void> }): void {
@@ -1032,6 +1124,7 @@ export class RendererWindowController {
     // prevents any orphaned or reentrant publication from surviving window close.
     this.behaviorCatalog.close();
     void Promise.allSettled([...leaving, ...pending, ...closing]).then((results) => {
+      this.diagnostics?.close();
       const failures = results.flatMap((result) =>
         result.status === "rejected"
           ? [result.reason instanceof Error ? result.reason.message : String(result.reason)]

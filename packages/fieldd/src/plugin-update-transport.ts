@@ -367,7 +367,9 @@ export class PluginUpdateTransport {
   }
 }
 
-function rendererIdentity(ctx: CallerContext): RendererParticipantIdentity {
+/** Shared local-renderer bearer proof. Runtime diagnostics reuse the proof, not update traffic or
+ * coordinator mutation. */
+export function rendererIdentity(ctx: CallerContext): RendererParticipantIdentity {
   if (
     ctx.transport !== "ws-loopback" ||
     ctx.clientKind !== "renderer" ||

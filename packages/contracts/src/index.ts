@@ -15,6 +15,7 @@ export * from "./live-surfaces";
 export * from "./meshdata";
 export * from "./methods";
 export * from "./mgmt";
+export * from "./plugin-diagnostics";
 export * from "./plugin-distribution";
 export * from "./plugin-registry";
 export * from "./plugin-runtime";

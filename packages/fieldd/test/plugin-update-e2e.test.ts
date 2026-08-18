@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  PluginRuntimeDiagnosticsSnapshot,
+  PluginRuntimeReportResult,
   type PluginUpdateCommand,
   type PluginUpdateParticipantEvent,
   PluginUpdateSourceResult,
@@ -141,6 +143,84 @@ function command(
 }
 
 describe("coordinated renderer update over the production Product API", () => {
+  it("joins an exact renderer report through the real bounded diagnostics RPC", {
+    timeout: 30_000,
+  }, async () => {
+    const daemon = await setup();
+    const shell = await openRpc(daemon);
+    await helloAs(shell, daemon.shellToken, "shell-main");
+    await shell.call("plugins.install", { id: PLUGIN_ID, version: "1.0.0" });
+
+    const windowGrant = (await shell.call("system.mintWindowToken", {
+      scopes: ["plugins.read"],
+      label: "renderer-diagnostics-window",
+      rendererParticipant: identity,
+    })) as { token: string };
+    const renderer = await openRpc(daemon);
+    await helloAs(renderer, windowGrant.token, "renderer");
+    await renderer.call("plugins.update.subscribe", { pluginId: PLUGIN_ID });
+    const observed = (await renderer.call("plugins.runtime.subscribe", {
+      pluginId: PLUGIN_ID,
+    })) as { subId: string; snapshot: unknown };
+    expect(PluginRuntimeDiagnosticsSnapshot.parse(observed.snapshot).plugins[0]?.renderers).toEqual(
+      [],
+    );
+
+    const report = {
+      pluginId: PLUGIN_ID,
+      sequence: 1,
+      controller: {
+        label: `renderer:${PLUGIN_ID}:field`,
+        state: "inactive",
+        desired: null,
+        committed: null,
+        desiredRevision: 0,
+        blocked: null,
+        scope: null,
+        lastClose: null,
+        force: { confirmedCount: 0, last: null },
+        history: [],
+        omittedHistory: 0,
+      },
+    };
+    expect(
+      PluginRuntimeReportResult.parse(await renderer.call("plugins.runtime.report", report)),
+    ).toMatchObject({ accepted: true });
+    await until(() =>
+      renderer.notifications.some(
+        (notification) =>
+          notification.method === "plugins.runtime.delta" &&
+          notification.params.subId === observed.subId,
+      ),
+    );
+    const current = PluginRuntimeDiagnosticsSnapshot.parse(
+      await shell.call("plugins.runtime.get", { pluginId: PLUGIN_ID }),
+    );
+    expect(current.plugins[0]?.renderers).toEqual([
+      expect.objectContaining({
+        participantId: identity.participantId,
+        incarnation: identity.incarnation,
+        connected: true,
+        sequence: 1,
+      }),
+    ]);
+    await expect(
+      renderer.call("plugins.runtime.report", {
+        ...report,
+        participantId: "renderer:forged",
+      }),
+    ).rejects.toMatchObject({ rpc: { data: { kind: "PRECONDITION_FAILED" } } });
+
+    await expect(renderer.call("plugins.update.leave", { pluginId: PLUGIN_ID })).resolves.toEqual({
+      retired: true,
+    });
+    expect(
+      PluginRuntimeDiagnosticsSnapshot.parse(
+        await shell.call("plugins.runtime.get", { pluginId: PLUGIN_ID }),
+      ).plugins[0]?.renderers,
+    ).toEqual([]);
+  });
+
   it("holds the pointer behind prepare/commit acks and retires candidate source authority exactly", {
     timeout: 30_000,
   }, async () => {

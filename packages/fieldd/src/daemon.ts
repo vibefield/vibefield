@@ -103,6 +103,7 @@ import { PeerLink } from "./peer-link";
 import { RegistryInstallService } from "./plugin-install";
 import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
+import { PluginRuntimeDiagnostics } from "./plugin-runtime-diagnostics";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
 import type { PluginUpdateDeadlines } from "./plugin-update-coordinator";
@@ -1653,6 +1654,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         : { deadlines: config.pluginUpdateDeadlines }),
     });
     pluginUpdatesForCleanup = updateManager;
+    const runtimeDiagnostics = new PluginRuntimeDiagnostics({
+      plugins,
+      serviceDiagnostic: (pluginId) => serviceHost?.diagnostic(pluginId) ?? null,
+      existingCoordinatorFor: (pluginId) => updateManager.existingCoordinatorFor(pluginId),
+    });
+    runtimeDiagnostics.register(api);
+    updateManager.subscribeDiagnostics(() => runtimeDiagnostics.notifyHostChanged());
+    updateManager.subscribeRendererRetirements((pluginId, identity) =>
+      runtimeDiagnostics.retireRenderer(pluginId, identity),
+    );
     new PluginUpdateTransport({
       coordinatorFor: (pluginId) => updateManager.coordinatorFor(pluginId),
       acquireSource: async (request) => await updateManager.acquireSource(request),
@@ -2012,6 +2023,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         async () => {
           const revoked = await teardownPluginWithResult(parsed.data.id);
           await installer.uninstall(parsed.data.id, parsed.data.removeData === true);
+          runtimeDiagnostics.retirePlugin(parsed.data.id);
           void reconciler?.unpublish(parsed.data.id, "uninstall"); // §16.6 — everywhere
           return revoked;
         },
@@ -2536,6 +2548,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           serviceHost?.stopAll() ?? Promise.resolve(),
           processes.stopAll(),
         ]);
+        runtimeDiagnostics.dispose();
         detachHealthSources?.();
         links.stop();
         await presenceRooms?.stop();
@@ -2578,6 +2591,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       api.close();
       docLane.close(); // release the lane port before the outer rollback runs
       await updateManager.dispose();
+      runtimeDiagnostics.dispose();
       await presenceRooms?.stop();
       docSync?.stop();
       laneLink.close();
@@ -2776,6 +2790,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
       logger: logger.child({ component: "plugin.service.host" }),
       pluginLog: emitPluginLog,
+      onDiagnosticsChanged: () => runtimeDiagnostics.notifyHostChanged(),
     });
     // fire-and-forget: activation states surface honestly through the registry
     void serviceHost.startEligible();
@@ -2849,6 +2864,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           supervisor.stop(); // stop watching FIRST: a teardown is not a wedge
           await updateManager.dispose();
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
+          runtimeDiagnostics.dispose();
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
           detachHealthSources?.();
           endpoints.dispose();

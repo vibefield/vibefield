@@ -1,6 +1,12 @@
-import type { PluginRecord, PluginSource, SettingsContribution } from "@vibefield/contracts";
+import {
+  type PluginRecord,
+  PluginRuntimeDiagnosticsSnapshot,
+  type PluginRuntimePluginDiagnostic,
+  type PluginSource,
+  type SettingsContribution,
+} from "@vibefield/contracts";
 import { StatusDot } from "@vibefield/design-kit";
-import { useFielddClient } from "@vibefield/fieldd-client/react";
+import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useState } from "react";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import { PluginCapabilities } from "./PluginCapabilities";
@@ -112,16 +118,118 @@ function PluginUninstall({ plugin }: { plugin: PluginRecord }): ReactElement {
   );
 }
 
+function shortRevision(value: string | undefined): string {
+  if (value === undefined) return "none";
+  return value.length <= 12 ? value : `${value.slice(0, 12)}…`;
+}
+
+function ControllerSummary({
+  title,
+  controller,
+  connected,
+}: {
+  title: string;
+  controller: PluginRuntimePluginDiagnostic["serviceController"];
+  connected?: boolean;
+}): ReactElement {
+  const scope = controller?.scope;
+  return (
+    <div className="rounded-[12px] border border-black/5 bg-black/[0.02] p-3 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[12px] font-medium text-black/75 dark:text-white/75">{title}</span>
+        <SettingsPill>
+          {connected === false ? "disconnected · " : ""}
+          {controller?.state ?? "not started"}
+        </SettingsPill>
+      </div>
+      {controller !== null && (
+        <div className={`mt-1 ${labelCls}`}>
+          committed {shortRevision(controller.committed?.artifact.installRevision)} · desired{" "}
+          {shortRevision(controller.desired?.artifact.installRevision)}
+          {scope != null && (
+            <>
+              {" "}
+              · {scope.liveCount} live · {scope.pendingSetups} pending · {scope.lateCleanups} late
+            </>
+          )}
+          {controller.lastClose !== null && (
+            <>
+              {" "}
+              · last close {controller.lastClose.reason?.kind ?? "unknown"} (
+              {controller.lastClose.quiescent ? "quiescent" : "not quiescent"})
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PluginRuntimeDetails({
+  runtime,
+}: {
+  runtime: PluginRuntimePluginDiagnostic;
+}): ReactElement {
+  return (
+    <div className="mt-3 space-y-2 border-t border-black/5 pt-3 dark:border-white/10">
+      <div className={`flex flex-wrap gap-x-3 gap-y-1 ${labelCls}`}>
+        <span>commit epoch {runtime.commitEpoch ?? "unavailable"}</span>
+        <span>update {runtime.update?.state ?? "idle"}</span>
+        <span>
+          {runtime.renderers.filter((renderer) => renderer.connected).length} connected ·{" "}
+          {runtime.renderers.length} renderer report{runtime.renderers.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <ControllerSummary title="Service" controller={runtime.serviceController} />
+      {runtime.renderers.map((renderer) => (
+        <ControllerSummary
+          key={`${renderer.participantId}:${renderer.incarnation}`}
+          title={`Renderer · ${renderer.participantId}`}
+          controller={renderer.controller}
+          connected={renderer.connected}
+        />
+      ))}
+      {(runtime.serviceControllerOmitted || runtime.omittedRenderers > 0) && (
+        <p className={labelCls}>
+          Some controller detail was omitted by the bounded diagnostics budget
+          {runtime.omittedRenderers > 0 ? ` (${runtime.omittedRenderers} renderers)` : ""}.
+        </p>
+      )}
+      {runtime.issues.length > 0 && (
+        <div className="space-y-1">
+          {runtime.issues.map((issue, index) => (
+            <p
+              key={`${issue.code}:${issue.participantId ?? issue.face}:${index}`}
+              className={
+                issue.severity === "error"
+                  ? "text-[12px] text-red-600 dark:text-red-400"
+                  : "text-[12px] text-amber-600 dark:text-amber-400"
+              }
+            >
+              {issue.message}
+            </p>
+          ))}
+          {runtime.omittedIssues > 0 && (
+            <p className={labelCls}>{runtime.omittedIssues} additional Doctor issues omitted.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PluginRow({
   plugin,
   plugins,
   settingsRevision,
   onSettingsChanged,
+  runtime,
 }: {
   plugin: PluginRecord;
   plugins: readonly PluginRecord[];
   settingsRevision: number;
   onSettingsChanged?: ((undoable: boolean) => void) | undefined;
+  runtime?: PluginRuntimePluginDiagnostic | undefined;
 }): ReactElement {
   const client = useFielddClient();
   const [pending, setPending] = useState(false);
@@ -129,6 +237,7 @@ function PluginRow({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [capsOpen, setCapsOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [runtimeOpen, setRuntimeOpen] = useState(false);
   const toggleable = plugin.state === "enabled" || plugin.state === "disabled";
   const uninstallable = plugin.source === "registry" || plugin.source === "sideload";
   const widgetCount = plugin.contributions.widgets.length;
@@ -181,7 +290,7 @@ function PluginRow({
         </div>
       </div>
 
-      {(hasSettings || hasCapabilities || uninstallable) && (
+      {(hasSettings || hasCapabilities || uninstallable || runtime !== undefined) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/5 pt-3 dark:border-white/10">
           {hasSettings && (
             <button
@@ -201,6 +310,17 @@ function PluginRow({
               onClick={() => setCapsOpen((open) => !open)}
             >
               Capabilities {capsOpen ? "−" : "+"}
+            </button>
+          )}
+          {runtime !== undefined && (
+            <button
+              type="button"
+              className={buttonCls}
+              aria-expanded={runtimeOpen}
+              onClick={() => setRuntimeOpen((open) => !open)}
+            >
+              Runtime {runtime.issues.length > 0 ? `· ${runtime.issues.length}` : ""}{" "}
+              {runtimeOpen ? "−" : "+"}
             </button>
           )}
           {uninstallable && (
@@ -235,6 +355,7 @@ function PluginRow({
           onSettingsChanged={onSettingsChanged}
         />
       )}
+      {runtime !== undefined && runtimeOpen && <PluginRuntimeDetails runtime={runtime} />}
       {uninstallable && overflowOpen && <PluginUninstall plugin={plugin} />}
     </article>
   );
@@ -248,6 +369,13 @@ export function PluginsSection({
   onSettingsChanged?: ((undoable: boolean) => void) | undefined;
 }): ReactElement {
   const snapshot = usePluginRegistrySnapshot();
+  const runtimeSubscription = useSubscription<unknown>("plugins.runtime.subscribe", {});
+  const runtimeSnapshot = PluginRuntimeDiagnosticsSnapshot.safeParse(runtimeSubscription.data);
+  const runtimeByPlugin = new Map(
+    runtimeSnapshot.success
+      ? runtimeSnapshot.data.plugins.map((runtime) => [runtime.pluginId, runtime] as const)
+      : [],
+  );
   return (
     <SettingsSection
       title="Installed plugins"
@@ -270,6 +398,7 @@ export function PluginsSection({
               plugins={snapshot.plugins}
               settingsRevision={settingsRevision}
               onSettingsChanged={onSettingsChanged}
+              runtime={runtimeByPlugin.get(plugin.id)}
             />
           ))}
           {snapshot.problems.map((problem) => (

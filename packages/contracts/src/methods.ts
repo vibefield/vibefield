@@ -624,6 +624,31 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // PRC-6b — passive runtime observation is a sibling of, never traffic on, the update command
+  // lane. Report identity is transport-derived and handler-gated to an already-known renderer;
+  // get/subscribe expose only the bounded path-free host fold.
+  defineMethod({
+    surface: "product",
+    method: "plugins.runtime.report",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.runtime.get",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.runtime.subscribe",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
   // P3b — the renderer principal lease (§11.2). Scope is necessary, never
   // sufficient: the handler additionally gates on principal kind (renderer/
   // shell-main local-token callers only) — a scope alone cannot open sessions.
