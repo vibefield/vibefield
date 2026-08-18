@@ -1,8 +1,10 @@
-// TC-D6(b) — the fieldd half of create-failure classification. The boundary is
-// an upstream fact the TC-S0 agent pinned: openpty refusals keep their errno on
-// the wire; spawn refusals are flattened to one string by anyhow's top-only
-// rendering. This classifier must read the first and REFUSE to guess at the
-// second.
+// TC-D6(b) — the message half of create-failure classification. Since ghosttea
+// 0.10.0 (G17) spawn refusals carry a typed {stage, code, osError} and are
+// classified structurally in create; THIS function keeps the openpty half,
+// where portable-pty stringifies the errno inside openpty() itself and the
+// string stays the only carrier. The string-alone rows below are still law:
+// the bare spawn message is as ambiguous as ever, and the classifier must
+// refuse it — blame for spawn refusals is decided by `code`, never prose.
 import { describe, expect, it } from "vitest";
 import { classifyOpenptyPressure } from "../src/terminal-service";
 
@@ -23,7 +25,7 @@ describe("classifyOpenptyPressure (TC-D6b)", () => {
     ).toBe("fd_pressure");
   });
 
-  it("refuses to classify the flattened spawn string — that ambiguity is upstream's", () => {
+  it("refuses to classify the bare spawn string — its blame belongs to `code` (G17)", () => {
     expect(classifyOpenptyPressure("failed to spawn PTY command")).toBeNull();
   });
 

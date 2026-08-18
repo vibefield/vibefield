@@ -16,6 +16,7 @@ import {
   isPipeEndpoint,
   METHODS,
   SOCKETS,
+  TERMINAL_SCROLLBACK_CLASS_BYTES,
   TerminalConfigDocument,
   TerminalConfigWriteResult,
   TerminalConnectTicketResult,
@@ -132,15 +133,19 @@ interface FakeConfigDocument {
  * a wedged service on a healthy socket, which is the state `client.connected`
  * cannot see.
  * `createError` replies to create-session with a verbatim service refusal, so
- * the classification of the floor's own prose can be exercised.
+ * the classification of the floor's own prose can be exercised;
+ * `createErrorMeta` rides the G17 structured fields ({stage, code, osError})
+ * beside it, the shape a 0.10.0 floor emits.
  * `protocolMinor` reports an older floor on the hello (below 11 = no config
- * documents; the pinned CLIENT refuses those before the wire). */
+ * documents, below 15 = no per-session scrollback; the pinned CLIENT refuses
+ * those before the wire). Default 16 — the 0.10.0 floor. */
 async function startFakeFloor(
   opts: {
     dieOnTerminate?: boolean;
     noOverlay?: boolean;
     stall?: readonly string[];
     createError?: string;
+    createErrorMeta?: { stage?: string; code?: string; osError?: number };
     protocolMinor?: number;
   } = {},
 ): Promise<{
@@ -151,6 +156,9 @@ async function startFakeFloor(
   configRevision: () => string;
   /** how many control connections this floor has accepted */
   connections: () => number;
+  /** the options of the last create-session that REACHED this floor —
+   * undefined when the pinned client refused before the wire (G16) */
+  createOptions: () => Record<string, unknown> | undefined;
 }> {
   // The root is the harness's (short on unix for the sun_path budget, tmpdir()
   // on win32 where no /tmp exists), and the fake binds the endpoint the real
@@ -172,6 +180,7 @@ async function startFakeFloor(
     contents: "",
   };
   let configRevision = "config-0";
+  let lastCreateOptions: Record<string, unknown> | undefined;
   let connections = 0;
   const stall = new Set(opts.stall ?? []);
   const server: Server = createServer((sock: Socket) => {
@@ -206,11 +215,13 @@ async function startFakeFloor(
           reply({
             type: "hello",
             protocolMajor: 1,
-            protocolMinor: opts.protocolMinor ?? 12,
+            protocolMinor: opts.protocolMinor ?? 16,
             serverBuild: "vibefield-fake-floor",
           });
         } else if (msg.type === "create-session") {
-          if (opts.createError !== undefined) reply({ type: "error", message: opts.createError });
+          lastCreateOptions = msg.options as Record<string, unknown>;
+          if (opts.createError !== undefined)
+            reply({ type: "error", message: opts.createError, ...opts.createErrorMeta });
           else reply({ type: "session-created", session: fakeSession(createdSessionId) });
         } else if (msg.type === "terminate" && opts.dieOnTerminate === true) {
           sock.destroy(); // the floor dies mid-call
@@ -269,6 +280,7 @@ async function startFakeFloor(
     document,
     configRevision: () => configRevision,
     connections: () => connections,
+    createOptions: () => lastCreateOptions,
   };
 }
 
@@ -935,6 +947,9 @@ describe("TerminalService (NF-3, mock native)", () => {
     // task falling over — and that is the floor failing, not the caller: it was
     // being answered PRECONDITION_FAILED, non-retryable, telling the caller to
     // fix input it had got right.
+    // Since G17 these bare messages are the ABSENT-METADATA fallback: a
+    // pre-0.10.0 floor, or a refusal upstream never typed. The typed rows
+    // live in the G17 tests below.
     for (const [message, kind, retryable] of [
       ["failed to spawn PTY command", "PRECONDITION_FAILED", false],
       ["session spawn task stopped", "INTERNAL", true],
@@ -954,6 +969,136 @@ describe("TerminalService (NF-3, mock native)", () => {
       )) as RpcCallError | undefined;
       expect(error?.kind, message).toBe(kind);
       expect(error?.retryable, message).toBe(retryable);
+    }
+  });
+
+  it("maps a declared workloadClass through the contracts table to the floor's cap (G16)", async () => {
+    // TC-D6(c) ENFORCED: the values asserted are the genned registry's, not
+    // literals — the same authority field-native reads. An UNDECLARED class
+    // sends nothing: the floor's global default governs, byte-identical to a
+    // pre-G16 create, because inventing a class would fake a policy the
+    // caller never declared.
+    const floor = await startFakeFloor();
+    const service = new TerminalService({
+      link: {
+        subscribe: async () => ({ snapshot: {} }),
+        terminalEndpoints: floor.endpoints,
+        on: () => undefined,
+      },
+    });
+    cleanup.push(() => service.dispose());
+    await service.create({ workloadClass: "agent" });
+    expect(floor.createOptions()?.["scrollbackBytes"]).toBe(TERMINAL_SCROLLBACK_CLASS_BYTES.AGENT);
+    await service.create({ workloadClass: "interactive" });
+    expect(floor.createOptions()?.["scrollbackBytes"]).toBe(
+      TERMINAL_SCROLLBACK_CLASS_BYTES.INTERACTIVE,
+    );
+    await service.create({});
+    expect(floor.createOptions()).not.toHaveProperty("scrollbackBytes");
+  });
+
+  it("refuses to pretend a pre-1.15 floor enforces a cap (G16)", async () => {
+    // The silent-ignore trap the petition named: an older daemon drops
+    // unknown JSON fields, so a classed create against it would report a cap
+    // nothing enforces. The pinned client refuses BEFORE the wire; fieldd
+    // classifies that refusal like any other capability floor — unsupported,
+    // non-retryable (no amount of retrying teaches an old floor a new field).
+    const floor = await startFakeFloor({ protocolMinor: 14 });
+    const service = new TerminalService({
+      link: {
+        subscribe: async () => ({ snapshot: {} }),
+        terminalEndpoints: floor.endpoints,
+        on: () => undefined,
+      },
+    });
+    cleanup.push(() => service.dispose());
+    const error = (await service.create({ workloadClass: "agent" }).then(
+      () => undefined,
+      (e: unknown) => e,
+    )) as RpcCallError | undefined;
+    expect(error?.kind).toBe("UNAVAILABLE");
+    expect(error?.details).toMatchObject({ state: "unsupported" });
+    expect(error?.retryable).toBe(false);
+    expect(floor.createOptions(), "refused before the wire").toBeUndefined();
+    // an UNCLASSED create keeps working against the same old floor — the
+    // G16 acceptance's compatibility half
+    const created = await service.create({});
+    expect(created.sessionId).toBe(floor.createdSessionId);
+  });
+
+  it("classifies typed spawn refusals by code, never by string (G17)", async () => {
+    // All four rows carry the SAME byte-identical message — the string that
+    // used to be the whole wire. What separates them now is upstream's stable
+    // `code`, typed at the failure site. The unknown-code row is the honesty
+    // fence: upstream's vocabulary can grow, and a code this seam does not
+    // know must refuse the caller's-input claim rather than guess blame.
+    for (const [meta, kind, state, retryable] of [
+      [
+        { stage: "spawn", code: "file-descriptor-exhausted", osError: 24 },
+        "RESOURCE_EXHAUSTED",
+        "fd_pressure",
+        false,
+      ],
+      [{ stage: "spawn", code: "executable-not-found", osError: 2 }, "NOT_FOUND", undefined, false],
+      [
+        { stage: "spawn", code: "permission-denied", osError: 13 },
+        "PRECONDITION_FAILED",
+        undefined,
+        false,
+      ],
+      [{ stage: "spawn", code: "resource-exhausted", osError: 12 }, "INTERNAL", undefined, true],
+    ] as const) {
+      const floor = await startFakeFloor({
+        createError: "failed to spawn PTY command",
+        createErrorMeta: meta,
+      });
+      const service = new TerminalService({
+        link: {
+          subscribe: async () => ({ snapshot: {} }),
+          terminalEndpoints: floor.endpoints,
+          on: () => undefined,
+        },
+      });
+      cleanup.push(() => service.dispose());
+      const error = (await service.create({}).then(
+        () => undefined,
+        (e: unknown) => e,
+      )) as RpcCallError | undefined;
+      expect(error?.kind, meta.code).toBe(kind);
+      if (state !== undefined) expect(error?.details, meta.code).toMatchObject({ state });
+      expect(error?.retryable, meta.code).toBe(retryable);
+    }
+  });
+
+  it("stage fences the openpty errno read — spawn prose cannot borrow it (G17)", async () => {
+    // portable-pty still stringifies the errno inside openpty() (the
+    // petition's negotiated exception), so that stage classifies by message —
+    // but ONLY under its own stage. The same errno prose arriving under
+    // stage:"spawn" with no typed code must not read as openpty pressure.
+    const errnoProse =
+      'failed to openpty: Os { code: 24, kind: Uncategorized, message: "Too many open files" }';
+    for (const [stage, kind, state] of [
+      ["openpty", "RESOURCE_EXHAUSTED", "fd_pressure"],
+      ["spawn", "INTERNAL", undefined],
+    ] as const) {
+      const floor = await startFakeFloor({
+        createError: errnoProse,
+        createErrorMeta: { stage },
+      });
+      const service = new TerminalService({
+        link: {
+          subscribe: async () => ({ snapshot: {} }),
+          terminalEndpoints: floor.endpoints,
+          on: () => undefined,
+        },
+      });
+      cleanup.push(() => service.dispose());
+      const error = (await service.create({}).then(
+        () => undefined,
+        (e: unknown) => e,
+      )) as RpcCallError | undefined;
+      expect(error?.kind, stage).toBe(kind);
+      if (state !== undefined) expect(error?.details, stage).toMatchObject({ state });
     }
   });
 

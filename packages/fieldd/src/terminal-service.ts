@@ -4,9 +4,11 @@ import { isAbsolute } from "node:path";
 import {
   GhostteaAutomationClient,
   GhostteaConfigDocumentConflictError,
+  GhostteaRequestError,
 } from "@vibecook/ghosttea-client";
 import {
   ObservedState,
+  TERMINAL_SCROLLBACK_CLASS_BYTES,
   TERMINAL_SESSION_CAP,
   type TerminalConfigDocument,
   type TerminalConfigWriteResult,
@@ -225,22 +227,26 @@ export class TerminalService {
         { service: "terminal", state: "session_cap" },
       );
     }
-    // TC-D6(c) — `workloadClass` is accepted, validated, and audited at the
-    // product seam; per-session scrollback ENFORCEMENT waits on upstream:
-    // ghosttea-protocol 0.9.3's CreateSessionOptions carries no scrollback
-    // field (verified at TC-S0), so the class→bytes mapping cannot reach the
-    // floor yet. No fake plumb — the ask is recorded in the TC petition set.
+    // TC-D6(c) — ENFORCED since ghosttea 0.10.0 (petition G16): a DECLARED
+    // workloadClass maps through the genned contracts table to the floor's
+    // per-session byte cap, which the floor validates (reject-not-clamp) and
+    // echoes back in SessionSummary. No class sends nothing — the floor's
+    // global default governs, byte-identical to a pre-G16 create — because
+    // inventing a class here would fake a policy the caller never declared.
+    // The pinned client refuses a pre-1.15 floor rather than let the field be
+    // silently ignored; that refusal is classified in the catch below.
     //
-    // TC-D6(b) — pre-flight an ABSOLUTE shell before the wire: upstream
-    // flattens spawn failures to one string ("failed to spawn PTY command",
-    // anyhow context rendered top-only), so ENOENT is answered HERE while it
-    // still can be. PATH-relative names stay the spawner's business — a
-    // second resolver would only disagree with the real one.
+    // TC-D6(b) — pre-flight an ABSOLUTE shell before the wire: answered here
+    // it costs no spawn and quotes the caller's own path. Refusals that DO
+    // reach the floor come back typed since ghosttea 0.10.0 (G17) and are
+    // classified in the catch below. PATH-relative names stay the spawner's
+    // business — a second resolver would only disagree with the real one.
     if (params.shell !== undefined && isAbsolute(params.shell) && !existsSync(params.shell))
       throw new RpcCallError("NOT_FOUND", `shell not found: ${params.shell}`, false);
     const client = await this.connectedClient();
     const explicit = params.shell !== undefined;
     const executable = params.shell ?? this.defaultShell();
+    const scrollbackBytes = classScrollbackBytes(params.workloadClass);
     try {
       const summary = await client.createSession({
         executable,
@@ -252,6 +258,9 @@ export class TerminalService {
         persistence: normalizePersistence(params.persistence),
         programKind: explicit ? "auto" : "interactive-shell",
         ownerId: OWNER_ID,
+        // spread, not `undefined`: an undeclared class must not put the KEY on
+        // the wire either (exactOptionalPropertyTypes agrees)
+        ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
       });
       return { sessionId: summary.id };
     } catch (error) {
@@ -268,30 +277,67 @@ export class TerminalService {
       // know whether the spawn landed.
       if (isRequestTimeout(error)) throw this.unresponsive("create", error);
       const message = errorMessage(error);
-      // TC-D6(b), the fieldd half of the native-side classification: openpty
-      // refusals KEEP their errno on the wire (portable-pty renders the
-      // io::Error debug form, `Os { code: 24 … }`), so fd exhaustion is
-      // readable here. Spawn-stage EMFILE is NOT — the same upstream
-      // flattening as above — and stays generic until the error-chain
-      // petition lands. Same spelling authority as the native emitters:
-      // contracts RESOURCE_PRESSURE_STATES.
-      if (classifyOpenptyPressure(message) !== null)
+      // G16's honest-refusal half: the pinned CLIENT refuses to ask a
+      // pre-1.15 floor for a per-session cap — silence would be a cap the
+      // caller believes in and nothing enforces. Same classification as the
+      // config-document floor below it: no amount of retrying teaches an old
+      // floor a new field.
+      if (NO_SESSION_SCROLLBACK.test(message))
+        throw new RpcCallError("UNAVAILABLE", `create refused: ${message}`, false, {
+          service: "terminal",
+          state: "unsupported",
+        });
+      // TC-D6(b) — typed classification (ghosttea 0.10.0, petition G17): wire
+      // refusals now carry {stage, code, osError} beside a byte-identical
+      // message. `code` is upstream's STABLE vocabulary, typed at the failure
+      // site and never string-parsed (its own unit rows pin that). The
+      // openpty stage is the negotiated exception: portable-pty stringifies
+      // the errno inside openpty() itself, so that arm still reads the
+      // message — now fenced by stage, so spawn-stage prose can never borrow
+      // it. Spelling authority for pressure states stays contracts
+      // RESOURCE_PRESSURE_STATES, same as the native emitters.
+      const meta = error instanceof GhostteaRequestError ? error : undefined;
+      if (
+        meta?.code === "file-descriptor-exhausted" ||
+        ((meta?.stage === undefined || meta.stage === "openpty") &&
+          classifyOpenptyPressure(message) !== null)
+      )
         throw new RpcCallError(
           "RESOURCE_EXHAUSTED",
           `create refused: file descriptors are exhausted at the floor — terminate sessions before creating more (${message})`,
           false,
           { service: "terminal", state: "fd_pressure" },
         );
-      // A spawn refusal on a live connection is the caller's input (bad
-      // executable/cwd), not a daemon fault — but only THIS refusal. The test
-      // was an unanchored /spawn/i over free prose, which also caught the
-      // floor's own `session spawn task stopped` (its blocking task falling
-      // over: a floor fault, and it was being reported to the caller as bad
-      // input, non-retryable). Anchored to the exact wording the pinned floor
-      // emits; anything else it refuses with stays INTERNAL and retryable.
-      if (SPAWN_REFUSAL.test(message))
+      // The two caller's-input codes the floor names. NOT_FOUND matches the
+      // absolute-path pre-flight's own answer — this arm is the PATH-relative
+      // and TOCTOU half the pre-flight cannot reach.
+      if (meta?.code === "executable-not-found")
+        throw new RpcCallError("NOT_FOUND", `shell not found: ${executable}`, false);
+      if (meta?.code === "permission-denied")
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `create failed: ${executable} is not executable (permission denied)`,
+          false,
+        );
+      // The flattened-string fallback: a refusal with NO typed code — the
+      // shape every pre-0.10.0 floor emitted, kept as the tolerant-reader
+      // floor (anchored: the floor's `session spawn task stopped` is ITS
+      // fault, not the caller's, and must stay INTERNAL). A code that IS
+      // present but unknown here refuses the caller's-input claim — upstream's
+      // vocabulary can grow (`resource-exhausted` is emitted for spawn-time
+      // OOM today), and a guessed blame is worse than INTERNAL retryable with
+      // the triple carried for diagnosis.
+      if (meta?.code === undefined && SPAWN_REFUSAL.test(message))
         throw new RpcCallError("PRECONDITION_FAILED", `create failed: ${message}`, false);
-      throw new RpcCallError("INTERNAL", `create failed: ${message}`, true);
+      throw new RpcCallError(
+        "INTERNAL",
+        meta?.code === undefined
+          ? `create failed: ${message}`
+          : `create failed: ${message} [stage=${meta.stage ?? "?"} code=${meta.code}${
+              meta.osError === undefined ? "" : ` osError=${meta.osError}`
+            }]`,
+        true,
+      );
     }
   }
 
@@ -660,31 +706,54 @@ function isUnknownSession(error: unknown): boolean {
   return /unknown session/i.test(errorMessage(error));
 }
 
-/** The floor's OWN spawn refusal, anchored (GT-5b). `error.to_string()` on the
- * service side prints the top anyhow context and drops the cause, so this
- * exact string is the whole message the wire carries for a create the PTY
- * layer refused (`ghosttea-0.9.2 session.rs:1182`).
+/** The floor's OWN spawn refusal, anchored (GT-5b). The message is byte-
+ * identical across the G17 landing (`ghosttea-0.10.0 session.rs:1281` keeps
+ * the exact string beside the new typed fields), so this anchor now serves as
+ * the ABSENT-METADATA fallback: when a refusal carries a typed `code`, the
+ * structural arms in `create` classify it and this regex is never consulted
+ * for blame.
  *
  * Anchored because the old unanchored `/spawn/i` was a substring test over free
  * prose, and the floor has a second spawn-bearing refusal —
- * `session spawn task stopped` (`service.rs:2017`, its blocking task falling
- * over), which is the FLOOR failing and was being reported to the caller as
- * bad input, non-retryable. Honest limit, worth stating: because the cause is
- * dropped upstream, this one string covers a bad executable AND a resource
- * exhaustion at spawn time, and fieldd cannot tell them apart. It classifies
- * the case it can name and leaves everything else INTERNAL. */
+ * `session spawn task stopped` (its blocking task falling over), which is the
+ * FLOOR failing and was being reported to the caller as bad input,
+ * non-retryable. Without a typed code the bare string still covers a bad
+ * executable AND a resource exhaustion and fieldd cannot tell them apart; it
+ * classifies the case it can name and leaves everything else INTERNAL. */
 const SPAWN_REFUSAL = /^failed to spawn PTY command$/;
 
-/** TC-D6(b) — the one refusal class whose errno SURVIVES the wire: portable-pty
- * bails openpty with the raw io::Error (debug-rendered, `Os { code: 24 … }`)
- * and ghosttea propagates it uncontexted, so fd exhaustion is readable here.
- * 24 = EMFILE, 23 = ENFILE. Everything else — including spawn-stage EMFILE —
- * arrives flattened by upstream's `.context()` and must stay UNCLASSIFIED: a
- * guess dressed as a classifier is worse than a gap (the error-chain petition
- * is the fix). Exported for its unit rows. */
+/** TC-D6(b) — the openpty half of create classification. portable-pty renders
+ * the errno into its message INSIDE openpty() (upstream `unix.rs:45` — the
+ * returned error carries no typed io::Error source), so even the G17 floor
+ * can only stamp `stage: "openpty"` on this path: the errno is still read
+ * from the string, exactly as negotiated in the petition. 24 = EMFILE,
+ * 23 = ENFILE. The caller fences this with `stage` so spawn-stage prose can
+ * never borrow the match; spawn-stage refusals classify by their typed
+ * `code` instead (ghosttea 0.10.0). Retires when the errno is typed upstream
+ * of ghosttea (the recorded portable-pty follow-up). Exported for its unit
+ * rows. */
 export function classifyOpenptyPressure(message: string): "fd_pressure" | null {
   if (!/failed to openpty/i.test(message)) return null;
   return /code:\s*2[34]\b|EMFILE|ENFILE/.test(message) ? "fd_pressure" : null;
+}
+
+/** The pinned client's own refusal when a per-session cap is REQUESTED of a
+ * floor below protocol 1.15 (G16): thrown before anything reaches the wire,
+ * so absent enforcement is a refusal the caller hears, never a silent
+ * pretend. */
+const NO_SESSION_SCROLLBACK = /does not support per-session scrollback limits/i;
+
+/** TC-D6(c) — the class→bytes authority is the genned contracts table (the
+ * same registry field-native reads), never a literal here. Undeclared maps to
+ * undefined: the field never rides the wire and the floor's global default
+ * governs, echoed per-session in SessionSummary either way since 1.15. */
+function classScrollbackBytes(
+  workloadClass: TerminalCreateParams["workloadClass"],
+): number | undefined {
+  if (workloadClass === undefined) return undefined;
+  return workloadClass === "agent"
+    ? TERMINAL_SCROLLBACK_CLASS_BYTES.AGENT
+    : TERMINAL_SCROLLBACK_CLASS_BYTES.INTERACTIVE;
 }
 
 /** The pinned CLIENT's own refusal when the server's protocol minor is below

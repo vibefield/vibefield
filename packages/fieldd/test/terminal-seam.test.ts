@@ -227,4 +227,38 @@ describe("the terminal seam (NF-3, real field-native)", () => {
     expect(row.pid).toBeGreaterThan(0);
     await rpc.call("terminal.terminate", { sessionId: created.sessionId });
   }, 60_000);
+
+  it("a classed create rides protocol 1.15 to the real floor (G16, TC-D6c)", async () => {
+    // End-to-end enforcement proof against the REAL 0.10.0 floor: the pinned
+    // client only sends `scrollbackBytes` after the hello negotiates ≥1.15,
+    // and the floor validates the value (reject-not-clamp) before the PTY is
+    // born — so a live session under a declared class means the whole ladder
+    // held: contracts table → create option → minor gate → floor validation.
+    // Depth semantics (an agent session retains ≤2MiB) are upstream's own
+    // pinned rows; this seam owns the option's safe passage.
+    const dataDir = await spawnNative();
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", resolve);
+      ws.once("error", reject);
+    });
+    cleanup.push(() => ws.close());
+    const rpc = new WsRpc(ws);
+    await helloAs(rpc, grant.token);
+
+    const created = (await rpc.call("terminal.create", { workloadClass: "agent" })) as {
+      sessionId: string;
+    };
+    const row = await poll(async () => {
+      const { terminals } = (await rpc.call("terminal.list", {})) as {
+        terminals: TerminalInfo[];
+      };
+      return terminals.find((t) => t.sessionId === created.sessionId);
+    });
+    expect(row.pid).toBeGreaterThan(0);
+    await rpc.call("terminal.terminate", { sessionId: created.sessionId });
+  }, 60_000);
 });
