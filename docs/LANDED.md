@@ -2860,9 +2860,9 @@ execution.
 
 ## PRC-6c2a — packaged physical runtime-soak runner
 
-**LANDED 2026-08-17 (`d2fd9e5` + `03c9adb` + `5b6a190`).** The existing production
-`--smoke-plugin-restart` witness now supports bounded cycle and wall-time modes without a soak-only
-composition root. One Electron owner
+**LANDED 2026-08-17; CONTINUITY HARDENED 2026-08-18 (`d2fd9e5` + `03c9adb` + `5b6a190` +
+`c88acdd`).** The existing production `--smoke-plugin-restart` witness now supports bounded cycle
+and monotonic-duration modes without a soak-only composition root. One Electron owner
 keeps two production-origin windows, repeatedly SIGKILLs the exact supervisor-owned fieldd, waits
 for positive old-fieldd and old-renderer PID death, adopts a fresh boot, preserves window participant
 IDs, requires fresh document incarnations, and reconstructs staged service and behavior plugins.
@@ -2874,6 +2874,13 @@ macOS physical footprint; log category bytes/files; queue/drop counters; and ful
 vectors. An external wrapper streams exclusive-create JSONL incrementally into an ignored draft
 evidence directory that survives production rebuilds, verifies sample count against the verdict,
 and reserves `claimSatisfied: true` for an exact 24-hour passing run.
+
+Duration mode now starts Electron's `prevent-app-suspension` blocker, exposes its live state as a
+fourteenth exact gate, and stops it during teardown. Elapsed time and deadlines use a monotonic
+clock. The oracle measures the origin→first-sample and every inter-sample interval; any completed-
+observation gap over five minutes fails the run. This makes “uninterrupted” executable rather than
+an operator note: a clock adjustment cannot earn duration, idle app suspension is actively
+prevented, and a stalled observer cannot silently leave an unmeasured hole in the trace.
 
 Calibration changed three assumptions. A replacement fieldd adopts the already-live native floor and
 therefore honestly reports `nativePid: null`; the runner retains and directly samples the original
@@ -2892,7 +2899,21 @@ unexplained drops remain zero. Its structured result is pass/calibration with
 `claimSatisfied: false`. The four-cycle negative control plants a real main-process listener per
 graded cycle and fails only the exact **1→2→3** residue. A final rebuilt three-cycle run also passes.
 
-Gates: Electron **582/582**, field-app **514/514**, fieldd **580 passed + 1 skipped**, all three
+The extended preflight then ran **32 crash/recovery cycles** with eight warmup and 24 graded
+samples. All 13 lifecycle exact gates stayed zero; Electron stayed at seven processes; endpoint
+medians were main FDs **147→147** (maximum 149), main threads **46→47**, fieldd FDs **48→48**,
+and fieldd threads **16→16**. System/plugin logs remained under **998,063 / 100,366 bytes** at
+**10 / 4 files**, with zero queues, drops, and extra observation-window retries. This is the same
+sample shape selected for the long run, not a duration substitute.
+
+After `c88acdd`, a 15-second duration calibration forced the terminal-sample path. It completed two
+samples over **18,001 ms**, reported a **14,001 ms** maximum gap, kept all **14 exact maxima at
+zero**, and recorded the suspension blocker as enabled and active in both samples. A deliberately
+too-short six-second attempt emitted only one complete sample and was rejected by the minimum-
+sample guard; unit controls independently reject both an oversized initial gap and an oversized
+mid-run gap. Both short verdicts preserve `claimSatisfied: false`.
+
+Gates: Electron **583/583**, field-app **514/514**, fieldd **580 passed + 1 skipped**, all three
 affected typechecks, preflight, the ICE/strata/Loro/React physical-singleton guard, production build
 and bundle boundary, focused Biome, patch hygiene, and packaged clean/leak witnesses. This lands the
 runner and its falsifiability, not §24.6's duration: PRC-6c2b remains one uninterrupted 24-hour run

@@ -3,7 +3,7 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-17 — PRC-6c2a LANDED.** PRC-5a–d
+> stays in the design docs + specs. Last rewritten: **2026-08-18 — PRC-6c2b PREFLIGHT GREEN.** PRC-5a–d
 > established exact renderer identity, immutable signed-artifact slots, explicit candidate
 > authority, and stable renderer replacement. PRC-5e assembled the authenticated coordinator and
 > source/ack transport in `7873e60` + `31a48c1` + `303374f` + `ffd1ae2` + `0c58fe7`; PRC-5f
@@ -25,10 +25,13 @@
 > voting. PRC-6c1 `bf281bf` adds exact ownership censuses and closes behavior-handle, service-promise,
 > terminal-map, and Ajv schema-cache retention. Its 120-cycle production-seam run keeps 18 resource
 > maxima at zero and rejects a planted real-listener leak. PRC-6c2a `d2fd9e5` + `03c9adb` +
-> `5b6a190` lands the ignored packaged two-window/real-worker/restart/log runner, incremental JSONL,
-> strict elapsed-time claim
-> gate, and seven-reading OS sampler. Its independent eight-cycle calibration keeps all 13 exact
-> gates at zero; a four-cycle listener control is rejected at 1→2→3. **Now: PRC-6c2b literal
+> `5b6a190`, hardened by `c88acdd`, lands the ignored packaged two-window/real-worker/restart/log
+> runner, incremental JSONL, monotonic elapsed-time claim gate, five-minute continuity bound,
+> active Electron suspension blocker, and seven-reading OS sampler. An extended 32-cycle
+> calibration (8 warmup + 24 graded) keeps all 13 lifecycle exact gates at zero; a 15-second
+> duration/terminal calibration keeps all 14 gates zero, proves the blocker active, and reports a
+> 14.0-second maximum observation gap. The listener control is rejected at 1→2→3, and the
+> deterministic oracle rejects both origin and mid-run gap controls. **Now: PRC-6c2b literal
 > uninterrupted 24-hour execution; §24.6 remains open until that verdict.** The real-tailnet QUIC
 > witness remains
 > **1/1 in 35.11 s** across two ephemeral nodes, including fragmentation, STOP/reopen, replay
@@ -143,9 +146,9 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 |---|---|---|---|
 | A — shell & spine | walking skeleton + ESR COMPLETE | design-03 · `specs/electron-shell-refactor.md` | follow-on slice: lazy widget factories + on-demand settings/diagnostics (§5.4.4-sanctioned) |
 | B — canvas & docs | B1–B4 landed; persistence half of P0 holds since B3 | design-03 · 03·A | — |
-| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-0 through PRC-3d landed; **PRC-4/PRC-5 COMPLETE**; **PRC-6a/6b/6c1/6c2a LANDED through `5b6a190`**. | `specs/plugin-architecture.md` §8.8/§12.7/§18.5/§21.9/§23/§24.4/§24.6 · `thinking-plugin-runtime-composability.md` · `thinking-prc6-diagnostics-soak.md` | **PRC-6c2b now:** execute and archive the literal 24-hour physical verdict. P8c rides WP8; P8e gates third-party listing. |
+| PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-0 through PRC-3d landed; **PRC-4/PRC-5 COMPLETE**; **PRC-6a/6b/6c1/6c2a LANDED through `c88acdd`**. | `specs/plugin-architecture.md` §8.8/§12.7/§18.5/§21.9/§23/§24.4/§24.6 · `thinking-plugin-runtime-composability.md` · `thinking-prc6-diagnostics-soak.md` | **PRC-6c2b now:** execute and archive the literal 24-hour physical verdict. P8c rides WP8; P8e gates third-party listing. |
 | PLUG — PRC-5 update coordinator | **COMPLETE.** PRC-5a identity `c5dcca9`; 5b slots `6817116`; 5c candidate authority `3fa514f` + `1602654`; 5d renderer replacement `6cafd0a`; 5e coordinated authority through `0c58fe7`; 5f positive death `b35f73d`; 5g durable epoch/boot fence/physical two-window restart `137f086`. | plugin-architecture §18.5 · `thinking-prc5-update-coordinator.md` | Release portability only: literal power-loss and Windows filesystem witness. Protocol follow-on is PRC-6. |
-| PLUG — PRC-6 diagnostics + soak | **IN FLIGHT THROUGH PRC-6c2a.** 6a `26fcfdf` bounded the shared projection; 6b through `9fb74f8` landed passive aggregation/logging/behavior folds; 6c1 `bf281bf` landed exact censuses/inverses; 6c2a `d2fd9e5` + `03c9adb` + `5b6a190` landed the packaged physical runner and build-stable evidence path. Eight clean cycles hold 13 exact gates at zero and the listener control fails only at 1→2→3; Electron 582/582, field-app 514/514, fieldd 580 + 1 skip. | plugin-architecture §23/§24.4/§24.6 · `thinking-prc6-diagnostics-soak.md` | **PRC-6c2b:** one uninterrupted 24h run; archive JSONL + passing literal-duration verdict. |
+| PLUG — PRC-6 diagnostics + soak | **IN FLIGHT THROUGH PRC-6c2a; PRC-6c2b PREFLIGHT GREEN.** 6a `26fcfdf` bounded the shared projection; 6b through `9fb74f8` landed passive aggregation/logging/behavior folds; 6c1 `bf281bf` landed exact censuses/inverses; 6c2a through `c88acdd` landed the packaged physical runner, durable evidence path, monotonic duration, five-minute observation-gap gate, and active suspension blocker. The 32-cycle calibration holds 13 lifecycle gates at zero; the duration calibration holds all 14 gates at zero; the listener and sample-gap controls fail for their named reasons. Electron 583/583, field-app 514/514, fieldd 580 + 1 skip. | plugin-architecture §23/§24.4/§24.6 · `thinking-prc6-diagnostics-soak.md` | **PRC-6c2b:** one uninterrupted 24h run; archive JSONL + passing literal-duration verdict. |
 | C — mesh | C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
@@ -399,11 +402,13 @@ timing controls pass. **PRC-6b `06860e0` + `078d8fc` + `9fb74f8`** then landed p
 service/renderer/update/behavior aggregation, lifecycle logging, and bounded Plugin Manager/Doctor
 disclosure. **PRC-6c1 `bf281bf`** adds exact ownership censuses, releases terminal code/schema/
 promise retention, refuses false zero after failed boundary teardown, and passes a falsifiable
-120-cycle production-seam soak. **PRC-6c2a `d2fd9e5` + `03c9adb` + `5b6a190`** lands the packaged
-real-worker/two-window/restart/log runner and falsifiable physical calibration. All 13 exact gates
-stay zero for eight clean cycles; its listener control fails 1→2→3. The runner records raw OS ranges
-around seven-reading medians and cannot label a short prefix as the 24-hour claim. Literal duration
-remains PRC-6c2b.
+120-cycle production-seam soak. **PRC-6c2a through `c88acdd`** lands the packaged
+real-worker/two-window/restart/log runner and falsifiable physical calibration. Thirteen lifecycle
+gates stay zero for 32 clean cycles; its listener control fails 1→2→3. A duration-mode terminal
+calibration holds all 14 gates at zero while proving Electron's suspension blocker active. The
+runner records raw OS ranges around seven-reading medians, measures duration monotonically, rejects
+an observation gap over five minutes, and cannot label a short prefix as the 24-hour claim. Literal
+duration remains PRC-6c2b.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through
