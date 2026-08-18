@@ -3036,3 +3036,65 @@ witness — and it ran the same day: James carried the tree transfer past the se
 permission-blocked file path, and **row 6b passed LIVE on WORKSTATION4090** (all six
 kill-matrix rows green at 0.10.1, 402ms for the witness — a case-variant private
 prefix is stripped from a real ConPTY spawn).
+
+## TC-S2 — the terminal engine leaves the floor's address space (field-terminal-host)
+
+**Date:** 2026-08-18 · **Commits:** `7f299d1` (wire truth) · `b6df585` (the cell) · `e5098ec` (fieldd consumer) · `77f6813` (supervisor + gate rows)
+
+TC-D3's first custody inversion, landed as four slices in one day on the seam map's
+three structural findings (write-once endpoints cell, hello-only delivery, token as
+accidental generation key). The terminal engine now runs as `field-terminal-host` —
+field-native's second binary, embedding today's ghosttea TerminalService AS-IS,
+self-custody — supervised by the floor with intensity-bounded respawn, TC-D15
+revisioned routes, and NO panic-abort (the migration-order law: abort waits for
+custody to separate at TC-S4).
+
+The load-bearing mechanics, all measured or pinned rather than assumed:
+
+- **Per-instance socket names** (`termctl.<n>.sock`, vector-pinned twins): a cell
+  restart is NEVER a rebind — the unix stale-unlink hazard and win32's
+  first-pipe-instance hold both dissolve by construction.
+- **The stdin leash**: token on the pipe (EL7 — never argv/env), EOF ⇒ drain(6s,
+  the genned budget mirroring G7's sweep) ⇒ report ⇒ exit 0. One portable stop
+  signal; a dead parent reaps the cell for free — row S2-B measured the reap at
+  391ms after a floor SIGKILL. Found and kept as design: Rust ignores SIGPIPE, so
+  the exit report is best-effort by construction (a println to the dead parent's
+  pipe would have panicked the drain).
+- **Routes as state transfer**: the supervisor publishes {revision, cells[]} on
+  EVERY transition — an empty snapshot at revision 1 before the first spawn is the
+  capability announcement fieldd's cell-birth wait keys on (a floor that never
+  speaks routes stays honestly absent and refuses NOW). The mgmt hello carries the
+  snapshot beside the legacy lockstep mirror; `routes.subscribe` re-delivers on the
+  LIVE link — the seam that did not exist before (endpoints moved only with a
+  re-pair).
+- **The birth wait**: a create arriving while the engine is being spawned rides the
+  cell's own hello budget (genned CELL_SUPERVISION) instead of refusing — GT-1's
+  spirit one level up: create may outrun the inventory, never the engine's birth.
+- **The fd gauge follows the descriptors**: the PTY fds live in the cell now, so
+  the sampler reads max(floor, cell) against the (inherited) limit — the TC-S0
+  fd-exhaustion arm passes in cell mode because the gauge watches the plane that
+  actually spends.
+- **Honest loss**: a replaced cellBootId while an observed inventory stood emits
+  the receipt naming every lost session, carrying the S2 string ("a terminal-engine
+  crash loses only its class").
+
+**The gate** (all green): row S2-A — cell SIGKILL → supervised replacement →
+routes delta with a new cellBootId on the same mgmt link → endpoints move →
+killed session leaves the inventory → a fresh create lands on the replacement,
+4.3s end to end. Row S2-B — floor SIGKILL → the leash reaps the cell, 391ms, no
+orphan. The full prior matrix (adopt, honest-refusal, env strip, epoch, churn)
+passes unchanged against cell-mode floors, as do the seam, governance, and cell
+lifecycle suites.
+
+**The published formula** (macOS, debug build, idle): processes 3+1 · cell
+12 threads / 16 fds / 3.7 MiB phys_footprint · floor 13 threads / 4.0 MiB (the
+service left its address space). The spec table's "cell base ≈1–2MB" estimate
+reads high-side-of-honest for debug; the release re-measure rides the next
+formula row.
+
+**Mode fallback**: FIELD_NATIVE_TERMINAL_MESH keeps the in-process serve
+bit-for-bit (a cell cannot borrow the floor's tailnet node across a process
+boundary — the G14-class seam owns that future), and the legacy hello mirror
+keeps every pre-routes reader working.
+
+Gates: `pnpm verify` verbatim green end to end over the completed slice (all TS suites, all cargo suites including the 15-row terminal_unit matrix and 4-row cell lifecycle, clippy `-D warnings`, gen freshness).
