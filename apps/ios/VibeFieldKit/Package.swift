@@ -40,7 +40,10 @@ let package = Package(
     // still carries 0.9.0's appearance parity and 0.7.0's reconnect layer, and
     // remains the version whose TruffleTerminalMesh the desktop floor
     // publishes terminal hosts with (IOS-3's server).
-    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.10.0")
+    // 0.10.1 (2026-08-18, revision ad97fdb): the G13 Windows env-strip
+    // case-fold + process_tree hardening — no Apple-plane delta; the pin
+    // moves for the one-version law, same as every row above.
+    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.10.1")
   ],
   targets: [
     // Design tokens and shared chrome — the godview monochrome language.

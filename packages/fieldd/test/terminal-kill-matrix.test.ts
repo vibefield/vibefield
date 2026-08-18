@@ -278,14 +278,16 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   }, 60_000);
 
   // WIN-6 / G13: the exact-case prefixes are stripped (row 6). This probes the
-  // CASE gap ghosttea's case-sensitive `starts_with` opens on Windows'
+  // CASE gap ghosttea's case-sensitive `starts_with` opened on Windows'
   // case-insensitive env — CONFIRMED to leak on the box (a `Field_Native_*`
-  // variant survived). field-native sets its OWN secrets exact-case, so those are
-  // stripped; this is a defense-in-depth gap the fix (G13, upstream) closes. Until
-  // the pin consuming G13 lands, the correct assertion (variant stripped) is
-  // EXPECTED-FAIL on Windows; when G13 lands it STARTS passing — drop `.fails`
-  // then. On unix a case variant is a genuinely different var, so this is skipped.
-  const caseGapWitness = WIN ? it.fails : it.skip;
+  // variant survived). field-native sets its OWN secrets exact-case, so those
+  // were always stripped; the gap was defense-in-depth. G13 landed in ghosttea
+  // 0.10.1 (2026-08-18: the strip folds ASCII case under Windows; unix stays
+  // case-sensitive, where a case variant is a genuinely different var) — so
+  // this row is a LIVE pass on the box now, `.fails` dropped exactly as the
+  // sentence that used to end this comment said to. Still skipped on unix:
+  // the scenario does not exist there.
+  const caseGapWitness = WIN ? it : it.skip;
   caseGapWitness(
     "row 6b: a case-variant of a stripped prefix must not leak (EL7, G13)",
     async () => {

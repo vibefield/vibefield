@@ -73,7 +73,17 @@ truffle-core = "=0.7.12"
 # and the v0.10.0 tag all agree at 43361e53; the later v0.10.0-retry.1 tag
 # (a Windows release-validation fix + a process_tree.rs delta) is NOT in any
 # published 0.10.0 artifact.
-ghosttea = "=0.10.0"
+# G13 (2026-08-18) bumps 0.10.0 → 0.10.1: Windows private env keys/prefixes now
+# strip ASCII-case-insensitively (unix stays case-sensitive — a case variant is
+# a genuinely different var there), closing the EL7 defense-in-depth leak the
+# box CONFIRMED live (a `Field_Native_*` variant reached a cmd.exe PTY). Also
+# carries the retry-tag's process_tree.rs hardening that 0.10.0 left behind.
+# Upstream validated on real Windows (118 tests + clippy + smoke). CONTROL
+# minor unchanged at 16. Consumption on our side is ONE line: kill-matrix row
+# 6b drops `.fails` — the witness the G13 filing pre-registered — and only the
+# BOX gate can see it pass (mac skips the row). Provenance: npm gitHead =
+# crate vcs-info = peeled v0.10.1 = ad97fdb.
+ghosttea = "=0.10.1"
 # GT-4 (native-floor §7 / GT-D7): the mesh half of the terminal floor, added at
 # the same version as `ghosttea` — it depends on that crate by path upstream, so
 # a split would be two ghosttea revisions in one graph. It brings truffle-core
@@ -81,4 +91,4 @@ ghosttea = "=0.10.0"
 # mismatch is a resolver refusal, never a silent second Arc<Node> type. Consumed
 # ONLY behind FIELD_NATIVE_TERMINAL_MESH — with the flag off the crate is linked
 # but never constructed, and the floor is bit-for-bit its pre-GT-4 self.
-ghosttea-truffle = "=0.10.0"
+ghosttea-truffle = "=0.10.1"
