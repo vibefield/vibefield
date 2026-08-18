@@ -378,6 +378,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   }
   let diagnostics: DiagnosticsService | null = null;
   let pluginUpdatesForCleanup: PluginUpdateManager | null = null;
+  /** Set once supersession has ALREADY been reported through `onFatal`, so the
+   * boot rollback can report the window only it can see without calling the
+   * spawner's fatal hook twice. */
+  let supersessionReported = false;
 
   // everything past pairing is transactional — never leak the client slot
   try {
@@ -2551,6 +2555,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const stopForSupersession = () => {
       if (fatalReason) return;
       fatalReason = "superseded: another fieldd took over this device's native plane";
+      supersessionReported = true;
       logger.fatal(
         "fieldd.lifecycle.superseded",
         "fieldd was superseded by another native-plane owner",
@@ -2961,8 +2966,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics?.dispose();
     await pluginUpdatesForCleanup?.dispose();
     native.close(); // rollback: release the mgmt client slot
+    // The earliest supersession window, which the `stopForSupersession` listener
+    // is not yet in scope to see: a takeover that lands while the services are
+    // still being built kills the mgmt socket under whatever request is in
+    // flight, so the boot fails with that request's transport error — "not
+    // connected", a closed link — for the ONE state the spawner must not treat
+    // as a crash to retry. Named here, with the same reason string and the same
+    // onFatal contract the listener uses, and only when nothing has reported it
+    // already (that path calls the hook from its own teardown).
+    const supersededDuringBoot = native.superseded && !supersessionReported;
     logger.fatal("fieldd.lifecycle.bootstrap_failed", "fieldd bootstrap failed", e);
     await Promise.allSettled([audit.close(), closeLogging()]);
+    if (supersededDuringBoot) {
+      const reason = "superseded: another fieldd took over this device's native plane";
+      config.onFatal?.(reason);
+      throw new Error(reason, { cause: e });
+    }
     throw e;
   }
 }

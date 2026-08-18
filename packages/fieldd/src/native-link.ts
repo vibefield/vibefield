@@ -8,6 +8,7 @@ import {
   NATIVE_SUPERVISION,
   PingAck,
   TerminalEndpoints,
+  TerminalRouteSnapshot,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { computePairingMac } from "./pairing";
@@ -95,6 +96,11 @@ export class NativeLink extends EventEmitter {
   private nextSubKey = 1;
   private attempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  /** True once the TC-D15 route stream has EVER been armed — from then on the
+   * ordinary replay path re-subscribes it at every reconnect, so the arm itself
+   * never runs twice. Staying false is what keeps a REFUSED arm re-armable on
+   * the next dial (NF-6's re-arm law: never once-and-throw). */
+  private terminalRoutesSubscribed = false;
   private readonly logger: Logger;
 
   connected = false;
@@ -113,6 +119,14 @@ export class NativeLink extends EventEmitter {
    * longer existed plus a dead boot's token, the audit recorded the grant as a
    * success, and `system.health` reported the device as a terminal host. */
   terminalEndpoints: TerminalEndpoints | undefined;
+  /** TC-D15: the revisioned route snapshot `terminalEndpoints` is DERIVED from,
+   * kept whole for the consumers that need the cell's identity rather than its
+   * coordinates — `cellBootId` is the only thing that tells a replaced engine
+   * apart from a re-pair to the same one (pids recycle; ordinals repeat across
+   * floor boots; the token is a credential, not an identity). Undefined means
+   * the floor never sent one: a pre-TC-S2 floor, whose legacy `terminal` mirror
+   * is then the only reading, or a link that is down. */
+  terminalRoutes: TerminalRouteSnapshot | undefined;
   /** GT-2d: the floor's own build label, re-learned at every re-pair. This
    * plane outlives us and is adopted by design, so "which field-native answered"
    * is a real question — undefined means the daemon predates GT-2d, which is
@@ -190,6 +204,16 @@ export class NativeLink extends EventEmitter {
       this.connected = true;
       this.attempts = 0;
       this.emit("connected");
+      // TC-D15 — armed AFTER the dial, at the same instant the daemon arms its
+      // own observed subscription (`native.on("connected", …)`), and for the
+      // same two reasons. It must not be able to fail a dial: the hello ack has
+      // already delivered the CURRENT snapshot, so the stream only adds future
+      // deltas and a floor too old to serve it must still boot. And it must not
+      // change what a dial can fail WITH: put inside the dial, this extra
+      // request became the first thing a mid-boot takeover could land on, and
+      // "superseded" — fatal, specific, and the daemon's whole shutdown trigger
+      // — surfaced as a generic closed-link error instead.
+      void this.ensureTerminalRoutes();
     } catch (e) {
       // this socket is unusable: detach it FIRST so its close event is stale,
       // then fail anything in flight — exactly one reconnect gets scheduled
@@ -257,14 +281,91 @@ export class NativeLink extends EventEmitter {
     // NF-D8: a fresh native boot means fresh endpoints + token; a re-pair to
     // the same boot re-delivers the same ones. The tolerant gate keeps a
     // malformed/absent field as "no floor" rather than a poisoned value.
-    const record = (ack ?? {}) as { terminal?: unknown; nativeBuild?: unknown };
-    const parsed = TerminalEndpoints.safeParse(record.terminal);
-    this.terminalEndpoints = parsed.success ? parsed.data : undefined;
+    const record = (ack ?? {}) as {
+      terminal?: unknown;
+      terminalRoutes?: unknown;
+      nativeBuild?: unknown;
+    };
+    // TC-D15: the hello delivers the CURRENT route state, and it is the truth
+    // whenever the floor speaks it — `terminal` is the LEGACY single-cell
+    // mirror the floor keeps in lockstep, and the only reading a pre-TC-S2
+    // floor offers at all. PREFERRED, never merged: two readings of one floor
+    // that disagree would be a coin toss, and only the snapshot carries the
+    // cell's identity and revision.
+    const routes = TerminalRouteSnapshot.safeParse(record.terminalRoutes);
+    this.terminalRoutes = routes.success ? routes.data : undefined;
+    if (routes.success) {
+      this.terminalEndpoints = cellEndpoints(routes.data);
+    } else {
+      const parsed = TerminalEndpoints.safeParse(record.terminal);
+      this.terminalEndpoints = parsed.success ? parsed.data : undefined;
+    }
     // GT-2d: read on its own terms, so a floor whose endpoints are malformed
     // still says who it is (and the reverse). Anything but a string is a floor
     // that did not answer the question — the same honest blank a pre-GT-2d
     // daemon leaves, never a guess.
     this.nativeBuild = typeof record.nativeBuild === "string" ? record.nativeBuild : undefined;
+    this.emit("terminal-endpoints");
+  }
+
+  /** TC-D15 — arm the route stream once. From then on NativeLink's ordinary
+   * replay re-subscribes it at every reconnect (P5 — reconnect = fresh
+   * snapshot), which IS the law's "re-read on reconnect" half; the hello ack
+   * has already re-read it once by the time the replay lands, and the second
+   * reading is idempotent because both carry the same revision.
+   *
+   * NEVER throws, by the same law `TerminalService.ensureStarted` states: a
+   * refusal is neither fatal nor permanent. A pre-TC-S2 floor has no such
+   * method and must keep working from the hello ack's legacy mirror alone, and
+   * a link that died between the dial and this call has a reconnect coming — so
+   * both are logged and re-armed on the next connect, never once-and-thrown
+   * (this runs detached, where a rejection would have nowhere to go anyway). */
+  private async ensureTerminalRoutes(): Promise<void> {
+    if (this.terminalRoutesSubscribed) return;
+    try {
+      const { snapshot } = await this.subscribe(
+        "native.lifecycle.terminal.routes.subscribe",
+        {},
+        (payload, kind) => this.applyTerminalRoutes(payload, kind),
+      );
+      this.terminalRoutesSubscribed = true;
+      this.applyTerminalRoutes(snapshot, "snapshot");
+    } catch (error) {
+      this.logger.debug(
+        "fieldd.native_link.terminal_routes_subscribe_refused",
+        "The terminal route subscription was refused; it re-arms on the next connect",
+        { error },
+      );
+    }
+  }
+
+  /** TC-D15 — routes are revisioned STATE and every delta is a FULL snapshot,
+   * so snapshots and deltas apply through one path: state transfer, never
+   * edges. That is what makes a MISSED delta self-repairing (the next one
+   * carries the whole truth) and a REPEATED one free.
+   *
+   * `revision` is the change key, not a deep-equal: the floor's own ordering
+   * key is right here, and re-sending identical state — which the reconnect
+   * path does on purpose — must not read as a change to consumers that drop
+   * live connections on the event.
+   *
+   * A payload that is not a snapshot keeps the last good one (tolerant reader,
+   * with its logging half). Debug, not warn: a floor that answers a generic
+   * subscription payload here is a capability gap rather than an anomaly, and
+   * the endpoints in hand are still the ones the hello vouched for. */
+  private applyTerminalRoutes(payload: unknown, kind: SubEventKind): void {
+    const parsed = TerminalRouteSnapshot.safeParse(payload);
+    if (!parsed.success) {
+      this.logger.debug(
+        "fieldd.native_link.terminal_routes_unparsed",
+        "A terminal routes payload was not a TerminalRouteSnapshot; routes unchanged",
+        { kind },
+      );
+      return;
+    }
+    if (this.terminalRoutes?.revision === parsed.data.revision) return;
+    this.terminalRoutes = parsed.data;
+    this.terminalEndpoints = cellEndpoints(parsed.data);
     this.emit("terminal-endpoints");
   }
 
@@ -281,10 +382,18 @@ export class NativeLink extends EventEmitter {
    * clearing it would make "this floor predates GT-2d" and "the link is down"
    * the same blank.
    *
+   * TC-D15: the route snapshot goes with them. It carries the same per-boot
+   * token and the same live-credential bargain, and a remembered route is
+   * exactly the stale shape this method exists to close. A snapshot whose
+   * `cells` are EMPTY is still a live reading — it says the floor currently has
+   * no engine — so losing it is a real transition and is announced too, which
+   * is why the guard below reads both fields and not just the endpoints.
+   *
    * Silent when there was nothing to clear: no change, no event. */
   private clearTerminalEndpoints(): void {
-    if (this.terminalEndpoints === undefined) return;
+    if (this.terminalEndpoints === undefined && this.terminalRoutes === undefined) return;
     this.terminalEndpoints = undefined;
+    this.terminalRoutes = undefined;
     this.emit("terminal-endpoints");
   }
 
@@ -626,6 +735,15 @@ export class NativeLink extends EventEmitter {
     this.clearTerminalEndpoints();
     this.sock?.destroy();
   }
+}
+
+/** TC-D15 — the one place the single-cell derivation lives. TC-S2 has exactly
+ * one cell and the vector is the shape's future (K=2 class cells at TC-S3), so
+ * the assumption is named here rather than repeated at every reader. Empty
+ * `cells` is an HONEST state — a floor with no engine up right now — and reads
+ * as "no endpoints", never as an error. */
+function cellEndpoints(snapshot: TerminalRouteSnapshot): TerminalEndpoints | undefined {
+  return snapshot.cells[0]?.endpoints;
 }
 
 function isRetryableInitialTransportFailure(error: unknown): boolean {

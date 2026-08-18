@@ -7,7 +7,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { isPipeEndpoint, SOCKETS } from "@vibefield/contracts";
+import { isPipeEndpoint, SOCKETS, type TerminalRouteSnapshot } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { NativeLink, type NativeLinkOptions } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -51,6 +51,51 @@ async function setup(
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const ROUTES_SUBSCRIBE = "native.lifecycle.terminal.routes.subscribe";
+
+/** The NF-D8 endpoints a PRE-TC-S2 floor puts on the hello ack, and the same
+ * ones a TC-S2 floor keeps there as the legacy single-cell mirror. */
+const LEGACY_ENDPOINTS = {
+  controlSocket: "/mock/native/run/termctl.sock",
+  frameSocket: "/mock/native/run/termframe.sock",
+  authToken: "legacy-mirror-token",
+};
+
+/** The route stream is armed just AFTER the dial completes — the same instant
+ * the daemon arms its observed subscription — so a row that drives deltas waits
+ * for the subscribe to land before pushing one. The wait is also the assertion
+ * that the arm happened at all. */
+async function awaitRoutesArmed(mock: MockMgmtServer, count = 1): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    if (mock.subscriptionRequests.filter((m) => m === ROUTES_SUBSCRIBE).length >= count) return;
+    await sleep(10);
+  }
+  throw new Error(`the terminal routes subscription was never armed (${count})`);
+}
+
+/** A one-cell TC-D15 snapshot in the floor's own shape. The socket names carry
+ * the cell's ordinal (`termctl.<n>.sock`) because a cell restart is never a
+ * rebind, so a REPLACEMENT moves the paths as well as the identity — which is
+ * what makes "did the endpoints follow the new cell?" an assertable question. */
+function routes(revision: number, instance: number, cellBootId: string): TerminalRouteSnapshot {
+  return {
+    revision,
+    cells: [
+      {
+        cellInstanceId: instance,
+        cellBootId,
+        pid: 4000 + instance,
+        tokenGeneration: instance,
+        endpoints: {
+          controlSocket: `/mock/native/run/termctl.${instance}.sock`,
+          frameSocket: `/mock/native/run/termframe.${instance}.sock`,
+          authToken: `token-${cellBootId}`,
+        },
+      },
+    ],
+  };
+}
 
 describe("NativeLink concurrency", () => {
   it("retries until native is ready — including past a stale unix inode", async () => {
@@ -234,6 +279,137 @@ describe("NativeLink concurrency", () => {
     expect(mock.connections).toBe(3);
     // the KEPT entry retried on the next cycle and recovered its stream
     expect(events.filter((e) => e === "flaky:snapshot").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("NativeLink terminal routes (TC-D15)", () => {
+  it("prefers the ack's route snapshot over the legacy mirror, and keeps its identity", async () => {
+    // A TC-S2 floor sends BOTH: the snapshot and the single-cell `terminal`
+    // mirror it keeps in lockstep for pre-routes readers. They are two readings
+    // of one floor, so the reader picks — it never merges — and the snapshot is
+    // the one carrying the identity every later comparison keys on.
+    const { mock, link } = await setup();
+    mock.helloTerminal = LEGACY_ENDPOINTS;
+    mock.terminalRoutes = routes(7, 1, "cell-a");
+    await link.connect();
+
+    expect(link.terminalEndpoints?.authToken).toBe("token-cell-a");
+    expect(link.terminalEndpoints?.controlSocket).toBe("/mock/native/run/termctl.1.sock");
+    expect(link.terminalRoutes?.revision).toBe(7);
+    expect(link.terminalRoutes?.cells[0]?.cellBootId, "the identity, not the token").toBe("cell-a");
+    expect(link.terminalRoutes?.cells[0]?.pid, "diagnostics targeting, never authority").toBe(4001);
+  });
+
+  it("a pre-TC-S2 floor still delivers endpoints from the legacy mirror alone", async () => {
+    // The floor that never heard of routes: no `terminalRoutes` on the ack, and
+    // a routes subscribe it answers with something that is not a snapshot at
+    // all (the mock's generic payload). Both readings must leave the pre-routes
+    // behaviour byte-identical rather than blanking a live floor.
+    const { mock, link } = await setup();
+    mock.helloTerminal = LEGACY_ENDPOINTS;
+    await link.connect();
+    await sleep(50);
+
+    expect(link.terminalEndpoints).toMatchObject(LEGACY_ENDPOINTS);
+    expect(link.terminalRoutes, "an unparseable payload is never adopted").toBeUndefined();
+  });
+
+  it("a delta naming a NEW cell fires exactly one change and moves the endpoints", async () => {
+    const { mock, link } = await setup();
+    mock.terminalRoutes = routes(1, 1, "cell-a");
+    await link.connect();
+    await awaitRoutesArmed(mock);
+
+    const seen: Array<string | undefined> = [];
+    link.on("terminal-endpoints", () => seen.push(link.terminalEndpoints?.authToken));
+    mock.pushRoutesDelta(routes(2, 2, "cell-b"));
+    await sleep(50);
+
+    expect(seen, "one change, one event").toEqual(["token-cell-b"]);
+    expect(link.terminalEndpoints?.controlSocket).toBe("/mock/native/run/termctl.2.sock");
+    expect(link.terminalRoutes?.cells[0]?.cellBootId).toBe("cell-b");
+  });
+
+  it("a delta at the SAME revision changes nothing — state transfer is idempotent", async () => {
+    // The payload here is deliberately impossible from a correct floor (a
+    // revision increments at every change), because that is what pins the KEY:
+    // `revision`, not a deep-equal over the cells. Re-sending identical state
+    // is something the reconnect path does on purpose, and consumers drop live
+    // control connections on this event.
+    const { mock, link } = await setup();
+    mock.terminalRoutes = routes(3, 1, "cell-a");
+    await link.connect();
+    await awaitRoutesArmed(mock);
+
+    const seen: string[] = [];
+    link.on("terminal-endpoints", () => seen.push("changed"));
+    mock.pushRoutesDelta(routes(3, 9, "cell-imposter"));
+    await sleep(50);
+
+    expect(seen).toEqual([]);
+    expect(link.terminalRoutes?.cells[0]?.cellBootId).toBe("cell-a");
+    expect(link.terminalEndpoints?.authToken).toBe("token-cell-a");
+  });
+
+  it("empty cells are an honest state: no endpoints, and the floor still said so", async () => {
+    // "The floor is up and has no engine right now" is a reading, not a blank —
+    // so the snapshot survives while the endpoints are absent, and a cell
+    // coming up afterwards is a change like any other.
+    const { mock, link } = await setup();
+    mock.terminalRoutes = { revision: 4, cells: [] };
+    await link.connect();
+    await awaitRoutesArmed(mock);
+
+    expect(link.terminalEndpoints).toBeUndefined();
+    expect(link.terminalRoutes?.revision).toBe(4);
+
+    mock.pushRoutesDelta(routes(5, 1, "cell-a"));
+    await sleep(50);
+    expect(link.terminalEndpoints?.authToken).toBe("token-cell-a");
+  });
+
+  it("a malformed delta keeps the last good snapshot (tolerant reader)", async () => {
+    const { mock, link } = await setup();
+    mock.terminalRoutes = routes(1, 1, "cell-a");
+    await link.connect();
+    await awaitRoutesArmed(mock);
+
+    const seen: string[] = [];
+    link.on("terminal-endpoints", () => seen.push("changed"));
+    mock.pushDelta("terminal.routes.subscribe", { revision: "seven", cells: [] });
+    await sleep(50);
+
+    expect(seen, "garbage is never a change").toEqual([]);
+    expect(link.terminalEndpoints?.authToken).toBe("token-cell-a");
+    expect(link.terminalRoutes?.revision).toBe(1);
+  });
+
+  it("reconnect re-reads the routes, and the stream is armed exactly once per dial", async () => {
+    // TC-D15's reconnect half. The cell is replaced while the link is DOWN, so
+    // the hello ack is what re-reads it; the replayed subscription then
+    // delivers the same revision, which must be silent (P5 re-snapshots on
+    // every reconnect by design).
+    const { mock, link } = await setup();
+    mock.terminalRoutes = routes(1, 1, "cell-a");
+    await link.connect();
+    await awaitRoutesArmed(mock);
+
+    const seen: Array<string | undefined> = [];
+    link.on("terminal-endpoints", () => seen.push(link.terminalEndpoints?.authToken));
+    mock.terminalRoutes = routes(2, 2, "cell-b");
+    mock.killClients();
+    await sleep(900); // the first backoff is 500ms
+
+    expect(link.connected).toBe(true);
+    // GT-5b's clear, then the re-pair's fresh reading — and NOT a third event
+    // from the replayed snapshot, which carries the revision already in hand
+    expect(seen).toEqual([undefined, "token-cell-b"]);
+    expect(link.terminalRoutes?.cells[0]?.cellBootId).toBe("cell-b");
+    await awaitRoutesArmed(mock, 2);
+    expect(
+      mock.subscriptionRequests.filter((m) => m === ROUTES_SUBSCRIBE),
+      "re-subscribed by the replay path, never armed twice per connect",
+    ).toHaveLength(2);
   });
 });
 

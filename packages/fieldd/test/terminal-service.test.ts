@@ -23,11 +23,13 @@ import {
   type TerminalCreateResult,
   type TerminalEndpoints,
   type TerminalInfo,
+  type TerminalRouteSnapshot,
   type TerminalTicket,
 } from "@vibefield/contracts";
+import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, RpcCallError } from "../src/index";
+import { bootstrap, NativeLink, RpcCallError } from "../src/index";
 import { TerminalService } from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint, shortTmpRoot } from "./native-harness";
@@ -377,6 +379,71 @@ const observed = (terminals: Array<Record<string, unknown>>) => ({
   terminals,
   workers: [],
 });
+
+/** TC-D15 — a one-cell route snapshot around a floor's real endpoints, so a
+ * replacement in a test moves the dial coordinates the way a respawned cell
+ * does (per-instance socket names; a restart is never a rebind). */
+function cellRoutes(
+  revision: number,
+  cellBootId: string,
+  endpoints: TerminalEndpoints,
+): TerminalRouteSnapshot {
+  return {
+    revision,
+    cells: [
+      {
+        cellInstanceId: revision,
+        cellBootId,
+        pid: 4000 + revision,
+        endpoints,
+        tokenGeneration: revision,
+      },
+    ],
+  };
+}
+
+/** A NativeLink paired with the mock, for the rows that drive TerminalService
+ * through the REAL link rather than a structural fake — the route stream only
+ * exists on that path. The route subscription is armed just AFTER the dial (the
+ * instant the daemon arms its observed one), so this waits for it: a delta
+ * pushed before the subscribe lands would go nowhere. */
+async function connectedLink(dataDir: string, mock: MockMgmtServer): Promise<NativeLink> {
+  const link = new NativeLink({
+    socketPath: nativeEndpoint(dataDir, SOCKETS.MGMT),
+    pairingFile: join(dataDir, "native", "pairing"),
+    bootId: "terminal-routes-test",
+  });
+  cleanup.push(() => link.close());
+  await link.connect();
+  await poll(async () =>
+    mock.subscriptionRequests.includes("native.lifecycle.terminal.routes.subscribe")
+      ? true
+      : undefined,
+  );
+  return link;
+}
+
+interface CapturedLog {
+  event: string;
+  message: string;
+  attrs?: LogFields | undefined;
+}
+
+/** The house capture logger (link-service.test.ts's shape), kept whole here
+ * because the TC-S2 receipt is asserted on its MESSAGE as well as its attrs. */
+function captureLogger(events: CapturedLog[]): Logger {
+  const logger: Logger = {
+    child: () => logger,
+    trace: (event, message, attrs) => events.push({ event, message, attrs }),
+    debug: (event, message, attrs) => events.push({ event, message, attrs }),
+    info: (event, message, attrs) => events.push({ event, message, attrs }),
+    warn: (event, message, attrs) => events.push({ event, message, attrs }),
+    error: (event, message, _error, attrs) => events.push({ event, message, attrs }),
+    fatal: (event, message, _error, attrs) => events.push({ event, message, attrs }),
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
 
 describe("TerminalService (NF-3, mock native)", () => {
   it("captures hello endpoints, mints tickets, and refuses honestly without them", async () => {
@@ -1237,5 +1304,138 @@ describe("GT-2d — the adopted floor is named in health", () => {
     const health = daemon.health();
     expect(health.nativeConnected).toBe(true);
     expect(health.nativeBuild).toBeNull();
+  });
+});
+
+describe("TC-D15 — the routes consumer (TC-S2)", () => {
+  it("names every session a replaced engine took, with the S2 ceiling stated", async () => {
+    // The receipt exists because this is the ONE moment the loss is knowable:
+    // the observed stream repairs the inventory a beat later, and no snapshot
+    // after that can say WHICH sessions the replacement took. It is a log and
+    // not an audit record deliberately — the audit surface is caller-scoped and
+    // this is the floor's news, arriving on an event with no caller behind it.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.terminalRoutes = cellRoutes(1, "cell-a", ENDPOINTS);
+    mock.observedState = observed([{ sessionId: "s1" }, { sessionId: "s2" }]);
+    const link = await connectedLink(dataDir, mock);
+    const logs: CapturedLog[] = [];
+    const service = new TerminalService({ link, logger: captureLogger(logs) });
+    cleanup.push(() => service.dispose());
+    await service.ensureStarted();
+    expect(service.list().map((t) => t.sessionId)).toEqual(["s1", "s2"]);
+
+    mock.pushRoutesDelta(cellRoutes(2, "cell-b", { ...ENDPOINTS, authToken: "cell-b-token" }));
+    const receipt = await poll(async () =>
+      logs.find((entry) => entry.event === "fieldd.terminal.cell_replaced"),
+    );
+
+    expect(receipt.attrs?.["lostSessionIds"], "every session, named").toEqual(["s1", "s2"]);
+    expect(receipt.attrs?.["previousCellBootId"]).toBe("cell-a");
+    expect(receipt.attrs?.["cellBootId"]).toBe("cell-b");
+    expect(receipt.message).toContain("a terminal-engine crash loses only its class");
+  });
+
+  it("stays silent when there is nothing it can honestly claim was lost", async () => {
+    // Two silences, both load-bearing. An EMPTY inventory lost nothing. And an
+    // ABSENT reading — the link down, or a floor that never speaks routes — is
+    // not evidence of loss at all: a dead mgmt connection kills no PTYs.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.terminalRoutes = cellRoutes(1, "cell-a", ENDPOINTS);
+    mock.observedState = observed([]);
+    const link = await connectedLink(dataDir, mock);
+    const logs: CapturedLog[] = [];
+    const service = new TerminalService({ link, logger: captureLogger(logs) });
+    cleanup.push(() => service.dispose());
+    await service.ensureStarted();
+
+    mock.pushRoutesDelta(cellRoutes(2, "cell-b", ENDPOINTS));
+    await poll(async () =>
+      link.terminalRoutes?.cells[0]?.cellBootId === "cell-b" ? true : undefined,
+    );
+    expect(logs.filter((entry) => entry.event === "fieldd.terminal.cell_replaced")).toEqual([]);
+
+    // and the link dropping — the floor's coordinates gone, not replaced —
+    // stays silent too, with two sessions in the inventory this time
+    mock.pushObserved(observed([{ sessionId: "s1" }, { sessionId: "s2" }]));
+    await poll(async () => (service.list().length === 2 ? true : undefined));
+    mock.killClients();
+    await new Promise((r) => setTimeout(r, 200));
+    expect(logs.filter((entry) => entry.event === "fieldd.terminal.cell_replaced")).toEqual([]);
+  }, 20_000);
+
+  it("the next create dials the replacement cell, never the dead one", async () => {
+    // The consumer half of the drop: TerminalService caches one control client
+    // per floor, and a route change invalidates it wholesale. Both fakes mint
+    // the same `fake-token`, which makes this row sharper than production —
+    // a real replacement rotates the token, so here the IDENTITY change alone
+    // has to be what forces the redial.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const cellA = await startFakeFloor();
+    const cellB = await startFakeFloor();
+    mock.terminalRoutes = cellRoutes(1, "cell-a", cellA.endpoints);
+    mock.observedState = observed([]);
+    const link = await connectedLink(dataDir, mock);
+    const service = new TerminalService({ link });
+    cleanup.push(() => service.dispose());
+
+    await service.create({});
+    expect(cellA.connections()).toBe(1);
+
+    mock.pushRoutesDelta(cellRoutes(2, "cell-b", cellB.endpoints));
+    await poll(async () =>
+      link.terminalEndpoints?.controlSocket === cellB.endpoints.controlSocket ? true : undefined,
+    );
+    await service.create({});
+    expect(cellB.connections(), "the live cell answered").toBe(1);
+    expect(cellA.connections(), "the dead cell is never dialed again").toBe(1);
+  });
+
+  it("a floor with NO cell up refuses create honestly — a known state, not a blank", async () => {
+    // Empty `cells` is a reading: the floor is paired and answering, and it has
+    // no engine right now. The product door must refuse UNAVAILABLE/absent
+    // rather than pretend to a floor, and the daemon must still be able to say
+    // which revision it is refusing from.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.terminalRoutes = { revision: 3, cells: [] };
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "empty-cells-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const err = await rpc.callErr("terminal.create", {});
+    expect(err.data?.kind).toBe("UNAVAILABLE");
+    expect((err.data?.details as { state?: string } | undefined)?.state).toBe("absent");
+    expect(daemon.native.terminalEndpoints).toBeUndefined();
+    expect(daemon.native.terminalRoutes?.revision, "the floor's own word for it").toBe(3);
+  });
+
+  it("keeps the pre-TC-S2 floor's endpoints working from the legacy mirror", async () => {
+    // The compatibility floor, asserted at the product door rather than at the
+    // link: a floor that sends only `terminal` must mint tickets exactly as it
+    // did before routes existed.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.helloTerminal = ENDPOINTS; // and no terminalRoutes: a pre-TC-S2 floor
+    mock.observedState = observed([{ sessionId: "s1" }]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "legacy-mirror-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const ticket = (await rpc.call("terminal.openTicket", { sessionId: "s1" })) as TerminalTicket;
+    expect(ticket.token).toBe(ENDPOINTS.authToken);
+    expect(
+      daemon.native.terminalRoutes,
+      "it never claimed a snapshot it did not get",
+    ).toBeUndefined();
   });
 });

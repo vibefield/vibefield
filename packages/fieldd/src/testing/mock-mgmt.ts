@@ -63,6 +63,13 @@ export class MockMgmtServer {
   /** NF-3 — when set, the hello ack carries these terminal endpoints (NF-D8);
    * null = a floor-less native (pre-NF-2, or the unit degraded). */
   helloTerminal: { controlSocket: string; frameSocket: string; authToken: string } | null = null;
+  /** TC-D15 (TC-S2) — when set, the hello ack carries this route snapshot AND
+   * native.lifecycle.terminal.routes.subscribe answers it; null = a pre-TC-S2
+   * floor, which says neither (and whose routes subscribe falls through to the
+   * generic `{n:0}` handler — the payload fieldd must read as "not a snapshot",
+   * tolerantly, rather than as a floor with no cells). Set it beside
+   * `helloTerminal`, the legacy mirror a real floor keeps in lockstep. */
+  terminalRoutes: unknown = null;
   /** GT-2d — the build label the hello ack carries; null = a floor predating
    * GT-2d, which fieldd must surface as "it did not say", never as a guess. */
   helloNativeBuild: string | null = null;
@@ -169,6 +176,7 @@ export class MockMgmtServer {
             grantedScopes: [],
             ...(this.helloNativeBuild !== null ? { nativeBuild: this.helloNativeBuild } : {}),
             ...(this.helloTerminal !== null ? { terminal: this.helloTerminal } : {}),
+            ...(this.terminalRoutes !== null ? { terminalRoutes: this.terminalRoutes } : {}),
           },
         }) + "\n",
       );
@@ -182,6 +190,24 @@ export class MockMgmtServer {
           jsonrpc: "2.0",
           id: msg.id,
           result: { subId, snapshot: this.observedState },
+        })}\n`,
+      );
+      return;
+    }
+    if (
+      msg.method === "native.lifecycle.terminal.routes.subscribe" &&
+      this.terminalRoutes !== null
+    ) {
+      // Recorded like every other subscribe, so a test can assert the stream
+      // was armed (and re-armed) rather than infer it from a payload.
+      this.subscriptionRequests.push(msg.method);
+      const subId = `s${this.nextSub++}`;
+      this.issued.push({ sock, subId, method: msg.method });
+      sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: { subId, snapshot: this.terminalRoutes },
         })}\n`,
       );
       return;
@@ -472,6 +498,15 @@ export class MockMgmtServer {
   pushObserved(state: unknown): void {
     this.observedState = state;
     this.pushDelta("lifecycle.observed.subscribe", state);
+  }
+
+  /** TC-D15 — push a FULL route snapshot as a delta (state transfer, never
+   * edges: a delta on this stream IS a whole snapshot). The stored snapshot
+   * moves with it, so a reconnect re-reads the state this pushed rather than
+   * the one the floor started with — which is what a real floor does. */
+  pushRoutesDelta(snapshot: unknown): void {
+    this.terminalRoutes = snapshot;
+    this.pushDelta("terminal.routes.subscribe", snapshot);
   }
 
   pushDiagnosticRecord(record: unknown): void {

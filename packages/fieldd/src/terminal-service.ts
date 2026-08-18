@@ -16,6 +16,7 @@ import {
   type TerminalEndpoints,
   type TerminalInfo,
   type TerminalObservation,
+  type TerminalRouteSnapshot,
   type TerminalTerminateResult,
   type TerminalTicket,
 } from "@vibefield/contracts";
@@ -40,6 +41,12 @@ export interface TerminalLink {
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
   ): Promise<{ snapshot: unknown }>;
   readonly terminalEndpoints: TerminalEndpoints | undefined;
+  /** TC-D15 — the revisioned snapshot those endpoints were derived from, when
+   * the link has one. OPTIONAL, because a pre-TC-S2 floor's link has none and
+   * this seam must keep working from the legacy mirror alone; what it adds is
+   * IDENTITY — `cellBootId` is the only field that tells a replaced engine
+   * apart from a re-pair to the same one. */
+  readonly terminalRoutes?: TerminalRouteSnapshot | undefined;
   on(event: "terminal-endpoints", fn: () => void): unknown;
 }
 
@@ -79,11 +86,67 @@ export class TerminalService {
    * reconnects from then on (P5), so ensureStarted becomes a no-op */
   private subscribed = false;
   private starting: Promise<void> | null = null;
+  /** TC-D15 — the identity of the cell the last route reading named. Kept
+   * across a link outage on purpose: a dead mgmt connection kills no PTYs, so
+   * an ABSENCE must not overwrite the last cell fieldd actually saw. Holding it
+   * is what lets a reconnect onto a DIFFERENT cell still be named as the loss
+   * it is, while a reconnect onto the same one stays silent. */
+  private cellBootId: string | undefined;
 
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
-    // A new native boot invalidates the old control connection wholesale.
-    opts.link.on("terminal-endpoints", () => this.dropClient());
+    // The link has usually paired BEFORE this service exists (the daemon builds
+    // it after `native.connect()`), so the cell in hand at construction is the
+    // baseline. Without seeding it, the first replacement after every boot
+    // would have nothing to compare against and would go unrecorded — the one
+    // case the receipt exists for.
+    this.cellBootId = opts.link.terminalRoutes?.cells[0]?.cellBootId;
+    opts.link.on("terminal-endpoints", () => this.onRouteChange());
+  }
+
+  /** The floor's coordinates moved. Two things follow, in this order.
+   *
+   * The old control connection is worthless either way — a new cell mints a new
+   * token — so it is dropped wholesale, exactly as it was before TC-S2.
+   *
+   * Then the honesty half. If the cell was REPLACED (a different `cellBootId`)
+   * while fieldd still held an observed inventory, every session on the old one
+   * is gone: TC-S2's ceiling, stated as "a terminal-engine crash loses only its
+   * class". The product owes that a receipt naming the sessions, because it is
+   * the one moment the loss is knowable — the observed stream repairs the
+   * inventory a beat later and no snapshot after that can reconstruct WHICH
+   * sessions the replacement took.
+   *
+   * The receipt is a structured log and not an audit record, deliberately:
+   * `AuditService`'s append surface is caller-scoped (it wants a CallerContext)
+   * and nothing here has a caller — this is the floor's news arriving on an
+   * event. Minting a synthetic principal to force it into the ledger would put
+   * a fabricated caller on an EL7 surface to make a diagnostic prettier. */
+  private onRouteChange(): void {
+    this.dropClient();
+    const routes = this.opts.link.terminalRoutes;
+    const cellBootId = routes?.cells[0]?.cellBootId;
+    // Absence is not evidence of loss: the link may merely be down, and a
+    // pre-TC-S2 floor never says at all.
+    if (routes === undefined || cellBootId === undefined) return;
+    const previous = this.cellBootId;
+    this.cellBootId = cellBootId;
+    if (previous === undefined || previous === cellBootId) return;
+    // Counted from the last inventory fieldd actually observed; before the
+    // first observation there is nothing it can honestly claim was lost.
+    const lostSessionIds = this.terminals.map((terminal) => terminal.sessionId);
+    if (lostSessionIds.length === 0) return;
+    this.logger.warn(
+      "fieldd.terminal.cell_replaced",
+      "The terminal engine was replaced and its sessions are gone — a terminal-engine crash loses only its class",
+      {
+        lostSessionIds,
+        lostSessions: lostSessionIds.length,
+        previousCellBootId: previous,
+        cellBootId,
+        revision: routes.revision,
+      },
+    );
   }
 
   /** Arm the observed-inventory subscription (P5; NativeLink replays it across
