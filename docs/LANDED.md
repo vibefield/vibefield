@@ -2717,3 +2717,52 @@ at -D warnings clean. Two pre-existing gate reds fixed en route with provenance 
 the stale mesh_bridge supersession row (red since the presence-lanes close-fence; its
 subject was supersession, so it now opens its lane) and doc-sync's ENOTEMPTY teardown
 race (the cross-daemon harness's own retry idiom).
+
+## PRC-5e–g — coordinated replacement survives renderer and daemon death
+
+**PRC-5 COMPLETE 2026-08-17** (`7873e60` + `31a48c1` + `303374f` + `ffd1ae2` +
+`0c58fe7` + `b35f73d` + `137f086`). PRC-5e joined the previously isolated participant,
+candidate-authority, and renderer-controller seams into the production install path. One
+per-plugin coordinator closes ingress synchronously, freezes the exact service and renderer
+incarnations, stages update-bound module and Product API authority, waits for strict
+transport-derived prepare acknowledgements, publishes one immutable pointer, then keeps the route
+closed through exact commit acknowledgements. Candidate bearer release revokes both mint state and
+authenticated sockets; retained-old recovery receives fresh module authority and exists only
+before logical commit. Newcomers are held outside the vote.
+
+PRC-5f makes time and death honest. Prepare expiry enters a separately bounded retained-old phase;
+commit/recovery expiry asks Electron to crash only the exact unsettled generation and starts a
+second death-evidence grace. Request acceptance removes nothing. Only the later
+token-correlated `render-process-gone` retires that incarnation, after its update sources are
+revoked; reload waits for that retirement and retains the stable window participant id with a fresh
+document incarnation. Disconnect and orderly close remain different facts.
+
+PRC-5g removes the temptation to persist a dead coordinator. The version-2 current pointer is the
+recovery journal and atomically carries both the complete signed-artifact slot and monotonic
+`commitEpoch`; legacy v1 reads as epoch 1. Definitely pre-rename failure may recover old. Any error
+after rename is publication-indeterminate, fails forward with ingress closed, and is resolved by a
+fresh daemon reading the pointer. A deliberately paused commit also pins the only legal handoff
+window: while registry refresh sees candidate/next-epoch just before the coordinator resumes, only
+that active episode's exact candidate at exactly `epoch + 1` is accepted.
+
+The real process-death matrix bundles the production store into a child and SIGKILLs it on both
+sides of rename. Restart selects old/epoch 1 and cleans the temp before rename; after rename it
+selects candidate/epoch 2. Electron observes replacement fieldd handles through a daemon boot-id
+fence. Owned-child exit closes the exact stale client; an adopted daemon stuck reconnecting is
+reprobed after a bounded grace. Same-boot handle churn is inert; a new boot requests every current
+document generation.
+
+The packaged acceptance smoke creates two sandboxed BrowserWindows on the production custom origin,
+loads **22 widget types / 5 staged plugins** in each, SIGKILLs the shell-owned fieldd, waits for
+automatic respawn, and observes the same census in both replacements. Both participant ids stay
+stable, both incarnations change, and the daemon boot id changes. That smoke found two adjacent
+real bugs: concurrent `plugins.modules` calls could mint competing token tables and invalidate the
+first window, so generation rebuild is now single-flight; macOS's long session temp root could push
+`meshdata.sock` over `sun_path`, so Unix smoke roots deliberately use `/tmp`.
+
+Acceptance on the landed tree: restart spike **6/6**; focused PRC-5g fieldd **59/59**; complete
+fieldd **566 passed + 1 platform skip**; Electron **574/574**; supervisor **54/54**; all affected
+typechecks; changed-file Biome; bundle assertion; patch hygiene; and the physical two-window smoke.
+The independent real-tailnet lane remains **1/1 in 35.11 s**. A literal hardware power cut and a
+Windows filesystem run remain named release/portability witnesses; macOS process SIGKILL is not
+presented as stronger storage-hardware evidence. PRC-6 now owns bounded diagnostics and soak.
