@@ -1803,7 +1803,10 @@ mod tests {
 
     /// The ledger's seam onto health, driven through a real flock'd file: a
     /// floor holding the whole machine budget says `pty_exhausted`, and says
-    /// nothing once the sessions end.
+    /// nothing once the sessions end. Unix-gated with the ledger itself — on
+    /// win32 `resolve` answers `None` and no pump ever holds a ledger (the
+    /// absence is asserted in `admission::tests`).
+    #[cfg(unix)]
     #[test]
     fn the_ledger_pump_puts_the_spent_budget_on_the_unit() {
         let dir = tempfile::tempdir().expect("tempdir");

@@ -346,9 +346,11 @@ mod tests {
 
     /// The wire form portable-pty actually produces, byte for byte from
     /// unix.rs:46 (`bail!("failed to openpty: {:?}", …)`) as ghosttea's
-    /// `to_string()` hands it over.
+    /// `to_string()` hands it over. Unix-gated: `classify_errno` maps through
+    /// THIS platform's table, and 24 is only EMFILE where libc says so.
+    #[cfg(unix)]
     #[test]
-    fn an_openpty_refusal_keeps_its_errno_across_the_wire() {
+    fn an_openpty_refusal_keeps_its_errno_across_the_wire_on_unix() {
         let refusal = classify_wire_message(
             "terminal control error: failed to openpty: Os { code: 24, kind: Uncategorized, \
              message: \"Too many open files\" }",
@@ -364,6 +366,24 @@ mod tests {
         assert!(
             message.contains("out of file descriptors"),
             "and says it in words a person can act on: {message}"
+        );
+    }
+
+    /// The win32 dual: 24 is a UNIX errno, not a fact of this platform, and
+    /// the classifier refuses to pretend. What ConPTY exhaustion actually
+    /// renders on the wire is UNMEASURED — until a WIN-rung probe pins it,
+    /// Unclassified is the honest answer, and this row is what keeps a future
+    /// "just match the string" shortcut from shipping as a guess.
+    #[cfg(not(unix))]
+    #[test]
+    fn a_unix_errno_shape_is_not_pretended_into_pressure() {
+        let refusal = classify_wire_message(
+            "terminal control error: failed to openpty: Os { code: 24, kind: Uncategorized, \
+             message: \"Too many open files\" }",
+        );
+        assert!(
+            matches!(refusal, CreateRefusal::Unclassified { .. }),
+            "a unix errno classified on win32 would be a guess dressed as a fact: {refusal:?}"
         );
     }
 
@@ -397,12 +417,30 @@ mod tests {
             "the anchor is `Os {{`, so prose carrying `code:` is not an errno"
         );
         assert_eq!(os_error_code("Os { code: 2, kind: NotFound }"), Some(2));
+    }
+
+    /// What the extracted code MEANS is platform-tabled: 2 is ENOENT where
+    /// libc says so, and NotFound classification follows only there.
+    #[cfg(unix)]
+    #[test]
+    fn an_extracted_enoent_classifies_not_found() {
         assert_eq!(
             classify_wire_message("Os { code: 2, kind: NotFound, message: \"No such file\" }"),
             CreateRefusal::NotFound {
                 message: "Os { code: 2, kind: NotFound, message: \"No such file\" }".into()
             }
         );
+    }
+
+    /// The same digits on win32 stay Unclassified — `is_not_found` reads the
+    /// LOCAL platform's table, and this platform has no claim on unix errnos.
+    #[cfg(not(unix))]
+    #[test]
+    fn an_extracted_enoent_stays_unclassified_here() {
+        assert!(matches!(
+            classify_wire_message("Os { code: 2, kind: NotFound, message: \"No such file\" }"),
+            CreateRefusal::Unclassified { .. }
+        ));
     }
 
     /// Both directions, and the flap the two thresholds exist to prevent.

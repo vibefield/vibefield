@@ -591,6 +591,13 @@ mod tests {
         );
     }
 
+    /// The flock'd rows are unix-only DELIBERATELY: on win32 `resolve` answers
+    /// `None` (no pool reader, no ledger) and `FileLock::exclusive` refuses
+    /// rather than pretend exclusivity. The design the win32 gate witnesses is
+    /// that ABSENCE (`this_platform_reports_no_pool_and_resolve_declines`
+    /// below), never unix behavior the platform does not have. Found the hard
+    /// way: these ran platform-blind and were the box gate's first ten reds.
+    #[cfg(unix)]
     #[test]
     fn reserve_and_release_return_exactly_what_was_taken() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -622,6 +629,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_budget_refuses_before_the_kernel_has_to() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -653,6 +661,7 @@ mod tests {
     /// The crash case: an entry whose daemon is gone must not hold budget. The
     /// dead pid is a real one this test reaped itself, so the liveness probe is
     /// exercised rather than mocked.
+    #[cfg(unix)]
     #[test]
     fn a_dead_daemons_entry_never_holds_budget() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -698,6 +707,7 @@ mod tests {
 
     /// Unknown fields survive a rewrite. A ledger shared between versions must
     /// not lose the newer one's data whenever the older one takes the lock.
+    #[cfg(unix)]
     #[test]
     fn a_rewrite_carries_through_fields_this_version_does_not_know() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -734,6 +744,7 @@ mod tests {
     /// A ledger with a shape this version cannot read is rebuilt rather than
     /// fatal — the kernel is still underneath, and refusing to serve over a
     /// malformed JSON file would be the daemon choosing an outage.
+    #[cfg(unix)]
     #[test]
     fn an_unreadable_ledger_is_rebuilt_instead_of_fatal() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -745,6 +756,7 @@ mod tests {
 
     /// `publish` is the self-healing half: whatever the events said, the
     /// inventory is truth and the ledger is told so.
+    #[cfg(unix)]
     #[test]
     fn publishing_the_observed_count_corrects_a_drifted_entry() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -763,12 +775,28 @@ mod tests {
     /// The pool reader on the host actually running the test. Not asserted
     /// against a constant — 511 is this machine's number, not every machine's —
     /// but it must answer, and the answer must be a plausible pool.
+    #[cfg(unix)]
     #[test]
     fn this_platform_reports_its_pty_pool() {
         let pool = pty_pool_max().expect("a unix host publishes its PTY ceiling");
         assert!(
             pool >= 16,
             "a pool of {pool} would not run a terminal at all; the reader is wrong, not the host"
+        );
+    }
+
+    /// The win32 half of the platform contract: no pool reader exists, so the
+    /// pool is honestly absent and `resolve` declines to build a ledger at all
+    /// — admission stays with the kernel until a measured ConPTY-pool probe
+    /// gives this platform a vocabulary (a WIN rung; never a guess here).
+    #[cfg(not(unix))]
+    #[test]
+    fn this_platform_reports_no_pool_and_resolve_declines() {
+        assert_eq!(pty_pool_max(), None);
+        let dir = tempfile::tempdir().expect("tempdir");
+        assert!(
+            AdmissionLedger::resolve(dir.path(), "boot-under-test").is_none(),
+            "no pool means no ledger — the honest absence, never a lock that lies"
         );
     }
 }
