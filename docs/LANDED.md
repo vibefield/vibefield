@@ -2802,3 +2802,57 @@ plain-data schema.
 PRC-6b still owns the passive service/renderer/update aggregation and lifecycle log mapping. PRC-6c
 owns calibrated clean/leak controls, the compressed gate, and the literal 24-hour physical soak;
 none of PRC-6a's fast loops claim that duration.
+
+## PRC-6b — passive product runtime diagnostics
+
+**LANDED 2026-08-17 (`06860e0` + `078d8fc` + `9fb74f8`).** Canonical exact-target comparison now
+feeds a passive, bounded fieldd join of registry, service-controller, renderer-controller,
+behavior-generation, and PRC-5 update facts. Renderer identity comes only from the shell-minted
+bearer and must already name a current coordinator participant; report/get/subscribe cannot create,
+admit, acknowledge, disconnect, retire, or advance update membership. The sender is one-in-flight,
+latest-only, and bounded in both pending values and plugin-key state. Disconnect retains stale plain
+data; positive retirement owns deletion.
+
+Service and renderer controller transitions emit one existing first-party log record each;
+diagnostic polling emits none. The Plugin Manager shows the bounded fold only behind explicit
+disclosure, and Doctor derives failure, non-quiescence, reachability, target mismatch, and update
+acknowledgement issues without replacing the exact underlying reports.
+
+A failed behavior old→new transition refuted the initial one-renderer-target design: desired new
+authority and a still-live failed old inverse can name different artifacts. The selected fold uses
+at most two exact renderer targets while globally shedding low-priority rows below 32 KiB. That
+counterexample also fixed physical ownership: unregister/rollback rows now disappear only after a
+successful inverse, so later close can retry them.
+
+Acceptance at that checkpoint: contracts **247/247**, field-app **507/507**, fieldd **576 passed +
+1 skipped**, affected typechecks, focused Biome, and patch hygiene. PRC-6b closes the bounded product
+projection, not the resource-duration claim.
+
+## PRC-6c1 — exact runtime censuses and compressed soak
+
+**LANDED 2026-08-17 (`bf281bf`).** Catalog, behavior-generation, renderer-window, service-host,
+service-registry, and runtime-diagnostics owners now expose plain structural censuses at their
+actual ownership seams. A successful behavior close retains its useful terminal fold as plain data
+then releases desired handles, candidate tokens, captured errors, fallback ledger, and listener; a
+failed close remains nonzero and retries the exact inverse. Window/service shutdown compacts only
+owners whose close actually succeeded, so a refused boundary cannot manufacture a zero by deleting
+its last handle. Settled service lease-release promises and queued diagnostic flush state now clear.
+
+Source audit found Ajv 8.20's strong schema-object cache behind dynamic service churn. A 4,000-row
+control grew that cache from **1 to 4,001**; `removeSchema()` returned it to **0** while V8 heap
+remained allocator-high. Registry schemas are now refcounted by provider generation, released on
+withdrawal/failed stage/disposal, and tested across 128 unique manifest generations.
+
+The forked 120-cycle production-seam probe exercises actual ServiceHost/ServiceRegistry, actual ICE
+behavior engine/catalog/generation ownership, and actual update coordinator/runtime diagnostics.
+After eight warmup samples, every one of **18 executable-resource counters** remains zero, fds stay
+**14→14**, external memory stays **4,330,809 bytes**, controller history stays at its **64** ceiling,
+and forced-GC heap median growth/slope are **+3,675,988 bytes / +43,575 bytes per sample**, below the
+selected dual threshold. The identical negative control plants one real catalog listener at sample
+12 and reaches 108; the structural oracle rejects it immediately although fd/memory budgets pass.
+
+Final gates: field-app **514/514**, fieldd **580 passed + 1 skipped**, both typechecks, the 120-cycle
+clean/leak oracle, preflight, physical-singleton dependency guard, focused Biome, and patch hygiene.
+This is compressed production-seam evidence, not §24.6: the probe uses a controlled worker,
+sequential renderer incarnations, and no real daemon restart/log rotation/thread/physical-footprint
+sampling. PRC-6c2 owns that ignored physical runner and the literal 24-hour execution.
