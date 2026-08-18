@@ -717,6 +717,14 @@ async fn a_superseded_connection_dying_does_not_silence_the_live_one() {
     // then vanished with no error, no log and no lane.closed — and asymmetric,
     // because fieldd→peer kept working, so it read as "the peer went quiet".
     let (_dir, daemon) = boot().await;
+    // The lane must EXIST: deliver_inbound gained close's receive-half fence
+    // (unknown ids drop — asserted as a feature by the retired-id test above),
+    // and this test's subject is supersession, not unknown-lane semantics.
+    daemon
+        .bridge
+        .open_lane(lane(7, LaneClass::Reliable))
+        .await
+        .unwrap();
     let mut first = BridgeClient::connect(&daemon).await;
     first.hello(&daemon, true).await;
     assert_eq!(first.next().await.map(|f| f.kind), Some(FRAME_HELLO_OK));

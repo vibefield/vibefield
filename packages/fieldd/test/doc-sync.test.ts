@@ -31,7 +31,10 @@ import { RpcCallError } from "../src/native-link";
 
 let dirs: string[] = [];
 afterEach(() => {
-  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  // Node's own ENOTEMPTY retry loop, the cross-daemon harness's documented
+  // fix: a dying writer can still be creating files while rmSync walks the
+  // tree — the race reds a loaded-host verify run about 1 in 3.
+  for (const d of dirs) rmSync(d, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
   dirs = [];
 });
 
