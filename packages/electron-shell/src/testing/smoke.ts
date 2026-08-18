@@ -398,7 +398,15 @@ interface SettledPhysicalResources {
   readonly fieldd: ProcessResourceSample;
   readonly native: ProcessResourceSample;
   readonly electron: ElectronProcessSample;
+  readonly observationWindows: number;
   readonly ranges: Readonly<Record<string, { readonly minimum: number; readonly maximum: number }>>;
+}
+
+interface PhysicalResourceObservation {
+  readonly main: ProcessResourceSample;
+  readonly fieldd: ProcessResourceSample;
+  readonly native: ProcessResourceSample;
+  readonly electron: ElectronProcessSample;
 }
 
 function medianPresent(values: readonly (number | null)[]): number | null {
@@ -433,74 +441,81 @@ async function samplePhysicalResourceWindow(
   fielddPid: number,
   nativePid: number,
 ): Promise<SettledPhysicalResources> {
-  const observations: Array<{
-    main: ProcessResourceSample;
-    fieldd: ProcessResourceSample;
-    native: ProcessResourceSample;
-    electron: ElectronProcessSample;
-  }> = [];
-  for (let index = 0; index < 7; index += 1) {
-    const [main, fieldd, native, electron] = await Promise.all([
-      sampleProcessResources(process.pid, false),
-      sampleProcessResources(fielddPid, false),
-      sampleProcessResources(nativePid, false),
-      sampleElectronProcesses(windows),
-    ]);
-    observations.push({ main, fieldd, native, electron });
-    if (index < 6) await sleep(125);
+  const deadline = Date.now() + 10_000;
+  let observationWindows = 0;
+  let lastFingerprints: readonly string[] = [];
+  while (Date.now() < deadline) {
+    observationWindows += 1;
+    const observations: PhysicalResourceObservation[] = [];
+    for (let index = 0; index < 7; index += 1) {
+      const [main, fieldd, native, electron] = await Promise.all([
+        sampleProcessResources(process.pid, false),
+        sampleProcessResources(fielddPid, false),
+        sampleProcessResources(nativePid, false),
+        sampleElectronProcesses(windows),
+      ]);
+      observations.push({ main, fieldd, native, electron });
+      if (index < 6) await sleep(125);
+    }
+    const electronFingerprints = new Set(
+      observations.map(({ electron }) =>
+        JSON.stringify({
+          processCount: electron.processCount,
+          rendererPids: electron.rendererPids,
+          roster: Object.entries(electron.roster).sort(([left], [right]) =>
+            left.localeCompare(right),
+          ),
+        }),
+      ),
+    );
+    lastFingerprints = [...electronFingerprints];
+    if (electronFingerprints.size !== 1) {
+      await sleep(125);
+      continue;
+    }
+    const ranges: Record<string, { minimum: number; maximum: number }> = {};
+    for (const owner of ["main", "fieldd", "native"] as const) {
+      const samples = observations.map((observation) => observation[owner]);
+      noteRange(
+        ranges,
+        `${owner}Fds`,
+        samples.map((sample) => sample.fds),
+      );
+      noteRange(
+        ranges,
+        `${owner}Threads`,
+        samples.map((sample) => sample.threads),
+      );
+      noteRange(
+        ranges,
+        `${owner}NetworkSockets`,
+        samples.map((sample) => sample.networkSockets),
+      );
+    }
+    const electron = observations[3]!.electron;
+    return {
+      main: resourceMedian(observations.map((observation) => observation.main)),
+      fieldd: resourceMedian(observations.map((observation) => observation.fieldd)),
+      native: resourceMedian(observations.map((observation) => observation.native)),
+      electron: {
+        ...electron,
+        processCount: medianPresent(
+          observations.map((observation) => observation.electron.processCount),
+        )!,
+        workingSetKb: medianPresent(
+          observations.map((observation) => observation.electron.workingSetKb),
+        )!,
+        rendererWorkingSetKb: medianPresent(
+          observations.map((observation) => observation.electron.rendererWorkingSetKb),
+        )!,
+      },
+      observationWindows,
+      ranges: Object.freeze(ranges),
+    };
   }
-  const electronFingerprints = new Set(
-    observations.map(({ electron }) =>
-      JSON.stringify({
-        processCount: electron.processCount,
-        rendererPids: electron.rendererPids,
-        roster: Object.entries(electron.roster).sort(([left], [right]) =>
-          left.localeCompare(right),
-        ),
-      }),
-    ),
+  throw new Error(
+    `Electron process roster did not settle within 10000ms: ${JSON.stringify(lastFingerprints)}`,
   );
-  if (electronFingerprints.size !== 1) {
-    throw new Error("Electron process roster changed inside the OS observation window");
-  }
-  const ranges: Record<string, { minimum: number; maximum: number }> = {};
-  for (const owner of ["main", "fieldd", "native"] as const) {
-    const samples = observations.map((observation) => observation[owner]);
-    noteRange(
-      ranges,
-      `${owner}Fds`,
-      samples.map((sample) => sample.fds),
-    );
-    noteRange(
-      ranges,
-      `${owner}Threads`,
-      samples.map((sample) => sample.threads),
-    );
-    noteRange(
-      ranges,
-      `${owner}NetworkSockets`,
-      samples.map((sample) => sample.networkSockets),
-    );
-  }
-  const electron = observations[3]!.electron;
-  return {
-    main: resourceMedian(observations.map((observation) => observation.main)),
-    fieldd: resourceMedian(observations.map((observation) => observation.fieldd)),
-    native: resourceMedian(observations.map((observation) => observation.native)),
-    electron: {
-      ...electron,
-      processCount: medianPresent(
-        observations.map((observation) => observation.electron.processCount),
-      )!,
-      workingSetKb: medianPresent(
-        observations.map((observation) => observation.electron.workingSetKb),
-      )!,
-      rendererWorkingSetKb: medianPresent(
-        observations.map((observation) => observation.electron.rendererWorkingSetKb),
-      )!,
-    },
-    ranges: Object.freeze(ranges),
-  };
 }
 
 function plantedMainListenerCount(): number {
@@ -824,6 +839,7 @@ export async function runSmokePluginRestart(opts: {
           mainResources,
           fielddResources,
           nativeResources,
+          osObservationWindows: resources.observationWindows,
           osObservationRanges: resources.ranges,
           logs,
           logging,
