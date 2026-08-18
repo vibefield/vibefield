@@ -7,7 +7,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { isPipeEndpoint, SOCKETS, type TerminalRouteSnapshot } from "@vibefield/contracts";
+import {
+  isPipeEndpoint,
+  SOCKETS,
+  type TerminalRouteCell,
+  type TerminalRouteSnapshot,
+  type TerminalWorkloadClass,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { NativeLink, type NativeLinkOptions } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -79,22 +85,31 @@ async function awaitRoutesArmed(mock: MockMgmtServer, count = 1): Promise<void> 
  * rebind, so a REPLACEMENT moves the paths as well as the identity — which is
  * what makes "did the endpoints follow the new cell?" an assertable question. */
 function routes(revision: number, instance: number, cellBootId: string): TerminalRouteSnapshot {
+  return { revision, cells: [cellRow(instance, cellBootId)] };
+}
+
+function cellRow(instance: number, cellBootId: string): TerminalRouteCell {
   return {
-    revision,
-    cells: [
-      {
-        cellInstanceId: instance,
-        cellBootId,
-        pid: 4000 + instance,
-        tokenGeneration: instance,
-        endpoints: {
-          controlSocket: `/mock/native/run/termctl.${instance}.sock`,
-          frameSocket: `/mock/native/run/termframe.${instance}.sock`,
-          authToken: `token-${cellBootId}`,
-        },
-      },
-    ],
+    cellInstanceId: instance,
+    cellBootId,
+    pid: 4000 + instance,
+    tokenGeneration: instance,
+    endpoints: {
+      controlSocket: `/mock/native/run/termctl.${instance}.sock`,
+      frameSocket: `/mock/native/run/termframe.${instance}.sock`,
+      authToken: `token-${cellBootId}`,
+    },
   };
+}
+
+/** TC-S3 — the same row, wearing its class and role. */
+function classCell(
+  instance: number,
+  cellBootId: string,
+  workloadClass: TerminalWorkloadClass,
+  role: "class" | "solo",
+): TerminalRouteCell {
+  return { ...cellRow(instance, cellBootId), workloadClass, role };
 }
 
 describe("NativeLink concurrency", () => {
@@ -382,6 +397,40 @@ describe("NativeLink terminal routes (TC-D15)", () => {
     expect(seen, "garbage is never a change").toEqual([]);
     expect(link.terminalEndpoints?.authToken).toBe("token-cell-a");
     expect(link.terminalRoutes?.revision).toBe(1);
+  });
+
+  it("the legacy mirror is the INTERACTIVE class's create target (TC-S3)", async () => {
+    // With K=2 cells the mirror is no longer "the floor's endpoints" — it is
+    // one cell's, and the one every pre-routes reader means is the deck's. The
+    // agent cell is listed FIRST so `cells[0]`, the pre-TC-S3 derivation, would
+    // give the wrong answer here.
+    const { mock, link } = await setup();
+    mock.terminalRoutes = {
+      revision: 2,
+      cells: [
+        classCell(2, "cell-agent", "agent", "class"),
+        classCell(1, "cell-deck", "interactive", "class"),
+      ],
+    } satisfies TerminalRouteSnapshot;
+    await link.connect();
+
+    expect(link.terminalEndpoints?.authToken).toBe("token-cell-deck");
+    expect(link.terminalRoutes?.cells, "both rows survive; only the mirror picks").toHaveLength(2);
+  });
+
+  it("a floor with only SOLO agent cells mirrors nothing — an honest blank", async () => {
+    // No interactive cell means no deck host, and the mirror says so rather
+    // than handing a pre-routes reader an agent isolation cell to attach to.
+    // The snapshot is still a live reading, and routes-aware consumers use it.
+    const { mock, link } = await setup();
+    mock.terminalRoutes = {
+      revision: 3,
+      cells: [classCell(5, "solo-5", "agent", "solo")],
+    } satisfies TerminalRouteSnapshot;
+    await link.connect();
+
+    expect(link.terminalEndpoints).toBeUndefined();
+    expect(link.terminalRoutes?.revision).toBe(3);
   });
 
   it("reconnect re-reads the routes, and the stream is armed exactly once per dial", async () => {

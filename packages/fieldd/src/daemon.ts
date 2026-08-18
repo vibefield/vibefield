@@ -1243,7 +1243,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return await audit.required(
         ctx,
         { action: "terminal.ticket.mint", target: { kind: "terminal", id: sessionId } },
-        () => terminals.ticket(),
+        // TC-S3: the session's OWN cell, via the inventory's `cell` tag — a
+        // ticket minted from any other cell would be a credential for a socket
+        // that has never heard of this session.
+        () => terminals.ticketForSession(sessionId),
         () => ({ outcome: "succeeded" }),
       );
     });
@@ -1325,7 +1328,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const ticket = await audit.required(
         ctx,
         { action: "terminal.ticket.mint", target: { kind: "terminal", id: created.sessionId } },
-        () => terminals.ticket(),
+        // TC-S3: from the cell the session actually LANDED on, which create
+        // reports — a workloadClass:"agent" birth lands on the agent cell, and
+        // the inventory that would otherwise say so is a mgmt round trip behind
+        // (GT-1's window, the reason this mint exists at all).
+        () => terminals.ticketForCell(created.cellBootId),
         () => ({ outcome: "succeeded" }),
       );
       return { sessionId: created.sessionId, ticket } satisfies TerminalCreateResult;

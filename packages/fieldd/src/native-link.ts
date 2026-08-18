@@ -8,7 +8,9 @@ import {
   NATIVE_SUPERVISION,
   PingAck,
   TerminalEndpoints,
+  type TerminalRouteCell,
   TerminalRouteSnapshot,
+  type TerminalWorkloadClass,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { computePairingMac } from "./pairing";
@@ -117,7 +119,12 @@ export class NativeLink extends EventEmitter {
    * one place and cleared in none, so after a field-native SIGKILL every reader
    * still saw a floor: `terminal.ticket()` handed out socket paths that no
    * longer existed plus a dead boot's token, the audit recorded the grant as a
-   * success, and `system.health` reported the device as a terminal host. */
+   * success, and `system.health` reported the device as a terminal host.
+   *
+   * TC-S3: with K=2 class cells this is one cell's coordinates, not "the
+   * floor's" — the INTERACTIVE class's create target (see `cellEndpoints`).
+   * Consumers that route by class or by session read `terminalRoutes`; this
+   * stays the reading a pre-routes consumer means. */
   terminalEndpoints: TerminalEndpoints | undefined;
   /** TC-D15: the revisioned route snapshot `terminalEndpoints` is DERIVED from,
    * kept whole for the consumers that need the cell's identity rather than its
@@ -737,13 +744,47 @@ export class NativeLink extends EventEmitter {
   }
 }
 
-/** TC-D15 — the one place the single-cell derivation lives. TC-S2 has exactly
- * one cell and the vector is the shape's future (K=2 class cells at TC-S3), so
- * the assumption is named here rather than repeated at every reader. Empty
- * `cells` is an HONEST state — a floor with no engine up right now — and reads
- * as "no endpoints", never as an error. */
+/** TC-S3 — the CREATE-TARGET discipline, in the ONE place every reader on this
+ * plane shares it (the normative statement lives on `TerminalRouteSnapshot`):
+ * a class's create target is its `role:"class"` row when one is present, else
+ * its HIGHEST-instance `role:"solo"` row — the floor spawns a fresh empty solo
+ * the moment the previous one takes a session, so the newest solo is the empty
+ * one, and at the solo cap the newest stays target as the honest overflow.
+ *
+ * Two absences are read the tolerant way, and both are load-bearing. A row with
+ * NO `workloadClass` is a pre-TC-S3 floor's single cell, which serves EVERY
+ * class — that is what keeps the legacy derivation below unchanged. An absent
+ * `role` reads as `class`, the contract's own default reading of absence.
+ *
+ * Rows that are not the target still serve their EXISTING sessions: per-session
+ * routing goes through the inventory's `cell` tag (TerminalService), never
+ * through this rule. */
+export function terminalCreateTarget(
+  snapshot: TerminalRouteSnapshot,
+  workloadClass: TerminalWorkloadClass,
+): TerminalRouteCell | undefined {
+  const candidates = snapshot.cells.filter(
+    (cell) => cell.workloadClass === undefined || cell.workloadClass === workloadClass,
+  );
+  const classCell = candidates.find((cell) => cell.role !== "solo");
+  if (classCell !== undefined) return classCell;
+  let newest: TerminalRouteCell | undefined;
+  for (const cell of candidates) {
+    if (newest === undefined || cell.cellInstanceId > newest.cellInstanceId) newest = cell;
+  }
+  return newest;
+}
+
+/** TC-D15/TC-S3 — the one place the LEGACY single-endpoint derivation lives.
+ * The mirror is the INTERACTIVE class's create target: it is the pane deck's
+ * door and the reading every pre-routes consumer means. A pre-TC-S3 floor whose
+ * rows declare no class needs no special case — a class-less row is a candidate
+ * for every class, so the rule above picks that floor's single cell exactly as
+ * `cells[0]` did. Empty `cells` is an HONEST state — a floor with no engine up
+ * right now — and reads as "no endpoints", never as an error; so does a floor
+ * with agent cells and no interactive one (it hosts no deck). */
 function cellEndpoints(snapshot: TerminalRouteSnapshot): TerminalEndpoints | undefined {
-  return snapshot.cells[0]?.endpoints;
+  return terminalCreateTarget(snapshot, "interactive")?.endpoints;
 }
 
 function isRetryableInitialTransportFailure(error: unknown): boolean {

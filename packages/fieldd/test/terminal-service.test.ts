@@ -25,11 +25,13 @@ import {
   type TerminalInfo,
   type TerminalRouteSnapshot,
   type TerminalTicket,
+  type TerminalWorkloadClass,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, NativeLink, RpcCallError } from "../src/index";
+import { terminalCreateTarget } from "../src/native-link";
 import { TerminalService } from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint, shortTmpRoot } from "./native-harness";
@@ -399,6 +401,96 @@ function cellRoutes(
         tokenGeneration: revision,
       },
     ],
+  };
+}
+
+/** TC-S3 — a K-cell snapshot: one row per cell, each with its own class, role
+ * and coordinates. The pid/tokenGeneration filler is the floor's, uninteresting
+ * here; what the rows under test read is `cellInstanceId` (the solo ordering),
+ * `cellBootId` (THE identity) and the class/role pair. */
+function classRoutes(
+  revision: number,
+  cells: Array<{
+    cellInstanceId: number;
+    cellBootId: string;
+    endpoints: TerminalEndpoints;
+    workloadClass?: TerminalWorkloadClass;
+    role?: "class" | "solo";
+  }>,
+): TerminalRouteSnapshot {
+  return {
+    revision,
+    cells: cells.map((cell) => ({
+      cellInstanceId: cell.cellInstanceId,
+      cellBootId: cell.cellBootId,
+      pid: 4000 + cell.cellInstanceId,
+      endpoints: cell.endpoints,
+      tokenGeneration: revision,
+      ...(cell.workloadClass === undefined ? {} : { workloadClass: cell.workloadClass }),
+      ...(cell.role === undefined ? {} : { role: cell.role }),
+    })),
+  };
+}
+
+/** TC-S3 — the inventory's `cell` tag, the join between an observed session and
+ * a route row. Deliberately without endpoints: the tag names PLACEMENT, the
+ * snapshot owns coordinates. */
+function cellTag(
+  cellInstanceId: number,
+  cellBootId: string,
+  workloadClass: TerminalWorkloadClass,
+  role: "class" | "solo" = "class",
+): Record<string, unknown> {
+  return { cellInstanceId, cellBootId, workloadClass, role };
+}
+
+/** Fake endpoints for a cell that is only ever TICKETED, never dialed — the
+ * mint rows need coordinates to tell cells apart, not a floor to talk to. */
+function paperEndpoints(name: string): TerminalEndpoints {
+  return {
+    controlSocket: `/mock/native/run/termctl.${name}.sock`,
+    frameSocket: `/mock/native/run/termframe.${name}.sock`,
+    authToken: `${name}-token`,
+  };
+}
+
+/** The ticket those paper endpoints mint to (D6 — the ticket IS the cell's
+ * endpoints, so "which cell answered" is assertable as a whole shape). */
+function paperTicket(name: string): TerminalTicket {
+  const endpoints = paperEndpoints(name);
+  return {
+    controlSocket: endpoints.controlSocket,
+    frameSocket: endpoints.frameSocket,
+    token: endpoints.authToken,
+  };
+}
+
+/** A structural link whose routes can MOVE, for the rows that drive placement
+ * without a daemon. The legacy mirror is derived by the link's OWN helper
+ * rather than re-implemented here: a fake that derived it differently could
+ * make a routing row pass against a link that would never publish that reading
+ * (native-link.test.ts pins the derivation itself). */
+function routedLink(initial: TerminalRouteSnapshot): {
+  link: ConstructorParameters<typeof TerminalService>[0]["link"];
+  move: (next: TerminalRouteSnapshot) => void;
+} {
+  const listeners: Array<() => void> = [];
+  let snapshot = initial;
+  return {
+    link: {
+      subscribe: async () => ({ snapshot: observed([]) }),
+      get terminalEndpoints() {
+        return terminalCreateTarget(snapshot, "interactive")?.endpoints;
+      },
+      get terminalRoutes() {
+        return snapshot;
+      },
+      on: (_event: "terminal-endpoints", fn: () => void) => listeners.push(fn),
+    },
+    move: (next: TerminalRouteSnapshot) => {
+      snapshot = next;
+      for (const fn of listeners) fn();
+    },
   };
 }
 
@@ -1361,8 +1453,15 @@ describe("TC-D15 — the routes consumer (TC-S2)", () => {
     );
 
     expect(receipt.attrs?.["lostSessionIds"], "every session, named").toEqual(["s1", "s2"]);
-    expect(receipt.attrs?.["previousCellBootId"]).toBe("cell-a");
-    expect(receipt.attrs?.["cellBootId"]).toBe("cell-b");
+    // TC-S3 flipped the SUBJECT of the receipt from the replacement to the cell
+    // that vanished: with K cells a change is a diff and there is no single
+    // "replacement" to name, while the loss is always some particular row's.
+    // A pre-TC-S3 floor's single class-less cell is still counted whole — its
+    // inventory carries no `cell` tag to join on.
+    expect(receipt.attrs?.["cellBootId"], "the cell that died, not the one that took over").toBe(
+      "cell-a",
+    );
+    expect(receipt.attrs?.["revision"]).toBe(2);
     expect(receipt.message).toContain("a terminal-engine crash loses only its class");
   });
 
@@ -1474,5 +1573,361 @@ describe("TC-D15 — the routes consumer (TC-S2)", () => {
       daemon.native.terminalRoutes,
       "it never claimed a snapshot it did not get",
     ).toBeUndefined();
+  });
+});
+
+describe("TC-S3 — class cells (K=2) and solo isolation", () => {
+  it("routes create by workload class, and answers with the cell that took it", async () => {
+    // The placement half of TC-D4: the class picks the CELL, so an agent birth
+    // cannot land in the pane deck's engine and take it down with it.
+    const interactive = await startFakeFloor();
+    const agent = await startFakeFloor();
+    const routed = routedLink(
+      classRoutes(1, [
+        {
+          cellInstanceId: 1,
+          cellBootId: "cell-i",
+          endpoints: interactive.endpoints,
+          workloadClass: "interactive",
+          role: "class",
+        },
+        {
+          cellInstanceId: 2,
+          cellBootId: "cell-a",
+          endpoints: agent.endpoints,
+          workloadClass: "agent",
+          role: "class",
+        },
+      ]),
+    );
+    const service = new TerminalService({ link: routed.link });
+    cleanup.push(() => service.dispose());
+
+    const born = await service.create({ workloadClass: "agent" });
+    expect(born.cellBootId, "the cell that took it, for the daemon's nested mint").toBe("cell-a");
+    expect(agent.connections()).toBe(1);
+    expect(interactive.connections(), "the interactive cell was never dialed").toBe(0);
+    // the class still selects the scrollback cap it selected before TC-S3 —
+    // placement is the NEW meaning of the field, not a replacement for the old
+    expect(agent.createOptions()?.["scrollbackBytes"]).toBe(TERMINAL_SCROLLBACK_CLASS_BYTES.AGENT);
+
+    // and the routing default is the contract's tolerant-reader default: an
+    // undeclared class is interactive, so an unchanged caller lands where it
+    // always did
+    const plain = await service.create({});
+    expect(plain.cellBootId).toBe("cell-i");
+    expect(interactive.connections()).toBe(1);
+    expect(agent.connections(), "one connection per cell, both still live").toBe(1);
+  });
+
+  it("targets the class row, else the NEWEST solo cell", async () => {
+    // Spawn isolation (TC-D4): the floor spawns a fresh empty solo the moment
+    // the previous one takes a session, so the HIGHEST instance is the empty
+    // one. There is no agent CLASS row here — that is the state a recurring
+    // poison workload puts the floor in, and every agent birth is isolated.
+    // The rows are listed newest-first so array order cannot explain the pick.
+    const filled = await startFakeFloor();
+    const empty = await startFakeFloor();
+    const interactive = await startFakeFloor();
+    const routed = routedLink(
+      classRoutes(9, [
+        {
+          cellInstanceId: 7,
+          cellBootId: "solo-7",
+          endpoints: empty.endpoints,
+          workloadClass: "agent",
+          role: "solo",
+        },
+        {
+          cellInstanceId: 5,
+          cellBootId: "solo-5",
+          endpoints: filled.endpoints,
+          workloadClass: "agent",
+          role: "solo",
+        },
+        {
+          cellInstanceId: 1,
+          cellBootId: "cell-i",
+          endpoints: interactive.endpoints,
+          workloadClass: "interactive",
+          role: "class",
+        },
+      ]),
+    );
+    const service = new TerminalService({ link: routed.link });
+    cleanup.push(() => service.dispose());
+
+    const born = await service.create({ workloadClass: "agent" });
+    expect(born.cellBootId).toBe("solo-7");
+    expect(empty.connections()).toBe(1);
+    expect(filled.connections(), "a filled solo cell is never a create target again").toBe(0);
+    expect(interactive.connections(), "and an agent birth never crosses into the deck").toBe(0);
+  });
+
+  it("mints a session's ticket from ITS cell, never from the create target", async () => {
+    // The routing half a create-target rule cannot answer: an EXISTING session
+    // lives where it was born, and the inventory's `cell` tag is the only join
+    // that says where. A ticket from the wrong cell is a credential for a
+    // socket that has never heard of the session.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.terminalRoutes = classRoutes(1, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-i",
+        endpoints: paperEndpoints("interactive"),
+        workloadClass: "interactive",
+        role: "class",
+      },
+      {
+        cellInstanceId: 2,
+        cellBootId: "cell-a",
+        endpoints: paperEndpoints("agent"),
+        workloadClass: "agent",
+        role: "class",
+      },
+    ]);
+    mock.observedState = observed([
+      { sessionId: "pane-1", cell: cellTag(1, "cell-i", "interactive") },
+      { sessionId: "agent-1", cell: cellTag(2, "cell-a", "agent") },
+    ]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "cell-ticket-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const pane = (await rpc.call("terminal.openTicket", { sessionId: "pane-1" })) as TerminalTicket;
+    const agent = (await rpc.call("terminal.openTicket", {
+      sessionId: "agent-1",
+    })) as TerminalTicket;
+    expect(pane).toMatchObject(paperTicket("interactive"));
+    expect(agent).toMatchObject(paperTicket("agent"));
+
+    // and the SESSIONLESS mint stays the deck's door: the interactive cell
+    const connect = TerminalConnectTicketResult.parse(await rpc.call("terminal.connectTicket", {}));
+    expect(connect.ticket).toMatchObject(paperTicket("interactive"));
+  });
+
+  it("a session whose cell is gone is cell_gone, never another cell's socket", async () => {
+    // The beat between a cell's death and the observed stream repairing the
+    // inventory: fieldd still holds a row for a session whose cell has left the
+    // snapshot. Minting the surviving cell's coordinates there would hand out a
+    // credential for a socket that never had this session; refusing is the
+    // honest state, and retryable because the inventory is about to say so.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.terminalRoutes = classRoutes(4, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-i",
+        endpoints: paperEndpoints("interactive"),
+        workloadClass: "interactive",
+        role: "class",
+      },
+    ]);
+    mock.observedState = observed([
+      { sessionId: "pane-1", cell: cellTag(1, "cell-i", "interactive") },
+      { sessionId: "agent-1", cell: cellTag(2, "cell-a", "agent") },
+    ]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "cell-gone-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const err = await rpc.callErr("terminal.openTicket", { sessionId: "agent-1" });
+    expect(err.data?.kind).toBe("UNAVAILABLE");
+    expect((err.data?.details as { state?: string } | undefined)?.state).toBe("cell_gone");
+    expect(err.data?.retryable, "the inventory is a beat behind, not wrong forever").toBe(true);
+    // the LIVE cell's session is unaffected — the refusal is this cell's, not the floor's
+    const pane = (await rpc.call("terminal.openTicket", { sessionId: "pane-1" })) as TerminalTicket;
+    expect(pane).toMatchObject(paperTicket("interactive"));
+  });
+
+  it("counts the blast per cell: the receipt names only the dead cell's sessions", async () => {
+    // "A terminal-engine crash loses only its class", made countable. Before
+    // TC-S3 any route change counted EVERY session as lost, which was true of a
+    // one-cell floor and is a lie about a K=2 one: the interactive panes are
+    // still running while the agent cell is respawning.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const cells = (revision: number, agentBootId: string): TerminalRouteSnapshot =>
+      classRoutes(revision, [
+        {
+          cellInstanceId: 1,
+          cellBootId: "cell-i",
+          endpoints: paperEndpoints("interactive"),
+          workloadClass: "interactive",
+          role: "class",
+        },
+        {
+          cellInstanceId: revision + 1,
+          cellBootId: agentBootId,
+          endpoints: paperEndpoints(agentBootId),
+          workloadClass: "agent",
+          role: "class",
+        },
+      ]);
+    mock.terminalRoutes = cells(1, "cell-a");
+    mock.observedState = observed([
+      { sessionId: "pane-1", cell: cellTag(1, "cell-i", "interactive") },
+      { sessionId: "agent-1", cell: cellTag(2, "cell-a", "agent") },
+      { sessionId: "agent-2", cell: cellTag(2, "cell-a", "agent") },
+    ]);
+    const link = await connectedLink(dataDir, mock);
+    const logs: CapturedLog[] = [];
+    const service = new TerminalService({ link, logger: captureLogger(logs) });
+    cleanup.push(() => service.dispose());
+    await service.ensureStarted();
+    expect(service.list()).toHaveLength(3);
+
+    mock.pushRoutesDelta(cells(2, "cell-a2"));
+    const receipts = await poll(async () => {
+      const found = logs.filter((entry) => entry.event === "fieldd.terminal.cell_replaced");
+      return found.length > 0 ? found : undefined;
+    });
+
+    expect(receipts, "one receipt, for the one cell that died").toHaveLength(1);
+    expect(
+      receipts[0]?.attrs?.["lostSessionIds"],
+      "the agent cell's sessions, and only those",
+    ).toEqual(["agent-1", "agent-2"]);
+    expect(receipts[0]?.attrs?.["lostSessions"]).toBe(2);
+    expect(receipts[0]?.attrs?.["cellBootId"]).toBe("cell-a");
+    expect(receipts[0]?.attrs?.["workloadClass"]).toBe("agent");
+    expect(receipts[0]?.attrs?.["role"]).toBe("class");
+    expect(receipts[0]?.attrs?.["revision"]).toBe(2);
+  });
+
+  it("a cell that vanishes with no replacement is still counted", async () => {
+    // The death and the respawn are two readings, and the first one is where
+    // the loss is knowable: the floor drops the row the moment the cell dies
+    // and publishes the replacement a beat later. Counting only replacements
+    // would make the receipt depend on how fast the supervisor is.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const interactiveRow = {
+      cellInstanceId: 1,
+      cellBootId: "cell-i",
+      endpoints: paperEndpoints("interactive"),
+      workloadClass: "interactive" as const,
+      role: "class" as const,
+    };
+    mock.terminalRoutes = classRoutes(1, [
+      interactiveRow,
+      {
+        cellInstanceId: 2,
+        cellBootId: "cell-a",
+        endpoints: paperEndpoints("agent"),
+        workloadClass: "agent",
+        role: "class",
+      },
+    ]);
+    mock.observedState = observed([
+      { sessionId: "pane-1", cell: cellTag(1, "cell-i", "interactive") },
+      { sessionId: "agent-1", cell: cellTag(2, "cell-a", "agent") },
+    ]);
+    const link = await connectedLink(dataDir, mock);
+    const logs: CapturedLog[] = [];
+    const service = new TerminalService({ link, logger: captureLogger(logs) });
+    cleanup.push(() => service.dispose());
+    await service.ensureStarted();
+
+    mock.pushRoutesDelta(classRoutes(2, [interactiveRow]));
+    const receipt = await poll(async () =>
+      logs.find((entry) => entry.event === "fieldd.terminal.cell_replaced"),
+    );
+    expect(receipt.attrs?.["cellBootId"]).toBe("cell-a");
+    expect(receipt.attrs?.["lostSessionIds"]).toEqual(["agent-1"]);
+  });
+
+  it("drops the dead cell's control client and keeps the live cell's", async () => {
+    // The connection half of the same law (GT-5b per cell). A wholesale drop
+    // would make fieldd's own control connections the blast radius the cells
+    // exist to bound: the interactive cell is up, authenticated, and holding
+    // live sessions while the agent cell is being replaced.
+    const interactive = await startFakeFloor();
+    const agentOld = await startFakeFloor();
+    const agentNew = await startFakeFloor();
+    const cells = (revision: number, agent: { bootId: string; endpoints: TerminalEndpoints }) =>
+      classRoutes(revision, [
+        {
+          cellInstanceId: 1,
+          cellBootId: "cell-i",
+          endpoints: interactive.endpoints,
+          workloadClass: "interactive",
+          role: "class",
+        },
+        {
+          cellInstanceId: revision + 1,
+          cellBootId: agent.bootId,
+          endpoints: agent.endpoints,
+          workloadClass: "agent",
+          role: "class",
+        },
+      ]);
+    const routed = routedLink(cells(1, { bootId: "cell-a", endpoints: agentOld.endpoints }));
+    const service = new TerminalService({ link: routed.link });
+    cleanup.push(() => service.dispose());
+
+    await service.create({});
+    await service.create({ workloadClass: "agent" });
+    expect([interactive.connections(), agentOld.connections()]).toEqual([1, 1]);
+
+    routed.move(cells(2, { bootId: "cell-a2", endpoints: agentNew.endpoints }));
+    await service.create({ workloadClass: "agent" });
+    await service.create({});
+
+    expect(agentNew.connections(), "the replacement answered").toBe(1);
+    expect(agentOld.connections(), "the dead cell is never dialed again").toBe(1);
+    expect(interactive.connections(), "the survivor kept the connection it had").toBe(1);
+  });
+
+  it("a pre-TC-S3 floor routes every class to its single cell", async () => {
+    // The compatibility floor for placement: a snapshot whose rows declare no
+    // class is a floor that has one cell for everything, and a declared class
+    // must not turn that into a refusal.
+    const floor = await startFakeFloor();
+    const routed = routedLink(cellRoutes(1, "cell-only", floor.endpoints));
+    const service = new TerminalService({ link: routed.link });
+    cleanup.push(() => service.dispose());
+
+    expect((await service.create({ workloadClass: "agent" })).cellBootId).toBe("cell-only");
+    expect((await service.create({ workloadClass: "interactive" })).cellBootId).toBe("cell-only");
+    expect((await service.create({})).cellBootId).toBe("cell-only");
+    expect(floor.connections(), "one cell, one control connection").toBe(1);
+  });
+
+  it("a class with no cell of its own lands on the interactive one after the birth budget", async () => {
+    // A floor that publishes an interactive cell and no agent one: the class
+    // waits out the birth budget for its OWN cell (someone else's news is not
+    // the arrival this caller is waiting for), then lands honestly rather than
+    // refusing a floor that can host the session. Class is a placement hint and
+    // a policy selector, never a permanent failure domain (TC-D4).
+    const interactive = await startFakeFloor();
+    const routed = routedLink(
+      classRoutes(1, [
+        {
+          cellInstanceId: 1,
+          cellBootId: "cell-i",
+          endpoints: interactive.endpoints,
+          workloadClass: "interactive",
+          role: "class",
+        },
+      ]),
+    );
+    const service = new TerminalService({ link: routed.link, birthWaitMs: 100 });
+    cleanup.push(() => service.dispose());
+
+    const started = Date.now();
+    const born = await service.create({ workloadClass: "agent" });
+    expect(born.cellBootId).toBe("cell-i");
+    expect(
+      Date.now() - started,
+      "it waited for the agent cell before falling back",
+    ).toBeGreaterThanOrEqual(100);
   });
 });

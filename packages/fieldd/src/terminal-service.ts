@@ -17,12 +17,14 @@ import {
   type TerminalEndpoints,
   type TerminalInfo,
   type TerminalObservation,
+  type TerminalRouteCell,
   type TerminalRouteSnapshot,
   type TerminalTerminateResult,
   type TerminalTicket,
+  type TerminalWorkloadClass,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { RpcCallError } from "./native-link";
+import { RpcCallError, terminalCreateTarget } from "./native-link";
 
 // TerminalService (fieldd — NF-3, native-floor spec §6): the thin product seam
 // over the terminal floor. It owns NO sessions and NO bytes — field-native's
@@ -73,53 +75,90 @@ const SPAWN_ROWS = 30;
  * gives a future "close everything VibeField spawned" op for free. */
 const OWNER_ID = "vibefield.fieldd";
 
+/** TC-S3 — the connection key for a floor that publishes no routes at all (a
+ * pre-TC-S2 daemon, whose legacy `terminal` mirror is the only reading there
+ * is). A NUL cannot appear in a floor-minted `cellBootId`, so this key can
+ * never collide with a real cell's. */
+const LEGACY_CELL_KEY = "\u0000legacy-mirror";
+
+/** TC-S3 — one cell, resolved for one operation: the connection key (its
+ * `cellBootId`, THE identity) and the coordinates to dial. Resolved per call,
+ * never cached: a route change can replace the row under us, and the token
+ * inside is a live credential (GT-5b). */
+interface CellTarget {
+  key: string;
+  endpoints: TerminalEndpoints;
+}
+
+/** One live control connection to one cell. */
+interface CellClient {
+  client: GhostteaAutomationClient;
+  /** the token it authenticated with — a rotation makes it stale (GT-5b) */
+  token: string;
+}
+
 export class TerminalService {
   private readonly logger: Logger;
   private terminals: TerminalInfo[] = [];
   /** Which floor observation `terminals` came from — undefined until the first
    * one applies, which is exactly the state `list`/`get` refuse in. */
   private lastObservation: TerminalObservation | undefined;
-  private client: GhostteaAutomationClient | null = null;
-  /** the token the live client authenticated with — a new native boot mints a
-   * new token, and a stale client must be rebuilt, not trusted */
-  private clientToken: string | null = null;
-  /** in-flight control dial, keyed by the token it is authenticating with */
-  private connecting: { token: string; promise: Promise<GhostteaAutomationClient> } | null = null;
+  /** TC-S3 — one control connection PER CELL, keyed by `cellBootId` (THE
+   * identity: a row's replacement is a new cellBootId, so a new client; pids
+   * recycle and ordinals repeat). GT-5b's staleness laws are kept per entry —
+   * an entry whose cell left the snapshot, or whose token rotated, is dropped,
+   * and ONLY that entry. That is the connection-plane half of "a terminal-engine
+   * crash loses only its class": the surviving cell keeps serving its sessions
+   * through the connection it already has. */
+  private clients = new Map<string, CellClient>();
+  /** in-flight control dials, keyed like `clients`, each remembering the token
+   * it is authenticating with (two dials for two boots are two clients) */
+  private connecting = new Map<
+    string,
+    { token: string; promise: Promise<GhostteaAutomationClient> }
+  >();
   private disposed = false;
   /** true once the observed subscription is armed; NativeLink replays it across
    * reconnects from then on (P5), so ensureStarted becomes a no-op */
   private subscribed = false;
   private starting: Promise<void> | null = null;
-  /** TC-D15 — the identity of the cell the last route reading named. Kept
-   * across a link outage on purpose: a dead mgmt connection kills no PTYs, so
-   * an ABSENCE must not overwrite the last cell fieldd actually saw. Holding it
-   * is what lets a reconnect onto a DIFFERENT cell still be named as the loss
-   * it is, while a reconnect onto the same one stays silent. */
-  private cellBootId: string | undefined;
+  /** TC-D15/TC-S3 — the ROWS of the last route reading fieldd actually saw, the
+   * baseline the per-cell loss diff runs against. Kept across a link outage on
+   * purpose: a dead mgmt connection kills no PTYs, so an ABSENCE must not
+   * overwrite the cells fieldd last saw. Holding them is what lets a reconnect
+   * onto DIFFERENT cells still be named as the loss it is, while a reconnect
+   * onto the same ones stays silent. It is the rows and no longer one id
+   * because with K=2 class cells a change is a DIFF, not a replacement:
+   * "which cells vanished" is the question the receipt answers. */
+  private cells: readonly TerminalRouteCell[] | undefined;
 
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
     // The link has usually paired BEFORE this service exists (the daemon builds
-    // it after `native.connect()`), so the cell in hand at construction is the
-    // baseline. Without seeding it, the first replacement after every boot
+    // it after `native.connect()`), so the cells in hand at construction are the
+    // baseline. Without seeding them, the first replacement after every boot
     // would have nothing to compare against and would go unrecorded — the one
     // case the receipt exists for.
-    this.cellBootId = opts.link.terminalRoutes?.cells[0]?.cellBootId;
+    this.cells = opts.link.terminalRoutes?.cells;
     opts.link.on("terminal-endpoints", () => this.onRouteChange());
   }
 
-  /** The floor's coordinates moved. Two things follow, in this order.
+  /** The floor's cells moved. Two things follow, in this order.
    *
-   * The old control connection is worthless either way — a new cell mints a new
-   * token — so it is dropped wholesale, exactly as it was before TC-S2.
+   * The control connections of the cells that CHANGED are worthless — a fresh
+   * cell mints a fresh token — so those are dropped; the ones whose row is
+   * still there, at the same token, are kept. Before TC-S3 this was a wholesale
+   * drop, which was right when there was one cell and is wrong now: hanging up
+   * on the interactive cell because the agent cell crashed would make fieldd's
+   * own connections the blast radius the cells exist to bound.
    *
-   * Then the honesty half. If the cell was REPLACED (a different `cellBootId`)
-   * while fieldd still held an observed inventory, every session on the old one
-   * is gone: TC-S2's ceiling, stated as "a terminal-engine crash loses only its
-   * class". The product owes that a receipt naming the sessions, because it is
-   * the one moment the loss is knowable — the observed stream repairs the
-   * inventory a beat later and no snapshot after that can reconstruct WHICH
-   * sessions the replacement took.
+   * Then the honesty half, "blast counted". Every cell that VANISHED from the
+   * snapshot took its sessions with it: TC-S2's ceiling, now stated per class —
+   * "a terminal-engine crash loses only its class". The product owes each one a
+   * receipt naming ITS sessions, because this is the one moment the loss is
+   * knowable: the observed stream repairs the inventory a beat later and no
+   * snapshot after that can reconstruct which cell held what. The join is the
+   * inventory's `cell` tag (TC-S3) — the reason that tag exists.
    *
    * The receipt is a structured log and not an audit record, deliberately:
    * `AuditService`'s append surface is caller-scoped (it wants a CallerContext)
@@ -127,30 +166,50 @@ export class TerminalService {
    * event. Minting a synthetic principal to force it into the ledger would put
    * a fabricated caller on an EL7 surface to make a diagnostic prettier. */
   private onRouteChange(): void {
-    this.dropClient();
+    this.pruneClients();
     const routes = this.opts.link.terminalRoutes;
-    const cellBootId = routes?.cells[0]?.cellBootId;
     // Absence is not evidence of loss: the link may merely be down, and a
-    // pre-TC-S2 floor never says at all.
-    if (routes === undefined || cellBootId === undefined) return;
-    const previous = this.cellBootId;
-    this.cellBootId = cellBootId;
-    if (previous === undefined || previous === cellBootId) return;
-    // Counted from the last inventory fieldd actually observed; before the
-    // first observation there is nothing it can honestly claim was lost.
-    const lostSessionIds = this.terminals.map((terminal) => terminal.sessionId);
-    if (lostSessionIds.length === 0) return;
-    this.logger.warn(
-      "fieldd.terminal.cell_replaced",
-      "The terminal engine was replaced and its sessions are gone — a terminal-engine crash loses only its class",
-      {
-        lostSessionIds,
-        lostSessions: lostSessionIds.length,
-        previousCellBootId: previous,
-        cellBootId,
-        revision: routes.revision,
-      },
-    );
+    // pre-TC-S2 floor never says at all. An EMPTY `cells` is a READING, though
+    // (the floor is up and has no engine right now) — a cell that vanished into
+    // one is as lost as a cell that vanished into a replacement.
+    if (routes === undefined) return;
+    const previous = this.cells;
+    this.cells = routes.cells;
+    if (previous === undefined) return;
+    const live = new Set(routes.cells.map((cell) => cell.cellBootId));
+    // TC-S3 — an UNTAGGED session can be attributed to exactly one reading: a
+    // pre-TC-S3 floor, whose single cell declared no class and whose inventory
+    // carries no `cell` tag at all. That is today's receipt, preserved. With
+    // more than one cell in the previous reading an untagged session names no
+    // cell, and a guess about which one took it would be worse than silence.
+    const legacySingleCell = previous.length === 1 && previous[0]?.workloadClass === undefined;
+    for (const gone of previous) {
+      if (live.has(gone.cellBootId)) continue;
+      // Counted from the last inventory fieldd actually observed; before the
+      // first observation there is nothing it can honestly claim was lost.
+      const lostSessionIds = this.terminals
+        .filter((terminal) =>
+          terminal.cell === undefined
+            ? legacySingleCell
+            : terminal.cell.cellBootId === gone.cellBootId,
+        )
+        .map((terminal) => terminal.sessionId);
+      if (lostSessionIds.length === 0) continue;
+      this.logger.warn(
+        "fieldd.terminal.cell_replaced",
+        "The terminal engine was replaced and its sessions are gone — a terminal-engine crash loses only its class",
+        {
+          lostSessionIds,
+          lostSessions: lostSessionIds.length,
+          // the VANISHED cell is the subject: with K cells there is no single
+          // "replacement" to name, and the loss is this row's
+          cellBootId: gone.cellBootId,
+          ...(gone.workloadClass === undefined ? {} : { workloadClass: gone.workloadClass }),
+          ...(gone.role === undefined ? {} : { role: gone.role }),
+          revision: routes.revision,
+        },
+      );
+    }
   }
 
   /** Arm the observed-inventory subscription (P5; NativeLink replays it across
@@ -254,14 +313,32 @@ export class TerminalService {
    * Deliberately NOT session-scoped: the credential is the floor's, not the
    * session's, so minting one for a just-created session needs no inventory
    * lookup — which is exactly what lets terminal.create answer with a ticket
-   * (GT-1) while openTicket keeps its observed gate for existing sessions. */
+   * (GT-1) while openTicket keeps its observed gate for existing sessions.
+   *
+   * TC-S3 — the SESSIONLESS mint (GT-D10's connect ticket, the pane deck's
+   * door) comes from the INTERACTIVE class's create target: a connection is not
+   * a session, so there is no `cell` tag to follow, and the deck is the
+   * interactive plane by definition. Session-scoped mints follow the tag —
+   * `ticketForSession` and `ticketForCell` below. */
   ticket(): TerminalTicket {
-    const endpoints = this.endpoints();
-    return {
-      controlSocket: endpoints.controlSocket,
-      frameSocket: endpoints.frameSocket,
-      token: endpoints.authToken,
-    };
+    return toTicket(this.classCell("interactive").endpoints);
+  }
+
+  /** TC-S3 — the mint for an EXISTING session: ITS cell, resolved through the
+   * observed inventory's `cell` tag. A row that is no longer its class's create
+   * target still serves the sessions it already has (a filled solo cell is the
+   * standing case), so an attach must never be routed by the target rule. */
+  ticketForSession(sessionId: string): TerminalTicket {
+    return toTicket(this.sessionCell(sessionId).endpoints);
+  }
+
+  /** TC-S3 — the mint for a session that has just been BORN, which the observed
+   * inventory has not seen yet (GT-1's whole window). `create` answers with the
+   * cell it landed on precisely so this mint can name it; `undefined` is the
+   * legacy floor, where the mirror is the only cell there is. */
+  ticketForCell(cellBootId: string | undefined): TerminalTicket {
+    if (cellBootId === undefined) return toTicket(this.endpoints());
+    return toTicket(this.cellByBootId(cellBootId).endpoints);
   }
 
   /** NF-D6, the free-shell door. Default = the user's LOGIN shell (`-l`): the
@@ -275,8 +352,13 @@ export class TerminalService {
    *
    * Births the session and nothing else. The product result also carries a
    * ticket (GT-1), but that mint is its own audited grant, so the daemon
-   * composes the two rather than this method quietly handing out a credential. */
-  async create(params: TerminalCreateParams): Promise<{ sessionId: string }> {
+   * composes the two rather than this method quietly handing out a credential —
+   * which is why the answer names the CELL the session landed on (TC-S3) and
+   * not its endpoints: the daemon needs to know where to mint from, not to be
+   * handed the credential to mint. */
+  async create(
+    params: TerminalCreateParams,
+  ): Promise<{ sessionId: string; cellBootId?: string | undefined }> {
     // TC-D6(d) — the per-pair session cap at the create seam, counted from the
     // observed inventory WHEN THERE IS ONE. Before the first observation the
     // cap has nothing to count and create must NOT gate on observation —
@@ -310,7 +392,13 @@ export class TerminalService {
     // business — a second resolver would only disagree with the real one.
     if (params.shell !== undefined && isAbsolute(params.shell) && !existsSync(params.shell))
       throw new RpcCallError("NOT_FOUND", `shell not found: ${params.shell}`, false);
-    const client = await this.connectedClient();
+    // TC-S3 — the class is the PLACEMENT: it picks the cell this session is
+    // born in, through the create-target discipline. The routing default is the
+    // contract's tolerant-reader default (`TerminalCreateParams`: absent =
+    // interactive), so an unchanged caller lands exactly where it always did.
+    const workloadClass = params.workloadClass ?? "interactive";
+    const cell = await this.awaitClassCell(workloadClass);
+    const client = await this.connectedClient(cell);
     const explicit = params.shell !== undefined;
     const executable = params.shell ?? this.defaultShell();
     const scrollbackBytes = classScrollbackBytes(params.workloadClass);
@@ -329,7 +417,12 @@ export class TerminalService {
         // the wire either (exactOptionalPropertyTypes agrees)
         ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
       });
-      return { sessionId: summary.id };
+      // The cell that took it, for the daemon's nested mint. The legacy key
+      // names no cell — there is no row to name — and the mirror answers there.
+      return {
+        sessionId: summary.id,
+        ...(cell.key === LEGACY_CELL_KEY ? {} : { cellBootId: cell.key }),
+      };
     } catch (error) {
       // Failure classification (the NF-6 review's theme): a dead transport is
       // UNAVAILABLE, never INTERNAL — the floor is gone, not the request wrong.
@@ -417,9 +510,13 @@ export class TerminalService {
    * measured the old rejection arm calling a SIGKILLed floor "already gone"
    * and auditing success — the honest-states law inverted). `client.connected`
    * is the discriminator: true when the service itself answered, false when
-   * the socket died. */
+   * the socket died.
+   *
+   * TC-S3 — dialed at the session's OWN cell (the inventory's `cell` tag), not
+   * at any class's create target: only the cell holding the PTY can fire its
+   * ladder, and a filled solo cell is never a target again. */
   async terminate(sessionId: string): Promise<TerminalTerminateResult> {
-    const client = await this.connectedClient();
+    const client = await this.connectedClient(await this.sessionCellForOp(sessionId));
     try {
       await client.terminate(sessionId, "application");
       return { terminated: true };
@@ -458,9 +555,20 @@ export class TerminalService {
    * not-yet-created overlay comes back as `exists: false` with empty text
    * rather than an ENOENT to invent a policy for — ghosttea's loader treats a
    * missing app overlay as a valid empty config, so nothing has to be written
-   * to disk before a user can be shown the file they are about to write. */
+   * to disk before a user can be shown the file they are about to write.
+   *
+   * TC-S3 — served by the INTERACTIVE class's cell. There is one overlay FILE
+   * beneath every cell (it is field-native's, not a cell's), so any cell can
+   * answer this and the deterministic choice is the one the deck already uses.
+   *
+   * NAMED S3 DEBT — a WRITE reloads the configuration in the cell that served
+   * it and in that cell only. Other live cells keep the config they booted with
+   * and restyle at their next respawn, so a font change can be visible in the
+   * interactive panes and not in the agent ones until then. The fix is a floor
+   * verb that fans the reload across cells (TC-S6's neighbourhood), not a
+   * fieldd loop dialing every cell to re-read a file it does not own. */
   async readConfig(): Promise<TerminalConfigDocument> {
-    const client = await this.connectedClient();
+    const client = await this.connectedClient(await this.awaitClassCell("interactive"));
     try {
       const document = await client.getConfigDocument();
       return {
@@ -485,9 +593,12 @@ export class TerminalService {
    * `effectiveChanged` is derived rather than reported: the service computes it
    * to decide whether to push `config-changed` and does not put it on the wire,
    * so this compares the effective-config revision from before the write with
-   * the one the write answered — the same comparison, one level up. */
+   * the one the write answered — the same comparison, one level up.
+   *
+   * TC-S3 — through the interactive cell, and the read above carries the named
+   * debt this write is the reason for: the reload lands in THIS cell. */
   async writeConfig(text: string, revision: string): Promise<TerminalConfigWriteResult> {
-    const client = await this.connectedClient();
+    const client = await this.connectedClient(await this.awaitClassCell("interactive"));
     let before: string | undefined;
     try {
       before = (await client.getConfig()).revision;
@@ -544,8 +655,8 @@ export class TerminalService {
 
   dispose(): void {
     this.disposed = true;
-    this.connecting = null;
-    this.dropClient();
+    this.connecting.clear();
+    for (const key of [...this.clients.keys()]) this.dropClient(key);
   }
 
   // ---- internals ----
@@ -559,36 +670,145 @@ export class TerminalService {
     });
   }
 
-  /** TC-S2 — the cell-birth wait. A create that arrives while the engine is
-   * being spawned (fresh floor boot, cell replacement) deserves the engine's
-   * own hello budget before an UNAVAILABLE, because the endpoints ARE coming:
-   * the routes delta lands the moment the cell hellos. One shared waiter per
-   * absence episode (a listener per CALL would accumulate on the link), and
-   * the timer resolves rather than rejects — `endpoints()` then refuses with
-   * the same honest shape as always. GT-1's spirit one level up: create may
-   * outrun the inventory, but it must not outrun the engine's BIRTH. */
-  private birthWait: Promise<void> | null = null;
-  private awaitEndpoints(): Promise<void> {
-    if (this.opts.link.terminalEndpoints !== undefined) return Promise.resolve();
+  /** TC-S2 — the cell-birth wait, per class since TC-S3. A create that arrives
+   * while the engine is being spawned (fresh floor boot, cell replacement)
+   * deserves the engine's own hello budget before an UNAVAILABLE, because the
+   * endpoints ARE coming: the routes delta lands the moment the cell hellos.
+   * One shared waiter per absence episode PER CLASS (a listener per CALL would
+   * accumulate on the link), and the timer resolves rather than rejects —
+   * `classCell()` then refuses with the same honest shape as always. GT-1's
+   * spirit one level up: create may outrun the inventory, but it must not
+   * outrun the engine's BIRTH.
+   *
+   * Per class, because with K=2 the classes are born independently: a snapshot
+   * that MOVED but still names no cell for this class is not the birth this
+   * caller is waiting for, so the wait re-checks and keeps waiting to the
+   * budget rather than resolving on someone else's news. */
+  private birthWaits = new Map<TerminalWorkloadClass, Promise<void>>();
+  private awaitEndpoints(workloadClass: TerminalWorkloadClass): Promise<void> {
+    if (this.hasCellFor(workloadClass)) return Promise.resolve();
     // Wait ONLY on evidence a cell system exists: a route snapshot (even an
     // empty one — the floor publishes {revision: 1, cells: []} before its
     // first spawn). A floor that never spoke routes and never gave endpoints
     // is absent, and absent refuses NOW — the pre-TC-S2 behavior.
     if (this.opts.link.terminalRoutes === undefined) return Promise.resolve();
-    if (this.birthWait !== null) return this.birthWait;
-    this.birthWait = new Promise<void>((resolve) => {
+    const pending = this.birthWaits.get(workloadClass);
+    if (pending !== undefined) return pending;
+    const wait = new Promise<void>((resolve) => {
       let settled = false;
       const done = () => {
         if (settled) return;
         settled = true;
-        this.birthWait = null;
+        this.birthWaits.delete(workloadClass);
         resolve();
       };
-      this.opts.link.on("terminal-endpoints", done);
+      this.opts.link.on("terminal-endpoints", () => {
+        if (this.hasCellFor(workloadClass)) done();
+      });
       const timer = setTimeout(done, this.opts.birthWaitMs ?? CELL_SUPERVISION.HELLO_DEADLINE_MS);
       timer.unref?.();
     });
-    return this.birthWait;
+    this.birthWaits.set(workloadClass, wait);
+    return wait;
+  }
+
+  /** Is there a cell this class can land on right now? */
+  private hasCellFor(workloadClass: TerminalWorkloadClass): boolean {
+    const routes = this.opts.link.terminalRoutes;
+    if (routes !== undefined && terminalCreateTarget(routes, workloadClass) !== undefined)
+      return true;
+    // A snapshot with ROWS that names no cell for this class is a class still
+    // being born, and the wait is for ITS hello — someone else's cell arriving
+    // is not the news this caller is waiting for, so the mirror does not count.
+    // An EMPTY snapshot is the pre-first-cell window, where the mirror IS the
+    // evidence a cell arrived at all (TC-S2's birth wait, unchanged).
+    if (routes !== undefined && routes.cells.length > 0) return false;
+    return this.opts.link.terminalEndpoints !== undefined;
+  }
+
+  /** The birth wait and the resolution, in the order every class-routed op
+   * needs them: give a cell that is being spawned its hello budget, then read
+   * whatever the snapshot actually says. */
+  private async awaitClassCell(workloadClass: TerminalWorkloadClass): Promise<CellTarget> {
+    await this.awaitEndpoints(workloadClass);
+    return this.classCell(workloadClass);
+  }
+
+  /** TC-S3 — the cell a NEW session of this class belongs in: the create-target
+   * discipline against the current snapshot. */
+  private classCell(workloadClass: TerminalWorkloadClass): CellTarget {
+    const routes = this.opts.link.terminalRoutes;
+    if (routes !== undefined) {
+      const target = terminalCreateTarget(routes, workloadClass);
+      if (target !== undefined) return { key: target.cellBootId, endpoints: target.endpoints };
+      // This class has no cell of its own. Class is a PLACEMENT HINT and a
+      // policy selector, never a permanent failure domain (TC-D4), so the
+      // session lands on the floor's interactive target rather than being
+      // refused by a floor that can perfectly well host it — the scrollback cap
+      // the class selects rides the create either way. Debug, not warn: the
+      // budget above has already been spent waiting for the class's own cell,
+      // and the fallback is a placement, not a fault.
+      const fallback = terminalCreateTarget(routes, "interactive");
+      if (fallback !== undefined) {
+        this.logger.debug(
+          "fieldd.terminal.class_cell_absent",
+          "No cell hosts this workload class; the session lands on the interactive cell",
+          { workloadClass, revision: routes.revision },
+        );
+        return { key: fallback.cellBootId, endpoints: fallback.endpoints };
+      }
+    }
+    // No snapshot at all (a pre-TC-S2 floor), or one that names no cell:
+    // the legacy mirror is the only reading there is, and `endpoints()` refuses
+    // honestly when it is absent too.
+    return { key: LEGACY_CELL_KEY, endpoints: this.endpoints() };
+  }
+
+  /** TC-S3 — the cell a KNOWN session lives on, from the observed inventory's
+   * `cell` tag. Deliberately not the target rule: a cell stops being a target
+   * long before it stops serving (every filled solo cell), so per-session ops
+   * follow the tag or they follow nothing. */
+  private sessionCell(sessionId: string): CellTarget {
+    const tag = this.sessionCellTag(sessionId);
+    // Untagged, or a session this inventory has never named: the legacy
+    // reading. On a pre-TC-S3 floor that IS the one cell; on a K=2 floor it is
+    // the interactive target, which is the best fieldd can honestly do for a
+    // session no observation has placed yet.
+    if (tag === undefined) return this.classCell("interactive");
+    return this.cellByBootId(tag.cellBootId);
+  }
+
+  private sessionCellTag(sessionId: string): TerminalInfo["cell"] {
+    return this.terminals.find((terminal) => terminal.sessionId === sessionId)?.cell;
+  }
+
+  /** The async half of `sessionCell`: a session whose cell is UNKNOWN may be
+   * waiting on a cell that is still being born, and it gets the same budget
+   * every other op gets. A TAGGED session needs no wait — its cell is either in
+   * the snapshot now or gone, and gone is an answer. */
+  private async sessionCellForOp(sessionId: string): Promise<CellTarget> {
+    if (this.sessionCellTag(sessionId) === undefined) await this.awaitEndpoints("interactive");
+    return this.sessionCell(sessionId);
+  }
+
+  /** One named cell's coordinates, or the honest state of its absence. */
+  private cellByBootId(cellBootId: string): CellTarget {
+    const routes = this.opts.link.terminalRoutes;
+    // No reading at all — the link is down, or the floor predates TC-S2. That
+    // is `absent`, not a dead cell, and `endpoints()` says so (refusing when
+    // the mirror is gone with it).
+    if (routes === undefined) return { key: LEGACY_CELL_KEY, endpoints: this.endpoints() };
+    const row = routes.cells.find((cell) => cell.cellBootId === cellBootId);
+    if (row !== undefined) return { key: row.cellBootId, endpoints: row.endpoints };
+    // TC-S3 — the cell that held this session is gone from the snapshot, so the
+    // session went with it and the observed stream is about to say so. Honest
+    // and retryable: never a ticket into a dead cell's socket, never a blank,
+    // and never the LIVE cell's coordinates for a session it does not have.
+    throw new RpcCallError("UNAVAILABLE", "the terminal cell holding this session is gone", true, {
+      service: "terminal",
+      state: "cell_gone",
+      cellBootId,
+    });
   }
 
   private endpoints(): TerminalEndpoints {
@@ -602,36 +822,37 @@ export class TerminalService {
     return endpoints;
   }
 
-  /** Lazy, per-native-boot control client. Rebuilt when the token rotates (a
-   * new field-native boot) or after a connection error surfaces.
+  /** Lazy, per-CELL control client (TC-S3). Rebuilt when the token rotates (a
+   * fresh cell mints a fresh one) or after a connection error surfaces.
    *
    * GT-5b: guarded in flight, the way `ensureStarted` guards its subscribe.
    * Without it two concurrent calls each built AND CONNECTED a client, and the
-   * loser was never disposed — its close handler checks `this.client ===
-   * client`, so it sat authenticated on the floor's control socket until the
-   * process exited. Keyed by token, because two dials for two different native
-   * boots are two different clients and joining them would be the bug. */
-  private async connectedClient(): Promise<GhostteaAutomationClient> {
-    if (this.opts.link.terminalEndpoints === undefined) await this.awaitEndpoints();
-    const endpoints = this.endpoints();
-    if (this.client !== null && this.clientToken === endpoints.authToken) {
-      return this.client;
+   * loser was never disposed — its close handler checks that the map still
+   * holds it, so it sat authenticated on the floor's control socket until the
+   * process exited. Keyed by cell AND checked against the token, because two
+   * dials for two different cells (or two boots of one) are two different
+   * clients and joining them would be the bug. */
+  private async connectedClient(cell: CellTarget): Promise<GhostteaAutomationClient> {
+    const live = this.clients.get(cell.key);
+    if (live !== undefined && live.token === cell.endpoints.authToken) {
+      return live.client;
     }
-    const inFlight = this.connecting;
-    if (inFlight !== null && inFlight.token === endpoints.authToken) {
+    const inFlight = this.connecting.get(cell.key);
+    if (inFlight !== undefined && inFlight.token === cell.endpoints.authToken) {
       return await inFlight.promise;
     }
     let tracked: Promise<GhostteaAutomationClient>;
-    tracked = this.openClient(endpoints).finally(() => {
-      if (this.connecting?.promise === tracked) this.connecting = null;
+    tracked = this.openClient(cell).finally(() => {
+      if (this.connecting.get(cell.key)?.promise === tracked) this.connecting.delete(cell.key);
     });
-    this.connecting = { token: endpoints.authToken, promise: tracked };
+    this.connecting.set(cell.key, { token: cell.endpoints.authToken, promise: tracked });
     return await tracked;
   }
 
-  /** Build, connect, and install the control client for these endpoints. */
-  private async openClient(endpoints: TerminalEndpoints): Promise<GhostteaAutomationClient> {
-    this.dropClient();
+  /** Build, connect, and install the control client for one cell. */
+  private async openClient(cell: CellTarget): Promise<GhostteaAutomationClient> {
+    const { key, endpoints } = cell;
+    this.dropClient(key);
     const client = new GhostteaAutomationClient(
       {
         controlSocket: endpoints.controlSocket,
@@ -655,25 +876,22 @@ export class TerminalService {
         detail: error instanceof Error ? error.message : String(error),
       });
     }
-    // The floor may have died or rebooted while this dial was in the air, and
-    // the link is the authority on that — caching a client here would cache one
-    // authenticated to a boot that is over. Likewise a service disposed
+    // The cell may have died or been replaced while this dial was in the air,
+    // and the link is the authority on that — caching a client here would cache
+    // one authenticated to a boot that is over. Likewise a service disposed
     // mid-dial: installing then leaks a connected client nothing will ever
-    // close. Refuse; the next call dials whatever floor is actually there
-    // (GT-5b).
-    if (this.disposed || this.opts.link.terminalEndpoints?.authToken !== endpoints.authToken) {
+    // close. Refuse; the next call dials whatever cell is actually there
+    // (GT-5b, now asked of THIS cell's row rather than of the floor's mirror).
+    if (this.disposed || this.currentToken(key) !== endpoints.authToken) {
       client.dispose();
-      throw new RpcCallError("UNAVAILABLE", "the terminal floor changed while connecting", true, {
+      throw new RpcCallError("UNAVAILABLE", "the terminal cell changed while connecting", true, {
         service: "terminal",
         state: "rotated",
       });
     }
     // a dead socket drops the cached client so the next call redials
     client.on("close", () => {
-      if (this.client === client) {
-        this.client = null;
-        this.clientToken = null;
-      }
+      if (this.clients.get(key)?.client === client) this.clients.delete(key);
     });
     // The client emits connection-error/transport-error (never "error" — the
     // review measured it): the only diagnostic explaining WHY a control
@@ -692,15 +910,37 @@ export class TerminalService {
         { error },
       );
     });
-    this.client = client;
-    this.clientToken = endpoints.authToken;
+    this.clients.set(key, { client, token: endpoints.authToken });
     return client;
   }
 
-  private dropClient(): void {
-    this.client?.dispose();
-    this.client = null;
-    this.clientToken = null;
+  private dropClient(key: string): void {
+    const entry = this.clients.get(key);
+    if (entry === undefined) return;
+    entry.client.dispose();
+    this.clients.delete(key);
+  }
+
+  /** GT-5b per cell (TC-S3). A control client is worth exactly as long as the
+   * row that vouched for it: a cell that left the snapshot, or whose token
+   * rotated, loses its client — and every other cell keeps its own. The token
+   * is the check rather than mere presence because a REPLACEMENT can reuse
+   * nothing but the name: a new cellBootId is a new key anyway, and a new token
+   * under the same key (a re-pair to a re-minted cell) is just as stale. */
+  private pruneClients(): void {
+    for (const [key, entry] of [...this.clients]) {
+      if (this.currentToken(key) === entry.token) continue;
+      this.dropClient(key);
+    }
+  }
+
+  /** The token the CURRENT reading gives this cell — undefined when the cell is
+   * gone from the snapshot, when the link is down, or (legacy key) when the
+   * mirror has been cleared. */
+  private currentToken(key: string): string | undefined {
+    if (key === LEGACY_CELL_KEY) return this.opts.link.terminalEndpoints?.authToken;
+    return this.opts.link.terminalRoutes?.cells.find((cell) => cell.cellBootId === key)?.endpoints
+      .authToken;
   }
 
   private unavailable(message: string, cause: unknown): RpcCallError {
@@ -796,6 +1036,17 @@ export class TerminalService {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** D6 — the ticket IS one cell's endpoints. Every mint goes through here, so
+ * "which cell did this credential come from" is a question about the CellTarget
+ * that was resolved and never about the shape. */
+function toTicket(endpoints: TerminalEndpoints): TerminalTicket {
+  return {
+    controlSocket: endpoints.controlSocket,
+    frameSocket: endpoints.frameSocket,
+    token: endpoints.authToken,
+  };
 }
 
 /** The service's own "that session doesn't exist" refusal — the ONLY error
