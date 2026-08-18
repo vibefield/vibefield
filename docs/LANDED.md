@@ -3018,3 +3018,20 @@ refresh mapping §2's vocabulary onto the landed surface (derived-at-`derive`, g
 suppression by default, `GuardedTx.move`, `maxFacetBytes` duty). **R3-0 is closed whole;
 the pack's build rungs (R3-1…R3-5) now wait on exactly one thing: MM-D1…D14
 ratification.**
+
+## Ghosttea 0.10.1 — G13 lands; the case-leak witness flips
+
+**Date:** 2026-08-18 · **Commit:** `7d3d236`
+
+Upstream closed the last open TC petition beside the G14-class seam: Windows private
+env keys and prefixes strip ASCII-case-insensitively (unix stays case-sensitive),
+closing the EL7 defense-in-depth leak WIN-6 confirmed live on the box. The fix is
+verified in the shipped crate (`session.rs` `eq_ignore_ascii_case` at both the key and
+prefix sites; provenance `ad97fdb` across npm gitHead, crate vcs-info, and the signed
+tag), and 0.10.1 also ships the `process_tree.rs` hardening the v0.10.0-retry.1 tag
+had left unpublished. Pins moved in lockstep (cargo, npm, SwiftPM, preflight);
+kill-matrix row 6b dropped `.fails` exactly as the G13 filing pre-registered. The mac
+gate is green verbatim; the row itself is win32-only, so the next box-gate run is its
+first live assertion (this session's file transfer to the box was permission-blocked
+— the flip rides on the artifact verification plus upstream's real-Windows validation:
+118 tests, clippy, a live ConPTY inheritance witness, smoke).
