@@ -1,21 +1,23 @@
-import {
-  createGhostteaTerminalRuntime,
-  GhostteaProvider,
-  type GhostteaTerminalRuntime,
-  waitForGhostteaRendererPorts,
-} from "@vibecook/ghosttea-react";
-import TerminalRenderWorker from "@vibecook/ghosttea-react/terminal-render.worker.js?worker";
+import { GhostteaProvider } from "@vibecook/ghosttea-react";
 import {
   GhostteaWorkspace,
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
-import { TerminalConnectTicketResult, TerminalListResult } from "@vibefield/contracts";
+import { TerminalListResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { emitGodviewColdOpenMarker, emitGodviewDeckMarker } from "../development-console";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
+import {
+  retryTerminalPool,
+  type TerminalFault,
+  type TerminalFaultPlane,
+  useTerminalPool,
+  useTerminalPoolOpen,
+  useTerminalSessionViews,
+} from "../terminal/pool";
 import { afterNextFrame, godviewColdOpen } from "./cold-open";
 import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
 import {
@@ -33,7 +35,6 @@ import { KillActivePane } from "./KillActivePane";
 import type { RemoteSessionDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
-import { pendingWarmTransport, takeTransportForDeck } from "./warm-transport";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -61,6 +62,16 @@ import "@vibecook/ghosttea-react/workspace.css";
 //
 // Nothing here is mounted until the overlay has been opened once — a user who
 // never presses ⌘G forks no bridge, opens no socket, and spawns no shell.
+//
+// TP-S0b — THE DECK NO LONGER OWNS A RUNTIME. It was the runtime's owner because
+// it was the only consumer; that made a window-scoped resource live and die with
+// one React subtree, and put the recovery ladder in a component that unmounts.
+// The window-level pool (`src/terminal/pool`) owns the runtime, the transport
+// table, the demand ledger and the ladder; this deck CLAIMS the pool, reads what
+// it holds, declares demand for the sessions its panes show, and releases that
+// demand when they go. Everything below the acquisition is unchanged — the
+// restore gate, the pane faces, the door, the persisted layout are all still the
+// deck's, because they are about a deck and not about a window.
 
 /** The deck's own localStorage namespace, in the vf- prefix the renderer's
  * other keys use. Deliberately NOT the app's IPC channel namespace, which wall
@@ -75,29 +86,11 @@ const DECK_STORAGE_KEY = "vf-godview-deck-v1";
 const SPAWN_COLS = 100;
 const SPAWN_ROWS = 30;
 
-/**
- * Which plane refused, and therefore what is actually true about the shells.
- *
- * `transport` is the deck's own path to the floor: no bridge on this host, a
- * connect main could not make, a bridge that died. The sessions may or may not
- * be reachable, and "could not reach its shell" is the honest sentence.
- *
- * `fieldd` is the CONTROL plane alone — the ticket mint. field-native holds the
- * PTYs and outlives fieldd by design (the two-plane law), so a fieldd that will
- * not answer says nothing about the shells: they are running, and the deck is
- * merely not allowed through the door yet. Reporting that as a dead shell told
- * a user the exact opposite of the property this product sells.
- */
-type DeckFaultPlane = "transport" | "fieldd";
-
-interface DeckFault {
-  plane: DeckFaultPlane;
-  /** The failing plane's own words, carried whole. */
-  message: string;
-}
-
-/** The fault face's headline, per plane. */
-function deckFaultHeadline(plane: DeckFaultPlane): string {
+/** The fault face's headline, per plane. The plane split itself (GT-5c) moved to
+ * the pool with the acquisition that produces it — `transport` is the path to
+ * the floor, `fieldd` is the CONTROL plane alone — and what stays here is what
+ * the deck says about it. */
+function deckFaultHeadline(plane: TerminalFaultPlane): string {
   return plane === "fieldd"
     ? "the deck could not reach fieldd"
     : "the deck could not reach its shell";
@@ -105,33 +98,10 @@ function deckFaultHeadline(plane: DeckFaultPlane): string {
 
 /** The line under it: what this means for the sessions, stated rather than
  * implied. DESIGN.md §9 — an error says what happened and what to do next. */
-function deckFaultConsequence(plane: DeckFaultPlane): string {
+function deckFaultConsequence(plane: TerminalFaultPlane): string {
   return plane === "fieldd"
     ? "your shells are still running — field-native outlives fieldd, and the deck rejoins them when the control plane answers"
     : "the sessions are unreachable from here until the bridge is back";
-}
-
-/** Ports are transferred per ATTACH and the wait is one-shot, so a runtime is
- * born with its own fresh wait, armed before the connect that causes the
- * transfer. Generous, because a redeem talks to two daemons. */
-function makeRuntime(): GhostteaTerminalRuntime {
-  return createGhostteaTerminalRuntime({
-    ports: waitForGhostteaRendererPorts(45_000),
-    clientBuild: "vibefield-godview",
-    // Bundled explicitly: the runtime's default resolves its worker relative to
-    // its own module URL, which under Vite means an asset inside node_modules.
-    workerFactory: () => new TerminalRenderWorker(),
-    platform: {
-      writeClipboard: (text) => void navigator.clipboard?.writeText(text),
-      forceCanvasFallback: () => false,
-      setForceCanvasFallback: () => undefined,
-      // A VibeField renderer cannot reload itself — security.ts denies every
-      // renderer-initiated navigation outside dev (GT-1 finding 3) — and should
-      // not want to: a reload would take the whole canvas down with the deck.
-      // Recovery is in-page, below.
-      reload: () => undefined,
-    },
-  });
 }
 
 /** The workspace publishes its context to its sidebar and nowhere else, so the
@@ -188,30 +158,21 @@ export function GodviewDeck({
   onPanes,
 }: GodviewDeckProps): ReactElement | null {
   const fieldd = useFielddClient();
-  /** THE deck's runtime, and `null` until the transport has been ACQUIRED.
+  /** THE POOL (TP-S0b), claimed and read.
    *
-   * Null-at-first is the whole shape of GT-D14's correctness (see the
-   * one-runtime law in `warm-transport.ts`): the ports arrive once, so this
-   * deck may not build a runtime while the prewarm still has one waiting for
-   * them. Which runtime it ends up with — inherited or its own — is decided in
-   * the acquisition effect below, never synchronously here, because "is a warm
-   * still in flight" is a question with an asynchronous answer. */
-  const [runtime, setRuntime] = useState<GhostteaTerminalRuntime | null>(null);
-  /** Whether this deck INHERITED its transport. Reported, and it also tells the
-   * connect effect that the ticket and the shell are already answered. */
-  const [warm, setWarm] = useState(false);
-  /** Bumped by a recovery. A runtime holds its ports for life, so a rebuilt
-   * bridge needs a NEW runtime — and the workspace reads its runtime from
-   * context at mount, so the deck has to remount onto it. */
-  const [generation, setGeneration] = useState(0);
-  /** What the deck could not reach, and its words for it. The PLANE is carried
-   * beside the message because the two failures behind it are opposite facts
-   * about the product (GT-5c): a `fieldd` fault is the CONTROL plane refusing a
-   * ticket while the shells this deck wants are alive and outliving it — the
-   * two-plane property, working — and a `transport` fault is the bridge or the
-   * floor itself. Reporting both as "could not reach its shell" told a user the
-   * opposite of what had happened. */
-  const [error, setError] = useState<DeckFault | null>(null);
+   * `useTerminalPoolOpen` is the claim — idempotent, and with no teardown,
+   * because a deck unmounting must not close the window's transport. Everything
+   * this component used to hold in React state now comes off the snapshot: the
+   * runtime (one per window, never per deck), the shell policy main answered the
+   * connect with, the fault and its plane, and the generation a replaced runtime
+   * bumps. The cold-open trace goes with the claim so the pool stamps `ticket`
+   * and `connected` wherever the acquisition actually happens — the prewarm's
+   * copy of those stamps was the reason the trace had to be a module singleton
+   * in the first place. */
+  const pool = useTerminalPool();
+  useTerminalPoolOpen(fieldd, godviewColdOpen);
+  const { runtime, shell, generation, warm } = pool;
+  const error: TerminalFault | null = pool.fault;
   /** Published by the sidebar probe. Read only to REPORT what the deck holds
    * (the marker below); the deck does not drive panes through it any more —
    * that was the adopt sweep GT-2e deleted. */
@@ -233,10 +194,6 @@ export function GodviewDeck({
    * from a path (GT-5c, the 2026-08-06 erratum). It is read by `paneMeta`, so a
    * ref for the same reason `paneColors` is one. */
   const remoteDevices = useRef(new Map<string, string>());
-  /** The shell every pane is born with, and where. Main's answer to the connect
-   * (GT-D10) — `null` until it lands, which is what gates the workspace's first
-   * mount below. */
-  const [shell, setShell] = useState<{ defaultShell: string; home: string } | null>(null);
   /** GT-3, the restore gate. `null` while the question is still being asked of
    * the floor; a question object while the user is being asked; `"go"` once the
    * deck may mount — with rehydration armed or not, per `rehydrate`. */
@@ -245,34 +202,17 @@ export function GodviewDeck({
    * chose to start clean has no layout left to rehydrate, and a deck with no
    * dead panes never had anything to ask about. */
   const [rehydrate, setRehydrate] = useState(false);
-  /** GT-2c: only a status TRANSITION may act — main republishes unchanged
-   * states by contract, and a republish treated as news is a remount loop. */
-  const lastBridgeState = useRef<string | null>(null);
-  /** Replaced runtimes retire here and are disposed after commit. A Set, so a
-   * twice-run updater (StrictMode) retires an instance once; disposal inside
-   * an updater or an unmount cleanup would double-fire there. */
-  const retiredRuntimes = useRef(new Set<GhostteaTerminalRuntime>());
 
   const publish = useCallback((next: GhostteaWorkspaceContext) => {
     workspaceRef.current = next;
     setWorkspace(next);
   }, []);
-  /** GT-2b: a failed deck must offer its own way back. Bumping the generation
-   * births a runtime with a FRESH ports wait and re-runs the connect ask — the
-   * same path `bridge-up` takes, available to a human when no bridge-up is
-   * coming (a bridge that never built, a ladder that spent itself). */
-  const retry = useCallback(() => {
-    setError(null);
-    // The failed runtime's one-shot ports wait is SPENT, so it is retired here
-    // and the acquisition effect — which the generation bump re-runs — builds
-    // the fresh one. Minting it in this updater would put a second ports wait
-    // in the page for as long as the old runtime is still around.
-    setRuntime((previous) => {
-      if (previous !== null) retiredRuntimes.current.add(previous);
-      return null;
-    });
-    setGeneration((current) => current + 1);
-  }, []);
+  /** GT-2b: a failed deck must offer its own way back. The pool replaces the
+   * transport — a fresh runtime with a fresh ports wait, and the connect asked
+   * again — which is the same path `bridge-up` takes, available to a human when
+   * no bridge-up is coming (a bridge that never built, a ladder that spent
+   * itself). The button is the deck's; the ladder is not. */
+  const retry = useCallback(() => retryTerminalPool(), []);
 
   /** The user said restore. Rehydration is armed and the workspace mounts;
    * dead panes come back through `onRehydratePane` below. */
@@ -302,16 +242,6 @@ export function GodviewDeck({
     setConsent("go");
   }, []);
 
-  // Disposal happens HERE, after commit, never in an updater: each runtime
-  // owns a render worker and the ports, and a leaked one is a leaked thread.
-  useEffect(() => {
-    for (const old of retiredRuntimes.current) {
-      if (old !== runtime) {
-        retiredRuntimes.current.delete(old);
-        old.dispose();
-      }
-    }
-  }, [runtime]);
   // The viewer's own appearance (GT-D12), read from the store Settings writes.
   // Recomputed when it moves and ONLY then: `theme` is not among the
   // workspace's initialization deps (`storageKey ∥ defaultShell ∥
@@ -343,99 +273,6 @@ export function GodviewDeck({
       },
     [publish],
   );
-
-  // The transport, and the shell policy that rides its answer. Runs once per
-  // runtime generation: a recovery rebuilds the bridge, so the ports have to be
-  // asked for again — main's `bridge-up` is the invitation, this is the ask.
-  //
-  // No session is created here, and that is the whole of GT-D10. The deck asks
-  // for a ticket to the floor; what appears in a pane is the workspace's
-  // decision, made through its own doors against the connection this opens.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      // Which plane the next `await` is asking, so the catch below reports the
-      // one that actually refused. Only the ticket mint speaks to fieldd; the
-      // bridge lookup and the connect are the transport's own (GT-5c).
-      let plane: DeckFaultPlane = "transport";
-      try {
-        const terminal = getHost().terminal;
-        if (terminal === undefined) {
-          throw new Error("this host has no terminal bridge");
-        }
-        // ── ACQUISITION (GT-D14) ─────────────────────────────────────────
-        // Only the first generation may inherit; a recovery is by definition a
-        // dead bridge, and the warm one died with it. Later generations still
-        // take ownership below, which is what keeps a prewarm from waking up
-        // behind a live deck.
-        {
-          // The one-runtime law, both halves. A warm still IN FLIGHT already
-          // has a ports wait armed and main posts the ports once, so building
-          // a second runtime here would hand both runtimes the same two
-          // MessagePorts and leave whichever the workspace holds permanently
-          // at "starting" — a dead deck, not a slow one. Waiting for it is
-          // therefore correctness, not politeness; the warm's own failure
-          // paths always settle the promise.
-          const pending = pendingWarmTransport();
-          if (pending !== null) await pending;
-          if (cancelled) return;
-          // ...and taking ownership closes the other half: a prewarm that was
-          // only SCHEDULED cannot start behind this deck afterwards.
-          const taken = takeTransportForDeck();
-          const inherited = generation === 0 ? taken : null;
-          if (taken !== null && inherited === null) taken.runtime.dispose();
-          if (inherited !== null) {
-            // Everything below is already done: ticket redeemed, bridge
-            // forked, ports posted, shell answered.
-            setRuntime(inherited.runtime);
-            setShell(inherited.shell);
-            setWarm(true);
-            setError(null);
-            return;
-          }
-        }
-        // Nothing to inherit. This deck owns the only ports wait from here, so
-        // it may build its runtime — and must, before the connect it causes.
-        const own = makeRuntime();
-        if (cancelled) {
-          own.dispose();
-          return;
-        }
-        setRuntime(own);
-        // Parsed, not cast: a mint without a ticket must fail loudly.
-        plane = "fieldd";
-        const minted = TerminalConnectTicketResult.parse(
-          await fieldd.request("terminal.connectTicket", {}),
-        );
-        if (cancelled) return;
-        godviewColdOpen.mark("ticket");
-        plane = "transport";
-        // Main answers the connect with the shell identity it alone can read.
-        const attached = await terminal.connect(minted.ticket);
-        if (cancelled) return;
-        godviewColdOpen.mark("connected");
-        setShell({ defaultShell: attached.defaultShell, home: attached.home });
-        setError(null);
-      } catch (cause) {
-        if (cancelled) return;
-        const message = cause instanceof Error ? cause.message : String(cause);
-        setError({ plane, message });
-        getRendererLogger()
-          .child({ component: "godview" })
-          .error(
-            "renderer.godview.deck_unavailable",
-            plane === "fieldd"
-              ? "The Godview deck could not mint its connect ticket; the floor's sessions are unaffected"
-              : "The Godview deck could not reach a shell",
-            cause,
-            { plane },
-          );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fieldd, generation]);
 
   // THE RESTORE GATE (GT-3, GT-D8 as amended). Runs ONCE per deck mount, and
   // finishes BEFORE the workspace is allowed to mount.
@@ -558,43 +395,6 @@ export function GodviewDeck({
       });
     });
   }, [workspace, runtime, warm]);
-
-  // Recovery (GT-1's ladder, from the renderer's side). `bridge-down` is the
-  // honest moment of death; `bridge-up` is the only one this page can act on,
-  // and acting means a new runtime with a fresh ports wait for the deck to
-  // remount onto. `ticket-expired` means main's credentials rotted with a
-  // field-native reboot and only a fresh redeem will do — which is what a new
-  // generation performs.
-  useEffect(() => {
-    const terminal = getHost().terminal;
-    if (terminal === undefined) return;
-    return terminal.onStatus((status) => {
-      // GT-2c: main publishes on EVERY set, including unchanged — its own
-      // contract test pins that — so only a TRANSITION may act here. Treating
-      // a republish as news built a feedback loop: each event minted a runtime
-      // and a generation, each generation re-asked, and the deck remounted
-      // itself to death (the dev storm James hit).
-      if (status.state === lastBridgeState.current) return;
-      lastBridgeState.current = status.state;
-      if (status.state === "bridge-down") {
-        setError({ plane: "transport", message: "the terminal bridge died — rebuilding" });
-        return;
-      }
-      if (status.state !== "bridge-up" && status.state !== "ticket-expired") return;
-      // Act = retire this runtime (its one-shot ports wait is spent) and bump
-      // the generation, which re-runs the acquisition effect and builds the
-      // replacement there. The old runtime is disposed by the effect below,
-      // never inside this updater — updaters must stay pure, React may run
-      // them more than once — and the new one is built in exactly one place so
-      // there is never a moment with two ports waits armed.
-      setError(null);
-      setRuntime((previous) => {
-        if (previous !== null) retiredRuntimes.current.add(previous);
-        return null;
-      });
-      setGeneration((previous) => previous + 1);
-    });
-  }, []);
 
   // NOTE (GT-D10, deliberate): there is no adopt sweep here any more. The old
   // one listed the floor on every open and pushed anything unseen into a pane,
@@ -793,12 +593,34 @@ export function GodviewDeck({
     return () => onRemoteDoor?.(null);
   }, [door, onRemoteDoor]);
 
+  /** The sessions this deck currently SHOWS, by id and nothing else (TP-L-C).
+   * One list, two readers: the monitor's pane facts and the demand below. */
+  const paneSessionIds = useMemo(
+    () => (workspace?.panes ?? []).map((pane) => pane.session.id),
+    [workspace],
+  );
+
+  // DEMAND (TP-L-E'), declared where the views are.
+  //
+  // One view per pane, at `live` while the overlay is open and `none` while it
+  // is not — PF6's `active` bit, said as a demand rather than only as a
+  // visibility prop. The release is atomic and belongs to the pool: a deck that
+  // unmounts drops every declaration in one pass, and a session nothing declares
+  // is a session nothing has to advance (TP-R1).
+  //
+  // What this does NOT do yet, stated plainly: reach the cell. `DeclareDemand`
+  // lands at TP-S3b with the direct connection, and until then `active: false`
+  // still leaves the source hot and the worker decoding — upstream's `setVisible`
+  // is worker-only and never reaches the daemon. The ledger is the honest record
+  // of what the tier SHOULD be; it is not yet a claim that it is.
+  useTerminalSessionViews(paneSessionIds, active ? "live" : "none");
+
   // The pane facts the monitor reads (GT-D17). Published on CHANGE only — this
   // fires on every workspace republish, and an unchanged array would re-run the
   // monitor's projection at ghosttea's cadence rather than at the panes'.
   const lastPaneFacts = useRef("");
   useEffect(() => {
-    const sessionIds = (workspace?.panes ?? []).map((pane) => pane.session.id);
+    const sessionIds = paneSessionIds;
     const activeSessionId = workspace?.activeSession?.id;
     const key = `${sessionIds.join("\0")}${activeSessionId ?? ""}`;
     if (key === lastPaneFacts.current) return;
@@ -814,7 +636,7 @@ export function GodviewDeck({
       if (!sessionIds.includes(sessionId)) remoteDevices.current.delete(sessionId);
     }
     onPanes?.({ sessionIds, ...(activeSessionId !== undefined ? { activeSessionId } : {}) });
-  }, [workspace, onPanes]);
+  }, [paneSessionIds, workspace, onPanes]);
 
   /** The pane's face, plus the monitor link (GT-D17).
    *

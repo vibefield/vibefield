@@ -2683,11 +2683,16 @@ export async function runSmokeGodview(opts: {
     // machine load — the same load that already makes the reload rows flaky.
     //
     // THE COLD OPEN, and it is genuinely cold even though the prewarm is on:
-    // row 1 presses ⇧⇧ the moment the canvas reports, and `claimWarmTransport`
-    // deliberately never blocks an open on a warm still in flight (GT-D14) — so
-    // the first open of this harness takes the cold path by construction, and
-    // `prewarmed: false` in this object is the proof rather than a disappointment.
-    // It is the BEFORE number, measured on the same run as the after.
+    // row 1 presses ⇧⇧ the moment the canvas reports, which is well inside the
+    // 2s idle window the prewarm is scheduled in — so `openTerminalPool`'s
+    // SYNCHRONOUS claim lands first, the idle callback then finds the pool
+    // already claimed and does nothing (GT-D14's second half, TP-S0b), and the
+    // first open of this harness takes the cold path by construction.
+    // `prewarmed: false` in this object is the proof rather than a
+    // disappointment. It is the BEFORE number, measured on the same run as the
+    // after. (The name here used to be `claimWarmTransport`, which was never on
+    // the deck's path at all — the deck always waited for a warm in FLIGHT, and
+    // the pool still does.)
     verdict["coldOpen"] = await coldOpenLine
       .then((raw) => JSON.parse(raw) as Record<string, unknown>)
       .catch((error) => ({ unmeasured: error instanceof Error ? error.message : String(error) }));

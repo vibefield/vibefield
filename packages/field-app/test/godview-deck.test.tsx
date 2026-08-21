@@ -21,11 +21,6 @@ import { act, type ComponentType } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewDeckFacts } from "../src/development-console";
-import {
-  pendingWarmTransport,
-  prewarmGodviewTransport,
-  resetWarmTransportForTest,
-} from "../src/godview/warm-transport";
 import type { FieldHost } from "../src/host";
 import { getHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
@@ -54,6 +49,14 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       dispose: () => {
         runtime.disposed = true;
       },
+      // TP-S0b: the prewarm path drives these, and it drives them through the
+      // POOL now rather than through a second module. A stub without them made
+      // the warm fail on every case that started one — and the one-runtime case
+      // below then passed because the deck saw a FAULT, not because it inherited
+      // anything. A fixture that can only fail proves nothing about a success.
+      connect: () => Promise.resolve(),
+      startPerformanceMeasurement: () => Promise.resolve(),
+      finishPerformanceMeasurement: () => Promise.resolve({ backend: "test" }),
       createSession: (options: unknown) => Promise.resolve({ id: `s-${JSON.stringify(options)}` }),
       // GT-D17's two verbs, as the door calls them. `openRemoteSession` answers
       // with a REPLICA — a local session id standing for a peer's — which is
@@ -122,6 +125,9 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
   },
 }));
 
+const { disposeTerminalPool, prewarmTerminalPool, terminalPoolSnapshot } = await import(
+  "../src/terminal/pool"
+);
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
 const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
@@ -144,8 +150,21 @@ let root: Root | null = null;
 let container: HTMLElement | null = null;
 
 function installHost(): void {
+  // Every level, deliberately. The half-stub this replaced turned the pool's
+  // own `info` on a spent prewarm into a TypeError that rejected the warm — and
+  // a rejected warm is why the deck built no second runtime in the one-runtime
+  // case. A fixture's logger must not be able to change the subject's control
+  // flow.
   setRendererLogger({
-    child: () => ({ error: () => undefined, warn: () => undefined }) as unknown as RendererLogger,
+    child: () =>
+      ({
+        trace: () => undefined,
+        debug: () => undefined,
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+        fatal: () => undefined,
+      }) as unknown as RendererLogger,
   } as unknown as RendererLogger);
   setHost({
     logger: {} as RendererLogger,
@@ -218,9 +237,10 @@ beforeEach(() => {
   publishStatus = null;
   localStorage.clear();
   resetDeckAppearanceForTest();
-  // GT-3p: the warm transport is a module singleton, so a case that started a
-  // prewarm would otherwise hand the next case a runtime it never asked for.
-  resetWarmTransportForTest();
+  // TP-S0b: the pool is a per-WINDOW module singleton, so a case that opened or
+  // warmed one would otherwise hand the next case a transport it never asked
+  // for — and the bridge subscription that came with it.
+  disposeTerminalPool();
   installHost();
   vi.spyOn(console, "log").mockImplementation((line: unknown) => {
     if (typeof line === "string" && line.startsWith("GODVIEW_DECK ")) {
@@ -741,7 +761,7 @@ describe("the one-runtime law (GT-3p, GT-D14)", () => {
         return Promise.resolve({ terminals: [] });
       },
     };
-    prewarmGodviewTransport(slowFieldd as never);
+    prewarmTerminalPool(slowFieldd as never);
     await settle();
     // The prewarm owns a runtime and its ports wait.
     expect(runtimes.length).toBe(1);
@@ -754,14 +774,22 @@ describe("the one-runtime law (GT-3p, GT-D14)", () => {
     expect(workspaceMounts.length).toBe(0);
 
     // Let the warm finish: the deck inherits that runtime rather than minting.
+    // It lands AFTER the claim, which is the case `adopt` has to get right — a
+    // claim that tested the pool's phase instead of its transport would build a
+    // second runtime on top of a perfectly good one.
     releaseTicket({ ticket: { token: "t", controlSocket: "c", frameSocket: "f" } });
     await settle();
     expect(runtimes.length).toBe(1);
+    expect(terminalPoolSnapshot().phase).toBe("open");
+    expect(terminalPoolSnapshot().warm, "the open was inherited, not acquired").toBe(true);
+    // ...and the inherited runtime is what the workspace was actually handed.
+    expect(workspaceMounts.length).toBeGreaterThan(0);
   });
 
   it("builds exactly one when no prewarm is pending", async () => {
-    expect(pendingWarmTransport()).toBeNull();
+    expect(terminalPoolSnapshot().phase).toBe("cold");
     await mountDeck();
     expect(runtimes.length).toBe(1);
+    expect(terminalPoolSnapshot().warm, "nothing was inherited").toBe(false);
   });
 });

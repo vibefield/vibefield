@@ -2,6 +2,7 @@ import type { TerminalBridgeStatus } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type CSSProperties, type ReactElement, useCallback, useEffect, useState } from "react";
 import { getHost } from "../host";
+import { prewarmTerminalPool } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
 import { GodviewDeck } from "./GodviewDeck";
@@ -24,11 +25,6 @@ import {
 } from "./monitor/stage-parameters";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { useGodviewOpen } from "./overlay-state";
-import {
-  discardWarmTransport,
-  prewarmGodviewTransport,
-  rewarmGodviewTransport,
-} from "./warm-transport";
 
 const THEME_STORAGE_KEY = "vf-godview-color-theme-v1";
 /** The prewarm's off switch (GT-3p). A DIAGNOSTIC, not a product setting: the
@@ -124,17 +120,22 @@ export function GodviewOverlay(): ReactElement | null {
   // bridge, a socket, a worker, a GPU device. No session, no shell, no PTY.
   //
   // Cancelled the moment the overlay has ever been open: from then on the deck
-  // owns the transport, and a prewarm waking up behind it would build a second
+  // has claimed the pool, and a prewarm waking up behind it would build a second
   // runtime waiting for the same one-shot ports (see the one-runtime law).
-  // `takeTransportForDeck` closes that race authoritatively; this only keeps the
-  // pointless work from being scheduled in the first place.
+  // `openTerminalPool` closes that race authoritatively — its claim is
+  // synchronous — and this only keeps the pointless work from being scheduled in
+  // the first place.
+  //
+  // TP-S0b: what is scheduled here is a POOL warm, not a Godview one. The
+  // overlay is where the idle moment is observable, so it stays the scheduler;
+  // the transport it warms belongs to the window.
   useEffect(() => {
     if (!prewarmEnabled() || everOpened) return;
     // The trace goes with it: the prewarm's stations are stamped BEFORE the
     // open, which is what lets the cold-open report name them as `warm` rather
     // than merely omitting them. An absent phase and a phase that was already
     // done look the same in a breakdown otherwise.
-    return whenIdle(() => prewarmGodviewTransport(fieldd, godviewColdOpen), 2_000);
+    return whenIdle(() => prewarmTerminalPool(fieldd, godviewColdOpen), 2_000);
   }, [fieldd, everOpened]);
 
   useEffect(() => {
@@ -145,25 +146,17 @@ export function GodviewOverlay(): ReactElement | null {
     }
   }, [theme]);
 
+  // The bridge NOTICE, and only the notice (TP-S0b). This used to be half of the
+  // recovery ladder as well: GT-D14's custody clause (discard a warm whose
+  // bridge died before anyone used it) and the one lazy re-warm lived here,
+  // while the deck held the other half — a replacement — behind its own
+  // transition guard. Two subscribers, two ideas of what counted as news. The
+  // pool subscribes once and owns the whole ladder; what is left here is a badge.
   useEffect(() => {
     const terminal = getHost().terminal;
     if (terminal === undefined) return;
-    return terminal.onStatus((status) => {
-      setBridge(status);
-      // GT-D14's custody clause: a warm transport whose bridge died before
-      // anyone used it is dead weight holding a disposed worker. Discarding it
-      // spends the attempt — `rewarmGodviewTransport` allows exactly one more,
-      // and nothing here loops. A CLAIMED transport is untouched: it belongs to
-      // the deck, whose own recovery ladder (GT-1) owns it from then on.
-      if (status.state === "bridge-down") discardWarmTransport("the bridge died before first use");
-      // The one lazy re-warm. `rewarmGodviewTransport` is a no-op unless the
-      // singleton is SPENT and has never re-warmed, so a bridge that flaps — or
-      // a deck's own recovery republishing bridge-up — cannot turn this into a
-      // ladder. Nothing schedules a retry; the next bridge-up is the trigger, or
-      // there is no second attempt at all.
-      if (status.state === "bridge-up") rewarmGodviewTransport(fieldd);
-    });
-  }, [fieldd]);
+    return terminal.onStatus(setBridge);
+  }, []);
 
   // BARE Escape IS DELIBERATELY UNBOUND HERE (James, 2026-08-04).
   //
