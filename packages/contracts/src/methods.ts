@@ -1029,6 +1029,25 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // TP-S1 (terminal-pipeline-v3 §5.1): renew a session's attach grant — a CAS
+  // on the generation the caller holds, idempotent by requestId (a retried
+  // renewal returns the grant it already got), so retry-safe by construction.
+  defineMethod({
+    surface: "product",
+    method: "terminal.renewAttach",
+    scope: "terminal.attach",
+    idempotent: true,
+    locality: "local",
+  }),
+  // TP-D4: the UI's roster projection — ids, class, health, provenance and NO
+  // placement; terminal.list stays the transport-facing inventory.
+  defineMethod({
+    surface: "product",
+    method: "terminal.roster",
+    scope: "terminal.attach",
+    idempotent: true,
+    locality: "local",
+  }),
   // Idempotent by intent — terminating an already-exited session is the normal
   // race when the ladder and a user click converge, and must not read as an
   // error (the lane.close reasoning).

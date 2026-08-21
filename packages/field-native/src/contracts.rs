@@ -5840,6 +5840,12 @@ impl TerminalEndpoints {
 #[doc = "    \"endpoints\": {"]
 #[doc = "      \"$ref\": \"#/definitions/TerminalEndpoints\""]
 #[doc = "    },"]
+#[doc = "    \"grantKey\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"grantKeyGeneration\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
 #[doc = "    \"pid\": {"]
 #[doc = "      \"type\": \"integer\""]
 #[doc = "    },"]
@@ -5864,6 +5870,18 @@ pub struct TerminalRouteCell {
     #[serde(rename = "cellInstanceId")]
     pub cell_instance_id: i64,
     pub endpoints: TerminalEndpoints,
+    #[serde(
+        rename = "grantKey",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub grant_key: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "grantKeyGeneration",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub grant_key_generation: ::std::option::Option<i64>,
     pub pid: i64,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub role: ::std::option::Option<TerminalCellRole>,
@@ -10601,6 +10619,12 @@ pub mod builder {
         cell_boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         cell_instance_id: ::std::result::Result<i64, ::std::string::String>,
         endpoints: ::std::result::Result<super::TerminalEndpoints, ::std::string::String>,
+        grant_key: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        grant_key_generation:
+            ::std::result::Result<::std::option::Option<i64>, ::std::string::String>,
         pid: ::std::result::Result<i64, ::std::string::String>,
         role: ::std::result::Result<
             ::std::option::Option<super::TerminalCellRole>,
@@ -10618,6 +10642,8 @@ pub mod builder {
                 cell_boot_id: Err("no value supplied for cell_boot_id".to_string()),
                 cell_instance_id: Err("no value supplied for cell_instance_id".to_string()),
                 endpoints: Err("no value supplied for endpoints".to_string()),
+                grant_key: Ok(Default::default()),
+                grant_key_generation: Ok(Default::default()),
                 pid: Err("no value supplied for pid".to_string()),
                 role: Ok(Default::default()),
                 token_generation: Err("no value supplied for token_generation".to_string()),
@@ -10654,6 +10680,26 @@ pub mod builder {
             self.endpoints = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for endpoints: {e}"));
+            self
+        }
+        pub fn grant_key<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.grant_key = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for grant_key: {e}"));
+            self
+        }
+        pub fn grant_key_generation<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<i64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.grant_key_generation = value.try_into().map_err(|e| {
+                format!("error converting supplied value for grant_key_generation: {e}")
+            });
             self
         }
         pub fn pid<T>(mut self, value: T) -> Self
@@ -10706,6 +10752,8 @@ pub mod builder {
                 cell_boot_id: value.cell_boot_id?,
                 cell_instance_id: value.cell_instance_id?,
                 endpoints: value.endpoints?,
+                grant_key: value.grant_key?,
+                grant_key_generation: value.grant_key_generation?,
                 pid: value.pid?,
                 role: value.role?,
                 token_generation: value.token_generation?,
@@ -10719,6 +10767,8 @@ pub mod builder {
                 cell_boot_id: Ok(value.cell_boot_id),
                 cell_instance_id: Ok(value.cell_instance_id),
                 endpoints: Ok(value.endpoints),
+                grant_key: Ok(value.grant_key),
+                grant_key_generation: Ok(value.grant_key_generation),
                 pid: Ok(value.pid),
                 role: Ok(value.role),
                 token_generation: Ok(value.token_generation),

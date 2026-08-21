@@ -12,7 +12,9 @@
       },
       "tokenGeneration": 4,
       "workloadClass": "interactive",
-      "role": "class"
+      "role": "class",
+      "grantKey": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "grantKeyGeneration": 1
     },
     {
       "cellInstanceId": 2,

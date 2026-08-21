@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TerminalWorkloadClass } from "./envelope";
-import { TerminalTicket } from "./terminal";
+import { TerminalCreateResult, TerminalObservation, TerminalTicket } from "./terminal";
 
 // The terminal pipeline (TPv3) — custody through pixels. The wire truth for
 // everything between fieldd's ticket mint and the renderer's cell sockets:
@@ -52,7 +52,10 @@ export const RouteBinding = z
   .object({
     cellBootId: z.string().min(1),
     routeRevision: Counter,
-    leaseEpoch: Counter,
+    /** Custody's per-session lease epoch — the fence on every message once
+     * the cell verifies (TP-S3a, when the bundle exposes it to fieldd through
+     * the inventory). OPTIONAL until then: absent = not yet exposed, never 0. */
+    leaseEpoch: Counter.optional(),
   })
   .passthrough();
 export type RouteBinding = z.infer<typeof RouteBinding>;
@@ -238,7 +241,8 @@ export const SessionAttachGrantClaims = z
     audienceCellBootId: z.string().min(1),
     clientId: z.string().min(1),
     sessionId: z.string().min(1),
-    leaseEpoch: Counter,
+    /** required from TP-S3a (see RouteBinding.leaseEpoch) */
+    leaseEpoch: Counter.optional(),
     routeRevision: Counter,
     grantGeneration: Counter,
     rights: sortedUniqueArray(SessionAttachRight),
@@ -376,6 +380,17 @@ export const TerminalRenewAttachResult = z
   .passthrough();
 export type TerminalRenewAttachResult = z.infer<typeof TerminalRenewAttachResult>;
 
+/** What `terminal.openTicket` / `terminal.create` ANSWER during TP-S1: the
+ * v2 result when the session's cell row carries a grant key, else today's
+ * legacy shape alone (a pre-TP floor, the in-process serve — no key, so no
+ * grants and no half ticket). A v2 reader tries the first member and shows
+ * `UNAVAILABLE {reason: grants-not-landed}` on the second; the union retires
+ * with the legacy fields at TP-S3e. */
+export const TerminalOpenTicketResponse = z.union([TerminalOpenTicketResult, TerminalTicket]);
+export type TerminalOpenTicketResponse = z.infer<typeof TerminalOpenTicketResponse>;
+export const TerminalCreateOpenResponse = z.union([TerminalCreateOpenResult, TerminalCreateResult]);
+export type TerminalCreateOpenResponse = z.infer<typeof TerminalCreateOpenResponse>;
+
 // ---------------------------------------------------------------------------
 // The roster's UI projection (spec §5.3, TP-D4)
 
@@ -414,6 +429,17 @@ export const ProductSessionRosterItem = z
     "a roster item never carries placement (TP-L-C)",
   );
 export type ProductSessionRosterItem = z.infer<typeof ProductSessionRosterItem>;
+
+/** terminal.roster result — the UI projection of the folded inventory, with
+ * the observation it came from (the terminal.list honesty: before the first
+ * observation the method REFUSES `UNAVAILABLE {state: "unobserved"}`). */
+export const TerminalRosterResult = z
+  .object({
+    items: z.array(ProductSessionRosterItem),
+    observation: TerminalObservation.optional(),
+  })
+  .passthrough();
+export type TerminalRosterResult = z.infer<typeof TerminalRosterResult>;
 
 // ---------------------------------------------------------------------------
 // The per-cell handshake (spec §5.1)

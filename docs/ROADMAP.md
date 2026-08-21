@@ -168,6 +168,21 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 
 ## In flight now
 
+**TP — the terminal pipeline (custody through pixels).** The merged spec
+(`draft/specs/terminal-pipeline-v3.md` v0.7, eight reviews in; architecture ratifiable, protocol
+a closure CANDIDATE behind §20's artifacts) started landing on 2026-08-21 as parallel slices:
+**TP-S1a** `f799ffc` (every TPv3 message as a contract + golden vectors, incl. RFC 8785 JCS and
+the envelope's binary framing), **TP-S0b** `19ff4d9` (the runtime leaves the deck for a
+window-level routed pool; TP-R1 proven against the real 0.10.1 runtime), **TP-S1b** (the floor
+mints a per-cell-boot grant key; fieldd issues HMAC'd route+grants beside the legacy ticket;
+`terminal.renewAttach` + `terminal.roster`). In flight in worktrees: **TP-S0a** (the TRF1
+corpus, the worker microbench, the metrics sampler, the existing-path baseline). Next: the
+S1-renderer slice on the pool (zero `connectTicket`, the honest cross-cell face, the roster
+projection in the UI), **TP-S2** (zoom/fullscreen = one resize; the ICE widget as a watch-only
+mirror host), **TP-S0c** (the perf lab rig, the Ghostty A-vs-A control), then the §20 gate
+(state tables, error matrix, property tests, TP-D1 ratified) before any TP-S3 sub-slice. The 19
+[JAMES] marks — T1's `connect-src` reversal first — are the standing calls.
+
 **PLUG.** **P8b COMPLETE — the artifact loads.** One evening closed the rung the whole ladder
 existed for (2026-08-13, four commits): the owed CORS probe ran FIRST and redesigned the rung
 before any code — P8-D9/P8-D10 refuted (the import map binds bare specifiers straight to

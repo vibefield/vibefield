@@ -3178,3 +3178,76 @@ Packaging (same day, separate commit): `field-terminal-host` now stages beside
 without its cell, the macOS nested-code list signs it, and the SEA `--verify`
 sandbox stages it. The half-pair refusal FIRED on live repo state (this
 checkout's release tree predates the cell), which is the gate working.
+
+## TP-S1a — the terminal pipeline's wire truth (contracts)
+
+2026-08-21, `f799ffc`. The first slice of the merged terminal-pipeline spec
+(`draft/specs/terminal-pipeline-v3.md` v0.7 — custody continued through
+presentation, transport and the renderer's scene/view model; §20 item 1 of its
+closure checklist). `packages/contracts/src/terminal-pipeline.ts` makes every
+TPv3 message a zod shape, TS-only like `terminal.ts` (the grant verifier is the
+cell, upstream; the floor only mints the key): grants as authenticated envelopes
+with the protected header UNDER the MAC and sorted-unique arrays (JCS has no
+sets), the per-cell handshake with no claim repeated outside the grant, the
+two-level attach, the TWO-DIMENSIONAL `CellActivationStatus` (input=allowed ⇒
+presentation=presenting is a parse refinement), the geometry verbs, BYTE
+credits, the presentation-envelope header with per-kind rules and the binary
+FRAMING the prose had never written down (`'T','P',version,reserved,u32BE
+header length, JSON header, payload`; the charge is the received message
+length). `canonicalJson` is RFC 8785, pinned by the RFC's own example;
+`tp-grant-mac.vector.json` pins both MACs; 30 `tp-*` fixtures; 18 new tests.
+Spec deltas recorded for v0.8: `endpoints` optional until S3a (cells serve UDS
+today — no `unix:` detour), unit-suffixed limit names, the framing.
+
+## TP-S0b — the pool owns the runtime; the deck is its first consumer
+
+2026-08-21, `19ff4d9` (built in a parallel worktree by an Opus agent, rebased
+onto main). The ghosttea runtime leaves the Godview deck for a window-level,
+module-owned pool (`packages/field-app/src/terminal/pool/`): one factory (the
+deck's and warm-transport's byte-identical copies collapsed; the 1s frame-
+subscription grace is now ours by name), a ROUTED data model with a transport
+table keyed by `cellBootId` (one named stand-in entry today — `terminal.
+connectTicket` carries no cell identity until TP-S1 routes it), a per-session
+demand ledger (MAX fold; release is atomic and idempotent), and the recovery
+ladder (`terminal.onStatus` → discard/re-warm/replace) moved in whole. Deck =
+first consumer; `warm-transport.ts` deleted. TP-R1's proof does NOT mock the
+runtime: the real 0.10.1 class drops a session exactly one grace after the LAST
+view releases, never while another view holds it; the pool takes no retain.
+Honest limits named (decode counts need S0a's counters; `DeclareDemand` to the
+cell is S3b). Findings: a control run on main showed the smoke's renderer-
+reload row flaky 0/2 there vs 2/2 on the slice; the deck's one-runtime test had
+passed for the wrong reason (a fixture logger without `info` rejected the warm
+inside its catch); a flapping-bridge one-runtime hole closed (identity-checked
+pending slot); §9.1's "doc-generation subtree" precedent is right but the deck
+was already outside the keyed subtree (errata note for the spec). Gate
+verbatim green; `smoke:godview` green twice incl. the real bridge kill.
+
+## TP-S1b — the floor mints the grant key; fieldd is the issuer
+
+2026-08-21 (this commit). The cross-plane half of S1. The floor mints one
+32-byte GRANT KEY per cell boot beside the cell token (`field-native
+services/terminal.rs`) and the route row carries it over the paired mgmt
+channel (`TerminalRouteCell.grantKey` / `grantKeyGeneration` — same custody as
+`authToken`: never env, disk or logs; absent on a pre-TP floor and the
+in-process serve). fieldd (`terminal-grants.ts`) derives `clientId` from the
+caller's principal (a window's participant + incarnation, NON-REUSED), keeps
+the two generation ledgers in memory (safe only because a fieldd restart
+replaces every renderer document — TP-R21's argument), mints HMAC-SHA256 over
+the contracts' canonical signing input, and `terminal.openTicket` /
+`terminal.create` answer the TPv3 route + grants SPREAD beside today's legacy
+trio when the cell carries a key — the legacy shape ALONE when it does not
+(never a half ticket; a v2 reader shows `UNAVAILABLE {grants-not-landed}`).
+New methods (declared == shipped): `terminal.renewAttach` (a CAS on the held
+generation, idempotent by requestId, audited as `terminal.attach.renew`) and
+`terminal.roster` (TP-D4 — the UI projection with NO placement; `terminal.list`
+stays the transport-facing inventory). `leaseEpoch` and `endpoints` stay absent
+until S3a exposes custody's per-session epoch and the cells' T1 doors. Tests:
+the minter in isolation (7), the product API with two keyed cells (6 — tickets
+verify against THEIR cell's key and not the other's, fresh transport grants
+with a stable connection set, renewAttach CAS/idempotency/NOT_FOUND/malformed,
+create's spread result from the cell the session landed on, the keyless floor's
+legacy answer + `grants_not_landed`, the roster with no placement + the
+unobserved refusal), the Rust key mint, the keyed route fixture parsed on both
+sides. Renderer consumption (zero `connectTicket`, the honest cross-cell face,
+the roster in the UI) is the S1-renderer slice on the pool.
+

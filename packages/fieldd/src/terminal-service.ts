@@ -9,14 +9,21 @@ import {
 import {
   CELL_SUPERVISION,
   ObservedState,
+  type RouteBinding,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
   TERMINAL_SESSION_CAP,
   type TerminalConfigDocument,
   type TerminalConfigWriteResult,
+  type TerminalCreateOpenResponse,
   type TerminalCreateParams,
   type TerminalEndpoints,
   type TerminalInfo,
   type TerminalObservation,
+  type TerminalOpenTicket,
+  type TerminalOpenTicketResponse,
+  type TerminalRenewAttachParams,
+  type TerminalRenewAttachResult,
+  type TerminalRosterResult,
   type TerminalRouteCell,
   type TerminalRouteSnapshot,
   type TerminalTerminateResult,
@@ -25,6 +32,12 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError, terminalCreateTarget } from "./native-link";
+import {
+  type CellGrantKey,
+  type GrantPrincipal,
+  projectRoster,
+  TerminalGrantMinter,
+} from "./terminal-grants";
 
 // TerminalService (fieldd — NF-3, native-floor spec §6): the thin product seam
 // over the terminal floor. It owns NO sessions and NO bytes — field-native's
@@ -88,6 +101,21 @@ const LEGACY_CELL_KEY = "\u0000legacy-mirror";
 interface CellTarget {
   key: string;
   endpoints: TerminalEndpoints;
+  /** TP-S1 — the row's per-cell-boot grant key, when the floor minted one;
+   * absent = a pre-TP floor / the legacy mirror: no grants are minted. */
+  grantKey?: CellGrantKey;
+}
+
+/** The grant key a route row carries, in the minter's shape (or nothing). */
+function grantKeyOf(row: TerminalRouteCell): { grantKey: CellGrantKey } | Record<string, never> {
+  if (row.grantKey === undefined) return {};
+  return {
+    grantKey: {
+      cellBootId: row.cellBootId,
+      keyHex: row.grantKey,
+      keyGeneration: row.grantKeyGeneration ?? 1,
+    },
+  };
 }
 
 /** One live control connection to one cell. */
@@ -131,6 +159,9 @@ export class TerminalService {
    * because with K=2 class cells a change is a DIFF, not a replacement:
    * "which cells vanished" is the question the receipt answers. */
   private cells: readonly TerminalRouteCell[] | undefined;
+  /** TP-S1 — the TPv3 grant issuer: generation ledgers in memory, MACs over
+   * the route row's per-cell-boot key (terminal-grants.ts). */
+  private readonly minter = new TerminalGrantMinter();
 
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -339,6 +370,91 @@ export class TerminalService {
   ticketForCell(cellBootId: string | undefined): TerminalTicket {
     if (cellBootId === undefined) return toTicket(this.endpoints());
     return toTicket(this.cellByBootId(cellBootId).endpoints);
+  }
+
+  /** TP-S1 — `terminal.openTicket`: today's ticket (the legacy trio the
+   * bridge still dials) with the TPv3 route + grants SPREAD beside it when
+   * the session's cell carries a grant key; the legacy trio ALONE when it does
+   * not (a pre-TP floor, the in-process serve) — never a half ticket, and
+   * `endpoints` stay absent until the cell serves its T1 doors (TP-S3a). The
+   * cell is the session's OWN (the inventory's `cell` tag), as before. */
+  openTicket(principal: GrantPrincipal, sessionId: string): TerminalOpenTicketResponse {
+    const cell = this.sessionCell(sessionId);
+    return { ...toTicket(cell.endpoints), ...this.grantsFor(cell, principal, sessionId) };
+  }
+
+  /** TP-S1 — the create result (GT-1's nested mint) for the cell the session
+   * LANDED on: the legacy `ticket` beside the spread v2 fields. */
+  createOpenResult(
+    principal: GrantPrincipal,
+    created: { sessionId: string; cellBootId?: string | undefined },
+  ): TerminalCreateOpenResponse {
+    const cell =
+      created.cellBootId === undefined
+        ? { key: LEGACY_CELL_KEY, endpoints: this.endpoints() }
+        : this.cellByBootId(created.cellBootId);
+    return {
+      sessionId: created.sessionId,
+      ticket: toTicket(cell.endpoints),
+      ...this.grantsFor(cell, principal, created.sessionId),
+    };
+  }
+
+  /** TP-S1 — `terminal.renewAttach`: CAS on the generation the caller holds,
+   * idempotent by requestId (terminal-grants.ts). A cell that mints no grants
+   * has nothing to renew — UNAVAILABLE, the honest state. */
+  renewAttach(
+    principal: GrantPrincipal,
+    params: TerminalRenewAttachParams,
+  ): TerminalRenewAttachResult {
+    const cell = this.sessionCell(params.sessionId);
+    if (cell.grantKey === undefined)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the terminal cell hosting this session mints no grants yet (pre-TP floor)",
+        true,
+        { service: "terminal", state: "grants_not_landed" },
+      );
+    const attachGrant = this.minter.renewAttach({
+      key: cell.grantKey,
+      principal,
+      sessionId: params.sessionId,
+      route: this.routeBinding(cell.key),
+      expectGeneration: params.expectGeneration,
+      requestId: params.requestId,
+    });
+    return { attachGrant };
+  }
+
+  /** TP-D4 — the UI's roster projection (no placement). Refuses before the
+   * first observation exactly like `list` (GT-5b's honesty). */
+  roster(): TerminalRosterResult {
+    this.requireObserved();
+    return {
+      items: projectRoster(this.terminals),
+      ...(this.lastObservation === undefined ? {} : { observation: this.lastObservation }),
+    };
+  }
+
+  private grantsFor(
+    cell: CellTarget,
+    principal: GrantPrincipal,
+    sessionId: string,
+  ): TerminalOpenTicket | Record<string, never> {
+    if (cell.grantKey === undefined) return {};
+    return this.minter.mintTicket({
+      key: cell.grantKey,
+      principal,
+      sessionId,
+      route: this.routeBinding(cell.key),
+    });
+  }
+
+  /** The route binding at mint time. `leaseEpoch` stays absent until the
+   * floor exposes custody's per-session lease epoch (TP-S3a); a key only ever
+   * comes from a route row, so `routes` is defined whenever this is reached. */
+  private routeBinding(cellBootId: string): RouteBinding {
+    return { cellBootId, routeRevision: this.opts.link.terminalRoutes?.revision ?? 0 };
   }
 
   /** NF-D6, the free-shell door. Default = the user's LOGIN shell (`-l`): the
@@ -740,7 +856,8 @@ export class TerminalService {
     const routes = this.opts.link.terminalRoutes;
     if (routes !== undefined) {
       const target = terminalCreateTarget(routes, workloadClass);
-      if (target !== undefined) return { key: target.cellBootId, endpoints: target.endpoints };
+      if (target !== undefined)
+        return { key: target.cellBootId, endpoints: target.endpoints, ...grantKeyOf(target) };
       // This class has no cell of its own. Class is a PLACEMENT HINT and a
       // policy selector, never a permanent failure domain (TC-D4), so the
       // session lands on the floor's interactive target rather than being
@@ -755,7 +872,7 @@ export class TerminalService {
           "No cell hosts this workload class; the session lands on the interactive cell",
           { workloadClass, revision: routes.revision },
         );
-        return { key: fallback.cellBootId, endpoints: fallback.endpoints };
+        return { key: fallback.cellBootId, endpoints: fallback.endpoints, ...grantKeyOf(fallback) };
       }
     }
     // No snapshot at all (a pre-TC-S2 floor), or one that names no cell:
@@ -799,7 +916,8 @@ export class TerminalService {
     // the mirror is gone with it).
     if (routes === undefined) return { key: LEGACY_CELL_KEY, endpoints: this.endpoints() };
     const row = routes.cells.find((cell) => cell.cellBootId === cellBootId);
-    if (row !== undefined) return { key: row.cellBootId, endpoints: row.endpoints };
+    if (row !== undefined)
+      return { key: row.cellBootId, endpoints: row.endpoints, ...grantKeyOf(row) };
     // TC-S3 — the cell that held this session is gone from the snapshot, so the
     // session went with it and the observed stream is about to say so. Honest
     // and retryable: never a ticket into a dead cell's socket, never a blank,

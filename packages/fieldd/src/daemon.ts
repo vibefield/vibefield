@@ -60,9 +60,11 @@ import {
   type TerminalConfigWriteResult,
   TerminalConnectTicketParams,
   type TerminalConnectTicketResult,
+  type TerminalCreateOpenResponse,
   TerminalCreateParams,
-  type TerminalCreateResult,
   type TerminalListResult,
+  TerminalRenewAttachParams,
+  type TerminalRosterResult,
   TerminalSessionParams,
 } from "@vibefield/contracts";
 import type { AuditHealthV1 } from "@vibefield/contracts/diagnostics";
@@ -1245,11 +1247,43 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         { action: "terminal.ticket.mint", target: { kind: "terminal", id: sessionId } },
         // TC-S3: the session's OWN cell, via the inventory's `cell` tag — a
         // ticket minted from any other cell would be a credential for a socket
-        // that has never heard of this session.
-        () => terminals.ticketForSession(sessionId),
+        // that has never heard of this session. TP-S1: the TPv3 route + grants
+        // ride beside the legacy trio when the cell carries a grant key; the
+        // caller's principal is what the grants are bound to (never UI claims).
+        () => terminals.openTicket(ctx.principal, sessionId),
         () => ({ outcome: "succeeded" }),
       );
     });
+    // TP-S1 — renew a session's attach grant: a CAS on the generation the
+    // caller holds, idempotent by requestId. Audited like a mint — it IS one.
+    api.register("terminal.renewAttach", async (ctx, params) => {
+      const parsed = TerminalRenewAttachParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "malformed terminal.renewAttach params",
+          false,
+        );
+      if (terminals.get(parsed.data.sessionId) === undefined)
+        throw new RpcCallError("NOT_FOUND", `no such terminal: ${parsed.data.sessionId}`, false);
+      return await audit.required(
+        ctx,
+        {
+          action: "terminal.attach.renew",
+          target: { kind: "terminal", id: parsed.data.sessionId },
+          attrs: {
+            expectGeneration: parsed.data.expectGeneration,
+            requestId: parsed.data.requestId,
+          },
+        },
+        () => terminals.renewAttach(ctx.principal, parsed.data),
+        () => ({ outcome: "succeeded" }),
+      );
+    });
+    // TP-D4 — the UI's roster: ids, class, health, title and NO placement
+    // (terminal.list stays the transport-facing inventory). Refuses before the
+    // first observation exactly like list.
+    api.register("terminal.roster", (): TerminalRosterResult => terminals.roster());
     // GT-D10: the connection's ticket, minted against no session at all. The
     // deck used to open by CREATING one — a shell nobody asked for, born so a
     // ticket could ride its answer — which is exactly how fieldd became a
@@ -1325,17 +1359,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // attr claiming otherwise was true only because the nesting made it so.
         (result) => ({ outcome: "succeeded", attrs: { sessionId: result.sessionId } }),
       );
-      const ticket = await audit.required(
+      const opened = await audit.required(
         ctx,
         { action: "terminal.ticket.mint", target: { kind: "terminal", id: created.sessionId } },
         // TC-S3: from the cell the session actually LANDED on, which create
         // reports — a workloadClass:"agent" birth lands on the agent cell, and
         // the inventory that would otherwise say so is a mgmt round trip behind
         // (GT-1's window, the reason this mint exists at all).
-        () => terminals.ticketForCell(created.cellBootId),
+        // TP-S1: the legacy `ticket` beside the spread route + grants, bound
+        // to the caller's principal.
+        () => terminals.createOpenResult(ctx.principal, created),
         () => ({ outcome: "succeeded" }),
       );
-      return { sessionId: created.sessionId, ticket } satisfies TerminalCreateResult;
+      return opened satisfies TerminalCreateOpenResponse;
     });
     api.register("terminal.terminate", async (ctx, params) => {
       const sessionId = requireSessionId(params);

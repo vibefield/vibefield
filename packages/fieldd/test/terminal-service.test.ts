@@ -7,12 +7,14 @@
 // transport-death honesty law (a dead control socket is UNAVAILABLE, never the
 // benign already-gone race). The live create/terminate/attach path needs a
 // real PTY authority and lives in terminal-seam.test.ts.
+import { createHmac } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   type DeviceInfo,
+  grantSigningInput,
   isPipeEndpoint,
   METHODS,
   SOCKETS,
@@ -20,11 +22,14 @@ import {
   TerminalConfigDocument,
   TerminalConfigWriteResult,
   TerminalConnectTicketResult,
+  TerminalCreateOpenResult,
   type TerminalCreateResult,
   type TerminalEndpoints,
   type TerminalInfo,
+  TerminalOpenTicketResult,
+  TerminalRosterResult,
   type TerminalRouteSnapshot,
-  type TerminalTicket,
+  TerminalTicket,
   type TerminalWorkloadClass,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
@@ -681,6 +686,8 @@ describe("TerminalService (NF-3, mock native)", () => {
       "terminal.connectTicket": "terminal.attach",
       "terminal.create": "terminal.attach",
       "terminal.terminate": "terminal.attach",
+      "terminal.renewAttach": "terminal.attach",
+      "terminal.roster": "terminal.attach",
       "terminal.config.read": "settings.manage",
       "terminal.config.write": "settings.manage",
     };
@@ -1929,5 +1936,276 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
       Date.now() - started,
       "it waited for the agent cell before falling back",
     ).toBeGreaterThanOrEqual(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TP-S1 — the session-addressed grant model over the product API
+// (terminal-pipeline-v3 §5.1, §15 row S1): the route + grants ride beside the
+// legacy ticket when the cell carries a grant key, bound to the CALLER's
+// principal and signed with THAT cell's key; renewAttach is a CAS; the roster
+// carries no placement; a keyless floor stays the legacy trio and says so.
+
+const KEY_I = "5e".repeat(32);
+const KEY_A = "a1".repeat(32);
+
+function keyedRoutes(
+  revision: number,
+  cells: Array<{
+    cellInstanceId: number;
+    cellBootId: string;
+    endpoints: TerminalEndpoints;
+    workloadClass?: TerminalWorkloadClass;
+    role?: "class" | "solo";
+    grantKey?: string;
+  }>,
+): TerminalRouteSnapshot {
+  const snapshot = classRoutes(revision, cells);
+  return {
+    ...snapshot,
+    cells: snapshot.cells.map((row, i) => {
+      const key = cells[i]?.grantKey;
+      return key === undefined ? row : { ...row, grantKey: key, grantKeyGeneration: 1 };
+    }),
+  };
+}
+
+/** The cell's verification, replayed here: HMAC-SHA256 over the contracts'
+ * canonical signing input with the route row's key. */
+function verifies(
+  keyHex: string,
+  grant: { protected: unknown; claims: unknown; mac: string },
+): boolean {
+  const mac = createHmac("sha256", Buffer.from(keyHex, "hex"))
+    .update(grantSigningInput(grant.protected as never, grant.claims), "utf8")
+    .digest("base64url");
+  return mac === grant.mac;
+}
+
+async function keyedDaemon() {
+  const dataDir = makeDataDir();
+  const mock = await startMock(dataDir);
+  mock.terminalRoutes = keyedRoutes(3, [
+    {
+      cellInstanceId: 1,
+      cellBootId: "cell-i",
+      endpoints: paperEndpoints("interactive"),
+      workloadClass: "interactive",
+      role: "class",
+      grantKey: KEY_I,
+    },
+    {
+      cellInstanceId: 2,
+      cellBootId: "cell-a",
+      endpoints: paperEndpoints("agent"),
+      workloadClass: "agent",
+      role: "class",
+      grantKey: KEY_A,
+    },
+  ]);
+  mock.observedState = observed([
+    { sessionId: "pane-1", title: "zsh", cell: cellTag(1, "cell-i", "interactive") },
+    { sessionId: "agent-1", cell: cellTag(2, "cell-a", "agent") },
+  ]);
+  const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+  cleanup.push(() => daemon.stop());
+  const grant = daemon.tokens.mint(["terminal.attach"], "tp-s1-test");
+  const rpc = await openRpc(daemon.controlPort);
+  await helloAs(rpc, grant.token);
+  return { dataDir, mock, daemon, rpc, grant };
+}
+
+describe("TP-S1 — the session-addressed grant model", () => {
+  it("mints the route + grants beside the legacy trio, signed by the session's OWN cell key", async () => {
+    const { rpc } = await keyedDaemon();
+    const pane = TerminalOpenTicketResult.parse(
+      await rpc.call("terminal.openTicket", { sessionId: "pane-1" }),
+    );
+    // the legacy trio is untouched — the bridge keeps dialing it until S3e
+    expect(pane).toMatchObject(paperTicket("interactive"));
+    // the v2 half, bound and signed
+    expect(pane.route).toEqual({ cellBootId: "cell-i", routeRevision: 3 });
+    expect(pane.endpoints).toBeUndefined(); // no T1 doors before S3a
+    expect(verifies(KEY_I, pane.transportGrant)).toBe(true);
+    expect(verifies(KEY_I, pane.attachGrant)).toBe(true);
+    expect(verifies(KEY_A, pane.attachGrant)).toBe(false);
+    expect(pane.transportGrant.protected.kid).toEqual({ cellBootId: "cell-i", keyGeneration: 1 });
+    expect(pane.transportGrant.claims).toMatchObject({
+      audienceCellBootId: "cell-i",
+      allowedChannels: ["control", "frames"],
+      transportGrantGeneration: 1,
+    });
+    expect(pane.transportGrant.claims.clientId).toMatch(/^local-token:/);
+    expect(pane.attachGrant.claims).toMatchObject({
+      audienceCellBootId: "cell-i",
+      sessionId: "pane-1",
+      routeRevision: 3,
+      grantGeneration: 1,
+      rights: ["geometry", "input", "read"],
+    });
+    expect(pane.attachGrant.claims.clientId).toBe(pane.transportGrant.claims.clientId);
+    // the agent session's ticket comes from ITS cell and ITS key
+    const agent = TerminalOpenTicketResult.parse(
+      await rpc.call("terminal.openTicket", { sessionId: "agent-1" }),
+    );
+    expect(agent).toMatchObject(paperTicket("agent"));
+    expect(agent.route.cellBootId).toBe("cell-a");
+    expect(verifies(KEY_A, agent.attachGrant)).toBe(true);
+    expect(verifies(KEY_I, agent.attachGrant)).toBe(false);
+    expect(agent.transportGrant.claims.connectionSetId).not.toBe(
+      pane.transportGrant.claims.connectionSetId,
+    );
+    // generations are per {client, cell} and per {client, session}: both start at 1 here
+    expect(agent.transportGrant.claims.transportGrantGeneration).toBe(1);
+    expect(agent.attachGrant.claims.grantGeneration).toBe(1);
+  });
+
+  it("every openTicket carries a FRESH transport grant; the connection set is stable; generations climb", async () => {
+    const { rpc } = await keyedDaemon();
+    const first = TerminalOpenTicketResult.parse(
+      await rpc.call("terminal.openTicket", { sessionId: "pane-1" }),
+    );
+    const second = TerminalOpenTicketResult.parse(
+      await rpc.call("terminal.openTicket", { sessionId: "pane-1" }),
+    );
+    expect(second.transportGrant.claims.connectionSetId).toBe(
+      first.transportGrant.claims.connectionSetId,
+    );
+    expect(second.transportGrant.claims.transportGrantGeneration).toBe(2);
+    expect(second.transportGrant.claims.nonce).not.toBe(first.transportGrant.claims.nonce);
+    expect(second.attachGrant.claims.grantGeneration).toBe(2);
+    expect(second.transportGrant.mac).not.toBe(first.transportGrant.mac);
+  });
+
+  it("renewAttach is a CAS on the held generation and idempotent by requestId", async () => {
+    const { rpc, dataDir } = await keyedDaemon();
+    const opened = TerminalOpenTicketResult.parse(
+      await rpc.call("terminal.openTicket", { sessionId: "pane-1" }),
+    );
+    expect(opened.attachGrant.claims.grantGeneration).toBe(1);
+    const renewed = (await rpc.call("terminal.renewAttach", {
+      sessionId: "pane-1",
+      expectGeneration: 1,
+      requestId: "r-1",
+    })) as { attachGrant: typeof opened.attachGrant };
+    expect(renewed.attachGrant.claims.grantGeneration).toBe(2);
+    expect(renewed.attachGrant.claims.clientId).toBe(opened.attachGrant.claims.clientId);
+    expect(verifies(KEY_I, renewed.attachGrant)).toBe(true);
+    const retried = (await rpc.call("terminal.renewAttach", {
+      sessionId: "pane-1",
+      expectGeneration: 1,
+      requestId: "r-1",
+    })) as { attachGrant: typeof opened.attachGrant };
+    expect(retried.attachGrant.mac).toBe(renewed.attachGrant.mac);
+    const stale = await rpc.callErr("terminal.renewAttach", {
+      sessionId: "pane-1",
+      expectGeneration: 1,
+      requestId: "r-2",
+    });
+    expect(stale.data?.kind).toBe("CONFLICT");
+    const ghost = await rpc.callErr("terminal.renewAttach", {
+      sessionId: "ghost",
+      expectGeneration: 0,
+      requestId: "r-3",
+    });
+    expect(ghost.data?.kind).toBe("NOT_FOUND");
+    const malformed = await rpc.callErr("terminal.renewAttach", { sessionId: "pane-1" });
+    expect(malformed.data?.kind).toBe("PRECONDITION_FAILED");
+    // every renewal is on the record beside the mints
+    const actions = (await readAuditActions(dataDir)).filter((a) => a.startsWith("terminal."));
+    expect(actions).toContain("terminal.attach.renew");
+    expect(actions).toContain("terminal.ticket.mint");
+  });
+
+  it("create answers with the spread route + grants for the cell the session landed on", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.terminalRoutes = keyedRoutes(9, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-f",
+        endpoints: floor.endpoints,
+        workloadClass: "interactive",
+        role: "class",
+        grantKey: KEY_I,
+      },
+    ]);
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["terminal.attach"], "tp-s1-create");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const created = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
+    expect(created.sessionId).toBe(floor.createdSessionId);
+    expect(created.ticket).toMatchObject({
+      controlSocket: floor.endpoints.controlSocket,
+      frameSocket: floor.endpoints.frameSocket,
+      token: floor.endpoints.authToken,
+    });
+    expect(created.route).toEqual({ cellBootId: "cell-f", routeRevision: 9 });
+    expect(created.attachGrant.claims.sessionId).toBe(floor.createdSessionId);
+    expect(verifies(KEY_I, created.attachGrant)).toBe(true);
+    expect(verifies(KEY_I, created.transportGrant)).toBe(true);
+  });
+
+  it("a keyless floor answers the legacy trio ALONE and says grants are not landed", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.terminalRoutes = cellRoutes(1, "cell-old", paperEndpoints("old"));
+    mock.observedState = observed([
+      { sessionId: "s1", cell: cellTag(1, "cell-old", "interactive") },
+    ]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["terminal.attach"], "tp-s1-legacy");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const answer = await rpc.call("terminal.openTicket", { sessionId: "s1" });
+    expect(TerminalOpenTicketResult.safeParse(answer).success).toBe(false);
+    expect(TerminalTicket.safeParse(answer).success).toBe(true);
+    expect(answer).toEqual(paperTicket("old")); // no half ticket — no route, no grants
+    const renew = await rpc.callErr("terminal.renewAttach", {
+      sessionId: "s1",
+      expectGeneration: 0,
+      requestId: "r-1",
+    });
+    expect(renew.data?.kind).toBe("UNAVAILABLE");
+    expect((renew.data?.details as { state?: string } | undefined)?.state).toBe(
+      "grants_not_landed",
+    );
+  });
+
+  it("the roster projects id/class/health/title and NEVER placement; unobserved refuses", async () => {
+    const { rpc } = await keyedDaemon();
+    const roster = TerminalRosterResult.parse(await rpc.call("terminal.roster", {}));
+    expect(roster.items).toEqual([
+      { sessionId: "pane-1", workloadClass: "interactive", health: "live", title: "zsh" },
+      { sessionId: "agent-1", workloadClass: "agent", health: "live" },
+    ]);
+    for (const item of roster.items) {
+      expect("cell" in item).toBe(false);
+      expect("cellBootId" in item).toBe(false);
+    }
+    expect(roster.observation).toBeDefined();
+    // the transport-facing inventory still carries the cell tag — two projections
+    const list = (await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] };
+    expect(list.terminals[0]?.cell?.cellBootId).toBe("cell-i");
+
+    // before the first observation the roster refuses exactly like list
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.helloTerminal = ENDPOINTS;
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["terminal.attach"], "tp-s1-unobserved");
+    const cold = await openRpc(daemon.controlPort);
+    await helloAs(cold, grant.token);
+    const unobserved = await cold.callErr("terminal.roster", {});
+    expect(unobserved.data?.kind).toBe("UNAVAILABLE");
+    expect((unobserved.data?.details as { state?: string } | undefined)?.state).toBe("unobserved");
   });
 });

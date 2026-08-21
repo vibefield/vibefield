@@ -1877,6 +1877,11 @@ async fn run_cell_generation_inner(
     // not color this generation (the cell also fences by boot id).
     let _ = std::fs::remove_file(crumb);
     let token = mint_token();
+    // TP-S1 — the per-cell-boot GRANT KEY beside the token: the HMAC-SHA256
+    // key under every TPv3 grant fieldd issues for this cell. It rides the
+    // route row over the paired mgmt channel and nowhere else (EL7: never env,
+    // never disk, never logs); the cell receives it at spawn from TP-S3a on.
+    let grant_key = mint_grant_key();
     let mut child = match tokio::process::Command::new(bin)
         .arg("--control")
         .arg(control)
@@ -1971,6 +1976,8 @@ async fn run_cell_generation_inner(
                 auth_token: token.clone(),
             },
             token_generation: i64::from(instance),
+            grant_key: Some(grant_key),
+            grant_key_generation: Some(1),
             workload_class: Some(plan.class),
             role: Some(plan.role),
         },
@@ -3058,6 +3065,13 @@ fn mint_token() -> String {
     hex::encode(rand::random::<[u8; 32]>())
 }
 
+/// TP-S1 — a per-cell-boot grant key: 32 random bytes, hex, distinct from the
+/// cell token it travels beside (same custody, different purpose: the token
+/// authenticates the legacy doors; the key signs TPv3 grants).
+fn mint_grant_key() -> String {
+    hex::encode(rand::random::<[u8; 32]>())
+}
+
 /// The 0700 run directory is the real boundary, but a socket the owning user
 /// alone may open costs one syscall and does not rely on the directory staying
 /// that way. Unix-only by nature: the windows pipes get their CurrentUserOnly
@@ -3547,6 +3561,18 @@ mod tests {
     /// The snapshot's deterministic order IS the create-target discipline's
     /// substrate: interactive class first (the legacy mirror's cell), agent
     /// class second, solos last by instance.
+    /// TP-S1 — the grant key is 32 bytes of hex and fresh per mint: two cell
+    /// boots never share a key (the kid is `{cellBootId, 1}`).
+    #[test]
+    fn grant_key_is_32_hex_bytes_and_fresh_per_mint() {
+        let a = mint_grant_key();
+        let b = mint_grant_key();
+        assert_eq!(a.len(), 64);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(a, b);
+        assert_ne!(a, mint_token());
+    }
+
     #[test]
     fn route_rows_compose_interactive_first_then_agent_then_solos() {
         fn row(
@@ -3564,6 +3590,8 @@ mod tests {
                     auth_token: "t".into(),
                 },
                 token_generation: i64::from(instance),
+                grant_key: None,
+                grant_key_generation: None,
                 workload_class: Some(class),
                 role: Some(role),
             }

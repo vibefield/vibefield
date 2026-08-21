@@ -109,6 +109,16 @@ export const TerminalRouteCell = z
      * ordering key `authToken` was accidentally serving as (GT-5b's rotation
      * checks keyed on the token value; a generation is comparable). */
     tokenGeneration: z.number().int(),
+    /** TP-S1 (terminal-pipeline-v3 §5.1) — the per-cell-boot GRANT KEY: 32
+     * random bytes, hex, minted by the floor at every cell start beside the
+     * token; the HMAC-SHA256 key under every TPv3 grant fieldd issues for this
+     * cell (`kid = {cellBootId, grantKeyGeneration}`). Same custody as
+     * `authToken` (NF-D8/EL7: the paired mgmt channel only — never env, disk
+     * or logs). ABSENT on a pre-TP floor and on the in-process serve; a reader
+     * without it mints NO grants (the honest answer), never a half ticket. */
+    grantKey: z.string().optional(),
+    /** `kid.keyGeneration` — 1 per cell boot today; rotation = a new boot. */
+    grantKeyGeneration: z.number().int().optional(),
     /** TC-S3 — which class this cell hosts. ABSENT = a pre-TC-S3 single-cell
      * floor (every class lands there); tolerant readers route accordingly. */
     workloadClass: TerminalWorkloadClass.optional(),

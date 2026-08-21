@@ -195,7 +195,10 @@ describe("the terminal seam (NF-3, real field-native)", () => {
     const attach = (await rpc.call("terminal.openTicket", {
       sessionId: created.sessionId,
     })) as TerminalTicket;
-    expect(attach).toEqual(created.ticket);
+    // TP-S1: the legacy trio is UNCHANGED, and the TPv3 route + grants ride
+    // beside it (signed with the REAL cell's key — the floor minted one), so
+    // this is a subset match, not an equality.
+    expect(attach).toMatchObject(created.ticket);
 
     await rpc.call("terminal.terminate", { sessionId: created.sessionId });
   }, 60_000);
