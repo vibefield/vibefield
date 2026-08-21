@@ -1,0 +1,13 @@
+{
+  "activationId": "act-01",
+  "workerStatusSequence": 3,
+  "state": "active",
+  "sceneContent": {
+    "sceneEpoch": {
+      "cellBootId": "cb-7f3a9c1e-2026",
+      "modelGeneration": 0
+    },
+    "sceneRevision": 4417
+  },
+  "leaseTtlMs": 3000
+}

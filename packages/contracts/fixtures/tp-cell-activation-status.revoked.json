@@ -1,0 +1,14 @@
+{
+  "sessionId": "sess-01J8Z3K9",
+  "activationId": "act-01",
+  "cellStatusSequence": 9,
+  "leaseTtlMs": 3000,
+  "presentation": {
+    "state": "revoked",
+    "reason": "stale-route"
+  },
+  "input": {
+    "state": "revoked",
+    "reason": "stale-route"
+  }
+}

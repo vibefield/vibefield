@@ -1,0 +1,9 @@
+{
+  "sessionId": "sess-01J8Z3K9",
+  "activationId": "act-01",
+  "leaseEpoch": 4,
+  "demandSequence": 2,
+  "demand": {
+    "mode": "none"
+  }
+}

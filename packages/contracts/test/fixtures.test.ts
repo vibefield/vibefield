@@ -47,6 +47,30 @@ import {
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
 import { TerminalCreateParams, TerminalTicket } from "../src/terminal";
+import {
+  AttachControlLeg,
+  AttachFramesLeg,
+  CellActivationStatus,
+  CellTransportGrant,
+  ClaimGeometry,
+  ConnectionAccepted,
+  ConnectionHello,
+  ConnectionRefused,
+  ControlLegAttached,
+  DeclareDemand,
+  FramesLegAttached,
+  GeometryCommitted,
+  PresentationEnvelopeHeader,
+  PresentationStatus,
+  ProductSessionRosterItem,
+  SceneApplied,
+  SessionAttachGrant,
+  TerminalCreateOpenResult,
+  TerminalOpenTicketResult,
+  TerminalRenewAttachParams,
+  TransferGeometry,
+  TransportCredit,
+} from "../src/terminal-pipeline";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 
@@ -95,6 +119,29 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "terminal-ticket": TerminalTicket,
   "terminal-routes": TerminalRouteSnapshot,
   "terminal-create-params": TerminalCreateParams,
+  // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
+  "tp-transport-grant": CellTransportGrant,
+  "tp-attach-grant": SessionAttachGrant,
+  "tp-open-ticket": TerminalOpenTicketResult,
+  "tp-create-open": TerminalCreateOpenResult,
+  "tp-renew-attach-params": TerminalRenewAttachParams,
+  "tp-connection-hello": ConnectionHello,
+  "tp-connection-accepted": ConnectionAccepted,
+  "tp-connection-refused": ConnectionRefused,
+  "tp-attach-control-leg": AttachControlLeg,
+  "tp-control-leg-attached": ControlLegAttached,
+  "tp-attach-frames-leg": AttachFramesLeg,
+  "tp-frames-leg-attached": FramesLegAttached,
+  "tp-scene-applied": SceneApplied,
+  "tp-cell-activation-status": CellActivationStatus,
+  "tp-presentation-status": PresentationStatus,
+  "tp-declare-demand": DeclareDemand,
+  "tp-claim-geometry": ClaimGeometry,
+  "tp-transfer-geometry": TransferGeometry,
+  "tp-geometry-committed": GeometryCommitted,
+  "tp-transport-credit": TransportCredit,
+  "tp-roster-item": ProductSessionRosterItem,
+  "tp-envelope-header": PresentationEnvelopeHeader,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

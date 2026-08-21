@@ -24,4 +24,5 @@ export * from "./plugins";
 export * from "./registries";
 export * from "./shell";
 export * from "./terminal";
+export * from "./terminal-pipeline";
 export * from "./users";

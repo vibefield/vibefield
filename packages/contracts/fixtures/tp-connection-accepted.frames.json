@@ -1,0 +1,33 @@
+{
+  "selectedProtocolVersion": {
+    "major": 1,
+    "minor": 0
+  },
+  "connectionSetId": "cs-win-3c4d-2-cb-7f3a9c1e",
+  "channel": "frames",
+  "legGeneration": 1,
+  "heartbeatTtlMs": 6000,
+  "creditEpoch": 1,
+  "initialWindows": {
+    "connectionCreditBytes": 4194304,
+    "perActivationCreditBytes": 1048576,
+    "stagingBytesPerSession": 16777216,
+    "stagingBytesTotal": 33554432,
+    "maxConcurrentActivations": 64,
+    "maxConcurrentSeeds": 2
+  },
+  "protocolLimits": {
+    "maxControlMessageBytes": 65536,
+    "maxPresentationChunkBytes": 262144,
+    "maxBatchLatencyMs": 8,
+    "maxCreditReturnDelayMs": 16,
+    "maxSceneAppliedDelayMs": 250,
+    "sceneAppliedRefreshMs": 1000,
+    "presentationStatusRefreshMs": 1000,
+    "activationAttachDeadlineMs": 5000,
+    "maxActivationCatchupMs": 3000,
+    "maxCatchupBytes": 16777216,
+    "creditAccountDrainTtlMs": 10000
+  },
+  "capabilities": ["resume"]
+}

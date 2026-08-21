@@ -1,0 +1,28 @@
+{
+  "note": "TPv3 presentation envelope binary framing — 'T','P',version=1,reserved=0,u32BE headerLen, UTF-8 JSON header, payload; chargedBytes = whole message length",
+  "header": {
+    "creditEpoch": 1,
+    "activationSequence": 88,
+    "sessionId": "sess-01J8Z3K9",
+    "activationId": "act-01",
+    "leaseEpoch": 4,
+    "kind": "trf1-frame",
+    "baseContent": {
+      "sceneEpoch": {
+        "cellBootId": "cb-7f3a9c1e-2026",
+        "modelGeneration": 0
+      },
+      "sceneRevision": 4416
+    },
+    "resultContent": {
+      "sceneEpoch": {
+        "cellBootId": "cb-7f3a9c1e-2026",
+        "modelGeneration": 0
+      },
+      "sceneRevision": 4417
+    }
+  },
+  "payloadHex": "5452463100010203ff10",
+  "wireBase64": "VFABAAAAAVJ7ImNyZWRpdEVwb2NoIjoxLCJhY3RpdmF0aW9uU2VxdWVuY2UiOjg4LCJzZXNzaW9uSWQiOiJzZXNzLTAxSjhaM0s5IiwiYWN0aXZhdGlvbklkIjoiYWN0LTAxIiwibGVhc2VFcG9jaCI6NCwia2luZCI6InRyZjEtZnJhbWUiLCJiYXNlQ29udGVudCI6eyJzY2VuZUVwb2NoIjp7ImNlbGxCb290SWQiOiJjYi03ZjNhOWMxZS0yMDI2IiwibW9kZWxHZW5lcmF0aW9uIjowfSwic2NlbmVSZXZpc2lvbiI6NDQxNn0sInJlc3VsdENvbnRlbnQiOnsic2NlbmVFcG9jaCI6eyJjZWxsQm9vdElkIjoiY2ItN2YzYTljMWUtMjAyNiIsIm1vZGVsR2VuZXJhdGlvbiI6MH0sInNjZW5lUmV2aXNpb24iOjQ0MTd9fVRSRjEAAQID/xA=",
+  "chargedBytes": 356
+}

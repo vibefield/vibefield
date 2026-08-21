@@ -1,0 +1,20 @@
+{
+  "sessionId": "sess-01J8Z3K9",
+  "activationId": "act-01",
+  "cellStatusSequence": 8,
+  "leaseTtlMs": 3000,
+  "acceptedContent": {
+    "sceneEpoch": {
+      "cellBootId": "cb-7f3a9c1e-2026",
+      "modelGeneration": 0
+    },
+    "sceneRevision": 4417
+  },
+  "presentation": {
+    "state": "presenting"
+  },
+  "input": {
+    "state": "suspended",
+    "reason": "lagging"
+  }
+}

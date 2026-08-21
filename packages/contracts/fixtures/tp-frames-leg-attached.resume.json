@@ -1,0 +1,26 @@
+{
+  "sessionId": "sess-01J8Z3K9",
+  "activationId": "act-02",
+  "resumeToken": "rt-9f1c",
+  "trfIdentity": {
+    "sessionHandle": "18446744073709551615",
+    "viewHandle": "7"
+  },
+  "outcome": {
+    "kind": "resume-accepted",
+    "from": {
+      "sceneEpoch": {
+        "cellBootId": "cb-7f3a9c1e-2026",
+        "modelGeneration": 0
+      },
+      "sceneRevision": 4410
+    },
+    "newestAvailable": {
+      "sceneEpoch": {
+        "cellBootId": "cb-7f3a9c1e-2026",
+        "modelGeneration": 0
+      },
+      "sceneRevision": 4417
+    }
+  }
+}

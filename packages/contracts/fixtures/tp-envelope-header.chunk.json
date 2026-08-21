@@ -1,0 +1,13 @@
+{
+  "creditEpoch": 1,
+  "activationSequence": 2,
+  "sessionId": "sess-01J8Z3K9",
+  "activationId": "act-01",
+  "leaseEpoch": 4,
+  "kind": "transfer-chunk",
+  "transfer": {
+    "transferId": "xfer-01",
+    "chunkIndex": 0,
+    "byteOffset": 0
+  }
+}

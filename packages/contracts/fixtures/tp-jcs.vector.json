@@ -1,0 +1,9 @@
+{
+  "note": "RFC 8785 (JCS) — the RFC's own example; canonicalJson(input) must equal `canonical` byte-for-byte",
+  "input": {
+    "numbers": [333333333.3333333, 1e30, 4.5, 0.002, 1e-27],
+    "string": "€$\u000f\nA'B\"\\\\\"/",
+    "literals": [null, true, false]
+  },
+  "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"€$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}"
+}
