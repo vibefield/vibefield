@@ -523,6 +523,36 @@
   line-height: 1.4;
 }
 
+/* TP-S0a, the terminal lanes' mode switch. Tokens only — the row borrows the
+   readout's instrument voice and decides no colour of its own. */
+.vf-godview-terminal-modes {
+  display: flex;
+  gap: 4px;
+  margin: 5px 0 0;
+}
+
+.vf-godview-terminal-mode {
+  flex: 1;
+  padding: 3px 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.vf-godview-terminal-mode:hover {
+  color: var(--text-main);
+}
+
+.vf-godview-terminal-mode[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text-main);
+}
+
 .vf-godview-tweak-reset {
   width: calc(100% - 22px);
   height: 26px;

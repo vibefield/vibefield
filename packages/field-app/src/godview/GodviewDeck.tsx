@@ -10,6 +10,7 @@ import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } 
 import { emitGodviewColdOpenMarker, emitGodviewDeckMarker } from "../development-console";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
+import { registerTerminalPerfSource } from "../perf/terminal-perf-source";
 import {
   retryTerminalPool,
   type TerminalFault,
@@ -355,6 +356,18 @@ export function GodviewDeck({
   useEffect(() => {
     if (consent === "go") godviewColdOpen.mark("consent");
   }, [consent]);
+
+  // TP-S0a — publish this deck's runtime as the perf sampler's source. Three
+  // lines, and deliberately additive: the sampler reaches the runtime through a
+  // module registry rather than through the React tree, so when TP-S0b moves
+  // runtime ownership to a window-level pool this registration moves with the
+  // OWNER and nothing in `perf/` changes. Registering costs nothing when no
+  // sampler is running — the registry is one slot and a set of listeners that
+  // is empty until a mode leaves `off`.
+  useEffect(() => {
+    if (runtime === null) return;
+    return registerTerminalPerfSource(runtime);
+  }, [runtime]);
 
   // The render backend announcing itself IS device-ready: the worker posts
   // `renderer-status` from `createRenderer`, after the adapter, the device and

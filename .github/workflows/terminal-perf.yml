@@ -1,0 +1,60 @@
+# TP-S0a — the worker replay microbench, per PR (spec §19.3/§19.4: "the worker
+# microbench on the corpus" runs per PR; the full lab is nightly or on demand).
+#
+# Its own workflow rather than a step in affected.yml, for two reasons that are
+# really one: a benchmark wants to run ALONE. `nx affected -t test` runs many
+# targets in parallel on a shared runner, and a number measured under that is a
+# number about the runner. This job runs the bench by itself, and it runs on
+# every PR regardless of what changed — a regression in the decode or apply path
+# can arrive from `contracts`, from a dependency bump, or from Node itself, none
+# of which show up as a change to `tooling/terminal-perf`.
+#
+# What it gates: an ORDER-OF-MAGNITUDE regression, plus the corpus's own
+# integrity (every frame must classify as `apply`; a stale or resync means a
+# fixture went bad). It does NOT gate on a percentage: §18's budgets are
+# hypotheses until the baseline is ratified, and a per-PR gate that reds on a
+# 15% move on a shared runner is a gate someone will disable. The numbers are
+# printed and uploaded so a human can see the trend before there is a threshold
+# worth enforcing.
+name: terminal-perf
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: terminal-perf-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  microbench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # No Electron, no GPU, no daemons: the corpus is committed and the bench
+      # is pure JS over it, which is the whole point of splitting stage 5 out of
+      # the lab.
+      - name: Worker replay microbench over the TRF1 corpus
+        env:
+          TERMINAL_PERF_OUT: ${{ runner.temp }}/terminal-perf.json
+          TERMINAL_PERF_RESULTS: ${{ runner.temp }}/terminal-perf
+        run: pnpm perf:terminal:bench
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: terminal-perf-${{ github.run_id }}
+          path: ${{ runner.temp }}/terminal-perf*
+          if-no-files-found: warn

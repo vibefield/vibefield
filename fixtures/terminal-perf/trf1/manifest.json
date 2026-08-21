@@ -1,0 +1,535 @@
+{
+  "version": 1,
+  "capturedAt": "2026-08-21T23:26:08.185Z",
+  "ghostteaVersion": "0.10.1",
+  "sourceCommit": "a3b86ae483528e53bddaadc1b47900fd744f1a0d",
+  "host": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "loadAvg1": 15.1
+  },
+  "limits": [
+    "The eleven `base1-port` entries are a TypeScript PORT of the TC spike's Rust generators (`draft/terminal-custody-spike/probes/base1/src/traces.rs`), replayed into a real cell. The spike's corpus is 11 generators exercised as 22 cases (11 traces x 2 viewport positions, `LEDGER.md:1162`), not the 22 byte traces spec §19.2 line 1622 describes, and nothing in it was ever recorded from a real program.",
+    "The `recorded` entries are live recordings and are NOT byte-reproducible; the manifest carries the exact argv so a re-run is a run, not a guess.",
+    "nvim, htop and an agent TUI are not installed on the capture host. Their CLASSES are covered by vim, top and alt-animation; the programs themselves are not in this corpus.",
+    "Cadence is the CELL's, not a display's: the cell coalesces damage, so `framesPerSecond` is the fixture's own emission rate.",
+    "Frames are stored verbatim. TRF1's reader is exact-version (`ghosttea-frame/dist/index.js:41`), so this corpus is readable only by ghosttea 0.10.1's frame protocol version."
+  ],
+  "entries": [
+    {
+      "name": "mode-setter",
+      "file": "mode-setter.trf1",
+      "covers": "mode/tab-stop/margin/title state",
+      "cols": 100,
+      "rows": 30,
+      "frames": 141,
+      "bytes": 2747459,
+      "durationMs": 5447.79,
+      "framesPerSecond": 25.88,
+      "meanFrameBytes": 19486,
+      "maxFrameBytes": 27934,
+      "fullSnapshots": 1,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts mode-setter (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 2189
+      },
+      "cadence": {
+        "mode": "accelerated",
+        "bytesPerSecond": 24000,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "mode/tab-stop/margin/title state"
+      ]
+    },
+    {
+      "name": "alternate-screen-active",
+      "file": "alternate-screen-active.trf1",
+      "covers": "alt-screen switching, ends in alt",
+      "cols": 100,
+      "rows": 30,
+      "frames": 269,
+      "bytes": 1998305,
+      "durationMs": 5363.51,
+      "framesPerSecond": 50.15,
+      "meanFrameBytes": 7429,
+      "maxFrameBytes": 11537,
+      "fullSnapshots": 50,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts alternate-screen-active (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 1387
+      },
+      "cadence": {
+        "mode": "accelerated",
+        "bytesPerSecond": 16000,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "alt-screen switching, ends in alt"
+      ]
+    },
+    {
+      "name": "alternate-screen-exited",
+      "file": "alternate-screen-exited.trf1",
+      "covers": "alt-screen switching, returns to primary",
+      "cols": 100,
+      "rows": 30,
+      "frames": 300,
+      "bytes": 2213165,
+      "durationMs": 4846.6,
+      "framesPerSecond": 61.9,
+      "meanFrameBytes": 7377,
+      "maxFrameBytes": 11537,
+      "fullSnapshots": 58,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts alternate-screen-exited (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 1412
+      },
+      "cadence": {
+        "mode": "accelerated",
+        "bytesPerSecond": 16000,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "alt-screen switching, returns to primary"
+      ]
+    },
+    {
+      "name": "query",
+      "file": "query.trf1",
+      "covers": "DSR/CPR query round trips",
+      "cols": 100,
+      "rows": 30,
+      "frames": 300,
+      "bytes": 1334489,
+      "durationMs": 2944.3,
+      "framesPerSecond": 101.89,
+      "meanFrameBytes": 4448,
+      "maxFrameBytes": 16436,
+      "fullSnapshots": 293,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts query (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 271
+      },
+      "cadence": {
+        "mode": "accelerated",
+        "bytesPerSecond": 8000,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "DSR/CPR query round trips"
+      ]
+    },
+    {
+      "name": "fragmenter",
+      "file": "fragmenter.trf1",
+      "covers": "unicode + escape atoms interleaved",
+      "cols": 100,
+      "rows": 30,
+      "frames": 268,
+      "bytes": 429029,
+      "durationMs": 5470.33,
+      "framesPerSecond": 48.99,
+      "meanFrameBytes": 1601,
+      "maxFrameBytes": 4794,
+      "fullSnapshots": 245,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts fragmenter (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 2618
+      },
+      "cadence": {
+        "mode": "accelerated",
+        "bytesPerSecond": 12000,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "unicode + escape atoms interleaved"
+      ]
+    },
+    {
+      "name": "counter",
+      "file": "counter.trf1",
+      "covers": "plain append-only lines",
+      "cols": 100,
+      "rows": 30,
+      "frames": 16,
+      "bytes": 407131,
+      "durationMs": 5460.07,
+      "framesPerSecond": 2.93,
+      "meanFrameBytes": 25446,
+      "maxFrameBytes": 30536,
+      "fullSnapshots": 14,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts counter (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 3013
+      },
+      "cadence": {
+        "mode": "accelerated",
+        "bytesPerSecond": 24000,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "plain append-only lines"
+      ]
+    },
+    {
+      "name": "bulk-styled",
+      "file": "bulk-styled.trf1",
+      "covers": "styled scrollback flood (yes/cat class)",
+      "cols": 100,
+      "rows": 30,
+      "frames": 28,
+      "bytes": 729180,
+      "durationMs": 5492.78,
+      "framesPerSecond": 5.1,
+      "meanFrameBytes": 26042,
+      "maxFrameBytes": 36988,
+      "fullSnapshots": 27,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts bulk-styled (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 65561
+      },
+      "cadence": {
+        "mode": "asFastAsPossible",
+        "bytesPerSecond": 0,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "styled scrollback flood (yes/cat class)"
+      ]
+    },
+    {
+      "name": "redraw-heavy",
+      "file": "redraw-heavy.trf1",
+      "covers": "one-line redraw churn (progress bar / cargo build class)",
+      "cols": 100,
+      "rows": 30,
+      "frames": 300,
+      "bytes": 4806875,
+      "durationMs": 4844.53,
+      "framesPerSecond": 61.93,
+      "meanFrameBytes": 16023,
+      "maxFrameBytes": 17161,
+      "fullSnapshots": 296,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts redraw-heavy (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 100982
+      },
+      "cadence": {
+        "mode": "asFastAsPossible",
+        "bytesPerSecond": 0,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "one-line redraw churn (progress bar / cargo build class)"
+      ]
+    },
+    {
+      "name": "alt-animation",
+      "file": "alt-animation.trf1",
+      "covers": "full-grid alt-screen repaint (htop / TUI class)",
+      "cols": 100,
+      "rows": 30,
+      "frames": 193,
+      "bytes": 6274230,
+      "durationMs": 4553.54,
+      "framesPerSecond": 42.38,
+      "meanFrameBytes": 32509,
+      "maxFrameBytes": 48264,
+      "fullSnapshots": 7,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts alt-animation (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 311165
+      },
+      "cadence": {
+        "mode": "accelerated",
+        "bytesPerSecond": 400000,
+        "targetMs": 6000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "full-grid alt-screen repaint (htop / TUI class)"
+      ]
+    },
+    {
+      "name": "alt-animation-exited",
+      "file": "alt-animation-exited.trf1",
+      "covers": "alt-screen animation that exits to primary",
+      "cols": 100,
+      "rows": 30,
+      "frames": 188,
+      "bytes": 6262649,
+      "durationMs": 4681.36,
+      "framesPerSecond": 40.16,
+      "meanFrameBytes": 33312,
+      "maxFrameBytes": 47530,
+      "fullSnapshots": 22,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts alt-animation-exited (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 96250
+      },
+      "cadence": {
+        "mode": "accelerated",
+        "bytesPerSecond": 400000,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "alt-screen animation that exits to primary"
+      ]
+    },
+    {
+      "name": "softwrap",
+      "file": "softwrap.trf1",
+      "covers": "soft-wrap continuation rows",
+      "cols": 100,
+      "rows": 30,
+      "frames": 90,
+      "bytes": 6222172,
+      "durationMs": 2161.51,
+      "framesPerSecond": 41.64,
+      "meanFrameBytes": 69135,
+      "maxFrameBytes": 73740,
+      "fullSnapshots": 87,
+      "source": {
+        "kind": "base1-port",
+        "detail": "byte-traces.ts softwrap (seed 1, scale 1) via replay-program.mjs",
+        "byteLength": 10451
+      },
+      "cadence": {
+        "mode": "accelerated",
+        "bytesPerSecond": 40000,
+        "targetMs": 5000
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "soft-wrap continuation rows"
+      ]
+    },
+    {
+      "name": "vim-edit",
+      "file": "vim-edit.trf1",
+      "covers": "editor: alt-screen, cursor motion, partial-row damage, status line",
+      "cols": 100,
+      "rows": 30,
+      "frames": 13,
+      "bytes": 59958,
+      "durationMs": 2539.99,
+      "framesPerSecond": 5.12,
+      "meanFrameBytes": 4612,
+      "maxFrameBytes": 22539,
+      "fullSnapshots": 2,
+      "source": {
+        "kind": "recorded",
+        "detail": "/usr/bin/vim -u NONE -N -c set number ruler laststatus=2",
+        "byteLength": 0
+      },
+      "cadence": {
+        "mode": "recorded",
+        "bytesPerSecond": 0,
+        "targetMs": 0
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "editor: alt-screen, cursor motion, partial-row damage, status line"
+      ]
+    },
+    {
+      "name": "top-repaint",
+      "file": "top-repaint.trf1",
+      "covers": "process monitor: whole-viewport repaint on a timer (htop class)",
+      "cols": 100,
+      "rows": 30,
+      "frames": 19,
+      "bytes": 615951,
+      "durationMs": 21338.11,
+      "framesPerSecond": 0.89,
+      "meanFrameBytes": 32418,
+      "maxFrameBytes": 43596,
+      "fullSnapshots": 18,
+      "source": {
+        "kind": "recorded",
+        "detail": "/usr/bin/top -l 6 -s 1",
+        "byteLength": 0
+      },
+      "cadence": {
+        "mode": "recorded",
+        "bytesPerSecond": 0,
+        "targetMs": 0
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "process monitor: whole-viewport repaint on a timer (htop class)"
+      ]
+    },
+    {
+      "name": "git-log-scroll",
+      "file": "git-log-scroll.trf1",
+      "covers": "scrollback growth from a long coloured log",
+      "cols": 100,
+      "rows": 30,
+      "frames": 18,
+      "bytes": 911441,
+      "durationMs": 6765.83,
+      "framesPerSecond": 2.66,
+      "meanFrameBytes": 50636,
+      "maxFrameBytes": 67005,
+      "fullSnapshots": 17,
+      "source": {
+        "kind": "recorded",
+        "detail": "/bin/sh -c end=$(($(date +%s) + 5)); while [ $(date +%s) -lt $end ]; do\ngit -P -c color.ui=always log --oneline --graph --decorate -n 400\ndone",
+        "byteLength": 0
+      },
+      "cadence": {
+        "mode": "recorded",
+        "bytesPerSecond": 0,
+        "targetMs": 0
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "scrollback growth from a long coloured log"
+      ]
+    },
+    {
+      "name": "yes-flood",
+      "file": "yes-flood.trf1",
+      "covers": "unbounded output at pty speed — the coalescing arm",
+      "cols": 100,
+      "rows": 30,
+      "frames": 154,
+      "bytes": 6286253,
+      "durationMs": 3190.93,
+      "framesPerSecond": 48.26,
+      "meanFrameBytes": 40820,
+      "maxFrameBytes": 50185,
+      "fullSnapshots": 154,
+      "source": {
+        "kind": "recorded",
+        "detail": "/bin/sh -c end=$(($(date +%s) + 5)); while [ $(date +%s) -lt $end ]; do\nyes 'the quick brown fox jumps over the lazy dog 0123456789' | head -c 8000000\ndone",
+        "byteLength": 0
+      },
+      "cadence": {
+        "mode": "recorded",
+        "bytesPerSecond": 0,
+        "targetMs": 0
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "unbounded output at pty speed — the coalescing arm"
+      ]
+    },
+    {
+      "name": "unicode-wall",
+      "file": "unicode-wall.trf1",
+      "covers": "emoji, CJK, box drawing and combining marks at width",
+      "cols": 100,
+      "rows": 30,
+      "frames": 250,
+      "bytes": 6266933,
+      "durationMs": 3978.4,
+      "framesPerSecond": 62.84,
+      "meanFrameBytes": 25068,
+      "maxFrameBytes": 44669,
+      "fullSnapshots": 250,
+      "source": {
+        "kind": "recorded",
+        "detail": "/bin/sh -c end=$(($(date +%s) + 5)); while [ $(date +%s) -lt $end ]; do\ni=0\nwhile [ $i -lt 120 ]; do\n  printf \"\\033[3%dm┌──────┬──────┐ 日本語テキスト %s\\033[0m\\r\\n\" $((i % 8)) \"$i\"\n  printf \"│ 🌍🚀 │ héllo│ Ω≈ç√∫˜µ≤≥ ﬁﬂ \\r\\n\"\n  printf \"└──────┴──────┘ e\\314\\201a\\314\\200o\\314\\202u\\314\\210 ｆｕｌｌｗｉｄｔｈ\\r\\n\"\n  i=$((i + 1))\ndone\ndone",
+        "byteLength": 0
+      },
+      "cadence": {
+        "mode": "recorded",
+        "bytesPerSecond": 0,
+        "targetMs": 0
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "emoji, CJK, box drawing and combining marks at width"
+      ]
+    },
+    {
+      "name": "ls-recursive",
+      "file": "ls-recursive.trf1",
+      "covers": "fast bursty output with colour runs — the everyday command class",
+      "cols": 100,
+      "rows": 30,
+      "frames": 98,
+      "bytes": 3813807,
+      "durationMs": 4756.7,
+      "framesPerSecond": 20.6,
+      "meanFrameBytes": 38916,
+      "maxFrameBytes": 50874,
+      "fullSnapshots": 97,
+      "source": {
+        "kind": "recorded",
+        "detail": "/bin/sh -c end=$(($(date +%s) + 5)); while [ $(date +%s) -lt $end ]; do\nls -laR packages plugins tooling 2>/dev/null | head -n 4000\ndone",
+        "byteLength": 0
+      },
+      "cadence": {
+        "mode": "recorded",
+        "bytesPerSecond": 0,
+        "targetMs": 0
+      },
+      "daemonMessages": [
+        "subscription-ack"
+      ],
+      "notes": [
+        "fast bursty output with colour runs — the everyday command class"
+      ]
+    }
+  ],
+  "totals": {
+    "entries": 17,
+    "frames": 2645,
+    "bytes": 51379027
+  }
+}

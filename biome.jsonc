@@ -16,9 +16,17 @@
     // substitution pass has run. What biome DOES check is the output: every
     // scaffold lands as workspace source, and `test/output-conformance.test.ts`
     // asserts the substituted tree parses and carries no leftover token.
+    //
+    // `fixtures/terminal-perf` is generated the same way `packages/contracts/gen`
+    // is: the TRF1 corpus and its manifest are written by
+    // `pnpm perf:terminal:capture` from a real cell's output, so formatting them
+    // by hand would be undone by the next capture and formatting them IN the
+    // capture would be teaching a recorder about biome. The `.trf1` files are
+    // binary; the manifest is `JSON.stringify(…, null, 2)`.
     "includes": [
       "**",
       "!packages/contracts/gen",
+      "!fixtures/terminal-perf",
       "!**/vibefield.plugin.json",
       "!tooling/create-plugin/template"
     ]

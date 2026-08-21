@@ -1,0 +1,33 @@
+{
+  "name": "@vibefield/terminal-perf",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./container": "./src/trf1-container.ts",
+    "./bench": "./src/bench.ts"
+  },
+  "bin": {
+    "terminal-perf": "./bin/terminal-perf.mjs"
+  },
+  "scripts": {
+    "bench": "vitest run --config vitest.bench.config.ts",
+    "capture": "vitest run --config vitest.capture.config.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibecook/ghosttea-client": "*",
+    "@vibecook/ghosttea-frame": "*",
+    "@vibefield/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/ws": "^8.5.0",
+    "@vibefield/fieldd": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "ws": "^8.18.0"
+  }
+}

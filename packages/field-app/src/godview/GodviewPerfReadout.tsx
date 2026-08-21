@@ -1,6 +1,7 @@
 import { type ReactElement, useEffect, useState } from "react";
 import { type FrameStatsSample, startFrameStats } from "../perf/frame-stats";
 import { COLD_OPEN_PHASES, type ColdOpenReport, godviewColdOpen } from "./cold-open";
+import { GodviewTerminalLanes } from "./GodviewTerminalLanes";
 import { getLabSwitches, type LabSwitches, setLabSwitches, useLabSwitches } from "./lab-switches";
 
 // THE LAB'S PERF READOUT (GT-3p) — the instrument GT-D15.4 measures with.
@@ -110,6 +111,12 @@ export function GodviewPerfReadout({
       <p className="vf-godview-perf-note">renderer · {rendererBackend ?? "no deck opened yet"}</p>
 
       <ColdOpenRows report={report} />
+
+      {/* TP-S0a — the terminal stage lanes. They sit here rather than in their
+          own panel because the question they answer is the same one the frame
+          stats answer, one hop further down: frames are late, and the terminal
+          lanes say whether the terminal plane is where the time went. */}
+      <GodviewTerminalLanes />
 
       <label className="vf-godview-tweak-check">
         <span>Monitor stage</span>
