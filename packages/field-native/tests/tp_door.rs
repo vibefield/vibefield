@@ -481,8 +481,9 @@ async fn anything_beyond_the_connection_layer_is_an_honest_protocol_close() {
     let m = minter();
     let door = Door::serve(config(&m)).await.expect("serve");
 
-    // a KNOWN control message the S3b door does not serve yet (the geometry
-    // verbs are S3c's): an honest PROTOCOL close naming the slice
+    // a geometry verb IS served now (S3c): a claim naming an activation this leg
+    // never attached is a STRUCTURED refusal (NOT_HOLDER) and the leg LIVES — not
+    // a protocol close.
     let g1 = m.transport(TransportSpec::basic("set-i", 1, "n-i1"));
     let (mut ws, _) = dial(&door.control_url(), None).await;
     expect_accepted(say_hello(&mut ws, "control", &g1, None).await);
@@ -493,10 +494,21 @@ async fn anything_beyond_the_connection_layer_is_an_honest_protocol_close() {
     ))
     .await
     .unwrap();
+    match next_reply(&mut ws).await {
+        Reply::Text(v) => {
+            assert_eq!(v["type"], "GeometryRefused");
+            assert_eq!(v["code"], "NOT_HOLDER");
+        }
+        other => panic!("expected GeometryRefused, got {other:?}"),
+    }
+    // the leg is still alive: a bogus tag after it still earns the PROTOCOL close.
+    ws.send(Message::Text(json!({"type":"Nope"}).to_string().into()))
+        .await
+        .unwrap();
     expect_close(
         next_reply(&mut ws).await,
         4003,
-        "PROTOCOL:unsupported-at-s3b:ClaimGeometry",
+        "PROTOCOL:unknown-type:Nope",
     );
     // an attach whose grant is not a grant at all: ONE structured refusal, the leg lives
     let g1b = m.transport(TransportSpec::basic("set-i", 2, "n-i1b"));

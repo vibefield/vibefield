@@ -16,10 +16,11 @@
 
 use super::grant::{AttachClaims, AttachRight};
 use super::wire::{
-    tagged, AttachControlLeg, AttachFramesLeg, AttachRefused, CellActivationStatus,
+    tagged, AttachControlLeg, AttachFramesLeg, AttachRefused, CellActivationStatus, ClaimGeometry,
     ControlLegAttached, DeclareDemand, DemandAccepted, FramesAttachOutcome, FramesLegAttached,
-    LeaseDimension, ReceiverCapacities, SceneApplied, SceneContentStamp, SceneEpoch,
-    SourceDemandMode, TransportCredit, TrfIdentity,
+    GeometryCommitted, GeometryHolder, GeometryRefused, LeaseDimension, ReceiverCapacities,
+    ReleaseGeometry, SceneApplied, SceneContentStamp, SceneEpoch, SourceDemandMode,
+    TransferGeometry, TransportCredit, TrfIdentity,
 };
 use crate::registries::terminal_pipeline as tp;
 use std::collections::HashMap;
@@ -162,6 +163,107 @@ pub enum Effect {
     WakePump { activation_id: String },
 }
 
+// --- Geometry lease (S3c) -------------------------------------------------
+// The cell-side geometry seat for one session. The cell is the AUTHORITY —
+// occupancy ("empty seat or own"), the cell-minted `holderGeneration`, the
+// revision and its CAS, the four auto-releases — while ghosttea commits the
+// actual PTY resize under its own attachment-epoch fence. ghosttea 0.10.1 has
+// no clear-control-keep-view primitive and its `claim_control_checked` does not
+// refuse an occupied seat (it only CASes a revision), so both the occupancy rule
+// and a standalone release live here; a released seat leaves ghosttea's
+// controller inert until the next claim overwrites it (the door is the only
+// path to a resize, and it gates every one on this lease).
+
+/// The geometry seat for one session.
+#[derive(Debug, Default)]
+pub struct GeometryLease {
+    holder: Option<HolderRecord>,
+    revision: u64,
+    next_generation: u64,
+}
+
+#[derive(Debug, Clone)]
+struct HolderRecord {
+    client_id: String,
+    /// the renderer's non-reused mount id (wire identity)
+    view_id: String,
+    /// cell-minted, stable across resizes of the same seat
+    holder_generation: u64,
+    /// the ghosttea view key (== the activation id) and the control-epoch fence
+    /// a resize reuses (the attachment-epoch fence is read FRESH per verb from the
+    /// activation's view — a detach auto-releases the seat, so a stale one cannot
+    /// survive to be reused).
+    activation_id: String,
+    control_epoch: u64,
+    resize_sequence: u64,
+    cols: u16,
+    rows: u16,
+}
+
+impl HolderRecord {
+    fn wire(&self) -> GeometryHolder {
+        GeometryHolder {
+            client_id: self.client_id.clone(),
+            view_id: self.view_id.clone(),
+            holder_generation: self.holder_generation,
+        }
+    }
+}
+
+/// The ghosttea call `geometry_precheck` authorized the door to make.
+#[derive(Debug)]
+pub enum GeometryOp {
+    /// Establish (empty seat) or re-establish (transfer) the controller — a new
+    /// holder generation. Maps to `Session::claim_control_checked`.
+    Claim { cols: u16, rows: u16 },
+    /// Resize the seat this claimant already holds — no new generation. Maps to
+    /// `Session::resize_view_checked`.
+    Resize {
+        control_epoch: u64,
+        resize_sequence: u64,
+        cols: u16,
+        rows: u16,
+    },
+}
+
+/// The door's marching orders for one geometry verb: refuse now, or perform the
+/// engine op on `ghosttea_view_id` and then call `geometry_finalize`.
+#[derive(Debug)]
+pub enum GeometryDecision {
+    Refuse(Vec<Effect>),
+    Proceed(GeometryProceed),
+}
+
+#[derive(Debug)]
+pub struct GeometryProceed {
+    /// the CALLER activation (the verb's `activationId`) — where the response goes
+    pub caller_activation_id: String,
+    pub session_id: String,
+    /// the ghosttea view to act on (the claimant/destination activation id)
+    pub client_id: String,
+    pub ghosttea_view_id: String,
+    pub attachment_epoch: u64,
+    pub base_revision: u64,
+    /// the wire holder identity to announce on a successful claim/transfer
+    pub claimant_view_id: String,
+    pub op: GeometryOp,
+}
+
+/// What the engine did, handed back to `geometry_finalize`.
+#[derive(Debug)]
+pub enum GeometryOutcome {
+    /// `claim_control_checked` granted — ghosttea's freshly minted control epoch.
+    Claimed {
+        control_epoch: u64,
+        cols: u16,
+        rows: u16,
+    },
+    /// `resize_view_checked` returned (size_changed or not — both commit).
+    Resized { cols: u16, rows: u16 },
+    /// the engine refused (stale attachment epoch, view gone, read-only view).
+    EngineRefused,
+}
+
 /// One credit window: cumulative bytes admitted vs returned within the epoch.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Window {
@@ -295,6 +397,8 @@ pub struct ActivationTable {
     by_id: HashMap<String, Activation>,
     by_key: HashMap<(String, String), String>,
     credit: HashMap<u64, CreditLedger>,
+    /// the geometry seat per session (S3c)
+    geometry: HashMap<String, GeometryLease>,
     attach_deadline: Duration,
     max_activations: usize,
 }
@@ -315,6 +419,9 @@ pub struct AttachFramesInput<'a> {
     pub claims: AttachClaims,
     pub trf_identity: Option<TrfIdentity>,
     pub resume_token: String,
+    /// the session's live model generation (`Session::session_epoch()`), read by
+    /// the door — a resume whose `from` names a different epoch is `epoch-changed`.
+    pub session_epoch: u64,
 }
 
 impl ActivationTable {
@@ -324,6 +431,7 @@ impl ActivationTable {
             by_id: HashMap::new(),
             by_key: HashMap::new(),
             credit: HashMap::new(),
+            geometry: HashMap::new(),
             attach_deadline: Duration::from_millis(tp::ACTIVATION_ATTACH_DEADLINE_MS),
             max_activations: tp::CELL_MAX_CONCURRENT_ACTIVATIONS as usize,
         }
@@ -433,6 +541,345 @@ impl ActivationTable {
         by_revisions || by_time
     }
 
+    // --- Geometry (S3c) ---------------------------------------------------
+
+    fn geometry_refuse(
+        leg: &LegRef,
+        code: &str,
+        current_holder: Option<GeometryHolder>,
+        geometry_revision: Option<u64>,
+    ) -> Vec<Effect> {
+        vec![Effect::Send(
+            leg.clone(),
+            tagged(
+                "GeometryRefused",
+                &GeometryRefused {
+                    code: code.to_string(),
+                    current_holder,
+                    geometry_revision,
+                },
+            ),
+        )]
+    }
+
+    /// `ClaimGeometry` (a re-claim of the same seat commits a resize). PURE: the
+    /// door performs the engine op the decision names, then `geometry_finalize`.
+    pub fn claim_geometry(&mut self, leg: &LegRef, msg: ClaimGeometry) -> GeometryDecision {
+        // Phase 1 — the caller (its own control leg, its own view). A malformed
+        // caller carries no lease context.
+        let caller = match self.by_id.get(&msg.activation_id) {
+            Some(a)
+                if a.control.connection_id == leg.connection_id
+                    && a.client_id == msg.claimant.client_id
+                    && a.session_id == msg.session_id =>
+            {
+                a
+            }
+            _ => {
+                return GeometryDecision::Refuse(Self::geometry_refuse(
+                    leg,
+                    "NOT_HOLDER",
+                    None,
+                    None,
+                ))
+            }
+        };
+        if !caller.has_right(AttachRight::Geometry) {
+            return GeometryDecision::Refuse(Self::geometry_refuse(
+                leg,
+                "RIGHT_MISSING",
+                None,
+                None,
+            ));
+        }
+        let Some((ghosttea_view_id, attachment_epoch)) = caller.view.clone() else {
+            // no presenting view (demand none) — nothing to resize
+            return GeometryDecision::Refuse(Self::geometry_refuse(
+                leg,
+                "VIEW_NOT_PRESENTING",
+                None,
+                None,
+            ));
+        };
+        let client_id = caller.client_id.clone();
+        let caller_activation_id = caller.activation_id.clone();
+        // Phase 2 — the lease.
+        let lease = self.geometry.entry(msg.session_id.clone()).or_default();
+        let holder_wire = lease.holder.as_ref().map(HolderRecord::wire);
+        if msg.expect_revision != lease.revision {
+            return GeometryDecision::Refuse(Self::geometry_refuse(
+                leg,
+                "STALE_REVISION",
+                holder_wire,
+                Some(lease.revision),
+            ));
+        }
+        let own_seat = lease.holder.as_ref().is_some_and(|h| {
+            h.client_id == msg.claimant.client_id && h.view_id == msg.claimant.view_id
+        });
+        if lease.holder.is_some() && !own_seat {
+            return GeometryDecision::Refuse(Self::geometry_refuse(
+                leg,
+                "SEAT_HELD",
+                holder_wire,
+                Some(lease.revision),
+            ));
+        }
+        let op = if own_seat {
+            let h = lease.holder.as_ref().expect("own_seat");
+            GeometryOp::Resize {
+                control_epoch: h.control_epoch,
+                resize_sequence: h.resize_sequence + 1,
+                cols: msg.cols,
+                rows: msg.rows,
+            }
+        } else {
+            GeometryOp::Claim {
+                cols: msg.cols,
+                rows: msg.rows,
+            }
+        };
+        GeometryDecision::Proceed(GeometryProceed {
+            caller_activation_id,
+            session_id: msg.session_id,
+            client_id,
+            ghosttea_view_id,
+            attachment_epoch,
+            base_revision: lease.revision,
+            claimant_view_id: msg.claimant.view_id,
+            op,
+        })
+    }
+
+    /// `TransferGeometry` — the current holder (or a `geometryAdmin` caller) hands
+    /// the seat to `to`, committing a resize as one engine claim.
+    pub fn transfer_geometry(&mut self, leg: &LegRef, msg: TransferGeometry) -> GeometryDecision {
+        // Phase 1 — the caller and its authority.
+        let (caller_is_admin, caller_client, caller_activation_id) =
+            match self.by_id.get(&msg.activation_id) {
+                Some(a)
+                    if a.control.connection_id == leg.connection_id
+                        && a.session_id == msg.session_id =>
+                {
+                    (
+                        a.has_right(AttachRight::GeometryAdmin),
+                        a.client_id.clone(),
+                        a.activation_id.clone(),
+                    )
+                }
+                _ => {
+                    return GeometryDecision::Refuse(Self::geometry_refuse(
+                        leg,
+                        "NOT_HOLDER",
+                        None,
+                        None,
+                    ))
+                }
+            };
+        // Phase 2 — the destination must hold a geometry-capable, presenting view.
+        let Some(dest_id) = self
+            .by_key
+            .get(&(msg.to.client_id.clone(), msg.session_id.clone()))
+            .cloned()
+        else {
+            return GeometryDecision::Refuse(Self::geometry_refuse(
+                leg,
+                "DESTINATION_INELIGIBLE",
+                None,
+                None,
+            ));
+        };
+        let dest = self.by_id.get(&dest_id).expect("indexed");
+        let dest_ok = dest.has_right(AttachRight::Geometry)
+            && dest.client_id == msg.to.client_id
+            && dest.view.is_some();
+        if !dest_ok {
+            return GeometryDecision::Refuse(Self::geometry_refuse(
+                leg,
+                "DESTINATION_INELIGIBLE",
+                None,
+                None,
+            ));
+        }
+        let (dest_view_id, dest_epoch) = dest.view.clone().expect("checked");
+        let dest_client = dest.client_id.clone();
+        // Phase 3 — the lease: the `from` must be the live holder, the caller its
+        // client (or admin), and the revision must match.
+        let lease = self.geometry.entry(msg.session_id.clone()).or_default();
+        let holder_wire = lease.holder.as_ref().map(HolderRecord::wire);
+        let from_is_holder = lease.holder.as_ref().is_some_and(|h| {
+            h.client_id == msg.from.client_id
+                && h.view_id == msg.from.view_id
+                && h.holder_generation == msg.from.holder_generation
+        });
+        let authorized = from_is_holder && (caller_is_admin || caller_client == msg.from.client_id);
+        if lease.holder.is_none() || !authorized {
+            return GeometryDecision::Refuse(Self::geometry_refuse(
+                leg,
+                "NOT_HOLDER",
+                holder_wire,
+                Some(lease.revision),
+            ));
+        }
+        if msg.expect_revision != lease.revision {
+            return GeometryDecision::Refuse(Self::geometry_refuse(
+                leg,
+                "STALE_REVISION",
+                holder_wire,
+                Some(lease.revision),
+            ));
+        }
+        GeometryDecision::Proceed(GeometryProceed {
+            caller_activation_id,
+            session_id: msg.session_id,
+            client_id: dest_client,
+            ghosttea_view_id: dest_view_id,
+            attachment_epoch: dest_epoch,
+            base_revision: lease.revision,
+            claimant_view_id: msg.to.view_id,
+            op: GeometryOp::Claim {
+                cols: msg.cols,
+                rows: msg.rows,
+            },
+        })
+    }
+
+    /// The door performed the engine op; commit (or refuse) the lease. The
+    /// revision CAS re-runs here in case a verb interleaved (they are serialized
+    /// per control leg, so this is the rare cross-client transfer race).
+    pub fn geometry_finalize(
+        &mut self,
+        leg: &LegRef,
+        proceed: GeometryProceed,
+        outcome: GeometryOutcome,
+    ) -> Vec<Effect> {
+        let lease = self.geometry.entry(proceed.session_id).or_default();
+        if lease.revision != proceed.base_revision {
+            return Self::geometry_refuse(
+                leg,
+                "STALE_REVISION",
+                lease.holder.as_ref().map(HolderRecord::wire),
+                Some(lease.revision),
+            );
+        }
+        match outcome {
+            GeometryOutcome::EngineRefused => Self::geometry_refuse(
+                leg,
+                "VIEW_SUPERSEDED",
+                lease.holder.as_ref().map(HolderRecord::wire),
+                Some(lease.revision),
+            ),
+            GeometryOutcome::Claimed {
+                control_epoch,
+                cols,
+                rows,
+            } => {
+                lease.next_generation += 1;
+                let record = HolderRecord {
+                    client_id: proceed.client_id,
+                    view_id: proceed.claimant_view_id,
+                    holder_generation: lease.next_generation,
+                    activation_id: proceed.ghosttea_view_id,
+                    control_epoch,
+                    resize_sequence: 0,
+                    cols,
+                    rows,
+                };
+                let wire = record.wire();
+                lease.holder = Some(record);
+                lease.revision += 1;
+                vec![Effect::Send(
+                    leg.clone(),
+                    tagged(
+                        "GeometryCommitted",
+                        &GeometryCommitted {
+                            holder: wire,
+                            geometry_revision: lease.revision,
+                            cols,
+                            rows,
+                        },
+                    ),
+                )]
+            }
+            GeometryOutcome::Resized { cols, rows } => {
+                let Some(h) = lease.holder.as_mut() else {
+                    return Self::geometry_refuse(
+                        leg,
+                        "VIEW_SUPERSEDED",
+                        None,
+                        Some(lease.revision),
+                    );
+                };
+                h.resize_sequence += 1;
+                h.cols = cols;
+                h.rows = rows;
+                let wire = h.wire();
+                lease.revision += 1;
+                vec![Effect::Send(
+                    leg.clone(),
+                    tagged(
+                        "GeometryCommitted",
+                        &GeometryCommitted {
+                            holder: wire,
+                            geometry_revision: lease.revision,
+                            cols,
+                            rows,
+                        },
+                    ),
+                )]
+            }
+        }
+    }
+
+    /// `ReleaseGeometry` — the holder yields the seat. No engine call (ghosttea
+    /// 0.10.1 has no clear-control-keep-view; its controller stays inert until
+    /// the next claim overwrites it, and every resize is gated on this lease).
+    pub fn release_geometry(&mut self, leg: &LegRef, msg: ReleaseGeometry) -> Vec<Effect> {
+        let ok_caller = self.by_id.get(&msg.activation_id).is_some_and(|a| {
+            a.control.connection_id == leg.connection_id && a.session_id == msg.session_id
+        });
+        if !ok_caller {
+            return Self::geometry_refuse(leg, "NOT_HOLDER", None, None);
+        }
+        let Some(lease) = self.geometry.get_mut(&msg.session_id) else {
+            return Self::geometry_refuse(leg, "NOT_HOLDER", None, None);
+        };
+        let is_holder = lease.holder.as_ref().is_some_and(|h| {
+            h.client_id == msg.holder.client_id
+                && h.view_id == msg.holder.view_id
+                && h.holder_generation == msg.holder.holder_generation
+        });
+        if !is_holder {
+            return Self::geometry_refuse(
+                leg,
+                "NOT_HOLDER",
+                lease.holder.as_ref().map(HolderRecord::wire),
+                Some(lease.revision),
+            );
+        }
+        lease.holder = None;
+        lease.revision += 1;
+        Vec::new()
+    }
+
+    /// Auto-release: if `activation_id` holds the seat for `session_id`, clear it
+    /// (view detach, leg death, grant expiry, liveness lapse — the four triggers).
+    /// The view detach itself clears ghosttea's controller.
+    fn release_geometry_if_held(&mut self, session_id: &str, activation_id: &str) -> bool {
+        if let Some(lease) = self.geometry.get_mut(session_id) {
+            if lease
+                .holder
+                .as_ref()
+                .is_some_and(|h| h.activation_id == activation_id)
+            {
+                lease.holder = None;
+                lease.revision += 1;
+                return true;
+            }
+        }
+        false
+    }
+
     /// `AttachControlLeg` after the grant VERIFIED and the attach high-water
     /// ADMITTED it (the door does both first — they need the verifier and the
     /// transport ledger). Returns the effects: one reply, maybe a view attach.
@@ -482,8 +929,10 @@ impl ActivationTable {
                     )];
                 }
                 let renewed = claims.grant_generation > a.grant_generation;
+                let mut dropped_geometry = false;
                 if renewed {
                     let had_input = a.has_right(AttachRight::Input);
+                    let had_geometry = a.has_right(AttachRight::Geometry);
                     a.rights = claims.rights.clone();
                     a.grant_generation = claims.grant_generation;
                     a.grant_expires_at_ms = claims.expires_at;
@@ -493,6 +942,10 @@ impl ActivationTable {
                         // a renewal in time reopens what the margin closed
                         a.input = Input::Suspended("pending");
                     }
+                    // a renewal that DROPS geometry revokes the seat at once (a
+                    // renewal that retains it keeps the holder — the activation,
+                    // and thus the seat, survives the grant bump automatically).
+                    dropped_geometry = had_geometry && !a.has_right(AttachRight::Geometry);
                     // a renewed view access may differ (read-write ⇄ read-only):
                     // the pump's view is re-attached by the door when it changes
                 }
@@ -513,6 +966,9 @@ impl ActivationTable {
                 if renewed {
                     Self::recompute_input(a, now_ms);
                     effects.push(Self::status_effect(a));
+                }
+                if dropped_geometry {
+                    self.release_geometry_if_held(&claims.session_id, &existing_id);
                 }
                 return effects;
             }
@@ -592,7 +1048,10 @@ impl ActivationTable {
                 session_id,
                 client_id: set.client_id.clone(),
                 view_id: activation_id,
-                read_write: has_input,
+                // geometry is a terminal WRITE too: ghosttea gates size control on
+                // a read-write view. The cell still gates BYTE input on the input
+                // right + the 2-D lease, so a geometry-only view never types.
+                read_write: has_input || claims.rights.contains(&AttachRight::Geometry),
             });
         }
         effects
@@ -609,7 +1068,9 @@ impl ActivationTable {
             claims,
             trf_identity,
             resume_token,
+            session_epoch,
         } = input;
+        let cell_boot_id = self.cell_boot_id.clone();
         let activation_id = msg.activation_id.clone();
         if claims.client_id != set.client_id {
             return vec![Self::refuse(
@@ -683,10 +1144,24 @@ impl ActivationTable {
                         kind: "seed-required".to_string(),
                         from: None,
                         newest_available: None,
-                        reason: Some(if msg.resume.is_some() {
-                            "no-resume-capability".to_string()
-                        } else {
-                            "no-cursor".to_string()
+                        // The honest reason (S3c): a resume whose `from` names a
+                        // different SceneEpoch is a MIGRATION (`epoch-changed`);
+                        // a same-epoch resume is viable but the dormant-cursor
+                        // machinery is capability-gated (capabilities §5.4) and not
+                        // in the core profile, so it still seeds.
+                        reason: Some(match &msg.resume {
+                            Some(resume) => {
+                                let current = SceneEpoch {
+                                    cell_boot_id: cell_boot_id.clone(),
+                                    model_generation: session_epoch,
+                                };
+                                if resume.from.scene_epoch != current {
+                                    "epoch-changed".to_string()
+                                } else {
+                                    "no-resume-capability".to_string()
+                                }
+                            }
+                            None => "no-cursor".to_string(),
                         }),
                     },
                 },
@@ -719,8 +1194,14 @@ impl ActivationTable {
     }
 
     pub fn view_detached(&mut self, activation_id: &str) {
-        if let Some(a) = self.by_id.get_mut(activation_id) {
+        let session = self.by_id.get_mut(activation_id).map(|a| {
             a.view = None;
+            a.session_id.clone()
+        });
+        // view detach ⇒ geometry revoke (one of the four auto-release triggers):
+        // a demand-none that parked the view gives up the seat too.
+        if let Some(session_id) = session {
+            self.release_geometry_if_held(&session_id, activation_id);
         }
     }
 
@@ -759,7 +1240,8 @@ impl ActivationTable {
                         session_id: a.session_id.clone(),
                         client_id: a.client_id.clone(),
                         view_id: a.activation_id.clone(),
-                        read_write: a.has_right(AttachRight::Input),
+                        read_write: a.has_right(AttachRight::Input)
+                            || a.has_right(AttachRight::Geometry),
                     });
                 }
             }
@@ -894,6 +1376,10 @@ impl ActivationTable {
             self.by_key
                 .remove(&(a.client_id.clone(), a.session_id.clone()));
         }
+        // auto-release the geometry seat (connection death / grant expiry /
+        // liveness lapse all funnel here); the DetachView below clears ghosttea's
+        // controller. A replacement's new activation re-claims if it wants it.
+        self.release_geometry_if_held(&a.session_id, activation_id);
         let mut effects = Vec::new();
         a.presentation = Presentation::Revoked(reason);
         a.input = Input::Revoked(reason);
@@ -1227,6 +1713,7 @@ mod tests {
                 view_handle: "77".into(),
             }),
             resume_token: "rt".into(),
+            session_epoch: 0,
         });
         assert!(matches!(e[1], Effect::StartPump { .. }));
         perform(e);
@@ -1337,6 +1824,7 @@ mod tests {
                 view_handle: "1".into(),
             }),
             resume_token: "rt".into(),
+            session_epoch: 0,
         }));
         t.unit_sent("r1", 5, true);
         perform(t.scene_applied(
@@ -1522,5 +2010,452 @@ mod tests {
         l.returned(&credit(3, 2, 30, vec![("a", 10)]));
         assert_eq!(l.connection.returned, 60);
         assert_eq!(l.accounts["a"].returned, 60);
+    }
+
+    // --- Geometry lease (S3c) --------------------------------------------
+    // The table is pure over its inputs, so these drive the whole verb cycle —
+    // precheck → (the door's engine op, simulated by a `GeometryOutcome`) →
+    // finalize — without a real ghosttea session or socket.
+
+    use crate::tp::wire::GeometryClaimant;
+
+    fn claims_for(client: &str, session: &str, gen: u64, rights: &[AttachRight]) -> AttachClaims {
+        AttachClaims {
+            audience_cell_boot_id: "cb".into(),
+            client_id: client.into(),
+            session_id: session.into(),
+            lease_epoch: None,
+            route_revision: 1,
+            grant_generation: gen,
+            rights: rights.to_vec(),
+            issued_at: 1_000,
+            expires_at: 1_000 + 600_000,
+        }
+    }
+
+    fn set_for(client: &str) -> SetIdentity {
+        SetIdentity {
+            client_id: client.into(),
+            connection_set_id: format!("{client}@cb"),
+        }
+    }
+
+    /// Attach a live activation and (simulating the door) attach its ghosttea
+    /// view, so the geometry precheck sees a presenting seat.
+    fn attach_live_with_view(
+        t: &mut ActivationTable,
+        client: &str,
+        session: &str,
+        activation_id: &str,
+        connection_id: u64,
+        rights: &[AttachRight],
+    ) -> LegRef {
+        let (control, _rx) = leg(connection_id);
+        t.attach_control(AttachControlInput {
+            now_ms: 1_000,
+            set: &set_for(client),
+            leg: &control,
+            msg: AttachControlLeg {
+                activation_id: activation_id.into(),
+                attach_grant: serde_json::json!({}),
+                replaces_activation_id: None,
+                initial_demand: SourceDemand {
+                    mode: SourceDemandMode::Live,
+                    cadence_class: None,
+                    urgency: None,
+                },
+            },
+            claims: claims_for(client, session, 1, rights),
+            session_known: true,
+        });
+        // the door attaches the ghosttea view (view id == activation id)
+        t.view_attached(activation_id, activation_id, 7);
+        control
+    }
+
+    fn claim(
+        client: &str,
+        session: &str,
+        activation_id: &str,
+        view: &str,
+        cols: u16,
+        rows: u16,
+        expect_revision: u64,
+    ) -> ClaimGeometry {
+        ClaimGeometry {
+            session_id: session.into(),
+            activation_id: activation_id.into(),
+            lease_epoch: 0,
+            claimant: GeometryClaimant {
+                client_id: client.into(),
+                view_id: view.into(),
+            },
+            cols,
+            rows,
+            expect_revision,
+        }
+    }
+
+    fn proceed(decision: GeometryDecision) -> GeometryProceed {
+        match decision {
+            GeometryDecision::Proceed(p) => p,
+            GeometryDecision::Refuse(_) => panic!("expected Proceed, got Refuse"),
+        }
+    }
+
+    fn refused(decision: GeometryDecision) -> serde_json::Value {
+        match decision {
+            GeometryDecision::Refuse(effects) => {
+                let (leg, mut rx) = leg(999);
+                perform(
+                    effects
+                        .into_iter()
+                        .map(|e| match e {
+                            Effect::Send(_, text) => Effect::Send(leg.clone(), text),
+                            other => other,
+                        })
+                        .collect(),
+                );
+                texts(&mut rx).pop().expect("a GeometryRefused")
+            }
+            GeometryDecision::Proceed(_) => panic!("expected Refuse, got Proceed"),
+        }
+    }
+
+    #[test]
+    fn geometry_claims_an_empty_seat_resizes_by_reclaim_and_cas_guards_the_revision() {
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_with_view(
+            &mut t,
+            "win:1#1",
+            "s1",
+            "a1",
+            1,
+            &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
+        );
+        let (sink, mut rx) = leg(1);
+
+        // claim an EMPTY seat → a Claim op → holder gen 1, revision 1.
+        let d = t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 100, 40, 0));
+        let p = proceed(d);
+        assert!(matches!(
+            p.op,
+            GeometryOp::Claim {
+                cols: 100,
+                rows: 40
+            }
+        ));
+        let effects = t.geometry_finalize(
+            &sink,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols: 100,
+                rows: 40,
+            },
+        );
+        perform(effects);
+        let committed = texts(&mut rx).pop().unwrap();
+        assert_eq!(committed["type"], "GeometryCommitted");
+        assert_eq!(committed["holder"]["holderGeneration"], 1);
+        assert_eq!(committed["geometryRevision"], 1);
+        assert_eq!(committed["cols"], 100);
+
+        // RE-claim the OWN seat with the new revision → a Resize op → the
+        // generation is STABLE, the revision advances.
+        let d = t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 120, 40, 1));
+        let p = proceed(d);
+        assert!(matches!(
+            p.op,
+            GeometryOp::Resize {
+                control_epoch: 5,
+                resize_sequence: 1,
+                cols: 120,
+                rows: 40,
+            }
+        ));
+        let effects = t.geometry_finalize(
+            &sink,
+            p,
+            GeometryOutcome::Resized {
+                cols: 120,
+                rows: 40,
+            },
+        );
+        perform(effects);
+        let committed = texts(&mut rx).pop().unwrap();
+        assert_eq!(committed["holder"]["holderGeneration"], 1); // unchanged
+        assert_eq!(committed["geometryRevision"], 2);
+        assert_eq!(committed["cols"], 120);
+
+        // a STALE expectRevision is refused, holder + revision echoed.
+        let refusal =
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 80, 24, 0)));
+        assert_eq!(refusal["code"], "STALE_REVISION");
+        assert_eq!(refusal["geometryRevision"], 2);
+        assert_eq!(refusal["currentHolder"]["holderGeneration"], 1);
+
+        // the engine refusing (a superseded view) does NOT mutate the lease.
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 90, 30, 2)));
+        let effects = t.geometry_finalize(&sink, p, GeometryOutcome::EngineRefused);
+        perform(effects);
+        assert_eq!(texts(&mut rx).pop().unwrap()["code"], "VIEW_SUPERSEDED");
+    }
+
+    #[test]
+    fn geometry_right_seat_occupancy_and_holder_only_transfer() {
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_with_view(
+            &mut t,
+            "win:1#1",
+            "s1",
+            "a1",
+            1,
+            &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
+        );
+        // client B: read-only at first (no geometry), same session.
+        let b = attach_live_with_view(&mut t, "win:2#1", "s1", "b1", 2, &[AttachRight::Read]);
+        let (sink, _rx) = leg(1);
+
+        // B without the geometry right → RIGHT_MISSING.
+        assert_eq!(
+            refused(t.claim_geometry(&b, claim("win:2#1", "s1", "b1", "mount-b", 80, 24, 0)))
+                ["code"],
+            "RIGHT_MISSING"
+        );
+
+        // A claims and holds the seat.
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0)));
+        perform(t.geometry_finalize(
+            &sink,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols: 100,
+                rows: 40,
+            },
+        ));
+
+        // give B geometry (a RENEWAL at a higher generation) — now B may CLAIM,
+        // but the seat is A's.
+        t.attach_control(AttachControlInput {
+            now_ms: 1_500,
+            set: &set_for("win:2#1"),
+            leg: &b,
+            msg: AttachControlLeg {
+                activation_id: "b1".into(),
+                attach_grant: serde_json::json!({}),
+                replaces_activation_id: None,
+                initial_demand: SourceDemand {
+                    mode: SourceDemandMode::Live,
+                    cadence_class: None,
+                    urgency: None,
+                },
+            },
+            claims: claims_for(
+                "win:2#1",
+                "s1",
+                2,
+                &[AttachRight::Read, AttachRight::Geometry],
+            ),
+            session_known: true,
+        });
+        assert_eq!(
+            refused(t.claim_geometry(&b, claim("win:2#1", "s1", "b1", "mount-b", 80, 24, 1)))
+                ["code"],
+            "SEAT_HELD"
+        );
+
+        // a transfer by a NON-holder (B) is refused.
+        let stranger_transfer = TransferGeometry {
+            session_id: "s1".into(),
+            activation_id: "b1".into(),
+            lease_epoch: 0,
+            from: GeometryHolder {
+                client_id: "win:1#1".into(),
+                view_id: "mount-a".into(),
+                holder_generation: 1,
+            },
+            to: GeometryClaimant {
+                client_id: "win:2#1".into(),
+                view_id: "mount-b".into(),
+            },
+            expect_revision: 1,
+            cols: 90,
+            rows: 30,
+        };
+        assert_eq!(
+            refused(t.transfer_geometry(&b, stranger_transfer))["code"],
+            "NOT_HOLDER"
+        );
+
+        // the HOLDER (A) transfers the seat to B: one engine claim, B holds gen 2.
+        let transfer = TransferGeometry {
+            session_id: "s1".into(),
+            activation_id: "a1".into(),
+            lease_epoch: 0,
+            from: GeometryHolder {
+                client_id: "win:1#1".into(),
+                view_id: "mount-a".into(),
+                holder_generation: 1,
+            },
+            to: GeometryClaimant {
+                client_id: "win:2#1".into(),
+                view_id: "mount-b".into(),
+            },
+            expect_revision: 1,
+            cols: 90,
+            rows: 30,
+        };
+        let p = proceed(t.transfer_geometry(&a, transfer));
+        assert_eq!(p.ghosttea_view_id, "b1"); // the destination's view is resized
+        let (sink_b, mut rx_b) = leg(2);
+        perform(t.geometry_finalize(
+            &sink_b,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 6,
+                cols: 90,
+                rows: 30,
+            },
+        ));
+        let committed = texts(&mut rx_b).pop().unwrap();
+        assert_eq!(committed["holder"]["clientId"], "win:2#1");
+        assert_eq!(committed["holder"]["holderGeneration"], 2);
+        assert_eq!(committed["geometryRevision"], 2);
+
+        // A is no longer the holder → A's claim on the (now B's) seat is SEAT_HELD.
+        assert_eq!(
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 70, 20, 2)))
+                ["code"],
+            "SEAT_HELD"
+        );
+    }
+
+    #[test]
+    fn geometry_auto_releases_on_detach_leg_loss_and_a_renewal_that_drops_it() {
+        // (1) view detach (demand none) frees the seat and bumps the revision.
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_with_view(
+            &mut t,
+            "win:1#1",
+            "s1",
+            "a1",
+            1,
+            &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
+        );
+        let (sink, _rx) = leg(1);
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0)));
+        perform(t.geometry_finalize(
+            &sink,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols: 100,
+                rows: 40,
+            },
+        ));
+        t.view_detached("a1"); // demand-none parks the view ⇒ seat revoked
+        t.view_attached("a1", "a1", 8); // demand-live re-attaches a fresh view
+                                        // the OLD revision is now stale (release bumped it) …
+        assert_eq!(
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0)))["code"],
+            "STALE_REVISION"
+        );
+        // … and a claim at the new revision (claim bumped to 1, the release to 2)
+        // succeeds on the freed seat.
+        assert!(matches!(
+            t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 2)),
+            GeometryDecision::Proceed(_)
+        ));
+
+        // (2) a control-leg loss (connection death) frees the seat.
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_with_view(
+            &mut t,
+            "win:1#1",
+            "s1",
+            "a1",
+            1,
+            &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
+        );
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0)));
+        perform(t.geometry_finalize(
+            &leg(1).0,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols: 100,
+                rows: 40,
+            },
+        ));
+        t.leg_closed(1); // the activation is invalidated → seat auto-released
+        let b = attach_live_with_view(
+            &mut t,
+            "win:2#1",
+            "s1",
+            "b1",
+            2,
+            &[AttachRight::Read, AttachRight::Geometry],
+        );
+        // the seat is free: B claims it (revision advanced 1→2 by the release).
+        assert!(matches!(
+            t.claim_geometry(&b, claim("win:2#1", "s1", "b1", "mb", 80, 24, 2)),
+            GeometryDecision::Proceed(_)
+        ));
+
+        // (3) a renewal that DROPS the geometry right revokes the seat.
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_with_view(
+            &mut t,
+            "win:1#1",
+            "s1",
+            "a1",
+            1,
+            &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
+        );
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0)));
+        perform(t.geometry_finalize(
+            &leg(1).0,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols: 100,
+                rows: 40,
+            },
+        ));
+        // renew A at a higher generation WITHOUT geometry.
+        t.attach_control(AttachControlInput {
+            now_ms: 2_000,
+            set: &set_for("win:1#1"),
+            leg: &a,
+            msg: AttachControlLeg {
+                activation_id: "a1".into(),
+                attach_grant: serde_json::json!({}),
+                replaces_activation_id: None,
+                initial_demand: SourceDemand {
+                    mode: SourceDemandMode::Live,
+                    cadence_class: None,
+                    urgency: None,
+                },
+            },
+            claims: claims_for("win:1#1", "s1", 2, &[AttachRight::Read, AttachRight::Input]),
+            session_known: true,
+        });
+        // the seat is revoked: A (were it still geometry-capable) would re-claim
+        // on an EMPTY seat — proven by a fresh claimant succeeding at the bumped
+        // revision rather than meeting SEAT_HELD.
+        let c = attach_live_with_view(
+            &mut t,
+            "win:3#1",
+            "s1",
+            "c1",
+            3,
+            &[AttachRight::Read, AttachRight::Geometry],
+        );
+        assert!(matches!(
+            t.claim_geometry(&c, claim("win:3#1", "s1", "c1", "mc", 60, 20, 2)),
+            GeometryDecision::Proceed(_)
+        ));
     }
 }

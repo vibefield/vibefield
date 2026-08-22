@@ -427,6 +427,89 @@ pub struct CalibrationPing {
     pub t0: f64,
 }
 
+// --- Geometry (control leg, S3c) -----------------------------------------
+// The CELL is the geometry authority; ghosttea commits the resize. The caller
+// names a `GeometryClaimant {clientId, viewId}` (it cannot possess a cell-minted
+// generation before the claim); the cell mints `holderGeneration` and answers a
+// `GeometryHolder`. `viewId` is the renderer's non-reused mount id, distinct
+// from the cell's ghosttea view key (the activation id).
+
+/// Contracts `GeometryClaimant`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeometryClaimant {
+    pub client_id: String,
+    pub view_id: String,
+}
+
+/// Contracts `GeometryHolder` — the claimant plus the CELL-minted generation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeometryHolder {
+    pub client_id: String,
+    pub view_id: String,
+    pub holder_generation: u64,
+}
+
+/// Contracts `ClaimGeometry` (a re-claim of the same seat commits a resize).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaimGeometry {
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
+    pub claimant: GeometryClaimant,
+    pub cols: u16,
+    pub rows: u16,
+    pub expect_revision: u64,
+}
+
+/// Contracts `ReleaseGeometry`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseGeometry {
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
+    pub holder: GeometryHolder,
+}
+
+/// Contracts `TransferGeometry` — ONE cell-side transition that revokes,
+/// grants and commits the resize.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferGeometry {
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
+    pub from: GeometryHolder,
+    pub to: GeometryClaimant,
+    pub expect_revision: u64,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+/// Contracts `GeometryCommitted` (cell → holder's control leg).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeometryCommitted {
+    pub holder: GeometryHolder,
+    pub geometry_revision: u64,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+/// Contracts `GeometryRefused` (cell → caller's control leg).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeometryRefused {
+    pub code: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_holder: Option<GeometryHolder>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geometry_revision: Option<u64>,
+}
+
 /// The presentation envelope's binary framing (contracts
 /// `encodePresentationEnvelope`): `'T' 'P' 1 0 u32BE headerLen | header JSON |
 /// payload`. The header is built as a `Value` because `baseContent` has three

@@ -17,14 +17,14 @@
 //! equal-generation) grant supersedes the channel's live leg, which closes
 //! `4002`. Shutdown closes every leg `1001`.
 //!
-//! TP-S3b on an ACCEPTED leg: control — `AttachControlLeg` (the attach grant
-//! verified, the attach high-water admitted, the table decides), `DeclareDemand`;
+//! On an ACCEPTED leg: control — `AttachControlLeg` (the attach grant verified,
+//! the attach high-water admitted, the table decides), `DeclareDemand`, and the
+//! geometry verbs `ClaimGeometry`/`ReleaseGeometry`/`TransferGeometry` (S3c —
+//! the cell owns the seat, ghosttea commits the resize; see `handle_geometry`);
 //! frames — `AttachFramesLeg`, `TransportCredit`, `SceneApplied`,
 //! `CalibrationPing` (echoed as a `calibration` unit; doubles as the frames
-//! heartbeat). The geometry verbs are S3c's and answer `4003 PROTOCOL:
-//! unsupported-at-s3b:<type>` — honest, never a pretended seat. Where the
-//! sessions come from is the `SessionSource` (source.rs): this harness's own
-//! until petition G22 lands.
+//! heartbeat). Where the sessions come from is the `SessionSource` (source.rs):
+//! this harness's own until petition G22 lands.
 //!
 //! Concurrency: one read task per socket plus one WRITER task owning its sink
 //! (every message to a leg — replies, the lease, presentation units — rides an
@@ -33,7 +33,8 @@
 //! sections; superseding or shutting a leg down is a message to its read task.
 
 use super::activation::{
-    ActivationTable, AttachControlInput, AttachFramesInput, Effect, LegRef, Outbound, SetIdentity,
+    ActivationTable, AttachControlInput, AttachFramesInput, Effect, GeometryDecision, GeometryOp,
+    GeometryOutcome, GeometryProceed, LegRef, Outbound, SetIdentity,
 };
 use super::grant::{Channel, GrantVerifier, PreAuthFailure, PreAuthFailureCode};
 use super::ledger::{CurrentLeg, TransportLedger, TransportRefusal};
@@ -42,16 +43,17 @@ use super::source::{NoSessions, SessionSource};
 use super::unix_ms;
 use super::wire::{
     capability_intersection, encode_envelope, inbound_tags, select_version, tagged,
-    AttachControlLeg, AttachFramesLeg, AttachRefused, CalibrationPing, ConnectionAccepted,
-    ConnectionHello, ConnectionRefused, DeclareDemand, LegHeartbeat, LegHeartbeatAck,
-    ProtocolLimits, ReceiverCapacities, SceneApplied, Tagged, TransportCredit, TrfIdentity,
+    AttachControlLeg, AttachFramesLeg, AttachRefused, CalibrationPing, ClaimGeometry,
+    ConnectionAccepted, ConnectionHello, ConnectionRefused, DeclareDemand, LegHeartbeat,
+    LegHeartbeatAck, ProtocolLimits, ReceiverCapacities, ReleaseGeometry, SceneApplied, Tagged,
+    TransferGeometry, TransportCredit, TrfIdentity,
 };
 use crate::registries::terminal_pipeline as tp;
 use crate::registries::terminal_pipeline_close_codes as close;
 use anyhow::{Context, Result};
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
-use ghosttea::ViewAccess;
+use ghosttea::{ControlClaim, Session, ViewAccess};
 use serde_json::json;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -1127,6 +1129,37 @@ fn handle_text(
             perform(state, effects);
             Ok(false)
         }
+        (Channel::Control, "ClaimGeometry") => {
+            let msg: ClaimGeometry =
+                serde_json::from_str(text).map_err(|e| format!("claim-geometry:{e}"))?;
+            let decision = {
+                let mut reg = state.registry.lock().unwrap();
+                reg.activations.claim_geometry(leg, msg)
+            };
+            handle_geometry(state, leg, decision);
+            Ok(false)
+        }
+        (Channel::Control, "TransferGeometry") => {
+            let msg: TransferGeometry =
+                serde_json::from_str(text).map_err(|e| format!("transfer-geometry:{e}"))?;
+            let decision = {
+                let mut reg = state.registry.lock().unwrap();
+                reg.activations.transfer_geometry(leg, msg)
+            };
+            handle_geometry(state, leg, decision);
+            Ok(false)
+        }
+        (Channel::Control, "ReleaseGeometry") => {
+            let msg: ReleaseGeometry =
+                serde_json::from_str(text).map_err(|e| format!("release-geometry:{e}"))?;
+            // No engine round-trip: the holder yields the seat cell-side.
+            let effects = {
+                let mut reg = state.registry.lock().unwrap();
+                reg.activations.release_geometry(leg, msg)
+            };
+            perform(state, effects);
+            Ok(false)
+        }
         (Channel::Frames, "AttachFramesLeg") => {
             let msg: AttachFramesLeg =
                 serde_json::from_str(text).map_err(|e| format!("attach-frames:{e}"))?;
@@ -1175,8 +1208,10 @@ fn handle_text(
             Ok(true)
         }
         (_, other) if inbound_tags(channel).contains(&other) => {
-            // Known to the contract, not to this slice (the geometry verbs are S3c's).
-            Err(format!("unsupported-at-s3b:{other}"))
+            // Defensive: a tag the contract lists for this leg but no arm above
+            // serves. Every current tag IS served (S3c closed the geometry verbs),
+            // so this fires only if a new tag joins `inbound_tags` without a handler.
+            Err(format!("unsupported:{other}"))
         }
         (_, other) => Err(format!("unknown-type:{other}")),
     }
@@ -1273,13 +1308,15 @@ fn attach_frames(state: &Arc<DoorState>, leg: &LegRef, set: &SetIdentity, msg: A
             return;
         }
     };
-    let trf_identity = state.config.source.session(&claims.session_id).map(|s| {
+    let session = state.config.source.session(&claims.session_id);
+    let trf_identity = session.as_ref().map(|s| {
         let handle = s.summary().handle;
         TrfIdentity {
             session_handle: handle.clone(),
             view_handle: handle,
         }
     });
+    let session_epoch = session.as_ref().map(|s| s.session_epoch()).unwrap_or(0);
     let resume_token = hex::encode(rand::random::<[u8; 16]>());
     let effects = {
         let mut reg = state.registry.lock().unwrap();
@@ -1290,9 +1327,78 @@ fn attach_frames(state: &Arc<DoorState>, leg: &LegRef, set: &SetIdentity, msg: A
             claims,
             trf_identity,
             resume_token,
+            session_epoch,
         })
     };
     perform(state, effects);
+}
+
+/// A geometry verb the table authorized (`GeometryDecision::Proceed`): run the
+/// engine op OUTSIDE the registry lock (the table is pure — it never touches the
+/// session), then `geometry_finalize` commits or refuses the lease. A refuse
+/// decision needs no engine call. Lock order is registry → ghosttea authority;
+/// ghosttea is a leaf and never re-enters this code, so the two never deadlock.
+fn handle_geometry(state: &Arc<DoorState>, leg: &LegRef, decision: GeometryDecision) {
+    let proceed = match decision {
+        GeometryDecision::Refuse(effects) => {
+            perform(state, effects);
+            return;
+        }
+        GeometryDecision::Proceed(proceed) => proceed,
+    };
+    let outcome = match state.config.source.session(&proceed.session_id) {
+        Some(session) => perform_geometry_op(&session, &proceed),
+        None => GeometryOutcome::EngineRefused,
+    };
+    let effects = {
+        let mut reg = state.registry.lock().unwrap();
+        reg.activations.geometry_finalize(leg, proceed, outcome)
+    };
+    perform(state, effects);
+}
+
+/// Commit the resize on the engine. A `Claim` establishes (or, for a transfer,
+/// re-establishes) the controller and returns ghosttea's freshly minted control
+/// epoch; a `Resize` reuses the held epoch. Both are fenced by the claimant
+/// view's attachment epoch — a superseded incarnation cannot resize.
+fn perform_geometry_op(session: &Session, proceed: &GeometryProceed) -> GeometryOutcome {
+    match &proceed.op {
+        GeometryOp::Claim { cols, rows } => match session.claim_control_checked(
+            &proceed.ghosttea_view_id,
+            &proceed.client_id,
+            proceed.attachment_epoch,
+            *cols,
+            *rows,
+            None,
+        ) {
+            Ok(ControlClaim::Granted(changed)) => GeometryOutcome::Claimed {
+                control_epoch: changed.controller.control_epoch,
+                cols: changed.cols,
+                rows: changed.rows,
+            },
+            _ => GeometryOutcome::EngineRefused,
+        },
+        GeometryOp::Resize {
+            control_epoch,
+            resize_sequence,
+            cols,
+            rows,
+        } => match session.resize_view_checked(
+            &proceed.ghosttea_view_id,
+            &proceed.client_id,
+            proceed.attachment_epoch,
+            *control_epoch,
+            *resize_sequence,
+            *cols,
+            *rows,
+        ) {
+            Ok(_) => GeometryOutcome::Resized {
+                cols: *cols,
+                rows: *rows,
+            },
+            Err(_) => GeometryOutcome::EngineRefused,
+        },
+    }
 }
 
 fn deregister(state: &DoorState, connection_set_id: &str, channel: Channel, connection_id: u64) {

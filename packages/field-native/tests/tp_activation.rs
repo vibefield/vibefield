@@ -696,3 +696,177 @@ async fn idempotent_attach_conflict_replacement_and_unknown_session() {
     }
     h.door.shutdown().await;
 }
+
+/// TP-S3c — the minimal geometry seat over ghosttea's `claim_control_checked` /
+/// `resize_view_checked`, proven against a REAL session: a claim resizes the PTY,
+/// a re-claim of the OWN seat resizes it again keeping the holder generation, and
+/// a stale revision is refused without touching the size.
+#[tokio::test]
+async fn geometry_claim_resizes_the_real_pty_and_reclaim_holds_the_generation() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut control, mut frames, _epoch) =
+        connect(&h, "set-g", 1, caps(4_000_000, 2_000_000)).await;
+    attach_both(
+        &h,
+        &mut control,
+        &mut frames,
+        &session_id,
+        "act-g",
+        &["geometry", "input", "read"],
+        true,
+    )
+    .await;
+    // reach a stable presenting lease (seed → applied → status), like the deck.
+    let (_kind, _base, result, _bytes, _hdrs) = receive_transfer(&mut frames).await;
+    scene_applied(&mut frames, &session_id, "act-g", &result).await;
+    expect_text(next_reply(&mut control).await, "CellActivationStatus");
+
+    // the PTY is 80x24 as spawned.
+    let (_ctl, cols0, rows0, _le) = session.control_state();
+    assert_eq!((cols0, rows0), (80, 24));
+
+    // CLAIM the empty seat at a new size → GeometryCommitted, and the real PTY
+    // resizes (ghosttea's `claim_control_checked` committed it).
+    send_json(
+        &mut control,
+        json!({
+            "type": "ClaimGeometry",
+            "sessionId": session_id, "activationId": "act-g", "leaseEpoch": 0,
+            "claimant": { "clientId": "win:1#1", "viewId": "mount-1" },
+            "cols": 100, "rows": 40, "expectRevision": 0,
+        }),
+    )
+    .await;
+    let committed = expect_text(next_reply(&mut control).await, "GeometryCommitted");
+    assert_eq!(committed["holder"]["clientId"], "win:1#1");
+    assert_eq!(committed["holder"]["viewId"], "mount-1");
+    assert_eq!(committed["holder"]["holderGeneration"], 1);
+    assert_eq!(committed["geometryRevision"], 1);
+    assert_eq!(committed["cols"], 100);
+    assert_eq!(committed["rows"], 40);
+    let (_ctl, cols1, rows1, _le) = session.control_state();
+    assert_eq!((cols1, rows1), (100, 40), "the engine committed the resize");
+
+    // RE-claim the OWN seat (a resize) → the holder GENERATION is stable, the
+    // revision advances, and the PTY resizes again (via `resize_view_checked`).
+    send_json(
+        &mut control,
+        json!({
+            "type": "ClaimGeometry",
+            "sessionId": session_id, "activationId": "act-g", "leaseEpoch": 0,
+            "claimant": { "clientId": "win:1#1", "viewId": "mount-1" },
+            "cols": 132, "rows": 50, "expectRevision": 1,
+        }),
+    )
+    .await;
+    let resized = expect_text(next_reply(&mut control).await, "GeometryCommitted");
+    assert_eq!(
+        resized["holder"]["holderGeneration"], 1,
+        "a resize keeps the holder generation"
+    );
+    assert_eq!(resized["geometryRevision"], 2);
+    let (_ctl, cols2, rows2, _le) = session.control_state();
+    assert_eq!((cols2, rows2), (132, 50));
+
+    // a STALE revision is refused and never touches the size.
+    send_json(
+        &mut control,
+        json!({
+            "type": "ClaimGeometry",
+            "sessionId": session_id, "activationId": "act-g", "leaseEpoch": 0,
+            "claimant": { "clientId": "win:1#1", "viewId": "mount-1" },
+            "cols": 10, "rows": 10, "expectRevision": 0,
+        }),
+    )
+    .await;
+    let refused = expect_text(next_reply(&mut control).await, "GeometryRefused");
+    assert_eq!(refused["code"], "STALE_REVISION");
+    assert_eq!(refused["geometryRevision"], 2);
+    let (_ctl, cols3, rows3, _le) = session.control_state();
+    assert_eq!((cols3, rows3), (132, 50), "a refused claim never resizes");
+
+    h.door.shutdown().await;
+}
+
+/// TP-S3c — the frames-leg attach reports the HONEST seed reason: a resume whose
+/// `from` names a different `SceneEpoch` is a migration (`epoch-changed`); a
+/// same-epoch resume is viable but the dormant-cursor resume is capability-gated
+/// (`no-resume-capability`); no resume is `no-cursor`.
+#[tokio::test]
+async fn frames_attach_reports_the_seed_reason_incl_epoch_changed() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let epoch = session.session_epoch();
+    let (mut control, mut frames, _e) = connect(&h, "set-m", 1, caps(4_000_000, 2_000_000)).await;
+
+    // ONE activation (demand `none`, so no pump/seed muddies the leg); the seed
+    // REASON is recomputed on every frames attach, so re-attaching the leg with a
+    // different resume shape exercises all three answers on the one activation.
+    let grant = h.attach_grant(&session_id, 1, &["input", "read"]);
+    send_json(
+        &mut control,
+        json!({
+            "type": "AttachControlLeg",
+            "activationId": "act-m",
+            "attachGrant": grant,
+            "initialDemand": { "mode": "none" },
+        }),
+    )
+    .await;
+    expect_text(next_reply(&mut control).await, "ControlLegAttached");
+
+    async fn attach_frames_resume(
+        h: &Harness,
+        frames: &mut Ws,
+        session_id: &str,
+        resume: Option<Value>,
+    ) -> Value {
+        let grant = h.attach_grant(session_id, 1, &["input", "read"]);
+        let mut msg = json!({
+            "type": "AttachFramesLeg",
+            "activationId": "act-m",
+            "attachGrant": grant,
+        });
+        if let Some(resume) = resume {
+            msg["resume"] = resume;
+        }
+        send_json(frames, msg).await;
+        expect_text(next_reply(frames).await, "FramesLegAttached")
+    }
+
+    // (a) a resume naming a DIFFERENT epoch → epoch-changed (the migration case).
+    let a = attach_frames_resume(
+        &h,
+        &mut frames,
+        &session_id,
+        Some(json!({
+            "resumeToken": "tok",
+            "from": { "sceneEpoch": { "cellBootId": CELL, "modelGeneration": epoch + 1000 }, "sceneRevision": 1 },
+        })),
+    )
+    .await;
+    assert_eq!(a["outcome"]["kind"], "seed-required");
+    assert_eq!(a["outcome"]["reason"], "epoch-changed");
+
+    // (b) a resume at the SAME epoch → viable, but capability-gated.
+    let b = attach_frames_resume(
+        &h,
+        &mut frames,
+        &session_id,
+        Some(json!({
+            "resumeToken": "tok",
+            "from": { "sceneEpoch": { "cellBootId": CELL, "modelGeneration": epoch }, "sceneRevision": 1 },
+        })),
+    )
+    .await;
+    assert_eq!(b["outcome"]["reason"], "no-resume-capability");
+
+    // (c) no resume → no-cursor.
+    let c = attach_frames_resume(&h, &mut frames, &session_id, None).await;
+    assert_eq!(c["outcome"]["reason"], "no-cursor");
+
+    h.door.shutdown().await;
+}
