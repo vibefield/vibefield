@@ -189,8 +189,10 @@ tested both ways); **the Origin probe (`pnpm smoke:terminal-door`) is green on t
 app-scheme renderer's DOCUMENT and a WORKER both reached `ConnectionAccepted` under
 `vibefield-app://shell`.** **TP-S2b-widget LANDED `d9c2e8b`** — the mirror is a BUILT-IN canvas widget type through the
 host's own registry door (`registerBuiltIn`; SDK untouched; roster-driven session picker; TP-R4a re-proven in
-widget form; `widgetTypes` 22 → 23 with `stagedPlugins` unmoved is the census witness). In flight (Opus,
-worktree `vf-mint`): **the ticket-mint lever** (the ≈57 % of cold open).
+widget form; `widgetTypes` 22 → 23 with `stagedPlugins` unmoved is the census witness). **TP-S1m LANDED `39eb38f`** — the ticket-mint lever, measured: there isn't one (a mint is 6 ms; S0c's "≈57 %" was a
+single-station instrument reading a renderer main-thread stall as a daemon round trip — errata at source; the
+cold-open trace now carries send edges + the create path, fieldd's audit ledger is read at teardown, a gated
+six-arm hop ladder asserts order; the real lever is the deck mount's ~150 ms of blocked main thread).
 **Next:** TP-S3b static activation (attach legs + the activation registry, seed + ONE catch-up from
 `logical_snapshot`, the two-dimensional lease, byte credits, `DeclareDemand{none|live}` → warm/hot; the
 deck streams through the authenticated path behind the flag — needs G23's routed runtime, or an interim

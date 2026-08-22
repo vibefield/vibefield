@@ -3376,7 +3376,7 @@ keydown → PTY write accepted **p50 1.06 ms** (p95 3.6, p99 8.1; 900/900 keys p
 10 µs) — §18.1's ≤1 ms hypothesis holds; Chromium `InputLatency::RawKeyDown` **p50 15.8 ms**
 (swap included; 0.9 % apart across runs) — the §18.12 floor as a number; `frameApplyMs` **p50
 0.10 ms in every scenario** incl. an 8 MB/s flood; cold open 359–519 ms vs the 300 ms hypothesis,
-with the `ticket` station **202–264 ms ≈ 57 %** of it (the mint round trip is the cold-open lever);
+with the `ticket` station **202–264 ms ≈ 57 %** of it (the mint round trip is the cold-open lever) — **ERRATUM 2026-08-22 (TP-S1m, `39eb38f`): FALSE — the mint costs 6 ms and the daemon's share of that station is 38 ms; the rest was the renderer's main thread blocked by the deck mount while the answer sat in its socket; the single-station instrument could not tell a slow daemon from a request sent late (see the TP-S1m entry)**;
 TP-R18's `metrics` half PASSES on frame-interval p95 and fps (Δ −0.0 %/0.0 %; null arm 1.1 %/
 0.1 %) and is UNGRADEABLE on keystroke→rAF (null arm 58.8 %); TP-R19 `secondary`/`medium` with a
 stable contributor set 3/3, throughput `host-contention-sensitive`; 100 panes reached idle and
@@ -3529,3 +3529,49 @@ SOURCE half of demand release (`DeclareDemand` reaches the cell at TP-S3b). Test
 `terminal-mirror-widget.test.tsx`, 5 in `plugin-runtime/test/registry.test.ts` (the third door:
 provenance, owned-name, distributable-id, collisions both ways), `pnpm smoke:canvas` as the census
 witness; `pnpm verify` verbatim green on the branch and again on merged main.
+
+## TP-S1m — the ticket-mint lever, measured: there isn't one
+
+2026-08-22, `39eb38f` (the mint-lever Opus agent; rebased, fast-forwarded; gate verbatim green in
+its worktree on the rebased commit). TP-S0c published "`ticket` alone is 202–264 ms, ≈57 % of the
+cold open — the single biggest lever in §18.7, a fieldd round trip, not rendering". This slice went
+to pull that lever and found it is not connected to anything: **minting a ticket costs 6.0 ms**
+(median, n=20 in-app cold opens, fieldd's own audit ledger) and the daemon's whole share of the
+interval is **38 ms**; the remaining **152 ms of the 190 ms** is the renderer failing to READ an
+answer already sitting in its socket — the main thread is blocked by the deck's GhostteaWorkspace
+mount (~150 ms). **Errata at source, this entry and the S0c entry below:** the "57 %" was the
+instrument's mistake — the cold-open trace had ONE station between `open` and `connected`, so
+React's commit, the pool's claim, the roster read and the mint's round trip arrived as one number;
+`cold-open.ts` now carries the SEND edges too (`claim · rosterAsk · roster · mintAsk · ticket ·
+connected`), the `ticket`/`connected` stations are stamped on the CREATE path (they never were —
+the trace was blind on the very path it measured), `terminal.roster` is the mint's NULL ARM on the
+same socket, the lab reads fieldd's audit ledger at teardown and pairs `attempt`/`outcome` by
+operationId (the handler's own duration with no new daemon instrument — EL7 already requires both
+records), `fieldd/test/terminal-mint-hops.test.ts` (gated, `VF_MINT_HOPS=1`) runs six interleaved
+arms against a real pair and asserts ORDER never milliseconds, and two opt-in lab switches
+(`VF_PERF_LONGTASKS=1`, `VF_PERF_NO_MONITOR=1`) keep a before/after from also being an A/B on the
+observer. The numbers (medians, n=20, loaded host): `open→claim` 15.2 · `claim→rosterAsk` 1.7 ·
+`rosterAsk→roster` 8.1 (the null arm: a fieldd round trip) · `roster→mintAsk` 0.5 ·
+`mintAsk→ticket` 190.4 · `ticket→connected` 8.8 · `connected→mounted` 127.4 · `mounted→frame` 9.2 ·
+TOTAL 365.1; from fieldd's ledger the same 190.4 = 0.3 to reach fieldd · 27.0 create (an fsync + the
+spawn) · 5.0 outcome fsync · 6.0 mint (an fsync + the HMAC) · 151.7 renderer read. Daemon side alone
+(n=25/arm × 3 runs): fsync null 4.4–4.7 · roster 0.24–0.35 · openTicket 11.3–18.0 · create 26.0–27.6
+· create `-l` 30.1–31.8 · the per-cell control dial 0.60–0.64. **A fix this measurement killed:** a
+first pass moved fieldd's lazy per-cell control dial to cell announcement, reading a cold create
+(40–55 ms) vs a warm one (27–34 ms) as that dial — it is 0.60 ms (p50, n=25, three runs, ±7 %) and
+the gap was host noise; reverted (it cost TC-S3's spawn-isolation rows their meaning); the arm that
+killed it stays in the ladder. **The real lever, sized:** monitor ON vs OFF, interleaved, n=6 — the
+total is 365.2 vs 370.1, UNCHANGED; every hop the monitor inflated gets faster and the stall
+reappears one station earlier (`claim→rosterAsk` 1.6 → 99.2): removing the monitor MOVES the cost;
+shortening a mint changes the cold open by zero. **Null control (§19):** the shipping-path arm
+measured 365.2 against §2's independent 20-launch baseline of 365.1, ~30 min apart — 0.03 %.
+Findings: `field-terminal-host` is a second binary `cargo build -p field-native` need not leave on
+disk — without it the failure surfaces two minutes later in the renderer as `UNAVAILABLE
+{state:"absent"}` (the driver now refuses up front, as for field-native); the driver's "rebuilt
+twice … after a rebase" comment corrected at source (the orchestrator's deleted `target/`);
+`long-animation-frame` UNDER-REPORTS the stall; the lab's cold open is honestly "launch and
+immediately press ⌘G" — it toggles Godview inside the GT-D14 prewarm's idle window and sometimes
+inside the floor's cell boot (751–2052 ms for the host to exist), and should be labelled that way.
+No product BEHAVIOUR changed. Tests: three cold-open trace cases + three pool cases; fieldd's
+terminal suites 74/2-skip; the hop ladder green on demand; every lab run's pty census back to 57.
+Results + reproduction: `draft/terminal-perf/results/20260821-mint-lever/README.md`.
