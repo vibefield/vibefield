@@ -168,36 +168,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 
 ## In flight now
 
-**TP — the terminal pipeline (custody through pixels). WAVE 1 COMPLETE (2026-08-22).** The
-merged spec (`draft/specs/terminal-pipeline-v3.md` v0.8, eight reviews in; architecture ratifiable,
-protocol a closure CANDIDATE behind §20's artifacts) landed its first nine slices in one night, all
-gate-green on main, four of them built by Opus agents in parallel worktrees: **TP-S1a** `f799ffc`
-(every TPv3 message as a contract + golden vectors, incl. RFC 8785 JCS and the envelope's binary
-framing) · **TP-S0b** `19ff4d9` (the runtime leaves the deck for a window-level routed pool; TP-R1
-proven against the real 0.10.1 runtime) · **TP-S1b** `06c7b26` (the floor mints a per-cell-boot grant
-key; fieldd issues HMAC'd route+grants beside the legacy ticket; `terminal.renewAttach` +
-`terminal.roster`) · **TP-S0a** `983aa92` (the 17-trace real-cell TRF1 corpus, the worker microbench —
-decode p50 2 µs, apply 12 µs —, mode-gated probes, the first baseline) · **TP-§20a** `427f71b` (the
-five state-transition tables + the failure matrix as contracts data, total/deterministic/closed by
-test) · **TP-S2** `0f10b22` (deck-owned zoom = one resize each way; the watch-only ICE mirror as the
-pool's second consumer; TP-R4a proven by attack) · **TP-S1r** `cd6f47d`+`0950474` (every birth and
-restore through fieldd's session doors; zero `connectTicket`; the single-cell pin with the honest
-`transport-not-landed` face; the UI reads `terminal.roster` only; the smoke births its own GT-D11
-flip witness) · **TP-S2b** `98d2d6e` (the smoke witnesses `zoom.commits` and that no other pane's box
-moves) · **TP-S0c** `0da66d9`+`d1b8429` (the `--terminal-perf-lab` rig in the REAL app, 11 scenarios,
-`pnpm perf:terminal`; the first in-app numbers — keydown→PTY-write **p50 1.06 ms** (§18.1's ≤1 ms
-holds), Chromium `RawKeyDown` **p50 15.8 ms** (the Electron floor), `frameApplyMs` 0.10 ms under an
-8 MB/s flood, cold open 359–519 ms with the **ticket mint ≈57 %** of it; a 13-row PROPOSED
-numeric-ratification table; the Ghostty A-vs-A control built and GATED off James's display; the
-lab's teardown/reaper/census after its Electrons leaked 509 ptys past `ptmx_max`). Nothing in
-flight. **Next, gated on James:** **TP-D1** (T1's `connect-src` reversal), **mark 20** (TP-D26 — the
-cell-side T1 door layer in OUR harness over ghosttea's public `Session` API; petitions G22 accessor
-pack + G23 renderer bundle drafted in `draft/petitions/`), **mark 21** (the mirror as a canvas widget
-TYPE: built-in vs SDK door); then §20 items 4–7, TP-S2b-widget, and TP-S3a cell-side in
-field-native behind the rollback flag. Named debts from the wave: the `ticket` round trip dominates
-cold open (a mint-latency lever for S1/S3); the wall-100 rAF-delivers-zero-frames reading; divider
-drag ≈52 Hz with no upstream throttle seam (G23 item 9); TP-R18's keystroke→rAF half ungradeable on
-this host. The 21 [JAMES] marks are the standing calls.
+**TP — the terminal pipeline (custody through pixels). RATIFIED 2026-08-22 — WAVE 2 IN FLIGHT.** The merged spec (`draft/specs/terminal-pipeline-v3.md` v0.9, eight reviews in) is ratified in full: **TP-D1 = T1** (direct loopback WS per cell; the `connect-src` reversal flag-conditional through S3a–S3d, deliberate at S3e), **TP-D26 = C′** (the cell-side door layer in OUR field-native harness over ghosttea's public `Session` API; petitions G22 + G23 are the upstream asks), **mark 21 = (a)** (the mirror as a built-in widget type), marks 2–19 as recommended; the protocol stays a closure CANDIDATE until §20 items 4–7 exist. **Wave 1 (all on main, 2026-08-21/22):** TP-S1a `f799ffc` (the wire truth + golden vectors incl. JCS and the envelope framing) · TP-S0b `19ff4d9` (the window-level routed pool) · TP-S1b `06c7b26` (the floor's per-cell-boot grant key; fieldd's HMAC'd route+grants; `renewAttach`/`roster`) · TP-S0a `983aa92` (the 17-trace corpus, the microbench — decode p50 2 µs, apply 12 µs —, mode-gated probes, the first baseline) · TP-§20a `427f71b` (five state tables + the failure matrix as data) · TP-S2 `0f10b22` (zoom = one resize each way; the watch-only ICE mirror) · TP-S1r `cd6f47d`+`0950474` (every birth/restore through fieldd's doors; zero `connectTicket`; the honest `transport-not-landed` face) · TP-S2b `98d2d6e` (the zoom witness) · TP-S0c `0da66d9`+`d1b8429`+`2c2c43b` (the `--terminal-perf-lab` rig; keydown→PTY-write p50 1.06 ms, `RawKeyDown` p50 15.8 ms, cold open 359–519 ms with the ticket mint ≈57 %). **Wave 2, now:** **TP-S3a** — the cell-side connection layer in field-native behind the rollback flag (two loopback WS doors in `field-terminal-host`, Origin at the upgrade, silent-1008 pre-auth, HMAC/JCS grant verification against the golden vectors, the transport high-water + nonce ledger + tombstones, one leg per channel with higher-generation replacement, `LegHeartbeat/Ack`, the grant key delivered to the cell at spawn, `doors` on the route row → `TerminalOpenTicket.endpoints`, the flag-conditional CSP; gate = both sockets accepted from the document AND a worker, packaged + dev, every named refusal proven) · **TP-S2b-widget** (the mirror as a built-in canvas widget type — mark 21 (a)) · **the ticket-mint lever** (the ≈57 % of cold open) · **the four-document split** (mark 19 — the core protocol · the rollout/rollback plan · the capability specs · the performance appendix). Then S3b static activation (the deck streams through the authenticated path behind the flag), S3c routed recovery + minimal geometry, S3d stress/fairness, S3e retire the bridge + the deliberate CSP test. Named debts: the wall-100 rAF zero-frames reading; divider drag ≈52 Hz (G23 item 9); TP-R18's keystroke→rAF half ungradeable on this host; DECISIONS.md carried no TC-D row (pre-existing).
 
 **PLUG.** **P8b COMPLETE — the artifact loads.** One evening closed the rung the whole ladder
 existed for (2026-08-13, four commits): the owed CORS probe ran FIRST and redesigned the rung
