@@ -3417,3 +3417,66 @@ refuse-with-the-real-reason precondition stands on the FIRST miss (a fresh workt
 built field-native), and its "twice in this slice's history" comment should read "once, plus a
 deleted target directory" (to ride the next code commit).
 
+## TP-S3a — the cell-side connection layer: two doors in OUR harness, and the Origin probe
+
+2026-08-22, `bc273fa` (the orchestrator; the critical path after James ratified TP-D1 = T1 and
+TP-D26 = C′ that morning). The first slice of the S3 bundle, built where TP-D26 put it: in
+`field-terminal-host`, over ghosttea's public `Session` API, beside its UDS plane.
+`packages/field-native/src/tp/` — `jcs.rs` (RFC 8785: ECMAScript number placement, UTF-16 key
+order, JSON.stringify escaping; pinned by the SAME `tp-jcs.vector.json` and grant-MAC vector the
+TypeScript minter pins, EL9 both ways) · `grant.rs` (the authenticated envelope verified over the
+RECEIVED `protected`+`claims` values — an unknown claim breaks the MAC exactly as it should; the
+silent class `GRANT_BAD_MAC`/`KEY_UNKNOWN`/`TYPE_MISMATCH`/`AUDIENCE_MISMATCH`/`EXPIRED`/
+`NOT_YET_VALID`/`LIFETIME_EXCEEDED` + `ORIGIN_REJECTED`/`HELLO_MALFORMED`/`PRE_AUTH_LIMIT`, each
+with its own test trigger; `GrantKey`'s Debug prints `<32 bytes>`, never the key) · `ledger.rs`
+(the transport high-water per connection set, the `(nonce, channel)` ledger held to
+`expiresAt + skew`, tombstones to `firstAcceptedAt + maxGrantLifetime + skew`; an EQUAL-generation
+grant replaces a live leg only when its `issuedAt` is newer; the attach high-water lives here for
+S3b) · `wire.rs` (serde mirrors of the contracts' hello/accepted/refused/heartbeat + the tagged
+envelope; the announced `ProtocolLimits` re-serialize byte-equal to
+`tp-protocol-limits.defaults.json`) · `door.rs` (tokio-tungstenite 0.29 — already in the lockfile
+via truffle-core, so no EL8 event; ONE ephemeral loopback port, `/control` + `/frames`; Origin read
+at the HTTP upgrade, a socket WITHOUT an Origin admitted (the grant is the authority, the list is
+hygiene — fieldd's door's rule); the pre-auth cap decided at ARRIVAL and released the instant a
+refusal is decided; every pre-auth failure a `1008` with NO body; `ConnectionRefused {code,
+retryable}` then `1000`; one leg per channel, `4002 SUPERSEDED` to the replaced leg; `LegHeartbeat`
+→ `Ack`, `4004 LEG_TIMEOUT` at the receipt deadline; `1001 GOING_AWAY` on drain, BEFORE the
+session sweep; anything beyond the connection layer on an accepted S3a leg is `4003
+PROTOCOL:unsupported-at-s3a:<type>` — honest, never a pretended attach). The floor now delivers
+the grant key AND the renderer origins on the bootstrap line (`{token, grantKey,
+grantKeyGeneration, allowedOrigins}`; `FIELD_NATIVE_ALLOWED_ORIGINS` is fieldd's own list passed
+down at spawn), the cell reports `doors` in its hello, the floor copies them onto the route row
+(`TerminalRouteCell.doors: CellEndpointSet`), and fieldd copies them into
+`TerminalOpenTicket.endpoints` EXACTLY when present (a keyed cell without doors still mints
+grants — the honest `transport-not-landed` face stays). Contracts deltas the prose had owed: every
+JSON text message on either leg is TAGGED `{type: <MessageName>, …}` (`TpMessageType`,
+`TP_LEG_INBOUND/OUTBOUND`, `tagTpMessage`/`decodeTpMessage`; the spec never said how a receiver
+tells an `AttachControlLeg` from a `DeclareDemand`); §20 item 5 EXISTS as data —
+`registries.TERMINAL_PIPELINE` (+ `TERMINAL_PIPELINE_CLOSE_CODES`) is the ONE authority for the
+protocol version, door hygiene, grant validity, the cell's receive caps and the announced limits,
+generated into `registries.rs` and pinned by a fixture both sides parse (values PROVISIONAL until
+the numeric checkpoint); `CellEndpointSet` moved to `envelope.ts` because the route row needs it.
+The CSP as ratified: `buildCsp(mode, hashes, {directTerminalDoor})` — production keeps the two
+pinned fieldd ports, admits `ws://127.0.0.1:*` only under the flag (`--terminal-direct-door` /
+`VIBEFIELD_TERMINAL_DIRECT_DOOR=1`; the probe mode implies it), the test asserts BOTH shapes;
+smoke-like modes gain `worker-src 'self' blob:`. **The gate line ran live:** `pnpm
+smoke:terminal-door` (`--terminal-door-probe`, `runTerminalDoorProbe` in the testing bundle; the
+production-main verifier refuses its marker) boots the real pair on an isolated root, births one
+session through fieldd's door, and the app-scheme renderer's DOCUMENT dialed `/control` while a
+blob WORKER dialed `/frames` with the ticket's transport grant — both `ConnectionAccepted`, both
+contexts' origin `vibefield-app://shell`, on the first run (the dev renderer's origin is an
+ordinary http origin fieldd's door already admits every session — stated, not re-probed). Tests:
+15 unit rows (JCS vectors, every silent code, ledger rules, tombstone math, version/window
+selection), 9 `tests/tp_door.rs` rows against a real tungstenite client (both channels on one
+grant; Origin; the silent class; deadline + cap; the structured class incl. `CAPACITY`;
+higher-generation and newer-equal replacement; heartbeats and `4004`; the honest `4003`s;
+shutdown `1001` + `STALE_ROUTE` by signal), 2 `cell_lifecycle` rows against the REAL binary (a key
+in the bootstrap opens doors a MAC'd grant enters; a keyless bootstrap says so by absence),
+fixture parity on `terminal-routes.doors.json`, fieldd (`doors` → `endpoints`; the minter's
+doors row), electron-shell (modes, the CSP's both shapes, the probe's pure halves), contracts
+(tagging, defaults fixture, the route row's doors). Gate verbatim green (two clippy findings
+on the way: tungstenite's large `ErrorResponse` and a `min` with today's 0 minor — both allowed
+with their reasons). NOT in this slice by design: attach legs, activations, frames, credits,
+`STALE_ROUTE` raised by custody, the attach high-water in use (S3b/S3c); one shared session set
+between the UDS plane and the doors is still G22's cost. Housekeeping: 18 orphaned `vf-smoke-*`
+floors from 2026-08-17/18 were found idle on launchd (no ptys held) and reaped.

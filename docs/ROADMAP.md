@@ -168,7 +168,34 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 
 ## In flight now
 
-**TP — the terminal pipeline (custody through pixels). RATIFIED 2026-08-22 — WAVE 2 IN FLIGHT.** The merged spec (`draft/specs/terminal-pipeline-v3.md` v0.9, eight reviews in) is ratified in full: **TP-D1 = T1** (direct loopback WS per cell; the `connect-src` reversal flag-conditional through S3a–S3d, deliberate at S3e), **TP-D26 = C′** (the cell-side door layer in OUR field-native harness over ghosttea's public `Session` API; petitions G22 + G23 are the upstream asks), **mark 21 = (a)** (the mirror as a built-in widget type), marks 2–19 as recommended; the protocol stays a closure CANDIDATE until §20 items 4–7 exist. **Wave 1 (all on main, 2026-08-21/22):** TP-S1a `f799ffc` (the wire truth + golden vectors incl. JCS and the envelope framing) · TP-S0b `19ff4d9` (the window-level routed pool) · TP-S1b `06c7b26` (the floor's per-cell-boot grant key; fieldd's HMAC'd route+grants; `renewAttach`/`roster`) · TP-S0a `983aa92` (the 17-trace corpus, the microbench — decode p50 2 µs, apply 12 µs —, mode-gated probes, the first baseline) · TP-§20a `427f71b` (five state tables + the failure matrix as data) · TP-S2 `0f10b22` (zoom = one resize each way; the watch-only ICE mirror) · TP-S1r `cd6f47d`+`0950474` (every birth/restore through fieldd's doors; zero `connectTicket`; the honest `transport-not-landed` face) · TP-S2b `98d2d6e` (the zoom witness) · TP-S0c `0da66d9`+`d1b8429`+`2c2c43b` (the `--terminal-perf-lab` rig; keydown→PTY-write p50 1.06 ms, `RawKeyDown` p50 15.8 ms, cold open 359–519 ms with the ticket mint ≈57 %). **Wave 2, now:** **TP-S3a** — the cell-side connection layer in field-native behind the rollback flag (two loopback WS doors in `field-terminal-host`, Origin at the upgrade, silent-1008 pre-auth, HMAC/JCS grant verification against the golden vectors, the transport high-water + nonce ledger + tombstones, one leg per channel with higher-generation replacement, `LegHeartbeat/Ack`, the grant key delivered to the cell at spawn, `doors` on the route row → `TerminalOpenTicket.endpoints`, the flag-conditional CSP; gate = both sockets accepted from the document AND a worker, packaged + dev, every named refusal proven) · **TP-S2b-widget** (the mirror as a built-in canvas widget type — mark 21 (a)) · **the ticket-mint lever** (the ≈57 % of cold open) · **the four-document split** (mark 19 — the core protocol · the rollout/rollback plan · the capability specs · the performance appendix). Then S3b static activation (the deck streams through the authenticated path behind the flag), S3c routed recovery + minimal geometry, S3d stress/fairness, S3e retire the bridge + the deliberate CSP test. Named debts: the wall-100 rAF zero-frames reading; divider drag ≈52 Hz (G23 item 9); TP-R18's keystroke→rAF half ungradeable on this host; DECISIONS.md carried no TC-D row (pre-existing).
+**TP — the terminal pipeline (custody through pixels). RATIFIED 2026-08-22 — WAVE 2 IN FLIGHT; TP-S3a LANDED.**
+The spec is ratified in full (James, 2026-08-22: **TP-D1 = T1**, **TP-D26 = C′**, **mark 21 = (a)**,
+marks 2–19 as recommended) and SPLIT per mark 19 into four documents: `draft/specs/terminal-pipeline-v3.md`
+(the normative v1 CORE PROTOCOL, v0.11) + `-rollout.md` (§13 deltas · §15 slice plan + landing log ·
+§20 item 7) + `-capabilities.md` (resume · snapshot-demand · profiling-envelope · geometryAdmin · the
+advanced rendering) + `-performance.md` (§18 · §19); the protocol stays a closure CANDIDATE until core §20
+items 4–7 exist (1, 2, 3, 5 do; 4 is half real). **Wave 1 (all on main, 2026-08-21/22):** TP-S1a `f799ffc` ·
+TP-S0b `19ff4d9` · TP-S1b `06c7b26` · TP-S0a `983aa92` · TP-§20a `427f71b` · TP-S2 `0f10b22` · TP-S1r
+`cd6f47d`+`0950474` · TP-S2b `98d2d6e` · TP-S0c `0da66d9`+`d1b8429`+`2c2c43b` (see LANDED.md). **Wave 2:**
+**TP-S3a LANDED `bc273fa`** — the cell-side CONNECTION LAYER in OUR harness (`field-native/src/tp/`: jcs ·
+grant · ledger · wire · door): two loopback WS doors per cell (`/control`, `/frames`, one ephemeral port),
+Origin at the upgrade, the silent-1008 pre-auth class, HMAC/JCS grant verification against the SAME
+vectors as the TS minter, the high-water + nonce ledger with tombstones, one leg per channel with higher-
+generation replacement (`4002`), `LegHeartbeat/Ack` + `4004`, `1001` on drain; the floor delivers the key
++ the renderer origins on the bootstrap line, the cell's `doors` ride the route row into
+`TerminalOpenTicket.endpoints`; contracts gained message TAGGING and `registries.TERMINAL_PIPELINE`
+(§20 item 5 as data, provisional); the CSP widens under the rollback flag only (`--terminal-direct-door`,
+tested both ways); **the Origin probe (`pnpm smoke:terminal-door`) is green on the first run — the
+app-scheme renderer's DOCUMENT and a WORKER both reached `ConnectionAccepted` under
+`vibefield-app://shell`.** In flight (Opus, worktrees): **TP-S2b-widget** (`vf-s2bw` — the mirror as a
+built-in canvas widget type, mark 21 (a)) · **the ticket-mint lever** (`vf-mint` — the ≈57 % of cold open).
+**Next:** TP-S3b static activation (attach legs + the activation registry, seed + ONE catch-up from
+`logical_snapshot`, the two-dimensional lease, byte credits, `DeclareDemand{none|live}` → warm/hot; the
+deck streams through the authenticated path behind the flag — needs G23's routed runtime, or an interim
+in-repo client for the gate) · S3c routed recovery + minimal geometry · S3d stress/fairness · S3e retire
+the bridge + the deliberate CSP test. Standing debts: one shared session set between the UDS plane and the
+doors = petition G22; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames reading;
+divider drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).
 
 **PLUG.** **P8b COMPLETE — the artifact loads.** One evening closed the rung the whole ladder
 existed for (2026-08-13, four commits): the owed CORS probe ran FIRST and redesigned the rung
