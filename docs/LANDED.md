@@ -3357,3 +3357,47 @@ held 527 ptys against `kern.tty.ptmx_max` 511 — 86 `field-terminal-host`s unde
 leaked by the perf-lab runs; reaped (ptys → 57), the S0c harness told to reap by path, cap and
 assert. Gate verbatim green on the merged main afterwards.
 
+## TP-S0c — the rig: a lab in the real app, and the first numbers that are ours
+
+2026-08-22, `0da66d9` + `d1b8429` (the S0c Opus agent; rebased, fast-forwarded). The
+`--terminal-perf-lab` Electron mode (`electron-shell/src/testing/terminal-perf-lab.ts`) is wired
+like `--smoke-godview`: the production window factory, a real daemon pair on an isolated data
+root, panes born through the workspace's own ⌘D, sessions driven by fieldd tickets + the
+automation client; the renderer is the REAL product renderer built with an explicit lab door
+(`vite build --mode` does NOT flip `import.meta.env.DEV`; `NODE_ENV` would ship React's dev
+runtime into the measurement) into `.vibefield/terminal-perf-lab/renderer`, and the production
+bundles REFUSE the lab marker by gate (`verify-production-{main,renderer}.mjs`). Scenarios that
+run: single-pane · deck-4 · flood · flood-in-a-deck · fan-out · scroll-storm · resize-storm ·
+focus-alternation · echo-probe · wall-probe · wall-100 (multi-view named as not hostable before a
+second view host); generators report achieved-vs-requested rates. `pnpm perf:terminal <scenario>`
+drives it; `--ab metrics,off` interleaves arms inside one launch, order flipped per rotation.
+Numbers (medians, loaded host; PROPOSED inputs to the numeric checkpoint, 13 rows in RESULTS §7):
+keydown → PTY write accepted **p50 1.06 ms** (p95 3.6, p99 8.1; 900/900 keys paired; fixture
+10 µs) — §18.1's ≤1 ms hypothesis holds; Chromium `InputLatency::RawKeyDown` **p50 15.8 ms**
+(swap included; 0.9 % apart across runs) — the §18.12 floor as a number; `frameApplyMs` **p50
+0.10 ms in every scenario** incl. an 8 MB/s flood; cold open 359–519 ms vs the 300 ms hypothesis,
+with the `ticket` station **202–264 ms ≈ 57 %** of it (the mint round trip is the cold-open lever);
+TP-R18's `metrics` half PASSES on frame-interval p95 and fps (Δ −0.0 %/0.0 %; null arm 1.1 %/
+0.1 %) and is UNGRADEABLE on keystroke→rAF (null arm 58.8 %); TP-R19 `secondary`/`medium` with a
+stable contributor set 3/3, throughput `host-contention-sensitive`; 100 panes reached idle and
+under flood — with the rAF loop delivering ZERO frames to a visible+focused page while the worker
+ran 118–120 submits/s at 98–99 % cache hits: the baseline's biggest open question. The Ghostty
+A-vs-A control is built (echo fixture with `probeId`, a Swift CGEvent injector whose clock is
+paired against Node's — macOS has TWO monotonic clocks 57,656 s apart here —, a window-list gate,
+the pairing/comparison reducer) and GATED (`--native-control --i-have-the-display`, refuses with
+foreign windows on screen): it injected ~33 stray characters into James's live session before the
+gate existed, and it will not run until he hands over the display; even then it answers inject →
+child-read and the DSR round trip, not keystroke → photon. The rig caught its own wrong headline
+twice ("the deck tops out at 11 panes" = `focusDeck` reading the first, 0×0 `.terminal-input`).
+**And the incident:** the lab's `finally` called `app.exit()` without `supervisor.dispose()`, so
+every scenario left its Electron, its detached floor, cells and shells alive — 45 lab Electrons /
+86 cells / 509 ptys put the machine over `kern.tty.ptmx_max` 511 and turned every terminal Rust
+test and smoke red on clean main (reaped twice; merge held for the fix). `d1b8429`: real teardown
+(bounded `dispose()`, scratch root removed only when not injected), `pnpm perf:terminal --reap`
+(a SIGKILL tool, so it is the tested part: matches this worktree's absolute path at an EXECUTABLE
+position only — a `grep` naming the binary and a `node -e … <path>` decoy are spared by test),
+a pre-flight refusal when its own leftovers are alive, and a per-run census whose claim is "none
+of this worktree's processes survived" (pty counts are corroboration — `/dev/ttys*` releases
+LAZILY, ~30 s after the holders exit, and other agents' shells move the baseline). Verified
+57 → 57 with zero strays on deck-4 and on wall-100 (100 sessions). Gate verbatim green.
+

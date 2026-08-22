@@ -168,27 +168,36 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 
 ## In flight now
 
-**TP — the terminal pipeline (custody through pixels).** The merged spec
-(`draft/specs/terminal-pipeline-v3.md` v0.8, eight reviews in; architecture ratifiable, protocol a
-closure CANDIDATE behind §20's artifacts) started landing on 2026-08-21 as parallel slices, all
-gate-green on main: **TP-S1a** `f799ffc` (every TPv3 message as a contract + golden vectors, incl.
-RFC 8785 JCS and the envelope's binary framing) · **TP-S0b** `19ff4d9` (the runtime leaves the
-deck for a window-level routed pool; TP-R1 proven against the real 0.10.1 runtime) · **TP-S1b**
-`06c7b26` (the floor mints a per-cell-boot grant key; fieldd issues HMAC'd route+grants beside the
-legacy ticket; `terminal.renewAttach` + `terminal.roster`) · **TP-S0a** `983aa92` (the 17-trace
-real-cell TRF1 corpus, the worker microbench — decode p50 2 µs, apply 12 µs —, mode-gated probes,
-the first baseline) · **TP-§20a** `427f71b` (the five state-transition tables + the failure matrix
-as contracts data, total/deterministic/closed by test) · **TP-S2** `0f10b22` (deck-owned zoom =
-one resize each way; the watch-only ICE mirror as the pool's second consumer; TP-R4a proven by
-attack) · **TP-S1r** `cd6f47d`+`0950474` (every birth and restore through fieldd's session doors;
-zero `connectTicket`; the single-cell pin with the honest `transport-not-landed` face; the UI reads
-`terminal.roster` only; the smoke births its own GT-D11 flip witness). In flight: **TP-S0c** (the
-perf-lab rig, closing S0a's in-app `metrics` gap, the Ghostty control "awaiting the display"),
-**TP-S2b** (the `zoom.commits` smoke row). Next, gated on James: **TP-D1** (T1's `connect-src`
-reversal) and **mark 20** (TP-D26 — the cell-side door layer in our own harness over ghosttea's
-`Session` API; petitions G22 accessor pack + G23 renderer bundle drafted) before any TP-S3 cell-side
-code; mark 21 (the mirror as a widget TYPE — built-in vs SDK door); then §20 items 4–7 and the S3
-sub-slices behind the rollback flag. The 21 [JAMES] marks are the standing calls.
+**TP — the terminal pipeline (custody through pixels). WAVE 1 COMPLETE (2026-08-22).** The
+merged spec (`draft/specs/terminal-pipeline-v3.md` v0.8, eight reviews in; architecture ratifiable,
+protocol a closure CANDIDATE behind §20's artifacts) landed its first nine slices in one night, all
+gate-green on main, four of them built by Opus agents in parallel worktrees: **TP-S1a** `f799ffc`
+(every TPv3 message as a contract + golden vectors, incl. RFC 8785 JCS and the envelope's binary
+framing) · **TP-S0b** `19ff4d9` (the runtime leaves the deck for a window-level routed pool; TP-R1
+proven against the real 0.10.1 runtime) · **TP-S1b** `06c7b26` (the floor mints a per-cell-boot grant
+key; fieldd issues HMAC'd route+grants beside the legacy ticket; `terminal.renewAttach` +
+`terminal.roster`) · **TP-S0a** `983aa92` (the 17-trace real-cell TRF1 corpus, the worker microbench —
+decode p50 2 µs, apply 12 µs —, mode-gated probes, the first baseline) · **TP-§20a** `427f71b` (the
+five state-transition tables + the failure matrix as contracts data, total/deterministic/closed by
+test) · **TP-S2** `0f10b22` (deck-owned zoom = one resize each way; the watch-only ICE mirror as the
+pool's second consumer; TP-R4a proven by attack) · **TP-S1r** `cd6f47d`+`0950474` (every birth and
+restore through fieldd's session doors; zero `connectTicket`; the single-cell pin with the honest
+`transport-not-landed` face; the UI reads `terminal.roster` only; the smoke births its own GT-D11
+flip witness) · **TP-S2b** `98d2d6e` (the smoke witnesses `zoom.commits` and that no other pane's box
+moves) · **TP-S0c** `0da66d9`+`d1b8429` (the `--terminal-perf-lab` rig in the REAL app, 11 scenarios,
+`pnpm perf:terminal`; the first in-app numbers — keydown→PTY-write **p50 1.06 ms** (§18.1's ≤1 ms
+holds), Chromium `RawKeyDown` **p50 15.8 ms** (the Electron floor), `frameApplyMs` 0.10 ms under an
+8 MB/s flood, cold open 359–519 ms with the **ticket mint ≈57 %** of it; a 13-row PROPOSED
+numeric-ratification table; the Ghostty A-vs-A control built and GATED off James's display; the
+lab's teardown/reaper/census after its Electrons leaked 509 ptys past `ptmx_max`). Nothing in
+flight. **Next, gated on James:** **TP-D1** (T1's `connect-src` reversal), **mark 20** (TP-D26 — the
+cell-side T1 door layer in OUR harness over ghosttea's public `Session` API; petitions G22 accessor
+pack + G23 renderer bundle drafted in `draft/petitions/`), **mark 21** (the mirror as a canvas widget
+TYPE: built-in vs SDK door); then §20 items 4–7, TP-S2b-widget, and TP-S3a cell-side in
+field-native behind the rollback flag. Named debts from the wave: the `ticket` round trip dominates
+cold open (a mint-latency lever for S1/S3); the wall-100 rAF-delivers-zero-frames reading; divider
+drag ≈52 Hz with no upstream throttle seam (G23 item 9); TP-R18's keystroke→rAF half ungradeable on
+this host. The 21 [JAMES] marks are the standing calls.
 
 **PLUG.** **P8b COMPLETE — the artifact loads.** One evening closed the rung the whole ladder
 existed for (2026-08-13, four commits): the owed CORS probe ran FIRST and redesigned the rung
