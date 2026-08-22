@@ -15,11 +15,30 @@
 //
 // Clock-injected, so the derivation is testable without a renderer.
 
-/** The cold path's stations, in the order a cold open passes them. */
+/** The cold path's stations, in the order a cold open passes them.
+ *
+ * TP-S1m SPLIT THE FIRST INTERVAL, and the split is the slice's finding. Until
+ * now the first station after `open` was `ticket`, so everything between the two
+ * — React's commit, the pool's claim, whatever that claim WAITED on, the roster
+ * read, and the mint's own round trip — arrived as one number. TP-S0c read that
+ * number as "~57% of a cold open is minting the ticket". It is not: the mint is
+ * the last and by far the smallest part of the interval. A breakdown that cannot
+ * separate a wait from the work it waits for will always blame the work. */
 export const COLD_OPEN_PHASES = [
   /** The renderer learned the overlay is open. Time zero for everything below. */
   "open",
-  /** fieldd answered `terminal.connectTicket` — a mint, no session. */
+  /** The deck claimed the pool. React's commit is behind this stamp. */
+  "claim",
+  /** `terminal.roster` LEFT the renderer — the control arm's send edge. */
+  "rosterAsk",
+  /** fieldd answered `terminal.roster`: a read of the observed inventory, with
+   * no audit append and no mint. It is the NULL ARM for the mint below it —
+   * same socket, same client, adjacent in time, differing only in what the
+   * handler does (§19's interleaved control, taken on the path itself). */
+  "roster",
+  /** The mint (`terminal.openTicket` or `terminal.create`) LEFT the renderer. */
+  "mintAsk",
+  /** fieldd answered the mint: a ticket, and on a TP floor a route and grants. */
   "ticket",
   /** Main answered the connect: bridge forked, sockets dialled, ports posted. */
   "connected",

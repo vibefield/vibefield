@@ -339,7 +339,7 @@ export function GodviewDeck({
         if (!cancelled) setConsent("go");
         return;
       }
-      const sessions = await refreshTerminalRoster();
+      const sessions = await refreshTerminalRoster(godviewColdOpen);
       if (cancelled) return;
       // `unread`/`unavailable`/`unobserved` all mean the same thing to this
       // gate: no trustworthy list of what is alive, so ask nothing and mount.
@@ -418,14 +418,14 @@ export function GodviewDeck({
       // N+1 panes where N were wanted.
       const sessions =
         terminalPoolSnapshot().rosterState === "unread"
-          ? await refreshTerminalRoster()
+          ? await refreshTerminalRoster(godviewColdOpen)
           : pool.roster;
       const alive = sessions
         .filter((session) => session.health !== "exited")
         .map((session) => session.sessionId);
-      if (await openDormantTransport(alive)) return;
+      if (await openDormantTransport(alive, godviewColdOpen)) return;
       try {
-        await createTerminalSession({ workloadClass: "interactive" });
+        await createTerminalSession({ workloadClass: "interactive" }, godviewColdOpen);
       } catch (cause) {
         // The pool has already published the fault and the deck is already
         // drawing its face; this only says so in the log with the deck's voice.

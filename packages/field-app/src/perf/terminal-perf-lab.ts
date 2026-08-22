@@ -26,6 +26,7 @@
 // an observer effect, reported by `framesRunning` beside the numbers it moves.
 
 import { emitTerminalPerfLabMarker } from "../development-console";
+import { getLabSwitches, setLabSwitches } from "../godview/lab-switches";
 import type { FrameStatsHandle, FrameStatsSample } from "./frame-stats";
 import { startFrameStats } from "./frame-stats";
 import type { StageHistogram, TerminalPerfMode, TerminalPerfSample } from "./terminal-perf";
@@ -108,8 +109,22 @@ export interface TerminalPerfLabSnapshot {
  * pacing never reaches them, small enough that a runaway cannot exhaust the
  * renderer's heap and make the lab the thing that broke the measurement. */
 const MAX_SAMPLES = 4_000;
+/** LoAF entries kept while the long-frame probe is armed. A cold open produces
+ * a handful; the cap is there so an armed observer left running through a flood
+ * cannot grow without bound. */
+const MAX_LONG_FRAMES = 2_000;
 const MAX_FRAMES = 20_000;
 const MAX_PROBES = 20_000;
+
+/** One `long-animation-frame` entry, reduced to the three numbers a cold open
+ * needs: when the stretch began (page clock, the same origin the cold-open
+ * trace stamps in), how long it lasted, and how much of it the engine calls
+ * BLOCKING — the part during which no other task could run. */
+export interface LongFrameRecord {
+  readonly startMs: number;
+  readonly durationMs: number;
+  readonly blockingMs: number;
+}
 
 /** The key a probe rides in. The rig injects printable ASCII and the fixture
  * echoes it, so a probe id has to be reconstructible from ONE character. The
@@ -133,6 +148,71 @@ class TerminalPerfLab {
   #lastSampleAt = -1;
   #hiddenTransitions = 0;
   #visibilityListener: (() => void) | undefined;
+  #longFrames: LongFrameRecord[] = [];
+  #longFrameObserver: PerformanceObserver | undefined;
+
+  /**
+   * TP-S1m — WATCH THE MAIN THREAD, on request.
+   *
+   * The cold-open trace can time a round trip but not say why one was slow: a
+   * reply that is ready in fieldd and a reply the page has not got around to
+   * reading look identical from the outside, and TP-S0c read one as the other.
+   * `long-animation-frame` names the difference — every entry is a stretch the
+   * page could not run a task in, so a mint whose answer landed inside one was
+   * waiting on THIS thread rather than on the daemon.
+   *
+   * Opt-in per run (`VF_PERF_LONGTASKS=1`) and OFF by default, so a before/after
+   * comparison is not itself an A/B on the presence of an observer. `buffered`
+   * collects the entries the engine already recorded before this was called —
+   * which is what lets main arm it immediately before the open rather than at
+   * page load, where it would also record the canvas coming up.
+   */
+  captureLongFrames(): boolean {
+    if (this.#longFrameObserver !== undefined) return true;
+    if (typeof PerformanceObserver === "undefined") return false;
+    const types = PerformanceObserver.supportedEntryTypes;
+    if (!Array.isArray(types) || !types.includes("long-animation-frame")) return false;
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (this.#longFrames.length >= MAX_LONG_FRAMES) return;
+        const loaf = entry as PerformanceEntry & { blockingDuration?: number };
+        this.#longFrames.push({
+          startMs: Math.round(entry.startTime * 10) / 10,
+          durationMs: Math.round(entry.duration * 10) / 10,
+          blockingMs: Math.round((loaf.blockingDuration ?? 0) * 10) / 10,
+        });
+      }
+    });
+    observer.observe({ type: "long-animation-frame", buffered: true });
+    this.#longFrameObserver = observer;
+    return true;
+  }
+
+  /** Drain what the observer has seen. Empty when it was never armed. */
+  takeLongFrames(): LongFrameRecord[] {
+    const drained = this.#longFrames;
+    this.#longFrames = [];
+    return drained;
+  }
+
+  /**
+   * TP-S1m — GT-3p's monitor kill switch, reachable from the rig.
+   *
+   * This is the one place the bridge's "may not make the app behave
+   * differently" rule is deliberately spent, and only because the thing it
+   * reaches for exists ONLY to be spent: `lab-switches.ts` is GT-D15.4's
+   * instrument for "remove a layer and watch the readout move", memory-only and
+   * unlabelled as a preference. Driving it from the panel measures a steady
+   * deck; driving it from here measures the OPEN, which is the one moment the
+   * layer's cost lands on a station a user can feel.
+   *
+   * Off by default and set only when the rig asks — a run that does not call
+   * this is byte-for-byte the run that shipped.
+   */
+  setMonitorEnabled(enabled: boolean): boolean {
+    setLabSwitches({ ...getLabSwitches(), monitor: enabled });
+    return getLabSwitches().monitor;
+  }
 
   /** Start accumulating. Idempotent — main may call it once per arm. */
   start(mode: TerminalPerfMode): void {

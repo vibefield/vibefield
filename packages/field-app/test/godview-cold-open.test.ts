@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ColdOpenTrace } from "../src/godview/cold-open";
+import { COLD_OPEN_PHASES, type ColdOpenPhase, ColdOpenTrace } from "../src/godview/cold-open";
 
 /** A trace whose clock never advances on its own: every stamp below passes the
  * instant explicitly, which is what makes these cases arithmetic rather than
@@ -71,6 +71,43 @@ describe("the cold-open trace (GT-D15.4)", () => {
     // is still 120.
     trace.mark("connected", 5_000);
     expect(trace.report().phases.connected).toBe(120);
+  });
+
+  it("splits the first interval into a SEND edge and an ANSWER, so a wait is not read as work (TP-S1m)", () => {
+    // The shape TP-S0c could not see. Before the split there was one station
+    // between `open` and `connected` — `ticket` at 210 — and the whole 210 ms
+    // was attributed to minting. The send edges say where it actually went:
+    // 15 ms of React, an 8 ms control round trip that proves the socket is
+    // fast, and then 185 ms in which a mint that fieldd answered in 38 ms was
+    // not read by a busy page.
+    const trace = tracing();
+    trace.mark("open", 0);
+    trace.mark("claim", 15);
+    trace.mark("rosterAsk", 17);
+    trace.mark("roster", 25);
+    trace.mark("mintAsk", 25.5);
+    trace.mark("ticket", 210);
+    trace.mark("connected", 218);
+    trace.mark("mounted", 330);
+    trace.mark("frame", 340);
+
+    const { phases } = trace.report();
+    // The NULL ARM: a fieldd round trip with no audit append and no mint.
+    expect((phases.roster ?? 0) - (phases.rosterAsk ?? 0)).toBe(8);
+    // The mint's own interval, measured from the send rather than from the
+    // previous station — which is the whole correction.
+    expect((phases.ticket ?? 0) - (phases.mintAsk ?? 0)).toBe(184.5);
+  });
+
+  it("orders the send edges before the answers they belong to", () => {
+    // A station list out of order would silently produce negative hops in every
+    // reduction downstream, and the reductions round rather than validate.
+    const order = (phase: string): number => COLD_OPEN_PHASES.indexOf(phase as ColdOpenPhase);
+    expect(order("claim")).toBeGreaterThan(order("open"));
+    expect(order("roster")).toBeGreaterThan(order("rosterAsk"));
+    expect(order("ticket")).toBeGreaterThan(order("mintAsk"));
+    expect(order("mintAsk")).toBeGreaterThan(order("roster"));
+    expect(order("connected")).toBeGreaterThan(order("ticket"));
   });
 
   it("is incomplete, not zero, when the open never reached a frame", () => {

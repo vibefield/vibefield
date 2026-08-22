@@ -28,6 +28,7 @@
 
 import { spawnSync } from "node:child_process";
 import {
+  type Dirent,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -751,6 +752,91 @@ function ptyCount(): number {
   }
 }
 
+/** One audited action fieldd performed during the run, as the ledger recorded
+ * it: the attempt's timestamp, and how long the effect between the two records
+ * took. `sequence` is the order the action's ATTEMPT was written in, so the
+ * cold open's first `terminal.session.create` is recognisable as the first one
+ * rather than by guessing from a duration. */
+interface AuditActionTiming {
+  readonly action: string;
+  readonly sequence: number;
+  readonly attemptAt: number;
+  readonly effectMs: number;
+  readonly outcome: string;
+}
+
+/** Pair every audited action's `attempt` with its `outcome` by `operationId`.
+ *
+ * TP-S1m's server-side instrument, and it adds nothing to the daemon: the two
+ * records are already written (attempt BEFORE the effect, outcome after), so
+ * the interval between their `time` fields IS the handler's own duration —
+ * `terminal.session.create`'s covers the class-cell wait, the per-cell control
+ * dial and the spawn; `terminal.ticket.mint`'s covers the mint alone.
+ *
+ * The whole audit tree is walked because the ledger's location under a data
+ * root is the daemon's business (a per-user root nests it), and a hard-coded
+ * path would silently report nothing the day that changes. Bounded by the
+ * directory's own size and read once, at teardown. */
+function auditDurations(root: string): AuditActionTiming[] {
+  const files: string[] = [];
+  const walk = (dir: string, depth: number): void => {
+    if (depth > 6) return;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path, depth + 1);
+      else if (entry.name.endsWith(".jsonl") && dir.split("/").includes("audit")) files.push(path);
+    }
+  };
+  walk(root, 0);
+  const attempts = new Map<string, { action: string; time: number; sequence: number }>();
+  const timings: AuditActionTiming[] = [];
+  let sequence = 0;
+  for (const file of files) {
+    let lines: string[];
+    try {
+      lines = readFileSync(file, "utf8").split("\n");
+    } catch {
+      continue;
+    }
+    for (const line of lines) {
+      if (line.trim() === "") continue;
+      let record: Record<string, unknown>;
+      try {
+        record = JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        continue; // a torn last line is not a reason to lose the rest
+      }
+      const operationId = record["operationId"];
+      const action = record["action"];
+      const time = record["time"];
+      if (typeof operationId !== "string" || typeof action !== "string") continue;
+      if (typeof time !== "number") continue;
+      if (record["phase"] === "attempt") {
+        sequence += 1;
+        attempts.set(operationId, { action, time, sequence });
+        continue;
+      }
+      const opened = attempts.get(operationId);
+      if (opened === undefined) continue;
+      attempts.delete(operationId);
+      timings.push({
+        action,
+        sequence: opened.sequence,
+        attemptAt: opened.time,
+        effectMs: Math.round((time - opened.time) * 10) / 10,
+        outcome: typeof record["outcome"] === "string" ? record["outcome"] : "unknown",
+      });
+    }
+  }
+  return timings.sort((left, right) => left.sequence - right.sequence);
+}
+
 /** The count once the kernel has finished taking them back.
  *
  * `/dev/ttys*` nodes ARE removed when a pty is released — but LAZILY, and later
@@ -995,6 +1081,29 @@ export async function runTerminalPerfLab(opts: {
       await contentTracing.startRecording({ included_categories: TRACE_CATEGORIES });
     }
 
+    // TP-S1m — the main thread's own account of the open, OFF by default.
+    // Armed immediately before the toggle so the entries it collects belong to
+    // the open rather than to the canvas coming up, and opt-in so a before/after
+    // comparison is never also an A/B on the presence of an observer.
+    // TP-S1m — the monitor stage, removed for the run when the rig asks. The
+    // cold open mounts the deck and the monitor in one commit, so the only way
+    // to say what the monitor costs the OPEN is to open once without it. A run
+    // that does not set this is the shipping path unchanged.
+    if (process.env["VF_PERF_NO_MONITOR"] === "1") {
+      const monitor = (await win.webContents.executeJavaScript(
+        "window.__vfTerminalPerfLab.setMonitorEnabled(false)",
+      )) as boolean;
+      emit({ kind: "lab-switches", at: Date.now(), monitor });
+    }
+
+    const watchLongFrames = process.env["VF_PERF_LONGTASKS"] === "1";
+    if (watchLongFrames) {
+      const armed = (await win.webContents.executeJavaScript(
+        "window.__vfTerminalPerfLab.captureLongFrames()",
+      )) as boolean;
+      emit({ kind: "long-frames-armed", at: Date.now(), armed });
+    }
+
     opts.toggleGodview();
     const opened = await deck.until(
       (facts) => facts.active && facts.panes >= 1,
@@ -1006,7 +1115,18 @@ export async function runTerminalPerfLab(opts: {
     // never the reason a run passes or fails.
     void coldOpen
       .until(() => true, "the cold-open stations", 30_000)
-      .then((facts) => emit({ kind: "cold-open", at: Date.now(), ...facts }))
+      .then(async (facts) => {
+        emit({ kind: "cold-open", at: Date.now(), ...facts });
+        if (!watchLongFrames) return;
+        // Drained AFTER the trace is complete, so every stretch the open spent
+        // is already recorded. The entries carry the page clock the cold-open
+        // stations are stamped in, which is what lets a reader place a slow
+        // reply inside a specific blocked frame instead of inferring it.
+        const frames = (await win.webContents.executeJavaScript(
+          "window.__vfTerminalPerfLab.takeLongFrames()",
+        )) as Array<{ startMs: number; durationMs: number; blockingMs: number }>;
+        emit({ kind: "long-frames", at: Date.now(), frames });
+      })
       .catch(() => emit({ kind: "cold-open", at: Date.now(), missing: true }));
 
     // A pane ceiling is GEOMETRY before it is resources: the deck splits until a
@@ -1206,6 +1326,26 @@ export async function runTerminalPerfLab(opts: {
         return message;
       }
     };
+
+    // TP-S1m — THE SERVER'S OWN RECORD OF THE COLD OPEN, read before the
+    // scratch root is removed.
+    //
+    // The renderer's trace can time a mint only from the outside: `mintAsk` to
+    // `ticket` covers the socket, fieldd's queue, its handler and the floor
+    // together, and TP-S0c read that whole interval as "minting the ticket".
+    // fieldd already writes the inside of it down — every audited action lands
+    // an `attempt` record before its effect and an `outcome` record after (EL7,
+    // and the reason `terminal.create` composes TWO audited actions). Pairing
+    // those by `operationId` gives each handler's own duration with no new
+    // instrument in the daemon at all, and the ledger is durable, so this is a
+    // read rather than a measurement that perturbs what it measures.
+    //
+    // Diagnostics only, and never a reason a run fails: a root with no ledger
+    // (an early failure, an injected FIELDD_DATA_DIR elsewhere) reports nothing.
+    await guard("reading the audit ledger", () => {
+      const actions = auditDurations(opts.root);
+      if (actions.length > 0) emit({ kind: "audit-timings", at: Date.now(), actions });
+    });
 
     const ptysBefore = startingPtys;
     let teardownNote = "clean";

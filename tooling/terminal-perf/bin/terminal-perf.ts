@@ -254,15 +254,38 @@ function buildSwiftHelpers(): void {
 // THE RUST HALF, which no JS build produces. Without it fieldd exits before
 // readiness and the only thing anyone sees is "field-native did not come up
 // before the readiness deadline" — twenty minutes of debugging the wrong plane,
-// twice in this slice's own history (once at the start, once after a rebase had
-// removed the binary). Six lines to say it plainly instead.
+// twice in this slice's own history: once at the start, and once after the
+// orchestrator deleted this worktree's `target/` directory while the slice was
+// still running (an ERRATUM to the comment that stood here, which blamed a
+// rebase — no rebase removed the binary; a disk sweep did). Six lines to say it
+// plainly instead.
 const fieldNative = join(repoRoot, "target", "debug", "field-native");
 if (!existsSync(fieldNative)) {
   process.stderr.write(
     `\nthe Rust floor is not built: ${fieldNative} is missing.\n` +
-      "  cargo build\n" +
+      "  cargo build --bins\n" +
       "\nWithout it fieldd exits before readiness and the lab reports a daemon problem\n" +
       "rather than a missing binary.\n",
+  );
+  process.exit(2);
+}
+
+// THE CELL, which is a SECOND binary (TC-S2) and the trap this check exists for.
+// `cargo build` builds the workspace's default targets and `cargo build -p
+// field-native` builds its lib and its default bin; neither necessarily leaves
+// `field-terminal-host` on disk. When it is missing the floor still comes up and
+// fieldd still reaches readiness — so the driver sails past every daemon check
+// and the failure surfaces two minutes later, in the RENDERER, as
+// `UNAVAILABLE {service:"terminal", state:"absent"}` and a deck that sits at
+// zero panes until the 120s open timeout. That is the same "twenty minutes
+// debugging the wrong plane" the check above was written for, one binary over.
+const terminalHost = join(repoRoot, "target", "debug", "field-terminal-host");
+if (!existsSync(terminalHost)) {
+  process.stderr.write(
+    `\nthe terminal CELL is not built: ${terminalHost} is missing.\n` +
+      "  cargo build -p field-native --bins\n" +
+      "\nfield-native comes up without it and fieldd reaches readiness, so nothing fails\n" +
+      "until the deck asks for a session and the floor answers UNAVAILABLE (state:absent).\n",
   );
   process.exit(2);
 }

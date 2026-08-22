@@ -139,9 +139,16 @@ export interface TerminalPoolSnapshot {
 }
 
 /** The stations the pool can stamp on a cold-open trace. Structural on purpose:
- * `ColdOpenTrace` satisfies it, and the pool does not import Godview. */
+ * `ColdOpenTrace` satisfies it, and the pool does not import Godview.
+ *
+ * TP-S1m added the SEND edges (`claim`, `rosterAsk`, `mintAsk`). Without them a
+ * station only says when an answer arrived, and an answer's arrival cannot tell
+ * a slow daemon from a request that was sent late — which is exactly the
+ * mistake the ticket's "57% of the cold open" was. */
 export interface TransportTrace {
-  mark(phase: "ticket" | "connected" | "device"): void;
+  mark(
+    phase: "claim" | "rosterAsk" | "roster" | "mintAsk" | "ticket" | "connected" | "device",
+  ): void;
 }
 
 /** One view's binding to one session (TP-L-C: by id, never by placement). */
@@ -549,6 +556,7 @@ async function openTransportForSession(
   const epoch = acquisitionEpoch;
   const fieldd = client;
   if (fieldd === null) return false;
+  trace?.mark("mintAsk");
   const raw = await fieldd.request("terminal.openTicket", { sessionId });
   if (epoch !== acquisitionEpoch) return false;
   const read = readOpenTicket(sessionId, raw, Date.now());
@@ -641,6 +649,7 @@ export function openTerminalPool(
 ): void {
   client = fieldd;
   ensureBridgeSubscription();
+  options.trace?.mark("claim");
   if (options.sessionIds !== undefined && options.sessionIds.length > 0) {
     rejoinHint = options.sessionIds;
   }
@@ -720,11 +729,17 @@ async function adopt(options: {
  */
 export async function createTerminalSession(
   params: TerminalCreateParams = {},
+  trace?: TransportTrace,
 ): Promise<CreatedTerminalSession> {
   const fieldd = client;
   if (fieldd === null) throw new Error("the terminal pool has no fieldd client");
   let raw: unknown;
   try {
+    // TP-S1m: the create path is a MINT too (GT-1 — create answers with a
+    // ticket), and it was the one the trace could not see. A first run has
+    // nothing to rejoin, so it reached the floor through here and published a
+    // cold open with no `ticket` station at all.
+    trace?.mark("mintAsk");
     raw = await fieldd.request("terminal.create", params);
   } catch (cause) {
     // The CONTROL plane refused. field-native holds the PTYs and outlives
@@ -734,6 +749,7 @@ export async function createTerminalSession(
     throw cause;
   }
   const read = readCreateTicket(raw, Date.now());
+  trace?.mark("ticket");
   if (read.placement !== undefined) placements.record(read.placement);
   if (read.routed) grantsLanded = true;
   rejoinHint = [...new Set([...rejoinHint, read.sessionId])];
@@ -743,6 +759,7 @@ export async function createTerminalSession(
   if (pinnedCell === null) {
     try {
       await landTransport(read, read.ticket);
+      trace?.mark("connected");
       phase = "open";
       fault = null;
       spentReason = null;
@@ -764,7 +781,10 @@ export async function createTerminalSession(
  * cost a worker and a GPU device. A no-op in every other phase — an open pool is
  * already pinned, and a failed one wants the human's retry.
  */
-export async function openDormantTransport(sessionIds: readonly string[]): Promise<boolean> {
+export async function openDormantTransport(
+  sessionIds: readonly string[],
+  trace?: TransportTrace,
+): Promise<boolean> {
   if (!claimed || phase !== "dormant") return false;
   if (sessionIds.length > 0) rejoinHint = [...new Set([...rejoinHint, ...sessionIds])];
   phase = "opening";
@@ -772,7 +792,7 @@ export async function openDormantTransport(sessionIds: readonly string[]): Promi
   const epoch = acquisitionEpoch;
   for (const sessionId of sessionIds) {
     try {
-      if (await openTransportForSession(sessionId)) {
+      if (await openTransportForSession(sessionId, trace)) {
         if (epoch !== acquisitionEpoch) return false;
         phase = "open";
         fault = null;
@@ -865,7 +885,9 @@ function unobservedRefusal(cause: unknown): boolean {
  * window that cannot ask at all is `unavailable`. An empty list is only
  * trustworthy under `observed`.
  */
-export async function refreshTerminalRoster(): Promise<readonly ProductSessionRosterItem[]> {
+export async function refreshTerminalRoster(
+  trace?: TransportTrace,
+): Promise<readonly ProductSessionRosterItem[]> {
   const fieldd = client;
   if (fieldd === null) {
     roster = [];
@@ -874,7 +896,12 @@ export async function refreshTerminalRoster(): Promise<readonly ProductSessionRo
     return roster;
   }
   try {
+    // TP-S1m's null arm: the same client and the same socket, one call before
+    // the mint, answering from memory with no audit append and no HMAC. What
+    // the two intervals differ by is the mint's own cost.
+    trace?.mark("rosterAsk");
     roster = TerminalRosterResult.parse(await fieldd.request("terminal.roster", {})).items;
+    trace?.mark("roster");
     rosterState = "observed";
   } catch (cause) {
     roster = [];

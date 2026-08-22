@@ -339,6 +339,58 @@ describe("grants are HELD, and nothing is faked", () => {
   });
 });
 
+describe("the cold-open stations the pool stamps (TP-S1m)", () => {
+  /** A trace that records the order stations were reached in. The pool takes it
+   * structurally (`TransportTrace`), which is what keeps Godview out of the
+   * pool — so a test can hand it a list and read the path back. */
+  function recorder(): { marks: string[]; mark: (phase: string) => void } {
+    const marks: string[] = [];
+    return { marks, mark: (phase: string) => marks.push(phase) };
+  }
+
+  it("stamps the CREATE path, which is the one a first run takes", async () => {
+    // The instrumentation gap TP-S0c published a number through: with nothing
+    // saved the pool rests dormant and the deck reaches the floor via `create`,
+    // and `create` stamped no station at all — so the trace carried no `ticket`
+    // and no `connected` for the very open it was measuring. It does now, and
+    // `mintAsk` is stamped BEFORE the request so the interval is the round trip
+    // rather than the round trip plus whatever preceded it.
+    const trace = recorder();
+    pool.openTerminalPool(fieldd, { sessionIds: [], trace });
+    await settle();
+    expect(pool.terminalPoolSnapshot().phase, "nothing to rejoin rests dormant").toBe("dormant");
+
+    await pool.createTerminalSession({ workloadClass: "interactive" }, trace);
+    await settle();
+
+    expect(trace.marks).toEqual(["claim", "mintAsk", "ticket", "connected"]);
+  });
+
+  it("stamps the REJOIN path the same way, send edge first", async () => {
+    cellOf = { "saved-1": "cell-a-boot-1" };
+    const trace = recorder();
+    pool.openTerminalPool(fieldd, { sessionIds: ["saved-1"], trace });
+    await settle();
+
+    expect(pool.terminalPoolSnapshot().phase).toBe("open");
+    expect(trace.marks).toEqual(["claim", "mintAsk", "ticket", "connected"]);
+  });
+
+  it("stamps the roster read as the mint's null arm — same client, no audit, no mint", async () => {
+    // What makes the roster a control rather than a second measurement: it goes
+    // through the same client and the same socket, immediately before the mint,
+    // and fieldd answers it from memory. A `rosterAsk`/`roster` pair with no
+    // mint between them is the interval the mint's own is read against.
+    const trace = recorder();
+    pool.openTerminalPool(fieldd, { sessionIds: [], trace });
+    await settle();
+    await pool.refreshTerminalRoster(trace);
+
+    expect(trace.marks).toEqual(["claim", "rosterAsk", "roster"]);
+    expect(requests).toContain("terminal.roster");
+  });
+});
+
 describe("the roster the UI reads (TP-D4)", () => {
   it("hands consumers a placement-free projection, refused at parse if it were not", async () => {
     rosterRows = [
