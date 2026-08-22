@@ -671,6 +671,7 @@ function renderMarkdown(
   const cold = input.records.find((r) => r.kind === "cold-open" && r["missing"] !== true);
   const failed = input.records.find((r) => r.kind === "failed");
   const resources = input.records.filter((r) => r.kind === "resources");
+  const census = input.records.find((r) => r.kind === "pty-census");
 
   const lines: string[] = [];
   lines.push(`# TP-S0c lab run — \`${input.scenario}\``, "");
@@ -898,6 +899,41 @@ function renderMarkdown(
       }
     }
     lines.push("");
+  }
+
+  if (census !== undefined) {
+    const leaked = Number(census["leaked"] ?? 0);
+    lines.push(
+      "## 6b. The pty census",
+      "",
+      "`kern.tty.ptmx_max` is **511 on macOS and it is SYSTEM-WIDE**: a scenario that",
+      "leaks ptys does not slow itself down, it fails every terminal test, every godview",
+      "smoke and every new shell on the machine. So each run counts `/dev/ttys*` before",
+      "it spawns anything and again after teardown.",
+      "",
+      "| | ptys |",
+      "|---|---:|",
+      `| before the run | ${String(census["before"])} |`,
+      `| after teardown | ${String(census["after"])} |`,
+      `| returned | ${String(census["returned"] ?? "—")} |`,
+      `| ptys still out after teardown | ${leaked} |`,
+      `| returned within the wait | ${census["settled"] === true ? "yes" : "no (45s)"} |`,
+      `| **this worktree's surviving processes** | **${String(census["survivingProcesses"] ?? "—")}** |`,
+      `| teardown | ${String(census["note"])} |`,
+      "",
+      Number(census["survivingProcesses"] ?? 0) > 0
+        ? "> **THIS RUN LEAKED.** " +
+            `${String(census["survivingProcesses"])} of its own processes survived teardown ` +
+            `(${((census["survivingKinds"] ?? []) as string[]).join(", ")}). Every number above ` +
+            "describes a machine that was also holding this run's leftovers. Run " +
+            "`pnpm perf:terminal --reap` and re-measure."
+        : "> Clean: nothing of this run survived its teardown. The pty delta is the corroborating " +
+            "evidence, not the claim — this machine is shared, so another agent's shells can hold " +
+            "the count above the baseline through no fault of the run. (`/dev/ttys*` nodes are also " +
+            "released LAZILY: an earlier fixed 1.5s sleep reported a four-pty leak on a run that had " +
+            "leaked nothing, which is why the census waits for the return instead.)",
+      "",
+    );
   }
 
   if (trace !== undefined) {

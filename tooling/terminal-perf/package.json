@@ -10,7 +10,8 @@
     "./ab": "./src/ab.ts",
     "./lab-report": "./src/lab-report.ts",
     "./native-control": "./src/native-control.ts",
-    "./trace-analysis": "./src/trace-analysis.ts"
+    "./trace-analysis": "./src/trace-analysis.ts",
+    "./reap": "./src/reap.ts"
   },
   "bin": {
     "terminal-perf": "./bin/terminal-perf.ts"

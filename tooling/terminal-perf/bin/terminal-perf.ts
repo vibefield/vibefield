@@ -20,7 +20,15 @@
 // can see foreign on-screen windows unless that flag is present.
 
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { cpus, hostname, loadavg, totalmem } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +42,7 @@ import {
   renderControlReport,
   summarizeArm,
 } from "../src/native-control.ts";
+import { findStrays, orderForReaping, type StrayProcess } from "../src/reap.ts";
 import { analyzeTrace, renderTraceAnalysis, type TraceEvent } from "../src/trace-analysis.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -41,6 +50,62 @@ const repoRoot = resolve(here, "..", "..", "..");
 const labRoot = join(repoRoot, ".vibefield", "terminal-perf-lab");
 const resultsHome =
   process.env["TERMINAL_PERF_RESULTS_HOME"] ?? join(repoRoot, "draft", "terminal-perf", "results");
+
+// ---- the reaper ---------------------------------------------------------------
+//
+// field-native is spawned DETACHED and outlives its parent by design (the
+// two-plane law): that is the product's guarantee, and it is also why a harness
+// that forgets to stop what it started leaks a whole floor — its cells, its
+// shells, and one pty per session. This lab did exactly that for fifteen runs
+// and put the machine at 527 ptys against a SYSTEM-WIDE ceiling of 511, which
+// fails every terminal test and every new shell on the box, not just ours.
+//
+// The lab now tears down properly. This is the second line of defence, for the
+// cases teardown cannot cover: a hard kill, a crash before `finally`, a wedged
+// daemon that outlasts the dispose bound.
+//
+// IT MATCHES ON THIS WORKTREE'S ABSOLUTE PATH and nothing else. Every process it
+// will ever signal carries `<repoRoot>/` in its argv, so it cannot reach another
+// worktree's floors, and it certainly cannot reach James's. A reaper that
+// matched on `field-native` alone would be a fleet-wide kill switch.
+
+function currentStrays(): StrayProcess[] {
+  const listing = spawnSync("/bin/ps", ["-axwwo", "pid=,command="], { encoding: "utf8" });
+  if (listing.status !== 0 || typeof listing.stdout !== "string") return [];
+  return findStrays(listing.stdout, repoRoot, [process.pid, process.ppid]);
+}
+
+/** SIGTERM, wait, SIGKILL. fieldd FIRST so nothing respawns behind the kill,
+ * then the floor, then any cell that outlived it. */
+function reapStrays(strays: readonly StrayProcess[]): number {
+  let signalled = 0;
+  for (const stray of orderForReaping(strays)) {
+    try {
+      process.kill(stray.pid, "SIGTERM");
+      signalled += 1;
+    } catch {
+      /* already gone */
+    }
+  }
+  if (signalled > 0) spawnSync("sleep", ["3"]);
+  for (const stray of strays) {
+    try {
+      process.kill(stray.pid, 0);
+      process.kill(stray.pid, "SIGKILL");
+    } catch {
+      /* gone, which is the point */
+    }
+  }
+  return signalled;
+}
+
+const ptyCount = (): number => {
+  try {
+    return readdirSync("/dev").filter((entry) => entry.startsWith("ttys")).length;
+  } catch {
+    return -1;
+  }
+};
 
 // ---- args --------------------------------------------------------------------
 
@@ -52,7 +117,9 @@ const flag = (name: string, fallback: string | null = null): string | null => {
 };
 const has = (name: string): boolean => argv.includes(`--${name}`);
 
-if (has("help") || positional.length === 0) {
+// `--reap` is the one verb that takes no scenario, so it must not fall into the
+// no-arguments help branch.
+if (has("help") || (positional.length === 0 && !has("reap"))) {
   process.stdout.write(`pnpm perf:terminal <scenario> [options]
 
   --duration <s>          total wall seconds of measured arms (default 30)
@@ -70,6 +137,7 @@ if (has("help") || positional.length === 0) {
   --control-gap-ms <ms>   gap between control keystrokes (default 40)
   --font-size <n>         font size for BOTH control arms (default 13)
   --refresh-hz <n>        the display's refresh, recorded as fixture identity (default 120)
+  --reap                  kill THIS worktree's leftover floors/cells/fieldd and exit
   --no-build              skip the builds and use what is on disk
   --keep-trace            keep the raw Perfetto trace (hundreds of MB); by
                           default it is analysed and then deleted
@@ -81,6 +149,39 @@ The environment also carries two knobs the lab reads directly:
 scenarios: run with an unknown one to have the lab list them.
 `);
   process.exit(0);
+}
+
+if (has("reap")) {
+  const strays = currentStrays();
+  if (strays.length === 0) {
+    process.stdout.write(`nothing of ${repoRoot} is running; ${ptyCount()} ptys on the machine\n`);
+    process.exit(0);
+  }
+  process.stdout.write(`reaping ${strays.length} stray process(es) from ${repoRoot}:\n`);
+  for (const stray of strays) process.stdout.write(`  ${stray.kind.padEnd(6)} ${stray.pid}\n`);
+  const before = ptyCount();
+  reapStrays(strays);
+  spawnSync("sleep", ["2"]);
+  process.stdout.write(`ptys ${before} -> ${ptyCount()}\n`);
+  process.exit(0);
+}
+
+// THE PRE-FLIGHT REFUSAL. A scenario started on top of a previous run's floors
+// measures both of them, and every pty the old one holds is one this one cannot
+// have — against a system-wide ceiling of 511. So the driver stops rather than
+// adding to the pile, and names the command that clears it.
+const stale = currentStrays();
+if (stale.length > 0) {
+  const byKind = new Map<string, number>();
+  for (const stray of stale) byKind.set(stray.kind, (byKind.get(stray.kind) ?? 0) + 1);
+  process.stderr.write(
+    `\nREFUSED: ${stale.length} process(es) from a previous run of this worktree are still alive ` +
+      `(${[...byKind].map(([k, n]) => `${n} ${k}`).join(", ")}), holding ptys against this ` +
+      `machine's system-wide ceiling of 511 (${ptyCount()} in use now).\n\n` +
+      `  pnpm perf:terminal --reap\n\n` +
+      `clears them. Starting a scenario on top of them would measure both runs.\n`,
+  );
+  process.exit(2);
 }
 
 const scenario = positional[0] as string;

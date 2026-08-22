@@ -26,13 +26,23 @@
 // rotations, and a tail claim requires the null arm (an arm that changes
 // nothing) to have moved less than the difference being claimed.
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { cpus, loadavg, tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import { TerminalTicket } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { buildLabReport, parseLabJsonl } from "@vibefield/terminal-perf/lab-report";
+import { findStrays } from "@vibefield/terminal-perf/reap";
 import { app, type BrowserWindow, contentTracing, screen } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
@@ -647,6 +657,75 @@ async function injectKeys(
   return injected;
 }
 
+// ---- what survived -----------------------------------------------------------
+
+/** This worktree's own floors / cells / fieldd that are still running.
+ *
+ * The repo root is derived the way `fixturePath` derives it: `__dirname` is
+ * `packages/electron-shell/dist/testing`. */
+function ownStrays(): { pid: number; kind: string }[] {
+  const repoRoot = join(__dirname, "..", "..", "..", "..");
+  const listing = spawnSync("/bin/ps", ["-axwwo", "pid=,command="], { encoding: "utf8" });
+  if (listing.status !== 0 || typeof listing.stdout !== "string") return [];
+  return findStrays(listing.stdout, repoRoot, [process.pid]).map((stray) => ({
+    pid: stray.pid,
+    kind: stray.kind,
+  }));
+}
+
+// ---- the pty census ----------------------------------------------------------
+
+/** How many ptys exist on this machine RIGHT NOW.
+ *
+ * `kern.tty.ptmx_max` is 511 on macOS and it is SYSTEM-WIDE: a scenario that
+ * leaks ptys does not degrade itself, it takes every terminal test, every
+ * godview smoke and every new shell on the machine down with it — which is
+ * exactly what this lab did before it learned to tear down (15 floors, 86 cells,
+ * 509 ptys, and `resource_governance::fd_exhaustion` reds on clean main for
+ * everybody). So the count is taken before and after every run, it goes in the
+ * artifact, and a run that does not give its ptys back says so.
+ *
+ * Counting `/dev/ttys*` rather than parsing `sysctl`: the entries are the
+ * allocated slave devices, which is the resource that runs out. */
+function ptyCount(): number {
+  try {
+    return readdirSync("/dev").filter((entry) => entry.startsWith("ttys")).length;
+  } catch {
+    return -1;
+  }
+}
+
+/** The count once the kernel has finished taking them back.
+ *
+ * `/dev/ttys*` nodes ARE removed when a pty is released — but LAZILY, and later
+ * than every process holding one has exited. Measured on this host: a `deck-4`
+ * run whose floor, cells and fieldd were all confirmed dead still read 61
+ * against a baseline of 57 immediately after teardown, and was back to 57 within
+ * half a minute with nothing else happening.
+ *
+ * So the question this asks is RETURN, not stability. An early version stopped
+ * on three identical reads, saw 61 three times in four seconds, and reported a
+ * four-pty leak on a run that had leaked nothing — and a census that cries leak
+ * on a clean run teaches its reader to ignore it, which is worse than no census.
+ *
+ * Waits for `<= baseline`, or gives up at the deadline and says so. Giving up is
+ * a real answer: it means the ptys were still out after 45 seconds, which on a
+ * machine with a 511 ceiling is worth a line in the report. */
+async function settledPtyCount(
+  baseline: number,
+  timeoutMs = 45_000,
+): Promise<{ count: number; returned: boolean }> {
+  const deadline = Date.now() + timeoutMs;
+  let current = ptyCount();
+  if (baseline < 0) return { count: current, returned: true };
+  while (Date.now() < deadline) {
+    if (current <= baseline) return { count: current, returned: true };
+    await sleep(1_000);
+    current = ptyCount();
+  }
+  return { count: current, returned: current <= baseline };
+}
+
 // ---- resources ---------------------------------------------------------------
 
 interface ResourceReading {
@@ -745,6 +824,9 @@ export async function runTerminalPerfLab(opts: {
   const probeInjection = process.env["VF_PERF_PROBE_INJECT"] === "os" ? "os" : "window";
 
   mkdirSync(outDir, { recursive: true });
+  // Taken BEFORE anything is spawned, so the closing census has a baseline that
+  // predates this run's own floor.
+  const startingPtys = ptyCount();
   const jsonl: string[] = [];
   const emit = (record: Record<string, unknown>): void => {
     jsonl.push(JSON.stringify({ scenario: scenarioName, ...record }));
@@ -759,6 +841,7 @@ export async function runTerminalPerfLab(opts: {
     chrome: process.versions["chrome"],
     platform: process.platform,
     arch: process.arch,
+    ptysAtStart: startingPtys,
     arms: armNames,
     rotations,
     armMs,
@@ -1024,6 +1107,82 @@ export async function runTerminalPerfLab(opts: {
     });
     failures.push(error instanceof Error ? error.message : String(error));
   } finally {
+    // TEARDOWN, and the reason this function exists rather than a bare
+    // `app.exit()`.
+    //
+    // Every smoke in this file's neighbour calls `teardown(supervisor, root,
+    // beforeExit)` and the FIRST thing it does is `supervisor.dispose()` —
+    // stop-owned, which SIGTERMs the fieldd this run spawned AND the
+    // field-native it recorded. The lab shipped without that call, and because
+    // field-native is spawned DETACHED and outlives its parent by design (the
+    // two-plane law), every run left a floor behind: its cells, its shells and
+    // one pty per session. `wall-100` creates a hundred sessions. Fifteen runs
+    // later the machine was at 527 ptys against a system-wide ceiling of 511,
+    // and every terminal test on it — ours and everybody else's — was failing
+    // while SPAWNING.
+    //
+    // Ordered, awaited, and bounded: `app.exit()` is a hard exit that runs no
+    // quit handlers, so anything that must happen has to happen above it. The
+    // bound matters because a wedged daemon must not hang the lab forever; what
+    // survives the bound is named in the record and reaped by the driver's
+    // `--reap`, which matches on this worktree's path.
+    const ptysBefore = startingPtys;
+    let teardownNote = "clean";
+    try {
+      await Promise.race([
+        opts.supervisor.dispose(),
+        sleep(20_000).then(() => {
+          teardownNote = "supervisor.dispose() did not finish within 20s";
+        }),
+      ]);
+    } catch (error) {
+      teardownNote = `supervisor.dispose() threw: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    // The scratch root, but ONLY if this run made it: an injected
+    // FIELDD_DATA_DIR is somebody else's data (the smokes' rule, kept).
+    if (process.env["FIELDD_DATA_DIR"] === undefined) {
+      try {
+        rmSync(opts.root, { recursive: true, force: true });
+      } catch {
+        /* a root that will not go is not worth failing a measurement over */
+      }
+    }
+    // Ptys are freed asynchronously as the cells die, so this WAITS for the
+    // count to settle rather than sleeping a guessed interval — see
+    // `settledPtyCount` for the run that proved a fixed sleep lies.
+    const settled = await settledPtyCount(ptysBefore);
+    const ptysAfter = settled.count;
+    // WHOSE ptys are still out? The count alone cannot say: this machine is
+    // shared, and another agent opening three shells during a run leaves the
+    // number above its baseline through no fault of ours. So the AUTHORITATIVE
+    // signal is whether any of THIS worktree's own floors, cells or fieldd
+    // survived teardown — the pty count is the corroborating evidence, reported
+    // either way. (The same matcher the driver's `--reap` uses, and the same one
+    // `reap.test.ts` pins against its decoys.)
+    const survivors = ownStrays();
+    emit({
+      kind: "pty-census",
+      at: Date.now(),
+      before: ptysBefore,
+      after: ptysAfter,
+      returned: ptysBefore >= 0 && ptysAfter >= 0 ? ptysBefore - ptysAfter : null,
+      leaked: ptysBefore >= 0 && ptysAfter > ptysBefore ? ptysAfter - ptysBefore : 0,
+      ceiling: 511,
+      settled: settled.returned,
+      // Zero is the claim that matters; the pty delta above may be somebody
+      // else's shells on a shared machine.
+      survivingProcesses: survivors.length,
+      survivingKinds: survivors.map((stray) => stray.kind),
+      note: teardownNote,
+    });
+    if (survivors.length > 0) {
+      failures.push(
+        `${survivors.length} process(es) of this worktree survived teardown ` +
+          `(${survivors.map((s) => s.kind).join(", ")}; ${teardownNote}) — ` +
+          "run `pnpm perf:terminal --reap`",
+      );
+    }
+
     const jsonlText = `${jsonl.join("\n")}\n`;
     writeFileSync(join(outDir, "lab.jsonl"), jsonlText);
     // The RESULTS is written HERE rather than by the driver, so a run that the
