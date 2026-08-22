@@ -12,6 +12,7 @@
 @import "./styles/utilities.css";
 @import "./panels/settings.css";
 @import "./godview/godview.css";
+@import "./godview/deck-zoom.css";
 @import "./godview/views/swarm/swarm.css";
 @import "./godview/views/swarm/agent-bubble.css";
 @custom-variant dark (&:where(.dark, .dark *));

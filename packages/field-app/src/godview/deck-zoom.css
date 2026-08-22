@@ -1,0 +1,179 @@
+/* Pane zoom — the two phases, as stylesheet (TP-D18, TPv3 §9.7; DESIGN.md §6).
+   `deck-zoom.ts` owns the choreography and writes nothing but attributes and
+   three custom properties; every visual decision is here.
+
+   Read the phases as the resize budget they are:
+     entering/leaving — TRANSFORM only. No box on the page changes, so
+       `ResizeObserver` (which reports the layout box) stays silent and no PTY
+       resize is committed while the animation runs.
+     zoomed — LAYOUT. Exactly one box moves: the zoomed pane's. Its siblings
+       are hidden with `visibility`, which keeps their boxes, and their grid
+       placement is pinned below so that taking the zoomed pane out of flow
+       cannot re-place them into different tracks. One box change, one resize
+       (TP-R3). */
+
+.vf-deck-zoom {
+  /* FILLS the deck section rather than flexing inside it. `.vf-godview-terminal-deck`
+     is a flex ITEM of the Godview column and a block CONTAINER, so a `flex: 1`
+     child here would size to `auto` and collapse the workspace's `height: 100%`
+     to nothing. (The zoomed pane's own containing block is `.terminal-host`,
+     which is upstream's and already `position: relative` — the rule below makes
+     the SPLITS static so the pane resolves past them to it.) */
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  /* The morph is clipped to the deck: a pane scaled to cover the host has to
+     overflow, and the overflow is nobody else's business. */
+  overflow: hidden;
+  /* Identity until a gesture writes otherwise, so the transition below always
+     has a value to interpolate from. */
+  --vf-zoom-scale: 1;
+  --vf-zoom-x: 0px;
+  --vf-zoom-y: 0px;
+  --vf-zoom-duration: 240ms;
+}
+
+/* ── the animation (M1: ONE element morphs; M3: a CSS transition, not WAAPI) ── */
+
+.vf-deck-zoom[data-zoom-phase="entering"] .ghostty-window,
+.vf-deck-zoom[data-zoom-phase="leaving"] .ghostty-window {
+  transform: translate(var(--vf-zoom-x), var(--vf-zoom-y)) scale(var(--vf-zoom-scale));
+  transform-origin: 0 0;
+  transition: transform var(--vf-zoom-duration) var(--vf-ease-island);
+  will-change: transform;
+}
+
+/* The rest states carry no transform and no transition — which is what makes
+   the commit a snap to the true layout rather than an animation back down. */
+
+/* ── grid placement, pinned (the invariant the commit depends on) ────────────
+   Upstream lays a split out as `[first, divider, second]` in a 3-track grid
+   with no explicit placement (`workspace/Workspace.js:141-160`). Auto-placement
+   is a function of which children are IN FLOW, so the moment the zoomed pane
+   goes absolute the divider would slide into track 1 and its sibling into the
+   1px track — resizing a session nobody zoomed. Pinning by position restates
+   exactly what auto-placement already did (so applying it changes no box and
+   costs no resize) and makes it independent of the zoomed pane's flow. */
+
+.vf-deck-zoom[data-zoom-phase="entering"] .ghostty-split.is-horizontal > *:nth-child(1),
+.vf-deck-zoom[data-zoom-layout] .ghostty-split.is-horizontal > *:nth-child(1) {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.vf-deck-zoom[data-zoom-phase="entering"] .ghostty-split.is-horizontal > *:nth-child(2),
+.vf-deck-zoom[data-zoom-layout] .ghostty-split.is-horizontal > *:nth-child(2) {
+  grid-row: 1;
+  grid-column: 2;
+}
+
+.vf-deck-zoom[data-zoom-phase="entering"] .ghostty-split.is-horizontal > *:nth-child(3),
+.vf-deck-zoom[data-zoom-layout] .ghostty-split.is-horizontal > *:nth-child(3) {
+  grid-row: 1;
+  grid-column: 3;
+}
+
+.vf-deck-zoom[data-zoom-phase="entering"] .ghostty-split.is-vertical > *:nth-child(1),
+.vf-deck-zoom[data-zoom-layout] .ghostty-split.is-vertical > *:nth-child(1) {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.vf-deck-zoom[data-zoom-phase="entering"] .ghostty-split.is-vertical > *:nth-child(2),
+.vf-deck-zoom[data-zoom-layout] .ghostty-split.is-vertical > *:nth-child(2) {
+  grid-row: 2;
+  grid-column: 1;
+}
+
+.vf-deck-zoom[data-zoom-phase="entering"] .ghostty-split.is-vertical > *:nth-child(3),
+.vf-deck-zoom[data-zoom-layout] .ghostty-split.is-vertical > *:nth-child(3) {
+  grid-row: 3;
+  grid-column: 1;
+}
+
+/* ── the committed zoom ──────────────────────────────────────────────────────
+   `position: static` on the splits moves the zoomed pane's containing block up
+   to `.terminal-host` — the box that holds the whole pane tree — so `inset: 0`
+   means the full pane area rather than whichever split the pane happened to
+   live in. A grid container's own box does not change when it stops being
+   positioned, so this costs nothing. */
+
+.vf-deck-zoom[data-zoom-layout="pane"] .ghostty-split {
+  position: static;
+}
+
+.vf-deck-zoom[data-zoom-layout="pane"] .ghostty-pane:not([data-vf-zoom-pane]) {
+  /* `visibility`, never `display`: a display change would collapse these panes
+     to 0×0 and fire a resize on every session in the deck. */
+  visibility: hidden;
+}
+
+.vf-deck-zoom[data-zoom-layout="pane"] .ghostty-pane[data-vf-zoom-pane] {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+}
+
+/* ── the affordance (DESIGN.md §5 overlay-chip tier — the kill chip's sibling) ─
+   Same tier, same restraint: quiet until the pointer or the keyboard asks for
+   it. It names the ACTIVE pane, because that is the pane every workspace
+   hotkey already acts on and the one this deck's chrome has always spoken for. */
+
+.vf-godview-zoom {
+  position: absolute;
+  top: 8px;
+  /* The LEFT corner, with the kill chip alone on the right. Not a layout
+     accident: a benign view control and the deck's one irreversible act should
+     never sit a few pixels apart, and separating them means neither chip's
+     width can ever grow into the other's (the kill chip's does — it becomes a
+     question and two buttons when armed). */
+  left: 8px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px;
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--panel-bg) 90%, transparent);
+  backdrop-filter: blur(8px);
+  opacity: 0.45;
+  transition: opacity 120ms ease;
+}
+
+.vf-godview-zoom:hover,
+.vf-godview-zoom:focus-within {
+  opacity: 1;
+}
+
+.vf-godview-zoom-action {
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 3px;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 8px;
+  cursor: pointer;
+}
+
+.vf-godview-zoom-action:hover {
+  color: var(--text-main);
+  background: var(--control-hover-bg);
+}
+
+.vf-godview-zoom-hint {
+  color: var(--text-faint);
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* M6 — non-negotiable. The duration halves in `deck-zoom.ts` (the commit's
+   deadline has to agree with the curve, so one number owns both); this makes
+   the curve itself stop overshooting and travelling. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-deck-zoom[data-zoom-phase="entering"] .ghostty-window,
+  .vf-deck-zoom[data-zoom-phase="leaving"] .ghostty-window {
+    transition-timing-function: ease-out;
+  }
+}

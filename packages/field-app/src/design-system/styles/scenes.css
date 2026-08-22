@@ -1429,3 +1429,41 @@
     animation-iteration-count: 1;
   }
 }
+
+/* The ICE terminal widget's fixture stage (TP-S2). Catalog-owned chrome only:
+   the controls that stand in for a host's cull answer and camera, and a box to
+   give the widget a size. Every selector the WIDGET owns lives beside the
+   widget in `terminal/mirror/mirror.css` — the catalog mounts the shipping
+   view, so it must not restate one line of its styling (docs/UI_SYSTEM.md). */
+.vf-ds-mirror-fixture {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.vf-ds-mirror-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+}
+
+.vf-ds-mirror-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.vf-ds-mirror-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-ds-mirror-stage {
+  width: 100%;
+  height: 320px;
+  overflow: hidden;
+  border-radius: var(--vf-radius-card);
+  background: var(--vf-fill);
+}

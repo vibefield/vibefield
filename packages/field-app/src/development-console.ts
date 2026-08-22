@@ -65,6 +65,20 @@ export interface GodviewDeckFacts {
    * never overrides the floor's own configuration. Whether the CRT curve looks
    * right is James's eye; that the id reached the renderer is a fact. */
   effects: { shaderEffect: string | null; animate: boolean };
+  /** TP-S2 / TP-R3: pane zoom, as the two numbers the gate is about.
+   *
+   * `phase` is where the gesture is (`idle` when there is no zoom). `commits`
+   * counts the deck's LAYOUT COMMITS — one per completed gesture, each way. A
+   * commit is the only thing that can move the zoomed pane's box, so it is the
+   * ceiling on the PTY resizes a zoom can cause: a harness pressing the chord
+   * twice and reading `commits: 2` has bounded "exactly one resize each way"
+   * from above, and the unit suite holds the other half (that one box change
+   * produces exactly one `runtime.resize`). Said exactly rather than round: a
+   * gesture REVERSED before its commit also counts one, and that one moves no
+   * box at all — the count is of commit operations, not of resizes observed.
+   * Present always, because "zero commits after N gestures" is as much a
+   * failure as too many. */
+  zoom: { phase: "idle" | "entering" | "zoomed" | "leaving"; commits: number };
 }
 
 export function emitGodviewDeckMarker(facts: GodviewDeckFacts): void {

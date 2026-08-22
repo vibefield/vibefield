@@ -36,6 +36,7 @@ import { KillActivePane } from "./KillActivePane";
 import type { RemoteSessionDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
+import { useDeckZoom, ZoomActivePane } from "./ZoomActivePane";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -183,6 +184,10 @@ export function GodviewDeck({
    * publishes a fresh one on every pane change — so an attach reads the current
    * one at call time instead of closing over whichever existed at build time. */
   const workspaceRef = useRef<GhostteaWorkspaceContext>(undefined);
+  /** The deck's own wrapper — the element pane zoom writes its phase onto. It
+   * has to be the deck's rather than the stage's: the stage is shared with the
+   * monitor and the tuning panel, and a zoom is about the panes. */
+  const zoomHostRef = useRef<HTMLDivElement>(null);
   /** Session id → the monitor row's accent that brought it here. The pane wears
    * the bubble's color, which is the deck↔monitor link the reference app draws
    * (GT-3m ported `PaneAttachment` for exactly this and could not feed it). A
@@ -613,6 +618,14 @@ export function GodviewDeck({
     [workspace],
   );
 
+  // PANE ZOOM (TP-D18, §9.7). The chord is claimed from ghosttea here — see
+  // `ZoomActivePane` for why, and `deck-zoom.ts` for what upstream's own zoom
+  // does instead. Note what this does NOT touch: demand. A zoomed deck shows
+  // one pane and keeps every other pane MOUNTED (hidden, not unmounted), so
+  // every session's view binding and its declared demand are exactly what they
+  // were — which is the difference between a zoom and upstream's remount.
+  const zoom = useDeckZoom(zoomHostRef, workspace?.activePaneId);
+
   // DEMAND (TP-L-E'), declared where the views are.
   //
   // One view per pane, at `live` while the overlay is open and `none` while it
@@ -697,6 +710,10 @@ export function GodviewDeck({
         shaderEffect: terminalEffects?.shaderEffects?.[0] ?? null,
         animate: terminalEffects?.animate === true,
       },
+      // TP-R3's end-to-end counter. The deck republishes on every zoom state
+      // change because `zoom.state` is a dependency below, so a harness reads
+      // one line per phase and the commit count only ever grows.
+      zoom: { phase: zoom.state.phase, commits: zoom.state.commits },
       ...(error !== null ? { error: error.message, errorPlane: error.plane } : {}),
       ...(consent !== null && consent !== "go" ? { consent } : {}),
       ...(exited.length > 0 ? { exitedSessionIds: exited } : {}),
@@ -704,7 +721,17 @@ export function GodviewDeck({
         ? { activeSessionId: workspace.activeSession.id }
         : {}),
     });
-  }, [active, workspace, runtime, error, consent, terminalTheme, terminalEffects, activeThemeName]);
+  }, [
+    active,
+    workspace,
+    runtime,
+    error,
+    consent,
+    terminalTheme,
+    terminalEffects,
+    activeThemeName,
+    zoom.state,
+  ]);
 
   const platform: GhostteaWorkspacePlatform | null =
     shell === null
@@ -790,64 +817,75 @@ export function GodviewDeck({
 
   return (
     <GhostteaProvider key={generation} runtime={runtime}>
-      {workspace?.activeSession !== undefined && (
-        <KillActivePane session={workspace.activeSession} fieldd={fieldd} />
-      )}
-      <GhostteaWorkspace
-        platform={platform}
-        theme={terminalTheme}
-        // Spread rather than `effects={terminalEffects}` because `undefined`
-        // and absent are the same to React but NOT to a tolerant reader of this
-        // code: the prop is omitted when nothing is selected, which is what
-        // hands ghosttea's config-derived path back to it intact (GT-D12 — the
-        // floor keeps its own answer, this viewer only overrides when asked).
-        {...(terminalEffects !== undefined ? { effects: terminalEffects } : {})}
-        storageKey={DECK_STORAGE_KEY}
-        sidebar={Sidebar}
-        decoratePane={decorate}
-        paneMeta={paneMeta}
-        // Armed only on consent. Unarmed, the library's default applies and a
-        // dead pane is dropped — which is what "start clean" asked for and what
-        // an all-alive deck never encounters.
-        {...(rehydrate ? { onRehydratePane: rehydratePane } : {})}
-        // No `createSplitSession` (GT-D10): splits go through the workspace's
-        // own door, like every other birth. It asks for `terminate-with-app`
-        // there — the opposite of this product's promise — and that is
-        // corrected where it belongs, in the plane that outlives fieldd:
-        // field-native re-governs ownerless births to keep-until-exit on
-        // `session-created` (GT-D11). Intercepting the door instead is what
-        // made this deck an authority it should never have been.
-        initialCwd={shell.home}
-        claimExistingSessions
-        // STAYS OFF, and no longer as a wait (GT-D7's 2026-08-05 amendment):
-        // ⌘⇧O's palette was upstream's door to remote sessions, not ours. Ours
-        // is the monitor — a peer's session is a bubble in the swarm, and
-        // clicking it attaches this pane (GT-D17). The prop gates that palette
-        // and its hotkey only; the runtime calls the door above makes are
-        // untouched by it.
-        //
-        // KNOWN DEFECT, upstream, verified NOT FIXABLE FROM HERE at 0.9.2
-        // (GT-5c; petition candidate G13). With this false, a mounted remote
-        // pane that reaches `ended` still renders the library's own
-        // `RemoteSessionBanner`, whose "Browse sessions on <device>" button
-        // calls `browseDeviceSessions` — which early-returns on this very flag.
-        // A control that does nothing, and reachable rather than latent now
-        // that GT-4's floor half has landed.
-        //
-        // The spec's recommended fix is to hand the library a browse handler
-        // that opens OUR monitor. There is no seam for one: `GhostteaWorkspace`
-        // destructures sixteen props and none is a browse handler
-        // (`workspace/Workspace.d.ts`), `browseDeviceSessions` is an internal
-        // `useCallback` wired straight to `SplitView`'s `onBrowseDevice`, and
-        // the banner is rendered by the library's own pane. The alternative —
-        // rendering our own banner from upstream's exported pure helpers —
-        // cannot suppress theirs either. So this is upstream's to open, and
-        // intercepting the click by matching another package's internal markup
-        // is not a decision a builder should take unilaterally.
-        enableRemoteSessions={false}
-        showTitlebar={false}
-        active={active}
-      />
+      {/* The zoom host wraps the workspace and the chrome that acts on it: it
+          carries the gesture's phase attributes, and it clips the morph, which
+          by design overflows the deck. (The zoomed pane itself resolves against
+          upstream's `.terminal-host` — `deck-zoom.css` says how.) */}
+      <div ref={zoomHostRef} className="vf-deck-zoom" data-zoom-phase="idle">
+        {workspace?.activeSession !== undefined && (
+          <KillActivePane session={workspace.activeSession} fieldd={fieldd} />
+        )}
+        <ZoomActivePane
+          phase={zoom.state.phase}
+          paneId={workspace?.activePaneId}
+          onToggle={zoom.toggle}
+        />
+        <GhostteaWorkspace
+          platform={platform}
+          theme={terminalTheme}
+          // Spread rather than `effects={terminalEffects}` because `undefined`
+          // and absent are the same to React but NOT to a tolerant reader of this
+          // code: the prop is omitted when nothing is selected, which is what
+          // hands ghosttea's config-derived path back to it intact (GT-D12 — the
+          // floor keeps its own answer, this viewer only overrides when asked).
+          {...(terminalEffects !== undefined ? { effects: terminalEffects } : {})}
+          storageKey={DECK_STORAGE_KEY}
+          sidebar={Sidebar}
+          decoratePane={decorate}
+          paneMeta={paneMeta}
+          // Armed only on consent. Unarmed, the library's default applies and a
+          // dead pane is dropped — which is what "start clean" asked for and what
+          // an all-alive deck never encounters.
+          {...(rehydrate ? { onRehydratePane: rehydratePane } : {})}
+          // No `createSplitSession` (GT-D10): splits go through the workspace's
+          // own door, like every other birth. It asks for `terminate-with-app`
+          // there — the opposite of this product's promise — and that is
+          // corrected where it belongs, in the plane that outlives fieldd:
+          // field-native re-governs ownerless births to keep-until-exit on
+          // `session-created` (GT-D11). Intercepting the door instead is what
+          // made this deck an authority it should never have been.
+          initialCwd={shell.home}
+          claimExistingSessions
+          // STAYS OFF, and no longer as a wait (GT-D7's 2026-08-05 amendment):
+          // ⌘⇧O's palette was upstream's door to remote sessions, not ours. Ours
+          // is the monitor — a peer's session is a bubble in the swarm, and
+          // clicking it attaches this pane (GT-D17). The prop gates that palette
+          // and its hotkey only; the runtime calls the door above makes are
+          // untouched by it.
+          //
+          // KNOWN DEFECT, upstream, verified NOT FIXABLE FROM HERE at 0.9.2
+          // (GT-5c; petition candidate G13). With this false, a mounted remote
+          // pane that reaches `ended` still renders the library's own
+          // `RemoteSessionBanner`, whose "Browse sessions on <device>" button
+          // calls `browseDeviceSessions` — which early-returns on this very flag.
+          // A control that does nothing, and reachable rather than latent now
+          // that GT-4's floor half has landed.
+          //
+          // The spec's recommended fix is to hand the library a browse handler
+          // that opens OUR monitor. There is no seam for one: `GhostteaWorkspace`
+          // destructures sixteen props and none is a browse handler
+          // (`workspace/Workspace.d.ts`), `browseDeviceSessions` is an internal
+          // `useCallback` wired straight to `SplitView`'s `onBrowseDevice`, and
+          // the banner is rendered by the library's own pane. The alternative —
+          // rendering our own banner from upstream's exported pure helpers —
+          // cannot suppress theirs either. So this is upstream's to open, and
+          // intercepting the click by matching another package's internal markup
+          // is not a decision a builder should take unilaterally.
+          enableRemoteSessions={false}
+          showTitlebar={false}
+          active={active}
+        />
+      </div>
     </GhostteaProvider>
   );
 }

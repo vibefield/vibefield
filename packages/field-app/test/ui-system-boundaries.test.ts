@@ -16,6 +16,7 @@ describe("UI system ownership boundaries", () => {
     expect(appManifest).toContain('@import "./styles/utilities.css";');
     expect(appManifest).toContain('@import "./panels/settings.css";');
     expect(appManifest).toContain('@import "./godview/godview.css";');
+    expect(appManifest).toContain('@import "./godview/deck-zoom.css";');
     expect(appManifest).toContain('@import "./godview/views/swarm/swarm.css";');
     expect(appManifest).toContain('@import "./godview/views/swarm/agent-bubble.css";');
 
@@ -35,8 +36,24 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|deck-zoom\b)/m,
     );
+  });
+
+  it("keeps the terminal mirror's fixture an ADAPTER, never a replica (TP-S2)", () => {
+    // The rule that bites hardest on a widget whose live state needs a daemon:
+    // the bench cannot show terminal pixels, and the tempting fix is to draw a
+    // convincing fake. So the fixture is held to supplying only what a HOST
+    // supplies — the cull answer and the camera — and to owning none of the
+    // widget's own classes.
+    const fixture = source("design-system/TerminalMirrorPreview.tsx");
+    expect(fixture).toContain("TerminalMirrorSurface");
+    expect(fixture).not.toMatch(/vf-terminal-mirror/);
+    expect(fixture).not.toContain("<style");
+    // And the widget's props are the whole seam: a fixture reaching for the
+    // pool or a runtime would be building a second host.
+    expect(fixture).not.toContain("terminalPool");
+    expect(fixture).not.toContain("watchOnlyRuntime");
   });
 
   it("mounts production views instead of the retired catalog replicas", () => {
@@ -45,7 +62,8 @@ describe("UI system ownership boundaries", () => {
     const agentBubbles = source("design-system/AgentBubblePreview.tsx");
     const groundWorkbench = source("design-system/CanvasGroundWorkbench.tsx");
     const groundPreview = source("design-system/InfiniteCanvasGroundPreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${agentBubbles}\n${groundWorkbench}\n${groundPreview}`;
+    const mirror = source("design-system/TerminalMirrorPreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${agentBubbles}\n${groundWorkbench}\n${groundPreview}\n${mirror}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -72,6 +90,8 @@ describe("UI system ownership boundaries", () => {
       "CanvasGroundWorkbench",
       "InfiniteCanvasGroundPreview",
       "InfiniteCanvasGround",
+      "TerminalMirrorPreview",
+      "TerminalMirrorSurface",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -130,8 +150,10 @@ describe("UI system ownership boundaries", () => {
       "hud/WidgetTray.css",
       "hud/ZoomPill.css",
       "panels/settings.css",
+      "godview/deck-zoom.css",
       "godview/views/swarm/agent-bubble.css",
       "godview/views/swarm/swarm.css",
+      "terminal/mirror/mirror.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

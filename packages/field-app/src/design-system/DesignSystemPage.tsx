@@ -44,6 +44,7 @@ import { FilePillPreview } from "./FilePillPreview";
 import { GodviewPreview } from "./GodviewPreview";
 import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
 import { OnboardingPreview } from "./OnboardingPreview";
+import { TerminalMirrorPreview } from "./TerminalMirrorPreview";
 
 type IconName =
   | "arrow-left"
@@ -1050,6 +1051,12 @@ function GodviewSection(): ReactElement {
         bleed
       >
         <AgentBubblePreview />
+      </Specimen>
+      <Specimen
+        title="Terminal mirror — a session watched from the canvas"
+        source="terminal/mirror/TerminalMirrorSurface.tsx"
+      >
+        <TerminalMirrorPreview />
       </Specimen>
     </Section>
   );

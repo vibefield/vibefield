@@ -1,0 +1,92 @@
+/* The ICE terminal widget's own skin (DESIGN.md §5 materials, §6 motion, §8
+   card canon). Everything here is on semantic tokens — the widget can be
+   mounted on the canvas, in a panel or in the catalog, and none of those know
+   which palette is live. */
+
+.vf-terminal-mirror {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--vf-radius-card);
+  background: var(--vf-card-deep);
+  --vf-mirror-scale: 1;
+}
+
+/* The label strip. A mirror says whose screen this is and that it is only
+   watching — DESIGN.md §9: a surface states what it is, and "watching" is the
+   whole contract with the user (they will try to type into it otherwise). */
+.vf-terminal-mirror-label {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px 6px;
+  color: var(--vf-text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.vf-terminal-mirror-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--vf-text-tertiary);
+  background: var(--vf-fill);
+  font-size: 9px;
+  text-transform: lowercase;
+}
+
+/* THE SURFACE. Two of TP-R4a's five layers are here, and they are the two the
+   DOM owns:
+     `pointer-events: none` — a mirror consumes no gesture, so every pointer
+       event belongs to the canvas underneath (the C-2 contract by omission:
+       no `data-canvas-interactive` anywhere in this widget, so drag, select
+       and wheel-to-zoom all stay the canvas's);
+     the transform — a camera gesture scales the last raster and changes NO
+       layout box, so nothing reallocates a backing store until the gesture
+       settles and the box is written once. */
+.vf-terminal-mirror-surface {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: scale(var(--vf-mirror-scale));
+  transform-origin: 0 0;
+  /* No transition while a gesture is in flight — the camera IS the animation,
+     and a transition on top of it would lag the pointer. The settle is a snap
+     to the freshly rastered box, which is the same commit the deck's pane zoom
+     performs. */
+  will-change: transform;
+}
+
+.vf-terminal-mirror[data-camera="settled"] .vf-terminal-mirror-surface {
+  will-change: auto;
+}
+
+/* Culled: the widget keeps its box (so the canvas layout never moves under a
+   scroll) and stops asking for pixels. The visual is a quiet placeholder rather
+   than a frozen frame, because a stale screen presented as live is the one
+   thing a mirror must never do. */
+.vf-terminal-mirror[data-mirror-state="culled"] .vf-terminal-mirror-surface {
+  opacity: 0.35;
+  transition: opacity 240ms ease;
+}
+
+.vf-terminal-mirror[data-mirror-state="watching"] .vf-terminal-mirror-surface {
+  opacity: 1;
+  transition: opacity 240ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-terminal-mirror[data-mirror-state="culled"] .vf-terminal-mirror-surface,
+  .vf-terminal-mirror[data-mirror-state="watching"] .vf-terminal-mirror-surface {
+    transition-duration: 120ms;
+  }
+}
