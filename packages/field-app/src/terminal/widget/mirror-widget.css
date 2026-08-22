@@ -1,0 +1,198 @@
+/* The BUILT-IN terminal mirror widget's card-side skin (TP-S2b-widget).
+   DESIGN.md §5 materials, §6 motion, §8 card canon; every value is a semantic
+   token — the card can be mounted on the canvas or in the catalog and neither
+   knows which palette is live.
+
+   Scope discipline: this file styles the WIDGET (the card interior, the picker,
+   the unbind affordance). The mirror's own skin stays in
+   `terminal/mirror/mirror.css` and is not reached into from here — the widget
+   hosts that view, it does not restyle it. */
+
+.vf-terminal-mirror-widget {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--vf-radius-card);
+  background: var(--vf-card-deep);
+  color: var(--vf-text-secondary);
+  font-family: var(--vf-font-sans);
+}
+
+/* The way back off a dead address. Quiet by default — a mirror is for reading,
+   and a permanently loud control on top of the screen you are reading is the
+   wrong emphasis — and legible the moment a pointer is anywhere near the card
+   (DESIGN.md §6: reveal on approach, never on a timer). */
+.vf-terminal-mirror-widget-unbind {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 160ms var(--vf-ease-island);
+}
+
+.vf-terminal-mirror-widget:hover .vf-terminal-mirror-widget-unbind,
+.vf-terminal-mirror-widget-unbind:focus-within {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-terminal-mirror-widget-unbind {
+    transition-duration: 0ms;
+  }
+}
+
+/* The honest face for a session this window cannot show (TPv3 §15 S1:
+   `UNAVAILABLE {state: "transport-not-landed"}`). A state, centred, with the
+   way out under it — never a blank card. */
+.vf-terminal-mirror-widget-face {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+}
+
+/* --- the tray tile ------------------------------------------------------- */
+
+/* A PICTURE of a mirror, for the tray silhouette. Deliberately not the widget:
+   mounting the real card for a 132-pixel tile would open a terminal door on
+   hover (see `mount.tsx`), so the tile is four rectangles that say "a screen,
+   being watched" and reach nothing. */
+.vf-terminal-mirror-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  border-radius: var(--vf-radius-card);
+  background: var(--vf-card-deep);
+}
+
+.vf-terminal-mirror-tile-bar {
+  width: 34%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--vf-fill);
+}
+
+.vf-terminal-mirror-tile-line {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--vf-hairline-strong);
+}
+
+.vf-terminal-mirror-tile-line[data-width="long"] {
+  width: 82%;
+}
+
+.vf-terminal-mirror-tile-line[data-width="medium"] {
+  width: 64%;
+}
+
+.vf-terminal-mirror-tile-line[data-width="short"] {
+  width: 40%;
+}
+
+/* --- the picker ---------------------------------------------------------- */
+
+.vf-terminal-picker {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px;
+}
+
+.vf-terminal-picker[data-roster-state="unread"],
+.vf-terminal-picker[data-roster-state="unobserved"],
+.vf-terminal-picker[data-roster-state="unavailable"] {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.vf-terminal-picker-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vf-terminal-picker-title {
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.vf-terminal-picker-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.vf-terminal-picker-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--vf-radius-control);
+  background: transparent;
+  color: var(--vf-text-primary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms var(--vf-ease-island);
+}
+
+.vf-terminal-picker-row:hover {
+  background: var(--vf-fill-hover);
+}
+
+.vf-terminal-picker-row:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: -2px;
+}
+
+.vf-terminal-picker-row-name {
+  flex: 0 1 auto;
+  overflow: hidden;
+  font-family: var(--vf-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An exited session stays offerable — a mirror of a finished run is a
+   legitimate thing to want on a board — but says what it is. */
+.vf-terminal-picker-row[data-health="exited"] .vf-terminal-picker-row-name {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-terminal-picker-row-detail {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--vf-text-faint);
+  font-size: 10px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

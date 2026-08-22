@@ -24,7 +24,12 @@ export {
   InactiveActivationScopeError,
 } from "./activation-scope";
 export { createRendererContext, type PluginRendererContext } from "./context";
-export { PluginRegistry, type RegisteredPlugin, safePreviewToCss } from "./registry";
+export {
+  type BuiltInContributor,
+  PluginRegistry,
+  type RegisteredPlugin,
+  safePreviewToCss,
+} from "./registry";
 export {
   type BehaviorRuntimeTarget,
   type PluginRuntimeFace,

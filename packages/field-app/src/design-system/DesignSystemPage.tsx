@@ -45,6 +45,7 @@ import { GodviewPreview } from "./GodviewPreview";
 import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
 import { OnboardingPreview } from "./OnboardingPreview";
 import { TerminalMirrorPreview } from "./TerminalMirrorPreview";
+import { TerminalSessionPickerPreview } from "./TerminalSessionPickerPreview";
 
 type IconName =
   | "arrow-left"
@@ -1057,6 +1058,13 @@ function GodviewSection(): ReactElement {
         source="terminal/mirror/TerminalMirrorSurface.tsx"
       >
         <TerminalMirrorPreview />
+      </Specimen>
+      <Specimen
+        title="Terminal mirror — choosing which session a card watches"
+        source="terminal/widget/SessionPickerView.tsx"
+        bleed
+      >
+        <TerminalSessionPickerPreview />
       </Specimen>
     </Section>
   );

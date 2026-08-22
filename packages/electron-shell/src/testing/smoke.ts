@@ -206,16 +206,23 @@ interface CanvasFacts {
 
 /** The census this smoke defends, and why it takes two numbers (P8-D2).
  *
- * `widgetTypes` is the product fact — 22 types across the five renderer-bearing
- * plugins — and it is what a loading regression actually costs a user.
- * `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback can satisfy
- * the census on its own, so without this number a renderer that quietly fell
- * back would look exactly like one that staged correctly. Asserting both is
- * what keeps the two loaders from diverging — the field must be full AND it
- * must have been filled the real way. behavior-conformance contributes the
- * fifth renderer module and its one card; kv-service remains service-only and
- * stages no renderer module. */
-const CANVAS_CENSUS = { widgetTypes: 22, minStagedPlugins: 5 } as const;
+ * `widgetTypes` is the product fact — 23 types: 22 across the five
+ * renderer-bearing plugins plus the HOST'S OWN built-in terminal mirror
+ * (TP-S2b-widget, 2026-08-22) — and it is what a loading regression actually
+ * costs a user. `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback
+ * can satisfy the census on its own, so without this number a renderer that
+ * quietly fell back would look exactly like one that staged correctly.
+ * Asserting both is what keeps the two loaders from diverging — the field must
+ * be full AND it must have been filled the real way. behavior-conformance
+ * contributes the fifth renderer module and its one card; kv-service remains
+ * service-only and stages no renderer module.
+ *
+ * The built-in deliberately moves only ONE of the two numbers, and that is
+ * itself a witness: `vibefield.terminal.mirror` reaches the canvas without
+ * fieldd staging anything, so a rise in `widgetTypes` with `stagedPlugins`
+ * unmoved is precisely what "the host registers it outside the plugin door"
+ * looks like from here. */
+const CANVAS_CENSUS = { widgetTypes: 23, minStagedPlugins: 5 } as const;
 
 /** Every way the line disagrees with the census, named — a smoke that fails
  * should say what it saw, not that something was wrong. */

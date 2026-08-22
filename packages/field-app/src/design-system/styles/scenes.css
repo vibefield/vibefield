@@ -1467,3 +1467,33 @@
   border-radius: var(--vf-radius-card);
   background: var(--vf-fill);
 }
+
+/* The session picker's fixture staging (TP-S2b-widget): a grid of cases, each
+   sized so the SHIPPING view can lay itself out. Everything the picker owns
+   lives beside it in `terminal/widget/mirror-widget.css` — the catalog gives it
+   a box and a caption and nothing else (docs/UI_SYSTEM.md). */
+.vf-ds-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.vf-ds-picker-case {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vf-ds-picker-label {
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.vf-ds-picker-stage {
+  display: flex;
+  height: 210px;
+  overflow: hidden;
+  border-radius: var(--vf-radius-card);
+  background: var(--vf-fill);
+}

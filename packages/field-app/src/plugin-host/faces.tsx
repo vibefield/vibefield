@@ -146,3 +146,38 @@ export function withPluginFace(opts: {
   PluginFace.displayName = `PluginFace(${type})`;
   return PluginFace;
 }
+
+/** The same policy for a BUILT-IN widget type (TP-S2b-widget), minus the half
+ * that cannot apply.
+ *
+ * §11.4's failure boundary is universal — a thrown render must never take the
+ * canvas or a peer card down, and the host's own widgets are no more trusted
+ * than a plugin's on that point. §12.4's disabled placeholder is NOT: a
+ * built-in ships inside this bundle and fieldd's registry holds no row for it,
+ * so `usePluginEnabled` would answer "absent-snapshot" forever — a subscription
+ * with only one possible answer. Worse, it would be a live coupling: the day
+ * anything published a record under the same id, a built-in would begin
+ * face-swapping on a plugin's enable flag. So the built-in door takes the
+ * boundary and refuses the machinery it cannot mean. */
+export function withBuiltInFace<P extends object>(opts: {
+  type: string;
+  surface: "dom" | "gl";
+  component: ComponentType<P>;
+}): ComponentType<P> {
+  // GENERIC where `withPluginFace` is not, and the difference is a fact about
+  // the two doors rather than a style choice: a plugin's component arrives as
+  // `unknown` across the SDK boundary and the prefab builder casts it under an
+  // attestation, while a built-in's component is app source whose props this
+  // compiler can see. Keeping that type means the built-in path carries no cast
+  // at all — which is the whole reason to have a separate door.
+  const { type, surface, component: Real } = opts;
+  function BuiltInFace(props: P): ReactElement {
+    return (
+      <WidgetFaceBoundary type={type} surface={surface}>
+        <Real {...props} />
+      </WidgetFaceBoundary>
+    );
+  }
+  BuiltInFace.displayName = `BuiltInFace(${type})`;
+  return BuiltInFace;
+}

@@ -943,8 +943,14 @@ function dupes(ids: string[]): string[] {
   return [...out];
 }
 
-/** Owned-name rule: `<pluginId>` itself (widgets only) or `<pluginId>.<one segment>`. */
-function isOwnedName(id: string, name: string, allowBare: boolean): boolean {
+/** Owned-name rule: `<pluginId>` itself (widgets only) or `<pluginId>.<one segment>`.
+ *
+ * Exported since TP-S2b-widget: the host's BUILT-IN widget door registers
+ * contributions that never pass through `validatePluginManifest`, and holds
+ * them to this same rule. One namespace law, one implementation — a second copy
+ * in the runtime package is how a built-in would eventually come to squat a
+ * plugin's widget type. */
+export function isOwnedName(id: string, name: string, allowBare: boolean): boolean {
   if (allowBare && name === id) return true;
   if (!name.startsWith(`${id}.`)) return false;
   return ID_SEGMENT_RE.test(name.slice(id.length + 1));

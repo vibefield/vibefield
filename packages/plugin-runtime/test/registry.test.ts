@@ -176,3 +176,86 @@ describe("PluginRegistry.registerRecord (staged)", () => {
     );
   });
 });
+
+// TP-S2b-widget — THE THIRD AUTHORITY. Built-ins are host source, so what this
+// door has to defend is not validation (there is no artifact to validate) but
+// the NAMESPACE: a built-in that could contribute any type at all would be able
+// to squat a plugin's, and the collision check alone would only catch it when
+// the plugin happened to register first.
+describe("PluginRegistry.registerBuiltIn (the host's own contributions)", () => {
+  const contributor = { id: "vibefield.terminal", title: "Terminal", version: "0.1.0" };
+  const contribution = (type: string) => ({
+    type,
+    title: "Terminal mirror",
+    schemaVersion: 1,
+    surface: "dom" as const,
+    sizeMode: "fixed" as const,
+    defaultSize: { w: 420, h: 280 },
+    props: {},
+    groups: {},
+  });
+
+  it("registers host widgets with no manifest and no record behind them", () => {
+    const r = new PluginRegistry<string>();
+    r.registerBuiltIn(contributor, [contribution("vibefield.terminal.mirror")], {
+      "vibefield.terminal.mirror": "impl",
+    });
+    expect(r.ownerOf("vibefield.terminal.mirror")).toBe("vibefield.terminal");
+    const [registered] = r.all();
+    // The provenance is honest in all three directions: this row is the host's,
+    // nothing staged it, and no manifest describes it.
+    expect(registered?.builtIn).toBe(true);
+    expect(registered?.v1).toBeUndefined();
+    expect(registered?.record).toBeUndefined();
+    expect(registered?.behaviorContributions).toEqual([]);
+  });
+
+  it("holds built-in types to the owned-name rule", () => {
+    const r = new PluginRegistry<string>();
+    // `<id>.<segment>` and the bare id are owned; anything else is not.
+    expect(() =>
+      r.registerBuiltIn(contributor, [contribution("vibefield.note")], {
+        "vibefield.note": "impl",
+      }),
+    ).toThrow(/may not contribute widget type vibefield\.note/);
+    expect(() =>
+      r.registerBuiltIn(contributor, [contribution("vibefield.terminal.a.b")], {
+        "vibefield.terminal.a.b": "impl",
+      }),
+    ).toThrow(/may not contribute/);
+  });
+
+  it("refuses a contributor id distribution could never carry", () => {
+    const r = new PluginRegistry<string>();
+    expect(() =>
+      r.registerBuiltIn({ id: "terminal", title: "Terminal", version: "0.1.0" }, [], {}),
+    ).toThrow(/not a distributable plugin id/);
+  });
+
+  it("cannot outrank a plugin, and a plugin cannot outrank it", () => {
+    // The same exact map, in both directions — which is the whole reason the
+    // third door goes through `bind()` rather than beside it.
+    const first = new PluginRegistry<string>();
+    const mirror = contribution("vibefield.terminal.mirror");
+    first.registerBuiltIn(contributor, [mirror], { "vibefield.terminal.mirror": "impl" });
+    // A staged plugin claiming a built-in's type refuses at registration. It is
+    // a type that plugin's own MANIFEST could never legally declare either, but
+    // the record door does not re-parse a manifest — so this check is the one
+    // actually standing between the two.
+    const base = record({ id: "vibefield.impostor" });
+    const impostor: PluginRecord = {
+      ...base,
+      contributions: { ...base.contributions, widgets: [mirror] },
+    };
+    expect(() => first.registerRecord(impostor, { "vibefield.terminal.mirror": "impl" })).toThrow(
+      /already owned by plugin vibefield\.terminal/,
+    );
+
+    // And a built-in cannot arrive twice under the same contributor id.
+    const second = new PluginRegistry<string>();
+    second.registerBuiltIn(contributor, [mirror], { "vibefield.terminal.mirror": "impl" });
+    expect(() =>
+      second.registerBuiltIn(contributor, [mirror], { "vibefield.terminal.mirror": "impl" }),
+    ).toThrow(/already registered/);
+  });
+});

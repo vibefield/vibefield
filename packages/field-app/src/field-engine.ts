@@ -31,6 +31,7 @@ import {
   prepareRendererPlugins,
   type StagedLoaderDeps,
 } from "./plugin-host/staged-loader";
+import { registerBuiltInTerminalWidgets } from "./terminal/widget";
 
 // The field's engine + seed, React-free (Track D3/D4): FieldView renders it,
 // the headless contract tests (drop-consume) drive it. B3 split the two —
@@ -140,11 +141,18 @@ export async function loadDevBundledPlugins(): Promise<readonly BundledRendererP
  * staged set is empty, and it is only ever non-empty in a dev build. A
  * production renderer with nothing staged registers NOTHING and says so once:
  * an empty field is the honest face of a daemon that approved no modules, and a
- * silent second loader would hide exactly the failure this rung must surface. */
+ * silent second loader would hide exactly the failure this rung must surface.
+ *
+ * TP-S2b-widget: the HOST'S OWN built-ins register FIRST — before any plugin,
+ * staged or bundled. Order is the point: the registry's collision law is
+ * first-writer-wins-and-the-second-throws, so registering the built-ins ahead
+ * of everything makes a plugin that claims `vibefield.terminal.mirror` fail
+ * loudly at registration instead of quietly outranking the host. */
 export function buildRegistry(
   prepared: PreparedRendererPlugins = EMPTY_PREPARED,
 ): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
+  registerBuiltInTerminalWidgets(registry);
   const log = getRendererLogger().child({ component: "plugin.host" });
   for (const staged of prepared.staged) {
     if (staged.activation.state !== "active") {

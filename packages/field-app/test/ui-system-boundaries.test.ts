@@ -36,7 +36,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|deck-zoom\b)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b)/m,
     );
   });
 
@@ -56,6 +56,21 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("watchOnlyRuntime");
   });
 
+  it("keeps the session picker's fixture an ADAPTER too (TP-S2b-widget)", () => {
+    // The picker was split out of the widget precisely so the bench could reach
+    // its five roster states with no daemon under it. That only pays if the
+    // fixture supplies DATA — rows and a state — and never markup: a catalog
+    // that redrew the list would be showing a picture of a picker while the
+    // shipping one drifted.
+    const fixture = source("design-system/TerminalSessionPickerPreview.tsx");
+    expect(fixture).toContain("SessionPickerView");
+    expect(fixture).not.toMatch(/vf-terminal-picker/);
+    expect(fixture).not.toContain("<style");
+    // And it must not reach the pool: the picker's whole seam is its props.
+    expect(fixture).not.toContain("refreshTerminalRoster");
+    expect(fixture).not.toContain("useTerminalPool");
+  });
+
   it("mounts production views instead of the retired catalog replicas", () => {
     const page = source("design-system/DesignSystemPage.tsx");
     const onboarding = source("design-system/OnboardingPreview.tsx");
@@ -63,7 +78,8 @@ describe("UI system ownership boundaries", () => {
     const groundWorkbench = source("design-system/CanvasGroundWorkbench.tsx");
     const groundPreview = source("design-system/InfiniteCanvasGroundPreview.tsx");
     const mirror = source("design-system/TerminalMirrorPreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${agentBubbles}\n${groundWorkbench}\n${groundPreview}\n${mirror}`;
+    const picker = source("design-system/TerminalSessionPickerPreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${agentBubbles}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -92,6 +108,8 @@ describe("UI system ownership boundaries", () => {
       "InfiniteCanvasGround",
       "TerminalMirrorPreview",
       "TerminalMirrorSurface",
+      "TerminalSessionPickerPreview",
+      "SessionPickerView",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -154,6 +172,7 @@ describe("UI system ownership boundaries", () => {
       "godview/views/swarm/agent-bubble.css",
       "godview/views/swarm/swarm.css",
       "terminal/mirror/mirror.css",
+      "terminal/widget/mirror-widget.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }
