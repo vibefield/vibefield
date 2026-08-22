@@ -3251,3 +3251,26 @@ unobserved refusal), the Rust key mint, the keyed route fixture parsed on both
 sides. Renderer consumption (zero `connectTicket`, the honest cross-cell face,
 the roster in the UI) is the S1-renderer slice on the pool.
 
+## TP-§20a — the state-transition tables and the failure matrix, as data
+
+2026-08-22 (this commit). Spec §20 items 2 and 3 — the protocol-closure
+checklist's behavioural half — become machine-checkable contracts:
+`packages/contracts/src/terminal-pipeline-machines.ts` carries five tables
+(the connection leg as the cell sees it · the runtime-owned activation with
+the cell's `presentation × input` dimensions as INPUTS and the two predicates
+as outputs · the credit account live → draining → closed · the transfer
+staging → validated → swapped | aborted · the geometry seat empty → held →
+held-grace), each with every input event, its guard in the spec's words, the
+resulting state and its actions; `machineCoverage()` computes the structural
+facts and the test holds them — every state×event pair is a transition, an
+explicit ignore or an explicit refusal (no "handled elsewhere"), at most one
+default row and it is last, no dangling state/event, absorbing states absorb.
+The failure/retry matrix names every pre-auth (silent 1008), connection-
+refusal, attach-refusal, geometry-refusal, seed-required, close (1001/1008/
+1011/4000–4004 — `LEG_TIMEOUT 4004` and `GOING_AWAY 1001` added) and
+envelope-decode code with retryable, who retries, how, the user's face and
+the audit line; the test proves the matrix covers the enums exactly once per
+family. `fixtures/tp-machines.vector.json` is the published form the upstream
+verifier reads; the test pins it byte for byte. Spec v0.8 §20 records items
+1–3 as EXISTING and what 4–7 still owe.
+

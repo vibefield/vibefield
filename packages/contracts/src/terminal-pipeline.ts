@@ -562,12 +562,15 @@ export type PreAuthFailureCode = z.infer<typeof PreAuthFailureCode>;
  * failure, silent by policy; `1011` server error; 4000+ protocol-specific and
  * always named. */
 export const TP_CLOSE_CODES = {
+  GOING_AWAY: 1001,
   POLICY_PRE_AUTH: 1008,
   SERVER_ERROR: 1011,
   STALE_ROUTE: 4000,
   FENCED: 4001,
   SUPERSEDED: 4002,
   PROTOCOL: 4003,
+  /** the heartbeat receipt deadline passed — the detecting side closes */
+  LEG_TIMEOUT: 4004,
 } as const;
 
 export const LegHeartbeat = z
