@@ -94,3 +94,50 @@ describe("orderForReaping", () => {
     expect(orderForReaping(strays).map((s) => s.kind)).toEqual(["fieldd", "floor", "cell"]);
   });
 });
+
+// The 45-Electron leak: the reaper knew only about daemons and would have
+// reported a clean machine while 45 lab apps sat on it, each holding a floor.
+describe("findStrays — the lab Electron", () => {
+  const ELECTRON_BIN = `${ROOT}/node_modules/.pnpm/electron@43.1.1_supports-color@7.2.0/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`;
+
+  it("finds this worktree's lab Electron", () => {
+    const found = findStrays(ps(` 401 ${ELECTRON_BIN} . --terminal-perf-lab`), ROOT);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.kind).toBe("electron");
+  });
+
+  it("spares another worktree's Electron", () => {
+    const other = ELECTRON_BIN.replace(ROOT, OTHER);
+    expect(findStrays(ps(` 402 ${other} . --terminal-perf-lab`), ROOT)).toEqual([]);
+  });
+
+  it("spares a packaged VibeField.app, which is not under node_modules", () => {
+    expect(
+      findStrays(ps(` 403 ${ROOT}/release/mac-arm64/VibeField.app/Contents/MacOS/VibeField`), ROOT),
+    ).toEqual([]);
+  });
+
+  it("spares a process that merely names the Electron binary", () => {
+    expect(findStrays(ps(` 404 ls -la ${ELECTRON_BIN}`), ROOT)).toEqual([]);
+  });
+
+  it("classifies fieldd as fieldd even though it RUNS under this worktree's electron", () => {
+    // The discrimination that matters: a lab Electron runs the app (argv[1] is
+    // "."), fieldd runs a script (argv[1] is the bin.cjs path). An
+    // electron-first rule reported the daemon as an app.
+    const found = findStrays(ps(` 408 ${ELECTRON_BIN} ${ROOT}/packages/fieldd/dist/bin.cjs`), ROOT);
+    expect(found.map((s) => s.kind)).toEqual(["fieldd"]);
+  });
+
+  it("kills the Electron parent FIRST so it cannot spawn while the rest die", () => {
+    const strays = findStrays(
+      ps(
+        ` 405 ${ROOT}/target/debug/field-terminal-host`,
+        ` 406 ${ROOT}/target/debug/field-native`,
+        ` 407 ${ELECTRON_BIN} . --terminal-perf-lab`,
+      ),
+      ROOT,
+    );
+    expect(orderForReaping(strays).map((s) => s.kind)).toEqual(["electron", "floor", "cell"]);
+  });
+});

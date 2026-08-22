@@ -659,7 +659,16 @@ async function injectKeys(
 
 // ---- what survived -----------------------------------------------------------
 
-/** This worktree's own floors / cells / fieldd that are still running.
+/** This worktree's floors, cells, fieldd and lab Electrons that are still
+ * running — EXCLUDING this app's own processes.
+ *
+ * That exclusion is the whole subtlety. Electron is multi-process: main,
+ * renderer, GPU and utility all run the SAME binary with the same argv[0], so a
+ * census that excluded only `process.pid` counted the live run's own helpers as
+ * survivors and reported "3 surviving lab Electrons" on a run that leaked
+ * nothing — the shell's own check, outside the process, said 0.
+ * `getAppMetrics()` enumerates exactly this app's processes, which is the
+ * precise answer and one this file already uses for the resource formula.
  *
  * The repo root is derived the way `fixturePath` derives it: `__dirname` is
  * `packages/electron-shell/dist/testing`. */
@@ -667,10 +676,57 @@ function ownStrays(): { pid: number; kind: string }[] {
   const repoRoot = join(__dirname, "..", "..", "..", "..");
   const listing = spawnSync("/bin/ps", ["-axwwo", "pid=,command="], { encoding: "utf8" });
   if (listing.status !== 0 || typeof listing.stdout !== "string") return [];
-  return findStrays(listing.stdout, repoRoot, [process.pid]).map((stray) => ({
+  const mine = new Set<number>([process.pid, ...app.getAppMetrics().map((metric) => metric.pid)]);
+  return findStrays(listing.stdout, repoRoot, [...mine]).map((stray) => ({
     pid: stray.pid,
     kind: stray.kind,
   }));
+}
+
+// ---- leaving, unconditionally -------------------------------------------------
+
+/**
+ * Exit, and mean it.
+ *
+ * THIS IS THE BUG THAT MATTERED MOST. The first teardown ended in
+ * `writeFileSync(...); await opts.beforeExit(); app.exit(code)` with nothing
+ * guarding the path to that last call — and the machine's disk was at 100% for
+ * part of that window, so the first statement was throwing ENOSPC and the exit
+ * never ran. The Electron then sat there with a shown, always-on-top window and
+ * nothing to make it quit, holding its DETACHED floor and every cell and shell
+ * under it. Forty-five accumulated, aged up to 1h11, and took the machine to 527
+ * ptys against a system-wide ceiling of 511 — which fails every terminal test
+ * and every new shell on the box, for everyone.
+ *
+ * So leaving is no longer the last statement of a happy path:
+ *
+ *   - the watchdog is armed BEFORE the run rather than after it, so a hang
+ *     anywhere — including inside teardown itself — still ends the process;
+ *   - `process.exit` sits behind `app.exit`, because `app.exit` runs Electron's
+ *     own shutdown and can itself be blocked, while `process.exit` cannot;
+ *   - the timer is unref'd, so it never keeps a finished process alive.
+ */
+function armExitWatchdog(afterMs: number, reason: string): () => void {
+  const timer = setTimeout(() => {
+    process.stderr.write(
+      `terminal-perf-lab: ${reason} — forcing exit after ${afterMs}ms so this process ` +
+        "cannot outlive its scenario and hold its floor\n",
+    );
+    process.exit(3);
+  }, afterMs);
+  timer.unref();
+  return () => clearTimeout(timer);
+}
+
+/** `app.exit`, with `process.exit` behind it on a short fuse. */
+function leave(code: number): void {
+  const fuse = setTimeout(() => process.exit(code), 5_000);
+  fuse.unref();
+  try {
+    app.exit(code);
+  } catch {
+    process.exit(code);
+  }
 }
 
 // ---- the pty census ----------------------------------------------------------
@@ -824,6 +880,13 @@ export async function runTerminalPerfLab(opts: {
   const probeInjection = process.env["VF_PERF_PROBE_INJECT"] === "os" ? "os" : "window";
 
   mkdirSync(outDir, { recursive: true });
+  // THE OUTER DEADLINE, armed before a single process is spawned. Every arm, wait
+  // and teardown step below has its own bound; this is the one that holds when
+  // one of those bounds is the thing that broke.
+  const disarmWatchdog = armExitWatchdog(
+    Math.max(120_000, armNames.length * rotations * armMs + 15 * 60_000),
+    "the scenario exceeded its total budget",
+  );
   // Taken BEFORE anything is spawned, so the closing census has a baseline that
   // predates this run's own floor.
   const startingPtys = ptyCount();
@@ -868,8 +931,11 @@ export async function runTerminalPerfLab(opts: {
         why: scenario.layout.why,
       });
       writeFileSync(join(outDir, "lab.jsonl"), `${jsonl.join("\n")}\n`);
-      await opts.beforeExit();
-      app.exit(0);
+      disarmWatchdog();
+      armExitWatchdog(30_000, "the not-hostable teardown did not finish");
+      await opts.supervisor.dispose().catch(() => undefined);
+      await opts.beforeExit().catch(() => undefined);
+      leave(0);
       return;
     }
 
@@ -1126,31 +1192,49 @@ export async function runTerminalPerfLab(opts: {
     // bound matters because a wedged daemon must not hang the lab forever; what
     // survives the bound is named in the record and reaped by the driver's
     // `--reap`, which matches on this worktree's path.
+    // Every step below is individually guarded and the exit is UNCONDITIONAL.
+    // `guard` is the rule in one function: nothing in here may prevent leaving.
+    disarmWatchdog();
+    const teardownWatchdog = armExitWatchdog(90_000, "teardown did not finish");
+    const guard = async (what: string, step: () => Promise<void> | void): Promise<string> => {
+      try {
+        await step();
+        return "ok";
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`terminal-perf-lab: ${what} failed: ${message}\n`);
+        return message;
+      }
+    };
+
     const ptysBefore = startingPtys;
     let teardownNote = "clean";
-    try {
+    // The daemons first: they are what outlives this process if it does not.
+    const disposed = await guard("supervisor.dispose()", async () => {
+      let timedOut = false;
       await Promise.race([
         opts.supervisor.dispose(),
         sleep(20_000).then(() => {
-          teardownNote = "supervisor.dispose() did not finish within 20s";
+          timedOut = true;
         }),
       ]);
-    } catch (error) {
-      teardownNote = `supervisor.dispose() threw: ${error instanceof Error ? error.message : String(error)}`;
-    }
+      if (timedOut) throw new Error("did not finish within 20s");
+    });
+    if (disposed !== "ok") teardownNote = `supervisor.dispose(): ${disposed}`;
     // The scratch root, but ONLY if this run made it: an injected
     // FIELDD_DATA_DIR is somebody else's data (the smokes' rule, kept).
     if (process.env["FIELDD_DATA_DIR"] === undefined) {
-      try {
+      await guard("removing the scratch root", () => {
         rmSync(opts.root, { recursive: true, force: true });
-      } catch {
-        /* a root that will not go is not worth failing a measurement over */
-      }
+      });
     }
     // Ptys are freed asynchronously as the cells die, so this WAITS for the
     // count to settle rather than sleeping a guessed interval — see
     // `settledPtyCount` for the run that proved a fixed sleep lies.
-    const settled = await settledPtyCount(ptysBefore);
+    let settled = { count: ptyCount(), returned: true };
+    await guard("the pty census", async () => {
+      settled = await settledPtyCount(ptysBefore);
+    });
     const ptysAfter = settled.count;
     // WHOSE ptys are still out? The count alone cannot say: this machine is
     // shared, and another agent opening three shells during a run leaves the
@@ -1159,7 +1243,10 @@ export async function runTerminalPerfLab(opts: {
     // survived teardown — the pty count is the corroborating evidence, reported
     // either way. (The same matcher the driver's `--reap` uses, and the same one
     // `reap.test.ts` pins against its decoys.)
-    const survivors = ownStrays();
+    let survivors: { pid: number; kind: string }[] = [];
+    await guard("counting survivors", () => {
+      survivors = ownStrays();
+    });
     emit({
       kind: "pty-census",
       at: Date.now(),
@@ -1173,6 +1260,9 @@ export async function runTerminalPerfLab(opts: {
       // else's shells on a shared machine.
       survivingProcesses: survivors.length,
       survivingKinds: survivors.map((stray) => stray.kind),
+      // Named separately because it is the one that took the machine down and
+      // the first thing a reader will look for.
+      survivingLabElectrons: survivors.filter((stray) => stray.kind === "electron").length,
       note: teardownNote,
     });
     if (survivors.length > 0) {
@@ -1184,13 +1274,15 @@ export async function runTerminalPerfLab(opts: {
     }
 
     const jsonlText = `${jsonl.join("\n")}\n`;
-    writeFileSync(join(outDir, "lab.jsonl"), jsonlText);
+    await guard("writing lab.jsonl", () => {
+      writeFileSync(join(outDir, "lab.jsonl"), jsonlText);
+    });
     // The RESULTS is written HERE rather than by the driver, so a run that the
     // driver never got to read (a crash, a kill, a hung build) still leaves a
     // readable report beside its raw lines. The reducer is pure and lives in
     // `@vibefield/terminal-perf`, with its own suite — the lab does not own the
     // arithmetic, only the decision to run it before exiting.
-    try {
+    await guard("writing RESULTS.md", () => {
       // The fixture's side channel, when this scenario ran one. Read at the very
       // end so it carries the whole run; a missing or unreadable file simply
       // means no §4b table, never a failed report.
@@ -1208,7 +1300,7 @@ export async function runTerminalPerfLab(opts: {
         host: {
           host: `${process.platform}/${process.arch}`,
           "host load (1/5/15m)": loadavg()
-            .map((v) => v.toFixed(2))
+            .map((value) => value.toFixed(2))
             .join(" / "),
           cpus: cpus().length,
           "total memory": `${(totalmem() / 1024 ** 3).toFixed(0)} GiB`,
@@ -1229,18 +1321,15 @@ export async function runTerminalPerfLab(opts: {
           2,
         )}\n`,
       );
-    } catch (error) {
-      writeFileSync(
-        join(outDir, "RESULTS.md"),
-        `# TP-S0c lab run — \`${scenarioName}\`\n\nThe reducer failed; \`lab.jsonl\` is intact.\n\n\`\`\`\n${
-          error instanceof Error ? (error.stack ?? error.message) : String(error)
-        }\n\`\`\`\n`,
-      );
-    }
+    });
+
     // The path on stdout is the driver's handshake: it reads this rather than
     // guessing where a run that failed early wrote its partial record.
-    process.stdout.write(`TERMINAL_PERF_LAB_OUT ${outDir}\n`);
-    await opts.beforeExit();
-    app.exit(failures.length > 0 ? 1 : 0);
+    await guard("the driver handshake", () => {
+      process.stdout.write(`TERMINAL_PERF_LAB_OUT ${outDir}\n`);
+    });
+    await guard("beforeExit", () => opts.beforeExit());
+    teardownWatchdog();
+    leave(failures.length > 0 ? 1 : 0);
   }
 }

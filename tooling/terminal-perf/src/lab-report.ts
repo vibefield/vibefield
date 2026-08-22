@@ -918,7 +918,8 @@ function renderMarkdown(
       `| returned | ${String(census["returned"] ?? "—")} |`,
       `| ptys still out after teardown | ${leaked} |`,
       `| returned within the wait | ${census["settled"] === true ? "yes" : "no (45s)"} |`,
-      `| **this worktree's surviving processes** | **${String(census["survivingProcesses"] ?? "—")}** |`,
+      `| **this worktree's surviving lab Electrons** | **${String(census["survivingLabElectrons"] ?? "—")}** |`,
+      `| **this worktree's surviving processes (all)** | **${String(census["survivingProcesses"] ?? "—")}** |`,
       `| teardown | ${String(census["note"])} |`,
       "",
       Number(census["survivingProcesses"] ?? 0) > 0

@@ -251,6 +251,22 @@ function buildSwiftHelpers(): void {
   }
 }
 
+// THE RUST HALF, which no JS build produces. Without it fieldd exits before
+// readiness and the only thing anyone sees is "field-native did not come up
+// before the readiness deadline" — twenty minutes of debugging the wrong plane,
+// twice in this slice's own history (once at the start, once after a rebase had
+// removed the binary). Six lines to say it plainly instead.
+const fieldNative = join(repoRoot, "target", "debug", "field-native");
+if (!existsSync(fieldNative)) {
+  process.stderr.write(
+    `\nthe Rust floor is not built: ${fieldNative} is missing.\n` +
+      "  cargo build\n" +
+      "\nWithout it fieldd exits before readiness and the lab reports a daemon problem\n" +
+      "rather than a missing binary.\n",
+  );
+  process.exit(2);
+}
+
 const labRenderer = join(labRoot, "renderer");
 if (!existsSync(join(labRenderer, "index.html"))) {
   process.stderr.write(
@@ -326,12 +342,81 @@ child.stdout.on("data", (chunk: Buffer) => {
 });
 child.stderr.on("data", (chunk: Buffer) => process.stderr.write(chunk.toString()));
 
+// THE CHILD'S LEASH. The lab arms its own watchdogs, but a driver that simply
+// awaits `exit` has no answer when the lab never gets there — and that is what
+// happened: 45 lab Electrons survived their scenarios, aged up to 1h11, each
+// holding a detached floor, until the machine ran out of ptys. So the driver
+// bounds the child, kills it if it overruns, and kills it on its OWN way out.
+const childBudgetMs = Math.max(
+  180_000,
+  Math.round(arms.length * rotations * armSeconds * 1000) + 20 * 60_000,
+);
+
+const killChild = (signal: NodeJS.Signals): void => {
+  try {
+    child.kill(signal);
+  } catch {
+    /* already gone */
+  }
+};
+// A driver killed at the terminal must not orphan an Electron holding a floor.
+const onSignal = (signal: NodeJS.Signals): void => {
+  process.stderr.write(`\nterminal-perf: ${signal} — killing the lab child before leaving\n`);
+  killChild("SIGKILL");
+  process.exit(130);
+};
+process.on("SIGINT", () => onSignal("SIGINT"));
+process.on("SIGTERM", () => onSignal("SIGTERM"));
+
+let timedOut = false;
+const leash = setTimeout(() => {
+  timedOut = true;
+  process.stderr.write(
+    `\nterminal-perf: the lab exceeded ${Math.round(childBudgetMs / 1000)}s — SIGTERM, then SIGKILL\n`,
+  );
+  killChild("SIGTERM");
+  setTimeout(() => killChild("SIGKILL"), 10_000).unref();
+}, childBudgetMs);
+
 const exitCode: number = await new Promise((resolveExit) => {
-  child.on("exit", (code) => resolveExit(code ?? 0));
+  child.on("exit", (code, signal) => {
+    clearTimeout(leash);
+    resolveExit(code ?? (signal === null ? 0 : 1));
+  });
 });
+if (timedOut) process.stderr.write("terminal-perf: the run was killed on its deadline\n");
 
 const reported = /TERMINAL_PERF_LAB_OUT (.+)/u.exec(stdout)?.[1]?.trim() ?? outDir;
 process.stdout.write(`\nlab exited ${exitCode}; artifacts in ${reported}\n`);
+
+// THE EXIT IS OBSERVED, NOT ASSUMED. `child.on("exit")` says the driver's own
+// child ended; it says nothing about an Electron that re-execed, nor about the
+// detached floor underneath it. So the driver looks at the machine, waits a
+// bounded moment for a clean shutdown to finish, and reaps what is left rather
+// than leaving it for the next agent to find.
+let lingering = currentStrays();
+for (let attempt = 0; attempt < 10 && lingering.length > 0; attempt += 1) {
+  spawnSync("sleep", ["1"]);
+  lingering = currentStrays();
+}
+if (lingering.length > 0) {
+  const byKind = new Map<string, number>();
+  for (const stray of lingering) byKind.set(stray.kind, (byKind.get(stray.kind) ?? 0) + 1);
+  process.stderr.write(
+    `\nterminal-perf: ${lingering.length} process(es) outlived the run ` +
+      `(${[...byKind].map(([kind, n]) => `${n} ${kind}`).join(", ")}) — reaping them now\n`,
+  );
+  reapStrays(lingering);
+  spawnSync("sleep", ["2"]);
+  const stillThere = currentStrays();
+  process.stdout.write(
+    stillThere.length === 0
+      ? `terminal-perf: reaped; ${ptyCount()} ptys on the machine\n`
+      : `terminal-perf: ${stillThere.length} process(es) SURVIVED the reap — investigate\n`,
+  );
+} else {
+  process.stdout.write(`terminal-perf: nothing outlived the run; ${ptyCount()} ptys\n`);
+}
 
 // ---- the trace, reduced ------------------------------------------------------
 
