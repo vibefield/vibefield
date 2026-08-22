@@ -3480,3 +3480,52 @@ with their reasons). NOT in this slice by design: attach legs, activations, fram
 `STALE_ROUTE` raised by custody, the attach high-water in use (S3b/S3c); one shared session set
 between the UDS plane and the doors is still G22's cost. Housekeeping: 18 orphaned `vf-smoke-*`
 floors from 2026-08-17/18 were found idle on launchd (no ptys held) and reaped.
+
+## TP-S2b-widget — the mirror becomes a canvas widget TYPE, through the host's own door
+
+2026-08-22, `d9c2e8b` (the S2b-widget Opus agent; rebased, fast-forwarded; mark 21 RATIFIED as
+(a) that morning). `vibefield.terminal.mirror` is a BUILT-IN dom widget contributed by
+`vibefield.terminal` (field-app's own row, `src/terminal/widget/`): built through the SAME
+`buildWidgetType` every plugin row goes through (contract vocabulary, prop constructors, the
+durable `vibefield.terminal.mirror:props` component, ICE's build-once catalog), inserted from the
+tray, persisted like every other widget (`{sessionId, label}` in the doc — `sessionId` is the only
+address, TP-L-C; an empty one is a real state and shows the roster picker), wrapped by CardShell.
+The SDK is UNTOUCHED and a test asserts it — the pool access is by construction (the component is
+app source beside the pool it consumes), no reach is granted to anyone else; mark 21 (b) still
+needs its own capability design. THE THIRD REGISTRY AUTHORITY: `PluginRegistry.registerBuiltIn`
+(plugin-runtime) — `registerV1` would have to NAME a renderer artifact that does not exist (§7.1's
+"widgets require entries.renderer") and `registerRecord` would claim fieldd staged a module it has
+never seen, so the third door states what is the case (no artifact, no entries, no activation) and
+then obeys the identical `bind()` laws plus the owned-name rule, now EXPORTED from contracts
+(`isOwnedName`) so the namespace law has one implementation; built-ins register FIRST in
+`buildRegistry`, so a plugin claiming the type refuses loudly instead of outranking the host;
+`withBuiltInFace` is §11.4's failure boundary WITHOUT §12.4's disable swap (a built-in cannot be
+disabled — fieldd's registry holds no row for it). SESSION CHOICE FROM THE ROSTER:
+`SessionPickerView` over `terminal.roster`'s `ProductSessionRosterItem`s (ids, class, health,
+provenance — NO placement; the contract refuses a placement key at parse, so the picker cannot
+become a placement UI); honest faces, none blank — `unread`, `unobserved` (fieldd has not looked
+at the floor — not an empty machine), `unavailable`, observed-and-empty, the session the floor
+does not have, and TPv3's `UNAVAILABLE {state: transport-not-landed}` naming `other-cell` vs
+`endpoints-not-served`. The catalog gains the picker's five roster states through a fixture
+ADAPTER (`TerminalSessionPickerPreview` — the view was split controller-free for it);
+`ui-system-boundaries` guards the fixture and holds `mirror-widget.css` to semantic tokens.
+TP-R4a IN THE WIDGET FORM: the five watch-only layers live in the surface; what a widget can newly
+get wrong is the canvas's own input plumbing, so two lines are load-bearing by omission — the
+contribution declares NO `keyboard` interaction and the subtree carries NO `data-canvas-interactive`;
+the attack test re-runs TP-S2's treatment against the REGISTERED component (programmatic focus,
+delivered focus events, pointer press/click, keydown, a driven ResizeObserver box change) and the
+claim count stays zero, with no `sendKey`/`sendText`/session-wide `setTheme`. Three findings: (1) an
+EAGER import from the registry door instantiated the terminal pool and `@vibecook/ghosttea-react`
+before any test file ran, so every `vi.mock` of it silently stopped applying and 18 green mirror rows
+went red without a line changing — the fix is layering (`mount.tsx` reaches the component through
+`lazy(() => import(…))`, a test pins that no static import returns); (2) a dom widget with no
+declared preview mounts the REAL component in ICE's tray sandbox — a terminal door opened by
+hovering the tray; the binding declares a static `TerminalMirrorTile`; (3) the canvas smoke's
+census moves ONE of its two numbers (`widgetTypes` 22 → 23, `stagedPlugins` unmoved), and that
+asymmetry IS the witness that the host registered it outside the plugin door. NOT WIRED on
+purpose: the surface's `cameraScale`/`cameraSettled` (the ICE content plane IS the camera
+transform; passing it would scale twice) and `culled` (the widget self-observes). Still S3's: the
+SOURCE half of demand release (`DeclareDemand` reaches the cell at TP-S3b). Tests: 22 new rows in
+`terminal-mirror-widget.test.tsx`, 5 in `plugin-runtime/test/registry.test.ts` (the third door:
+provenance, owned-name, distributable-id, collisions both ways), `pnpm smoke:canvas` as the census
+witness; `pnpm verify` verbatim green on the branch and again on merged main.

@@ -187,8 +187,10 @@ generation replacement (`4002`), `LegHeartbeat/Ack` + `4004`, `1001` on drain; t
 (§20 item 5 as data, provisional); the CSP widens under the rollback flag only (`--terminal-direct-door`,
 tested both ways); **the Origin probe (`pnpm smoke:terminal-door`) is green on the first run — the
 app-scheme renderer's DOCUMENT and a WORKER both reached `ConnectionAccepted` under
-`vibefield-app://shell`.** In flight (Opus, worktrees): **TP-S2b-widget** (`vf-s2bw` — the mirror as a
-built-in canvas widget type, mark 21 (a)) · **the ticket-mint lever** (`vf-mint` — the ≈57 % of cold open).
+`vibefield-app://shell`.** **TP-S2b-widget LANDED `d9c2e8b`** — the mirror is a BUILT-IN canvas widget type through the
+host's own registry door (`registerBuiltIn`; SDK untouched; roster-driven session picker; TP-R4a re-proven in
+widget form; `widgetTypes` 22 → 23 with `stagedPlugins` unmoved is the census witness). In flight (Opus,
+worktree `vf-mint`): **the ticket-mint lever** (the ≈57 % of cold open).
 **Next:** TP-S3b static activation (attach legs + the activation registry, seed + ONE catch-up from
 `logical_snapshot`, the two-dimensional lease, byte credits, `DeclareDemand{none|live}` → warm/hot; the
 deck streams through the authenticated path behind the flag — needs G23's routed runtime, or an interim
