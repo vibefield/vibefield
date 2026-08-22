@@ -22,6 +22,17 @@ fn load(name: &str) -> Value {
     serde_json::from_str(&raw).unwrap_or_else(|e| panic!("json {}: {e}", p.display()))
 }
 
+/// A tagged-message fixture with its leg `type` tag stripped — the body a cell
+/// actually serializes (the tag is added by the message framing, not by the
+/// wire struct). Lets an EMIT-only wire type be checked for Value-equality.
+fn without_type(name: &str) -> Value {
+    let mut v = load(name);
+    v.as_object_mut()
+        .expect("tagged fixture is an object")
+        .remove("type");
+    v
+}
+
 fn roundtrip<T>(name: &str, strict: bool)
 where
     T: serde::de::DeserializeOwned + serde::Serialize,
@@ -121,6 +132,55 @@ fn logging_diagnostics_fixtures() {
     let mut invalid_level = load("log-record.system.json");
     invalid_level["level"] = serde_json::json!(15);
     assert!(serde_json::from_value::<LogRecordV1>(invalid_level).is_err());
+}
+
+#[test]
+fn geometry_fixtures() {
+    // TP-S3c — the geometry seat. Directionality is baked into the wire derives:
+    // the cell RECEIVES a claim (Deserialize) and EMITS the commit/refusal
+    // (Serialize). So the inbound shape is proven by parsing the fixture; the two
+    // outbound shapes are proven by re-serializing to the fixture body (minus the
+    // leg's `type` tag) — the same Value-equality EL9 uses for every echoed shape.
+    use field_native::tp::wire::{
+        ClaimGeometry, GeometryCommitted, GeometryHolder, GeometryRefused,
+    };
+
+    let claim: ClaimGeometry =
+        serde_json::from_value(load("tp-tagged-message.claim-geometry.json")).unwrap();
+    assert_eq!(claim.session_id, "s1");
+    assert_eq!(claim.activation_id, "act-1");
+    assert_eq!(claim.claimant.client_id, "client-02");
+    assert_eq!((claim.cols, claim.rows), (100, 28));
+    assert_eq!(claim.expect_revision, 5);
+
+    let committed = GeometryCommitted {
+        holder: GeometryHolder {
+            client_id: "client-01".into(),
+            view_id: "view-01".into(),
+            holder_generation: 2,
+        },
+        geometry_revision: 5,
+        cols: 120,
+        rows: 32,
+    };
+    assert_eq!(
+        serde_json::to_value(&committed).unwrap(),
+        without_type("tp-tagged-message.geometry-committed.json"),
+    );
+
+    let refused = GeometryRefused {
+        code: "SEAT_HELD".into(),
+        current_holder: Some(GeometryHolder {
+            client_id: "client-01".into(),
+            view_id: "view-01".into(),
+            holder_generation: 2,
+        }),
+        geometry_revision: Some(5),
+    };
+    assert_eq!(
+        serde_json::to_value(&refused).unwrap(),
+        without_type("tp-tagged-message.geometry-refused.json"),
+    );
 }
 
 #[test]

@@ -10,6 +10,7 @@ import {
   AttachControlLeg,
   CellActivationStatus,
   CellTransportGrant,
+  ClaimGeometry,
   ConnectionHello,
   canonicalJson,
   compareSceneContent,
@@ -19,6 +20,8 @@ import {
   decodeTpMessage,
   encodePresentationEnvelope,
   FramesAttachOutcome,
+  GeometryCommitted,
+  GeometryRefused,
   type GrantProtectedHeader,
   grantSigningInput,
   grantValidityAt,
@@ -341,11 +344,28 @@ describe("message tagging — one wire for both legs (TP-S3a)", () => {
       ["tp-tagged-message.refused.json", TP_LEG_OUTBOUND.control],
       ["tp-tagged-message.heartbeat.json", TP_LEG_INBOUND.control],
       ["tp-tagged-message.heartbeat-ack.json", TP_LEG_OUTBOUND.frames],
+      // TP-S3c — the geometry seat rides the same wire: the claim is inbound,
+      // the cell's commit and refusal are outbound, all on the control leg.
+      ["tp-tagged-message.claim-geometry.json", TP_LEG_INBOUND.control],
+      ["tp-tagged-message.geometry-committed.json", TP_LEG_OUTBOUND.control],
+      ["tp-tagged-message.geometry-refused.json", TP_LEG_OUTBOUND.control],
     ];
     for (const [name, allowed] of rows) {
       const decoded = decodeTpMessage(fixture(name), allowed);
       expect(decoded.ok, name).toBe(true);
     }
+    // …and each geometry body is pinned by its own schema, not just its tag.
+    const claim = ClaimGeometry.parse(fixture("tp-tagged-message.claim-geometry.json"));
+    expect(claim.claimant.clientId).toBe("client-02");
+    expect(claim.cols).toBe(100);
+    expect(claim.expectRevision).toBe(5);
+    const committed = GeometryCommitted.parse(fixture("tp-tagged-message.geometry-committed.json"));
+    expect(committed.holder.holderGeneration).toBe(2);
+    expect(committed.geometryRevision).toBe(5);
+    const refused = GeometryRefused.parse(fixture("tp-tagged-message.geometry-refused.json"));
+    expect(refused.code).toBe("SEAT_HELD");
+    expect(refused.currentHolder?.clientId).toBe("client-01");
+    expect(refused.geometryRevision).toBe(5);
   });
 });
 

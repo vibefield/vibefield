@@ -1,0 +1,10 @@
+{
+  "type": "ClaimGeometry",
+  "sessionId": "s1",
+  "activationId": "act-1",
+  "leaseEpoch": 3,
+  "claimant": { "clientId": "client-02", "viewId": "view-02" },
+  "cols": 100,
+  "rows": 28,
+  "expectRevision": 5
+}

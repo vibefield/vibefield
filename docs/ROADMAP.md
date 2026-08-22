@@ -198,8 +198,14 @@ six-arm hop ladder asserts order; the real lever is the deck mount's ~150 ms of 
 `InputAllowed`; the cell's own lag call), `DeclareDemand{none|live}` → the ghosttea view (warm/hot), the
 BYTES credit ledger, and the per-activation pump (seed = a forced full frame; deltas base=last-sent; ONE
 `catchup` repairs any dropped-frame lineage; bounded → `stopped{overload}`) — proven end-to-end against a
-REAL /bin/sh session + a REAL WebSocket client. **Next:** S3c routed recovery + the minimal geometry seat
-(over ghosttea's `claim_control_checked`/`resize_view_checked`) · S3d stress/fairness · S3e retire
+REAL /bin/sh session + a REAL WebSocket client. **TP-S3c LANDED `e0eefa9`** — the minimal geometry
+SEAT, cell side: the geometry lease with the CELL the authority over ghosttea's
+`claim_control_checked`/`resize_view_checked` (cell-minted `holderGeneration` stable across resizes;
+cell-side `geometryRevision` + CAS; the "empty seat or own" rule + a standalone release ghosttea 0.10.1
+cannot express itself; claim / resize-by-reclaim / holder-only transfer / release + the FOUR auto-releases:
+detach, leg loss, grant expiry, renewal-drop), a geometry-capable view attached read-write, and the honest
+`SeedRequired{epoch-changed}` migration reason — a claim RESIZES THE REAL PTY, proven end-to-end against a
+real session + client; focus ⇏ claim is the G23 bundle's, not the cell's. **Next:** S3d stress/fairness · S3e retire
 the bridge + the deliberate CSP test. Standing debts: one shared session set between the UDS plane and the
 doors = petition G22; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames reading;
 divider drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).

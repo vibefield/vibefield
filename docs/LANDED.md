@@ -3630,3 +3630,58 @@ one clippy merge of two identical lag branches). NOT in S3b: routed cross-cell r
 seat (S3c), the stress/fairness rows (S3d), the renderer runtime that makes it user-facing (G23), and
 G22 — until the accessor lands the harness hosts T1-born sessions itself and fieldd's legacy UDS
 clients cannot see them.
+
+## TP-S3c — the minimal geometry seat, cell side: the lease over ghosttea's control primitives, and the honest migration reason
+
+2026-08-22, `e0eefa9` (the orchestrator; the critical path). The third S3 slice, built where TP-D26
+put it — in `field-terminal-host`, over ghosttea 0.10.1's PUBLIC control API — and proven END TO END
+against a REAL `/bin/sh` session this harness resizes and a REAL tungstenite client. **The geometry
+lease (`field-native/src/tp/activation.rs`): the CELL is the authority, ghosttea commits the resize.**
+ghosttea's `claim_control_checked`/`resize_view_checked` are the resize-commit fence (attachment-epoch
++ control-revision guarded), but 0.10.1 has NO clear-control-keep-view primitive and its claim does not
+refuse an occupied seat (it only CASes a revision) — so the occupancy rule ("empty seat or the
+claimant's own"), the CELL-MINTED `holderGeneration` (stable across resizes; only an establishing claim
+or a transfer mints a new one), the `geometryRevision` and its CAS, a standalone release, and the four
+auto-releases all live in the cell. A released seat leaves ghosttea's controller INERT until the next
+claim overwrites it (the door is the only path to a resize and gates every one on the lease). **The
+verbs** (control leg, contracts as-built): `ClaimGeometry` (a re-claim of the OWN seat commits a resize
+— there is no standalone resize verb) → `GeometryCommitted {holder, geometryRevision, cols, rows}` or
+`GeometryRefused {code, currentHolder?, geometryRevision?}` (`SEAT_HELD` · `STALE_REVISION` ·
+`RIGHT_MISSING` · `NOT_HOLDER` · `DESTINATION_INELIGIBLE` · the engine's `VIEW_SUPERSEDED`);
+`TransferGeometry` (the current holder or a `geometryAdmin` caller hands the seat to `to`, ONE engine
+claim on the destination's view); `ReleaseGeometry` (the holder yields — no engine call). **The flow is
+optimistic and pure:** `geometry_precheck` (rights, the CAS, occupancy) returns Refuse | Proceed WITHOUT
+touching the session; the door performs the engine op OUTSIDE the registry lock (`handle_geometry` /
+`perform_geometry_op`); `geometry_finalize` re-checks the revision (a lost cross-client race → one more
+`STALE_REVISION`) and commits or refuses — the table never touches a socket or the engine, the module's
+purity intact. **The four auto-releases** (`release_geometry_if_held`): connection death (`leg_closed`
+→ `invalidate`), grant expiry (`tick` → `invalidate`), VIEW DETACH (a demand-none that parks the view
+gives up the seat too — `view_detached`), and a RENEWAL that drops the geometry right (`attach_control`
+renewal path); the view detach itself clears ghosttea's controller, and a renewal that RETAINS geometry
+keeps the holder for free (the activation, and thus the seat, survives the grant bump). A geometry-
+capable view is attached READ-WRITE (`has_input || has_geometry`) because a resize is a terminal write
+ghosttea gates on read-write access; the cell still gates BYTE input on the input right + the two-
+dimensional lease, so a geometry-only view never types. **The honest migration reason
+(`attach_frames`):** a resume whose `from` names a different `SceneEpoch` is a MIGRATION →
+`SeedRequired{reason: "epoch-changed"}`; a same-epoch resume is viable but the dormant-cursor resume is
+capability-gated (capabilities §5.4, not in the core profile) → `no-resume-capability`; no resume →
+`no-cursor`. `session_epoch` (from `Session::session_epoch()`) is threaded into `AttachFramesInput` by
+the door. Cross-cell migration otherwise already worked (a fresh cell has no `by_key` entry, so a
+`replacesActivationId` naming an activation it never hosted just activates fresh; same-cell replace is
+S3b's) — S3c adds the honest reason. **NOT built here: focus ⇏ claim** — the as-built "focus ⇒ claim"
+hazard lives UPSTREAM (ghostty `runtime.js` / the renderer); it lands with the G23 bundle, not the cell.
+**Wire (`wire.rs`):** serde mirrors for `GeometryClaimant`/`GeometryHolder`/`ClaimGeometry`/
+`ReleaseGeometry`/`TransferGeometry`/`GeometryCommitted`/`GeometryRefused`. **Tests:** three PURE unit
+rows in `activation.rs` (claim an empty seat → resize by re-claim keeping the generation → the revision
+CAS + an engine refusal that does not mutate the lease; the geometry right + seat occupancy + a
+holder-only transfer with `SEAT_HELD`/`NOT_HOLDER`/`DESTINATION_INELIGIBLE`, two clients on one session;
+and all three auto-releases) — the table's purity lets them drive the whole precheck → (simulated
+engine outcome) → finalize cycle without a socket; plus two END-TO-END rows in `tp_activation.rs`
+against a real session + client: a claim RESIZES THE REAL PTY (asserted via `Session::control_state`),
+a re-claim resizes again keeping the holder generation, a stale revision refuses without touching the
+size; and the frames attach reports `epoch-changed` / `no-resume-capability` / `no-cursor`. `tp_door.rs`
+updated (a geometry verb is served now: a claim naming an unattached activation is a STRUCTURED
+`GeometryRefused NOT_HOLDER` and the leg LIVES, no longer a protocol close). `pnpm verify` verbatim
+green (one rustfmt wrap on a hand-written test line). NOT in S3c: the stress/fairness rows (S3d), the
+renderer routed runtime that makes it user-facing (G23), and G22 (until the accessor lands, the harness
+hosts T1-born sessions itself and fieldd's legacy UDS clients cannot see them).
