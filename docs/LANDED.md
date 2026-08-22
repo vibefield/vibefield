@@ -3303,3 +3303,40 @@ seam) — TP-R17 / G23. Left undone by design: the mirror is not yet a canvas wi
 manifest contribution — the plugin door), and no smoke row asserts `zoom.commits`. Gate green;
 `smoke:godview` green.
 
+## TP-S1r — the pool opens by session; connectTicket is gone from the renderer
+
+2026-08-22 (built in a parallel worktree by the S0b Opus agent; rebased onto S2, fast-
+forwarded — SHAs in the commit list). The renderer half of TP-S1: every pane birth and every
+restore now goes through fieldd's session-addressed doors. Restore reads the saved pane ids
+synchronously at first render and `openTicket`s them in order (a refused mint is the EXPECTED
+case — `openTicket` gates on the observed inventory — so it tries the next, never faults);
+nothing to rejoin ⇒ `dormant` (no bridge, no socket — the resting state that let the sessionless
+door be retired rather than replaced); out of dormant the pool reads the ROSTER and opens on a
+session the floor already has before it ever `create`s (else `claimExistingSessions` would
+claim N and the pool would spawn an N+1th shell nobody asked for — found by writing its row);
+splits, new panes and rehydration ride `createSplitSession` → `terminal.create` → the floor's own
+summary (the Workspace birth-door "gap" the brief feared does NOT exist: `createSplitSession`
+serves both `splitActive` and `createSessionInActivePane`, and `initializeWorkspace`'s fallback
+never runs when a session exists to claim). Zero `terminal.connectTicket` on every path
+(asserted). The first ticket handed to main PINS `route.cellBootId`; a session on another cell
+answers `UNAVAILABLE {service:"terminal", state:"transport-not-landed", reason:"other-cell"}` —
+a face that carries NO cell (grepped) — while cell A's one connection is provably untouched. The
+UI reads `terminal.roster` only (`terminal.list` is gone from the renderer, asserted); the
+restore gate mounts unarmed on anything but an OBSERVED roster. `SessionPlacementLedger` holds
+route + both grants + `attachExpiresAt` + `grantGeneration` for S3; nothing verifies, renews or
+dials; a keyless floor's legacy ticket still drives the bridge as `grantsLanded: false`. The
+prewarm now warms the RUNTIME only — a transport cannot exist before a session does (a deliberate
+consequence, named). S0a's perf-source registration moved into the pool (the deck unmounts while
+the runtime lives). The smoke's persistence-flip rows were near-vacuous before this slice and
+became impossible on fieldd-born panes (born keep-until-exit, `contracts/src/terminal.ts:113-
+115`); the gate now BIRTHS its own witness through the automation client with
+`persistence: "terminate-with-app"` and no owner — exactly the class GT-D11 governs — and
+observes BOTH endpoints (the floor's own create summary = pre-flip; fieldd's inventory =
+post-flip), while deck panes get an asserted row of their own (a pane ever seen
+`terminate-with-app` now FAILS); the sampler's empty trail was its ~1.7 s poll cadence under
+load, not a frozen set — it now counts polls/refusals and the guard waits for it to have LOOKED.
+The earlier "echo" blocker was pre-S1b fieldd and vanished on the rebase; the claim path was
+exonerated by probes (`accepted:true` on the claimed pane and on an unclaimed control). Gate
+verbatim green; `smoke:godview` `ok:true` twice (`flipObserved: true`, `consentShown` via the
+real roster, `claimedExisting: true`).
+
