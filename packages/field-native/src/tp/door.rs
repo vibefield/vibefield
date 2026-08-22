@@ -29,12 +29,17 @@
 //! Concurrency: one read task per socket plus one WRITER task owning its sink
 //! (every message to a leg — replies, the lease, presentation units — rides an
 //! unbounded channel to that writer, so a pump and a reply never race on one
-//! socket); one registry behind a std Mutex with short, await-free critical
-//! sections; superseding or shutting a leg down is a message to its read task.
+//! socket). The frames writer is a TWO-LANE PRIORITY scheduler (§8, TP-S3d):
+//! urgent units (control replies, urgent incrementals) drain before any bulk
+//! (transfer chunks), which it re-inspects after every chunk — a background
+//! transfer yields to an urgent incremental at chunk boundaries, and a bulk
+//! byte-semaphore bounds how far bulk runs ahead. One registry behind a std
+//! Mutex with short, await-free critical sections; superseding or shutting a
+//! leg down is a message to its read task.
 
 use super::activation::{
     ActivationTable, AttachControlInput, AttachFramesInput, Effect, GeometryDecision, GeometryOp,
-    GeometryOutcome, GeometryProceed, LegRef, Outbound, SetIdentity,
+    GeometryOutcome, GeometryProceed, LegRef, Outbound, SetIdentity, UnitClass,
 };
 use super::grant::{Channel, GrantVerifier, PreAuthFailure, PreAuthFailureCode};
 use super::ledger::{CurrentLeg, TransportLedger, TransportRefusal};
@@ -55,12 +60,12 @@ use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use ghosttea::{ControlClaim, Session, ViewAccess};
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, WebSocketConfig};
@@ -421,27 +426,39 @@ impl Drop for Door {
 // ---- the pump's view of the door --------------------------------------------
 
 impl PumpHost for DoorState {
-    fn try_admit(&self, connection_id: u64, activation_id: &str, bytes: u64) -> Admission {
+    fn try_admit(
+        &self,
+        connection_id: u64,
+        activation_id: &str,
+        bytes: u64,
+        class: UnitClass,
+    ) -> Admission {
         let mut reg = self.registry.lock().unwrap();
         match reg
             .activations
-            .can_admit(connection_id, activation_id, bytes)
+            .can_admit(connection_id, activation_id, bytes, class)
         {
             None => Admission::Gone,
             Some(false) => Admission::Starved,
             Some(true) => {
                 reg.activations
-                    .try_admit(connection_id, activation_id, bytes);
+                    .try_admit(connection_id, activation_id, bytes, class);
                 Admission::Admitted
             }
         }
     }
 
-    fn can_admit(&self, connection_id: u64, activation_id: &str, bytes: u64) -> Admission {
+    fn can_admit(
+        &self,
+        connection_id: u64,
+        activation_id: &str,
+        bytes: u64,
+        class: UnitClass,
+    ) -> Admission {
         let reg = self.registry.lock().unwrap();
         match reg
             .activations
-            .can_admit(connection_id, activation_id, bytes)
+            .can_admit(connection_id, activation_id, bytes, class)
         {
             None => Admission::Gone,
             Some(false) => Admission::Starved,
@@ -593,6 +610,10 @@ fn start_pump(state: &DoorState, activation_id: &str) {
             hub,
             session_handle,
             max_chunk_bytes: max_chunk,
+            max_urgent_unit_bytes: state
+                .config
+                .protocol_limits
+                .max_urgent_presentation_unit_bytes,
             seed_wait: state.config.seed_wait,
             catchup_bound: state.config.catchup_bound,
         }
@@ -882,8 +903,12 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
                     }
                     if let Some(windows) = initial_windows {
                         // §8 law (4): the credit epoch IS the frames-leg generation.
-                        reg.activations
-                            .open_credit(connection_id, leg_generation, windows);
+                        reg.activations.open_credit(
+                            connection_id,
+                            leg_generation,
+                            windows,
+                            state.config.protocol_limits.urgent_reserve_bytes,
+                        );
                     }
                     // Accepted: no longer a pre-auth socket.
                     reg.pre_auth_connections = reg.pre_auth_connections.saturating_sub(1);
@@ -906,13 +931,21 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
     };
 
     // From here the socket is split: a writer task owns the sink, this task reads.
+    // The frames socket's writer is a two-lane PRIORITY scheduler with a bulk
+    // byte-semaphore (`maxBulkBytesAdmittedAhead`); a control socket has no bulk.
     let (sink, mut stream) = ws.split();
     let (out_tx, out_rx) = mpsc::unbounded_channel::<Outbound>();
-    let writer = tokio::spawn(writer_task(sink, out_rx));
+    let bulk_credit = (channel == Channel::Frames).then(|| {
+        Arc::new(Semaphore::new(
+            state.config.protocol_limits.max_bulk_bytes_admitted_ahead as usize,
+        ))
+    });
+    let writer = tokio::spawn(writer_task(sink, out_rx, bulk_credit.clone()));
     let leg = LegRef {
         connection_id,
         leg_generation,
         out: out_tx.clone(),
+        bulk_credit,
     };
     let set_identity = SetIdentity {
         client_id: claims.client_id.clone(),
@@ -1013,22 +1046,47 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
     );
 }
 
-/// The writer: one task per socket owns the sink; everything to the peer rides
-/// `rx` in order. `Close(0, _)` = the peer already closed (no frame to send).
-async fn writer_task(mut sink: WsSink, mut rx: mpsc::UnboundedReceiver<Outbound>) {
-    while let Some(item) = rx.recv().await {
-        match item {
-            Outbound::Text(t) => {
+/// The writer: one task per socket owns the sink. It is a TWO-LANE PRIORITY
+/// scheduler (§8, TP-S3d): `Text`/`Binary`/`Close` ride the URGENT lane, `Bulk`
+/// the bulk lane. Urgent drains fully; between bulk chunks the writer re-inspects
+/// urgent, so a background transfer yields to an urgent incremental at chunk
+/// boundaries — the bulk-induced-HOL bound. Each written bulk chunk returns its
+/// bytes to `bulk_credit` (`maxBulkBytesAdmittedAhead`); on exit the semaphore is
+/// CLOSED so a pump blocked acquiring permits ends. `Close(0, _)` = the peer
+/// already closed (no frame to send).
+async fn writer_task(
+    mut sink: WsSink,
+    mut rx: mpsc::UnboundedReceiver<Outbound>,
+    bulk_credit: Option<Arc<Semaphore>>,
+) {
+    let mut urgent: VecDeque<Outbound> = VecDeque::new();
+    let mut bulk: VecDeque<Vec<u8>> = VecDeque::new();
+    let mut disconnected = false;
+    loop {
+        // Pull everything currently queued into the priority lanes (non-blocking),
+        // so an urgent unit that arrived during the last write jumps ahead now.
+        loop {
+            match rx.try_recv() {
+                Ok(item) => enqueue(item, &mut urgent, &mut bulk),
+                Err(mpsc::error::TryRecvError::Empty) => break,
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    disconnected = true;
+                    break;
+                }
+            }
+        }
+        match pick_next(&mut urgent, &mut bulk) {
+            Pick::Urgent(Outbound::Text(t)) => {
                 if sink.send(Message::Text(t.into())).await.is_err() {
                     break;
                 }
             }
-            Outbound::Binary(b) => {
+            Pick::Urgent(Outbound::Binary(b)) => {
                 if sink.send(Message::Binary(b.into())).await.is_err() {
                     break;
                 }
             }
-            Outbound::Close(code, reason) => {
+            Pick::Urgent(Outbound::Close(code, reason)) => {
                 if code != 0 {
                     let frame = CloseFrame {
                         code: CloseCode::from(code),
@@ -1039,7 +1097,59 @@ async fn writer_task(mut sink: WsSink, mut rx: mpsc::UnboundedReceiver<Outbound>
                 let _ = sink.flush().await;
                 break;
             }
+            Pick::Urgent(Outbound::Bulk(b)) => bulk.push_back(b), // unreachable; keep total
+            Pick::Bulk(b) => {
+                // ONE chunk, then loop back to re-inspect urgent; return its bytes
+                // to the bulk-ahead window as the wire drains them.
+                let n = b.len();
+                let broke = sink.send(Message::Binary(b.into())).await.is_err();
+                if let Some(sem) = &bulk_credit {
+                    sem.add_permits(n);
+                }
+                if broke {
+                    break;
+                }
+            }
+            Pick::Idle => {
+                if disconnected {
+                    break;
+                }
+                match rx.recv().await {
+                    Some(item) => enqueue(item, &mut urgent, &mut bulk),
+                    None => break,
+                }
+            }
         }
+    }
+    // Unblock any pump waiting on bulk-ahead permits for this dead socket.
+    if let Some(sem) = &bulk_credit {
+        sem.close();
+    }
+}
+
+/// The writer's priority pick: the URGENT lane drains fully before any bulk, and
+/// each lane is FIFO. Pulled out of the writer loop so the invariant is unit-
+/// testable without a socket (§8, TP-S3d — the bulk-induced-HOL floor).
+enum Pick {
+    Urgent(Outbound),
+    Bulk(Vec<u8>),
+    Idle,
+}
+
+fn pick_next(urgent: &mut VecDeque<Outbound>, bulk: &mut VecDeque<Vec<u8>>) -> Pick {
+    if let Some(u) = urgent.pop_front() {
+        Pick::Urgent(u)
+    } else if let Some(b) = bulk.pop_front() {
+        Pick::Bulk(b)
+    } else {
+        Pick::Idle
+    }
+}
+
+fn enqueue(item: Outbound, urgent: &mut VecDeque<Outbound>, bulk: &mut VecDeque<Vec<u8>>) {
+    match item {
+        Outbound::Bulk(b) => bulk.push_back(b),
+        other => urgent.push_back(other),
     }
 }
 
@@ -1485,4 +1595,55 @@ async fn close_with(ws: &mut Ws, code: u16, reason: &str) -> Result<()> {
     };
     let _ = tokio::time::timeout(Duration::from_millis(500), drain).await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// §8, TP-S3d — the writer's priority invariant: an urgent unit jumps EVERY
+    /// queued bulk chunk, and each lane stays FIFO. This is the bulk-induced-HOL
+    /// floor at the scheduler: a background transfer never delays an urgent
+    /// incremental that is already queued.
+    #[test]
+    fn the_writer_drains_urgent_before_any_bulk_and_fifo_within_each_lane() {
+        let mut urgent: VecDeque<Outbound> = VecDeque::new();
+        let mut bulk: VecDeque<Vec<u8>> = VecDeque::new();
+
+        // A transfer's chunks are queued (bulk) with an urgent incremental in the
+        // MIDDLE — exactly the head-of-line case.
+        enqueue(Outbound::Bulk(b"a-begin".to_vec()), &mut urgent, &mut bulk);
+        enqueue(Outbound::Bulk(b"a-chunk1".to_vec()), &mut urgent, &mut bulk);
+        enqueue(
+            Outbound::Binary(b"b-urgent".to_vec()),
+            &mut urgent,
+            &mut bulk,
+        );
+        enqueue(Outbound::Bulk(b"a-chunk2".to_vec()), &mut urgent, &mut bulk);
+        enqueue(Outbound::Text("ctrl".into()), &mut urgent, &mut bulk);
+
+        let mut order: Vec<Vec<u8>> = Vec::new();
+        loop {
+            match pick_next(&mut urgent, &mut bulk) {
+                Pick::Urgent(Outbound::Binary(b)) => order.push(b),
+                Pick::Urgent(Outbound::Text(t)) => order.push(t.into_bytes()),
+                Pick::Urgent(other) => panic!("unexpected urgent {other:?}"),
+                Pick::Bulk(b) => order.push(b),
+                Pick::Idle => break,
+            }
+        }
+
+        // urgent lane first (FIFO: the binary, then the control text), THEN the
+        // bulk lane in FIFO order.
+        assert_eq!(
+            order,
+            vec![
+                b"b-urgent".to_vec(),
+                b"ctrl".to_vec(),
+                b"a-begin".to_vec(),
+                b"a-chunk1".to_vec(),
+                b"a-chunk2".to_vec(),
+            ],
+        );
+    }
 }

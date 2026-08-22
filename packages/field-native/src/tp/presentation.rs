@@ -23,7 +23,7 @@
 //! - Frames for other sessions on a shared hub are skipped by handle; the
 //!   worker validates the TRF1 identity it was told at attach (`trfIdentity`).
 
-use super::activation::{LegRef, Outbound};
+use super::activation::{LegRef, Outbound, UnitClass};
 use super::crc32c::crc32c;
 use super::source::Trf1Header;
 use super::wire::{encode_envelope, SceneContentStamp, SceneEpoch};
@@ -37,12 +37,25 @@ use tokio::sync::Notify;
 
 /// The door, as the pump sees it.
 pub trait PumpHost: Send + Sync + 'static {
-    /// Admit `bytes` for this activation on its frames connection (mutating:
-    /// the bytes are charged to both windows when Admitted).
-    fn try_admit(&self, connection_id: u64, activation_id: &str, bytes: u64) -> Admission;
-    /// Would `bytes` be admissible right now? (non-mutating — the pump asks
-    /// before forcing the engine to render a full frame nobody can receive)
-    fn can_admit(&self, connection_id: u64, activation_id: &str, bytes: u64) -> Admission;
+    /// Admit `bytes` of `class` for this activation on its frames connection
+    /// (mutating: the bytes are charged to both windows when Admitted). Bulk
+    /// leaves the urgent reserve; urgent draws the full connection window.
+    fn try_admit(
+        &self,
+        connection_id: u64,
+        activation_id: &str,
+        bytes: u64,
+        class: UnitClass,
+    ) -> Admission;
+    /// Would `bytes` of `class` be admissible right now? (non-mutating — the pump
+    /// asks before forcing the engine to render a full frame nobody can receive)
+    fn can_admit(
+        &self,
+        connection_id: u64,
+        activation_id: &str,
+        bytes: u64,
+        class: UnitClass,
+    ) -> Admission;
     /// A unit (a delta or a whole transfer) was sent ending at `revision`.
     fn unit_sent(&self, activation_id: &str, revision: u64, seed: bool);
     /// The pump could not converge within the bound.
@@ -72,6 +85,9 @@ pub struct PumpStart {
     pub session_handle: u64,
     pub scene_epoch: SceneEpoch,
     pub max_chunk_bytes: usize,
+    /// a delta larger than this is not an urgent incremental — it becomes a
+    /// (bulk) catch-up transfer (§8, TP-S3d).
+    pub max_urgent_unit_bytes: u64,
     pub seed_wait: Duration,
     pub catchup_bound: Duration,
 }
@@ -205,6 +221,12 @@ impl<H: PumpHost> Pump<H> {
     /// emitted on its own) wrapped as `trf1-frame`. Ok(true) = sent, Ok(false)
     /// = starved (dropped; the lineage needs a full), Err = the activation is gone.
     fn delta(&mut self, packet: &[u8], header: &Trf1Header) -> Result<bool, ()> {
+        // An oversized incremental is NOT an urgent unit — drop the lineage here
+        // and let the bounded catch-up transfer (bulk, chunked) carry it (§8,
+        // TP-S3d). Checked on the payload, before a sequence is spent.
+        if packet.len() as u64 > self.start.max_urgent_unit_bytes {
+            return Ok(false);
+        }
         let mut h = self.header("trf1-frame");
         h["baseContent"] = match self.last_sent {
             Some(rev) => serde_json::to_value(self.stamp(rev)).unwrap(),
@@ -212,10 +234,13 @@ impl<H: PumpHost> Pump<H> {
         };
         h["resultContent"] = serde_json::to_value(self.stamp(header.revision)).unwrap();
         let unit = encode_envelope(&h, packet);
+        // A delta is an URGENT incremental: it may draw the full connection window
+        // and rides the writer's urgent lane, ahead of any bulk transfer.
         match self.host.try_admit(
             self.start.connection_id,
             &self.start.activation_id,
             unit.len() as u64,
+            UnitClass::Urgent,
         ) {
             Admission::Admitted => {
                 if self.start.frames.out.send(Outbound::Binary(unit)).is_err() {
@@ -337,15 +362,17 @@ impl<H: PumpHost> Pump<H> {
         Step::Continue
     }
 
-    /// Block until `bytes` WOULD be admissible (or the bound passes → overload).
-    /// Non-mutating: the real charge happens when the unit is sent.
+    /// Block until `bytes` of BULK WOULD be admissible (or the bound passes →
+    /// overload). Non-mutating: the real charge happens when the unit is sent.
     async fn wait_for_credit(&self, bytes: u64) -> Result<(), ()> {
         let deadline = tokio::time::Instant::now() + self.start.catchup_bound;
         loop {
-            match self
-                .host
-                .can_admit(self.start.connection_id, &self.start.activation_id, bytes)
-            {
+            match self.host.can_admit(
+                self.start.connection_id,
+                &self.start.activation_id,
+                bytes,
+                UnitClass::Bulk,
+            ) {
                 Admission::Admitted => return Ok(()),
                 Admission::Starved => {
                     if self.stop.load(Ordering::Acquire) {
@@ -364,7 +391,10 @@ impl<H: PumpHost> Pump<H> {
         }
     }
 
-    /// Send one envelope once admitted (waiting for credit, bounded).
+    /// Send one BULK transfer envelope once admitted (waiting for credit,
+    /// bounded), then behind the writer's bulk-ahead backpressure. Credit is
+    /// charged first; only once admitted do we acquire the writer permits — so a
+    /// credit-starved loop never leaks bulk permits.
     async fn send_admitted(&mut self, unit: Vec<u8>) -> Result<(), ()> {
         let deadline = tokio::time::Instant::now() + self.start.catchup_bound;
         loop {
@@ -372,15 +402,9 @@ impl<H: PumpHost> Pump<H> {
                 self.start.connection_id,
                 &self.start.activation_id,
                 unit.len() as u64,
+                UnitClass::Bulk,
             ) {
-                Admission::Admitted => {
-                    return self
-                        .start
-                        .frames
-                        .out
-                        .send(Outbound::Binary(unit))
-                        .map_err(|_| ());
-                }
+                Admission::Admitted => break,
                 Admission::Starved => {
                     if self.stop.load(Ordering::Acquire) {
                         return Err(());
@@ -396,5 +420,20 @@ impl<H: PumpHost> Pump<H> {
                 Admission::Gone => return Err(()),
             }
         }
+        // Bulk-ahead backpressure (`maxBulkBytesAdmittedAhead`): acquire a chunk's
+        // worth of writer permits and FORGET them; the writer returns them as it
+        // writes the chunk. A CLOSED semaphore means the socket's writer exited —
+        // end the pump rather than block forever.
+        if let Some(sem) = &self.start.frames.bulk_credit {
+            match sem.acquire_many(unit.len() as u32).await {
+                Ok(permit) => permit.forget(),
+                Err(_) => return Err(()),
+            }
+        }
+        self.start
+            .frames
+            .out
+            .send(Outbound::Bulk(unit))
+            .map_err(|_| ())
     }
 }

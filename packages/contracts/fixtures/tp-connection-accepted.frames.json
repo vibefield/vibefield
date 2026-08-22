@@ -27,7 +27,10 @@
     "activationAttachDeadlineMs": 5000,
     "maxActivationCatchupMs": 3000,
     "maxCatchupBytes": 16777216,
-    "creditAccountDrainTtlMs": 10000
+    "creditAccountDrainTtlMs": 10000,
+    "urgentReserveBytes": 2097152,
+    "maxBulkBytesAdmittedAhead": 4194304,
+    "maxUrgentPresentationUnitBytes": 262144
   },
   "capabilities": ["resume"]
 }

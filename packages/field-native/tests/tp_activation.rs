@@ -88,6 +88,10 @@ struct Harness {
 }
 
 async fn harness() -> Harness {
+    harness_cfg(|_| {}).await
+}
+
+async fn harness_cfg(configure: impl FnOnce(&mut DoorConfig)) -> Harness {
     let minter = TestMinter::new(CELL);
     let verifier = GrantVerifier::new(
         GrantKey {
@@ -104,6 +108,7 @@ async fn harness() -> Harness {
     // must not race the test's own pacing (production keeps the registry
     // default, `MAX_ACTIVATION_CATCHUP_MS`).
     config.catchup_bound = Duration::from_secs(30);
+    configure(&mut config);
     let door = Door::serve(config).await.expect("serve");
     Harness {
         minter,
@@ -867,6 +872,47 @@ async fn frames_attach_reports_the_seed_reason_incl_epoch_changed() {
     // (c) no resume → no-cursor.
     let c = attach_frames_resume(&h, &mut frames, &session_id, None).await;
     assert_eq!(c["outcome"]["reason"], "no-cursor");
+
+    h.door.shutdown().await;
+}
+
+/// TP-S3d — §8 "every presentation unit is capped: anything larger than
+/// `maxUrgentPresentationUnitBytes` becomes a transfer". With the cap set just
+/// above the TRF1 header, every incremental trips it, so a change must arrive as
+/// a (bulk) CATCH-UP transfer — never a bare oversized `trf1-frame`.
+#[tokio::test]
+async fn an_oversized_delta_is_carried_by_a_catchup_transfer() {
+    let h = harness_cfg(|c| {
+        c.protocol_limits.max_urgent_presentation_unit_bytes = 64;
+    })
+    .await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut control, mut frames, _e) = connect(&h, "set-o", 1, caps(4_000_000, 2_000_000)).await;
+    attach_both(
+        &h,
+        &mut control,
+        &mut frames,
+        &session_id,
+        "act-o",
+        &["input", "read"],
+        true,
+    )
+    .await;
+    let (kind, _b, seed_stamp, _by, _hd) = receive_transfer(&mut frames).await;
+    assert_eq!(kind, "seed");
+    scene_applied(&mut frames, &session_id, "act-o", &seed_stamp).await;
+    expect_text(next_reply(&mut control).await, "CellActivationStatus");
+
+    // A change: the pump drops the oversized incremental (Ok(false) → needs_full)
+    // and repairs the lineage with a catch-up transfer, chunked and on the bulk
+    // lane — the very path §8 mandates for anything over the urgent-unit cap.
+    type_into(&session, "echo s3d\n");
+    let (kind2, _b2, _s2, _by2, _hd2) = receive_transfer(&mut frames).await;
+    assert_eq!(
+        kind2, "catchup",
+        "an oversized change becomes a catch-up transfer, not one urgent frame"
+    );
 
     h.door.shutdown().await;
 }

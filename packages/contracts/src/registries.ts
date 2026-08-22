@@ -152,6 +152,19 @@ export const TERMINAL_PIPELINE = {
   INPUT_LAG_SUSPEND_REVISIONS: 64,
   ATTACH_RENEWAL_MARGIN_MS: 60_000,
   SEED_FRAME_WAIT_MS: 2_000,
+  // TP-S3d — the writer/admission fairness FLOOR (§8). URGENT_RESERVE_BYTES of
+  // connection credit is carved out for the urgent class: BULK admission (seed /
+  // catch-up transfers) may consume connection credit only DOWN TO this reserve,
+  // so an urgent incremental always has room (URGENT_RESERVE_BYTES ≥
+  // MAX_URGENT_PRESENTATION_UNIT_BYTES). MAX_BULK_BYTES_ADMITTED_AHEAD bounds the
+  // bulk bytes queued to the frames writer ahead of what it has written — the
+  // bulk-induced-HOL bound is that plus the one chunk being written (so it is ≥
+  // MAX_PRESENTATION_CHUNK_BYTES). A presentation unit larger than
+  // MAX_URGENT_PRESENTATION_UNIT_BYTES is not an urgent incremental — it becomes
+  // a (bulk) catch-up transfer.
+  URGENT_RESERVE_BYTES: 2_097_152,
+  MAX_BULK_BYTES_ADMITTED_AHEAD: 4_194_304,
+  MAX_URGENT_PRESENTATION_UNIT_BYTES: 262_144,
 } as const;
 
 /** TPv3 — WebSocket close codes on the cell doors (terminal-pipeline-v3 §5.1):

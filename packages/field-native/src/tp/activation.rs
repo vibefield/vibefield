@@ -24,23 +24,47 @@ use super::wire::{
 };
 use crate::registries::terminal_pipeline as tp;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::Semaphore;
 
-/// What a leg's writer task receives.
+/// What a leg's writer task receives. The writer is a TWO-LANE PRIORITY
+/// scheduler (§8, TP-S3d): `Text`/`Binary`/`Close` ride the URGENT lane (control
+/// replies, and the urgent-class incrementals that must never wait behind bulk);
+/// `Bulk` rides the BULK lane (seed/catch-up transfer chunks). Urgent drains
+/// first and the writer re-inspects it after every bulk chunk, so a background
+/// transfer yields to an urgent incremental at chunk boundaries.
 #[derive(Debug)]
 pub enum Outbound {
     Text(String),
     Binary(Vec<u8>),
+    Bulk(Vec<u8>),
     Close(u16, String),
 }
 
+/// The priority class of a presentation unit for admission (§8, TP-S3d): an
+/// urgent incremental may draw the full connection window; bulk (a transfer) may
+/// consume connection credit only down to the `urgentReserve`, and is further
+/// bounded ahead of the writer by `maxBulkBytesAdmittedAhead`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnitClass {
+    Urgent,
+    Bulk,
+}
+
 /// A handle on one accepted leg: enough to address it and to write to it.
+/// `bulk_credit` is the frames leg's byte-semaphore bounding `Bulk` bytes queued
+/// ahead of the writer (`maxBulkBytesAdmittedAhead`); a pump acquires a chunk's
+/// worth before enqueuing it and the writer returns them as it writes. `None` on
+/// a control leg (it has no bulk lane). The semaphore is CLOSED when the writer
+/// exits, so a pump blocked acquiring permits on a dead socket ends promptly.
 #[derive(Debug, Clone)]
 pub struct LegRef {
     pub connection_id: u64,
     pub leg_generation: u64,
     pub out: UnboundedSender<Outbound>,
+    pub bulk_credit: Option<Arc<Semaphore>>,
 }
 
 impl LegRef {
@@ -279,6 +303,11 @@ impl Window {
     fn can_admit(&self, bytes: u64) -> bool {
         self.in_flight().saturating_add(bytes) <= self.limit
     }
+    /// Admit only up to `effective_limit` (≤ `self.limit`) — bulk leaves the
+    /// `urgentReserve` headroom for the urgent class.
+    fn can_admit_within(&self, bytes: u64, effective_limit: u64) -> bool {
+        self.in_flight().saturating_add(bytes) <= effective_limit
+    }
 }
 
 /// The frames leg's credit ledger (§8, TP-D11): the connection window and one
@@ -290,21 +319,37 @@ pub struct CreditLedger {
     pub last_sequence: Option<u64>,
     pub connection: Window,
     pub per_activation_limit: u64,
+    /// bulk may consume connection credit only down to `connection.limit −
+    /// urgent_reserve` (§8, TP-S3d); urgent draws the full window.
+    pub urgent_reserve: u64,
     pub accounts: HashMap<String, Window>,
 }
 
 impl CreditLedger {
-    pub fn new(credit_epoch: u64, windows: ReceiverCapacities) -> Self {
+    pub fn new(credit_epoch: u64, windows: ReceiverCapacities, urgent_reserve: u64) -> Self {
+        let connection_limit = windows.connection_credit_bytes;
         Self {
             credit_epoch,
             last_sequence: None,
             connection: Window {
                 admitted: 0,
                 returned: 0,
-                limit: windows.connection_credit_bytes,
+                limit: connection_limit,
             },
             per_activation_limit: windows.per_activation_credit_bytes,
+            // never let the reserve exceed the window (a tiny window would
+            // otherwise starve bulk entirely and stall a seed)
+            urgent_reserve: urgent_reserve.min(connection_limit),
             accounts: HashMap::new(),
+        }
+    }
+
+    /// The connection headroom a unit of `class` may draw: the full window for
+    /// urgent, the window minus the reserve for bulk.
+    fn connection_limit_for(&self, class: UnitClass) -> u64 {
+        match class {
+            UnitClass::Urgent => self.connection.limit,
+            UnitClass::Bulk => self.connection.limit.saturating_sub(self.urgent_reserve),
         }
     }
 
@@ -329,17 +374,23 @@ impl CreditLedger {
         }
     }
 
-    /// Non-mutating: would `bytes` be admissible now? `None` = no such account.
-    pub fn can_admit(&self, activation_id: &str, bytes: u64) -> Option<bool> {
+    /// Non-mutating: would `bytes` of `class` be admissible now? `None` = no such
+    /// account. Bulk is bounded by the window minus the urgent reserve.
+    pub fn can_admit(&self, activation_id: &str, bytes: u64, class: UnitClass) -> Option<bool> {
         let account = self.accounts.get(activation_id)?;
-        Some(self.connection.can_admit(bytes) && account.can_admit(bytes))
+        Some(
+            self.connection
+                .can_admit_within(bytes, self.connection_limit_for(class))
+                && account.can_admit(bytes),
+        )
     }
 
-    pub fn try_admit(&mut self, activation_id: &str, bytes: u64) -> bool {
+    pub fn try_admit(&mut self, activation_id: &str, bytes: u64, class: UnitClass) -> bool {
+        let effective = self.connection_limit_for(class);
         let Some(account) = self.accounts.get(activation_id) else {
             return false;
         };
-        if !self.connection.can_admit(bytes) || !account.can_admit(bytes) {
+        if !self.connection.can_admit_within(bytes, effective) || !account.can_admit(bytes) {
             return false;
         }
         self.connection.admitted += bytes;
@@ -466,9 +517,12 @@ impl ActivationTable {
         connection_id: u64,
         credit_epoch: u64,
         windows: ReceiverCapacities,
+        urgent_reserve: u64,
     ) {
-        self.credit
-            .insert(connection_id, CreditLedger::new(credit_epoch, windows));
+        self.credit.insert(
+            connection_id,
+            CreditLedger::new(credit_epoch, windows, urgent_reserve),
+        );
     }
 
     pub fn credit_ledger(&self, connection_id: u64) -> Option<&CreditLedger> {
@@ -1335,18 +1389,30 @@ impl ActivationTable {
             .collect()
     }
 
-    /// The pump asks to admit `bytes` for an activation on a frames connection.
-    pub fn try_admit(&mut self, connection_id: u64, activation_id: &str, bytes: u64) -> bool {
+    /// The pump asks to admit `bytes` of `class` for an activation on a frames connection.
+    pub fn try_admit(
+        &mut self,
+        connection_id: u64,
+        activation_id: &str,
+        bytes: u64,
+        class: UnitClass,
+    ) -> bool {
         self.credit
             .get_mut(&connection_id)
-            .is_some_and(|l| l.try_admit(activation_id, bytes))
+            .is_some_and(|l| l.try_admit(activation_id, bytes, class))
     }
 
     /// Non-mutating twin: `None` when the connection's ledger or the account is gone.
-    pub fn can_admit(&self, connection_id: u64, activation_id: &str, bytes: u64) -> Option<bool> {
+    pub fn can_admit(
+        &self,
+        connection_id: u64,
+        activation_id: &str,
+        bytes: u64,
+        class: UnitClass,
+    ) -> Option<bool> {
         self.credit
             .get(&connection_id)
-            .and_then(|l| l.can_admit(activation_id, bytes))
+            .and_then(|l| l.can_admit(activation_id, bytes, class))
     }
 
     /// Does the activation want frames right now (demand live and the view attached)?
@@ -1519,6 +1585,7 @@ mod tests {
                 connection_id,
                 leg_generation: 1,
                 out: tx,
+                bulk_credit: None,
             },
             rx,
         )
@@ -1686,6 +1753,7 @@ mod tests {
                 max_concurrent_activations: 8,
                 max_concurrent_seeds: 1,
             },
+            0,
         );
         perform(t.attach_control(AttachControlInput {
             now_ms: 2_000,
@@ -1722,9 +1790,9 @@ mod tests {
         assert_eq!(r[0]["trfIdentity"]["sessionHandle"], "77");
         assert_eq!(r[0]["outcome"]["kind"], "seed-required");
         // credit: the account opened with the per-activation window
-        assert!(t.try_admit(2, "a1", 400));
+        assert!(t.try_admit(2, "a1", 400, UnitClass::Urgent));
         assert!(
-            !t.try_admit(2, "a1", 200),
+            !t.try_admit(2, "a1", 200, UnitClass::Urgent),
             "per-activation window exhausted"
         );
         // the seed sent at revision 10; SceneApplied(10) ⇒ presenting, input allowed
@@ -1799,7 +1867,7 @@ mod tests {
         let mut t = ActivationTable::new("cb");
         let (control, mut crx) = leg(1);
         let (frames, _frx) = leg(2);
-        t.open_credit(2, 1, ReceiverCapacities::CELL_CAPS);
+        t.open_credit(2, 1, ReceiverCapacities::CELL_CAPS, 0);
         perform(t.attach_control(AttachControlInput {
             now_ms: 2_000,
             set: &set(),
@@ -1975,14 +2043,18 @@ mod tests {
                 max_concurrent_activations: 2,
                 max_concurrent_seeds: 1,
             },
+            0, // no urgent reserve: this row is about cumulative-max / epoch fencing
         );
         l.open_account("a");
         l.open_account("b");
-        assert!(l.try_admit("a", 60));
-        assert!(!l.try_admit("a", 1), "a's window is full");
-        assert!(l.try_admit("b", 40));
+        assert!(l.try_admit("a", 60, UnitClass::Urgent));
         assert!(
-            !l.try_admit("b", 1),
+            !l.try_admit("a", 1, UnitClass::Urgent),
+            "a's window is full"
+        );
+        assert!(l.try_admit("b", 40, UnitClass::Urgent));
+        assert!(
+            !l.try_admit("b", 1, UnitClass::Urgent),
             "the CONNECTION window is full (60+40)"
         );
         let credit = |epoch, seq, conn, accts: Vec<(&str, u64)>| TransportCredit {
@@ -2002,7 +2074,7 @@ mod tests {
         // a's 60 back: a wakes; connection moved so b wakes too
         let woke = l.returned(&credit(3, 1, 60, vec![("a", 60)]));
         assert!(woke.contains(&"a".to_string()) && woke.contains(&"b".to_string()));
-        assert!(l.try_admit("a", 60));
+        assert!(l.try_admit("a", 60, UnitClass::Urgent));
         // a duplicate / reordered return is harmless
         assert!(l.returned(&credit(3, 1, 60, vec![("a", 60)])).is_empty());
         assert!(l.returned(&credit(3, 0, 10, vec![("a", 10)])).is_empty());
@@ -2010,6 +2082,56 @@ mod tests {
         l.returned(&credit(3, 2, 30, vec![("a", 10)]));
         assert_eq!(l.connection.returned, 60);
         assert_eq!(l.accounts["a"].returned, 60);
+    }
+
+    #[test]
+    fn credit_reserves_the_window_for_urgent_and_the_floor_isolates_a_stall() {
+        let caps = |conn: u64, per: u64| ReceiverCapacities {
+            connection_credit_bytes: conn,
+            per_activation_credit_bytes: per,
+            staging_bytes_per_session: 0,
+            staging_bytes_total: 0,
+            max_concurrent_activations: 4,
+            max_concurrent_seeds: 1,
+        };
+
+        // (1) urgentReserve (§8, TP-S3d): BULK consumes connection credit only
+        // down to `limit − reserve`; URGENT draws the full window.
+        let mut l = CreditLedger::new(3, caps(100, 100), 40);
+        l.open_account("a");
+        assert!(
+            l.try_admit("a", 60, UnitClass::Bulk),
+            "bulk fits down to limit − reserve (100 − 40)"
+        );
+        assert!(
+            !l.try_admit("a", 1, UnitClass::Bulk),
+            "bulk may never dip into the urgent reserve"
+        );
+        assert!(
+            l.try_admit("a", 40, UnitClass::Urgent),
+            "urgent draws the reserved headroom the bulk could not"
+        );
+        assert!(
+            !l.try_admit("a", 1, UnitClass::Urgent),
+            "now the whole window is in flight"
+        );
+
+        // (2) the fairness FLOOR (§8 law 7 / TP-R15a): a stalled activation
+        // exhausts only ITS per-activation account, never the connection's — so
+        // one viewer's stall is another viewer's non-event.
+        let mut l = CreditLedger::new(7, caps(100, 30), 0);
+        l.open_account("stalled");
+        l.open_account("healthy");
+        assert!(l.try_admit("stalled", 30, UnitClass::Urgent));
+        assert!(
+            !l.try_admit("stalled", 1, UnitClass::Urgent),
+            "the stalled activation's own account is full and it is NOT returning"
+        );
+        assert!(
+            l.try_admit("healthy", 30, UnitClass::Urgent),
+            "yet another activation still admits — the connection had room, its account is fresh"
+        );
+        assert_eq!(l.connection.admitted, 60);
     }
 
     // --- Geometry lease (S3c) --------------------------------------------

@@ -145,6 +145,10 @@ pub struct ProtocolLimits {
     pub max_activation_catchup_ms: u64,
     pub max_catchup_bytes: u64,
     pub credit_account_drain_ttl_ms: u64,
+    // TP-S3d — the writer/admission fairness floor (§8).
+    pub urgent_reserve_bytes: u64,
+    pub max_bulk_bytes_admitted_ahead: u64,
+    pub max_urgent_presentation_unit_bytes: u64,
 }
 
 impl ProtocolLimits {
@@ -160,6 +164,9 @@ impl ProtocolLimits {
         max_activation_catchup_ms: tp::MAX_ACTIVATION_CATCHUP_MS,
         max_catchup_bytes: tp::MAX_CATCHUP_BYTES,
         credit_account_drain_ttl_ms: tp::CREDIT_ACCOUNT_DRAIN_TTL_MS,
+        urgent_reserve_bytes: tp::URGENT_RESERVE_BYTES,
+        max_bulk_bytes_admitted_ahead: tp::MAX_BULK_BYTES_ADMITTED_AHEAD,
+        max_urgent_presentation_unit_bytes: tp::MAX_URGENT_PRESENTATION_UNIT_BYTES,
     };
 }
 

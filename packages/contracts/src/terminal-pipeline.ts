@@ -475,6 +475,10 @@ export const ProtocolLimits = z
     maxActivationCatchupMs: Counter,
     maxCatchupBytes: ByteCount,
     creditAccountDrainTtlMs: Counter,
+    // TP-S3d — the writer/admission fairness floor (§8).
+    urgentReserveBytes: ByteCount,
+    maxBulkBytesAdmittedAhead: ByteCount,
+    maxUrgentPresentationUnitBytes: ByteCount,
   })
   .passthrough();
 export type ProtocolLimits = z.infer<typeof ProtocolLimits>;
@@ -501,6 +505,9 @@ export const DEFAULT_PROTOCOL_LIMITS: ProtocolLimits = {
   maxActivationCatchupMs: TERMINAL_PIPELINE.MAX_ACTIVATION_CATCHUP_MS,
   maxCatchupBytes: TERMINAL_PIPELINE.MAX_CATCHUP_BYTES,
   creditAccountDrainTtlMs: TERMINAL_PIPELINE.CREDIT_ACCOUNT_DRAIN_TTL_MS,
+  urgentReserveBytes: TERMINAL_PIPELINE.URGENT_RESERVE_BYTES,
+  maxBulkBytesAdmittedAhead: TERMINAL_PIPELINE.MAX_BULK_BYTES_ADMITTED_AHEAD,
+  maxUrgentPresentationUnitBytes: TERMINAL_PIPELINE.MAX_URGENT_PRESENTATION_UNIT_BYTES,
 };
 
 /** Owner: the CELL's own receive-side caps. The frames leg's initial windows
