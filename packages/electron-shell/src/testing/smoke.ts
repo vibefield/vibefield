@@ -1358,13 +1358,24 @@ async function untilFloor(
 class PersistenceSampler {
   private readonly observed = new Map<string, string[]>();
   private stopped = false;
+  /** How many times the floor actually ANSWERED, and how many times it did not.
+   *
+   * An empty trail means one of two very different things — the session was
+   * never listed, or the sampler never got to look — and a guard that cannot
+   * tell them apart is reporting on itself. Measured 2026-08-21: under load a
+   * poll cycle costs ~1.7s, not the nominal 50ms, so "the sampler has not looked
+   * since that session was born" is a real state and not a hypothetical one. */
+  polls = 0;
+  refusals = 0;
   readonly running: Promise<void>;
 
   constructor(handle: FielddHandle, intervalMs = 50) {
     this.running = (async () => {
       while (!this.stopped) {
         try {
-          for (const row of await listTerminals(handle)) {
+          const rows = await listTerminals(handle);
+          this.polls += 1;
+          for (const row of rows) {
             const seen = this.observed.get(row.sessionId) ?? [];
             const persistence = row.persistence ?? "unstated";
             if (seen.at(-1) !== persistence) seen.push(persistence);
@@ -1372,10 +1383,16 @@ class PersistenceSampler {
           }
         } catch {
           /* a refusal or a blip is not this sampler's business to report */
+          this.refusals += 1;
         }
         await sleep(intervalMs);
       }
     })();
+  }
+
+  /** Every session this sampler has ever seen listed. */
+  seen(): string[] {
+    return [...this.observed.keys()];
   }
 
   /** What this session was observed to be, oldest first. Empty means the
@@ -1384,9 +1401,98 @@ class PersistenceSampler {
     return this.observed.get(sessionId) ?? [];
   }
 
+  /**
+   * Wait until this sampler has actually LOOKED at a session.
+   *
+   * The reason it exists (measured 2026-08-21): a trail read straight after
+   * `untilFloor` confirms the floor lists a session can still be empty, because
+   * `untilFloor` returns the instant the inventory answers and the sampler's own
+   * next poll is up to a cycle away — 35 polls across a whole run under load.
+   * Reading then measures the sampler's cadence, not the floor. Waiting here
+   * moves the reading back onto the floor.
+   */
+  async untilSeen(sessionId: string, timeoutMs = 20_000): Promise<readonly string[]> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const trail = this.trail(sessionId);
+      if (trail.length > 0) return trail;
+      await sleep(100);
+    }
+    return this.trail(sessionId);
+  }
+
   async stop(): Promise<void> {
     this.stopped = true;
     await this.running;
+  }
+}
+
+/**
+ * WITNESS GT-D11's FLIP, on the birth class that still produces one.
+ *
+ * The flip is field-native re-governing an OWNERLESS `terminate-with-app` birth
+ * to `keep-until-exit` on its own `session-created` event. Until TP-S1r the
+ * deck's panes were that birth class — the ghosttea workspace's own create door
+ * asks for `terminate-with-app` — so the rows above could watch the deck and see
+ * it. They cannot any more: deck panes are born through fieldd's `terminal.create`
+ * now, which asks for keep-until-exit directly (`contracts/src/terminal.ts:113-115`),
+ * so there is nothing left to re-govern and a guard pointed at them would be
+ * asserting an absence. The flip still governs every OTHER client — iOS, agents,
+ * ghosttea's own doors — so the witness moves to a session this harness births
+ * itself, in exactly that class, rather than the gate quietly losing it.
+ *
+ * BOTH ENDPOINTS ARE OBSERVED DIRECTLY, which is what makes this stronger than
+ * the sampling it replaces. The floor answers `createSession` with the summary
+ * it just made — that IS the pre-flip state, from the plane that made it — and
+ * fieldd's observed inventory then reports the post-flip state. The old row
+ * could only sample the inventory and, as its own comment recorded, never once
+ * caught the pre-flip value: the flip is over inside the floor before the
+ * management round trip that would report it has heard of the session.
+ *
+ * The witness is terminated before it can be claimed by a later row: it exists
+ * to be born and re-governed, not to become a pane.
+ */
+async function witnessRegovernedBirth(
+  handle: FielddHandle,
+  throughSession: string,
+  shell: string,
+): Promise<{ born: string | null; governed: string | undefined; sessionId: string }> {
+  // A control socket for the cell that already holds a session — no sessionless
+  // mint (TP-D3 retired that door) and no second cell.
+  const ticket = TerminalTicket.parse(
+    await handle.client.request("terminal.openTicket", { sessionId: throughSession }),
+  );
+  const automation = new GhostteaAutomationClient(
+    { controlSocket: ticket.controlSocket, authToken: ticket.token },
+    { clientBuild: "vibefield-smoke-godview-flip" },
+  );
+  try {
+    await automation.connect();
+    const summary = await automation.createSession({
+      executable: shell,
+      args: [],
+      environment: { mode: "inherit" },
+      cols: 80,
+      rows: 24,
+      // The birth class GT-D11 governs: what the workspace's own door asks for,
+      // and with NO ownerId, which is what makes it ownerless.
+      persistence: "terminate-with-app",
+      programKind: "interactive-shell",
+    });
+    const born = summary.persistence;
+    // The floor's own answer said `terminate-with-app`; the inventory must come
+    // to say `keep-until-exit`. That pair IS the flip.
+    const listed = await untilFloor(
+      handle,
+      (terminals) => persistenceOf(terminals, summary.id) === "keep-until-exit",
+      `list the ownerless flip witness ${summary.id} re-governed to keep-until-exit`,
+      20_000,
+    );
+    const governed = persistenceOf(listed, summary.id);
+    await automation.terminateAndWait(summary.id, "application", 15_000).catch(() => undefined);
+    return { born, governed, sessionId: summary.id };
+  } finally {
+    automation.dispose();
   }
 }
 
@@ -1970,7 +2076,6 @@ export async function runSmokeGodview(opts: {
     // and a row that failed on it would fail always. The trails are in the
     // verdict so the fact is on the record every run, and the residual is named
     // where it belongs: this smoke proves the DESTINATION, not the flip.
-    verdict["firstPaneTrail"] = persistence.trail(freeShell);
 
     // 4. Split — the workspace's own ⌘D, through the workspace's OWN create
     //    door now that the deck no longer intercepts it. The new session is a
@@ -1998,29 +2103,69 @@ export async function runSmokeGodview(opts: {
     );
     verdict["splitCreated"] = true;
     verdict["splitRegoverned"] = true;
-    verdict["splitPaneTrail"] = persistence.trail(splitSession);
-    // The two trails together are what makes the flip rows non-vacuous, and the
-    // rule is stated where it can be checked rather than left to a reader: a
-    // pane observed to have been `terminate-with-app` at any point is the
-    // precondition holding. If NEITHER pane was ever caught in that state, the
-    // rows above proved only that the floor ends up where we want it — which
-    // is worth knowing and is not the flip.
+    // Read only once the sampler has actually LOOKED at this session. Reading
+    // straight off `untilFloor` measured the sampler's cadence instead of the
+    // floor: `untilFloor` returns the instant the inventory answers, and under
+    // load the sampler's next poll is up to a cycle away (measured: 35 polls
+    // across a whole run, zero refusals, the split session in none of them).
+    verdict["splitPaneTrail"] = await persistence.untilSeen(splitSession);
+    verdict["firstPaneTrail"] = await persistence.untilSeen(freeShell);
+
+    // 4b. THE FLIP ITSELF (GT-D11), on the birth class that still has one.
+    //
+    //     Deck panes stopped being that class at TP-S1r: they are born through
+    //     fieldd's `terminal.create`, which asks for keep-until-exit directly
+    //     (`contracts/src/terminal.ts:113-115`), so there is nothing to
+    //     re-govern and no flip to catch. The rows above therefore assert what
+    //     is now TRUE OF THEM — born correct, never seen in the pre-flip state —
+    //     and the flip's witness moves to a session this harness births itself,
+    //     ownerless and `terminate-with-app`, which is exactly what GT-D11
+    //     governs for every client that is not the deck (iOS, agents, ghosttea's
+    //     own doors). Losing the witness quietly is the one outcome not on the
+    //     table.
+    const flip = await witnessRegovernedBirth(opts.handle, freeShell, expectedLoginShell());
+    verdict["flipWitnessBorn"] = flip.born;
+    verdict["flipWitnessGoverned"] = flip.governed;
+    if (flip.born !== "terminate-with-app") {
+      throw new Error(
+        `the flip witness was born ${String(flip.born)}, not terminate-with-app — the precondition GT-D11 governs did not happen, so the row below would prove nothing`,
+      );
+    }
+    if (flip.governed !== "keep-until-exit") {
+      throw new Error(
+        `the flip witness (${flip.sessionId}) was born terminate-with-app and the floor still reports ${String(flip.governed)} — field-native did not re-govern an ownerless birth (GT-D11)`,
+      );
+    }
+    verdict["flipObserved"] = true;
+
+    // The DECK's panes, stated as the fact they now are rather than as an
+    // absence: born keep-until-exit, and never once observed in the pre-flip
+    // state. `flipPreconditionObserved` stays in the verdict because its value
+    // is the thing that changed — it was the old rows' honest "could not see
+    // it", and it is now "there was nothing to see".
     const caughtPreFlip = [freeShell, splitSession].some((id) =>
       persistence.trail(id).includes("terminate-with-app"),
     );
     verdict["flipPreconditionObserved"] = caughtPreFlip;
     await persistence.stop();
-    // The instrumentation's own anti-vacuity guard. `flipPreconditionObserved`
-    // is only worth reading if the sampler was actually running — an empty
-    // trail would report "never observed" for a sampler that never looked, and
-    // a measurement that reads the same whether or not it ran is not one.
+    // The instrumentation's own anti-vacuity guard, and it is STRICT: a trail
+    // that is empty means the sampler never looked, and a measurement that
+    // reads the same whether or not it ran is not one. The counters are in the
+    // message because "never saw it" and "never looked" are different failures
+    // and the reader should not have to run it again to tell them apart.
     for (const [name, id] of [
       ["the workspace's first pane", freeShell],
       ["the split pane", splitSession],
     ] as const) {
       if (persistence.trail(id).length === 0) {
         throw new Error(
-          `the persistence sampler never saw ${name} (${id}) at all, so its trail proves nothing about the flip`,
+          `the persistence sampler never saw ${name} (${id}) at all, so its trail proves nothing` +
+            ` [polls=${persistence.polls} refusals=${persistence.refusals} seen=${JSON.stringify(persistence.seen())}]`,
+        );
+      }
+      if (persistence.trail(id).includes("terminate-with-app")) {
+        throw new Error(
+          `${name} (${id}) was observed as terminate-with-app — a deck pane is born keep-until-exit through fieldd since TP-S1r, so something is creating panes through the workspace's own door again`,
         );
       }
     }
