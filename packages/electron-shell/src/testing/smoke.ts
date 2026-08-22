@@ -1036,6 +1036,16 @@ interface DeckFacts {
   /** GT-3f: the shader the renderer was handed. Null means the deck passed no
    * `effects` prop at all, which is how an unchosen shader is spelled. */
   effects: { shaderEffect: string | null; animate: boolean };
+  /** TP-S2 / TP-R3: where a zoom gesture is, and how many LAYOUT COMMITS the
+   * deck has performed since it mounted.
+   *
+   * A commit is the only thing that can move the zoomed pane's box, so this
+   * count is the CEILING on the PTY resizes a zoom can have caused — which is
+   * why row 4c reads it as one half of the proof and measures the pane boxes
+   * themselves as the other. Optional here and only here: a deck built before
+   * the field existed publishes no `zoom`, and a harness that threw on its
+   * absence would be failing on a stale bundle rather than on a behaviour. */
+  zoom?: { phase: "idle" | "entering" | "zoomed" | "leaving"; commits: number };
 }
 
 /** The renderer-local home of the viewer's appearance (GT-D12). Named here so
@@ -1212,6 +1222,68 @@ function pressChord(win: BrowserWindow, key: string): void {
   win.webContents.sendInputEvent({ type: "keyDown", keyCode: key, modifiers });
   win.webContents.sendInputEvent({ type: "char", keyCode: key, modifiers });
   win.webContents.sendInputEvent({ type: "keyUp", keyCode: key, modifiers });
+}
+
+/** The zoom chord: ⌘⇧Enter on darwin, ctrl+shift+Enter elsewhere (TP-S2).
+ *
+ * Separate from `pressChord` because it needs SHIFT and because Return carries
+ * no character — sending a `char` event for it would be a keystroke into the
+ * shell, which is exactly what this row must not do. The deck claims this chord
+ * from ghosttea in a window-level capture listener, so it does not depend on
+ * the workspace's `workspaceOwnsHotkey` gate; the row focuses the deck anyway,
+ * because that is the state a user is in.
+ *
+ * DELIVERY IS NOT ASSUMED. `sendInputEvent` injects below AppKit's
+ * key-equivalent dispatch (see `closeWindowAccelerator` for the ⌘W version of
+ * this caveat), so the row treats a chord that produces no phase change as an
+ * unproven DELIVERY rather than a broken zoom, and falls back to the chip —
+ * recording which path it took. */
+function pressZoomChord(win: BrowserWindow): void {
+  const modifiers: ("meta" | "control" | "shift")[] = [
+    process.platform === "darwin" ? "meta" : "control",
+    "shift",
+  ];
+  win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return", modifiers });
+  win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return", modifiers });
+}
+
+/** Every pane's laid-out box, keyed by ghosttea's own `data-pane-id`.
+ *
+ * THE MEASUREMENT TP-R3 ACTUALLY WANTS. The floor's inventory carries no
+ * geometry — `ObservedTerminal` is `{sessionId, pid, createdAt, persistence,
+ * title, cwd, cell}` (`contracts/src/mgmt.ts:93-108`) — so there is no
+ * daemon-side cols×rows for a harness to diff, and the deck's commit counter
+ * alone would only bound the resizes from above. What CAN be measured is the
+ * thing a resize is caused BY: a pane's layout box. `TerminalSurface` derives
+ * its grid from `entry.contentRect` and commits a PTY resize only when that
+ * derived grid moves, so a pane whose box is identical before and after a
+ * gesture cannot have resized its session — and that is the half of the row
+ * about the panes NOBODY zoomed.
+ *
+ * Rounded to whole pixels: sub-pixel layout jitter is not a resize (a change
+ * below one 7.83px cell does not move the derived grid at all), and an
+ * exact-float comparison would make this row fail on a fraction nothing can
+ * see. `visibility: hidden` panes are still measured, deliberately — the
+ * committed zoom hides its siblings that way precisely BECAUSE it keeps their
+ * boxes, and this is the assertion that says so. */
+async function paneBoxes(win: BrowserWindow): Promise<Record<string, string>> {
+  return (await win.webContents.executeJavaScript(
+    `(() => {
+      const boxes = {};
+      for (const pane of document.querySelectorAll("[data-pane-id]")) {
+        const rect = pane.getBoundingClientRect();
+        boxes[pane.getAttribute("data-pane-id")] =
+          Math.round(rect.width) + "x" + Math.round(rect.height);
+      }
+      return boxes;
+    })()`,
+  )) as Record<string, string>;
+}
+
+/** Which pane ids changed box between two readings. The row's whole assertion
+ * is about the SIZE of this set: exactly one on a zoom, zero everywhere else. */
+function resizedPanes(before: Record<string, string>, after: Record<string, string>): string[] {
+  return Object.keys(before).filter((paneId) => after[paneId] !== before[paneId]);
 }
 
 /** Put the caret in a terminal, by clicking one — which is how a user does it.
@@ -2169,6 +2241,133 @@ export async function runSmokeGodview(opts: {
         );
       }
     }
+
+    // 4c. THE ZOOM ROW (TP-S2; TP-R3 "zoom = exactly one PTY resize each way").
+    //
+    //     Two measurements, because the row's claim has two halves and neither
+    //     alone is the claim:
+    //
+    //       COMMITS — the deck publishes `zoom.commits`, the number of layout
+    //         commits it has performed. A commit is the only thing that can
+    //         move the zoomed pane's box, so 0 → 1 → 2 across one gesture each
+    //         way is the CEILING on the resizes: at most one per direction.
+    //       BOXES — the ceiling is not the floor. What proves the other panes
+    //         were left alone is their laid-out boxes, read from the page
+    //         before and after: exactly ONE pane's box may move on a zoom, and
+    //         it must be the pane the deck marked. `TerminalSurface` commits a
+    //         PTY resize only when its box moves the derived grid, so a pane
+    //         with an identical box did not resize its session.
+    //
+    //     The floor cannot answer this: its inventory carries no geometry
+    //     (`ObservedTerminal`, `contracts/src/mgmt.ts:93-108`), which is why
+    //     the measurement is renderer-side and says so rather than implying a
+    //     daemon-side witness it does not have.
+    //
+    //     Runs HERE because row 4 has just made a second pane. With one pane a
+    //     zoom is a no-op — the pane already fills the host, no box moves, and
+    //     every assertion below would pass without the feature existing.
+    await focusDeck(win);
+    const zoomBaseline = await deck.until(
+      (facts) => facts.zoom !== undefined,
+      "the deck to publish its zoom state (a bundle without it predates TP-S2)",
+      20_000,
+    );
+    if (zoomBaseline.zoom?.commits !== 0) {
+      throw new Error(
+        `the deck had already committed ${String(zoomBaseline.zoom?.commits)} zoom layout(s) before this row pressed anything — the 0 → 1 → 2 count below would be measuring something else`,
+      );
+    }
+    const boxesBeforeZoom = await paneBoxes(win);
+    if (Object.keys(boxesBeforeZoom).length < 2) {
+      throw new Error(
+        `the zoom row needs at least two panes to prove the others are left alone; saw ${JSON.stringify(boxesBeforeZoom)}`,
+      );
+    }
+
+    // The chord first, because that is the gesture a user makes — but its
+    // DELIVERY is not assumed (the repo's own lesson, and the same caveat
+    // `closeWindowAccelerator` documents for ⌘W: `sendInputEvent` injects below
+    // AppKit's key-equivalent dispatch). A chord that produces no phase change
+    // is recorded as an unproven delivery and the row drives the chip instead,
+    // so the invariant is still measured and the reader is told which path ran.
+    //
+    // BOTH PATHS ARE MEASURED, not one path and one hope. On this machine the
+    // chord IS delivered (the row reports `zoomDriver: "chord"`), and the chip
+    // branch was exercised on purpose by suppressing the press for one run:
+    // same commits, same geometry, `zoomDriver: "chip"`. A fallback nobody has
+    // ever run is a guess about the machine that will need it.
+    pressZoomChord(win);
+    let zoomDriver = "chord";
+    let zoomedFacts = await deck
+      .until((facts) => facts.zoom?.phase === "zoomed", "⌘⇧Enter to zoom the active pane", 6_000)
+      .catch(() => null);
+    if (zoomedFacts === null) {
+      zoomDriver = "chip";
+      await clickDeckButton(win, "zoom pane");
+      zoomedFacts = await deck.until(
+        (facts) => facts.zoom?.phase === "zoomed",
+        "the zoom chip to zoom the active pane",
+        20_000,
+      );
+    }
+    verdict["zoomDriver"] = zoomDriver;
+    verdict["zoomCommitsIn"] = zoomedFacts.zoom?.commits ?? null;
+    if (zoomedFacts.zoom?.commits !== 1) {
+      throw new Error(
+        `zooming in committed ${String(zoomedFacts.zoom?.commits)} layouts, not exactly 1 (TP-R3) [driver=${zoomDriver}]`,
+      );
+    }
+
+    const boxesZoomed = await paneBoxes(win);
+    const grew = resizedPanes(boxesBeforeZoom, boxesZoomed);
+    if (grew.length !== 1) {
+      throw new Error(
+        `zooming moved ${grew.length} pane boxes (${grew.join(", ") || "none"}), not exactly 1 — TP-R3 is a claim about the whole deck, not just the zoomed pane [before=${JSON.stringify(boxesBeforeZoom)} zoomed=${JSON.stringify(boxesZoomed)}]`,
+      );
+    }
+    // …and it is the pane the deck MARKED, not merely some pane. Counting alone
+    // would pass if the zoom grew a neighbour and left the subject alone.
+    const markedPane = (await win.webContents.executeJavaScript(
+      `document.querySelector("[data-vf-zoom-pane]")?.getAttribute("data-pane-id") ?? null`,
+    )) as string | null;
+    if (markedPane === null || markedPane !== grew[0]) {
+      throw new Error(
+        `the pane whose box moved (${String(grew[0])}) is not the pane the deck marked as zoomed (${String(markedPane)})`,
+      );
+    }
+    verdict["zoomedPaneGrew"] = `${boxesBeforeZoom[grew[0]]} → ${boxesZoomed[grew[0]]}`;
+    verdict["zoomLeftUntouched"] = Object.keys(boxesBeforeZoom).length - 1;
+
+    // And back. One commit, one box moved, and the deck returns to the layout
+    // it started in — the last of which is what makes this a round trip rather
+    // than two unrelated gestures.
+    if (zoomDriver === "chord") pressZoomChord(win);
+    else await clickDeckButton(win, "restore pane");
+    const restoredFacts = await deck.until(
+      (facts) => facts.zoom?.phase === "idle",
+      "the zoom to return the pane to its split",
+      20_000,
+    );
+    verdict["zoomCommitsOut"] = restoredFacts.zoom?.commits ?? null;
+    if (restoredFacts.zoom?.commits !== 2) {
+      throw new Error(
+        `the zoom round trip committed ${String(restoredFacts.zoom?.commits)} layouts, not exactly 2 (TP-R3: one each way) [driver=${zoomDriver}]`,
+      );
+    }
+    const boxesRestored = await paneBoxes(win);
+    const shrank = resizedPanes(boxesZoomed, boxesRestored);
+    if (shrank.length !== 1 || shrank[0] !== grew[0]) {
+      throw new Error(
+        `restoring moved ${shrank.length} pane boxes (${shrank.join(", ") || "none"}) — expected only ${String(grew[0])} [zoomed=${JSON.stringify(boxesZoomed)} restored=${JSON.stringify(boxesRestored)}]`,
+      );
+    }
+    const notReturned = resizedPanes(boxesBeforeZoom, boxesRestored);
+    if (notReturned.length !== 0) {
+      throw new Error(
+        `the deck did not return to its pre-zoom layout: ${notReturned.join(", ")} [before=${JSON.stringify(boxesBeforeZoom)} restored=${JSON.stringify(boxesRestored)}]`,
+      );
+    }
+    verdict["zoomRoundTripped"] = true;
 
     // 5. Claim. `claimExistingSessions` is first-run-only upstream (gated on
     //    there being no saved workspace), so this stages a genuine first run:
