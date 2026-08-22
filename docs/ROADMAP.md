@@ -205,7 +205,7 @@ cell-side `geometryRevision` + CAS; the "empty seat or own" rule + a standalone 
 cannot express itself; claim / resize-by-reclaim / holder-only transfer / release + the FOUR auto-releases:
 detach, leg loss, grant expiry, renewal-drop), a geometry-capable view attached read-write, and the honest
 `SeedRequired{epoch-changed}` migration reason — a claim RESIZES THE REAL PTY, proven end-to-end against a
-real session + client; focus ⇏ claim is the G23 bundle's, not the cell's. **Next:** S3d stress/fairness · S3e retire
+real session + client; focus ⇏ claim is the G23 bundle's, not the cell's. **TP-S3d LANDED `547fde5`** — the writer/admission fairness FLOOR (§8): the frames writer is a TWO-LANE PRIORITY scheduler (urgent incrementals + control replies jump bulk transfer chunks, re-inspected after every chunk = the bulk-induced-HOL floor; a bulk byte-semaphore bounds `maxBulkBytesAdmittedAhead`, closed on writer exit); class-aware admission (`urgentReserve` — bulk draws connection credit only down to the reserve, urgent draws the full window); a delta over `maxUrgentPresentationUnitBytes` becomes a bulk catch-up; the fairness floor (a stalled activation exhausts only its own account, never the connection's — TP-R15a). Three knobs added to `TERMINAL_PIPELINE`/`ProtocolLimits`. Proven: the writer-priority unit (urgent jumps every queued bulk), the reserve + floor unit, the oversized→catch-up e2e. **Next:** S3e retire
 the bridge + the deliberate CSP test. Standing debts: one shared session set between the UDS plane and the
 doors = petition G22; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames reading;
 divider drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).

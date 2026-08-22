@@ -3685,3 +3685,43 @@ updated (a geometry verb is served now: a claim naming an unattached activation 
 green (one rustfmt wrap on a hand-written test line). NOT in S3c: the stress/fairness rows (S3d), the
 renderer routed runtime that makes it user-facing (G23), and G22 (until the accessor lands, the harness
 hosts T1-born sessions itself and fieldd's legacy UDS clients cannot see them).
+
+## TP-S3d — stress and fairness, cell side: the two-lane priority writer, class-aware admission, and the fairness floor
+
+2026-08-22, `547fde5` (the orchestrator; the critical path). The fourth S3 slice — §8's writer/admission
+correctness FLOOR (tuning + TP-R20 stay at S5, TP-D23). **The two-lane PRIORITY writer
+(`field-native/src/tp/door.rs`):** the frames socket's one writer task is now a scheduler with an URGENT
+lane (control replies + urgent incrementals) and a BULK lane (seed/catch-up transfer chunks). Urgent
+drains FULLY before any bulk and the writer re-inspects urgent after EVERY bulk chunk — a background
+transfer yields to an urgent incremental at chunk boundaries, which IS the bulk-induced-HOL floor. The
+priority pick is pulled out as `pick_next` so the invariant is unit-tested without a socket. A per-socket
+bulk BYTE-SEMAPHORE bounds how far bulk runs ahead of the writer (`maxBulkBytesAdmittedAhead`): a pump
+acquires a chunk's worth before enqueuing it and the writer returns them as it writes; the semaphore is
+CLOSED when the writer exits, so a pump blocked on a dead socket's permits ends promptly (no deadlock).
+**Class-aware admission (`activation.rs` `CreditLedger`):** a `UnitClass::{Urgent, Bulk}` threads through
+`can_admit`/`try_admit` and the `PumpHost`. URGENT draws the full connection window; BULK may consume
+connection credit only DOWN TO `connection.limit − urgentReserve`, so an urgent incremental always has
+room (`urgentReserve ≥ maxUrgentPresentationUnitBytes`). **The pump (`presentation.rs`):** deltas are
+URGENT (`Outbound::Binary`, no backpressure) — but a delta whose payload exceeds
+`maxUrgentPresentationUnitBytes` is NOT an urgent unit: the pump drops the lineage and repairs with a
+(bulk) catch-up transfer (§8 "anything larger becomes a transfer"). Transfers (seed/catch-up) are BULK
+(`Outbound::Bulk`): credit is charged FIRST, and only once admitted does the pump acquire the writer's
+bulk-ahead permits — so a credit-starved loop never leaks permits. **The fairness FLOOR (§8 law 7 /
+TP-R15a):** the per-activation credit window means a stalled activation exhausts only ITS account, never
+the connection's — one viewer's stall is another viewer's non-event. Law 1 (a return for a stale/unknown
+activation still credits the CONNECTION total, exactly once) was already sound in S3b's ledger and is
+unchanged. **Contracts:** three §20-item-5 knobs — `URGENT_RESERVE_BYTES` (2 MiB),
+`MAX_BULK_BYTES_ADMITTED_AHEAD` (4 MiB ≥ the chunk cap), `MAX_URGENT_PRESENTATION_UNIT_BYTES` (256 KiB) —
+in `registries.TERMINAL_PIPELINE` + `ProtocolLimits` + `DEFAULT_PROTOCOL_LIMITS`, generated into
+`registries.rs`, mirrored in the Rust wire `ProtocolLimits::DEFAULTS`, and folded into
+`tp-protocol-limits.defaults.json` and the two `…accepted…` fixtures. **Tests:** the writer priority
+(`door.rs` unit — an urgent unit jumps EVERY queued bulk chunk; each lane FIFO); the credit reserve + the
+fairness floor (`activation.rs` unit — bulk stops at `limit − reserve`, urgent draws the full window; a
+stalled account never blocks another's admission on the connection); and the oversized-delta → catch-up
+path END TO END (`tp_activation.rs` — with the urgent-unit cap set just above the TRF1 header, a change
+arrives as a `catchup` transfer, never a bare oversized `trf1-frame`). `pnpm verify` verbatim green. NOT
+in S3d: the S5 tuning (weighted round-robin among many urgent sessions, per-session parse/CPU accounting,
+token buckets, TP-R20); a synthetic flood BEYOND the engine's coalescing is not reproducible by output
+volume (S3b's discipline note — a burst coalesces to ~one frame), so convergence-under-load is proven by
+S3b's starvation → catch-up → `stopped{overload}` bound plus this slice's classification path, not a new
+volume flood. Also NOT here: the renderer routed runtime that makes it user-facing (G23), and G22.
