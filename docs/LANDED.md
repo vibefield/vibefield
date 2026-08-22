@@ -3400,4 +3400,20 @@ a pre-flight refusal when its own leftovers are alive, and a per-run census whos
 of this worktree's processes survived" (pty counts are corroboration — `/dev/ttys*` releases
 LAZILY, ~30 s after the holders exit, and other agents' shells move the baseline). Verified
 57 → 57 with zero strays on deck-4 and on wall-100 (100 sessions). Gate verbatim green.
+`2c2c43b` closes the account: the exit had been the last statement of a happy path — during the
+disk-full window `writeFileSync` threw ENOSPC inside the `finally` and `app.exit()` never ran (the
+two incidents compounded) — so now an exit watchdog is armed BEFORE the run, `process.exit` sits
+behind `app.exit` on a 5 s fuse, all eight teardown steps are individually guarded, the driver
+leashes its child (SIGTERM → SIGKILL; SIGINT/SIGTERM kill the child before the driver leaves) and
+OBSERVES the exit, the reaper gains an `electron` kind (this worktree's own Electron, reaped first;
+fieldd-under-Electron classified by script first; a packaged VibeField.app and siblings spared —
+90 rows), and the census reports `survivingLabElectrons` excluding the live app's own helpers via
+`getAppMetrics()`. Proven: deck-4 then flood from a 57-pty baseline, both `0 / 0 / 0`, settled;
+a planted stray is REFUSED pre-flight and cleared by `--reap`. Gate verbatim green. **Errata
+to that commit's message (2026-08-22):** it attributes a missing `target/debug/field-native` to
+"a rebase"; the second miss was the orchestrator's own `rm -rf` of the worktree's target after
+the agent's first report (too early — recorded as a lesson), not the rebase; the driver's new
+refuse-with-the-real-reason precondition stands on the FIRST miss (a fresh worktree that had never
+built field-native), and its "twice in this slice's history" comment should read "once, plus a
+deleted target directory" (to ride the next code commit).
 
