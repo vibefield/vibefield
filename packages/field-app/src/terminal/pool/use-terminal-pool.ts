@@ -21,18 +21,33 @@ export function useTerminalPool(): TerminalPoolSnapshot {
 }
 
 /**
- * Claim the pool for this consumer, opening it if it is not open.
+ * Claim the pool for this consumer, opening it on the sessions it would like to
+ * rejoin (best first).
  *
  * Idempotent, and deliberately WITHOUT a teardown: a consumer unmounting does
  * not close the window's transport. That is the promotion's whole point — the
  * deck can come and go (and does, every time the overlay's gate flips) while the
  * bridge, the socket, the worker and the device stay exactly where they are. The
  * transport goes away when the window does (`disposeTerminalPool`).
+ *
+ * The claim runs ONCE per consumer, on the ids it had at mount: a later change
+ * to `rejoin` is a different question (which session to open NEXT), and
+ * re-claiming on it would re-enter a pool that is already open and do nothing —
+ * so the dependency is deliberately the client and the trace, not the list.
  */
-export function useTerminalPoolOpen(fieldd: FielddClient, trace?: TransportTrace): void {
+export function useTerminalPoolOpen(
+  fieldd: FielddClient,
+  options: { rejoin?: readonly string[]; trace?: TransportTrace } = {},
+): void {
+  const latest = useRef(options);
+  latest.current = options;
   useEffect(() => {
-    openTerminalPool(fieldd, trace);
-  }, [fieldd, trace]);
+    const { rejoin, trace } = latest.current;
+    openTerminalPool(fieldd, {
+      ...(rejoin !== undefined ? { sessionIds: rejoin } : {}),
+      ...(trace !== undefined ? { trace } : {}),
+    });
+  }, [fieldd]);
 }
 
 /**

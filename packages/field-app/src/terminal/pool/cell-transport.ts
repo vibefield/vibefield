@@ -15,31 +15,30 @@ import type { GhostteaTerminalRuntime } from "@vibecook/ghosttea-react";
 // keyed by `cellBootId`, blast counted per cell — so this is the client half of
 // a design that exists, not a new one (`fieldd/src/terminal-service.ts:106-133`).
 //
-// WHAT IS HONEST TODAY, exactly. `terminal.connectTicket` is sessionless and
-// mints "for the interactive cell by definition"
-// (`fieldd/src/terminal-service.ts:321-324`); `TerminalTicket` is
-// `{controlSocket, frameSocket, token}` (`contracts/src/terminal.ts:67-74`) and
-// carries NO cell identity, no route revision and no lease epoch. So the key
-// below is a LOCAL STAND-IN for a fact the wire does not yet state — named as
-// one, not dressed up as a route binding. TP-S1 replaces it with the real
-// `RouteBinding` off `openTicket(sessionId)`, and the table, the lookup and
-// every consumer stay exactly as they are.
+// TP-S1 — THE KEY IS REAL NOW. It was a named stand-in
+// (`cell:interactive/unrouted`) for exactly one slice, because
+// `terminal.connectTicket` is sessionless and answers no cell at all
+// (`fieldd/src/terminal-service.ts:321-324`; `TerminalTicket` is
+// `{controlSocket, frameSocket, token}`, `contracts/src/terminal.ts:67-74`).
+// The session-addressed mints answer a `RouteBinding` — `{cellBootId,
+// routeRevision, leaseEpoch?}` — and THAT `cellBootId` is this table's key. The
+// table, the lookup and every consumer are unchanged by the swap, which is what
+// the stand-in was for.
 
 /** Placement's key. Opaque by law — it never crosses the pool's door. */
 export type CellBootId = string & { readonly __cellBootId: unique symbol };
 
 /**
- * The one cell this window can reach today.
+ * A cell a keyless floor did not name.
  *
- * Spelled as a stand-in rather than a plausible id: a reader who greps for a
- * cell boot id must land on the sentence that says the wire does not carry one
- * yet. A REPLACED cell is a new key in the final model (§5.2 — "a replaced cell
- * is a NEW key, never a reconnect"); today a rebuilt bridge cannot be told from
- * a rebooted floor through this door, so the pool replaces the ENTRY under this
- * one key and records the transport generation on it instead of inventing an
- * identity it cannot observe.
+ * A floor that predates the grant key answers the bare legacy ticket with no
+ * route at all (`open-ticket.ts`). The transport is still real and the bridge
+ * still dials it, so the table still needs a key — but the key must not be a
+ * plausible-looking cell id, because nothing observed one. This is that key,
+ * spelled so a reader who greps for it lands on this sentence. A floor that
+ * mints routes never produces it.
  */
-export const UNROUTED_INTERACTIVE_CELL = "cell:interactive/unrouted" as CellBootId;
+export const UNNAMED_CELL = "cell:unnamed/keyless-floor" as CellBootId;
 
 /** Main's answer to the connect (GT-D10): the shell every pane is born with. */
 export interface TerminalShellPolicy {
@@ -107,12 +106,16 @@ export class CellTransportTable {
 /**
  * Resolve a session to the cell that holds it.
  *
- * Today: always the one cell, because the door that mints this window's
- * connection is sessionless and answers for the interactive cell by definition.
- * The signature is the final one — a session id in, a placement key out — so
- * TP-S1's real resolution (route snapshot, `STALE_ROUTE` re-resolve) lands
- * inside this function rather than at its call sites.
+ * The answer comes from the ticket that session was last minted — the route
+ * layer's own word, cached per session in the placement ledger — and the lookup
+ * is a function so that TP-S3c's re-resolution (a `STALE_ROUTE` at a cell's
+ * door, the inventory's cell tag moving) lands inside it rather than at its call
+ * sites. `undefined` means "never ticketed", which is a different fact from
+ * "ticketed onto a cell we cannot reach" and must not be collapsed into it.
  */
-export function resolveCellForSession(_sessionId: string): CellBootId {
-  return UNROUTED_INTERACTIVE_CELL;
+export function resolveCellForSession(
+  sessionId: string,
+  placements: { cellFor(sessionId: string): CellBootId | undefined },
+): CellBootId | undefined {
+  return placements.cellFor(sessionId);
 }

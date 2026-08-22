@@ -31,6 +31,9 @@ import { setRendererLogger } from "../src/logging";
 /** Every runtime the deck has minted, in order. The storm was a runtime-per-
  * event loop, so counting them IS the assertion. */
 const runtimes: Array<{ id: number; disposed: boolean }> = [];
+/** What the device warm answers. The prewarm's ONLY await since TP-S1, so it is
+ * the only place a warm can be held open. */
+let deviceWarm: () => Promise<{ backend: string }> = () => Promise.resolve({ backend: "test" });
 /** Every workspace initialization, with the props that decided it. */
 const workspaceMounts: Array<Record<string, unknown>> = [];
 
@@ -56,7 +59,10 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       // anything. A fixture that can only fail proves nothing about a success.
       connect: () => Promise.resolve(),
       startPerformanceMeasurement: () => Promise.resolve(),
-      finishPerformanceMeasurement: () => Promise.resolve({ backend: "test" }),
+      finishPerformanceMeasurement: () => deviceWarm(),
+      // TP-S1: a pane is born through fieldd and MOUNTED from the floor's own
+      // summary, so the fixture's floor has to be able to answer for it.
+      listSessions: () => Promise.resolve(floor.map((row) => ({ id: row.sessionId }))),
       createSession: (options: unknown) => Promise.resolve({ id: `s-${JSON.stringify(options)}` }),
       // GT-D17's two verbs, as the door calls them. `openRemoteSession` answers
       // with a REPLICA — a local session id standing for a peer's — which is
@@ -188,16 +194,40 @@ function installHost(): void {
   } as unknown as FieldHost);
 }
 
-/** The fieldd client the deck sees. Only two methods are ever asked for. */
+const TICKET = { controlSocket: "/x/control.sock", frameSocket: "/x/frame.sock", token: "tok" };
+
+/** The fieldd client the deck sees.
+ *
+ * TP-S1 changed every door here. There is no `connectTicket` — a transport is
+ * opened FOR a session — so the fixture answers `openTicket` for sessions the
+ * floor has, `create` for a birth, and `roster` for the UI's placement-free
+ * projection. `terminal.list` is gone from the renderer entirely: it is the
+ * TRANSPORT-facing projection and carries the cell tag a UI may not see. */
 const fieldd = {
-  request: (method: string): Promise<unknown> => {
+  request: (method: string, params?: unknown): Promise<unknown> => {
     requests.push(method);
-    if (method === "terminal.connectTicket") {
+    if (method === "terminal.openTicket") {
+      const sessionId = (params as { sessionId: string }).sessionId;
+      if (!floor.some((row) => row.sessionId === sessionId)) {
+        return Promise.reject(new Error(`NOT_FOUND: ${sessionId} is not observed`));
+      }
+      return Promise.resolve(TICKET);
+    }
+    if (method === "terminal.create") {
+      const sessionId = `born-${floor.length + 1}`;
+      floor = [...floor, { sessionId }];
+      return Promise.resolve({ sessionId, ticket: TICKET });
+    }
+    if (method === "terminal.roster") {
+      // The contract's key is `items` (`TerminalRosterResult`), not `sessions`.
       return Promise.resolve({
-        ticket: { controlSocket: "/x/control.sock", frameSocket: "/x/frame.sock", token: "tok" },
+        items: floor.map((row) => ({
+          sessionId: row.sessionId,
+          workloadClass: "interactive",
+          health: "live",
+        })),
       });
     }
-    if (method === "terminal.list") return Promise.resolve({ terminals: floor });
     return Promise.reject(new Error(`unexpected method ${method}`));
   },
 };
@@ -233,6 +263,7 @@ beforeEach(() => {
   markers = [];
   requests = [];
   floor = [];
+  deviceWarm = () => Promise.resolve({ backend: "test" });
   connects = 0;
   publishStatus = null;
   localStorage.clear();
@@ -522,10 +553,10 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     // ticket says NOTHING about the sessions — and "the deck could not reach
     // its shell" told a user the exact opposite of the property this product
     // sells. Only the mint speaks to fieldd; everything else is transport.
-    vi.spyOn(fieldd, "request").mockImplementation((method: string) =>
-      method === "terminal.connectTicket"
-        ? Promise.reject(new Error("fieldd is not answering"))
-        : Promise.resolve({ terminals: [] }),
+    // TP-S1: the mint the deck reaches for on an empty floor is `create`, and
+    // the roster is what the restore gate asks. Both refused, both fieldd's.
+    vi.spyOn(fieldd, "request").mockImplementation(() =>
+      Promise.reject(new Error("fieldd is not answering")),
     );
     await mountDeck();
 
@@ -626,9 +657,14 @@ describe("the restore consent gate (GT-3)", () => {
     // to be wrong: the floor outlives the shell precisely so they are not.
     saveLayout(["alive-1"]);
     vi.spyOn(fieldd, "request").mockImplementation((method: string): Promise<unknown> => {
-      if (method === "terminal.list") return Promise.reject(new Error("floor unreachable"));
+      // The ROSTER is what the gate reads now (TP-D4). A roster this window
+      // cannot read is the same class of answer the old unreadable inventory
+      // was: no trustworthy list of what is alive, so ask nothing and mount.
+      if (method === "terminal.roster") return Promise.reject(new Error("roster unreachable"));
       return Promise.resolve({
-        ticket: { controlSocket: "/x/c.sock", frameSocket: "/x/f.sock", token: "tok" },
+        controlSocket: "/x/c.sock",
+        frameSocket: "/x/f.sock",
+        token: "tok",
       });
     });
     await mountDeck();
@@ -737,6 +773,109 @@ describe("paneMeta, the durable half of restore (GT-D8 as amended)", () => {
   });
 });
 
+describe("every birth goes through the product door (TP-S1)", () => {
+  it("never reaches for the retired sessionless mint, on any path", async () => {
+    // The S1 gate row, from the DECK's seat: whatever the deck does — rejoin a
+    // saved pane, create a first one, ask the restore question — it asks fieldd
+    // by session and never for a connection with no session in it.
+    saveLayout(["alive-1"]);
+    floor = [{ sessionId: "alive-1" }];
+    await mountDeck();
+
+    expect(requests).not.toContain("terminal.connectTicket");
+    // ...and it never reads the TRANSPORT-facing inventory either: that
+    // projection carries the cell tag, and a UI may not see placement (TP-L-C).
+    expect(requests).not.toContain("terminal.list");
+    expect(requests).toContain("terminal.openTicket");
+    expect(requests).toContain("terminal.roster");
+  });
+
+  it("opens by rejoining a saved pane rather than by creating a new shell", async () => {
+    // The restore path's whole point: a window that had panes gets its
+    // connection back through one of them, and spawns nothing.
+    saveLayout(["alive-1", "alive-2"]);
+    floor = [{ sessionId: "alive-1" }, { sessionId: "alive-2" }];
+    await mountDeck();
+
+    expect(requests, "a rejoin is not a birth").not.toContain("terminal.create");
+    expect(latest().panes).toBe(0); // the stub workspace draws none; the deck asked for none
+  });
+
+  it("opens on a session the floor ALREADY has rather than creating beside it", async () => {
+    // The stranger case: field-native has been running and this window opens
+    // onto it with no saved layout. `claimExistingSessions` is about to claim
+    // that session, so creating one here would show two panes where one was
+    // wanted — and spawn a shell nobody asked for. The roster is read even
+    // though the restore gate had nothing to ask about, precisely so this
+    // ordering can hold.
+    floor = [{ sessionId: "stranger-1" }];
+    await mountDeck();
+
+    expect(requests).toContain("terminal.roster");
+    expect(requests, "a session that exists is opened, not duplicated").not.toContain(
+      "terminal.create",
+    );
+    expect(requests).toContain("terminal.openTicket");
+    expect(connects).toBe(1);
+  });
+
+  it("creates its first session through fieldd when there is nothing to rejoin", async () => {
+    // An empty floor and no saved layout: the window has to make a session
+    // before it can have a transport at all, and the birth is fieldd's —
+    // audited, class-placed, capped — not a create down the control connection.
+    floor = [];
+    await mountDeck();
+
+    expect(requests).toContain("terminal.create");
+    expect(requests).not.toContain("terminal.connectTicket");
+    expect(connects, "the create's own ticket opened the bridge").toBe(1);
+  });
+
+  it("hands the workspace a birth door, so splits and new panes are fieldd's too", async () => {
+    // `createSplitSession` is upstream's ONE birth override, and it serves both
+    // `splitActive` and `createSessionInActivePane` (Workspace.js:350, :384) —
+    // so supplying it is what puts fieldd in front of every interactive pane
+    // birth the user can reach.
+    floor = [{ sessionId: "alive-1" }];
+    saveLayout(["alive-1"]);
+    await mountDeck();
+
+    const props = workspaceMounts[workspaceMounts.length - 1]!;
+    const createSplit = props["createSplitSession"] as
+      | ((session: unknown) => Promise<{ id: string }>)
+      | undefined;
+    expect(createSplit, "the door is supplied at all").toBeTypeOf("function");
+
+    const before = requests.filter((method) => method === "terminal.create").length;
+    const born = await act(async () => createSplit?.({ id: "alive-1", cwd: null }));
+    expect(requests.filter((method) => method === "terminal.create").length).toBe(before + 1);
+    // ...and what comes back is the FLOOR's summary for that session, not a
+    // shape this renderer invented.
+    expect(born?.id).toBe("born-2");
+  });
+
+  it("rehydrates a dead pane through fieldd as well", async () => {
+    saveLayout(["alive-1", "dead-1"]);
+    floor = [{ sessionId: "alive-1" }];
+    await mountDeck();
+    const restore = [...(container?.querySelectorAll("button") ?? [])].find(
+      (button) => button.textContent === "restore",
+    );
+    await act(async () => restore?.click());
+    await settle();
+
+    const rehydrate = workspaceMounts[0]?.["onRehydratePane"] as
+      | ((context: { meta: unknown; sessionId: string; paneId: string }) => Promise<unknown>)
+      | undefined;
+    expect(rehydrate).toBeTypeOf("function");
+    const before = requests.filter((method) => method === "terminal.create").length;
+    await act(async () =>
+      rehydrate?.({ meta: { cwd: "/repo/api" }, sessionId: "dead-1", paneId: "pane-1" }),
+    );
+    expect(requests.filter((method) => method === "terminal.create").length).toBe(before + 1);
+  });
+});
+
 describe("the one-runtime law (GT-3p, GT-D14)", () => {
   // The bug this exists for, found in the smoke and not in review: main posts
   // the two MessagePorts EXACTLY ONCE per attach, and
@@ -750,18 +889,18 @@ describe("the one-runtime law (GT-3p, GT-D14)", () => {
   // THAT runtime instead of building its own.
   it("builds no runtime of its own while a prewarm is still in flight", async () => {
     // A warm that never settles, so "in flight" is the whole of this case.
-    let releaseTicket: (value: unknown) => void = () => undefined;
-    const slowFieldd = {
-      request: (method: string) => {
-        if (method === "terminal.connectTicket") {
-          return new Promise((resolve) => {
-            releaseTicket = resolve;
-          });
-        }
-        return Promise.resolve({ terminals: [] });
-      },
-    };
-    prewarmTerminalPool(slowFieldd as never);
+    //
+    // TP-S1 moved where a warm can be held: it no longer redeems a ticket or
+    // forks a bridge, so a slow FLOOR cannot hold one open any more. Its one
+    // await is the render device, which is also the honest place for this test
+    // to grip — the ports wait the law is about is armed by the runtime, and the
+    // runtime is what the device warm belongs to.
+    let releaseDevice: (value: { backend: string }) => void = () => undefined;
+    deviceWarm = () =>
+      new Promise((resolve) => {
+        releaseDevice = resolve;
+      });
+    prewarmTerminalPool(fieldd as never);
     await settle();
     // The prewarm owns a runtime and its ports wait.
     expect(runtimes.length).toBe(1);
@@ -775,9 +914,9 @@ describe("the one-runtime law (GT-3p, GT-D14)", () => {
 
     // Let the warm finish: the deck inherits that runtime rather than minting.
     // It lands AFTER the claim, which is the case `adopt` has to get right — a
-    // claim that tested the pool's phase instead of its transport would build a
-    // second runtime on top of a perfectly good one.
-    releaseTicket({ ticket: { token: "t", controlSocket: "c", frameSocket: "f" } });
+    // claim that tested the pool's phase instead of its runtime would build a
+    // second one on top of a perfectly good one.
+    releaseDevice({ backend: "test" });
     await settle();
     expect(runtimes.length).toBe(1);
     expect(terminalPoolSnapshot().phase).toBe("open");

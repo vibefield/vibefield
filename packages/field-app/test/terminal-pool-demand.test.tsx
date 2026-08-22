@@ -59,9 +59,25 @@ const pool = await import("../src/terminal/pool");
 type PoolClient = Parameters<typeof pool.openTerminalPool>[0];
 
 let publishStatus: ((status: { state: string }) => void) | null = null;
+
+/** A floor that answers the session-addressed mint. TP-S1: there is no
+ * sessionless door any more, so a fixture that wants a transport has to name a
+ * session — which is the point of the slice showing up in the fixture. */
+const ROUTE = { cellBootId: "cell-a-boot-1", routeRevision: 1, leaseEpoch: 1 };
+const LEGACY = { controlSocket: "c", frameSocket: "f", token: "t" };
 const fieldd = {
-  request: () => Promise.resolve({ ticket: { token: "t", controlSocket: "c", frameSocket: "f" } }),
+  request: (method: string) => {
+    if (method === "terminal.roster") return Promise.resolve({ items: [] });
+    // The legacy trio alone: the grant half is exercised in
+    // `terminal-pool-routing.test.ts`, and this fixture is about DEMAND.
+    return Promise.resolve({ ...LEGACY, sessionId: "session-a", ticket: LEGACY });
+  },
 } as unknown as PoolClient;
+
+/** Open the pool the way a consumer does now — by naming a session. */
+function open(): void {
+  pool.openTerminalPool(fieldd, { sessionIds: ["session-a"] });
+}
 
 let root: Root | null = null;
 let container: HTMLElement | null = null;
@@ -99,9 +115,9 @@ afterEach(() => {
 
 describe("addressing by session id alone (TP-L-C)", () => {
   it("keeps ONE transport for the sessions it answers for, and never names it", async () => {
-    pool.openTerminalPool(fieldd);
+    open();
     await settle();
-    expect(pool.terminalPoolCellCount(), "one cell today; the shape is the point").toBe(1);
+    expect(pool.terminalPoolCellCount(), "one cell for this window's bridge").toBe(1);
 
     const a = pool.bindTerminalSessionView("session-a", pool.LIVE_SOURCE_DEMAND);
     const b = pool.bindTerminalSessionView("session-b", pool.LIVE_SOURCE_DEMAND);
@@ -129,8 +145,9 @@ describe("addressing by session id alone (TP-L-C)", () => {
     expect(pool.terminalSessionDemand("early")).toBe("live");
     expect(pool.terminalPoolProjectedDemand(), "nothing to declare it to yet").toEqual([]);
 
-    pool.openTerminalPool(fieldd);
+    open();
     await settle();
+    expect(pool.terminalPoolSnapshot().phase).toBe("open");
 
     expect(pool.terminalPoolProjectedDemand()).toEqual([
       { sessionId: "early", mode: "live", transportGeneration: 1 },
@@ -143,7 +160,7 @@ describe("addressing by session id alone (TP-L-C)", () => {
     // a fact about a session and its views, and the floor outlives fieldd — so
     // clearing the ledger here would say the views went away, which is the one
     // thing that did not happen.
-    pool.openTerminalPool(fieldd);
+    open();
     await settle();
     const view = pool.bindTerminalSessionView("survivor", pool.LIVE_SOURCE_DEMAND);
     expect(pool.terminalPoolProjectedDemand()[0]?.transportGeneration).toBe(1);
@@ -161,7 +178,7 @@ describe("addressing by session id alone (TP-L-C)", () => {
 
 describe("demand is released by the view, atomically (TP-L-E')", () => {
   it("folds MAX over a session's views and drops in ONE step", async () => {
-    pool.openTerminalPool(fieldd);
+    open();
     await settle();
 
     const watching = pool.bindTerminalSessionView("s", pool.NO_SOURCE_DEMAND);
@@ -183,7 +200,7 @@ describe("demand is released by the view, atomically (TP-L-E')", () => {
   });
 
   it("survives a double release, because React cleanups can run late", async () => {
-    pool.openTerminalPool(fieldd);
+    open();
     await settle();
     const first = pool.bindTerminalSessionView("s", pool.LIVE_SOURCE_DEMAND);
     const second = pool.bindTerminalSessionView("s", pool.LIVE_SOURCE_DEMAND);
@@ -206,7 +223,7 @@ describe("demand is released by the view, atomically (TP-L-E')", () => {
     // would have been component state and would have died with the component;
     // now it lives in a module that outlives every remount, so "the views left"
     // has to be said out loud by the unmount path.
-    pool.openTerminalPool(fieldd);
+    open();
     await settle();
 
     function Panes({ ids, active }: { ids: string[]; active: boolean }): null {
@@ -252,7 +269,7 @@ describe("demand is released by the view, atomically (TP-L-E')", () => {
     // subscription open past the last view. It takes none — the runtime's own
     // per-surface refcount is the only holder, and the pool owns the GRACE
     // rather than a reference.
-    pool.openTerminalPool(fieldd);
+    open();
     await settle();
     const view = pool.bindTerminalSessionView("s", pool.LIVE_SOURCE_DEMAND);
     view.declare(pool.NO_SOURCE_DEMAND);
@@ -264,7 +281,7 @@ describe("demand is released by the view, atomically (TP-L-E')", () => {
   });
 
   it("clears the ledger when the WINDOW goes away, not before", async () => {
-    pool.openTerminalPool(fieldd);
+    open();
     await settle();
     pool.bindTerminalSessionView("s", pool.LIVE_SOURCE_DEMAND);
     expect(pool.terminalPoolViewCount()).toBe(1);

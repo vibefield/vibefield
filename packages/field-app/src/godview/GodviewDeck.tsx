@@ -1,20 +1,24 @@
+import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import { GhostteaProvider } from "@vibecook/ghosttea-react";
 import {
   GhostteaWorkspace,
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
-import { TerminalListResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { emitGodviewColdOpenMarker, emitGodviewDeckMarker } from "../development-console";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
-import { registerTerminalPerfSource } from "../perf/terminal-perf-source";
 import {
+  createTerminalSession,
+  openDormantTransport,
+  refreshTerminalRoster,
   retryTerminalPool,
   type TerminalFault,
   type TerminalFaultPlane,
+  terminalPoolSnapshot,
+  terminalSessionSummary,
   useTerminalPool,
   useTerminalPoolOpen,
   useTerminalSessionViews,
@@ -81,12 +85,12 @@ import "@vibecook/ghosttea-react/workspace.css";
  * R6 catches this comment too if it spells the prefix out. */
 const DECK_STORAGE_KEY = "vf-godview-deck-v1";
 
-/** The geometry the workspace's OWN create doors use for a pane with nothing to
- * copy from (Workspace.tsx's initialization door). A rehydrated pane is that
- * same case — the session it replaces is gone, so there are no cols to inherit
- * — and the first resize from the mounted surface corrects it either way. */
-const SPAWN_COLS = 100;
-const SPAWN_ROWS = 30;
+// The deck used to carry a SPAWN_COLS/SPAWN_ROWS pair here, because
+// `runtime.createSession` takes a geometry and a pane being rehydrated has no
+// cols to inherit. `terminal.create` takes none (`contracts/src/terminal.ts:107`)
+// — the floor picks, and the first resize from the mounted surface corrects it,
+// which is what the old comment said was happening anyway. One fewer renderer
+// guess about a PTY.
 
 /** The fault face's headline, per plane. The plane split itself (GT-5c) moved to
  * the pool with the acquisition that produces it — `transport` is the path to
@@ -172,7 +176,21 @@ export function GodviewDeck({
    * copy of those stamps was the reason the trace had to be a module singleton
    * in the first place. */
   const pool = useTerminalPool();
-  useTerminalPoolOpen(fieldd, godviewColdOpen);
+  /** The saved layout's session ids, read SYNCHRONOUSLY at first render.
+   *
+   * They are the transport's opening move (TP-S1): a window rejoins one of the
+   * sessions it was showing rather than asking for a sessionless connection, so
+   * the pool needs them before its first mint — which means before any effect
+   * that awaits the floor. localStorage is the only source that can answer that
+   * early, and it is the same document the workspace restores from. */
+  const savedPanes = useMemo(() => {
+    try {
+      return savedPaneSessionIds(localStorage.getItem(DECK_STORAGE_KEY));
+    } catch {
+      return []; // a page with no storage has no layout, which is an answer
+    }
+  }, []);
+  useTerminalPoolOpen(fieldd, { rejoin: savedPanes, trace: godviewColdOpen });
   const { runtime, shell, generation, warm } = pool;
   const error: TerminalFault | null = pool.fault;
   /** Published by the sidebar probe. Read only to REPORT what the deck holds
@@ -218,7 +236,7 @@ export function GodviewDeck({
    * again — which is the same path `bridge-up` takes, available to a human when
    * no bridge-up is coming (a bridge that never built, a ladder that spent
    * itself). The button is the deck's; the ladder is not. */
-  const retry = useCallback(() => retryTerminalPool(), []);
+  const retry = useCallback(() => retryTerminalPool(savedPanes), [savedPanes]);
 
   /** The user said restore. Rehydration is armed and the workspace mounts;
    * dead panes come back through `onRehydratePane` below. */
@@ -302,39 +320,45 @@ export function GodviewDeck({
   // matters. No layout, or a layout this reader cannot make sense of, is also
   // silent — GT-D8's malformed-manifest rule is "start clean", not "explain".
   //
-  // A floor that cannot be asked mounts too, unarmed: `terminal.list` failing
-  // means the deck is about to have bigger problems than a prompt, and guessing
-  // that every saved pane is dead would be the one answer certain to be wrong.
+  // A floor that cannot be asked mounts too, unarmed: a roster this window
+  // cannot read means the deck is about to have bigger problems than a prompt,
+  // and guessing that every saved pane is dead would be the one answer certain
+  // to be wrong.
+  //
+  // TP-S1 — THE ROSTER, NOT THE INVENTORY. This read was `terminal.list`, which
+  // is the TRANSPORT-facing projection: it carries the cell tag the routed
+  // transport consumes, and a UI that read it was handling placement it is not
+  // allowed to see (TP-L-C). `terminal.roster` is the other projection of the
+  // same fold (TP-D4) — ids, class, health, provenance, and a contract that
+  // REFUSES a placement key at parse. The pool performs the read because the
+  // pool holds the client; what arrives here is already placement-free.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      let saved: string[] = [];
-      try {
-        saved = savedPaneSessionIds(localStorage.getItem(DECK_STORAGE_KEY));
-      } catch {
-        saved = []; // a page with no storage has no layout, which is an answer
-      }
-      if (saved.length === 0) {
+      if (savedPanes.length === 0) {
         if (!cancelled) setConsent("go");
         return;
       }
-      let live: string[] = [];
-      try {
-        live = TerminalListResult.parse(await fieldd.request("terminal.list", {})).terminals.map(
-          (terminal) => terminal.sessionId,
-        );
-      } catch (cause) {
+      const sessions = await refreshTerminalRoster();
+      if (cancelled) return;
+      // `unread`/`unavailable`/`unobserved` all mean the same thing to this
+      // gate: no trustworthy list of what is alive, so ask nothing and mount.
+      // Only an OBSERVED roster can say a saved pane is dead.
+      if (terminalPoolSnapshot().rosterState !== "observed") {
         getRendererLogger()
           .child({ component: "godview" })
-          .error(
-            "renderer.godview.restore_floor_unreadable",
-            "The floor could not be listed for the restore check; mounting without it",
-            cause,
+          .info(
+            "renderer.godview.restore_roster_unreadable",
+            "The roster could not be read for the restore check; mounting without it",
+            { state: terminalPoolSnapshot().rosterState },
           );
-        if (!cancelled) setConsent("go");
+        setConsent("go");
         return;
       }
-      if (cancelled) return;
+      const saved = savedPanes;
+      const live = sessions
+        .filter((session) => session.health !== "exited")
+        .map((session) => session.sessionId);
       const question = restoreQuestion(saved, live);
       // Everything alive ⇒ nothing to consent to. The panes rejoin by id
       // inside the workspace's own initialization, exactly as they did before
@@ -348,7 +372,7 @@ export function GodviewDeck({
     return () => {
       cancelled = true;
     };
-  }, [fieldd]);
+  }, [savedPanes]);
 
   // THE COLD-OPEN TRACE (GT-3p). Four stations are stamped from here; the other
   // three belong to owners that ran before this component existed (the prewarm)
@@ -362,17 +386,59 @@ export function GodviewDeck({
     if (consent === "go") godviewColdOpen.mark("consent");
   }, [consent]);
 
-  // TP-S0a — publish this deck's runtime as the perf sampler's source. Three
-  // lines, and deliberately additive: the sampler reaches the runtime through a
-  // module registry rather than through the React tree, so when TP-S0b moves
-  // runtime ownership to a window-level pool this registration moves with the
-  // OWNER and nothing in `perf/` changes. Registering costs nothing when no
-  // sampler is running — the registry is one slot and a set of listeners that
-  // is empty until a mode leaves `off`.
+  // THE FIRST CONNECTION, when there is nothing to rejoin (TP-S1).
+  //
+  // The pool opens by rejoining a saved pane. When none of them answers a ticket
+  // it rests in `dormant` — no bridge, no socket — which is the honest state for
+  // a window with nothing to show, and the reason the sessionless
+  // `connectTicket` could be retired rather than replaced.
+  //
+  // Getting out of it takes two tries, in this order, and the order is the whole
+  // point:
+  //
+  //   1. OPEN ON A SESSION THAT ALREADY EXISTS. The floor may hold sessions this
+  //      deck never saved — an agent's, another window's, one from before a
+  //      layout was cleared — and the workspace is about to CLAIM them
+  //      (`claimExistingSessions`). Creating first would spawn a shell nobody
+  //      asked for and leave the deck showing N+1 panes where N were wanted.
+  //   2. ONLY THEN CREATE ONE. A birth is meaningful (GT-D14), so it happens
+  //      after consent has resolved and never at idle.
+  //
+  // Runs after the gate, so "start clean" and "restore" both reach it having
+  // already decided what the saved layout means.
+  const firstConnection = useRef(false);
   useEffect(() => {
-    if (runtime === null) return;
-    return registerTerminalPerfSource(runtime);
-  }, [runtime]);
+    if (consent !== "go" || pool.phase !== "dormant" || firstConnection.current) return;
+    firstConnection.current = true;
+    void (async () => {
+      // The roster may be unread here: the restore gate only asks for it when
+      // there IS a saved layout, and this path is reached with none. Asking now
+      // is what keeps step 1 honest — without it a first run would create a
+      // shell beside every session the workspace is about to claim, and show
+      // N+1 panes where N were wanted.
+      const sessions =
+        terminalPoolSnapshot().rosterState === "unread"
+          ? await refreshTerminalRoster()
+          : pool.roster;
+      const alive = sessions
+        .filter((session) => session.health !== "exited")
+        .map((session) => session.sessionId);
+      if (await openDormantTransport(alive)) return;
+      try {
+        await createTerminalSession({ workloadClass: "interactive" });
+      } catch (cause) {
+        // The pool has already published the fault and the deck is already
+        // drawing its face; this only says so in the log with the deck's voice.
+        getRendererLogger()
+          .child({ component: "godview" })
+          .error(
+            "renderer.godview.first_session_failed",
+            "The deck could not open its first session",
+            cause,
+          );
+      }
+    })();
+  }, [consent, pool.phase, pool.roster]);
 
   // The render backend announcing itself IS device-ready: the worker posts
   // `renderer-status` from `createRenderer`, after the adapter, the device and
@@ -472,23 +538,51 @@ export function GodviewDeck({
     [],
   );
 
+  // A BIRTH, through the one product door (TP-S1).
+  //
+  // This reverses GT-D10's implementation without touching its principle. The
+  // principle was: the workspace owns pane births, and the deck must not be a
+  // second authority over what a pane holds. It still does not — every birth
+  // below is still the WORKSPACE asking, through the workspace's own props. What
+  // changed is where the session comes from once it has asked.
+  //
+  // It used to come from `runtime.createSession`, straight down the deck's
+  // connection to the floor. The comment here said routing it through
+  // `terminal.create` "would put fieldd back in front of a pane birth for no
+  // reason". TPv3 gives the reason: a session born on the control connection is
+  // born wherever that connection already points, so it can never be placed by
+  // CLASS, is not counted against the floor's per-pair cap, and is not audited
+  // as a product act. `create(class)` is the product-plane birth (spec §5.1),
+  // and the ticket it answers is what opens this window's transport when it has
+  // none — which is how a deck with an empty floor gets a connection at all now
+  // that the sessionless door is retired.
+  //
+  // PERSISTENCE moved with it, and is now simpler rather than different. The
+  // deck used to pass `terminate-with-app` deliberately, because that is what
+  // the workspace's own doors ask for and field-native re-governs an ownerless
+  // birth to keep-until-exit on `session-created` (GT-D11). fieldd's create
+  // defaults to keep-until-exit directly (`contracts/src/terminal.ts:113-115`),
+  // so the same end state is reached by saying it once instead of by saying the
+  // opposite and being corrected.
+  const bornSession = useCallback(
+    async (cwd: string | undefined): Promise<SessionSummary | null> => {
+      const created = await createTerminalSession({
+        ...(cwd !== undefined ? { cwd } : {}),
+        // TC-D6(c): the class is the scrollback cap AND the placement hint. A
+        // pane a person types into is interactive by definition.
+        workloadClass: "interactive",
+      });
+      // The join: fieldd answers an id, the workspace mounts a summary, and the
+      // floor is the one authority both read.
+      return terminalSessionSummary(created.sessionId);
+    },
+    [],
+  );
+
   // A dead pane, answered with a live one (GT-D8). Armed only after consent.
-  //
-  // The replacement is created through the WORKSPACE'S OWN runtime door, with
-  // the same options its own initialization uses — that is GT-D10 holding under
-  // a feature that could easily have broken it. Going through `terminal.create`
-  // would put fieldd back in front of a pane birth for no reason: the deck has
-  // a connection, the workspace has a door, and fieldd's policy seat does not
-  // require it to be on the path.
-  //
-  // `terminate-with-app` is passed DELIBERATELY, and it is the one thing here
-  // that looks wrong and is not: it is what the workspace's own doors ask for,
-  // and field-native re-governs an ownerless birth to keep-until-exit on
-  // `session-created` (GT-D11). Asking for keep-until-exit here would make this
-  // pane the one session on the floor whose retention came from the renderer.
   const rehydratePane = useCallback(
     async (context: { meta: unknown; sessionId: string; paneId: string }) => {
-      if (shell === null || runtime === null) return null;
+      if (shell === null) return null;
       // `paneCwd` and not `meta.cwd`: what the floor calls a cwd is the OSC 7
       // URL the shell announced, and a spawn given `file://host/Users/x` cannot
       // chdir into it. Home is the honest fallback for a pane whose shell never
@@ -498,16 +592,7 @@ export function GodviewDeck({
       // local shell there is either the wrong directory or a dropped pane.
       const cwd = paneCwd(context.meta, readDeviceHost()) ?? shell.home;
       try {
-        return await runtime.createSession({
-          executable: shell.defaultShell,
-          args: [],
-          cwd,
-          environment: { mode: "inherit" },
-          cols: SPAWN_COLS,
-          rows: SPAWN_ROWS,
-          persistence: "terminate-with-app",
-          programKind: "interactive-shell",
-        });
+        return await bornSession(cwd);
       } catch (cause) {
         // Drop-and-collapse is the library's own answer to a null, and it is
         // the honest one: a pane that cannot be refilled should not be drawn as
@@ -522,7 +607,29 @@ export function GodviewDeck({
         return null;
       }
     },
-    [runtime, shell],
+    [bornSession, shell],
+  );
+
+  /** A SPLIT, or a new pane in the active one (GT-D10, TP-S1).
+   *
+   * `createSplitSession` is upstream's one birth override and it is misnamed:
+   * `Workspace.js` routes BOTH `splitActive` (:350) and
+   * `createSessionInActivePane` (:384) through it, so this single prop is every
+   * interactive new-pane door the user has. Supplying it is what puts fieldd in
+   * front of those births; omitting it is what used to send them down the
+   * control connection instead.
+   *
+   * A throw here is upstream's to handle (it logs and leaves the layout alone),
+   * and that is the honest outcome: a pane that could not be born should not be
+   * drawn as though it were. */
+  const createSplitSession = useCallback(
+    async (activeSession: DeckSession): Promise<SessionSummary> => {
+      const cwd = paneCwd({ cwd: activeSession.cwd }, readDeviceHost()) ?? shell?.home;
+      const born = await bornSession(cwd);
+      if (born === null) throw new Error("the floor did not report the session it just created");
+      return born;
+    },
+    [bornSession, shell],
   );
 
   // THE DOOR (GT-D17). Two verbs, built where the runtime and the workspace
@@ -847,13 +954,13 @@ export function GodviewDeck({
           // dead pane is dropped — which is what "start clean" asked for and what
           // an all-alive deck never encounters.
           {...(rehydrate ? { onRehydratePane: rehydratePane } : {})}
-          // No `createSplitSession` (GT-D10): splits go through the workspace's
-          // own door, like every other birth. It asks for `terminate-with-app`
-          // there — the opposite of this product's promise — and that is
-          // corrected where it belongs, in the plane that outlives fieldd:
-          // field-native re-governs ownerless births to keep-until-exit on
-          // `session-created` (GT-D11). Intercepting the door instead is what
-          // made this deck an authority it should never have been.
+          // THE BIRTH DOOR (TP-S1). Upstream routes both `splitActive` and
+          // `createSessionInActivePane` through this one prop, so supplying it
+          // puts fieldd's audited, class-placed, capped `create` in front of
+          // every interactive pane birth — without the deck intercepting
+          // anything or becoming a second authority over what a pane holds. The
+          // workspace still asks; it just gets its session from the product door.
+          createSplitSession={createSplitSession}
           initialCwd={shell.home}
           claimExistingSessions
           // STAYS OFF, and no longer as a wait (GT-D7's 2026-08-05 amendment):
