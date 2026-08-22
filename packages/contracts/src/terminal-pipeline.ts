@@ -659,7 +659,14 @@ export type DemandAccepted = z.infer<typeof DemandAccepted>;
 
 /** Control leg: attach ONE session under an activation id minted by the
  * main-thread runtime (the activation authority). sessionId · leaseEpoch ·
- * routeRevision · rights are DERIVED from the verified attach grant. */
+ * routeRevision · rights are DERIVED from the verified attach grant.
+ *
+ * RENEWAL rides the same message (TP-S3b): an `AttachControlLeg` naming an
+ * activation this connection already holds, with a NEWER grant (a higher
+ * `grantGeneration` for the same client+session), is idempotent for the
+ * activation and updates its rights/expiry — a rights downgrade applies the
+ * moment the cell accepts it (spec §5.1); the same generation again is a pure
+ * idempotent retry; a lower generation is `GRANT_GENERATION_ROLLBACK`. */
 export const AttachControlLeg = z
   .object({
     activationId: z.string().min(1),
@@ -684,6 +691,11 @@ export const AttachRefusalCode = z.enum([
   "ACTIVATION_CONFLICT",
   "GRANT_GENERATION_ROLLBACK",
   "GRANT_NONCE_REPLAYED",
+  /** TP-S3b — the attach grant did not verify (any of the silent class's
+   * grant codes). On an already-authenticated leg there is no hello to close
+   * silently, so it is ONE structured refusal; the precise code stays in the
+   * cell's audit line, and the renderer re-mints (terminal for that grant). */
+  "GRANT_INVALID",
   "STALE_ROUTE",
   "FENCED",
   "SESSION_UNKNOWN",

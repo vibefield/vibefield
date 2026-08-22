@@ -140,6 +140,18 @@ export const TERMINAL_PIPELINE = {
   MAX_ACTIVATION_CATCHUP_MS: 3_000,
   MAX_CATCHUP_BYTES: 8_388_608,
   CREDIT_ACCOUNT_DRAIN_TTL_MS: 5_000,
+  // TP-S3b — the cell's own activation numbers. CELL_LEASE_TTL_MS ≥
+  // SCENE_APPLIED_REFRESH_MS + detection + jitter (the TTL inequality, §5.4);
+  // INPUT_LAG_SUSPEND_REVISIONS is the cell's lag call (input → suspended
+  // {lagging} when newest − accepted exceeds it, or when no SceneApplied
+  // arrives within MAX_SCENE_APPLIED_DELAY_MS after a unit was sent);
+  // ATTACH_RENEWAL_MARGIN_MS closes input that far before the attach grant
+  // expires without a renewal; SEED_FRAME_WAIT_MS bounds the wait for the
+  // engine's full frame after a refresh.
+  CELL_LEASE_TTL_MS: 6_000,
+  INPUT_LAG_SUSPEND_REVISIONS: 64,
+  ATTACH_RENEWAL_MARGIN_MS: 60_000,
+  SEED_FRAME_WAIT_MS: 2_000,
 } as const;
 
 /** TPv3 — WebSocket close codes on the cell doors (terminal-pipeline-v3 §5.1):

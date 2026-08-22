@@ -1,7 +1,9 @@
 //! The cell's two T1 doors (terminal-pipeline-v3 §8 "door hygiene", §5.1 the
-//! handshake, the contracts' CONNECTION_LEG machine): one ephemeral loopback
-//! TCP port, two WebSocket paths — `/control` and `/frames` — accepted,
-//! authenticated and kept alive here. TP-S3a scope: connection layer ONLY.
+//! handshake, §5.4 activation, §7 demand, §8 credits/transfers; the contracts'
+//! CONNECTION_LEG / ACTIVATION / CREDIT_ACCOUNT machines as the cell sees
+//! them): one ephemeral loopback TCP port, two WebSocket paths — `/control`
+//! and `/frames` — accepted, authenticated, kept alive, and (TP-S3b) carrying
+//! session activations.
 //!
 //! Per socket, in order: the Origin allow-list at the HTTP upgrade → the
 //! pre-auth caps (a hello deadline, a byte cap, a connection cap) → the FIRST
@@ -10,34 +12,50 @@
 //! the reason is the audit line) → the ledger admits it (the structured class
 //! answers `ConnectionRefused` and closes) → `ConnectionAccepted` (frames: a
 //! credit epoch + the MIN of advertised and cell windows) → the leg lives while
-//! `LegHeartbeat`s arrive within `heartbeatTtlMs`, and dies `4004` otherwise.
-//! A higher-generation (or newer equal-generation) grant supersedes the
-//! channel's live leg, which closes `4002`. Shutdown closes every leg `1001`.
+//! `LegHeartbeat`s (or, on frames, `CalibrationPing`s) arrive within
+//! `heartbeatTtlMs`, and dies `4004` otherwise. A higher-generation (or newer
+//! equal-generation) grant supersedes the channel's live leg, which closes
+//! `4002`. Shutdown closes every leg `1001`.
 //!
-//! Not here yet (S3b+): session attaches, activations, frames, credits — any
-//! such message on an accepted leg is an honest `4003 PROTOCOL` close naming
-//! `unsupported-at-s3a:<type>`. `STALE_ROUTE`/`FENCED` closes exist as signals
-//! the cell will raise when custody tells it so (TC-S6).
+//! TP-S3b on an ACCEPTED leg: control — `AttachControlLeg` (the attach grant
+//! verified, the attach high-water admitted, the table decides), `DeclareDemand`;
+//! frames — `AttachFramesLeg`, `TransportCredit`, `SceneApplied`,
+//! `CalibrationPing` (echoed as a `calibration` unit; doubles as the frames
+//! heartbeat). The geometry verbs are S3c's and answer `4003 PROTOCOL:
+//! unsupported-at-s3b:<type>` — honest, never a pretended seat. Where the
+//! sessions come from is the `SessionSource` (source.rs): this harness's own
+//! until petition G22 lands.
 //!
-//! Concurrency: one tokio task per socket; one registry behind a std Mutex with
-//! short, await-free critical sections; superseding or shutting a leg down is a
-//! message to its task, never a cross-task socket write.
+//! Concurrency: one read task per socket plus one WRITER task owning its sink
+//! (every message to a leg — replies, the lease, presentation units — rides an
+//! unbounded channel to that writer, so a pump and a reply never race on one
+//! socket); one registry behind a std Mutex with short, await-free critical
+//! sections; superseding or shutting a leg down is a message to its read task.
 
+use super::activation::{
+    ActivationTable, AttachControlInput, AttachFramesInput, Effect, LegRef, Outbound, SetIdentity,
+};
 use super::grant::{Channel, GrantVerifier, PreAuthFailure, PreAuthFailureCode};
 use super::ledger::{CurrentLeg, TransportLedger, TransportRefusal};
+use super::presentation::{spawn_pump, Admission, PumpHandle, PumpHost, PumpStart};
+use super::source::{NoSessions, SessionSource};
 use super::unix_ms;
 use super::wire::{
-    capability_intersection, inbound_tags, select_version, tagged, ConnectionAccepted,
-    ConnectionHello, ConnectionRefused, LegHeartbeat, LegHeartbeatAck, ProtocolLimits,
-    ReceiverCapacities, Tagged,
+    capability_intersection, encode_envelope, inbound_tags, select_version, tagged,
+    AttachControlLeg, AttachFramesLeg, AttachRefused, CalibrationPing, ConnectionAccepted,
+    ConnectionHello, ConnectionRefused, DeclareDemand, LegHeartbeat, LegHeartbeatAck,
+    ProtocolLimits, ReceiverCapacities, SceneApplied, Tagged, TransportCredit, TrfIdentity,
 };
 use crate::registries::terminal_pipeline as tp;
 use crate::registries::terminal_pipeline_close_codes as close;
 use anyhow::{Context, Result};
+use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
+use ghosttea::ViewAccess;
+use serde_json::json;
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
@@ -48,7 +66,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
 /// Everything the door needs, with the registries' numbers as defaults.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DoorConfig {
     pub verifier: GrantVerifier,
     /// `Origin` values admitted at the upgrade. A socket WITHOUT an Origin
@@ -62,6 +80,27 @@ pub struct DoorConfig {
     pub heartbeat_ttl: Duration,
     pub protocol_limits: ProtocolLimits,
     pub cell_caps: ReceiverCapacities,
+    /// TP-S3b — where sessions come from (`NoSessions` until G22 in production;
+    /// `DirectSessions` in the harness/test binary).
+    pub source: Arc<dyn SessionSource>,
+    /// the cadence of the activation tick (deadlines, expiry, lag by time)
+    pub tick: Duration,
+    /// how long the pump waits for the engine's forced full frame (seed/catch-up)
+    pub seed_wait: Duration,
+    /// the activation-time convergence bound: a seed+catch-up that cannot be
+    /// admitted within it stops the activation `{overload}` (§8, `maxActivationCatchupMs`)
+    pub catchup_bound: Duration,
+}
+
+impl std::fmt::Debug for DoorConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DoorConfig")
+            .field("verifier", &self.verifier)
+            .field("allowed_origins", &self.allowed_origins)
+            .field("hello_deadline", &self.hello_deadline)
+            .field("heartbeat_ttl", &self.heartbeat_ttl)
+            .finish_non_exhaustive()
+    }
 }
 
 impl DoorConfig {
@@ -76,7 +115,16 @@ impl DoorConfig {
             heartbeat_ttl: Duration::from_millis(tp::HEARTBEAT_TTL_MS),
             protocol_limits: ProtocolLimits::DEFAULTS,
             cell_caps: ReceiverCapacities::CELL_CAPS,
+            source: Arc::new(NoSessions),
+            tick: Duration::from_millis(500),
+            seed_wait: Duration::from_millis(tp::SEED_FRAME_WAIT_MS),
+            catchup_bound: Duration::from_millis(tp::MAX_ACTIVATION_CATCHUP_MS),
         }
+    }
+
+    pub fn with_source(mut self, source: Arc<dyn SessionSource>) -> Self {
+        self.source = source;
+        self
     }
 }
 
@@ -124,11 +172,22 @@ struct Registry {
     pre_auth_connections: usize,
     next_connection_id: u64,
     closed: bool,
+    activations: ActivationTable,
 }
 
 struct DoorState {
     config: DoorConfig,
     registry: Mutex<Registry>,
+    pumps: Mutex<HashMap<String, PumpHandle>>,
+    /// the Arc of this very state — the pump host trait takes `&self` but a
+    /// pump task needs an owned handle; set once by `Door::serve`
+    me: Mutex<Weak<DoorState>>,
+}
+
+impl DoorState {
+    fn arc(&self) -> Option<Arc<DoorState>> {
+        self.me.lock().unwrap().upgrade()
+    }
 }
 
 /// A read-only view for tests and diagnostics — ids, generations, counts;
@@ -139,6 +198,8 @@ pub struct DoorSnapshot {
     pub pre_auth_connections: usize,
     /// (transport high-waters, attach high-waters, nonces)
     pub ledger_sizes: (usize, usize, usize),
+    /// (activationId, clientId, sessionId, presentation, input) as strings
+    pub activations: Vec<(String, String, String, String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -155,6 +216,7 @@ pub struct Door {
     port: u16,
     state: Arc<DoorState>,
     accept_task: tokio::task::JoinHandle<()>,
+    tick_task: tokio::task::JoinHandle<()>,
 }
 
 impl Door {
@@ -165,6 +227,8 @@ impl Door {
             .await
             .context("bind the T1 door on loopback")?;
         let port = listener.local_addr().context("door local address")?.port();
+        let cell_boot_id = config.verifier.cell_boot_id().to_string();
+        let tick = config.tick;
         let state = Arc::new(DoorState {
             config,
             registry: Mutex::new(Registry {
@@ -173,8 +237,12 @@ impl Door {
                 pre_auth_connections: 0,
                 next_connection_id: 1,
                 closed: false,
+                activations: ActivationTable::new(&cell_boot_id),
             }),
+            pumps: Mutex::new(HashMap::new()),
+            me: Mutex::new(Weak::new()),
         });
+        *state.me.lock().unwrap() = Arc::downgrade(&state);
         let accept_state = state.clone();
         let accept_task = tokio::spawn(async move {
             loop {
@@ -199,6 +267,22 @@ impl Door {
                 }
             }
         });
+        let tick_state = state.clone();
+        let tick_task = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tick);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let effects = {
+                    let mut reg = tick_state.registry.lock().unwrap();
+                    if reg.closed {
+                        break;
+                    }
+                    reg.activations.tick(unix_ms())
+                };
+                perform(&tick_state, effects);
+            }
+        });
         tracing::info!(
             event = "field_native.tp.door.serving",
             component = "terminal",
@@ -209,6 +293,7 @@ impl Door {
             port,
             state,
             accept_task,
+            tick_task,
         })
     }
 
@@ -249,6 +334,12 @@ impl Door {
             sets,
             pre_auth_connections: reg.pre_auth_connections,
             ledger_sizes: reg.ledger.sizes(),
+            activations: reg
+                .activations
+                .summary()
+                .into_iter()
+                .map(|(a, c, s, p, i)| (a, c, s, format!("{p:?}"), format!("{i:?}")))
+                .collect(),
         }
     }
 
@@ -271,6 +362,7 @@ impl Door {
     /// bounded moment to leave. Idempotent.
     pub async fn shutdown(&self) {
         self.accept_task.abort();
+        self.tick_task.abort();
         let signalled = {
             let mut reg = self.state.registry.lock().unwrap();
             reg.closed = true;
@@ -294,6 +386,19 @@ impl Door {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }
+        // every pump goes with its leg; stop any straggler
+        let pumps: Vec<PumpHandle> = self
+            .state
+            .pumps
+            .lock()
+            .unwrap()
+            .drain()
+            .map(|(_, p)| p)
+            .collect();
+        for pump in pumps {
+            pump.stop();
+            pump.task.abort();
+        }
         tracing::info!(
             event = "field_native.tp.door.stopped",
             component = "terminal",
@@ -307,10 +412,205 @@ impl Door {
 impl Drop for Door {
     fn drop(&mut self) {
         self.accept_task.abort();
+        self.tick_task.abort();
+    }
+}
+
+// ---- the pump's view of the door --------------------------------------------
+
+impl PumpHost for DoorState {
+    fn try_admit(&self, connection_id: u64, activation_id: &str, bytes: u64) -> Admission {
+        let mut reg = self.registry.lock().unwrap();
+        match reg
+            .activations
+            .can_admit(connection_id, activation_id, bytes)
+        {
+            None => Admission::Gone,
+            Some(false) => Admission::Starved,
+            Some(true) => {
+                reg.activations
+                    .try_admit(connection_id, activation_id, bytes);
+                Admission::Admitted
+            }
+        }
+    }
+
+    fn can_admit(&self, connection_id: u64, activation_id: &str, bytes: u64) -> Admission {
+        let reg = self.registry.lock().unwrap();
+        match reg
+            .activations
+            .can_admit(connection_id, activation_id, bytes)
+        {
+            None => Admission::Gone,
+            Some(false) => Admission::Starved,
+            Some(true) => Admission::Admitted,
+        }
+    }
+
+    fn unit_sent(&self, activation_id: &str, revision: u64, seed: bool) {
+        let effects = {
+            let mut reg = self.registry.lock().unwrap();
+            reg.activations.unit_sent(activation_id, revision, seed)
+        };
+        perform_on(self, effects);
+    }
+
+    fn presentation_stopped(&self, activation_id: &str, reason: &'static str) {
+        let effects = {
+            let mut reg = self.registry.lock().unwrap();
+            reg.activations
+                .presentation_stopped(activation_id, reason, unix_ms())
+        };
+        perform_on(self, effects);
+    }
+
+    fn wants_frames(&self, activation_id: &str) -> bool {
+        self.registry
+            .lock()
+            .unwrap()
+            .activations
+            .wants_frames(activation_id)
+    }
+}
+
+/// Perform the table's effects OUTSIDE its lock (sends, view attach/detach,
+/// pump start/stop/wake). Re-entrant: an attach yields `view_attached`, which
+/// may yield a `StartPump`.
+fn perform(state: &Arc<DoorState>, effects: Vec<Effect>) {
+    perform_on(state, effects);
+}
+
+fn perform_on(state: &DoorState, mut effects: Vec<Effect>) {
+    while !effects.is_empty() {
+        let batch = std::mem::take(&mut effects);
+        for effect in batch {
+            match effect {
+                Effect::Send(leg, text) => leg.send_text(text),
+                Effect::AttachView {
+                    activation_id,
+                    session_id,
+                    client_id,
+                    view_id,
+                    read_write,
+                } => {
+                    let Some(session) = state.config.source.session(&session_id) else {
+                        continue;
+                    };
+                    let access = if read_write {
+                        ViewAccess::ReadWrite
+                    } else {
+                        ViewAccess::ReadOnly
+                    };
+                    match session.attach_view_with_access(&view_id, &client_id, access) {
+                        Ok(epoch) => {
+                            let mut reg = state.registry.lock().unwrap();
+                            effects.extend(reg.activations.view_attached(
+                                &activation_id,
+                                &view_id,
+                                epoch,
+                            ));
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                event = "field_native.tp.door.view_attach_failed",
+                                component = "terminal",
+                                activation_id = %activation_id,
+                                error = %error,
+                                "the engine refused the activation's view"
+                            );
+                        }
+                    }
+                }
+                Effect::DetachView {
+                    activation_id,
+                    session_id,
+                    client_id,
+                    view_id,
+                } => {
+                    if let Some(session) = state.config.source.session(&session_id) {
+                        let _ = session.detach_view(&view_id, &client_id);
+                    }
+                    state
+                        .registry
+                        .lock()
+                        .unwrap()
+                        .activations
+                        .view_detached(&activation_id);
+                }
+                Effect::StartPump { activation_id } => start_pump(state, &activation_id),
+                Effect::StopPump { activation_id } => {
+                    if let Some(pump) = state.pumps.lock().unwrap().remove(&activation_id) {
+                        pump.stop();
+                    }
+                }
+                Effect::WakePump { activation_id } => {
+                    if let Some(pump) = state.pumps.lock().unwrap().get(&activation_id) {
+                        pump.notify.notify_one();
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn start_pump(state: &DoorState, activation_id: &str) {
+    // Everything the pump needs, read under the lock; the spawn happens outside it.
+    let start = {
+        let reg = state.registry.lock().unwrap();
+        let Some(a) = reg.activations.get(activation_id) else {
+            return;
+        };
+        let Some(frames) = a.frames.clone() else {
+            return;
+        };
+        let Some(session) = state.config.source.session(&a.session_id) else {
+            return;
+        };
+        let Some(hub) = state.config.source.frames(&a.session_id) else {
+            return;
+        };
+        let Some(ledger) = reg.activations.credit_ledger(frames.connection_id) else {
+            return;
+        };
+        let session_handle: u64 = session.summary().handle.parse().unwrap_or(0);
+        let per_activation = ledger.per_activation_limit.max(1);
+        let connection = ledger.connection.limit.max(1);
+        let max_chunk = (state.config.protocol_limits.max_presentation_chunk_bytes)
+            .min(per_activation / 2)
+            .min(connection / 2)
+            .max(4096) as usize;
+        PumpStart {
+            activation_id: activation_id.to_string(),
+            session_id: a.session_id.clone(),
+            lease_epoch: a.lease_epoch,
+            connection_id: frames.connection_id,
+            credit_epoch: ledger.credit_epoch,
+            frames,
+            scene_epoch: reg.activations.scene_epoch(session.session_epoch()),
+            session,
+            hub,
+            session_handle,
+            max_chunk_bytes: max_chunk,
+            seed_wait: state.config.seed_wait,
+            catchup_bound: state.config.catchup_bound,
+        }
+    };
+    let Some(host) = state.arc() else {
+        return;
+    };
+    let handle = spawn_pump(host, start);
+    if let Some(previous) = state
+        .pumps
+        .lock()
+        .unwrap()
+        .insert(activation_id.to_string(), handle)
+    {
+        previous.stop();
     }
 }
 
 type Ws = WebSocketStream<TcpStream>;
+type WsSink = SplitSink<Ws, Message>;
 
 /// What the upgrade callback captured: the Origin (if any) and the path.
 #[derive(Default)]
@@ -331,8 +631,6 @@ fn ws_config(limits: &ProtocolLimits) -> WebSocketConfig {
 // Response) — large by their definition, not ours to shrink.
 #[allow(clippy::result_large_err)]
 async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: SocketAddr) {
-    // Count this socket as pre-auth from the first byte; the guard releases it
-    // unless acceptance disarms the guard first.
     // The cap is decided HERE, at arrival, so an earlier socket is never pushed
     // over it by a later one: a socket that finds the cap full is not counted
     // and is refused 1008 once its upgrade completes.
@@ -526,6 +824,12 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         return;
     };
     let (close_tx, mut close_rx) = mpsc::unbounded_channel::<LegClose>();
+    let initial_windows = (channel == Channel::Frames).then(|| {
+        hello
+            .receiver_capacities
+            .map(|advertised| advertised.min_with(state.config.cell_caps))
+            .unwrap_or(state.config.cell_caps)
+    });
     let admitted = {
         let mut reg = state.registry.lock().unwrap();
         if reg.closed {
@@ -574,6 +878,11 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
                         debug_assert!(admission.replaces_current_leg);
                         let _ = previous.close_tx.send(LegClose::Superseded);
                     }
+                    if let Some(windows) = initial_windows {
+                        // §8 law (4): the credit epoch IS the frames-leg generation.
+                        reg.activations
+                            .open_credit(connection_id, leg_generation, windows);
+                    }
                     // Accepted: no longer a pre-auth socket.
                     reg.pre_auth_connections = reg.pre_auth_connections.saturating_sub(1);
                     pre_auth_guard.armed = false;
@@ -594,34 +903,32 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         Some(Ok(g)) => g,
     };
 
-    let initial_windows = (channel == Channel::Frames).then(|| {
-        hello
-            .receiver_capacities
-            .map(|advertised| advertised.min_with(state.config.cell_caps))
-            .unwrap_or(state.config.cell_caps)
-    });
+    // From here the socket is split: a writer task owns the sink, this task reads.
+    let (sink, mut stream) = ws.split();
+    let (out_tx, out_rx) = mpsc::unbounded_channel::<Outbound>();
+    let writer = tokio::spawn(writer_task(sink, out_rx));
+    let leg = LegRef {
+        connection_id,
+        leg_generation,
+        out: out_tx.clone(),
+    };
+    let set_identity = SetIdentity {
+        client_id: claims.client_id.clone(),
+        connection_set_id: claims.connection_set_id.clone(),
+    };
+
     let accepted = ConnectionAccepted {
         selected_protocol_version: version,
         connection_set_id: claims.connection_set_id.clone(),
         channel,
         leg_generation,
         heartbeat_ttl_ms: state.config.heartbeat_ttl.as_millis() as u64,
-        // §8 law (4): the credit epoch IS the frames-leg generation.
         credit_epoch: (channel == Channel::Frames).then_some(leg_generation),
         initial_windows,
         protocol_limits: state.config.protocol_limits,
         capabilities: capability_intersection(&hello.capabilities),
     };
-    if ws
-        .send(Message::Text(
-            tagged("ConnectionAccepted", &accepted).into(),
-        ))
-        .await
-        .is_err()
-    {
-        deregister(&state, &claims.connection_set_id, channel, connection_id);
-        return;
-    }
+    leg.send_text(tagged("ConnectionAccepted", &accepted));
     tracing::info!(
         event = "field_native.tp.door.accepted",
         component = "terminal",
@@ -634,7 +941,8 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         "a T1 leg is accepted"
     );
 
-    // The accepted leg: heartbeats in, acks out, a receipt deadline, closes by signal.
+    // The accepted leg: messages in, replies out through the writer, a receipt
+    // deadline, closes by signal.
     let ttl = state.config.heartbeat_ttl;
     let deadline = tokio::time::sleep(ttl);
     tokio::pin!(deadline);
@@ -649,20 +957,18 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
             _ = &mut deadline => {
                 break (close::LEG_TIMEOUT, "LEG_TIMEOUT".to_string());
             }
-            incoming = ws.next() => {
+            incoming = stream.next() => {
                 match incoming {
                     None | Some(Err(_)) | Some(Ok(Message::Close(_))) => break (0, String::new()),
                     Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) | Some(Ok(Message::Frame(_))) => {}
                     Some(Ok(Message::Binary(_))) => break (close::PROTOCOL, "PROTOCOL:binary-inbound".to_string()),
                     Some(Ok(Message::Text(text))) => {
-                        match handle_text(text.as_str(), channel, &claims.connection_set_id, leg_generation) {
-                            Ok(Some(ack)) => {
-                                if ws.send(Message::Text(ack.into())).await.is_err() {
-                                    break (0, String::new());
+                        match handle_text(&state, &leg, &set_identity, channel, text.as_str()) {
+                            Ok(keepalive) => {
+                                if keepalive {
+                                    deadline.as_mut().reset(tokio::time::Instant::now() + ttl);
                                 }
-                                deadline.as_mut().reset(tokio::time::Instant::now() + ttl);
                             }
-                            Ok(None) => {}
                             Err(reason) => break (close::PROTOCOL, format!("PROTOCOL:{reason}")),
                         }
                     }
@@ -670,10 +976,29 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
             }
         }
     };
+    // Teardown: the leg leaves the set, every activation on it is invalidated
+    // (the lease revoked on the other leg, views detached, pumps stopped), then
+    // the close frame goes out through the writer.
     deregister(&state, &claims.connection_set_id, channel, connection_id);
-    if outcome.0 != 0 {
-        let _ = close_with(&mut ws, outcome.0, &outcome.1).await;
-    }
+    let effects = {
+        let mut reg = state.registry.lock().unwrap();
+        reg.activations.leg_closed(connection_id)
+    };
+    perform(&state, effects);
+    let _ = out_tx.send(Outbound::Close(outcome.0, outcome.1.clone()));
+    drop(out_tx);
+    drop(leg);
+    // let the writer send the close, then drain the reader so the peer's echo
+    // completes the handshake
+    let _ = tokio::time::timeout(Duration::from_millis(500), writer).await;
+    let drain = async {
+        while let Some(next) = stream.next().await {
+            if next.is_err() {
+                break;
+            }
+        }
+    };
+    let _ = tokio::time::timeout(Duration::from_millis(500), drain).await;
     tracing::info!(
         event = "field_native.tp.door.closed",
         component = "terminal",
@@ -684,6 +1009,36 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         reason = %outcome.1,
         "a T1 leg closed"
     );
+}
+
+/// The writer: one task per socket owns the sink; everything to the peer rides
+/// `rx` in order. `Close(0, _)` = the peer already closed (no frame to send).
+async fn writer_task(mut sink: WsSink, mut rx: mpsc::UnboundedReceiver<Outbound>) {
+    while let Some(item) = rx.recv().await {
+        match item {
+            Outbound::Text(t) => {
+                if sink.send(Message::Text(t.into())).await.is_err() {
+                    break;
+                }
+            }
+            Outbound::Binary(b) => {
+                if sink.send(Message::Binary(b.into())).await.is_err() {
+                    break;
+                }
+            }
+            Outbound::Close(code, reason) => {
+                if code != 0 {
+                    let frame = CloseFrame {
+                        code: CloseCode::from(code),
+                        reason: reason.into(),
+                    };
+                    let _ = sink.send(Message::Close(Some(frame))).await;
+                }
+                let _ = sink.flush().await;
+                break;
+            }
+        }
+    }
 }
 
 /// Decrements the pre-auth count if the socket never got accepted.
@@ -726,40 +1081,218 @@ fn parse_hello(text: &str, channel: Channel) -> Result<ConnectionHello, PreAuthF
     Ok(hello)
 }
 
-/// One inbound text frame on an ACCEPTED leg. `Ok(Some(reply))` sends a reply
-/// and re-arms the deadline; `Ok(None)` is silence; `Err(reason)` is a PROTOCOL
-/// close naming the reason.
+/// One inbound text frame on an ACCEPTED leg. `Ok(true)` re-arms the receipt
+/// deadline (a heartbeat or a calibration ping), `Ok(false)` does not,
+/// `Err(reason)` is a PROTOCOL close naming the reason.
 fn handle_text(
-    text: &str,
+    state: &Arc<DoorState>,
+    leg: &LegRef,
+    set: &SetIdentity,
     channel: Channel,
-    connection_set_id: &str,
-    leg_generation: u64,
-) -> Result<Option<String>, String> {
+    text: &str,
+) -> Result<bool, String> {
     let tag: Tagged = serde_json::from_str(text).map_err(|_| "untagged".to_string())?;
-    match tag.message_type.as_str() {
-        "LegHeartbeat" => {
+    match (channel, tag.message_type.as_str()) {
+        (_, "LegHeartbeat") => {
             let hb: LegHeartbeat =
                 serde_json::from_str(text).map_err(|e| format!("heartbeat:{e}"))?;
-            if hb.connection_set_id != connection_set_id
+            if hb.connection_set_id != set.connection_set_id
                 || hb.channel != channel
-                || hb.leg_generation != leg_generation
+                || hb.leg_generation != leg.leg_generation
             {
                 return Err("heartbeat-identity".to_string());
             }
-            Ok(Some(tagged(
+            leg.send_text(tagged(
                 "LegHeartbeatAck",
                 &LegHeartbeatAck {
                     sequence: hb.sequence,
                 },
-            )))
+            ));
+            Ok(true)
         }
-        "ConnectionHello" => Err("hello-after-accept".to_string()),
-        other if inbound_tags(channel).contains(&other) => {
-            // Honest about the slice: the message is known, the door is S3a.
-            Err(format!("unsupported-at-s3a:{other}"))
+        (_, "ConnectionHello") => Err("hello-after-accept".to_string()),
+        (Channel::Control, "AttachControlLeg") => {
+            let msg: AttachControlLeg =
+                serde_json::from_str(text).map_err(|e| format!("attach-control:{e}"))?;
+            attach_control(state, leg, set, msg);
+            Ok(false)
         }
-        other => Err(format!("unknown-type:{other}")),
+        (Channel::Control, "DeclareDemand") => {
+            let msg: DeclareDemand =
+                serde_json::from_str(text).map_err(|e| format!("declare-demand:{e}"))?;
+            let effects = {
+                let mut reg = state.registry.lock().unwrap();
+                reg.activations.declare_demand(leg, msg)
+            };
+            perform(state, effects);
+            Ok(false)
+        }
+        (Channel::Frames, "AttachFramesLeg") => {
+            let msg: AttachFramesLeg =
+                serde_json::from_str(text).map_err(|e| format!("attach-frames:{e}"))?;
+            attach_frames(state, leg, set, msg);
+            Ok(false)
+        }
+        (Channel::Frames, "TransportCredit") => {
+            let msg: TransportCredit =
+                serde_json::from_str(text).map_err(|e| format!("credit:{e}"))?;
+            let effects = {
+                let mut reg = state.registry.lock().unwrap();
+                reg.activations.credit_returned(leg.connection_id, &msg)
+            };
+            perform(state, effects);
+            Ok(false)
+        }
+        (Channel::Frames, "SceneApplied") => {
+            let msg: SceneApplied =
+                serde_json::from_str(text).map_err(|e| format!("scene-applied:{e}"))?;
+            let effects = {
+                let mut reg = state.registry.lock().unwrap();
+                reg.activations.scene_applied(leg, msg, unix_ms())
+            };
+            perform(state, effects);
+            Ok(false)
+        }
+        (Channel::Frames, "CalibrationPing") => {
+            let ping: CalibrationPing =
+                serde_json::from_str(text).map_err(|e| format!("calibration:{e}"))?;
+            // The echo rides the frames leg as a `calibration` unit (no
+            // activation: it is the connection's clock exchange). t1 = receive,
+            // t2 = send, cell clock ms (f64 for sub-ms).
+            let t1 = unix_ms_f64();
+            let header = json!({
+                "creditEpoch": leg.leg_generation,
+                "activationSequence": 0,
+                "sessionId": "-",
+                "activationId": "-",
+                "leaseEpoch": 0,
+                "kind": "calibration",
+                "calibration": { "sequence": ping.sequence, "t0": ping.t0, "t1": t1, "t2": unix_ms_f64() },
+            });
+            let _ = leg
+                .out
+                .send(Outbound::Binary(encode_envelope(&header, &[])));
+            Ok(true)
+        }
+        (_, other) if inbound_tags(channel).contains(&other) => {
+            // Known to the contract, not to this slice (the geometry verbs are S3c's).
+            Err(format!("unsupported-at-s3b:{other}"))
+        }
+        (_, other) => Err(format!("unknown-type:{other}")),
     }
+}
+
+fn unix_ms_f64() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64() * 1000.0)
+        .unwrap_or(0.0)
+}
+
+fn refuse_attach(leg: &LegRef, activation_id: String, code: &str, retryable: bool) {
+    leg.send_text(tagged(
+        "AttachRefused",
+        &AttachRefused {
+            activation_id: Some(activation_id),
+            code: code.to_string(),
+            retryable,
+        },
+    ));
+}
+
+/// `AttachControlLeg`: verify the attach grant (a failure is ONE structured
+/// `GRANT_INVALID`, the precise code in the audit line), admit its generation
+/// against the attach high-water, then let the table decide.
+fn attach_control(state: &Arc<DoorState>, leg: &LegRef, set: &SetIdentity, msg: AttachControlLeg) {
+    let now = unix_ms();
+    let claims = match state.config.verifier.verify_attach(&msg.attach_grant, now) {
+        Ok(c) => c,
+        Err(failure) => {
+            tracing::info!(
+                event = "field_native.tp.attach.refused",
+                component = "terminal",
+                code = "GRANT_INVALID",
+                detail = %failure,
+                connection_set_id = %set.connection_set_id,
+                activation_id = %msg.activation_id,
+                "an attach grant did not verify"
+            );
+            refuse_attach(leg, msg.activation_id, "GRANT_INVALID", false);
+            return;
+        }
+    };
+    let session_known = state.config.source.session(&claims.session_id).is_some();
+    let effects = {
+        let mut reg = state.registry.lock().unwrap();
+        if !reg.ledger.accept_attach_generation(
+            &claims.client_id,
+            &claims.session_id,
+            claims.grant_generation,
+            now,
+        ) {
+            vec![Effect::Send(
+                leg.clone(),
+                tagged(
+                    "AttachRefused",
+                    &AttachRefused {
+                        activation_id: Some(msg.activation_id.clone()),
+                        code: "GRANT_GENERATION_ROLLBACK".to_string(),
+                        retryable: false,
+                    },
+                ),
+            )]
+        } else {
+            reg.activations.attach_control(AttachControlInput {
+                now_ms: now,
+                set,
+                leg,
+                msg,
+                claims,
+                session_known,
+            })
+        }
+    };
+    perform(state, effects);
+}
+
+fn attach_frames(state: &Arc<DoorState>, leg: &LegRef, set: &SetIdentity, msg: AttachFramesLeg) {
+    let now = unix_ms();
+    let claims = match state.config.verifier.verify_attach(&msg.attach_grant, now) {
+        Ok(c) => c,
+        Err(failure) => {
+            tracing::info!(
+                event = "field_native.tp.attach.refused",
+                component = "terminal",
+                code = "GRANT_INVALID",
+                detail = %failure,
+                connection_set_id = %set.connection_set_id,
+                activation_id = %msg.activation_id,
+                "an attach grant did not verify (frames leg)"
+            );
+            refuse_attach(leg, msg.activation_id, "GRANT_INVALID", false);
+            return;
+        }
+    };
+    let trf_identity = state.config.source.session(&claims.session_id).map(|s| {
+        let handle = s.summary().handle;
+        TrfIdentity {
+            session_handle: handle.clone(),
+            view_handle: handle,
+        }
+    });
+    let resume_token = hex::encode(rand::random::<[u8; 16]>());
+    let effects = {
+        let mut reg = state.registry.lock().unwrap();
+        reg.activations.attach_frames(AttachFramesInput {
+            set,
+            leg,
+            msg,
+            claims,
+            trf_identity,
+            resume_token,
+        })
+    };
+    perform(state, effects);
 }
 
 fn deregister(state: &DoorState, connection_set_id: &str, channel: Channel, connection_id: u64) {

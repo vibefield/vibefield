@@ -1255,6 +1255,16 @@ export const FAILURE_MATRIX: readonly FailureRow[] = [
     audit: "cell: tp.attach.refused {replay suspected}",
   },
   {
+    code: "GRANT_INVALID",
+    family: "attach-refusal",
+    wire: "AttachRefused {code, retryable:false}",
+    retryable: false,
+    whoRetries: "runtime",
+    how: "the attach grant did not verify (bad MAC / key / type / audience / validity / client) — terminal for that grant: re-mint via openTicket or renewAttach, then attach again",
+    userFace: "recovering face; UNAVAILABLE {reason: grant-invalid} after the re-mint fails",
+    audit: "cell: tp.attach.refused {grant-invalid: <silent code>}",
+  },
+  {
     code: "STALE_ROUTE",
     family: "attach-refusal",
     wire: "AttachRefused {code, retryable:true} (and 4000 at the door)",

@@ -221,6 +221,246 @@ pub struct LegHeartbeatAck {
     pub sequence: u64,
 }
 
+// ---------------------------------------------------------------------------
+// TP-S3b — session activation, demand, the lease, credits, transfers (contracts
+// §5.4 / §7 / §8). Inbound shapes deserialize tolerantly; outbound shapes
+// serialize exactly (the fixtures pin them). Grants stay `Value` until verified.
+
+/// Contracts `SceneEpoch` — source-content LINEAGE: the cell boot + the model
+/// generation; a new epoch always seeds.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SceneEpoch {
+    pub cell_boot_id: String,
+    pub model_generation: u64,
+}
+
+/// Contracts `SceneContentStamp` — the ONLY stamp on the wire.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SceneContentStamp {
+    pub scene_epoch: SceneEpoch,
+    pub scene_revision: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SourceDemandMode {
+    None,
+    Snapshot,
+    Live,
+}
+
+/// Contracts `SourceDemand`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceDemand {
+    pub mode: SourceDemandMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cadence_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub urgency: Option<String>,
+}
+
+/// Contracts `DeclareDemand` (control leg, client → cell).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeclareDemand {
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
+    pub demand_sequence: u64,
+    pub demand: SourceDemand,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DemandAccepted {
+    pub demand_sequence: u64,
+}
+
+/// Contracts `AttachControlLeg` (control leg). The grant stays a `Value`
+/// until it verifies (grant.rs); sessionId/leaseEpoch/routeRevision/rights
+/// are DERIVED from it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachControlLeg {
+    pub activation_id: String,
+    pub attach_grant: Value,
+    #[serde(default)]
+    pub replaces_activation_id: Option<String>,
+    pub initial_demand: SourceDemand,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlLegAttached {
+    pub session_id: String,
+    pub activation_id: String,
+    pub grant_generation_accepted: u64,
+    pub rights: Vec<super::grant::AttachRight>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachRefused {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_id: Option<String>,
+    pub code: String,
+    pub retryable: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResumeRequest {
+    pub resume_token: String,
+    pub from: SceneContentStamp,
+}
+
+/// Contracts `AttachFramesLeg` (frames leg).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachFramesLeg {
+    pub activation_id: String,
+    pub attach_grant: Value,
+    #[serde(default)]
+    pub resume: Option<ResumeRequest>,
+}
+
+/// Contracts `TrfIdentity` — u64 handles as decimal strings.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TrfIdentity {
+    pub session_handle: String,
+    pub view_handle: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FramesAttachOutcome {
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<SceneContentStamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub newest_available: Option<SceneContentStamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FramesLegAttached {
+    pub session_id: String,
+    pub activation_id: String,
+    pub resume_token: String,
+    pub trf_identity: TrfIdentity,
+    pub outcome: FramesAttachOutcome,
+}
+
+/// Contracts `SceneApplied` (frames leg, worker → cell).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SceneApplied {
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
+    pub applied_content: SceneContentStamp,
+}
+
+/// One dimension of the lease (`PresentationDimension` / `InputDimension`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LeaseDimension {
+    pub state: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl LeaseDimension {
+    pub fn new(state: &str, reason: Option<&str>) -> Self {
+        Self {
+            state: state.to_string(),
+            reason: reason.map(str::to_string),
+        }
+    }
+}
+
+/// Contracts `CellActivationStatus` (control leg, cell → main) — the
+/// revocable lease with its two dimensions.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CellActivationStatus {
+    pub session_id: String,
+    pub activation_id: String,
+    pub cell_status_sequence: u64,
+    pub lease_ttl_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accepted_content: Option<SceneContentStamp>,
+    pub presentation: LeaseDimension,
+    pub input: LeaseDimension,
+}
+
+/// Contracts `TransportCredit` (frames leg, worker → cell): cumulative BYTES.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransportCredit {
+    pub credit_epoch: u64,
+    pub credit_sequence: u64,
+    pub connection_bytes_returned: u64,
+    #[serde(default)]
+    pub accounts: Vec<CreditAccountReturn>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreditAccountReturn {
+    pub activation_id: String,
+    pub bytes_returned: u64,
+}
+
+/// Contracts `CalibrationPing` (frames leg, worker → cell; doubles as the
+/// frames heartbeat).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalibrationPing {
+    pub sequence: u64,
+    pub t0: f64,
+}
+
+/// The presentation envelope's binary framing (contracts
+/// `encodePresentationEnvelope`): `'T' 'P' 1 0 u32BE headerLen | header JSON |
+/// payload`. The header is built as a `Value` because `baseContent` has three
+/// states the contract distinguishes (absent · null · a stamp).
+pub const ENVELOPE_PREFIX_BYTES: usize = 8;
+pub const ENVELOPE_MAX_HEADER_BYTES: usize = 4096;
+
+pub fn encode_envelope(header: &Value, payload: &[u8]) -> Vec<u8> {
+    let header_bytes = serde_json::to_vec(header).expect("envelope header serializes");
+    debug_assert!(header_bytes.len() <= ENVELOPE_MAX_HEADER_BYTES);
+    let mut out = Vec::with_capacity(ENVELOPE_PREFIX_BYTES + header_bytes.len() + payload.len());
+    out.extend_from_slice(&[0x54, 0x50, 1, 0]);
+    out.extend_from_slice(&(header_bytes.len() as u32).to_be_bytes());
+    out.extend_from_slice(&header_bytes);
+    out.extend_from_slice(payload);
+    out
+}
+
+/// Decode (the test client's half, and a sanity check the cell runs on its
+/// own output in tests): `(header, payload)`.
+pub fn decode_envelope(bytes: &[u8]) -> Option<(Value, &[u8])> {
+    if bytes.len() < ENVELOPE_PREFIX_BYTES || bytes[0] != 0x54 || bytes[1] != 0x50 || bytes[2] != 1
+    {
+        return None;
+    }
+    let len = u32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
+    if len > ENVELOPE_MAX_HEADER_BYTES || ENVELOPE_PREFIX_BYTES + len > bytes.len() {
+        return None;
+    }
+    let header: Value =
+        serde_json::from_slice(&bytes[ENVELOPE_PREFIX_BYTES..ENVELOPE_PREFIX_BYTES + len]).ok()?;
+    Some((header, &bytes[ENVELOPE_PREFIX_BYTES + len..]))
+}
+
 /// The wire capabilities this cell speaks in the v1 core profile: none of the
 /// three (`resume`, `snapshot-demand`, `profiling-envelope`) yet — the
 /// intersection it echoes is therefore empty; a client's unknown strings are

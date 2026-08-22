@@ -481,12 +481,13 @@ async fn anything_beyond_the_connection_layer_is_an_honest_protocol_close() {
     let m = minter();
     let door = Door::serve(config(&m)).await.expect("serve");
 
-    // a KNOWN control message the S3a door does not serve yet
+    // a KNOWN control message the S3b door does not serve yet (the geometry
+    // verbs are S3c's): an honest PROTOCOL close naming the slice
     let g1 = m.transport(TransportSpec::basic("set-i", 1, "n-i1"));
     let (mut ws, _) = dial(&door.control_url(), None).await;
     expect_accepted(say_hello(&mut ws, "control", &g1, None).await);
     ws.send(Message::Text(
-        json!({"type":"AttachControlLeg","activationId":"a1","attachGrant":{},"initialDemand":{"mode":"live"}})
+        json!({"type":"ClaimGeometry","sessionId":"s","activationId":"a1","leaseEpoch":0,"claimant":{"clientId":"c","viewId":"v"},"cols":80,"rows":24,"expectRevision":0})
             .to_string()
             .into(),
     ))
@@ -495,11 +496,30 @@ async fn anything_beyond_the_connection_layer_is_an_honest_protocol_close() {
     expect_close(
         next_reply(&mut ws).await,
         4003,
-        "PROTOCOL:unsupported-at-s3a:AttachControlLeg",
+        "PROTOCOL:unsupported-at-s3b:ClaimGeometry",
     );
+    // an attach whose grant is not a grant at all: ONE structured refusal, the leg lives
+    let g1b = m.transport(TransportSpec::basic("set-i", 2, "n-i1b"));
+    let (mut ws, _) = dial(&door.control_url(), None).await;
+    expect_accepted(say_hello(&mut ws, "control", &g1b, None).await);
+    ws.send(Message::Text(
+        json!({"type":"AttachControlLeg","activationId":"a1","attachGrant":{},"initialDemand":{"mode":"live"}})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    match next_reply(&mut ws).await {
+        Reply::Text(v) => {
+            assert_eq!(v["type"], "AttachRefused");
+            assert_eq!(v["code"], "GRANT_INVALID");
+            assert_eq!(v["activationId"], "a1");
+        }
+        other => panic!("expected AttachRefused, got {other:?}"),
+    }
 
     // an unknown tag
-    let g2 = m.transport(TransportSpec::basic("set-i", 2, "n-i2"));
+    let g2 = m.transport(TransportSpec::basic("set-i", 3, "n-i2"));
     let (mut ws, _) = dial(&door.control_url(), None).await;
     expect_accepted(say_hello(&mut ws, "control", &g2, None).await);
     ws.send(Message::Text(json!({"type":"Nope"}).to_string().into()))
@@ -512,7 +532,7 @@ async fn anything_beyond_the_connection_layer_is_an_honest_protocol_close() {
     );
 
     // binary on an accepted leg
-    let g3 = m.transport(TransportSpec::basic("set-i", 3, "n-i3"));
+    let g3 = m.transport(TransportSpec::basic("set-i", 4, "n-i3"));
     let (mut ws, _) = dial(&door.control_url(), None).await;
     expect_accepted(say_hello(&mut ws, "control", &g3, None).await);
     ws.send(Message::Binary(vec![0x54, 0x50].into()))

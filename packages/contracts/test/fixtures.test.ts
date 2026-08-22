@@ -50,6 +50,7 @@ import { TerminalCreateParams, TerminalTicket } from "../src/terminal";
 import {
   AttachControlLeg,
   AttachFramesLeg,
+  AttachRefused,
   CellActivationStatus,
   CellTransportGrant,
   ClaimGeometry,
@@ -144,6 +145,7 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-transport-credit": TransportCredit,
   "tp-roster-item": ProductSessionRosterItem,
   "tp-envelope-header": PresentationEnvelopeHeader,
+  "tp-attach-refused": AttachRefused,
   "tp-protocol-limits": ProtocolLimits,
   "tp-tagged-message": TaggedTpMessage,
 };

@@ -28,10 +28,14 @@
 //! checkpoint). The cell logs the audit line for every refusal and NEVER the
 //! grant, the key, or a claim value (EL7).
 
+pub mod activation;
+pub mod crc32c;
 pub mod door;
 pub mod grant;
 pub mod jcs;
 pub mod ledger;
+pub mod presentation;
+pub mod source;
 pub mod wire;
 
 /// Wall-clock milliseconds since the Unix epoch — grant validity is the ONLY
