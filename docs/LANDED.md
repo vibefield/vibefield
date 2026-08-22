@@ -3340,3 +3340,20 @@ exonerated by probes (`accepted:true` on the claimed pane and on an unclaimed co
 verbatim green; `smoke:godview` `ok:true` twice (`flipObserved: true`, `consentShown` via the
 real roster, `claimedExisting: true`).
 
+## TP-S2b — the smoke witnesses zoom.commits, and measures the panes nobody zoomed
+
+2026-08-22, `98d2d6e` (the S2 Opus agent; one file, `electron-shell/src/testing/smoke.ts`).
+Row 4c, placed right after the split because a zoom with one pane is a no-op that would pass
+without the feature (it throws on fewer than two): `zoom.commits` 0 → 1 → 2 across one gesture
+each way (baseline asserted 0, not assumed), AND the pane boxes read from the live page — the
+floor's inventory carries no geometry — exactly one box may move and it must be the pane the deck
+marked `data-vf-zoom-pane`: `590x446 → 1180x446`, the sibling untouched to the pixel, the layout
+round-tripped exactly. The chord ⌘⇧Enter is delivered (`zoomDriver: "chord"`, measured); a chord
+producing no phase change within 6 s falls back to the chip, and that path was exercised by
+suppressing the press for one build. `DeckFacts.zoom` is the only optional field, so a pre-S2
+bundle fails on a behaviour, not a missing field. The agent's control run found the fleet
+blocker of the hour: `resource_governance::fd_exhaustion…` red on CLEAN main because the machine
+held 527 ptys against `kern.tty.ptmx_max` 511 — 86 `field-terminal-host`s under ~15 vf-s0c floors
+leaked by the perf-lab runs; reaped (ptys → 57), the S0c harness told to reap by path, cap and
+assert. Gate verbatim green on the merged main afterwards.
+
