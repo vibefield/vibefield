@@ -20,6 +20,9 @@ pub mod resource_pressure;
 pub mod rlimit;
 pub mod services;
 pub mod state;
+/// TP-S3a — the cell-side T1 door layer (terminal-pipeline-v3 §5.1/§8, TP-D26):
+/// grant verification, the transport ledger, the wire types and the WS doors.
+pub mod tp;
 
 use anyhow::{Context, Result};
 use std::fs;

@@ -1,5 +1,6 @@
-import { z } from "zod";
-import { TerminalWorkloadClass } from "./envelope";
+import { type ZodTypeAny, z } from "zod";
+import { CellEndpointSet, TerminalWorkloadClass } from "./envelope";
+import { TERMINAL_PIPELINE, TERMINAL_PIPELINE_CLOSE_CODES } from "./registries";
 import { TerminalCreateResult, TerminalObservation, TerminalTicket } from "./terminal";
 
 // The terminal pipeline (TPv3) — custody through pixels. The wire truth for
@@ -60,19 +61,9 @@ export const RouteBinding = z
   .passthrough();
 export type RouteBinding = z.infer<typeof RouteBinding>;
 
-const LOOPBACK_WS = /^wss?:\/\/(127\.0\.0\.1|\[::1\]|localhost)(:\d{1,5})?(\/[^?#]*)?$/;
-
-/** The two loopback WebSocket doors of one cell (T1 — spec §8). Transport-
- * private: the renderer's routed transport dials them, UI never sees them.
- * Tokens NEVER ride URLs (no query, no fragment) — authority is the grant in
- * the first frame. */
-export const CellEndpointSet = z
-  .object({
-    controlUrl: z.string().regex(LOOPBACK_WS, "a loopback ws:// URL without query/fragment"),
-    framesUrl: z.string().regex(LOOPBACK_WS, "a loopback ws:// URL without query/fragment"),
-  })
-  .passthrough();
-export type CellEndpointSet = z.infer<typeof CellEndpointSet>;
+// `CellEndpointSet` (the two loopback WS doors of one cell) lives in envelope.ts
+// since TP-S3a: the ROUTE ROW carries it from the floor to fieldd, which copies
+// it into `TerminalOpenTicket.endpoints` below.
 
 /** Source-content LINEAGE: changes ONLY when delta continuity breaks (a new
  * cell boot, a model reset/new incarnation, migration to a different model
@@ -293,9 +284,11 @@ export const GrantValidityLimits = z
   })
   .passthrough();
 export type GrantValidityLimits = z.infer<typeof GrantValidityLimits>;
+/** The numbers live in registries.ts (`TERMINAL_PIPELINE`) so the Rust cell
+ * verifies with the SAME constants by generation (NF-D9), never by retyping. */
 export const DEFAULT_GRANT_VALIDITY_LIMITS: GrantValidityLimits = {
-  maxClockSkewMs: 5_000,
-  maxGrantLifetimeMs: 10 * 60_000,
+  maxClockSkewMs: TERMINAL_PIPELINE.MAX_CLOCK_SKEW_MS,
+  maxGrantLifetimeMs: TERMINAL_PIPELINE.MAX_GRANT_LIFETIME_MS,
 };
 
 export type GrantValidity = "valid" | "not-yet-valid" | "expired" | "lifetime-exceeded";
@@ -486,6 +479,56 @@ export const ProtocolLimits = z
   .passthrough();
 export type ProtocolLimits = z.infer<typeof ProtocolLimits>;
 
+/** §20 item 5 — the numeric defaults WITH their owners, as data. Every value is
+ * PROVISIONAL until the post-S0 numeric ratification checkpoint (spec §15/§16);
+ * the numbers themselves live in registries.ts `TERMINAL_PIPELINE` and reach
+ * the Rust cell by generation. Pinned by `fixtures/tp-protocol-limits.defaults.json`. */
+export const TP_PROTOCOL_VERSION: ProtocolVersion = {
+  major: TERMINAL_PIPELINE.PROTOCOL_MAJOR,
+  minor: TERMINAL_PIPELINE.PROTOCOL_MINOR,
+};
+
+/** Owner: the CELL. Announced in `ConnectionAccepted.protocolLimits`. */
+export const DEFAULT_PROTOCOL_LIMITS: ProtocolLimits = {
+  maxControlMessageBytes: TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES,
+  maxPresentationChunkBytes: TERMINAL_PIPELINE.MAX_PRESENTATION_CHUNK_BYTES,
+  maxBatchLatencyMs: TERMINAL_PIPELINE.MAX_BATCH_LATENCY_MS,
+  maxCreditReturnDelayMs: TERMINAL_PIPELINE.MAX_CREDIT_RETURN_DELAY_MS,
+  maxSceneAppliedDelayMs: TERMINAL_PIPELINE.MAX_SCENE_APPLIED_DELAY_MS,
+  sceneAppliedRefreshMs: TERMINAL_PIPELINE.SCENE_APPLIED_REFRESH_MS,
+  presentationStatusRefreshMs: TERMINAL_PIPELINE.PRESENTATION_STATUS_REFRESH_MS,
+  activationAttachDeadlineMs: TERMINAL_PIPELINE.ACTIVATION_ATTACH_DEADLINE_MS,
+  maxActivationCatchupMs: TERMINAL_PIPELINE.MAX_ACTIVATION_CATCHUP_MS,
+  maxCatchupBytes: TERMINAL_PIPELINE.MAX_CATCHUP_BYTES,
+  creditAccountDrainTtlMs: TERMINAL_PIPELINE.CREDIT_ACCOUNT_DRAIN_TTL_MS,
+};
+
+/** Owner: the CELL's own receive-side caps. The frames leg's initial windows
+ * are MIN(the worker's advertised `receiverCapacities`, these) — receive
+ * capacity is the worker's; the cell only bounds it (spec §5.1, §8). */
+export const DEFAULT_CELL_RECEIVER_CAPS: ReceiverCapacities = {
+  connectionCreditBytes: TERMINAL_PIPELINE.CELL_CONNECTION_CREDIT_BYTES,
+  perActivationCreditBytes: TERMINAL_PIPELINE.CELL_PER_ACTIVATION_CREDIT_BYTES,
+  stagingBytesPerSession: TERMINAL_PIPELINE.CELL_STAGING_BYTES_PER_SESSION,
+  stagingBytesTotal: TERMINAL_PIPELINE.CELL_STAGING_BYTES_TOTAL,
+  maxConcurrentActivations: TERMINAL_PIPELINE.CELL_MAX_CONCURRENT_ACTIVATIONS,
+  maxConcurrentSeeds: TERMINAL_PIPELINE.CELL_MAX_CONCURRENT_SEEDS,
+};
+
+/** Owner: the CELL (door hygiene, spec §8): the first frame must be a HELLO
+ * within `helloDeadlineMs`; a pre-auth socket may send at most
+ * `preAuthMaxBytes`; at most `preAuthConnectionCap` sockets may sit pre-auth;
+ * the leg's heartbeat receipt deadline is `heartbeatTtlMs` (the client
+ * heartbeats every `heartbeatIntervalMs`). */
+export const TP_DOOR_LIMITS = {
+  helloDeadlineMs: TERMINAL_PIPELINE.HELLO_DEADLINE_MS,
+  preAuthMaxBytes: TERMINAL_PIPELINE.PRE_AUTH_MAX_BYTES,
+  preAuthConnectionCap: TERMINAL_PIPELINE.PRE_AUTH_CONNECTION_CAP,
+  maxConnectionSets: TERMINAL_PIPELINE.MAX_CONNECTION_SETS,
+  heartbeatIntervalMs: TERMINAL_PIPELINE.HEARTBEAT_INTERVAL_MS,
+  heartbeatTtlMs: TERMINAL_PIPELINE.HEARTBEAT_TTL_MS,
+} as const;
+
 /** First frame on either socket. clientId · connectionSetId ·
  * transportGrantGeneration are DERIVED from the verified grant, never
  * repeated here; `channel` must be ∈ the grant's `allowedChannels`. */
@@ -561,17 +604,7 @@ export type PreAuthFailureCode = z.infer<typeof PreAuthFailureCode>;
 /** WebSocket close codes (spec §5.1). `1008` = every pre-authentication
  * failure, silent by policy; `1011` server error; 4000+ protocol-specific and
  * always named. */
-export const TP_CLOSE_CODES = {
-  GOING_AWAY: 1001,
-  POLICY_PRE_AUTH: 1008,
-  SERVER_ERROR: 1011,
-  STALE_ROUTE: 4000,
-  FENCED: 4001,
-  SUPERSEDED: 4002,
-  PROTOCOL: 4003,
-  /** the heartbeat receipt deadline passed — the detecting side closes */
-  LEG_TIMEOUT: 4004,
-} as const;
+export const TP_CLOSE_CODES = TERMINAL_PIPELINE_CLOSE_CODES;
 
 export const LegHeartbeat = z
   .object({
@@ -1167,4 +1200,149 @@ export function decodePresentationEnvelope(bytes: Uint8Array): PresentationEnvel
     envelope: { header: parsed.data, payload: bytes.subarray(headerEnd) },
     chargedBytes: bytes.byteLength,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Message tagging (TP-S3a, spec §5.1/§5.4/§6/§7/§8 as ONE wire): every JSON
+// text message on either leg is `{ type: <MessageName>, ...body }` — the tag is
+// the schema's name, the body is the untagged shape above (bodies never carry
+// `type`). Binary frames-leg messages are PresentationEnvelopes and carry no
+// tag. Which tags a leg accepts in which direction is data here; a tag outside
+// the leg's inbound set is a PROTOCOL error after acceptance and
+// HELLO_MALFORMED before it (the first frame must be ConnectionHello).
+
+export const TpMessageType = z.enum([
+  "ConnectionHello",
+  "ConnectionAccepted",
+  "ConnectionRefused",
+  "LegHeartbeat",
+  "LegHeartbeatAck",
+  "AttachControlLeg",
+  "ControlLegAttached",
+  "AttachRefused",
+  "DeclareDemand",
+  "DemandAccepted",
+  "CellActivationStatus",
+  "ClaimGeometry",
+  "ReleaseGeometry",
+  "TransferGeometry",
+  "GeometryCommitted",
+  "GeometryRefused",
+  "AttachFramesLeg",
+  "FramesLegAttached",
+  "TransportCredit",
+  "SceneApplied",
+  "CalibrationPing",
+]);
+export type TpMessageType = z.infer<typeof TpMessageType>;
+
+/** The body schema behind each tag. */
+export const TP_MESSAGE_SCHEMAS: Readonly<Record<TpMessageType, ZodTypeAny>> = {
+  ConnectionHello,
+  ConnectionAccepted,
+  ConnectionRefused,
+  LegHeartbeat,
+  LegHeartbeatAck,
+  AttachControlLeg,
+  ControlLegAttached,
+  AttachRefused,
+  DeclareDemand,
+  DemandAccepted,
+  CellActivationStatus,
+  ClaimGeometry,
+  ReleaseGeometry,
+  TransferGeometry,
+  GeometryCommitted,
+  GeometryRefused,
+  AttachFramesLeg,
+  FramesLegAttached,
+  TransportCredit,
+  SceneApplied,
+  CalibrationPing,
+};
+
+/** client → cell, per leg. */
+export const TP_LEG_INBOUND: Readonly<Record<TransportChannel, readonly TpMessageType[]>> = {
+  control: [
+    "ConnectionHello",
+    "LegHeartbeat",
+    "AttachControlLeg",
+    "DeclareDemand",
+    "ClaimGeometry",
+    "ReleaseGeometry",
+    "TransferGeometry",
+  ],
+  frames: [
+    "ConnectionHello",
+    "LegHeartbeat",
+    "AttachFramesLeg",
+    "TransportCredit",
+    "SceneApplied",
+    "CalibrationPing",
+  ],
+};
+
+/** cell → client, per leg (JSON text; the frames leg's presentation units are binary). */
+export const TP_LEG_OUTBOUND: Readonly<Record<TransportChannel, readonly TpMessageType[]>> = {
+  control: [
+    "ConnectionAccepted",
+    "ConnectionRefused",
+    "LegHeartbeatAck",
+    "ControlLegAttached",
+    "AttachRefused",
+    "DemandAccepted",
+    "CellActivationStatus",
+    "GeometryCommitted",
+    "GeometryRefused",
+  ],
+  frames: [
+    "ConnectionAccepted",
+    "ConnectionRefused",
+    "LegHeartbeatAck",
+    "FramesLegAttached",
+    "AttachRefused",
+  ],
+};
+
+/** The tag alone — what a receiver reads FIRST (the body is parsed with the
+ * tag's schema after the leg/direction check). Fixture prefix `tp-tagged-message`. */
+export const TaggedTpMessage = z.object({ type: TpMessageType }).passthrough();
+export type TaggedTpMessage = z.infer<typeof TaggedTpMessage>;
+
+export function tagTpMessage<T extends TpMessageType>(
+  type: T,
+  body: z.input<(typeof TP_MESSAGE_SCHEMAS)[T]>,
+): Record<string, unknown> {
+  return { type, ...(body as Record<string, unknown>) };
+}
+
+export type TpMessageDecodeError =
+  | "not-an-object"
+  | "missing-type"
+  | "unknown-type"
+  | "not-allowed-here"
+  | "invalid";
+
+export type TpMessageDecodeResult =
+  | { ok: true; type: TpMessageType; body: unknown }
+  | { ok: false; error: TpMessageDecodeError; issues?: z.ZodIssue[] };
+
+/** Decode one JSON text message against the tags `allowed` on this leg in this
+ * direction. `type` is stripped from the body before the body parses, so a
+ * tolerant `.passthrough()` body never smuggles a second tag. */
+export function decodeTpMessage(
+  raw: unknown,
+  allowed: readonly TpMessageType[],
+): TpMessageDecodeResult {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    return { ok: false, error: "not-an-object" };
+  const record = raw as Record<string, unknown>;
+  if (typeof record["type"] !== "string") return { ok: false, error: "missing-type" };
+  const tag = TpMessageType.safeParse(record["type"]);
+  if (!tag.success) return { ok: false, error: "unknown-type" };
+  if (!allowed.includes(tag.data)) return { ok: false, error: "not-allowed-here" };
+  const { type: _type, ...body } = record;
+  const parsed = TP_MESSAGE_SCHEMAS[tag.data].safeParse(body);
+  if (!parsed.success) return { ok: false, error: "invalid", issues: parsed.error.issues };
+  return { ok: true, type: tag.data, body: parsed.data };
 }

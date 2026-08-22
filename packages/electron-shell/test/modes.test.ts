@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isSmokeLike, parseMode, type ShellMode, shutdownPolicy } from "../src/main/modes";
+import {
+  isSmokeLike,
+  parseDirectTerminalDoor,
+  parseMode,
+  type ShellMode,
+  shutdownPolicy,
+} from "../src/main/modes";
 
 // Mode selection is parsed ONCE (ESR §5.2.6). These lock the precedence, the
 // smoke-like classification, and the daemon-lifetime policy so no downstream
@@ -14,6 +20,7 @@ const ALL_MODES: readonly ShellMode[] = [
   "smoke-godview",
   "live-surfaces-lab",
   "terminal-perf-lab",
+  "terminal-door-probe",
   "spike-loro",
 ];
 
@@ -32,6 +39,7 @@ describe("parseMode", () => {
     expect(parseMode(["--smoke-godview"])).toBe("smoke-godview");
     expect(parseMode(["--live-surfaces-lab"])).toBe("live-surfaces-lab");
     expect(parseMode(["--terminal-perf-lab"])).toBe("terminal-perf-lab");
+    expect(parseMode(["--terminal-door-probe"])).toBe("terminal-door-probe");
     expect(parseMode(["--spike-loro"])).toBe("spike-loro");
   });
 
@@ -71,6 +79,7 @@ describe("isSmokeLike", () => {
     "smoke-godview",
     "live-surfaces-lab",
     "terminal-perf-lab",
+    "terminal-door-probe",
     "spike-loro",
   ]);
 
@@ -96,10 +105,24 @@ describe("shutdownPolicy", () => {
     // pair against its own data root and drives real sessions through it, so it
     // owns what it started and stops it.
     "terminal-perf-lab": "stop-owned",
+    // TP-S3a: the door probe is the perf lab's shape — its own pair, stop-owned.
+    "terminal-door-probe": "stop-owned",
     "spike-loro": "leave-running",
   };
 
   it.each(ALL_MODES)("%s", (mode) => {
     expect(shutdownPolicy(mode)).toBe(expected[mode]);
+  });
+});
+
+describe("parseDirectTerminalDoor (TP-S3a — TP-D1's rollback flag)", () => {
+  it("is OFF by default, ON by argv or env, and implied by the door probe", () => {
+    expect(parseDirectTerminalDoor([], {})).toBe(false);
+    expect(parseDirectTerminalDoor(["--smoke"], { VIBEFIELD_TERMINAL_DIRECT_DOOR: "0" })).toBe(
+      false,
+    );
+    expect(parseDirectTerminalDoor(["--terminal-direct-door"], {})).toBe(true);
+    expect(parseDirectTerminalDoor([], { VIBEFIELD_TERMINAL_DIRECT_DOOR: "1" })).toBe(true);
+    expect(parseDirectTerminalDoor(["--terminal-door-probe"], {})).toBe(true);
   });
 });

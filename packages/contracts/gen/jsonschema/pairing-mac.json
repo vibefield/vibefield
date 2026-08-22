@@ -29,6 +29,24 @@
     "PairingMac": {
       "$ref": "#/definitions/PairingMac"
     },
+    "CellEndpointSet": {
+      "type": "object",
+      "properties": {
+        "controlUrl": {
+          "type": "string",
+          "pattern": "^wss?:\\/\\/(127\\.0\\.0\\.1|\\[::1\\]|localhost)(:\\d{1,5})?(\\/[^?#]*)?$"
+        },
+        "framesUrl": {
+          "type": "string",
+          "pattern": "^wss?:\\/\\/(127\\.0\\.0\\.1|\\[::1\\]|localhost)(:\\d{1,5})?(\\/[^?#]*)?$"
+        }
+      },
+      "required": [
+        "controlUrl",
+        "framesUrl"
+      ],
+      "additionalProperties": true
+    },
     "TerminalEndpoints": {
       "type": "object",
       "properties": {
@@ -86,6 +104,9 @@
         },
         "grantKeyGeneration": {
           "type": "integer"
+        },
+        "doors": {
+          "$ref": "#/definitions/CellEndpointSet"
         },
         "workloadClass": {
           "$ref": "#/definitions/TerminalWorkloadClass"

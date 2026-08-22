@@ -18,6 +18,7 @@ import {
   DiagnosticProducerStateV1,
 } from "../src/diagnostics";
 import {
+  CellEndpointSet,
   ClientKind,
   Hello,
   HelloAck,
@@ -102,6 +103,7 @@ const BASE_SHARED = {
   PairingMac,
   // NF-D8 — rides HelloAck (mgmt surface); named so the $ref stays
   // typify-resolvable.
+  CellEndpointSet,
   TerminalEndpoints,
   // TC-D15 (TC-S2) — the revisioned route snapshot + its cell row; both
   // named for the same typify reason. TC-S3 adds the class/role enums and

@@ -1821,6 +1821,7 @@ fn spawn_cell_task(
         frame,
         config_file,
         crumb,
+        config.allowed_origins.clone(),
         reap,
         report,
     ))))
@@ -1838,6 +1839,7 @@ async fn run_cell_generation(
     frame: String,
     config_file: PathBuf,
     crumb: PathBuf,
+    allowed_origins: Vec<String>,
     mut reap: watch::Receiver<bool>,
     report: tokio::sync::mpsc::UnboundedSender<CellReport>,
 ) {
@@ -1850,6 +1852,7 @@ async fn run_cell_generation(
         &frame,
         &config_file,
         &crumb,
+        &allowed_origins,
         &mut reap,
     )
     .await;
@@ -1869,6 +1872,7 @@ async fn run_cell_generation_inner(
     frame: &str,
     config_file: &std::path::Path,
     crumb: &std::path::Path,
+    allowed_origins: &[String],
     reap: &mut watch::Receiver<bool>,
 ) -> CellEnd {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -1924,8 +1928,18 @@ async fn run_cell_generation_inner(
             );
         }
     }));
-    // The bootstrap line: the token rides the pipe, never argv or env (EL7).
-    let bootstrap = format!("{}\n", serde_json::json!({ "token": token }));
+    // The bootstrap line: the token AND the grant key ride the pipe, never argv
+    // or env (EL7); the renderer Origins the doors admit ride beside them
+    // (TP-S3a — a non-secret, but one seam).
+    let bootstrap = format!(
+        "{}\n",
+        serde_json::json!({
+            "token": token,
+            "grantKey": grant_key,
+            "grantKeyGeneration": 1,
+            "allowedOrigins": allowed_origins,
+        })
+    );
     if let Err(error) = stdin.write_all(bootstrap.as_bytes()).await {
         let _ = child.start_kill();
         let _ = child.wait().await;
@@ -1978,6 +1992,26 @@ async fn run_cell_generation_inner(
             token_generation: i64::from(instance),
             grant_key: Some(grant_key),
             grant_key_generation: Some(1),
+            // TP-S3a — the cell's T1 doors, when it serves them. A URL the
+            // contract's loopback pattern refuses is logged and dropped — the
+            // row then honestly carries no doors rather than a dial nobody can.
+            doors: hello.doors.as_ref().and_then(|doors| {
+                match (doors.control_url.parse(), doors.frames_url.parse()) {
+                    (Ok(control_url), Ok(frames_url)) => Some(crate::contracts::CellEndpointSet {
+                        control_url,
+                        frames_url,
+                    }),
+                    _ => {
+                        tracing::warn!(
+                            event = "field_native.terminal.cell_doors_rejected",
+                            component = "terminal",
+                            instance,
+                            "the cell's door URLs failed the contract's loopback pattern"
+                        );
+                        None
+                    }
+                }
+            }),
             workload_class: Some(plan.class),
             role: Some(plan.role),
         },
@@ -3592,6 +3626,7 @@ mod tests {
                 token_generation: i64::from(instance),
                 grant_key: None,
                 grant_key_generation: None,
+                doors: None,
                 workload_class: Some(class),
                 role: Some(role),
             }

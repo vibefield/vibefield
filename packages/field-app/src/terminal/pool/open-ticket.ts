@@ -39,10 +39,13 @@ export interface ReadTicket {
  * three rather than either whole shape. */
 type RoutedHalf = Pick<TerminalOpenTicketResult, "route" | "transportGrant" | "attachGrant">;
 
-/** `leaseEpoch` is OPTIONAL on the route until TP-S3a, and `endpoints` is
- * absent until then too. Both are "not yet", never zero: a pool that defaulted
- * a missing lease epoch to 0 would be asserting an authority fence the floor
- * has not stated. Carried through as the contract has them. */
+/** `leaseEpoch` is OPTIONAL on the route until the floor exposes custody's
+ * per-session epoch, and `endpoints` is present EXACTLY when the session's cell
+ * serves its T1 doors (TP-S3a: the route row's `doors`, copied by fieldd). Both
+ * are "not yet", never zero: a pool that defaulted a missing lease epoch to 0
+ * would be asserting an authority fence the floor has not stated. Carried
+ * through as the contract has them; the routed transport dials `endpoints`
+ * from TP-S3b on — today the bridge still carries every pane. */
 
 function placementOf(sessionId: string, parsed: RoutedHalf, now: number): SessionPlacement {
   return {

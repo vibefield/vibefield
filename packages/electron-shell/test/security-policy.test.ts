@@ -19,6 +19,7 @@ const SMOKE_LIKE: readonly ShellMode[] = [
   "smoke-canvas",
   "smoke-godview",
   "live-surfaces-lab",
+  "terminal-door-probe",
   "spike-loro",
 ];
 const NON_DEV: readonly ShellMode[] = ["production", ...SMOKE_LIKE];
@@ -43,8 +44,23 @@ describe("buildCsp", () => {
       expect(loopbackEndpoints).toBe(2);
     });
 
-    it("never widens connect-src to the loopback wildcard", () => {
+    it("never widens connect-src to the loopback wildcard while the direct door is OFF", () => {
       expect(csp).not.toContain("ws://127.0.0.1:*");
+      expect(buildCsp("production", [], { directTerminalDoor: false })).toBe(csp);
+    });
+
+    it("admits the cells' loopback ports EXACTLY when the direct terminal door is ON (TP-S3a, TP-D1 as ratified)", () => {
+      // The deliberate reversal of the pinned policy, under the rollback flag
+      // until TP-S3e makes it unconditional: the two fieldd ports stay, the
+      // wildcard joins them, nothing else moves.
+      const widened = buildCsp("production", [], { directTerminalDoor: true }) as string;
+      expect(widened).toContain(`ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL}`);
+      expect(widened).toContain(`ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`);
+      expect(widened).toContain("ws://127.0.0.1:*");
+      expect(widened.replace(" ws://127.0.0.1:*", "")).toBe(csp);
+      // workers stay on 'self' in production either way
+      expect(widened).not.toContain("worker-src");
+      expect(csp).not.toContain("worker-src");
     });
 
     it("admits wasm compilation only and keeps plain unsafe-eval banned", () => {
@@ -61,6 +77,10 @@ describe("buildCsp", () => {
 
     it("keeps the loopback wildcard for ephemeral test ports", () => {
       expect(csp).toContain("ws://127.0.0.1:*");
+    });
+
+    it("admits blob: workers — the door probe dials from a worker built in place (TP-S3a)", () => {
+      expect(csp).toContain("worker-src 'self' blob:;");
     });
 
     it("still admits wasm compilation only, never plain unsafe-eval", () => {

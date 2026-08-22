@@ -30,6 +30,8 @@
 //! supervisor classifies and applies restart intensity.
 
 use crate::registries;
+use crate::tp::door::{Door, DoorConfig};
+use crate::tp::grant::{GrantKey, GrantValidityLimits, GrantVerifier};
 use anyhow::{Context, Result};
 use ghosttea::{ipc, TerminalService, TerminalServiceConfig, TerminalServiceListeners, TextEngine};
 use serde::{Deserialize, Serialize};
@@ -52,9 +54,34 @@ pub struct CellArgs {
 
 /// stdin line 1. A struct rather than a bare string so the seam can grow
 /// (e.g. a mesh face at TC-S3+) without re-cutting the pipe protocol.
+///
+/// TP-S3a grew it: the per-cell-boot GRANT KEY (hex; the HMAC key under every
+/// TPv3 grant fieldd mints for this cell — the same custody as the token: the
+/// pipe, never argv or env) with its generation, and the renderer Origins the
+/// T1 doors admit. All three are OPTIONAL on the wire: a floor that sends no
+/// key gets a cell that serves no doors (the honest answer, stated in the
+/// hello by their absence), never a door with a made-up key.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CellBootstrap {
     pub token: String,
+    #[serde(default)]
+    pub grant_key: Option<String>,
+    #[serde(default)]
+    pub grant_key_generation: Option<u64>,
+    #[serde(default)]
+    pub allowed_origins: Vec<String>,
+}
+
+/// TP-S3a — the cell's two T1 WebSocket doors, as the hello reports them
+/// (the floor copies them onto the route row as `doors`; fieldd carries them
+/// into `TerminalOpenTicket.endpoints`). Loopback `ws://` URLs, no query, no
+/// fragment — tokens never ride URLs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CellDoors {
+    pub control_url: String,
+    pub frames_url: String,
 }
 
 /// stdout line 1 — printed only once the serve plane holds. The parent binds
@@ -66,6 +93,11 @@ pub struct CellHello {
     pub pid: u32,
     pub control: String,
     pub frame: String,
+    /// TP-S3a — present iff the bootstrap carried a grant key and the doors
+    /// bound; absent = this cell serves no T1 doors (a pre-TP floor, or a key
+    /// the floor chose not to send).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub doors: Option<CellDoors>,
 }
 
 /// stdout's last line. `drained` carries upstream's own report rendering;
@@ -183,11 +215,51 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
 
     let (handle, serving) = service.serve_managed(TerminalServiceListeners::new(control, frames));
 
+    // TP-S3a — the T1 doors, iff the floor sent the grant key (TP-D26: the
+    // door layer is OURS, here, beside ghosttea's UDS plane). A malformed key
+    // is a failed start stated on stderr — never a door that cannot verify.
+    let door = match (
+        bootstrap.grant_key.as_deref(),
+        bootstrap.grant_key_generation,
+    ) {
+        (Some(key_hex), generation) => {
+            let key = hex::decode(key_hex).context("the bootstrap grant key is not hex")?;
+            if key.len() < 16 {
+                anyhow::bail!("the bootstrap grant key is too short ({} bytes)", key.len());
+            }
+            let verifier = GrantVerifier::new(
+                GrantKey {
+                    cell_boot_id: cell_boot_id.clone(),
+                    key_generation: generation.unwrap_or(1),
+                    key,
+                },
+                GrantValidityLimits::default(),
+            );
+            Some(
+                Door::serve(DoorConfig::new(verifier, bootstrap.allowed_origins.clone()))
+                    .await
+                    .context("serve the T1 doors")?,
+            )
+        }
+        (None, _) => {
+            tracing::info!(
+                event = "field_native.tp.door.absent",
+                component = "terminal",
+                "no grant key in the bootstrap — this cell serves no T1 doors"
+            );
+            None
+        }
+    };
+
     let hello = CellHello {
         cell_boot_id,
         pid: std::process::id(),
         control: args.control.clone(),
         frame: args.frame.clone(),
+        doors: door.as_ref().map(|d| CellDoors {
+            control_url: d.control_url(),
+            frames_url: d.frames_url(),
+        }),
     };
     // One line, flushed: the parent's hello deadline is watching this pipe.
     // Explicit and fallible — a parent that already closed our stdout cannot
@@ -217,9 +289,14 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
     let mut serving = tokio::spawn(serving);
     tokio::select! {
         _ = leash => {
-            // Requested (or orphaned — same answer): drain within the shared
-            // budget, report, exit clean. The budget is the genned authority,
-            // mirroring upstream's own sweep window.
+            // Requested (or orphaned — same answer): the T1 doors close every
+            // leg 1001 FIRST (a renderer learns the cell is going away before
+            // its sessions drain), then drain within the shared budget, report,
+            // exit clean. The budget is the genned authority, mirroring
+            // upstream's own sweep window.
+            if let Some(door) = door.as_ref() {
+                door.shutdown().await;
+            }
             let budget = Duration::from_millis(registries::cell_supervision::DRAIN_BUDGET_MS);
             let report = handle.shutdown(budget).await;
             // A completed shutdown is the one non-failure way serving ends —
@@ -248,6 +325,10 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
         }
         outcome = &mut serving => {
             let outcome = outcome.unwrap_or_else(|join| Err(anyhow::anyhow!(join)));
+            // The doors go with the plane — best effort, the process is ending.
+            if let Some(door) = door.as_ref() {
+                door.shutdown().await;
+            }
             // The serve plane ended on its own — a crash by definition (the
             // requested path above never lets it finish first). No drain ran;
             // say so rather than pretend.

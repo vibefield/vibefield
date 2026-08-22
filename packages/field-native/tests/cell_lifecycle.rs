@@ -6,9 +6,14 @@
 //! work. The supervisor half (spawn/restart/routes) gets its own rows; the
 //! product-fidelity crash story lives in fieldd's kill matrix.
 
+#[path = "support/tp_mint.rs"]
+mod tp_mint;
+
+use futures_util::{SinkExt, StreamExt};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
+use tokio_tungstenite::tungstenite::Message;
 
 fn short_root() -> tempfile::TempDir {
     // unix sockets ride the path, and the macOS default tmp blows the
@@ -232,4 +237,97 @@ async fn a_leash_drain_broadcasts_exits_to_witnesses() {
         "the drain's exit broadcast must reach the witness"
     );
     let _ = wait_exit(child, Duration::from_secs(10));
+}
+
+/// TP-S3a — the bootstrap carries the grant key, the hello carries the doors,
+/// and a grant MAC'd with that key opens the control door of the REAL binary.
+/// Without a key the hello honestly carries no doors.
+#[tokio::test]
+async fn a_grant_key_in_the_bootstrap_opens_t1_doors_in_the_hello() {
+    let root = short_root();
+    let (mut child, _control, _frame) = spawn_cell(root.path(), 11);
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    let key_hex = hex::encode(vec![0x5e_u8; 32]);
+    writeln!(
+        stdin,
+        "{}",
+        serde_json::json!({
+            "token": "tok-doors",
+            "grantKey": key_hex,
+            "grantKeyGeneration": 1,
+            "allowedOrigins": ["vibefield-app://shell"],
+        })
+    )
+    .expect("bootstrap");
+    let mut lines = BufReader::new(stdout).lines();
+    let hello: field_native::cell::CellHello =
+        serde_json::from_str(&lines.next().expect("hello").expect("read hello")).expect("parse");
+    let doors = hello.doors.expect("a keyed cell serves its doors");
+    assert!(doors.control_url.starts_with("ws://127.0.0.1:"));
+    assert!(doors.control_url.ends_with("/control"));
+    assert!(doors.frames_url.ends_with("/frames"));
+
+    // a grant for THIS cell boot, MAC'd with the bootstrap key, is accepted
+    let minter = tp_mint::TestMinter::new(&hello.cell_boot_id);
+    let grant = minter.transport(tp_mint::TransportSpec::basic("set-cell", 1, "n-cell"));
+    let (mut ws, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        tokio_tungstenite::connect_async(doors.control_url.clone()),
+    )
+    .await
+    .expect("dial within 5s")
+    .expect("the real cell's door accepts the upgrade");
+    ws.send(Message::Text(
+        tp_mint::hello("control", &grant, None).into(),
+    ))
+    .await
+    .expect("send hello");
+    let reply = tokio::time::timeout(Duration::from_secs(5), ws.next())
+        .await
+        .expect("a reply within 5s")
+        .expect("a reply")
+        .expect("a frame");
+    let Message::Text(text) = reply else {
+        panic!("expected a text reply, got {reply:?}");
+    };
+    let accepted: serde_json::Value = serde_json::from_str(text.as_str()).expect("json");
+    assert_eq!(accepted["type"], "ConnectionAccepted", "{accepted}");
+    assert_eq!(accepted["connectionSetId"], "set-cell");
+
+    // the leash: the door closes the leg 1001 BEFORE the drain, then exit 0
+    drop(stdin);
+    let close = tokio::time::timeout(Duration::from_secs(10), ws.next())
+        .await
+        .expect("a close within 10s")
+        .expect("a close frame")
+        .expect("a frame");
+    match close {
+        Message::Close(Some(frame)) => assert_eq!(u16::from(frame.code), 1001),
+        other => panic!("expected close 1001, got {other:?}"),
+    }
+    let report: field_native::cell::CellExitReport =
+        serde_json::from_str(&lines.next().expect("exit line").expect("read exit")).expect("parse");
+    assert!(report.drained.is_some());
+    assert!(wait_exit(child, Duration::from_secs(10)).success());
+}
+
+#[test]
+fn a_keyless_bootstrap_serves_no_doors_and_says_so() {
+    let root = short_root();
+    let (mut child, _control, _frame) = spawn_cell(root.path(), 12);
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    writeln!(stdin, "{}", serde_json::json!({ "token": "tok-nodoors" })).expect("bootstrap");
+    let mut lines = BufReader::new(stdout).lines();
+    let raw = lines.next().expect("hello").expect("read hello");
+    let hello: field_native::cell::CellHello = serde_json::from_str(&raw).expect("parse");
+    assert!(hello.doors.is_none(), "no key, no doors: {raw}");
+    assert!(
+        !raw.contains("doors"),
+        "absence is absence on the wire, never null"
+    );
+    drop(stdin);
+    let _ = lines.next();
+    assert!(wait_exit(child, Duration::from_secs(10)).success());
 }

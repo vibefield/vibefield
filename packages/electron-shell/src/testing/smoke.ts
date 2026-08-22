@@ -97,6 +97,7 @@ import {
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
 
+export { runTerminalDoorProbe } from "./terminal-door-probe";
 // TP-S0c — the perf lab rides the SAME test-only bundle every smoke does, so
 // main reaches it through the one runtime-external import it already has and no
 // second artifact has to be built, excluded from packaging, and kept excluded.

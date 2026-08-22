@@ -1,0 +1,7 @@
+{
+  "type": "LegHeartbeat",
+  "connectionSetId": "cs-win-3c4d-2-cb-7f3a9c1e",
+  "channel": "control",
+  "legGeneration": 1,
+  "sequence": 42
+}

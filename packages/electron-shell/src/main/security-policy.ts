@@ -19,12 +19,35 @@ import type { ShellMode } from "./modes";
  * its exact hash — build-deterministic bytes, hashed by main from the very
  * file it serves (self-synchronising; no nonce, no serve-time rewriting). An
  * empty list changes nothing, which is also the dev answer (dev CSP is null). */
-export function buildCsp(mode: ShellMode, importMapHashes: readonly string[] = []): string | null {
+export interface CspOptions {
+  /** TP-S3a — TP-D1 as ratified (terminal-pipeline-v3 §8): with the direct
+   * terminal door ON, production `connect-src` ALSO admits `ws://127.0.0.1:*`
+   * — the cells' ephemeral loopback ports (a fixed front-door port would be
+   * the centralization custody refused). The threat statement ratified with
+   * it: a compromised renderer could then attempt ANY loopback WebSocket
+   * server; every door of ours is Origin- and token-gated, the sandbox stays,
+   * and loopback is potentially-trustworthy (a CSP matter, not mixed content).
+   * OFF (the default until S3e) keeps exactly the two pinned ports. */
+  directTerminalDoor?: boolean;
+}
+
+export function buildCsp(
+  mode: ShellMode,
+  importMapHashes: readonly string[] = [],
+  options: CspOptions = {},
+): string | null {
   if (mode === "dev") return null;
+  const pinned = `ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL} ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`;
   const connect =
     mode === "production"
-      ? `ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL} ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`
+      ? options.directTerminalDoor === true
+        ? `${pinned} ws://127.0.0.1:*`
+        : pinned
       : "ws://127.0.0.1:*";
+  // Smoke-like modes may spawn blob: workers (TP-S3a's door probe dials a cell
+  // from a worker context built in place); production keeps workers on 'self'
+  // — the product's workers are bundled files under the app origin.
+  const workers = mode === "production" ? "" : "worker-src 'self' blob:; ";
   // P8b (ESP §8.4): the plugin module origin is admitted EXPLICITLY and only
   // where plugin bytes actually land — modules on script-src, their compiled
   // stylesheet on style-src. It is a separate scheme rather than the app origin
@@ -38,7 +61,7 @@ export function buildCsp(mode: ShellMode, importMapHashes: readonly string[] = [
   return (
     `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' ${pluginModules}${hashes}; ` +
     `style-src 'self' 'unsafe-inline' ${pluginModules}; ` +
-    `img-src 'self' data: https://*.ts.net:*; connect-src ${connect}; base-uri 'none'; object-src 'none'`
+    `img-src 'self' data: https://*.ts.net:*; ${workers}connect-src ${connect}; base-uri 'none'; object-src 'none'`
   );
 }
 

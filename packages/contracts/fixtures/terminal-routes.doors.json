@@ -1,0 +1,62 @@
+{
+  "revision": 8,
+  "cells": [
+    {
+      "cellInstanceId": 4,
+      "cellBootId": "01JCELLBOOT0000000000000004",
+      "pid": 4310,
+      "endpoints": {
+        "controlSocket": "/data/native/run/termctl.4.sock",
+        "frameSocket": "/data/native/run/termframe.4.sock",
+        "authToken": "per-cell-token-gen-4"
+      },
+      "tokenGeneration": 4,
+      "workloadClass": "interactive",
+      "role": "class",
+      "grantKey": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "grantKeyGeneration": 1,
+      "doors": {
+        "controlUrl": "ws://127.0.0.1:49152/control",
+        "framesUrl": "ws://127.0.0.1:49152/frames"
+      }
+    },
+    {
+      "cellInstanceId": 2,
+      "cellBootId": "01JCELLBOOT0000000000000002",
+      "pid": 4302,
+      "endpoints": {
+        "controlSocket": "/data/native/run/termctl.2.sock",
+        "frameSocket": "/data/native/run/termframe.2.sock",
+        "authToken": "per-cell-token-gen-2"
+      },
+      "tokenGeneration": 2,
+      "workloadClass": "agent",
+      "role": "class",
+      "grantKey": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "grantKeyGeneration": 1,
+      "doors": {
+        "controlUrl": "ws://127.0.0.1:49153/control",
+        "framesUrl": "ws://127.0.0.1:49153/frames"
+      }
+    },
+    {
+      "cellInstanceId": 5,
+      "cellBootId": "01JCELLBOOT0000000000000005",
+      "pid": 4333,
+      "endpoints": {
+        "controlSocket": "/data/native/run/termctl.5.sock",
+        "frameSocket": "/data/native/run/termframe.5.sock",
+        "authToken": "per-cell-token-gen-5"
+      },
+      "tokenGeneration": 5,
+      "workloadClass": "agent",
+      "role": "solo",
+      "grantKey": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+      "grantKeyGeneration": 1,
+      "doors": {
+        "controlUrl": "ws://127.0.0.1:49154/control",
+        "framesUrl": "ws://127.0.0.1:49154/frames"
+      }
+    }
+  ]
+}

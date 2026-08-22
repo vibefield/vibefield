@@ -100,9 +100,24 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
       rights: ["geometry", "input", "read"],
       expiresAt: now + TP_ATTACH_GRANT_TTL_MS,
     });
-    // S1: no lease epoch until the floor exposes custody's per-session epoch (S3a)
+    // no lease epoch until the floor exposes custody's per-session epoch
     expect("leaseEpoch" in ticket.attachGrant.claims).toBe(false);
+    // S3a: endpoints ride the ticket EXACTLY when the row carries the doors
     expect(ticket.endpoints).toBeUndefined();
+    expect("endpoints" in ticket).toBe(false);
+    const doors = {
+      controlUrl: "ws://127.0.0.1:49152/control",
+      framesUrl: "ws://127.0.0.1:49152/frames",
+    };
+    // (a fresh minter, so this row's generation ladder below is untouched)
+    const withDoors = new TerminalGrantMinter(() => now).mintTicket({
+      key: KEY,
+      principal: WINDOW,
+      sessionId: "s1",
+      route: ROUTE,
+      doors,
+    });
+    expect(withDoors.endpoints).toEqual(doors);
     // a second key cannot verify the first key's grant
     expect(verify({ ...KEY, keyHex: "a1".repeat(32) }, ticket.attachGrant)).toBe(false);
     now += 1;

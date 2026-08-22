@@ -8,6 +8,7 @@ import {
 } from "@vibecook/ghosttea-client";
 import {
   CELL_SUPERVISION,
+  type CellEndpointSet,
   ObservedState,
   type RouteBinding,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
@@ -104,17 +105,28 @@ interface CellTarget {
   /** TP-S1 — the row's per-cell-boot grant key, when the floor minted one;
    * absent = a pre-TP floor / the legacy mirror: no grants are minted. */
   grantKey?: CellGrantKey;
+  /** TP-S3a — the cell's T1 doors, when it serves them (the route row's
+   * `doors`); they become `TerminalOpenTicket.endpoints` and nothing else
+   * reads them. Absent = the ticket carries no endpoints (honest: a renderer
+   * shows `transport-not-landed`), never a made-up URL. */
+  doors?: CellEndpointSet;
 }
 
-/** The grant key a route row carries, in the minter's shape (or nothing). */
-function grantKeyOf(row: TerminalRouteCell): { grantKey: CellGrantKey } | Record<string, never> {
-  if (row.grantKey === undefined) return {};
+/** What a route row adds to a cell target beyond its dial coordinates: the
+ * grant key in the minter's shape (TP-S1) and the T1 doors (TP-S3a) — each
+ * present only when the row carries it. */
+function rowExtrasOf(row: TerminalRouteCell): Pick<CellTarget, "grantKey" | "doors"> {
   return {
-    grantKey: {
-      cellBootId: row.cellBootId,
-      keyHex: row.grantKey,
-      keyGeneration: row.grantKeyGeneration ?? 1,
-    },
+    ...(row.grantKey === undefined
+      ? {}
+      : {
+          grantKey: {
+            cellBootId: row.cellBootId,
+            keyHex: row.grantKey,
+            keyGeneration: row.grantKeyGeneration ?? 1,
+          },
+        }),
+    ...(row.doors === undefined ? {} : { doors: row.doors }),
   };
 }
 
@@ -447,6 +459,7 @@ export class TerminalService {
       principal,
       sessionId,
       route: this.routeBinding(cell.key),
+      ...(cell.doors === undefined ? {} : { doors: cell.doors }),
     });
   }
 
@@ -857,7 +870,7 @@ export class TerminalService {
     if (routes !== undefined) {
       const target = terminalCreateTarget(routes, workloadClass);
       if (target !== undefined)
-        return { key: target.cellBootId, endpoints: target.endpoints, ...grantKeyOf(target) };
+        return { key: target.cellBootId, endpoints: target.endpoints, ...rowExtrasOf(target) };
       // This class has no cell of its own. Class is a PLACEMENT HINT and a
       // policy selector, never a permanent failure domain (TC-D4), so the
       // session lands on the floor's interactive target rather than being
@@ -872,7 +885,11 @@ export class TerminalService {
           "No cell hosts this workload class; the session lands on the interactive cell",
           { workloadClass, revision: routes.revision },
         );
-        return { key: fallback.cellBootId, endpoints: fallback.endpoints, ...grantKeyOf(fallback) };
+        return {
+          key: fallback.cellBootId,
+          endpoints: fallback.endpoints,
+          ...rowExtrasOf(fallback),
+        };
       }
     }
     // No snapshot at all (a pre-TC-S2 floor), or one that names no cell:
@@ -917,7 +934,7 @@ export class TerminalService {
     if (routes === undefined) return { key: LEGACY_CELL_KEY, endpoints: this.endpoints() };
     const row = routes.cells.find((cell) => cell.cellBootId === cellBootId);
     if (row !== undefined)
-      return { key: row.cellBootId, endpoints: row.endpoints, ...grantKeyOf(row) };
+      return { key: row.cellBootId, endpoints: row.endpoints, ...rowExtrasOf(row) };
     // TC-S3 — the cell that held this session is gone from the snapshot, so the
     // session went with it and the observed stream is about to say so. Honest
     // and retryable: never a ticket into a dead cell's socket, never a blank,

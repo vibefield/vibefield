@@ -72,6 +72,10 @@ async function main(): Promise<void> {
               FIELD_NATIVE_DATA_DIR: dataDir,
               FIELD_LOG_DIR: logRoot,
               FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
+              // TP-S3a — the SAME renderer origins fieldd's own door admits
+              // reach the cells' T1 doors (terminal-pipeline-v3 §8 door
+              // hygiene): one allow-list, one authority, passed down at spawn.
+              FIELD_NATIVE_ALLOWED_ORIGINS: allowedOrigins.join(","),
               // Level overrides remain development/test-only even though fieldd
               // inherits a broad shell environment.
               FIELD_NATIVE_LOG_FILTER:

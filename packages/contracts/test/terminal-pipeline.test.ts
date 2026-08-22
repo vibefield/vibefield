@@ -3,17 +3,20 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { CellEndpointSet, TerminalRouteSnapshot } from "../src/envelope";
+import { TERMINAL_PIPELINE } from "../src/registries";
 import { TerminalTicket } from "../src/terminal";
 import {
   AttachControlLeg,
   CellActivationStatus,
-  CellEndpointSet,
   CellTransportGrant,
   ConnectionHello,
   canonicalJson,
   compareSceneContent,
   DEFAULT_GRANT_VALIDITY_LIMITS,
+  DEFAULT_PROTOCOL_LIMITS,
   decodePresentationEnvelope,
+  decodeTpMessage,
   encodePresentationEnvelope,
   FramesAttachOutcome,
   type GrantProtectedHeader,
@@ -28,6 +31,10 @@ import {
   TerminalCreateOpenResult,
   TerminalOpenTicket,
   TerminalOpenTicketResult,
+  TP_LEG_INBOUND,
+  TP_LEG_OUTBOUND,
+  TpMessageType,
+  tagTpMessage,
 } from "../src/terminal-pipeline";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
@@ -267,5 +274,108 @@ describe("the presentation envelope — binary framing around unchanged TRF1 (sp
         baseContent: { sceneEpoch: { cellBootId: "other", modelGeneration: 0 }, sceneRevision: 1 },
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("message tagging — one wire for both legs (TP-S3a)", () => {
+  it("tags, decodes and strips the tag from the body", () => {
+    const hello = fixture("tp-connection-hello.frames.json");
+    const tagged = tagTpMessage("ConnectionHello", hello);
+    expect(tagged["type"]).toBe("ConnectionHello");
+    const decoded = decodeTpMessage(tagged, TP_LEG_INBOUND.frames);
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    expect(decoded.type).toBe("ConnectionHello");
+    expect((decoded.body as Record<string, unknown>)["type"]).toBeUndefined();
+    expect((decoded.body as ConnectionHello).channel).toBe("frames");
+  });
+
+  it("refuses what the leg does not accept in this direction, and unknown tags", () => {
+    const hb = tagTpMessage("LegHeartbeat", {
+      connectionSetId: "cs-1",
+      channel: "control",
+      legGeneration: 1,
+      sequence: 7,
+    });
+    expect(decodeTpMessage(hb, TP_LEG_INBOUND.control).ok).toBe(true);
+    // cell → client tags are never accepted inbound
+    const ack = tagTpMessage("LegHeartbeatAck", { sequence: 7 });
+    expect(decodeTpMessage(ack, TP_LEG_INBOUND.control)).toMatchObject({
+      ok: false,
+      error: "not-allowed-here",
+    });
+    expect(decodeTpMessage({ type: "Nope" }, TP_LEG_INBOUND.control)).toMatchObject({
+      ok: false,
+      error: "unknown-type",
+    });
+    expect(decodeTpMessage({ sequence: 1 }, TP_LEG_INBOUND.control)).toMatchObject({
+      ok: false,
+      error: "missing-type",
+    });
+    expect(decodeTpMessage("hello", TP_LEG_INBOUND.control)).toMatchObject({
+      ok: false,
+      error: "not-an-object",
+    });
+    // a tagged message whose body fails its schema is `invalid`, with issues
+    const bad = decodeTpMessage({ type: "LegHeartbeatAck", sequence: -1 }, TP_LEG_OUTBOUND.control);
+    expect(bad).toMatchObject({ ok: false, error: "invalid" });
+  });
+
+  it("every tag has a schema and sits on at least one leg in one direction", () => {
+    const seen = new Set<string>([
+      ...TP_LEG_INBOUND.control,
+      ...TP_LEG_INBOUND.frames,
+      ...TP_LEG_OUTBOUND.control,
+      ...TP_LEG_OUTBOUND.frames,
+    ]);
+    for (const t of TpMessageType.options) expect(seen.has(t), t).toBe(true);
+    // both hellos are first frames; acks answer heartbeats on both legs
+    expect(TP_LEG_INBOUND.control[0]).toBe("ConnectionHello");
+    expect(TP_LEG_INBOUND.frames[0]).toBe("ConnectionHello");
+  });
+
+  it("the tagged-message fixtures decode on the leg they are filed for", () => {
+    const rows: Array<[string, readonly TpMessageType[]]> = [
+      ["tp-tagged-message.hello-control.json", TP_LEG_INBOUND.control],
+      ["tp-tagged-message.accepted-control.json", TP_LEG_OUTBOUND.control],
+      ["tp-tagged-message.refused.json", TP_LEG_OUTBOUND.control],
+      ["tp-tagged-message.heartbeat.json", TP_LEG_INBOUND.control],
+      ["tp-tagged-message.heartbeat-ack.json", TP_LEG_OUTBOUND.frames],
+    ];
+    for (const [name, allowed] of rows) {
+      const decoded = decodeTpMessage(fixture(name), allowed);
+      expect(decoded.ok, name).toBe(true);
+    }
+  });
+});
+
+describe("§20 item 5 — numeric defaults with owners, as data", () => {
+  it("the defaults fixture IS the defaults (registries → contracts → the cell)", () => {
+    expect(fixture("tp-protocol-limits.defaults.json")).toEqual(DEFAULT_PROTOCOL_LIMITS);
+    expect(DEFAULT_GRANT_VALIDITY_LIMITS.maxGrantLifetimeMs).toBe(
+      TERMINAL_PIPELINE.MAX_GRANT_LIFETIME_MS,
+    );
+    // the TTL inequality, by construction
+    expect(TERMINAL_PIPELINE.HEARTBEAT_TTL_MS).toBeGreaterThan(
+      2 * TERMINAL_PIPELINE.HEARTBEAT_INTERVAL_MS,
+    );
+  });
+});
+
+describe("the route row carries the cell's T1 doors (TP-S3a)", () => {
+  it("parses a snapshot whose row names its doors, and refuses a non-loopback door", () => {
+    const snapshot = TerminalRouteSnapshot.parse(fixture("terminal-routes.doors.json"));
+    const row = snapshot.cells[0]!;
+    expect(row.doors?.controlUrl).toMatch(/^ws:\/\/127\.0\.0\.1:\d+\/control$/);
+    expect(row.doors?.framesUrl).toMatch(/^ws:\/\/127\.0\.0\.1:\d+\/frames$/);
+    expect(
+      CellEndpointSet.safeParse({
+        controlUrl: "ws://10.0.0.1:4000/control",
+        framesUrl: "ws://127.0.0.1:4000/frames",
+      }).success,
+    ).toBe(false);
+    // a pre-door row (no `doors`) still parses — absence is the honest answer
+    const legacy = TerminalRouteSnapshot.parse(fixture("terminal-routes.replaced.json"));
+    expect(legacy.cells.every((c) => c.doors === undefined)).toBe(true);
   });
 });

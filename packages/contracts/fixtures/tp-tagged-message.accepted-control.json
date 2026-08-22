@@ -1,0 +1,25 @@
+{
+  "type": "ConnectionAccepted",
+  "selectedProtocolVersion": {
+    "major": 1,
+    "minor": 0
+  },
+  "connectionSetId": "cs-win-3c4d-2-cb-7f3a9c1e",
+  "channel": "control",
+  "legGeneration": 1,
+  "heartbeatTtlMs": 6000,
+  "protocolLimits": {
+    "maxControlMessageBytes": 262144,
+    "maxPresentationChunkBytes": 1048576,
+    "maxBatchLatencyMs": 4,
+    "maxCreditReturnDelayMs": 16,
+    "maxSceneAppliedDelayMs": 1000,
+    "sceneAppliedRefreshMs": 2000,
+    "presentationStatusRefreshMs": 2000,
+    "activationAttachDeadlineMs": 5000,
+    "maxActivationCatchupMs": 3000,
+    "maxCatchupBytes": 8388608,
+    "creditAccountDrainTtlMs": 5000
+  },
+  "capabilities": ["resume"]
+}

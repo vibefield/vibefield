@@ -70,7 +70,7 @@ import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
-import { isSmokeLike, parseMode } from "./modes";
+import { isSmokeLike, parseDirectTerminalDoor, parseMode } from "./modes";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
@@ -108,6 +108,10 @@ import { createMainWindow, loadRenderer } from "./windows";
 // contains none of that code (ESR-12), and packaging simply omits the file.
 
 const MODE = parseMode(process.argv);
+// TP-S3a — the direct terminal door (TP-D1 as ratified): a rollback flag, OFF
+// until S3e; it widens the production CSP to the cells' loopback ports and, at
+// S3b, routes the pool's transport. Parsed once, beside the mode.
+const DIRECT_TERMINAL_DOOR = parseDirectTerminalDoor(process.argv, process.env);
 // Smoke/headless runs have no GPU to talk to — a CI runner or an ssh session on
 // Windows has no window station, and over ssh Chromium's GPU init fails outright.
 // Force software rendering for smoke-like modes (harmless when a GPU is present);
@@ -385,7 +389,7 @@ async function main(
   } catch {
     importMapHashes = [];
   }
-  installCsp(MODE, importMapHashes);
+  installCsp(MODE, importMapHashes, { directTerminalDoor: DIRECT_TERMINAL_DOOR });
   // The renderer's own origin. Dev serves from Vite instead, so the handler is
   // pointless there; every other mode loads vibefield-app://shell and would show
   // a blank window without it. Root is the built renderer beside dist/main.
@@ -420,7 +424,7 @@ async function main(
       });
     },
   });
-  const appCsp = buildCsp(MODE, importMapHashes);
+  const appCsp = buildCsp(MODE, importMapHashes, { directTerminalDoor: DIRECT_TERMINAL_DOOR });
   if (MODE !== "dev") {
     installAppProtocol({
       root: rendererRoot,
@@ -1110,6 +1114,34 @@ async function main(
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
       toggleGodview,
+      beforeExit: closeEvidence,
+      onWindow: (window) => {
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch(() => undefined);
+          },
+        });
+      },
+    });
+    return;
+  }
+
+  // TP-S3a — the door probe: the real pair, one session through fieldd's own
+  // door, the renderer DOCUMENT and a WORKER dialing the cell's T1 doors with
+  // the ticket's grant. `ConnectionAccepted` from both is the gate line.
+  if (MODE === "terminal-door-probe") {
+    await (await testing()).runTerminalDoorProbe({
+      handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      viteUrl: VITE_URL,
       beforeExit: closeEvidence,
       onWindow: (window) => {
         installRendererLogging({

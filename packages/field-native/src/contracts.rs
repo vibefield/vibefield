@@ -29,6 +29,193 @@ pub mod error {
         }
     }
 }
+#[doc = "`CellEndpointSet`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"controlUrl\","]
+#[doc = "    \"framesUrl\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"controlUrl\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"pattern\": \"^wss?:\\\\/\\\\/(127\\\\.0\\\\.0\\\\.1|\\\\[::1\\\\]|localhost)(:\\\\d{1,5})?(\\\\/[^?#]*)?$\""]
+#[doc = "    },"]
+#[doc = "    \"framesUrl\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"pattern\": \"^wss?:\\\\/\\\\/(127\\\\.0\\\\.0\\\\.1|\\\\[::1\\\\]|localhost)(:\\\\d{1,5})?(\\\\/[^?#]*)?$\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct CellEndpointSet {
+    #[serde(rename = "controlUrl")]
+    pub control_url: CellEndpointSetControlUrl,
+    #[serde(rename = "framesUrl")]
+    pub frames_url: CellEndpointSetFramesUrl,
+}
+impl CellEndpointSet {
+    pub fn builder() -> builder::CellEndpointSet {
+        Default::default()
+    }
+}
+#[doc = "`CellEndpointSetControlUrl`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^wss?:\\\\/\\\\/(127\\\\.0\\\\.0\\\\.1|\\\\[::1\\\\]|localhost)(:\\\\d{1,5})?(\\\\/[^?#]*)?$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CellEndpointSetControlUrl(::std::string::String);
+impl ::std::ops::Deref for CellEndpointSetControlUrl {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CellEndpointSetControlUrl> for ::std::string::String {
+    fn from(value: CellEndpointSetControlUrl) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CellEndpointSetControlUrl {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new(
+                    "^wss?:\\/\\/(127\\.0\\.0\\.1|\\[::1\\]|localhost)(:\\d{1,5})?(\\/[^?#]*)?$",
+                )
+                .unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err ("doesn't match pattern \"^wss?:\\/\\/(127\\.0\\.0\\.1|\\[::1\\]|localhost)(:\\d{1,5})?(\\/[^?#]*)?$\"" . into ()) ;
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CellEndpointSetControlUrl {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for CellEndpointSetControlUrl {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CellEndpointSetControlUrl {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CellEndpointSetControlUrl {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`CellEndpointSetFramesUrl`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^wss?:\\\\/\\\\/(127\\\\.0\\\\.0\\\\.1|\\\\[::1\\\\]|localhost)(:\\\\d{1,5})?(\\\\/[^?#]*)?$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CellEndpointSetFramesUrl(::std::string::String);
+impl ::std::ops::Deref for CellEndpointSetFramesUrl {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CellEndpointSetFramesUrl> for ::std::string::String {
+    fn from(value: CellEndpointSetFramesUrl) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CellEndpointSetFramesUrl {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new(
+                    "^wss?:\\/\\/(127\\.0\\.0\\.1|\\[::1\\]|localhost)(:\\d{1,5})?(\\/[^?#]*)?$",
+                )
+                .unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err ("doesn't match pattern \"^wss?:\\/\\/(127\\.0\\.0\\.1|\\[::1\\]|localhost)(:\\d{1,5})?(\\/[^?#]*)?$\"" . into ()) ;
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CellEndpointSetFramesUrl {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for CellEndpointSetFramesUrl {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CellEndpointSetFramesUrl {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CellEndpointSetFramesUrl {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 #[doc = "`ClientKind`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -5837,6 +6024,9 @@ impl TerminalEndpoints {
 #[doc = "    \"cellInstanceId\": {"]
 #[doc = "      \"type\": \"integer\""]
 #[doc = "    },"]
+#[doc = "    \"doors\": {"]
+#[doc = "      \"$ref\": \"#/definitions/CellEndpointSet\""]
+#[doc = "    },"]
 #[doc = "    \"endpoints\": {"]
 #[doc = "      \"$ref\": \"#/definitions/TerminalEndpoints\""]
 #[doc = "    },"]
@@ -5869,6 +6059,8 @@ pub struct TerminalRouteCell {
     pub cell_boot_id: ::std::string::String,
     #[serde(rename = "cellInstanceId")]
     pub cell_instance_id: i64,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub doors: ::std::option::Option<CellEndpointSet>,
     pub endpoints: TerminalEndpoints,
     #[serde(
         rename = "grantKey",
@@ -6234,6 +6426,60 @@ impl WhoIsIdentity {
 }
 #[doc = r" Types for composing complex structures."]
 pub mod builder {
+    #[derive(Clone, Debug)]
+    pub struct CellEndpointSet {
+        control_url: ::std::result::Result<super::CellEndpointSetControlUrl, ::std::string::String>,
+        frames_url: ::std::result::Result<super::CellEndpointSetFramesUrl, ::std::string::String>,
+    }
+    impl ::std::default::Default for CellEndpointSet {
+        fn default() -> Self {
+            Self {
+                control_url: Err("no value supplied for control_url".to_string()),
+                frames_url: Err("no value supplied for frames_url".to_string()),
+            }
+        }
+    }
+    impl CellEndpointSet {
+        pub fn control_url<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::CellEndpointSetControlUrl>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.control_url = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for control_url: {e}"));
+            self
+        }
+        pub fn frames_url<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::CellEndpointSetFramesUrl>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.frames_url = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for frames_url: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<CellEndpointSet> for super::CellEndpointSet {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: CellEndpointSet,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                control_url: value.control_url?,
+                frames_url: value.frames_url?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::CellEndpointSet> for CellEndpointSet {
+        fn from(value: super::CellEndpointSet) -> Self {
+            Self {
+                control_url: Ok(value.control_url),
+                frames_url: Ok(value.frames_url),
+            }
+        }
+    }
     #[derive(Clone, Debug)]
     pub struct DesiredState {
         generation: ::std::result::Result<i64, ::std::string::String>,
@@ -10618,6 +10864,10 @@ pub mod builder {
     pub struct TerminalRouteCell {
         cell_boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         cell_instance_id: ::std::result::Result<i64, ::std::string::String>,
+        doors: ::std::result::Result<
+            ::std::option::Option<super::CellEndpointSet>,
+            ::std::string::String,
+        >,
         endpoints: ::std::result::Result<super::TerminalEndpoints, ::std::string::String>,
         grant_key: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
@@ -10641,6 +10891,7 @@ pub mod builder {
             Self {
                 cell_boot_id: Err("no value supplied for cell_boot_id".to_string()),
                 cell_instance_id: Err("no value supplied for cell_instance_id".to_string()),
+                doors: Ok(Default::default()),
                 endpoints: Err("no value supplied for endpoints".to_string()),
                 grant_key: Ok(Default::default()),
                 grant_key_generation: Ok(Default::default()),
@@ -10670,6 +10921,16 @@ pub mod builder {
             self.cell_instance_id = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for cell_instance_id: {e}"));
+            self
+        }
+        pub fn doors<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::CellEndpointSet>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.doors = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for doors: {e}"));
             self
         }
         pub fn endpoints<T>(mut self, value: T) -> Self
@@ -10751,6 +11012,7 @@ pub mod builder {
             Ok(Self {
                 cell_boot_id: value.cell_boot_id?,
                 cell_instance_id: value.cell_instance_id?,
+                doors: value.doors?,
                 endpoints: value.endpoints?,
                 grant_key: value.grant_key?,
                 grant_key_generation: value.grant_key_generation?,
@@ -10766,6 +11028,7 @@ pub mod builder {
             Self {
                 cell_boot_id: Ok(value.cell_boot_id),
                 cell_instance_id: Ok(value.cell_instance_id),
+                doors: Ok(value.doors),
                 endpoints: Ok(value.endpoints),
                 grant_key: Ok(value.grant_key),
                 grant_key_generation: Ok(value.grant_key_generation),

@@ -57,8 +57,10 @@ export interface SessionGrants {
  *   connections are what remove this; until then the honest answer is a face.
  *
  *   `endpoints-not-served` — the ticket carries route and grants but no
- *   `endpoints` (absent until TP-S3a by contract), so the v2 path has nothing to
- *   dial and the v1 bridge is already committed elsewhere.
+ *   `endpoints` (a keyed cell that serves no T1 doors — since TP-S3a a cell
+ *   born with its grant key serves them and fieldd copies them onto the
+ *   ticket), so the v2 path has nothing to dial and the v1 bridge is already
+ *   committed elsewhere.
  */
 export interface SessionUnavailable {
   readonly service: "terminal";

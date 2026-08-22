@@ -1941,7 +1941,7 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
 
 // ---------------------------------------------------------------------------
 // TP-S1 — the session-addressed grant model over the product API
-// (terminal-pipeline-v3 §5.1, §15 row S1): the route + grants ride beside the
+// (terminal-pipeline-v3 §5.1, rollout §15 row S1): the route + grants ride beside the
 // legacy ticket when the cell carries a grant key, bound to the CALLER's
 // principal and signed with THAT cell's key; renewAttach is a CAS; the roster
 // carries no placement; a keyless floor stays the legacy trio and says so.
@@ -1958,6 +1958,7 @@ function keyedRoutes(
     workloadClass?: TerminalWorkloadClass;
     role?: "class" | "solo";
     grantKey?: string;
+    doors?: { controlUrl: string; framesUrl: string };
   }>,
 ): TerminalRouteSnapshot {
   const snapshot = classRoutes(revision, cells);
@@ -1965,7 +1966,12 @@ function keyedRoutes(
     ...snapshot,
     cells: snapshot.cells.map((row, i) => {
       const key = cells[i]?.grantKey;
-      return key === undefined ? row : { ...row, grantKey: key, grantKeyGeneration: 1 };
+      const doors = cells[i]?.doors;
+      return {
+        ...row,
+        ...(key === undefined ? {} : { grantKey: key, grantKeyGeneration: 1 }),
+        ...(doors === undefined ? {} : { doors }),
+      };
     }),
   };
 }
@@ -2001,6 +2007,13 @@ async function keyedDaemon() {
       workloadClass: "agent",
       role: "class",
       grantKey: KEY_A,
+      // TP-S3a — the agent cell serves its T1 doors; the interactive one does
+      // not (a keyed cell that predates the door layer), so the two tickets
+      // below show both honest answers.
+      doors: {
+        controlUrl: "ws://127.0.0.1:49160/control",
+        framesUrl: "ws://127.0.0.1:49160/frames",
+      },
     },
   ]);
   mock.observedState = observed([
@@ -2025,7 +2038,7 @@ describe("TP-S1 — the session-addressed grant model", () => {
     expect(pane).toMatchObject(paperTicket("interactive"));
     // the v2 half, bound and signed
     expect(pane.route).toEqual({ cellBootId: "cell-i", routeRevision: 3 });
-    expect(pane.endpoints).toBeUndefined(); // no T1 doors before S3a
+    expect(pane.endpoints).toBeUndefined(); // this cell serves no T1 doors (no `doors` on its row)
     expect(verifies(KEY_I, pane.transportGrant)).toBe(true);
     expect(verifies(KEY_I, pane.attachGrant)).toBe(true);
     expect(verifies(KEY_A, pane.attachGrant)).toBe(false);
@@ -2050,6 +2063,11 @@ describe("TP-S1 — the session-addressed grant model", () => {
     );
     expect(agent).toMatchObject(paperTicket("agent"));
     expect(agent.route.cellBootId).toBe("cell-a");
+    // TP-S3a — a cell that serves its doors puts them on the ticket, verbatim
+    expect(agent.endpoints).toEqual({
+      controlUrl: "ws://127.0.0.1:49160/control",
+      framesUrl: "ws://127.0.0.1:49160/frames",
+    });
     expect(verifies(KEY_A, agent.attachGrant)).toBe(true);
     expect(verifies(KEY_I, agent.attachGrant)).toBe(false);
     expect(agent.transportGrant.claims.connectionSetId).not.toBe(

@@ -63,8 +63,10 @@ import {
   PresentationEnvelopeHeader,
   PresentationStatus,
   ProductSessionRosterItem,
+  ProtocolLimits,
   SceneApplied,
   SessionAttachGrant,
+  TaggedTpMessage,
   TerminalCreateOpenResult,
   TerminalOpenTicketResult,
   TerminalRenewAttachParams,
@@ -142,6 +144,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-transport-credit": TransportCredit,
   "tp-roster-item": ProductSessionRosterItem,
   "tp-envelope-header": PresentationEnvelopeHeader,
+  "tp-protocol-limits": ProtocolLimits,
+  "tp-tagged-message": TaggedTpMessage,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

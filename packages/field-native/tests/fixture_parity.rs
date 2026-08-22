@@ -57,6 +57,10 @@ fn terminal_routes_fixture() {
     // TC-D15 — the subscribe surface's delta payload IS the full snapshot; a
     // cell replacement is a new row under a bumped revision, never an edge.
     roundtrip::<TerminalRouteSnapshot>("terminal-routes.replaced.json", true);
+    // TP-S3a — rows carrying the cell's T1 doors (and the grant key beside the
+    // token). field-native EMITS this row, so it is strict; the door URLs are
+    // pattern-validated newtypes on this side (the contract's loopback rule).
+    roundtrip::<TerminalRouteSnapshot>("terminal-routes.doors.json", true);
 }
 
 #[test]

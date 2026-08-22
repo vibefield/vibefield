@@ -70,6 +70,21 @@ export const TerminalEndpoints = z
   .passthrough();
 export type TerminalEndpoints = z.infer<typeof TerminalEndpoints>;
 
+const LOOPBACK_WS = /^wss?:\/\/(127\.0\.0\.1|\[::1\]|localhost)(:\d{1,5})?(\/[^?#]*)?$/;
+
+/** TPv3 (terminal-pipeline-v3 §8, T1) — the two loopback WebSocket doors of
+ * ONE cell. Transport-private: the renderer's routed transport dials them, UI
+ * never sees them. Tokens NEVER ride URLs (no query, no fragment) — authority
+ * is the grant in the first frame. Lives here (not in terminal-pipeline.ts)
+ * because the ROUTE ROW carries it from the floor to fieldd (TP-S3a). */
+export const CellEndpointSet = z
+  .object({
+    controlUrl: z.string().regex(LOOPBACK_WS, "a loopback ws:// URL without query/fragment"),
+    framesUrl: z.string().regex(LOOPBACK_WS, "a loopback ws:// URL without query/fragment"),
+  })
+  .passthrough();
+export type CellEndpointSet = z.infer<typeof CellEndpointSet>;
+
 /** TC-D4/TC-D6(c) — the two workload classes. Class is a PLACEMENT HINT and a
  * policy selector (scrollback caps), never a permanent failure domain. One
  * authority for both planes: the route snapshot, the observed inventory's
@@ -119,6 +134,13 @@ export const TerminalRouteCell = z
     grantKey: z.string().optional(),
     /** `kid.keyGeneration` — 1 per cell boot today; rotation = a new boot. */
     grantKeyGeneration: z.number().int().optional(),
+    /** TP-S3a (terminal-pipeline-v3 §8, TP-D26) — the cell's two T1 loopback
+     * WebSocket doors, reported in its hello once it serves them. ABSENT when
+     * the cell has no grant key (a pre-TP floor, the in-process serve) or
+     * predates the door layer; fieldd carries them into
+     * `TerminalOpenTicket.endpoints` and nothing else reads them (transport-
+     * private — never UI). */
+    doors: CellEndpointSet.optional(),
     /** TC-S3 — which class this cell hosts. ABSENT = a pre-TC-S3 single-cell
      * floor (every class lands there); tolerant readers route accordingly. */
     workloadClass: TerminalWorkloadClass.optional(),

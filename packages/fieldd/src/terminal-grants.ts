@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from "node:crypto";
 import {
+  type CellEndpointSet,
   type CellTransportGrant,
   type CellTransportGrantClaims,
   DEFAULT_GRANT_VALIDITY_LIMITS,
@@ -13,6 +14,7 @@ import {
   type SessionAttachGrant,
   type SessionAttachGrantClaims,
   type SessionAttachRight,
+  TERMINAL_PIPELINE,
   type TerminalInfo,
   type TerminalOpenTicket,
 } from "@vibefield/contracts";
@@ -63,7 +65,7 @@ export function rightsFor(principal: GrantPrincipal): SessionAttachRight[] {
  * grant is an ESTABLISHMENT deadline (a minute is generous for a loopback
  * dial); the attach grant is renewable and bounded by the lifetime the cell
  * enforces. */
-export const TP_TRANSPORT_GRANT_TTL_MS = 60_000;
+export const TP_TRANSPORT_GRANT_TTL_MS = TERMINAL_PIPELINE.TRANSPORT_GRANT_TTL_MS;
 export const TP_ATTACH_GRANT_TTL_MS = DEFAULT_GRANT_VALIDITY_LIMITS.maxGrantLifetimeMs;
 
 /** The per-cell-boot grant key as the route row delivers it. */
@@ -99,6 +101,9 @@ export interface MintTicketInput {
   principal: GrantPrincipal;
   sessionId: string;
   route: RouteBinding;
+  /** TP-S3a — the cell's T1 doors when the route row carries them; copied
+   * verbatim into `TerminalOpenTicket.endpoints`. */
+  doors?: CellEndpointSet;
 }
 
 export interface RenewAttachInput extends MintTicketInput {
@@ -157,11 +162,14 @@ export class TerminalGrantMinter {
     return this.attachGrantAt(input, clientId, generation);
   }
 
-  /** The S1 ticket: route + both grants; `endpoints` stays absent until the
-   * cell serves its T1 doors (TP-S3a) — the contract says so. */
+  /** The ticket: route + both grants, and `endpoints` exactly when the cell
+   * serves its T1 doors (TP-S3a — the route row's `doors`); a keyed cell that
+   * predates the door layer mints grants without endpoints, and the renderer
+   * shows the honest `transport-not-landed` face. */
   mintTicket(input: MintTicketInput): TerminalOpenTicket {
     return {
       route: input.route,
+      ...(input.doors === undefined ? {} : { endpoints: input.doors }),
       transportGrant: this.mintTransport(input.key, input.principal),
       attachGrant: this.mintAttach(input),
     };

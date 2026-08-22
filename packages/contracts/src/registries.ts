@@ -100,6 +100,64 @@ export const CELL_ISOLATION = {
   MAX_SOLO_CELLS: 8,
 } as const;
 
+/** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20
+ * item 5 "numeric limits with owners"). ONE authority for the cell (Rust, by
+ * generation), fieldd (the grant TTLs) and the renderer. Every value is
+ * PROVISIONAL until the post-S0 numeric ratification checkpoint (spec §15/§16)
+ * — change it here, never in a consumer. Owners: the protocol version is the
+ * wire's; heartbeat/pre-auth/connection caps are the CELL's door hygiene; the
+ * grant validity bounds are shared by minter (fieldd) and verifier (cell); the
+ * CELL_* receive caps bound what a worker may advertise (the leg's windows are
+ * the MIN of both); the ProtocolLimits block is what `ConnectionAccepted`
+ * announces. The TTL inequality (§5.4) holds by construction:
+ * HEARTBEAT_TTL_MS ≥ HEARTBEAT_INTERVAL_MS + detection + jitter. */
+export const TERMINAL_PIPELINE = {
+  PROTOCOL_MAJOR: 1,
+  PROTOCOL_MINOR: 0,
+  HEARTBEAT_INTERVAL_MS: 5_000,
+  HEARTBEAT_TTL_MS: 15_000,
+  HELLO_DEADLINE_MS: 5_000,
+  PRE_AUTH_MAX_BYTES: 65_536,
+  PRE_AUTH_CONNECTION_CAP: 64,
+  MAX_CONNECTION_SETS: 256,
+  MAX_CLOCK_SKEW_MS: 5_000,
+  MAX_GRANT_LIFETIME_MS: 600_000,
+  TRANSPORT_GRANT_TTL_MS: 60_000,
+  CELL_CONNECTION_CREDIT_BYTES: 16_777_216,
+  CELL_PER_ACTIVATION_CREDIT_BYTES: 4_194_304,
+  CELL_STAGING_BYTES_PER_SESSION: 8_388_608,
+  CELL_STAGING_BYTES_TOTAL: 67_108_864,
+  CELL_MAX_CONCURRENT_ACTIVATIONS: 256,
+  CELL_MAX_CONCURRENT_SEEDS: 4,
+  MAX_CONTROL_MESSAGE_BYTES: 262_144,
+  MAX_PRESENTATION_CHUNK_BYTES: 1_048_576,
+  MAX_BATCH_LATENCY_MS: 4,
+  MAX_CREDIT_RETURN_DELAY_MS: 16,
+  MAX_SCENE_APPLIED_DELAY_MS: 1_000,
+  SCENE_APPLIED_REFRESH_MS: 2_000,
+  PRESENTATION_STATUS_REFRESH_MS: 2_000,
+  ACTIVATION_ATTACH_DEADLINE_MS: 5_000,
+  MAX_ACTIVATION_CATCHUP_MS: 3_000,
+  MAX_CATCHUP_BYTES: 8_388_608,
+  CREDIT_ACCOUNT_DRAIN_TTL_MS: 5_000,
+} as const;
+
+/** TPv3 — WebSocket close codes on the cell doors (terminal-pipeline-v3 §5.1):
+ * `1008` = EVERY pre-authentication failure, silent by policy (no body, no
+ * code on the wire — the reason lives in the cell's audit line); `1011` server
+ * error; 4000+ protocol-specific and always named in the close reason. One
+ * authority for the cell (Rust, by generation) and the renderer. */
+export const TERMINAL_PIPELINE_CLOSE_CODES = {
+  GOING_AWAY: 1001,
+  POLICY_PRE_AUTH: 1008,
+  SERVER_ERROR: 1011,
+  STALE_ROUTE: 4000,
+  FENCED: 4001,
+  SUPERSEDED: 4002,
+  PROTOCOL: 4003,
+  LEG_TIMEOUT: 4004,
+} as const;
+
 /** Mesh namespaces. `ss:*` is reserved to SyncedStore; `x.<pluginId>.*` is the dynamic service namespace (D19). */
 export const NAMESPACES = {
   RPC: "field.rpc",

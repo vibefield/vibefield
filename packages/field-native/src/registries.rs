@@ -73,6 +73,54 @@ pub mod cell_isolation {
     pub const MAX_SOLO_CELLS: u64 = 8;
 }
 
+/// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:
+/// protocol version, door hygiene, grant validity, the cell's receive caps and
+/// the announced ProtocolLimits. PROVISIONAL until the numeric checkpoint; one
+/// authority with fieldd and the renderer. See registries.ts for the owners.
+pub mod terminal_pipeline {
+    pub const PROTOCOL_MAJOR: u64 = 1;
+    pub const PROTOCOL_MINOR: u64 = 0;
+    pub const HEARTBEAT_INTERVAL_MS: u64 = 5000;
+    pub const HEARTBEAT_TTL_MS: u64 = 15000;
+    pub const HELLO_DEADLINE_MS: u64 = 5000;
+    pub const PRE_AUTH_MAX_BYTES: u64 = 65536;
+    pub const PRE_AUTH_CONNECTION_CAP: u64 = 64;
+    pub const MAX_CONNECTION_SETS: u64 = 256;
+    pub const MAX_CLOCK_SKEW_MS: u64 = 5000;
+    pub const MAX_GRANT_LIFETIME_MS: u64 = 600000;
+    pub const TRANSPORT_GRANT_TTL_MS: u64 = 60000;
+    pub const CELL_CONNECTION_CREDIT_BYTES: u64 = 16777216;
+    pub const CELL_PER_ACTIVATION_CREDIT_BYTES: u64 = 4194304;
+    pub const CELL_STAGING_BYTES_PER_SESSION: u64 = 8388608;
+    pub const CELL_STAGING_BYTES_TOTAL: u64 = 67108864;
+    pub const CELL_MAX_CONCURRENT_ACTIVATIONS: u64 = 256;
+    pub const CELL_MAX_CONCURRENT_SEEDS: u64 = 4;
+    pub const MAX_CONTROL_MESSAGE_BYTES: u64 = 262144;
+    pub const MAX_PRESENTATION_CHUNK_BYTES: u64 = 1048576;
+    pub const MAX_BATCH_LATENCY_MS: u64 = 4;
+    pub const MAX_CREDIT_RETURN_DELAY_MS: u64 = 16;
+    pub const MAX_SCENE_APPLIED_DELAY_MS: u64 = 1000;
+    pub const SCENE_APPLIED_REFRESH_MS: u64 = 2000;
+    pub const PRESENTATION_STATUS_REFRESH_MS: u64 = 2000;
+    pub const ACTIVATION_ATTACH_DEADLINE_MS: u64 = 5000;
+    pub const MAX_ACTIVATION_CATCHUP_MS: u64 = 3000;
+    pub const MAX_CATCHUP_BYTES: u64 = 8388608;
+    pub const CREDIT_ACCOUNT_DRAIN_TTL_MS: u64 = 5000;
+}
+
+/// TPv3 — the cell doors' WebSocket close codes (1008 = silent pre-auth; 4000+
+/// named). See registries.ts.
+pub mod terminal_pipeline_close_codes {
+    pub const GOING_AWAY: u16 = 1001;
+    pub const POLICY_PRE_AUTH: u16 = 1008;
+    pub const SERVER_ERROR: u16 = 1011;
+    pub const STALE_ROUTE: u16 = 4000;
+    pub const FENCED: u16 = 4001;
+    pub const SUPERSEDED: u16 = 4002;
+    pub const PROTOCOL: u16 = 4003;
+    pub const LEG_TIMEOUT: u16 = 4004;
+}
+
 /// File names beneath a daemon's own data directory. The plane that OWNS the
 /// file joins the name to its data dir; readers ask that plane for the path.
 pub mod files {

@@ -9,7 +9,7 @@ const BENCH_MARKERS = ["VibeField UI Bench", "VIBEFIELD_UI_BENCH_URL", "vibefiel
 // TP-S0c: the perf lab RUNNER lives in the separate testing bundle
 // (dist/testing/smoke.cjs) that main reaches by a runtime-external import, the
 // same way every smoke does — so its marker must never appear in main either.
-const LAB_MARKERS = ["vibefield-terminal-perf-lab-only"];
+const LAB_MARKERS = ["vibefield-terminal-perf-lab-only", "vibefield-terminal-door-probe-only"];
 
 if (!existsSync(mainBundle)) {
   throw new Error("production main verification requires dist/main/index.cjs");
