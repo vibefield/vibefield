@@ -7,6 +7,11 @@ const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const rendererRoot = join(packageRoot, "dist", "renderer");
 const BENCH_MARKER = "vibefield-ui-bench-only";
 const BENCH_PATH = /(^|\/)(design-system|ui-bench)([-./]|$)/i;
+// TP-S0c: the perf lab's renderer bridge carries this marker in its header. The
+// production build folds `__VIBEFIELD_TERMINAL_PERF_LAB__` to `false` and rollup
+// drops the module, so finding the marker here means the fold stopped working —
+// which is the only way lab instrumentation could reach a packaged renderer.
+const PERF_LAB_MARKER = "vibefield-terminal-perf-lab-only";
 
 function walk(directory, output = []) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -29,6 +34,7 @@ for (const absolute of files) {
   if (/\.(?:css|html|js|json)$/i.test(path)) {
     const contents = readFileSync(absolute, "utf8");
     if (contents.includes(BENCH_MARKER)) leaks.push(`${path} contains the UI Bench marker`);
+    if (contents.includes(PERF_LAB_MARKER)) leaks.push(`${path} contains the perf-lab marker`);
   }
 }
 
@@ -43,5 +49,5 @@ if (leaks.length > 0) {
 
 const bytes = files.reduce((total, file) => total + statSync(file).size, 0);
 process.stdout.write(
-  `production UI boundary OK — ${files.length} files, ${bytes.toLocaleString("en-US")} bytes; UI Bench absent\n`,
+  `production UI boundary OK — ${files.length} files, ${bytes.toLocaleString("en-US")} bytes; UI Bench and perf lab absent\n`,
 );

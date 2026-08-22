@@ -9,6 +9,18 @@ import { createRendererLoggingClient } from "./renderer-logger";
 // global, adapt it to FieldHost, mount. It knows nothing about ICE, documents,
 // plugins, or HUD — the field app is a black box behind its public entry.
 
+// TP-S0c — the perf lab's renderer bridge, and the ONLY lines of this file that
+// are not production. The flag is a vite `define` (the same mechanism
+// `__VIBEFIELD_FORCE_ONBOARDING__` already uses), so outside the lab build this
+// reads `if (false)` and rollup drops both the branch and the chunk it names;
+// `verify-production-renderer.mjs` asserts the module's marker is absent from
+// `dist/renderer`, which makes the exclusion a gate rather than a comment.
+if (__VIBEFIELD_TERMINAL_PERF_LAB__) {
+  void import("@vibefield/field-app/terminal-perf-lab").then((lab) => {
+    lab.installTerminalPerfLab();
+  });
+}
+
 const root = document.getElementById("root");
 if (root === null) throw new Error("renderer host: #root missing from index.html");
 

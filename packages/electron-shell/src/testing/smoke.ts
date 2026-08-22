@@ -97,6 +97,12 @@ import {
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
 
+// TP-S0c — the perf lab rides the SAME test-only bundle every smoke does, so
+// main reaches it through the one runtime-external import it already has and no
+// second artifact has to be built, excluded from packaging, and kept excluded.
+// Its code lives in its own file; only the door is here.
+export { runTerminalPerfLab, SCENARIOS as TERMINAL_PERF_SCENARIOS } from "./terminal-perf-lab";
+
 // Smoke/spike runners (ESR §5.2.6 / ESR-12): a SEPARATE build artifact
 // (dist/testing/smoke.cjs) that the production main bundle never contains —
 // index.ts reaches it via a runtime-external dynamic import, and packaging

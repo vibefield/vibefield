@@ -115,7 +115,24 @@ const MODE = parseMode(process.argv);
 // The Live Surfaces lab is smoke-like for isolation but deliberately exercises
 // a real WebGPU device and its loss/replacement path, so it is the sole exception.
 // Must precede `app.whenReady()`, so it lives here at module load.
-if (isSmokeLike(MODE) && MODE !== "live-surfaces-lab") app.disableHardwareAcceleration();
+// TP-S0c: `terminal-perf-lab` joins `live-surfaces-lab` in KEEPING hardware
+// acceleration. A perf lab that measured a software rasteriser would publish
+// numbers for a renderer nobody runs — the GPU path is the thing under test.
+if (isSmokeLike(MODE) && MODE !== "live-surfaces-lab" && MODE !== "terminal-perf-lab") {
+  app.disableHardwareAcceleration();
+}
+// TP-S0c: an OCCLUDED Chromium window stops presenting. Chromium suspends rAF
+// and backgrounds the renderer when a window is covered or unfocused, which for
+// a perf lab does not mean "slow" — it means zero: the lab's `single-pane` run
+// collected frame samples in rotation 0 and none in rotations 1–3, from a window
+// something else had come to sit on top of. These two switches keep the renderer
+// awake so a measured zero is the terminal's and not the compositor's. They are
+// mode-gated because a PRODUCTION shell should absolutely background an occluded
+// window — that is a battery feature, and only the lab wants it off.
+if (MODE === "terminal-perf-lab") {
+  app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
+}
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 const PRELOAD_PATH = join(__dirname, "..", "preload", "index.cjs");
 const DESKTOP_BOOT_ID = `desktop-${randomBytes(8).toString("hex")}`;
@@ -345,7 +362,21 @@ async function main(
   // the app protocol serves, so the policy and the document cannot drift
   // (build-deterministic bytes; a rebuilt map re-hashes on next boot). Dev has
   // no built html and a null CSP; absent file ⇒ no hashes ⇒ policy unchanged.
-  const rendererRoot = join(__dirname, "..", "renderer");
+  // TP-S0c: the perf lab builds the SAME product renderer — same entry, same
+  // plugins, same chunks, same production React — under a vite mode whose only
+  // effects are one `define` and this output directory, under the ignored dev
+  // root. So a lab build can never leave instrumented bytes sitting in the path
+  // packaging picks up, and what it measures is the renderer that ships.
+  // (`--mode` alone does NOT make `import.meta.env.DEV` true: mode and NODE_ENV
+  // are separate in Vite and `build` pins the latter to production. The sampler
+  // is admitted by an explicit door instead — `allowSamplingForPerfLab`.)
+  // The driver passes the absolute path; the fallback keeps the mode runnable by
+  // hand from a default build.
+  const rendererRoot =
+    MODE === "terminal-perf-lab"
+      ? (process.env["VF_TERMINAL_PERF_LAB_RENDERER"] ??
+        join(__dirname, "..", "..", "..", "..", ".vibefield", "terminal-perf-lab", "renderer"))
+      : join(__dirname, "..", "renderer");
   let importMapHashes: string[] = [];
   try {
     importMapHashes = importMapHashesFromHtml(
@@ -1063,6 +1094,37 @@ async function main(
       toggleGodview,
       closeWindow,
     });
+  }
+
+  // TP-S0c — the perf lab. Wired exactly like the godview smoke (the driving
+  // pattern it reuses): a SHOWN window on the production factory, the real
+  // daemon pair against an isolated data root, real panes through the
+  // workspace's own doors. It differs in what it does with them — it drives a
+  // scenario and reads the TP-S0a sampler instead of asserting rows.
+  if (MODE === "terminal-perf-lab") {
+    await (await testing()).runTerminalPerfLab({
+      handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      viteUrl: VITE_URL,
+      toggleGodview,
+      beforeExit: closeEvidence,
+      onWindow: (window) => {
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch(() => undefined);
+          },
+        });
+      },
+    });
+    return;
   }
 
   if (MODE === "smoke-godview") {

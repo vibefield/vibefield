@@ -38,6 +38,10 @@ declare global {
   /** Replaced by Vite. True only for the explicit `dev:onboarding` run mode. */
   const __VIBEFIELD_FORCE_ONBOARDING__: boolean;
 
+  /** Replaced by Vite. True only in the `terminal-perf-lab` build (TP-S0c), so
+   * every other bundle folds the perf-lab branch away statically. */
+  const __VIBEFIELD_TERMINAL_PERF_LAB__: boolean;
+
   interface Window {
     vibefield: {
       readonly platform: ShellPlatform;

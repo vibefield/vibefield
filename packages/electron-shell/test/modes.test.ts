@@ -13,6 +13,7 @@ const ALL_MODES: readonly ShellMode[] = [
   "smoke-plugin-restart",
   "smoke-godview",
   "live-surfaces-lab",
+  "terminal-perf-lab",
   "spike-loro",
 ];
 
@@ -30,6 +31,7 @@ describe("parseMode", () => {
     expect(parseMode(["--smoke-plugin-restart"])).toBe("smoke-plugin-restart");
     expect(parseMode(["--smoke-godview"])).toBe("smoke-godview");
     expect(parseMode(["--live-surfaces-lab"])).toBe("live-surfaces-lab");
+    expect(parseMode(["--terminal-perf-lab"])).toBe("terminal-perf-lab");
     expect(parseMode(["--spike-loro"])).toBe("spike-loro");
   });
 
@@ -39,8 +41,13 @@ describe("parseMode", () => {
     expect(parseMode(["a", "b", "c", "--spike-loro"])).toBe("spike-loro");
   });
 
-  it("honors precedence lab > spike-loro > restart > godview > smoke > canvas > dev", () => {
+  it("honors precedence lab > perf-lab > spike-loro > restart > godview > smoke > canvas > dev", () => {
     expect(parseMode(["--spike-loro", "--live-surfaces-lab"])).toBe("live-surfaces-lab");
+    expect(parseMode(["--spike-loro", "--terminal-perf-lab"])).toBe("terminal-perf-lab");
+    expect(parseMode(["--terminal-perf-lab", "--live-surfaces-lab"])).toBe("live-surfaces-lab");
+    expect(parseMode(["--dev", "--smoke-godview", "--terminal-perf-lab"])).toBe(
+      "terminal-perf-lab",
+    );
     expect(parseMode(["--dev", "--smoke-canvas", "--smoke", "--spike-loro"])).toBe("spike-loro");
     expect(parseMode(["--dev", "--smoke-canvas", "--smoke"])).toBe("smoke");
     expect(parseMode(["--dev", "--smoke-canvas"])).toBe("smoke-canvas");
@@ -63,6 +70,7 @@ describe("isSmokeLike", () => {
     "smoke-plugin-restart",
     "smoke-godview",
     "live-surfaces-lab",
+    "terminal-perf-lab",
     "spike-loro",
   ]);
 
@@ -84,6 +92,10 @@ describe("shutdownPolicy", () => {
     "smoke-plugin-restart": "stop-owned",
     "smoke-godview": "stop-owned",
     "live-surfaces-lab": "leave-running",
+    // TP-S0c: the ONE lab that is stop-owned. Unlike the others it spawns a
+    // pair against its own data root and drives real sessions through it, so it
+    // owns what it started and stops it.
+    "terminal-perf-lab": "stop-owned",
     "spike-loro": "leave-running",
   };
 

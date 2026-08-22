@@ -137,15 +137,42 @@ export interface TerminalPerfState {
   readonly sample: TerminalPerfSample | null;
 }
 
+/** Set by the perf lab's renderer bridge, and by nothing else.
+ *
+ * TP-S0c needed a THIRD state that TP-S0a's two did not have: a build that is a
+ * production build in every way that affects a measurement — React's production
+ * runtime, minified, the same chunks — but whose sampler may open a window. A
+ * `vite build` is `import.meta.env.DEV === false` whatever `--mode` says (mode
+ * and NODE_ENV are separate in Vite, and `build` pins NODE_ENV to production),
+ * so the lab's first run reported `metrics` requested and `off` effective with
+ * zero windows. The wrong fixes were both available and both bad: building with
+ * NODE_ENV=development would have swapped in React's development runtime and
+ * measured a renderer nobody ships, and `define`-ing `import.meta.env.DEV` true
+ * would also have flipped `field-engine.ts:118`.
+ *
+ * So the door is explicit and its only key lives in
+ * `terminal-perf-lab.ts` — a module the production bundle does not contain
+ * (`__VIBEFIELD_TERMINAL_PERF_LAB__` folds to false, rollup drops it, and
+ * `verify-production-renderer.mjs` fails the build if its marker ever appears in
+ * `dist/renderer`). A production bundle therefore has no caller for this
+ * function, which is a stronger guarantee than a flag it could read wrong. */
+let labSamplingAllowed = false;
+
+/** Called by the lab bridge at install. Not exported from the package's public
+ * entry — reachable only through `@vibefield/field-app/terminal-perf-lab`. */
+export function allowSamplingForPerfLab(): void {
+  labSamplingAllowed = true;
+}
+
 /** Production builds may never sample. The gate is the bundler's `import.meta.env`,
  * so `metrics` is not merely unused in a production bundle — the mode setter
  * refuses it, and the check is one boolean read. */
 function samplingAllowed(): boolean {
+  if (labSamplingAllowed) return true;
   try {
-    // `DEV` alone: it is the flag Vite defines in every non-production build
-    // and the one vitest sets, and it is the only member of `ImportMetaEnv`
-    // this app declares. A production bundle has it statically `false`, so the
-    // branch below is dead code the bundler can see.
+    // `DEV`: the flag Vite defines in every dev-server build and the one vitest
+    // sets. A production bundle has it statically `false`, so the branch below
+    // is dead code the bundler can see.
     return import.meta.env?.DEV === true;
   } catch {
     return false;

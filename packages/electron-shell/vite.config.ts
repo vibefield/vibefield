@@ -28,7 +28,13 @@ export default defineConfig(({ mode }) => ({
   base: "./",
   // The dev runner overrides this one compile-time capability for
   // `dev:onboarding`. Packaged and smoke renderers always get the safe default.
-  define: { __VIBEFIELD_FORCE_ONBOARDING__: "false" },
+  define: {
+    __VIBEFIELD_FORCE_ONBOARDING__: "false",
+    // TP-S0c: the perf lab's renderer bridge is admitted by ONE compile-time
+    // boolean. Everywhere else it is the literal `false`, which is what lets
+    // rollup drop the dynamic import and the whole module behind it.
+    __VIBEFIELD_TERMINAL_PERF_LAB__: String(mode === "terminal-perf-lab"),
+  },
   // P8b-3 §11.6: the host singleton chunks + the inline import map that binds
   // a staged plugin's bare specifiers to them. Production renderer only — the
   // plugin never runs for `design`, and its own `apply: "build"` keeps it out
@@ -78,7 +84,15 @@ export default defineConfig(({ mode }) => ({
     outDir:
       mode === "design"
         ? join(import.meta.dirname, "..", "..", ".vibefield", "ui-bench", "renderer")
-        : join(import.meta.dirname, "dist", "renderer"),
+        : // TP-S0c: the perf lab builds the SAME product entry with the same
+          // plugins; the only differences from production are the
+          // `__VIBEFIELD_TERMINAL_PERF_LAB__` define above and this directory.
+          // It lands under the ignored dev root so a lab build can never replace
+          // the renderer that gets packaged, and everything that could move a
+          // measurement — React's build, minification, chunking — is unchanged.
+          mode === "terminal-perf-lab"
+          ? join(import.meta.dirname, "..", "..", ".vibefield", "terminal-perf-lab", "renderer")
+          : join(import.meta.dirname, "dist", "renderer"),
     emptyOutDir: true,
     rollupOptions: {
       // MEASURED, and load-bearing (P8b-3). Vite's client default is `false`,

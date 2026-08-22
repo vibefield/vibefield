@@ -163,3 +163,22 @@ export interface GodviewColdOpenFacts {
 export function emitGodviewColdOpenMarker(facts: GodviewColdOpenFacts): void {
   console.log(`GODVIEW_COLD_OPEN ${JSON.stringify(facts)}`);
 }
+
+/** The perf lab's renderer bridge, announcing itself (TP-S0c).
+ *
+ * Here rather than in `perf/terminal-perf-lab.ts` because this module is the
+ * one place harness markers live — it is the file `noConsole` exempts, and
+ * exempting a second file would make "where do markers come from" a question
+ * with two answers.
+ *
+ * ONE line, and only this line: everything else the lab reads it pulls over
+ * `executeJavaScript`, because a `metrics` window carries four histograms and
+ * twenty counters once a second and console marshalling would cost more than
+ * the thing being measured. What a marker is good for is the arrival of a
+ * capability — the rig waits for this instead of polling a global into
+ * existence, so a renderer built without the lab fails legibly rather than
+ * timing out.
+ */
+export function emitTerminalPerfLabMarker(): void {
+  console.log(`TERMINAL_PERF_LAB ${JSON.stringify({ installed: true })}`);
+}

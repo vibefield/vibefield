@@ -9,11 +9,13 @@ export type ShellMode =
   | "smoke-plugin-restart"
   | "smoke-godview"
   | "live-surfaces-lab"
+  | "terminal-perf-lab"
   | "spike-loro";
 
 /** Precedence mirrors the pre-split dispatch order in main(). */
 export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--live-surfaces-lab")) return "live-surfaces-lab";
+  if (argv.includes("--terminal-perf-lab")) return "terminal-perf-lab";
   if (argv.includes("--spike-loro")) return "spike-loro";
   if (argv.includes("--smoke-plugin-restart")) return "smoke-plugin-restart";
   if (argv.includes("--smoke-godview")) return "smoke-godview";
@@ -33,6 +35,7 @@ export function isSmokeLike(mode: ShellMode): boolean {
     mode === "smoke-plugin-restart" ||
     mode === "smoke-godview" ||
     mode === "live-surfaces-lab" ||
+    mode === "terminal-perf-lab" ||
     mode === "spike-loro"
   );
 }
@@ -46,12 +49,16 @@ export function isSmokeLike(mode: ShellMode): boolean {
  *
  * Test-only lab/spike modes are leave-running despite passing isSmokeLike:
  * they touch no daemon, so have nothing to stop and no right to stop another
- * process's. */
+ * process's. `terminal-perf-lab` is the exception among the labs (TP-S0c): it
+ * SPAWNS a pair against its own isolated data root and drives real sessions
+ * through it, so it owns them and stops them — otherwise a night of A/B arms
+ * would leave one daemon pair and a hundred ptys per run behind. */
 export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" {
   return mode === "smoke" ||
     mode === "smoke-canvas" ||
     mode === "smoke-plugin-restart" ||
-    mode === "smoke-godview"
+    mode === "smoke-godview" ||
+    mode === "terminal-perf-lab"
     ? "stop-owned"
     : "leave-running";
 }
