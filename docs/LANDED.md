@@ -3575,3 +3575,58 @@ inside the floor's cell boot (751–2052 ms for the host to exist), and should b
 No product BEHAVIOUR changed. Tests: three cold-open trace cases + three pool cases; fieldd's
 terminal suites 74/2-skip; the hop ladder green on demand; every lab run's pty census back to 57.
 Results + reproduction: `draft/terminal-perf/results/20260821-mint-lever/README.md`.
+
+## TP-S3b — static activation, cell side: the seed, the two-dimensional lease, byte credits, and the catch-up that repairs a lineage
+
+2026-08-22, `5ba4a72` (the orchestrator; the critical path). The second S3 slice, built where TP-D26
+put it — in `field-terminal-host`, over ghosttea's public `Session` API — and proven END TO END
+against a REAL `/bin/sh` session this harness spawns and a REAL tungstenite client playing the
+routed runtime. New in `field-native/src/tp/`: **`source.rs`** — the `SessionSource` seam (the door
+needs a session by id, its `FrameHub`, and — until G22 — nothing else; `DirectSessions` is the
+harness's own set, `NoSessions` is what a production cell serves until the accessor lands) plus the
+TRF1 header parser (the door stamps and routes, never decodes — §8). **`activation.rs`** — the
+cell-side ACTIVATION table, pure over its inputs (every call returns `Effect`s the door performs
+outside the lock): one pending-or-active activation per `{clientId, sessionId}` (idempotent same-id
+retry, `ACTIVATION_CONFLICT` for a new id without `replacesActivationId`, an atomic replacement that
+revokes the old and tells its control leg), the two-dimensional lease (`presentation` goes
+`presenting` when `SceneApplied` reaches the seed's revision; `input` is `allowed` only under
+`PresentationReady` ∧ the input right ∧ the cell's own lag call — a read-only grant reaches
+presenting and NEVER `InputAllowed`; a renewal that drops the input right revokes it at once), the
+BYTES credit ledger (per-connection and per-activation windows, cumulative-max returns idempotent
+and epoch-fenced, the draining rule for a closed activation), and `DeclareDemand{none|live}` driving
+the ghosttea view attach/detach (warm/hot). **`presentation.rs`** — the per-activation pump: the
+seed is `Session::refresh()`'s forced FULL frame shipped as a `seed` transfer (`baseContent = null`,
+chunked to the announced limit, crc32c over the concatenation), ordinary `trf1-frame` deltas carry
+base = the last revision SENT (the socket is ordered) and result = the frame's, and ANY dropped
+frame — credit starvation, a hub lag, demand none→live — breaks the lineage and is repaired by ONE
+`catchup` transfer (another forced full frame, base = last sent), bounded by `maxActivationCatchupMs`
+(→ `presentation: stopped{overload}` on breach, never a livelock). **`crc32c.rs`** — the transfer
+checksum (table-driven, no new crate; the RFC 3720 check values pinned). **`door.rs`** grew the S3b
+wiring: a per-socket WRITER task owns the sink (so a pump and a reply never race on one socket), the
+attach handlers verify the attach grant (a failure is ONE `AttachRefused {code: GRANT_INVALID,
+retryable: false}`, the precise silent code in the audit line — on an authenticated leg there is no
+hello to close), admit its generation against the attach high-water, and let the table decide; a
+`CalibrationPing` is echoed as a `calibration` unit (and re-arms the frames leg's deadline). The
+geometry verbs answer `4003 PROTOCOL:unsupported-at-s3b:<type>` — honest, never a pretended seat.
+Contracts: a new `GRANT_INVALID` attach-refusal code + failure-matrix row + fixture; the
+`AttachControlLeg` doc states renewal rides the same message (a higher `grantGeneration` for a held
+activation); §20-item-5 data grew (`registries.TERMINAL_PIPELINE` gained `CELL_LEASE_TTL_MS`,
+`INPUT_LAG_SUSPEND_REVISIONS`, `ATTACH_RENEWAL_MARGIN_MS`, `SEED_FRAME_WAIT_MS`, generated into
+`registries.rs`). **Tests:** `tests/tp_activation.rs` — 4 rows against a real session + client (the
+deck path: seed → lease presenting/allowed → deltas with base/result stamps → `SceneApplied` keeps
+the lease fresh; credit gating: with NO credit the stream stalls partway through a feed of discrete
+frames and the activation stays live, and returning credit resumes it with a `catchup` transfer;
+read-only never `InputAllowed` + demand none detaches the view (`has_active_views` false) + live
+re-attaches it + a frames-leg loss revokes the lease on the control leg; attach
+idempotency/conflict/replacement + `SESSION_UNKNOWN` + the calibration echo) — plus the table's own
+decisions unit-tested in `activation.rs` (attach idempotency, the lease under rights/lag/renewal,
+demand, and the credit ledger's cumulative-max/epoch-fence). **A test discipline worth keeping:** the
+engine COALESCES a burst into ~one frame (a 6000-line `seq` produced 2 frames of an 812-byte seed),
+so byte-starvation cannot be reproduced by output VOLUME against a window that also fits the seed —
+the credit test starves by feeding many DISCRETE spaced frames from a background task, and the pump's
+convergence bound was made a `DoorConfig` field so the test sets it generously without racing the 3s
+production constant. `pnpm verify` verbatim green (one biome fixup on the regenerated machines vector;
+one clippy merge of two identical lag branches). NOT in S3b: routed cross-cell recovery + the geometry
+seat (S3c), the stress/fairness rows (S3d), the renderer runtime that makes it user-facing (G23), and
+G22 — until the accessor lands the harness hosts T1-born sessions itself and fieldd's legacy UDS
+clients cannot see them.

@@ -193,10 +193,13 @@ widget form; `widgetTypes` 22 → 23 with `stagedPlugins` unmoved is the census 
 single-station instrument reading a renderer main-thread stall as a daemon round trip — errata at source; the
 cold-open trace now carries send edges + the create path, fieldd's audit ledger is read at teardown, a gated
 six-arm hop ladder asserts order; the real lever is the deck mount's ~150 ms of blocked main thread).
-**Next:** TP-S3b static activation (attach legs + the activation registry, seed + ONE catch-up from
-`logical_snapshot`, the two-dimensional lease, byte credits, `DeclareDemand{none|live}` → warm/hot; the
-deck streams through the authenticated path behind the flag — needs G23's routed runtime, or an interim
-in-repo client for the gate) · S3c routed recovery + minimal geometry · S3d stress/fairness · S3e retire
+**TP-S3b LANDED `5ba4a72`** — static activation, cell side: the ACTIVATION table (one activation per
+{client,session}, idempotent/conflict/atomic-replace), the two-dimensional lease (read-only never
+`InputAllowed`; the cell's own lag call), `DeclareDemand{none|live}` → the ghosttea view (warm/hot), the
+BYTES credit ledger, and the per-activation pump (seed = a forced full frame; deltas base=last-sent; ONE
+`catchup` repairs any dropped-frame lineage; bounded → `stopped{overload}`) — proven end-to-end against a
+REAL /bin/sh session + a REAL WebSocket client. **Next:** S3c routed recovery + the minimal geometry seat
+(over ghosttea's `claim_control_checked`/`resize_view_checked`) · S3d stress/fairness · S3e retire
 the bridge + the deliberate CSP test. Standing debts: one shared session set between the UDS plane and the
 doors = petition G22; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames reading;
 divider drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).
