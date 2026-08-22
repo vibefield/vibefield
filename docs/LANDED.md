@@ -3274,3 +3274,32 @@ family. `fixtures/tp-machines.vector.json` is the published form the upstream
 verifier reads; the test pins it byte for byte. Spec v0.8 §20 records items
 1–3 as EXISTING and what 4–7 still owe.
 
+## TP-S2 — zoom is one resize; the ICE widget watches
+
+2026-08-22, `0f10b22` (built in a parallel worktree by an Opus agent; rebased, fast-forwarded).
+Fullscreen/zoom of a deck pane is a CSS-transform morph the DECK owns (`godview/deck-zoom.ts`,
+DESIGN.md's island easing, reduced-motion honoured): zero resizes during the animation by
+construction (a transform changes no layout box), ONE layout commit and ONE `runtime.resize`
+at gesture end, each way, siblings hidden by `visibility` with pinned grid placement so no
+other pane is ever resized — measured on the real `TerminalSurface`. Upstream's
+`toggle-zoom` could not be used: it swaps the rendered root and re-keys `SplitView`, so every
+pane unmounts and the zoomed one REMOUNTS (new viewId, new canvas, re-attach + re-seed) —
+spec §2 errata at source; `is-zoomed` is dead code at 0.10.1. The chord ⌘⇧Enter is claimed
+ahead of the workspace's passive capture listener (layout effect + `stopImmediatePropagation`,
+proven). The ICE terminal widget ships as a field-app product surface, the pool's second
+consumer (`src/terminal/mirror/TerminalMirrorSurface`): a WATCH-ONLY mirror that cannot take
+focus BY CONSTRUCTION — five layers (a watch-only runtime facade with an allow-list of verbs,
+`inert`, `pointer-events: none`, `active={false}`, a `readWrite:false` projection) because
+props cannot do it: `controlsResize:false` gates only the explicit claim while the surface's own
+ResizeObserver still resizes the PTY (a SECOND hazard beside focus⇒claim — spec §2 + G23),
+`readWrite` is not a prop, `setTheme` is session-scoped. TP-R4a proven by attack (focus,
+hand-delivered focus events, pointer, keys, a real 1200×800 box change → zero claims/resizes/
+input reach the runtime). Cull-driven demand through the pool's ledger (live ⇄ none; release
+on unmount; the two-view fold keeps the session); camera scale rides a custom property and
+re-rasters once at settle; no `data-canvas-interactive` (a mirror consumes no gesture). UI
+Bench mounts the SHIPPING surface through a fixture adapter; `ui-system-boundaries` rows bite.
+Measured and NOT met: divider drag = 26 resizes / 200 px (~52 Hz; upstream has no throttle
+seam) — TP-R17 / G23. Left undone by design: the mirror is not yet a canvas widget TYPE (a
+manifest contribution — the plugin door), and no smoke row asserts `zoom.commits`. Gate green;
+`smoke:godview` green.
+
