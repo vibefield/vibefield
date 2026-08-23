@@ -224,18 +224,32 @@ ghosttea's OWN `KeyInput`/`MouseInput` — the cross-crate drift guard), the cel
 own leg · `leaseEpoch` placement fence · the `input` lease dimension · a synchronous renewal-margin
 backstop · a presenting view; refusals are drop-and-audit with NO per-keystroke ack; ghosttea's
 `authorize_input` — read-only / stale-epoch / monotonic-sequence — is the engine backstop), and
-field-app's pure `terminal/routed/encode-input.ts` (the `encodeInput` supply the G23 host takes
-verbatim; `location`/`timestamp` projected away; an unknown kind returns null — closed, not
-guessed). Proven: typing `exit` over the wire TERMINATES a real `/bin/sh`; a replayed
+field-app's bounded `createRoutedInputEncoder` (one monotonic wire sequence per activation across
+all G23 DOM views/remounts; one slot per admitted session with guarded activation/session/owner
+release; capacity, exhaustion, malformed and unknown input return null — closed, not guessed;
+`location`/`timestamp` projected away). The contract now pins the engine's exact u8/u32/f32 fields
+and JSON-safe i64/u64 subset; Rust also refuses f32 overflow-to-infinity. Proven: typing `exit` over
+the wire TERMINATES a real `/bin/sh`; a replayed
 `inputSequence`, a stale `leaseEpoch` and a read-only viewer all leave the human-input epoch
-unmoved (8/8 reruns). **Next, in order:** (1) integrate G22/G23 behind the flag — `ServiceSessions`
-into the production door (`cell.rs:216`, today `NoSessions`), the `--terminal-direct-door` flag made
-a renderer TRANSPORT selector (today CSP-only; `runtime-factory.ts:35` still builds the legacy port
-runtime), shell/home policy split from the legacy `terminal.connect`; (2) prove the full direct path
-(type AND display) behind the flag; (3) **S3e** retire the bridge + the deliberate CSP test.
-Standing debts: the shared session set is **no longer a petition — G22 LANDED in 0.11.0**; the debt
-is now the step-2 INTEGRATION; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames
-reading; divider drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).
+unmoved (8/8 reruns). **TP-S3 PRODUCTION INTEGRATION LANDED `67c043d` (2026-08-23):** the
+production cell installs G22 `ServiceSessions`, so UDS births and
+both T1 doors resolve one session registry and one `FrameHub`; fieldd exposes the exact
+transport-private `terminal.sessions` summary and returns the birth summary + first routed ticket
+atomically; Electron main carries one fixed bridge/routed selector plus shell policy on bootstrap;
+and the pool installs G23's routed host/runtime, multi-cell ticket routing, bounded input encoder,
+and exact termination inverses behind `--terminal-direct-door`. The integration review fixed three
+real boundary races instead of timing around them: UUID-derived engine `u64` epochs now map to
+cell-local monotonic JSON-safe `modelGeneration`s; a create ticket is primed for the first
+activation rather than re-entering observation-gated `openTicket`; and the one-shot Workspace list
+waits only through fieldd's explicit `unobserved` state. Render prewarm is bounded at 5 s.
+**Production proof:** four consecutive clean packaged direct-mode runs applied a real frame,
+reached `PresentationReady` + `InputAllowed`, typed a `touch` command through the focused
+`TerminalSurface` and observed its filesystem side effect, while process census found no legacy
+terminal bridge; measured cold open was 213–279 ms, inside the 300 ms target. **Next: TP-S3e** —
+remove the rollback flag and bridge/backend, then widen `connect-src` unconditionally with the
+deliberate CSP test and packaging cleanup. Standing debts after S3e remain `STALE_ROUTE` raised by
+custody = TC-S6; the wall-100 rAF zero-frames reading; divider drag ≈52 Hz (G23 item 9);
+DECISIONS.md carries no TC-D row (pre-existing).
 
 **PLUG.** **P8b COMPLETE — the artifact loads.** One evening closed the rung the whole ladder
 existed for (2026-08-13, four commits): the owed CORS probe ran FIRST and redesigned the rung

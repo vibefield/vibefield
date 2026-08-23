@@ -3765,12 +3765,16 @@ itself"), so the verb is VibeField-only: NO upstream release. **Contracts:** `Se
 {sessionId, activationId, leaseEpoch, inputSequence, op}` + `SendInputOp` (a `kind`-discriminated
 union — text · paste · key · mouse · scroll (SIGNED rows) · scroll-to · interrupt) +
 `TerminalKeyInput`/`TerminalMouseInput` PINNED to ghosttea's engine serde (camelCase;
-`unshiftedCodepoint` defaulting 0 exactly as upstream's `#[serde(default)]`); tag 22 in
+`unshiftedCodepoint` defaulting 0 exactly as upstream's `#[serde(default)]`; button=u8,
+codepoint/dimensions/padding=u32, coordinates=finite f32-range, and JSON-number i64/u64 fields
+restricted to their exactly representable subset); tag 22 in
 `TpMessageType`, the 8th control-INBOUND entry; four golden fixtures
 (`tp-send-input.{text,key,mouse}` + `tp-tagged-message.send-input` with rows −5). **The cell
 (`field-native/src/tp/`):** `wire.rs` serde mirrors whose `InputOp::Key/Mouse` EMBED
 `ghosttea::session::{KeyInput, MouseInput}` — the fixture test deserializing the vectors into the
-engine's own types IS the cross-crate drift guard; `activation.rs` `send_input` (a PURE read):
+engine's own types IS the cross-crate drift guard; a post-landing boundary row proves integer
+overflows refuse, and the Rust mouse reader closes serde's f64→f32 overflow-to-infinity hole;
+`activation.rs` `send_input` (a PURE read):
 own-control-leg check → `leaseEpoch` placement fence (a stale-route input never reaches the
 engine) → the `input` lease dimension (the one authority — rights, presentation, lag, expiry
 margin) → a synchronous renewal-margin backstop (a stale-`Allowed` lease cannot leak past the
@@ -3780,21 +3784,68 @@ coordinates (`view`, `client`, `attachmentEpoch` from the activation table — t
 an epoch), engine `authorize_input` the backstop. Refusals are DROP-AND-AUDIT (§5.4's "always
 rejects"; the echo of accepted input is a frame; `CellActivationStatus.input` already says why
 typing is dead) — no per-keystroke ack rides the wire. **The renderer half
-(`field-app/src/terminal/routed/encode-input.ts`):** the pure `encodeRoutedInput` context →
-tagged-`SendInput` projection the G23 routed host will take verbatim (`host.encodeInput =
-encodeRoutedInput`); `TerminalKeyEvent.location`/`timestamp` never reach the wire; an operation
-kind this build cannot encode returns null — closed, not guessed. **Tests:** the activation unit
+(`field-app/src/terminal/routed/encode-input.ts`):** the same-day latest-change review caught that
+G23's supplied `inputSequence` is PER DOM VIEW while the cell/engine fence is PER ACTIVATION. The
+replacement `createRoutedInputEncoder` owns one monotonic sequence across every view/remount of an
+activation, resets on activation replacement, and retains at most the explicit admitted-session
+budget. Guarded activation release, final session release and owner dispose are its exact inverses;
+it never evicts a possibly live slot, and capacity/safe-counter exhaustion fails closed. The body
+validates before state commit, so invalid/future input neither allocates nor spends a sequence;
+`TerminalKeyEvent.location`/`timestamp` never reach the wire. **Tests:** the activation unit
 walks EVERY drop reason (no-activation · wrong-leg · stale-lease-epoch · right-expired ·
 no-view · input-not-allowed) and the Proceed's cell-owned coordinates; the e2e types over a real
 WebSocket into a real `/bin/sh` — acceptance witnessed by ghosttea's human-input epoch
 (`record_input(true)`; every refusal and the dedup return first), a replayed `inputSequence`
 authorized ONCE, a stale `leaseEpoch` and a read-only second session (same socket pair) leaving
 their epochs UNMOVED, and the typed `exit` TERMINATING the shell — the PTY round trip no header
-inspection can fake (8/8 reruns green); the wire fixture test (the drift guard); contracts 330/330
+inspection can fake (8/8 reruns green); the wire fixture test (the drift guard); contracts 331/331
 with the new SendInput describe + leg-decode row; the encode helper validated against the contract
-schema on the control leg. `pnpm verify` verbatim green. **NOT here:** the G22 `ServiceSessions`
+schema on the control leg; the correction adds cross-view/remount sequencing, activation reset,
+bounded lifecycle and numeric limit proofs. `pnpm verify` verbatim green at the original landing;
+focused correction gates are recorded with the follow-up. **NOT here:** the G22 `ServiceSessions`
 integration into the production door (`cell.rs` still `NoSessions`), the routed HOST in the
 renderer (`runtime-factory.ts` still builds the legacy port runtime; the direct-door flag is still
 CSP-only) — that integration, then the full direct-path proof, PRECEDE S3e per the corrected
 sequence; and the agent input lane (`automation_input`, epoch-gated so human input wins) is a
 DISTINCT future seam, not this verb.
+
+## TP-S3 production integration — G22/G23 on the real app path
+
+2026-08-23, **LANDED `67c043d`.** This is the integration slice
+the EL8 and TP-S3-input entries above explicitly left open. **G22:** `field-terminal-host` now starts
+the Ghosttea service loop, obtains its `ServiceSessions` accessor, and installs that exact shared
+registry as the T1 `SessionSource`; a real lifecycle test creates through the ordinary UDS service
+and attaches the same session through BOTH WebSocket doors, proving shared `Session` and `FrameHub`
+identity rather than a copied inventory. **G23 product boundary:** contracts add the exact Ghosttea
+runtime-summary schema and scoped `terminal.sessions`; fieldd returns the authoritative birth
+summary beside `terminal.create`'s ticket (so creation never waits for observation) and lists exact
+summaries only for observed sessions. Electron main parses the rollback flag once and carries the
+fixed `bridge|routed` selector plus login-shell/home policy on the authenticated window bootstrap.
+The field-app pool installs one G23 routed runtime and host per window, with per-session ticketing,
+renewal, multi-cell route accounting, `terminal.create`/`terminate` adapters, and the bounded
+activation-scoped `SendInput` encoder. The bridge path remains the flag-off rollback and is not
+forked in direct mode.
+
+The production pass found and fixed the integration failures at their ownership boundaries. A
+Ghosttea session epoch is a UUID-derived opaque `u64`, not a JavaScript counter; the cell now maps
+each live engine lineage to a stable, non-reused, cell-local `modelGeneration` within JSON's exact
+integer range and stores that translated epoch on the activation/pump. Empty-workspace birth no
+longer pre-creates in the deck: G23 calls the product create adapter, which primes the atomic create
+ticket for the FIRST activation before any observation-gated `openTicket` call. The routed host
+also waits, with a 5 s bound, only through fieldd's explicit retryable `unobserved` inventory state,
+so Ghosttea's one initialization cannot permanently lose a slow first snapshot. Render-worker
+prewarm has its own 5 s bound and falls back to a fresh cold runtime instead of wedging a claim.
+Legacy ticket extras are stripped at the G23 adapter, and termination/disposal release primed
+tickets, input sequence state, birth summaries, placements, and cell accounting.
+
+**Proof:** `pnpm smoke:terminal-direct` builds the production app and launches with
+`--terminal-direct-door --terminal-direct-proof`. Four consecutive clean packaged runs reached a
+real applied scene (`PresentationReady`), the cell-authorized input state (`InputAllowed`), focused
+the real `TerminalSurface`, typed `touch /private/tmp/…`, observed the filesystem side effect, and
+found no `ghosttea-terminal-bridge` utility process. The measured cold opens were 213–279 ms, below
+performance §18.7's 300 ms target. Full gates at closeout: contracts 334/334; Electron shell
+603 pass / 1 skip; field-app 648/648; fieldd terminal service 49/49; all four affected TypeScript
+typechecks; `cargo fmt --check`; `cargo check -p field-native --all-targets`; and the complete
+field-native suite, including 126 unit passes plus every non-environment integration row (the real
+tailnet probes remain intentionally ignored). **Not done here:** TP-S3e. The rollback flag,
+bridge/backend, and flag-conditional CSP remain until that next deliberate removal slice.
