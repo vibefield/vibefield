@@ -1541,23 +1541,46 @@ fn perform_geometry_op(session: &Session, proceed: &GeometryProceed) -> Geometry
 fn handle_input(state: &Arc<DoorState>, msg: &SendInput, decision: InputDecision) {
     let proceed = match decision {
         InputDecision::Drop(reason) => {
-            tracing::debug!(
-                event = "field_native.tp.input.dropped",
-                component = "terminal",
-                reason,
-                activation_id = %msg.activation_id,
-                "a SendInput was refused cell-side"
-            );
+            // §5.4's drop-and-AUDIT: the structural refusals are rare and must
+            // be visible at the default (INFO) filter. `input-not-allowed`
+            // alone stays at debug — it repeats per keystroke while a viewer
+            // types into a suspended lease, and the CellActivationStatus line
+            // already audits that transition once.
+            if reason == "input-not-allowed" {
+                tracing::debug!(
+                    event = "field_native.tp.input.dropped",
+                    component = "terminal",
+                    reason,
+                    activation_id = %msg.activation_id,
+                    "a SendInput was refused cell-side"
+                );
+            } else {
+                tracing::info!(
+                    event = "field_native.tp.input.dropped",
+                    component = "terminal",
+                    reason,
+                    activation_id = %msg.activation_id,
+                    "a SendInput was refused cell-side"
+                );
+            }
             return;
         }
         InputDecision::Proceed(proceed) => proceed,
     };
     let Some(session) = state.config.source.session(&proceed.session_id) else {
-        // the session vanished between the table read and the engine call
+        // the session vanished between the table read and the engine call — a
+        // benign teardown race, but still a dropped input, so it audits too
+        tracing::debug!(
+            event = "field_native.tp.input.dropped",
+            component = "terminal",
+            reason = "session-vanished",
+            activation_id = %msg.activation_id,
+            "a SendInput was refused cell-side"
+        );
         return;
     };
     if let Err(error) = perform_input_op(&session, &proceed, &msg.op) {
-        tracing::debug!(
+        tracing::info!(
             event = "field_native.tp.input.engine_refused",
             component = "terminal",
             detail = %error,

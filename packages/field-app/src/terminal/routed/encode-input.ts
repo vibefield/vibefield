@@ -21,7 +21,7 @@ import type {
   RoutedTerminalInputContext,
   RoutedTerminalInputOperation,
 } from "@vibecook/ghosttea-react";
-import { SendInput, type SendInputOp, tagTpMessage } from "@vibefield/contracts";
+import { SendInput, type SendInputOp, TERMINAL_PIPELINE, tagTpMessage } from "@vibefield/contracts";
 
 function encodeOp(operation: RoutedTerminalInputOperation): SendInputOp | null {
   switch (operation.kind) {
@@ -142,13 +142,28 @@ export function createRoutedInputEncoder(options: RoutedInputEncoderOptions): Ro
     });
     if (!parsed.success) return null;
 
+    // The cell reads with tungstenite capped at MAX_CONTROL_MESSAGE_BYTES, and
+    // an oversize frame is a READ ERROR there — it would tear down the control
+    // leg (every activation on it), not drop one message. Refuse it here on the
+    // only side that can prevent the loss, measuring the UTF-8 BYTES of the
+    // exact JSON the runtime will send (UTF-16 length undercounts multi-byte
+    // text). Refusal spends no sequence and surfaces as the runtime's ordinary
+    // `routed-input-suppressed` path.
+    const message = tagTpMessage("SendInput", parsed.data);
+    if (
+      new TextEncoder().encode(JSON.stringify(message)).length >
+      TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES
+    ) {
+      return null;
+    }
+
     // Commit only after the whole wire body validates. A malformed operation
     // cannot allocate a session slot or spend a sequence number.
     sessions.set(context.sessionId, {
       activationId: context.activationId,
       lastSequence: inputSequence,
     });
-    return tagTpMessage("SendInput", parsed.data);
+    return message;
   };
 
   return {

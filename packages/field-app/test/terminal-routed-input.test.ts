@@ -219,4 +219,26 @@ describe("createRoutedInputEncoder — the SendInput wire encoding (spec §5.4)"
       createRoutedInputEncoder({ maxTrackedSessions: Number.POSITIVE_INFINITY }),
     ).toThrow(RangeError);
   });
+
+  it("refuses a message the cell's frame cap would reject — an oversize paste must not kill the leg", () => {
+    const encoder = createRoutedInputEncoder({ maxTrackedSessions: 1 });
+    // Comfortably under the 262,144-byte cap: passes.
+    expect(
+      encoder.encodeInput(context({ kind: "paste", text: "a".repeat(200_000) })),
+    ).not.toBeNull();
+    // Over the cap: refused, and the refusal spends no sequence.
+    expect(encoder.encodeInput(context({ kind: "paste", text: "b".repeat(300_000) }))).toBeNull();
+    expect(sequenceOf(encoder.encodeInput(context(text())))).toBe(2);
+  });
+
+  it("measures UTF-8 bytes, not UTF-16 length — multi-byte text cannot sneak past the cap", () => {
+    const encoder = createRoutedInputEncoder({ maxTrackedSessions: 1 });
+    // 90,000 astral emoji: 180,000 UTF-16 code units (under the cap) but
+    // 360,000 UTF-8 bytes (over it). A length-based check would pass this and
+    // the cell's read would tear down the control leg.
+    const emoji = "\u{1F4A5}".repeat(90_000);
+    expect(emoji.length).toBeLessThan(262_144);
+    expect(encoder.encodeInput(context({ kind: "paste", text: emoji }))).toBeNull();
+    expect(sequenceOf(encoder.encodeInput(context(text())))).toBe(1);
+  });
 });
