@@ -205,10 +205,37 @@ cell-side `geometryRevision` + CAS; the "empty seat or own" rule + a standalone 
 cannot express itself; claim / resize-by-reclaim / holder-only transfer / release + the FOUR auto-releases:
 detach, leg loss, grant expiry, renewal-drop), a geometry-capable view attached read-write, and the honest
 `SeedRequired{epoch-changed}` migration reason — a claim RESIZES THE REAL PTY, proven end-to-end against a
-real session + client; focus ⇏ claim is the G23 bundle's, not the cell's. **TP-S3d LANDED `547fde5`** — the writer/admission fairness FLOOR (§8): the frames writer is a TWO-LANE PRIORITY scheduler (urgent incrementals + control replies jump bulk transfer chunks, re-inspected after every chunk = the bulk-induced-HOL floor; a bulk byte-semaphore bounds `maxBulkBytesAdmittedAhead`, closed on writer exit); class-aware admission (`urgentReserve` — bulk draws connection credit only down to the reserve, urgent draws the full window); a delta over `maxUrgentPresentationUnitBytes` becomes a bulk catch-up; the fairness floor (a stalled activation exhausts only its own account, never the connection's — TP-R15a). Three knobs added to `TERMINAL_PIPELINE`/`ProtocolLimits`. Proven: the writer-priority unit (urgent jumps every queued bulk), the reserve + floor unit, the oversized→catch-up e2e. **Next:** S3e retire
-the bridge + the deliberate CSP test. Standing debts: one shared session set between the UDS plane and the
-doors = petition G22; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames reading;
-divider drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).
+real session + client; focus ⇏ claim is the G23 bundle's, not the cell's. **TP-S3d LANDED `547fde5`** — the writer/admission fairness FLOOR (§8): the frames writer is a TWO-LANE PRIORITY scheduler (urgent incrementals + control replies jump bulk transfer chunks, re-inspected after every chunk = the bulk-induced-HOL floor; a bulk byte-semaphore bounds `maxBulkBytesAdmittedAhead`, closed on writer exit); class-aware admission (`urgentReserve` — bulk draws connection credit only down to the reserve, urgent draws the full window); a delta over `maxUrgentPresentationUnitBytes` becomes a bulk catch-up; the fairness floor (a stalled activation exhausts only its own account, never the connection's — TP-R15a). Three knobs added to `TERMINAL_PIPELINE`/`ProtocolLimits`. Proven: the writer-priority unit (urgent jumps every queued bulk), the reserve + floor unit, the
+oversized→catch-up e2e. **Then the ghosttea 0.11.0 lockstep LANDED `6a115b3`** — the G22/G23 bundle
+(in-process `ServiceSessions`; the routed renderer runtime), EL8-pinned across Cargo/npm/preflight,
+gate-green; the cross-repo drift-guard re-verified 42/42 golden vectors. **Erratum (2026-08-23):
+"Next: S3e" was WRONG — S3e retires the bridge, but the routed path cannot yet TYPE.** TPv3
+specifies the input AUTHORITY (§5.4 `InputAllowed`; §18.1 `sendKey`) and never defines the input
+VERB: `TpMessageType` has no input tag, the cell door no input arm, and ghosttea 0.11.0 confirms the
+hole from the other side (`encodeInput` absent ⇒ `routed-input-suppressed{wire-verb-unavailable}`).
+Verified a VibeField-ONLY slice, no upstream: `ghosttea-react`'s `sendExtension` ships the message
+raw (un-type-checked), and the engine's `authorize_input` already fences input by `(view, client,
+attachment_epoch, input_sequence)` — the fencing is built and tested upstream; VibeField carries the
+coordinates. Proposal + design + evidence in `thinking-terminal-input-verb.md`. **Mark 22 RATIFIED
+2026-08-23 (all five sub-questions as recommended) and TP-S3-input LANDED `d265d70` the same
+day:** `SendInput` on the control leg (tag 22 of `TpMessageType`, control-inbound 8; the op union
+mirrors the engine's input serde and the Rust fixture test deserializes the golden vectors into
+ghosttea's OWN `KeyInput`/`MouseInput` — the cross-crate drift guard), the cell-door arm (cell gate:
+own leg · `leaseEpoch` placement fence · the `input` lease dimension · a synchronous renewal-margin
+backstop · a presenting view; refusals are drop-and-audit with NO per-keystroke ack; ghosttea's
+`authorize_input` — read-only / stale-epoch / monotonic-sequence — is the engine backstop), and
+field-app's pure `terminal/routed/encode-input.ts` (the `encodeInput` supply the G23 host takes
+verbatim; `location`/`timestamp` projected away; an unknown kind returns null — closed, not
+guessed). Proven: typing `exit` over the wire TERMINATES a real `/bin/sh`; a replayed
+`inputSequence`, a stale `leaseEpoch` and a read-only viewer all leave the human-input epoch
+unmoved (8/8 reruns). **Next, in order:** (1) integrate G22/G23 behind the flag — `ServiceSessions`
+into the production door (`cell.rs:216`, today `NoSessions`), the `--terminal-direct-door` flag made
+a renderer TRANSPORT selector (today CSP-only; `runtime-factory.ts:35` still builds the legacy port
+runtime), shell/home policy split from the legacy `terminal.connect`; (2) prove the full direct path
+(type AND display) behind the flag; (3) **S3e** retire the bridge + the deliberate CSP test.
+Standing debts: the shared session set is **no longer a petition — G22 LANDED in 0.11.0**; the debt
+is now the step-2 INTEGRATION; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames
+reading; divider drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).
 
 **PLUG.** **P8b COMPLETE — the artifact loads.** One evening closed the rung the whole ladder
 existed for (2026-08-13, four commits): the owed CORS probe ran FIRST and redesigned the rung

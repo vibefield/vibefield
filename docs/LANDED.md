@@ -3725,3 +3725,76 @@ token buckets, TP-R20); a synthetic flood BEYOND the engine's coalescing is not 
 volume (S3b's discipline note — a burst coalesces to ~one frame), so convergence-under-load is proven by
 S3b's starvation → catch-up → `stopped{overload}` bound plus this slice's classification path, not a new
 volume flood. Also NOT here: the renderer routed runtime that makes it user-facing (G23), and G22.
+
+## EL8 — ghosttea 0.11.0: the G22/G23 bundle consumed at the pins
+
+2026-08-23, `6a115b3` (recorded 2026-08-23 with the S3-input pass — the entry was owed at landing).
+The lockstep upgrade 0.10.1 → 0.11.0 across every plane in ONE event: the two cargo pins
+(`ghosttea`/`ghosttea-truffle` `=0.11.0`), six npm rows in `pnpm-workspace.yaml`
+(overrides + `minimumReleaseAgeExclude`), and `scripts/preflight.mjs`'s EL8 pin table. Upstream
+payload: **G22** — the in-process `ServiceSessions` accessor (session-by-id / frame hubs /
+spawn-through-the-service with the private-env strip / `subscribe_lifecycle`), the door to ONE
+shared session set between the UDS plane and the T1 doors (NOT yet consumed by the production door —
+that is the integration slice); **G23** — `ghosttea-react`'s routed runtime
+(`createGhostteaTerminalRuntime({transport:"routed"})`, activation authority on main,
+envelope-before-apply, strong resize refusal on both paths). Cross-repo interop re-verified BEFORE
+the bump: ghosttea's routed codec round-trips all 42 `@vibefield/contracts` golden vectors (30 wire
++ 12 structural), close codes identical, `DEFAULT_ROUTED_PROTOCOL_LIMITS` deep-equals the S3d
+defaults. Consumption findings, fixed in the same commit: 0.11.0's `TerminalSurface` calls
+`setViewInputPolicy`/`releaseResizeControl` on mount → the three field-app test fakes gained stubs;
+the `controlsResize` TRIPWIRE test (a by-design failure awaiting upstream's ResizeObserver fix) was
+rewritten to assert the fix (baseline-delta: zero resizes for a mirror); the flaky
+`read_only_never_input_allowed…` row was root-caused to the pump's demand-none boundary + 0.11.0's
+post-seed settling deltas — fixed by pump hardening (`needs_full` set the moment demand-none is
+OBSERVED; frames dropped while unwanted) and `receive_transfer` skipping leading deltas — 20/20
+deterministic after. One artifact-service flake under full-suite concurrency was exonerated
+(pre-existing class; 3× green in isolation). `pnpm verify` verbatim green at the commit.
+
+## TP-S3-input — the input verb: SendInput, the cell gate, and typing `exit` into a real /bin/sh
+
+2026-08-23, `d265d70` (the orchestrator; the critical path). Mark 22 — proposed, RATIFIED
+(James: "go ahead" on all five sub-questions as recommended) and LANDED in one day; the evidence
+trail is `draft/thinking-terminal-input-verb.md`, the spec fold is core v0.15 (§5.4 + §17 mark 22 +
+the §20 item 1 amendment). **The gap it closes:** TPv3 specified the input AUTHORITY in full
+(`InputAllowed`, "the cell ALWAYS rejects input while its own `input` is not `allowed`", §18.1's
+`runtime.sendKey → control WS send`) and never defined the MESSAGE — `TpMessageType` had 21 tags
+and no input verb, the cell door no input arm; ghosttea-react 0.11.0 names the absence
+(`routed-input-suppressed {wire-verb-unavailable}`) and sends whatever the host's `encodeInput`
+returns RAW (`sendExtension` — "contract publishes no such tag, so Ghosttea never invents one
+itself"), so the verb is VibeField-only: NO upstream release. **Contracts:** `SendInput
+{sessionId, activationId, leaseEpoch, inputSequence, op}` + `SendInputOp` (a `kind`-discriminated
+union — text · paste · key · mouse · scroll (SIGNED rows) · scroll-to · interrupt) +
+`TerminalKeyInput`/`TerminalMouseInput` PINNED to ghosttea's engine serde (camelCase;
+`unshiftedCodepoint` defaulting 0 exactly as upstream's `#[serde(default)]`); tag 22 in
+`TpMessageType`, the 8th control-INBOUND entry; four golden fixtures
+(`tp-send-input.{text,key,mouse}` + `tp-tagged-message.send-input` with rows −5). **The cell
+(`field-native/src/tp/`):** `wire.rs` serde mirrors whose `InputOp::Key/Mouse` EMBED
+`ghosttea::session::{KeyInput, MouseInput}` — the fixture test deserializing the vectors into the
+engine's own types IS the cross-crate drift guard; `activation.rs` `send_input` (a PURE read):
+own-control-leg check → `leaseEpoch` placement fence (a stale-route input never reaches the
+engine) → the `input` lease dimension (the one authority — rights, presentation, lag, expiry
+margin) → a synchronous renewal-margin backstop (a stale-`Allowed` lease cannot leak past the
+margin) → the presenting view (demand-none = nothing to type into); `door.rs` dispatch arm +
+`perform_input_op` mapping the op onto ghosttea's view-authorized family with the CELL-owned fence
+coordinates (`view`, `client`, `attachmentEpoch` from the activation table — the wire cannot forge
+an epoch), engine `authorize_input` the backstop. Refusals are DROP-AND-AUDIT (§5.4's "always
+rejects"; the echo of accepted input is a frame; `CellActivationStatus.input` already says why
+typing is dead) — no per-keystroke ack rides the wire. **The renderer half
+(`field-app/src/terminal/routed/encode-input.ts`):** the pure `encodeRoutedInput` context →
+tagged-`SendInput` projection the G23 routed host will take verbatim (`host.encodeInput =
+encodeRoutedInput`); `TerminalKeyEvent.location`/`timestamp` never reach the wire; an operation
+kind this build cannot encode returns null — closed, not guessed. **Tests:** the activation unit
+walks EVERY drop reason (no-activation · wrong-leg · stale-lease-epoch · right-expired ·
+no-view · input-not-allowed) and the Proceed's cell-owned coordinates; the e2e types over a real
+WebSocket into a real `/bin/sh` — acceptance witnessed by ghosttea's human-input epoch
+(`record_input(true)`; every refusal and the dedup return first), a replayed `inputSequence`
+authorized ONCE, a stale `leaseEpoch` and a read-only second session (same socket pair) leaving
+their epochs UNMOVED, and the typed `exit` TERMINATING the shell — the PTY round trip no header
+inspection can fake (8/8 reruns green); the wire fixture test (the drift guard); contracts 330/330
+with the new SendInput describe + leg-decode row; the encode helper validated against the contract
+schema on the control leg. `pnpm verify` verbatim green. **NOT here:** the G22 `ServiceSessions`
+integration into the production door (`cell.rs` still `NoSessions`), the routed HOST in the
+renderer (`runtime-factory.ts` still builds the legacy port runtime; the direct-door flag is still
+CSP-only) — that integration, then the full direct-path proof, PRECEDE S3e per the corrected
+sequence; and the agent input lane (`automation_input`, epoch-gated so human input wins) is a
+DISTINCT future seam, not this verb.
