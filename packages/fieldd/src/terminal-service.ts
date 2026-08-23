@@ -27,6 +27,8 @@ import {
   type TerminalRosterResult,
   type TerminalRouteCell,
   type TerminalRouteSnapshot,
+  TerminalRuntimeSession,
+  TerminalRuntimeSessionsResult,
   type TerminalTerminateResult,
   type TerminalTicket,
   type TerminalWorkloadClass,
@@ -399,7 +401,11 @@ export class TerminalService {
    * LANDED on: the legacy `ticket` beside the spread v2 fields. */
   createOpenResult(
     principal: GrantPrincipal,
-    created: { sessionId: string; cellBootId?: string | undefined },
+    created: {
+      sessionId: string;
+      session: TerminalRuntimeSession;
+      cellBootId?: string | undefined;
+    },
   ): TerminalCreateOpenResponse {
     const cell =
       created.cellBootId === undefined
@@ -407,6 +413,7 @@ export class TerminalService {
         : this.cellByBootId(created.cellBootId);
     return {
       sessionId: created.sessionId,
+      session: created.session,
       ticket: toTicket(cell.endpoints),
       ...this.grantsFor(cell, principal, created.sessionId),
     };
@@ -485,9 +492,11 @@ export class TerminalService {
    * which is why the answer names the CELL the session landed on (TC-S3) and
    * not its endpoints: the daemon needs to know where to mint from, not to be
    * handed the credential to mint. */
-  async create(
-    params: TerminalCreateParams,
-  ): Promise<{ sessionId: string; cellBootId?: string | undefined }> {
+  async create(params: TerminalCreateParams): Promise<{
+    sessionId: string;
+    session: TerminalRuntimeSession;
+    cellBootId?: string | undefined;
+  }> {
     // TC-D6(d) — the per-pair session cap at the create seam, counted from the
     // observed inventory WHEN THERE IS ONE. Before the first observation the
     // cap has nothing to count and create must NOT gate on observation —
@@ -550,6 +559,10 @@ export class TerminalService {
       // names no cell — there is no row to name — and the mirror answers there.
       return {
         sessionId: summary.id,
+        // The routed renderer needs the engine's real decimal handle before it
+        // can mount. Carry the summary from the birth that already has it;
+        // waiting for observed inventory here would recreate GT-1's race.
+        session: TerminalRuntimeSession.parse(summary),
         ...(cell.key === LEGACY_CELL_KEY ? {} : { cellBootId: cell.key }),
       };
     } catch (error) {
@@ -628,6 +641,56 @@ export class TerminalService {
         true,
       );
     }
+  }
+
+  /**
+   * G23's transport-private session inventory.
+   *
+   * `terminal.list` remains the floor-observation answer and `terminal.roster`
+   * remains the placement-free UI projection.  This read exists for the
+   * routed runtime alone: a pane cannot mount without Ghosttea's real numeric
+   * session handle.  Resolve every observed cell independently, list each once,
+   * and filter back to the observed ids so a control-plane race cannot leak a
+   * session the product inventory has not admitted yet.
+   */
+  async runtimeSessions(): Promise<TerminalRuntimeSessionsResult> {
+    const observed = this.list();
+    if (observed.length === 0) return { sessions: [] };
+
+    const wanted = new Set(observed.map((terminal) => terminal.sessionId));
+    const cells = new Map<string, CellTarget>();
+    for (const terminal of observed) {
+      const cell = this.sessionCell(terminal.sessionId);
+      cells.set(cell.key, cell);
+    }
+
+    const batches = await Promise.all(
+      [...cells.values()].map(async (cell) => {
+        const client = await this.connectedClient(cell);
+        try {
+          return await client.listSessions();
+        } catch (error) {
+          if (!client.connected)
+            throw this.unavailable("the terminal floor died while listing runtime sessions", error);
+          if (isRequestTimeout(error)) throw this.unresponsive("runtime session inventory", error);
+          throw new RpcCallError(
+            "INTERNAL",
+            `runtime session inventory failed: ${errorMessage(error)}`,
+            true,
+          );
+        }
+      }),
+    );
+
+    const byId = new Map<string, TerminalRuntimeSession>();
+    for (const summary of batches.flat()) {
+      if (!wanted.has(summary.id)) continue;
+      const parsed = TerminalRuntimeSession.parse(summary);
+      byId.set(parsed.id, parsed);
+    }
+    return TerminalRuntimeSessionsResult.parse({
+      sessions: [...byId.values()].sort((left, right) => left.id.localeCompare(right.id)),
+    });
   }
 
   /** Fire the ladder (interrupt → 2s → SIGTERM pgrp → 2s → SIGKILL pgrp —

@@ -1,6 +1,8 @@
+import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
   TerminalCreateOpenResponse,
   type TerminalCreateOpenResult,
+  type TerminalOpenTicket,
   TerminalOpenTicketResponse,
   type TerminalOpenTicketResult,
   TerminalTicket,
@@ -31,21 +33,36 @@ export interface ReadTicket {
   readonly placement: SessionPlacement | undefined;
   /** True when the floor minted the v2 half. The honest `grantsLanded` bit. */
   readonly routed: boolean;
+  /** The complete direct path is present: grants AND both cell endpoints. */
+  readonly direct: boolean;
+  /** Exact routed ticket, retained so a create can feed its FIRST activation
+   * without immediately re-entering the observation-gated openTicket seam. */
+  readonly routedTicket?: TerminalOpenTicket;
 }
 
 /** The v2 half both mints answer, named once. `TerminalOpenTicketResult` spreads
  * the legacy trio beside it and `TerminalCreateOpenResult` nests the ticket, but
  * PLACEMENT is the same three fields on both — so the reader below takes those
  * three rather than either whole shape. */
-type RoutedHalf = Pick<TerminalOpenTicketResult, "route" | "transportGrant" | "attachGrant">;
+type RoutedHalf = Pick<
+  TerminalOpenTicketResult,
+  "route" | "endpoints" | "transportGrant" | "attachGrant"
+>;
+
+function asSessionSummary(
+  session: NonNullable<TerminalCreateOpenResult["session"]>,
+): SessionSummary {
+  const { scrollbackBytes, ...required } = session;
+  return scrollbackBytes === undefined ? required : { ...required, scrollbackBytes };
+}
 
 /** `leaseEpoch` is OPTIONAL on the route until the floor exposes custody's
  * per-session epoch, and `endpoints` is present EXACTLY when the session's cell
  * serves its T1 doors (TP-S3a: the route row's `doors`, copied by fieldd). Both
  * are "not yet", never zero: a pool that defaulted a missing lease epoch to 0
  * would be asserting an authority fence the floor has not stated. Carried
- * through as the contract has them; the routed transport dials `endpoints`
- * from TP-S3b on — today the bridge still carries every pane. */
+ * through as the contract has them: G23 dials `endpoints` when the direct-door
+ * rollback flag is on; the bridge consumes the legacy trio while it is off. */
 
 function placementOf(sessionId: string, parsed: RoutedHalf, now: number): SessionPlacement {
   return {
@@ -62,6 +79,15 @@ function placementOf(sessionId: string, parsed: RoutedHalf, now: number): Sessio
   };
 }
 
+function routedTicketOf(parsed: RoutedHalf): TerminalOpenTicket {
+  return {
+    route: parsed.route,
+    ...(parsed.endpoints === undefined ? {} : { endpoints: parsed.endpoints }),
+    transportGrant: parsed.transportGrant,
+    attachGrant: parsed.attachGrant,
+  };
+}
+
 /**
  * Read `terminal.openTicket`'s answer for a KNOWN session.
  *
@@ -75,8 +101,14 @@ export function readOpenTicket(sessionId: string, raw: unknown, now: number): Re
   // The legacy member is the whole answer on a keyless floor; the v2 member
   // SPREADS the legacy trio, so the bridge coordinates read the same either way.
   const ticket = TerminalTicket.parse(answered);
-  if (!isRouted(answered)) return { ticket, placement: undefined, routed: false };
-  return { ticket, placement: placementOf(sessionId, answered, now), routed: true };
+  if (!isRouted(answered)) return { ticket, placement: undefined, routed: false, direct: false };
+  return {
+    ticket,
+    placement: placementOf(sessionId, answered, now),
+    routed: true,
+    direct: answered.endpoints !== undefined,
+    routedTicket: routedTicketOf(answered),
+  };
 }
 
 /** Whether a union member carried the v2 half. A property test rather than a
@@ -90,6 +122,8 @@ function isRouted<T extends object>(answered: T): answered is T & RoutedHalf {
  * that mints them — its placement and grants. */
 export interface ReadCreate extends ReadTicket {
   readonly sessionId: string;
+  /** Exact birth summary; present on the G23-capable product seam. */
+  readonly session?: SessionSummary;
 }
 
 /**
@@ -103,11 +137,19 @@ export interface ReadCreate extends ReadTicket {
 export function readCreateTicket(raw: unknown, now: number): ReadCreate {
   const answered: TerminalCreateOpenResult | { sessionId: string; ticket: TerminalTicket } =
     TerminalCreateOpenResponse.parse(raw);
-  const base = { sessionId: answered.sessionId, ticket: answered.ticket };
-  if (!isRouted(answered)) return { ...base, placement: undefined, routed: false };
+  const base = {
+    sessionId: answered.sessionId,
+    ticket: answered.ticket,
+    ...(!("session" in answered) || answered.session === undefined
+      ? {}
+      : { session: asSessionSummary(answered.session) }),
+  };
+  if (!isRouted(answered)) return { ...base, placement: undefined, routed: false, direct: false };
   return {
     ...base,
     placement: placementOf(answered.sessionId, answered, now),
     routed: true,
+    direct: answered.endpoints !== undefined,
+    routedTicket: routedTicketOf(answered),
   };
 }

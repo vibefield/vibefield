@@ -5,7 +5,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CellEndpointSet, TerminalRouteSnapshot } from "../src/envelope";
 import { TERMINAL_PIPELINE } from "../src/registries";
-import { TerminalTicket } from "../src/terminal";
+import {
+  TerminalRuntimeSession,
+  TerminalRuntimeSessionsResult,
+  TerminalTicket,
+} from "../src/terminal";
 import {
   AttachControlLeg,
   CellActivationStatus,
@@ -34,6 +38,8 @@ import {
   SessionAttachGrant,
   SessionAttachGrantClaims,
   TerminalCreateOpenResult,
+  TerminalKeyInput,
+  TerminalMouseInput,
   TerminalOpenTicket,
   TerminalOpenTicketResult,
   TP_LEG_INBOUND,
@@ -150,6 +156,50 @@ describe("the S1 product results are additive over today's ticket (TP-L-F)", () 
     const r = TerminalCreateOpenResult.parse(fixture("tp-create-open.s1.json"));
     expect(r.sessionId).toBe(r.attachGrant.claims.sessionId);
     expect(r.ticket.controlSocket).toMatch(/termctl/);
+  });
+});
+
+describe("terminal.sessions — the exact G23 mount inventory", () => {
+  const session = {
+    id: "sess-01J8Z3K9",
+    handle: "18446744073709551615",
+    executable: "/bin/zsh",
+    cols: 80,
+    rows: 24,
+    exited: false,
+    readWrite: true,
+    title: null,
+    cwd: "/Users/test",
+    bellCount: 0,
+    pid: 123,
+    createdAtMs: 1_000,
+    exitCode: null,
+    exitSignal: null,
+    requestedTermination: null,
+    exitOutcome: null,
+    ownerId: null,
+    persistence: "keep-until-exit",
+    activity: {
+      kind: "unknown",
+      source: "unsupported",
+      confidence: "heuristic",
+      rootProcessGroupId: null,
+      foregroundProcessGroupId: null,
+      observedAtMs: 1_000,
+    },
+  };
+
+  it("preserves the engine's decimal u64 handle without a JSON-number round trip", () => {
+    const parsed = TerminalRuntimeSessionsResult.parse({ sessions: [session] });
+    expect(parsed.sessions[0]?.handle).toBe("18446744073709551615");
+  });
+
+  it("refuses mnemonic, signed, fractional, and non-canonical handles", () => {
+    for (const handle of ["session-handle", "-1", "1.5", "01", 1]) {
+      expect(TerminalRuntimeSession.safeParse({ ...session, handle }).success, String(handle)).toBe(
+        false,
+      );
+    }
   });
 });
 
@@ -403,6 +453,58 @@ describe("the input verb — SendInput (spec \u00a75.4, TP-S3-input)", () => {
     });
     if (op.kind !== "key") throw new Error("kind");
     expect(op.key.unshiftedCodepoint).toBe(0);
+  });
+
+  it("pins the JSON numeric domain to the engine's u8/u32/f32 and safe i64/u64 subsets", () => {
+    const key = fixture("tp-send-input.key.json").op.key;
+    expect(TerminalKeyInput.safeParse({ ...key, unshiftedCodepoint: 0xffff_ffff }).success).toBe(
+      true,
+    );
+    expect(TerminalKeyInput.safeParse({ ...key, unshiftedCodepoint: -1 }).success).toBe(false);
+    expect(TerminalKeyInput.safeParse({ ...key, unshiftedCodepoint: 0x1_0000_0000 }).success).toBe(
+      false,
+    );
+
+    const mouse = fixture("tp-send-input.mouse.json").op.mouse;
+    expect(TerminalMouseInput.safeParse({ ...mouse, button: 0xff }).success).toBe(true);
+    expect(TerminalMouseInput.safeParse({ ...mouse, button: -1 }).success).toBe(false);
+    expect(TerminalMouseInput.safeParse({ ...mouse, button: 0x100 }).success).toBe(false);
+    expect(TerminalMouseInput.safeParse({ ...mouse, screenWidth: 0xffff_ffff }).success).toBe(true);
+    expect(TerminalMouseInput.safeParse({ ...mouse, screenWidth: -1 }).success).toBe(false);
+    expect(TerminalMouseInput.safeParse({ ...mouse, screenWidth: 0x1_0000_0000 }).success).toBe(
+      false,
+    );
+    expect(
+      TerminalMouseInput.safeParse({
+        ...mouse,
+        x: 3.4028234663852886e38,
+        y: -3.4028234663852886e38,
+      }).success,
+    ).toBe(true);
+    expect(TerminalMouseInput.safeParse({ ...mouse, x: 3.5e38 }).success).toBe(false);
+
+    const body = fixture("tp-send-input.text.json");
+    expect(SendInput.safeParse({ ...body, inputSequence: Number.MAX_SAFE_INTEGER }).success).toBe(
+      true,
+    );
+    expect(
+      SendInput.safeParse({ ...body, inputSequence: Number.MAX_SAFE_INTEGER + 1 }).success,
+    ).toBe(false);
+    expect(SendInput.safeParse({ ...body, leaseEpoch: -1 }).success).toBe(false);
+    expect(
+      SendInput.safeParse({ ...body, op: { kind: "scroll", rows: Number.MIN_SAFE_INTEGER } })
+        .success,
+    ).toBe(true);
+    expect(
+      SendInput.safeParse({ ...body, op: { kind: "scroll", rows: Number.MIN_SAFE_INTEGER - 1 } })
+        .success,
+    ).toBe(false);
+    expect(
+      SendInput.safeParse({
+        ...body,
+        op: { kind: "scroll-to", row: Number.MAX_SAFE_INTEGER + 1 },
+      }).success,
+    ).toBe(false);
   });
 
   it("an unknown kind refuses; the verb is INBOUND on control only", () => {

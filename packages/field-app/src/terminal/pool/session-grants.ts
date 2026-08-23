@@ -99,6 +99,11 @@ export class SessionPlacementLedger {
     return this.#bySession.get(sessionId)?.cellBootId;
   }
 
+  /** Drop one session after the product authority confirms termination. */
+  forgetSession(sessionId: string): boolean {
+    return this.#bySession.delete(sessionId);
+  }
+
   /** Every session known to sit on one cell. Used when a transport dies: its
    * sessions lose their placement, because the next ticket re-resolves them
    * (§5.2 — re-resolve on connection death). */

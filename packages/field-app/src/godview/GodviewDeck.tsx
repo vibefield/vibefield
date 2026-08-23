@@ -7,7 +7,11 @@ import {
 } from "@vibecook/ghosttea-react/workspace";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { emitGodviewColdOpenMarker, emitGodviewDeckMarker } from "../development-console";
+import {
+  emitGodviewColdOpenMarker,
+  emitGodviewDeckMarker,
+  emitGodviewDirectTerminalMarker,
+} from "../development-console";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import {
@@ -57,17 +61,18 @@ import "@vibecook/ghosttea-react/workspace.css";
 // a `/bin/sh` hardcode — was compensation for being a second authority. James
 // saw the result as an `sh-3.2$` prompt.
 //
-// Control rides fieldd, the one product door (D27): the renderer asks for the
-// connection's ticket with `terminal.connectTicket` — a mint, no session — and
-// hands it to main, which dials field-native's sockets and posts the two
-// MessagePorts back. Bytes never touch JSON-RPC (EL2). The shell supervises no
-// ghosttead: field-native embeds that floor and outlives us, which is what the
-// Backend's external mode is for. fieldd stands BESIDE the flow as policy
-// client: it mints tickets and audits, and the native plane keeps what the
-// workspace creates alive (GT-D11) — neither is a gate in front of a pane.
+// Control rides fieldd, the one product door (D27). With TP's direct-door flag,
+// fieldd mints per-session routed tickets and G23 dials the cell's T1 doors;
+// with the rollback flag off, the legacy connection ticket still reaches main,
+// which posts the bridge's two MessagePorts. Terminal bytes never touch
+// JSON-RPC (EL2). The shell supervises no ghosttead: field-native embeds that
+// floor and outlives us. fieldd stands beside the byte flow as policy client —
+// it mints, audits, and exposes exact session summaries; the native plane keeps
+// what the workspace creates alive (GT-D11).
 //
 // Nothing here is mounted until the overlay has been opened once — a user who
-// never presses ⌘G forks no bridge, opens no socket, and spawns no shell.
+// never presses ⌘G opens no terminal socket and spawns no shell (and, on the
+// rollback path, forks no bridge).
 //
 // TP-S0b — THE DECK NO LONGER OWNS A RUNTIME. It was the runtime's owner because
 // it was the only consumer; that made a window-scoped resource live and die with
@@ -409,6 +414,12 @@ export function GodviewDeck({
   const firstConnection = useRef(false);
   useEffect(() => {
     if (consent !== "go" || pool.phase !== "dormant" || firstConnection.current) return;
+    // On G23 the static shell policy is available while the pool is dormant,
+    // so the workspace can mount and make its own empty-layout birth through
+    // the routed host's `createSession` product adapter. Pre-creating here
+    // would race fieldd's deliberately lagging observed inventory and could
+    // leave Ghosttea seeing an empty `terminal.sessions` result forever.
+    if (shell !== null) return;
     firstConnection.current = true;
     void (async () => {
       // The roster may be unread here: the restore gate only asks for it when
@@ -438,7 +449,7 @@ export function GodviewDeck({
           );
       }
     })();
-  }, [consent, pool.phase, pool.roster]);
+  }, [consent, pool.phase, pool.roster, shell]);
 
   // The render backend announcing itself IS device-ready: the worker posts
   // `renderer-status` from `createRenderer`, after the adapter, the device and
@@ -458,6 +469,94 @@ export function GodviewDeck({
     if (runtime.rendererBackend !== "starting") onRendererBackend?.(runtime.rendererBackend);
     return () => runtime.removeEventListener("renderer-status", onStatus);
   }, [runtime, onRendererBackend]);
+
+  // G23's own end-to-end observation for the direct-path smoke. A mounted pane
+  // is not proof of display: this event reaches `presentationReady` only after
+  // the routed frames worker applies a scene and its lease agrees with the cell.
+  useEffect(() => {
+    if (runtime === null) return;
+    const emitCurrent = (
+      sessionId: string,
+      current: {
+        activationId: string;
+        phase: string;
+        presentationReady: boolean;
+        inputAllowed: boolean;
+        unavailableReason?: string;
+        controlAttached?: boolean;
+        framesAttached?: boolean;
+        framesOutcome?: { kind?: string };
+        framesState?: { state?: string };
+      },
+      protocolReason?: string,
+    ): void => {
+      emitGodviewDirectTerminalMarker({
+        sessionId,
+        activationId: current.activationId,
+        phase: current.phase,
+        presentationReady: current.presentationReady,
+        inputAllowed: current.inputAllowed,
+        ...(typeof current.unavailableReason === "string"
+          ? { unavailableReason: current.unavailableReason }
+          : {}),
+        ...(typeof current.controlAttached === "boolean"
+          ? { controlAttached: current.controlAttached }
+          : {}),
+        ...(typeof current.framesAttached === "boolean"
+          ? { framesAttached: current.framesAttached }
+          : {}),
+        ...(typeof current.framesOutcome?.kind === "string"
+          ? { framesOutcome: current.framesOutcome.kind }
+          : {}),
+        ...(typeof current.framesState?.state === "string"
+          ? { framesState: current.framesState.state }
+          : {}),
+        ...(protocolReason === undefined ? {} : { protocolReason }),
+      });
+    };
+    const onRoutedState: EventListener = (event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail = event.detail as {
+        sessionId?: unknown;
+        current?: {
+          activationId?: unknown;
+          phase?: unknown;
+          presentationReady?: unknown;
+          inputAllowed?: unknown;
+          unavailableReason?: unknown;
+          controlAttached?: unknown;
+          framesAttached?: unknown;
+          framesOutcome?: { kind?: unknown };
+          framesState?: { state?: unknown };
+        };
+      };
+      const current = detail?.current;
+      if (
+        typeof detail?.sessionId !== "string" ||
+        typeof current?.activationId !== "string" ||
+        typeof current.phase !== "string" ||
+        typeof current.presentationReady !== "boolean" ||
+        typeof current.inputAllowed !== "boolean"
+      ) {
+        return;
+      }
+      emitCurrent(detail.sessionId, current as Parameters<typeof emitCurrent>[1]);
+    };
+    const onRoutedProtocolError: EventListener = (event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail = event.detail as { sessionId?: unknown; reason?: unknown };
+      if (typeof detail?.sessionId !== "string" || typeof detail.reason !== "string") return;
+      const current = runtime.routedActivation(detail.sessionId);
+      if (current === undefined) return;
+      emitCurrent(detail.sessionId, current, detail.reason);
+    };
+    runtime.addEventListener("routed-activation-state", onRoutedState);
+    runtime.addEventListener("routed-protocol-error", onRoutedProtocolError);
+    return () => {
+      runtime.removeEventListener("routed-activation-state", onRoutedState);
+      runtime.removeEventListener("routed-protocol-error", onRoutedProtocolError);
+    };
+  }, [runtime]);
 
   // The last two stations, and the one publication. A pane in the deck's own
   // report is `mounted`; the frame after it is what a user would call open.
@@ -798,6 +897,8 @@ export function GodviewDeck({
       panes: panes.length,
       sessions: workspace?.sessions.length ?? 0,
       sessionIds: panes.map((pane) => pane.session.id),
+      poolPhase: pool.phase,
+      rosterState: pool.rosterState,
       // "starting" while the transport is still being acquired — the same word
       // the render worker uses before it has a backend, and the honest one: no
       // renderer exists yet either way.
@@ -832,6 +933,8 @@ export function GodviewDeck({
     active,
     workspace,
     runtime,
+    pool.phase,
+    pool.rosterState,
     error,
     consent,
     terminalTheme,

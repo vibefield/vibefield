@@ -17,7 +17,7 @@ use field_native::tp::crc32c::crc32c;
 use field_native::tp::door::{Door, DoorConfig};
 use field_native::tp::grant::{GrantKey, GrantValidityLimits, GrantVerifier};
 use field_native::tp::source::{DirectSessions, Trf1Header};
-use field_native::tp::wire::decode_envelope;
+use field_native::tp::wire::{decode_envelope, JSON_MAX_SAFE_INTEGER};
 use futures_util::{SinkExt, StreamExt};
 use ghosttea::session::{Persistence, SpawnOptions};
 use ghosttea::{
@@ -280,6 +280,7 @@ async fn receive_transfer(frames: &mut Ws) -> (String, Value, Value, Vec<u8>, Ve
             other => panic!("expected transfer-begin, got {other:?}"),
         }
     };
+    assert_json_safe_counters(&begin, "transfer-begin");
     let transfer_id = begin["transfer"]["transferId"]
         .as_str()
         .unwrap()
@@ -299,6 +300,7 @@ async fn receive_transfer(frames: &mut Ws) -> (String, Value, Value, Vec<u8>, Ve
         assert_eq!(h["kind"], "transfer-chunk");
         assert_eq!(h["transfer"]["transferId"], transfer_id);
         assert_eq!(h["transfer"]["chunkIndex"], i as u64);
+        assert_json_safe_counters(&h, "transfer-chunk");
         let offset = h["transfer"]["byteOffset"].as_u64().unwrap() as usize;
         bytes[offset..offset + p.len()].copy_from_slice(&p);
         headers.push(h);
@@ -309,6 +311,7 @@ async fn receive_transfer(frames: &mut Ws) -> (String, Value, Value, Vec<u8>, Ve
     };
     assert_eq!(end["kind"], "transfer-end");
     assert_eq!(end["transfer"]["transferId"], transfer_id);
+    assert_json_safe_counters(&end, "transfer-end");
     headers.push(end.clone());
     assert_eq!(
         crc32c(&bytes),
@@ -322,6 +325,34 @@ async fn receive_transfer(frames: &mut Ws) -> (String, Value, Value, Vec<u8>, Ve
         bytes,
         headers,
     )
+}
+
+/// Browser readers parse every TP envelope through IEEE-754 JSON numbers.
+/// Keep the real Rust presentation path honest: every numeric header field is
+/// a non-negative integer that JavaScript can represent exactly.
+fn assert_json_safe_counters(value: &Value, path: &str) {
+    match value {
+        Value::Number(number) => {
+            let counter = number
+                .as_u64()
+                .unwrap_or_else(|| panic!("{path} contains a non-counter JSON number: {number}"));
+            assert!(
+                counter <= JSON_MAX_SAFE_INTEGER,
+                "{path} contains a counter outside JavaScript's exact range: {counter}"
+            );
+        }
+        Value::Array(values) => {
+            for (index, value) in values.iter().enumerate() {
+                assert_json_safe_counters(value, &format!("{path}[{index}]"));
+            }
+        }
+        Value::Object(fields) => {
+            for (key, value) in fields {
+                assert_json_safe_counters(value, &format!("{path}.{key}"));
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::String(_) => {}
+    }
 }
 
 /// Type into the PTY through the AUTOMATION door (fieldd's own path), which
@@ -811,7 +842,10 @@ async fn frames_attach_reports_the_seed_reason_incl_epoch_changed() {
     let h = harness().await;
     let session = spawn_session(&h.source);
     let session_id = session.id();
-    let epoch = session.session_epoch();
+    let _engine_epoch = session.session_epoch();
+    // This fresh cell's first observed engine lineage is allocated protocol
+    // generation 1, independent of the UUID-derived 64-bit engine token.
+    let model_generation = 1;
     let (mut control, mut frames, _e) = connect(&h, "set-m", 1, caps(4_000_000, 2_000_000)).await;
 
     // ONE activation (demand `none`, so no pump/seed muddies the leg); the seed
@@ -856,7 +890,7 @@ async fn frames_attach_reports_the_seed_reason_incl_epoch_changed() {
         &session_id,
         Some(json!({
             "resumeToken": "tok",
-            "from": { "sceneEpoch": { "cellBootId": CELL, "modelGeneration": epoch + 1000 }, "sceneRevision": 1 },
+            "from": { "sceneEpoch": { "cellBootId": CELL, "modelGeneration": model_generation + 1000 }, "sceneRevision": 1 },
         })),
     )
     .await;
@@ -870,7 +904,7 @@ async fn frames_attach_reports_the_seed_reason_incl_epoch_changed() {
         &session_id,
         Some(json!({
             "resumeToken": "tok",
-            "from": { "sceneEpoch": { "cellBootId": CELL, "modelGeneration": epoch }, "sceneRevision": 1 },
+            "from": { "sceneEpoch": { "cellBootId": CELL, "modelGeneration": model_generation }, "sceneRevision": 1 },
         })),
     )
     .await;

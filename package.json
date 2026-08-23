@@ -18,6 +18,7 @@
     "plugin": "node tooling/plugin-cli/bin/vibefield-plugin.mjs",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",
     "smoke:terminal-door": "pnpm --filter @vibefield/desktop smoke:terminal-door",
+    "smoke:terminal-direct": "pnpm --filter @vibefield/desktop smoke:terminal-direct",
     "perf:terminal:bench": "pnpm --filter @vibefield/terminal-perf bench",
     "perf:terminal:capture": "pnpm --filter @vibefield/terminal-perf capture",
     "perf:terminal": "node tooling/terminal-perf/bin/terminal-perf.ts",

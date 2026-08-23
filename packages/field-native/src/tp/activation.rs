@@ -20,7 +20,7 @@ use super::wire::{
     ControlLegAttached, DeclareDemand, DemandAccepted, FramesAttachOutcome, FramesLegAttached,
     GeometryCommitted, GeometryHolder, GeometryRefused, LeaseDimension, ReceiverCapacities,
     ReleaseGeometry, SceneApplied, SceneContentStamp, SceneEpoch, SendInput, SourceDemandMode,
-    TransferGeometry, TransportCredit, TrfIdentity,
+    TransferGeometry, TransportCredit, TrfIdentity, JSON_MAX_SAFE_INTEGER,
 };
 use crate::registries::terminal_pipeline as tp;
 use std::collections::HashMap;
@@ -121,6 +121,9 @@ pub struct Activation {
     pub accepted: Option<SceneContentStamp>,
     pub resume_token: Option<String>,
     pub trf_identity: Option<TrfIdentity>,
+    /// The protocol-safe lineage allocated for the engine's opaque `u64`
+    /// session epoch when the frames leg attached.
+    pub scene_epoch: Option<SceneEpoch>,
     /// the newest revision the pump has SENT (the worker's eventual current)
     pub newest_sent: Option<u64>,
     /// the revision of the first seed sent — presenting once applied
@@ -476,6 +479,12 @@ pub struct ActivationTable {
     cell_boot_id: String,
     by_id: HashMap<String, Activation>,
     by_key: HashMap<(String, String), String>,
+    /// Ghosttea derives a session epoch from UUID bytes, so it can occupy all
+    /// 64 bits. The JSON wire cannot. Translate each live engine lineage to a
+    /// stable, cell-local, monotonically increasing safe counter; never
+    /// truncate or modulo an identity token.
+    model_generations: HashMap<(String, u64), u64>,
+    next_model_generation: u64,
     credit: HashMap<u64, CreditLedger>,
     /// the geometry seat per session (S3c)
     geometry: HashMap<String, GeometryLease>,
@@ -510,6 +519,8 @@ impl ActivationTable {
             cell_boot_id: cell_boot_id.to_string(),
             by_id: HashMap::new(),
             by_key: HashMap::new(),
+            model_generations: HashMap::new(),
+            next_model_generation: 1,
             credit: HashMap::new(),
             geometry: HashMap::new(),
             attach_deadline: Duration::from_millis(tp::ACTIVATION_ATTACH_DEADLINE_MS),
@@ -534,10 +545,40 @@ impl ActivationTable {
     }
 
     pub fn scene_epoch(&self, model_generation: u64) -> SceneEpoch {
+        assert!(
+            model_generation <= JSON_MAX_SAFE_INTEGER,
+            "TP model generations must be exactly representable JSON integers"
+        );
         SceneEpoch {
             cell_boot_id: self.cell_boot_id.clone(),
             model_generation,
         }
+    }
+
+    fn resolve_scene_epoch(&mut self, session_id: &str, engine_epoch: u64) -> SceneEpoch {
+        let key = (session_id.to_string(), engine_epoch);
+        let model_generation = match self.model_generations.get(&key) {
+            Some(generation) => *generation,
+            None => {
+                let generation = self.next_model_generation;
+                assert!(
+                    generation <= JSON_MAX_SAFE_INTEGER,
+                    "TP exhausted its JavaScript-safe model-generation space"
+                );
+                self.next_model_generation = generation + 1;
+                self.model_generations.insert(key, generation);
+                generation
+            }
+        };
+        self.scene_epoch(model_generation)
+    }
+
+    /// Forget engine identity tokens once their session has left the live
+    /// source. `next_model_generation` deliberately never moves backward: a
+    /// later lineage can never reuse a stamp from this cell boot.
+    pub fn prune_model_generations(&mut self, mut session_is_live: impl FnMut(&str) -> bool) {
+        self.model_generations
+            .retain(|(session_id, _), _| session_is_live(session_id));
     }
 
     /// A frames leg was accepted: its credit epoch opens with these windows.
@@ -1149,6 +1190,7 @@ impl ActivationTable {
             accepted: None,
             resume_token: None,
             trf_identity: None,
+            scene_epoch: None,
             newest_sent: None,
             seed_revision: None,
             pump_running: false,
@@ -1197,7 +1239,6 @@ impl ActivationTable {
             resume_token,
             session_epoch,
         } = input;
-        let cell_boot_id = self.cell_boot_id.clone();
         let activation_id = msg.activation_id.clone();
         if claims.client_id != set.client_id {
             return vec![Self::refuse(
@@ -1207,7 +1248,7 @@ impl ActivationTable {
                 false,
             )];
         }
-        let Some(a) = self.by_id.get_mut(&activation_id) else {
+        let Some(a) = self.by_id.get(&activation_id) else {
             // No control attach yet (or gone): the runtime attaches control first.
             return vec![Self::refuse(
                 leg,
@@ -1243,18 +1284,29 @@ impl ActivationTable {
                 false,
             )];
         };
+        let current_scene_epoch = self.resolve_scene_epoch(&claims.session_id, session_epoch);
+        let a = self
+            .by_id
+            .get_mut(&activation_id)
+            .expect("the activation was validated above");
         // A replaced frames leg: the old one's pump stops with its leg (the door
         // invalidates activations on a closed leg); a re-attach on the same leg
         // is idempotent.
+        let lineage_changed = a
+            .scene_epoch
+            .as_ref()
+            .is_some_and(|epoch| epoch != &current_scene_epoch);
         let already = a
             .frames
             .as_ref()
-            .is_some_and(|f| f.connection_id == leg.connection_id);
+            .is_some_and(|f| f.connection_id == leg.connection_id)
+            && !lineage_changed;
         a.frames = Some(leg.clone());
         if a.resume_token.is_none() {
             a.resume_token = Some(resume_token);
         }
         a.trf_identity = Some(trf.clone());
+        a.scene_epoch = Some(current_scene_epoch.clone());
         if let Some(ledger) = self.credit.get_mut(&leg.connection_id) {
             ledger.open_account(&activation_id);
         }
@@ -1278,11 +1330,7 @@ impl ActivationTable {
                         // in the core profile, so it still seeds.
                         reason: Some(match &msg.resume {
                             Some(resume) => {
-                                let current = SceneEpoch {
-                                    cell_boot_id: cell_boot_id.clone(),
-                                    model_generation: session_epoch,
-                                };
-                                if resume.from.scene_epoch != current {
+                                if resume.from.scene_epoch != current_scene_epoch {
                                     "epoch-changed".to_string()
                                 } else {
                                     "no-resume-capability".to_string()
@@ -1294,6 +1342,12 @@ impl ActivationTable {
                 },
             ),
         )];
+        if lineage_changed && a.pump_running {
+            a.pump_running = false;
+            effects.push(Effect::StopPump {
+                activation_id: activation_id.clone(),
+            });
+        }
         if !already && a.view.is_some() && !a.pump_running {
             a.pump_running = true;
             effects.push(Effect::StartPump {
@@ -1718,6 +1772,33 @@ mod tests {
                 leg.send_text(text);
             }
         }
+    }
+
+    #[test]
+    fn opaque_engine_lineages_get_stable_non_reused_json_safe_generations() {
+        let mut t = ActivationTable::new("cb");
+
+        let first = t.resolve_scene_epoch("s1", u64::MAX);
+        assert_eq!(first.model_generation, 1);
+        assert!(first.model_generation <= JSON_MAX_SAFE_INTEGER);
+        assert_eq!(
+            t.resolve_scene_epoch("s1", u64::MAX),
+            first,
+            "one engine lineage keeps one protocol generation"
+        );
+
+        let reset = t.resolve_scene_epoch("s1", u64::MAX - 1);
+        let other_session = t.resolve_scene_epoch("s2", u64::MAX);
+        assert_eq!(reset.model_generation, 2);
+        assert_eq!(other_session.model_generation, 3);
+
+        t.prune_model_generations(|session_id| session_id == "s2");
+        assert_eq!(t.model_generations.len(), 1);
+        assert_eq!(
+            t.resolve_scene_epoch("s1", u64::MAX).model_generation,
+            4,
+            "pruning can reclaim identity tokens but never reuse their stamps"
+        );
     }
 
     #[test]

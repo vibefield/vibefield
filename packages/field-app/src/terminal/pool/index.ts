@@ -21,6 +21,7 @@ export { isSessionUnavailable } from "./session-grants";
 export {
   bindTerminalSessionView,
   type CreatedTerminalSession,
+  configureTerminalPool,
   createTerminalSession,
   disposeTerminalPool,
   openDormantTransport,
@@ -30,6 +31,7 @@ export {
   refreshTerminalRoster,
   retryTerminalPool,
   subscribeTerminalPool,
+  TERMINAL_PREWARM_TIMEOUT_MS,
   type TerminalFault,
   type TerminalFaultPlane,
   type TerminalPoolPhase,

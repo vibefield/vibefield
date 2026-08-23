@@ -26,6 +26,7 @@ import {
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
   WindowConnection,
+  WindowTerminalBootstrap,
 } from "../src/shell";
 
 // Shell-boundary contracts (ESR spec §6.1–6.2). These shapes cross the Electron
@@ -117,6 +118,26 @@ describe("WindowConnection — the D27 loopback endpoint + per-window scoped tok
     expect(parsed.token).toBe("wnd_9f8e7d6c5b4a39281706");
     expect(parsed.rendererParticipant).toEqual(rendererParticipant);
     expect((parsed as Record<string, unknown>).generation).toBe(3);
+  });
+
+  it("carries main's per-generation terminal selector while older hosts remain readable", () => {
+    const terminal = {
+      transport: "routed" as const,
+      defaultShell: "/bin/zsh",
+      home: "/Users/test",
+    };
+    expect(
+      WindowConnection.parse({
+        port: 49213,
+        token: "wnd_9f8e7d6c5b4a39281706",
+        rendererParticipant,
+        terminal,
+      }).terminal,
+    ).toEqual(terminal);
+    expect(WindowTerminalBootstrap.safeParse({ ...terminal, transport: "guess" }).success).toBe(
+      false,
+    );
+    expect(WindowTerminalBootstrap.safeParse({ ...terminal, home: "" }).success).toBe(false);
   });
 
   it("bounds both renderer identity parts to printable protocol-safe values", () => {

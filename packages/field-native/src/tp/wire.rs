@@ -17,6 +17,11 @@ use ghosttea::session::{KeyInput, MouseInput};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// Largest integer JSON can carry exactly through a JavaScript reader. TP
+/// counters are JSON numbers, so opaque engine `u64`s must be translated at
+/// the protocol boundary instead of being serialized directly.
+pub const JSON_MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+
 /// The tag of every JSON text message (contracts `TpMessageType`).
 #[derive(Debug, Deserialize)]
 pub struct Tagged {
@@ -542,13 +547,43 @@ pub struct SendInput {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum InputOp {
-    Text { text: String },
-    Paste { text: String },
-    Key { key: KeyInput },
-    Mouse { mouse: MouseInput },
-    Scroll { rows: i64 },
-    ScrollTo { row: u64 },
+    Text {
+        text: String,
+    },
+    Paste {
+        text: String,
+    },
+    Key {
+        key: KeyInput,
+    },
+    Mouse {
+        #[serde(deserialize_with = "deserialize_finite_mouse_input")]
+        mouse: MouseInput,
+    },
+    Scroll {
+        rows: i64,
+    },
+    ScrollTo {
+        row: u64,
+    },
     Interrupt,
+}
+
+/// serde's stock f64 → f32 visitor permits overflow and yields ±infinity. JSON
+/// cannot spell infinity, and the TS contract accepts only finite f32-range
+/// coordinates, so close that reader-side hole before an event reaches the
+/// engine while retaining ghosttea's own MouseInput as the wire target.
+fn deserialize_finite_mouse_input<'de, D>(deserializer: D) -> Result<MouseInput, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let mouse = MouseInput::deserialize(deserializer)?;
+    if !mouse.x.is_finite() || !mouse.y.is_finite() {
+        return Err(serde::de::Error::custom(
+            "mouse coordinates must be finite f32 values",
+        ));
+    }
+    Ok(mouse)
 }
 
 /// The presentation envelope's binary framing (contracts
@@ -736,5 +771,35 @@ mod tests {
             InputOp::Scroll { rows } => assert_eq!(rows, -5),
             other => panic!("expected Scroll, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn the_send_input_numeric_widths_match_ghostteas_reader_types() {
+        let mut key = fixture("tp-send-input.key.json");
+        key["op"]["key"]["unshiftedCodepoint"] = Value::from(-1);
+        assert!(serde_json::from_value::<SendInput>(key.clone()).is_err());
+        key["op"]["key"]["unshiftedCodepoint"] = Value::from(u32::MAX);
+        assert!(serde_json::from_value::<SendInput>(key.clone()).is_ok());
+        key["op"]["key"]["unshiftedCodepoint"] = Value::from(u64::from(u32::MAX) + 1);
+        assert!(serde_json::from_value::<SendInput>(key).is_err());
+
+        let mut mouse = fixture("tp-send-input.mouse.json");
+        mouse["op"]["mouse"]["button"] = Value::from(-1);
+        assert!(serde_json::from_value::<SendInput>(mouse.clone()).is_err());
+        mouse["op"]["mouse"]["button"] = Value::from(u8::MAX);
+        mouse["op"]["mouse"]["screenWidth"] = Value::from(u32::MAX);
+        mouse["op"]["mouse"]["x"] = Value::from(f64::from(f32::MAX));
+        assert!(serde_json::from_value::<SendInput>(mouse.clone()).is_ok());
+
+        mouse["op"]["mouse"]["button"] = Value::from(u16::from(u8::MAX) + 1);
+        assert!(serde_json::from_value::<SendInput>(mouse.clone()).is_err());
+
+        mouse["op"]["mouse"]["button"] = Value::from(0);
+        mouse["op"]["mouse"]["screenWidth"] = Value::from(u64::from(u32::MAX) + 1);
+        assert!(serde_json::from_value::<SendInput>(mouse.clone()).is_err());
+
+        mouse["op"]["mouse"]["screenWidth"] = Value::from(1280);
+        mouse["op"]["mouse"]["x"] = Value::from(3.5e38_f64);
+        assert!(serde_json::from_value::<SendInput>(mouse).is_err());
     }
 }

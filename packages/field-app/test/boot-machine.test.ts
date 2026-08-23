@@ -299,6 +299,34 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     ]);
   });
 
+  it("applies main's terminal selector before workspace preparation can prewarm the pool", async () => {
+    const h = harness();
+    const order: string[] = [];
+    const configureTerminalPool = vi.fn(() => order.push("configure"));
+    const prepareFieldPlugins = vi.fn(async () => {
+      order.push("prepare");
+      return { generation: -1, staged: [], bundled: [] };
+    });
+    const mod = {
+      ...workspaceModule,
+      configureTerminalPool,
+      prepareFieldPlugins,
+    } as unknown as WorkspaceModule;
+    const terminal = {
+      transport: "routed" as const,
+      defaultShell: "/bin/zsh",
+      home: "/Users/test",
+    };
+    h.getConnection.mockResolvedValue({ port: 4242, token: "abc", terminal });
+    h.importWorkspace.mockResolvedValue(mod);
+
+    h.machine.start();
+    await flush();
+
+    expect(configureTerminalPool).toHaveBeenCalledWith(terminal);
+    expect(order.slice(0, 2)).toEqual(["configure", "prepare"]);
+  });
+
   it("hands plugin activation the exact window client before FieldView mounts", async () => {
     const h = harness();
     const prepareFieldPlugins = vi.fn(async () => ({

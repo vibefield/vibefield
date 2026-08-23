@@ -994,6 +994,16 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // TP-S3/G23 — the transport-private Ghosttea summaries the routed runtime
+  // needs before mounting. Separate from terminal.list (floor observation) and
+  // terminal.roster (UI projection): notably, this carries the TRF1 handle.
+  defineMethod({
+    surface: "product",
+    method: "terminal.sessions",
+    scope: "terminal.attach",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "terminal.get",

@@ -65,6 +65,25 @@ impl TestMinter {
         let mac = self.sign(&protected, &claims);
         json!({ "protected": protected, "claims": claims, "mac": mac })
     }
+
+    /// A session attach grant valid NOW. Rights must already be sorted, just
+    /// as fieldd's production minter emits them.
+    pub fn attach(&self, session_id: &str, generation: u64, rights: &[&str]) -> Value {
+        let now = field_native::tp::unix_ms();
+        let claims = json!({
+            "audienceCellBootId": self.cell_boot_id,
+            "clientId": "win:1#1",
+            "sessionId": session_id,
+            "routeRevision": 1,
+            "grantGeneration": generation,
+            "rights": rights,
+            "issuedAt": now - 1_000,
+            "expiresAt": now + 599_000,
+        });
+        let protected = self.protected("SessionAttachGrant");
+        let mac = self.sign(&protected, &claims);
+        json!({ "protected": protected, "claims": claims, "mac": mac })
+    }
 }
 
 pub struct TransportSpec<'a> {

@@ -29,6 +29,7 @@ import {
   TerminalOpenTicketResult,
   TerminalRosterResult,
   type TerminalRouteSnapshot,
+  TerminalRuntimeSessionsResult,
   TerminalTicket,
   type TerminalWorkloadClass,
 } from "@vibefield/contracts";
@@ -100,7 +101,9 @@ const packet = (bytes: Buffer): Buffer => {
  * connection died, and the only test using it asserted UNAVAILABLE either way. */
 const fakeSession = (id: string): Record<string, unknown> => ({
   id,
-  handle: `${id}-handle`,
+  // Ghosttea/TRF1 handles are u64 decimal strings. A mnemonic fake used to be
+  // tolerated only because no product boundary exposed the summary.
+  handle: "1",
   executable: "/bin/cat",
   cols: 100,
   rows: 30,
@@ -232,6 +235,8 @@ async function startFakeFloor(
           if (opts.createError !== undefined)
             reply({ type: "error", message: opts.createError, ...opts.createErrorMeta });
           else reply({ type: "session-created", session: fakeSession(createdSessionId) });
+        } else if (msg.type === "list-sessions") {
+          reply({ type: "sessions", sessions: [fakeSession(createdSessionId)] });
         } else if (msg.type === "terminate" && opts.dieOnTerminate === true) {
           sock.destroy(); // the floor dies mid-call
         } else if (msg.type === "get-config") {
@@ -681,6 +686,7 @@ describe("TerminalService (NF-3, mock native)", () => {
     // refused for a principal that holds neither scope.
     const EXPECTED_SCOPE: Record<string, string> = {
       "terminal.list": "terminal.attach",
+      "terminal.sessions": "terminal.attach",
       "terminal.get": "terminal.attach",
       "terminal.openTicket": "terminal.attach",
       "terminal.connectTicket": "terminal.attach",
@@ -788,6 +794,7 @@ describe("TerminalService (NF-3, mock native)", () => {
 
     const created = (await rpc.call("terminal.create", {})) as TerminalCreateResult;
     expect(created.sessionId).toBe(floor.createdSessionId);
+    expect(created.session).toMatchObject({ id: floor.createdSessionId, handle: "1" });
     expect(created.ticket).toMatchObject({
       controlSocket: floor.endpoints.controlSocket,
       frameSocket: floor.endpoints.frameSocket,
@@ -797,6 +804,19 @@ describe("TerminalService (NF-3, mock native)", () => {
     // the pre-GT-1 path is still honestly observed-gated for THIS session
     const raced = await rpc.callErr("terminal.openTicket", { sessionId: created.sessionId });
     expect(raced.data?.kind).toBe("NOT_FOUND");
+
+    // Once observation admits it, G23's separate transport inventory returns
+    // the same real engine identity — never a roster-shaped fabrication.
+    mock.pushObserved(observed([{ sessionId: created.sessionId }]));
+    await poll(async () => {
+      const listed = (await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] };
+      return listed.terminals.some((terminal) => terminal.sessionId === created.sessionId)
+        ? true
+        : undefined;
+    });
+    const sessions = TerminalRuntimeSessionsResult.parse(await rpc.call("terminal.sessions", {}));
+    expect(sessions.sessions).toHaveLength(1);
+    expect(sessions.sessions[0]).toMatchObject({ id: created.sessionId, handle: "1" });
 
     // both grants are on the record: the spawn and the credential it handed out
     const actions = (await readAuditActions(dataDir)).filter((a) => a.startsWith("terminal."));

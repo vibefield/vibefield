@@ -1,14 +1,15 @@
 // TP-S3-input — the renderer half of the input verb, drift-guarded against the
-// contract: every operation ghosttea-react can hand `encodeInput` must come out
-// as a `SendInput` the cell's schema accepts on the control leg, and nothing
-// renderer-only (location, timestamp) may leak onto the wire.
+// contract. Ghosttea numbers input per DOM view; this helper must emit one
+// monotonic sequence per activation because the cell maps that activation to
+// one engine view.
 import type { RoutedTerminalInputContext } from "@vibecook/ghosttea-react";
 import { decodeTpMessage, SendInput, TP_LEG_INBOUND } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
-import { encodeRoutedInput } from "../src/terminal/routed/encode-input";
+import { createRoutedInputEncoder } from "../src/terminal/routed/encode-input";
 
 const context = (
   operation: RoutedTerminalInputContext["operation"],
+  overrides: Partial<RoutedTerminalInputContext> = {},
 ): RoutedTerminalInputContext => ({
   sessionId: "sess-1",
   viewId: "view-1",
@@ -16,10 +17,20 @@ const context = (
   leaseEpoch: 4,
   inputSequence: 9,
   operation,
+  ...overrides,
 });
 
-describe("encodeRoutedInput — the SendInput wire encoding (spec §5.4)", () => {
+const text = (value = "x"): RoutedTerminalInputContext["operation"] => ({
+  kind: "text",
+  text: value,
+});
+
+const sequenceOf = (message: Readonly<Record<string, unknown>> | null): number =>
+  SendInput.parse(message).inputSequence;
+
+describe("createRoutedInputEncoder — the SendInput wire encoding (spec §5.4)", () => {
   it("every operation kind encodes to a SendInput the contract accepts inbound on control", () => {
+    const encoder = createRoutedInputEncoder({ maxTrackedSessions: 4 });
     const ops: RoutedTerminalInputContext["operation"][] = [
       { kind: "text", text: "ls\n" },
       { kind: "paste", text: "multi\nline" },
@@ -62,8 +73,8 @@ describe("encodeRoutedInput — the SendInput wire encoding (spec §5.4)", () =>
       { kind: "scroll-to", row: 120 },
       { kind: "interrupt" },
     ];
-    for (const op of ops) {
-      const message = encodeRoutedInput(context(op));
+    for (const [index, op] of ops.entries()) {
+      const message = encoder.encodeInput(context(op));
       expect(message, op.kind).not.toBeNull();
       const decoded = decodeTpMessage(message, TP_LEG_INBOUND.control);
       expect(decoded.ok, op.kind).toBe(true);
@@ -72,13 +83,14 @@ describe("encodeRoutedInput — the SendInput wire encoding (spec §5.4)", () =>
       const body = SendInput.parse(decoded.body);
       expect(body.activationId).toBe("act-1");
       expect(body.leaseEpoch).toBe(4);
-      expect(body.inputSequence).toBe(9);
+      expect(body.inputSequence).toBe(index + 1);
       expect(body.op.kind).toBe(op.kind);
     }
   });
 
   it("projects the key event: location/timestamp never reach the wire; a missing codepoint becomes 0", () => {
-    const message = encodeRoutedInput(
+    const encoder = createRoutedInputEncoder({ maxTrackedSessions: 1 });
+    const message = encoder.encodeInput(
       context({
         kind: "key",
         event: {
@@ -104,10 +116,107 @@ describe("encodeRoutedInput — the SendInput wire encoding (spec §5.4)", () =>
     expect(op.key["type"]).toBe("up");
   });
 
-  it("an operation kind this build cannot encode stays closed (null), never a guess", () => {
-    const unknown = {
-      kind: "hyperdrive",
-    } as unknown as RoutedTerminalInputContext["operation"];
-    expect(encodeRoutedInput(context(unknown))).toBeNull();
+  it("projects every DOM view and remount onto one activation-scoped sequence", () => {
+    const encoder = createRoutedInputEncoder({ maxTrackedSessions: 1 });
+    const messages = [
+      encoder.encodeInput(context(text("a"), { viewId: "view-a", inputSequence: 1 })),
+      encoder.encodeInput(context(text("b"), { viewId: "view-b", inputSequence: 1 })),
+      encoder.encodeInput(context(text("c"), { viewId: "view-a-remount", inputSequence: 1 })),
+    ];
+    expect(messages.map(sequenceOf)).toEqual([1, 2, 3]);
+  });
+
+  it("resets at a new activation, not at a new renderer view", () => {
+    const encoder = createRoutedInputEncoder({ maxTrackedSessions: 1 });
+    expect(sequenceOf(encoder.encodeInput(context(text())))).toBe(1);
+    expect(sequenceOf(encoder.encodeInput(context(text(), { viewId: "view-2" })))).toBe(2);
+    expect(
+      sequenceOf(
+        encoder.encodeInput(
+          context(text(), { activationId: "act-2", viewId: "view-3", inputSequence: 500 }),
+        ),
+      ),
+    ).toBe(1);
+  });
+
+  it("is bounded, releases by lifecycle, and a late old-activation inverse cannot erase the new one", () => {
+    const encoder = createRoutedInputEncoder({ maxTrackedSessions: 1 });
+    expect(sequenceOf(encoder.encodeInput(context(text())))).toBe(1);
+    expect(sequenceOf(encoder.encodeInput(context(text(), { activationId: "act-2" })))).toBe(1);
+
+    encoder.releaseActivation("sess-1", "act-1");
+    expect(encoder.encodeInput(context(text(), { sessionId: "sess-2" }))).toBeNull();
+
+    encoder.releaseActivation("sess-1", "act-2");
+    expect(sequenceOf(encoder.encodeInput(context(text(), { sessionId: "sess-2" })))).toBe(1);
+
+    encoder.releaseSession("sess-2");
+    expect(sequenceOf(encoder.encodeInput(context(text(), { sessionId: "sess-3" })))).toBe(1);
+
+    encoder.dispose();
+    expect(encoder.encodeInput(context(text(), { sessionId: "sess-3" }))).toBeNull();
+  });
+
+  it("invalid or unknown operations stay closed and do not allocate or spend a sequence", () => {
+    const encoder = createRoutedInputEncoder({ maxTrackedSessions: 1 });
+    const unknown = { kind: "hyperdrive" } as unknown as RoutedTerminalInputContext["operation"];
+    expect(encoder.encodeInput(context(unknown))).toBeNull();
+
+    expect(
+      encoder.encodeInput(
+        context({
+          kind: "mouse",
+          event: {
+            action: "motion",
+            button: 256,
+            x: 0,
+            y: 0,
+            screenWidth: 800,
+            screenHeight: 600,
+            cellWidth: 10,
+            cellHeight: 20,
+            paddingLeft: 0,
+            paddingTop: 0,
+            shift: false,
+            control: false,
+            alt: false,
+            meta: false,
+          },
+        }),
+      ),
+    ).toBeNull();
+
+    expect(sequenceOf(encoder.encodeInput(context(text(), { sessionId: "sess-2" })))).toBe(1);
+
+    const existing = createRoutedInputEncoder({ maxTrackedSessions: 1 });
+    expect(sequenceOf(existing.encodeInput(context(text())))).toBe(1);
+    expect(
+      existing.encodeInput(
+        context({
+          kind: "key",
+          event: {
+            type: "down",
+            key: "x",
+            code: "KeyX",
+            location: 0,
+            repeat: false,
+            shift: false,
+            control: false,
+            alt: false,
+            meta: false,
+            timestamp: 0,
+            unshiftedCodepoint: 0x1_0000_0000,
+          },
+        }),
+      ),
+    ).toBeNull();
+    expect(sequenceOf(existing.encodeInput(context(text())))).toBe(2);
+  });
+
+  it("refuses an invalid capacity instead of creating an unbounded ledger", () => {
+    expect(() => createRoutedInputEncoder({ maxTrackedSessions: 0 })).toThrow(RangeError);
+    expect(() =>
+      createRoutedInputEncoder({ maxTrackedSessions: Number.POSITIVE_INFINITY }),
+    ).toThrow(RangeError);
   });
 });

@@ -29,12 +29,17 @@ export function registerWindowBootstrap(
   registry: WindowRegistry,
   ensure: FielddSupervisor["ensure"],
   desktopBootId: string,
+  options: { directTerminalDoor: boolean },
   logger?: Logger,
 ): WindowRendererBoundary {
   const handle = createBootstrapHandler({
     owns: (sender) => registry.owns(sender),
     ensure,
     desktopBootId,
+    terminal: {
+      transport: options.directTerminalDoor ? "routed" : "bridge",
+      ...shellIdentity(),
+    },
     onRevokeError: (error, details) => {
       logger?.error(
         "desktop.ipc.window_token_revoke_failed",

@@ -99,6 +99,72 @@ export type TerminalConnectTicketParams = z.infer<typeof TerminalConnectTicketPa
 export const TerminalConnectTicketResult = z.object({ ticket: TerminalTicket }).passthrough();
 export type TerminalConnectTicketResult = z.infer<typeof TerminalConnectTicketResult>;
 
+/**
+ * The renderer-runtime inventory carried by `terminal.sessions`.
+ *
+ * This is deliberately the Ghosttea `SessionSummary` wire shape, named at our
+ * product boundary rather than cast in the renderer.  The routed runtime needs
+ * the engine's decimal `handle` before it can mount a surface: a product roster
+ * row cannot stand in for it, and synthesising one would make the worker reject
+ * the first `FramesLegAttached` identity.  Keeping this schema here also makes
+ * an upstream summary-shape change fail our type/build gates at the adapter.
+ */
+export const TerminalSessionActivity = z
+  .object({
+    kind: z.enum(["shell-idle", "foreground-job", "unknown"]),
+    source: z.enum(["shell-integration", "process-group", "unsupported"]),
+    confidence: z.enum(["authoritative", "heuristic"]),
+    rootProcessGroupId: z.number().int().nullable(),
+    foregroundProcessGroupId: z.number().int().nullable(),
+    observedAtMs: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type TerminalSessionActivity = z.infer<typeof TerminalSessionActivity>;
+
+export const TerminalRuntimeSession = z
+  .object({
+    id: z.string().min(1),
+    /** ghosttea/TRF1 u64, represented as decimal text on JSON wires */
+    handle: z.string().regex(/^(0|[1-9][0-9]*)$/),
+    executable: z.string(),
+    cols: z.number().int().nonnegative(),
+    rows: z.number().int().nonnegative(),
+    exited: z.boolean(),
+    readWrite: z.boolean(),
+    title: z.string().nullable(),
+    cwd: z.string().nullable(),
+    bellCount: z.number().int().nonnegative(),
+    pid: z.number().int().nullable(),
+    createdAtMs: z.number().int().nonnegative(),
+    exitCode: z.number().int().nullable(),
+    exitSignal: z.string().nullable(),
+    requestedTermination: z.enum(["user", "application", "service-shutdown"]).nullable(),
+    exitOutcome: z
+      .enum([
+        "completed",
+        "crashed",
+        "signaled",
+        "user-terminated",
+        "application-terminated",
+        "service-terminated",
+        "unknown",
+      ])
+      .nullable(),
+    ownerId: z.string().nullable(),
+    persistence: z
+      .enum(["terminate-with-app", "keep-until-exit", "keep-until-explicit-close"])
+      .nullable(),
+    scrollbackBytes: z.number().int().nonnegative().nullable().optional(),
+    activity: TerminalSessionActivity,
+  })
+  .passthrough();
+export type TerminalRuntimeSession = z.infer<typeof TerminalRuntimeSession>;
+
+export const TerminalRuntimeSessionsResult = z
+  .object({ sessions: z.array(TerminalRuntimeSession) })
+  .passthrough();
+export type TerminalRuntimeSessionsResult = z.infer<typeof TerminalRuntimeSessionsResult>;
+
 /** terminal.create — the free-shell door (NF-D6: the user's $SHELL as a login
  * shell, inherit-minus-strip env). Agent PTYs are NOT born here — they come
  * from agent.spawn with clean+allowlist env; this method exists so plain PTYs
@@ -141,7 +207,12 @@ export const TERMINAL_SESSION_CAP = 100;
  * `openTicket` keeps its observed gate for attach-to-EXISTING flows, where the
  * inventory is the only honest proof the session is real. */
 export const TerminalCreateResult = z
-  .object({ sessionId: z.string(), ticket: TerminalTicket })
+  .object({
+    sessionId: z.string(),
+    ticket: TerminalTicket,
+    /** Present on the G23-capable floor; optional for tolerant legacy readers. */
+    session: TerminalRuntimeSession.optional(),
+  })
   .passthrough();
 export type TerminalCreateResult = z.infer<typeof TerminalCreateResult>;
 

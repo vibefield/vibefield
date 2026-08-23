@@ -215,6 +215,18 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
 
     let (handle, serving) = service.serve_managed(TerminalServiceListeners::new(control, frames));
 
+    // G22 — the accessor is served by the same command loop as the UDS plane,
+    // so poll that plane before asking for its registry. A JoinHandle keeps it
+    // alive through both door setup and the later leash-triggered drain.
+    let mut serving = tokio::spawn(serving);
+    let service_sessions = match handle.sessions().await {
+        Ok(sessions) => sessions,
+        Err(error) => {
+            serving.abort();
+            return Err(error).context("obtain the terminal service session registry");
+        }
+    };
+
     // TP-S3a — the T1 doors, iff the floor sent the grant key (TP-D26: the
     // door layer is OURS, here, beside ghosttea's UDS plane). A malformed key
     // is a failed start stated on stderr — never a door that cannot verify.
@@ -235,11 +247,20 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
                 },
                 GrantValidityLimits::default(),
             );
-            Some(
-                Door::serve(DoorConfig::new(verifier, bootstrap.allowed_origins.clone()))
-                    .await
-                    .context("serve the T1 doors")?,
-            )
+            let config = DoorConfig::new(verifier, bootstrap.allowed_origins.clone())
+                // The T1 and UDS doors now resolve against the exact same live
+                // sessions and frame hubs. No copied inventory can race a birth.
+                .with_source(std::sync::Arc::new(service_sessions.clone()));
+            match Door::serve(config).await {
+                Ok(door) => Some(door),
+                Err(error) => {
+                    let budget =
+                        Duration::from_millis(registries::cell_supervision::DRAIN_BUDGET_MS);
+                    let _ = handle.shutdown(budget).await;
+                    let _ = tokio::time::timeout(WRITER_FLUSH_GRACE, &mut serving).await;
+                    return Err(error).context("serve the T1 doors");
+                }
+            }
         }
         (None, _) => {
             tracing::info!(
@@ -286,7 +307,6 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
     // (measured: a witness saw session-created, then only the close). A task
     // keeps it alive through the shutdown, exactly as the in-process unit's
     // serve task always did.
-    let mut serving = tokio::spawn(serving);
     tokio::select! {
         _ = leash => {
             // Requested (or orphaned — same answer): the T1 doors close every

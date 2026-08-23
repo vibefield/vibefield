@@ -312,6 +312,141 @@ async fn a_grant_key_in_the_bootstrap_opens_t1_doors_in_the_hello() {
     assert!(wait_exit(child, Duration::from_secs(10)).success());
 }
 
+/// G22 production integration: create through the cell's ordinary UDS service,
+/// then attach that exact session through BOTH T1 doors. This is the regression
+/// that an in-process `NoSessions` source could never pass: control resolution
+/// proves the shared Session, frames resolution proves its shared FrameHub.
+#[cfg(unix)]
+#[tokio::test]
+async fn uds_born_sessions_are_the_t1_doors_sessions() {
+    let root = short_root();
+    let (mut child, control_socket, _frame_socket) = spawn_cell(root.path(), 13);
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    writeln!(
+        stdin,
+        "{}",
+        serde_json::json!({
+            "token": "tok-g22",
+            "grantKey": hex::encode(vec![0x5e_u8; 32]),
+            "grantKeyGeneration": 1,
+        })
+    )
+    .expect("bootstrap");
+    let mut lines = BufReader::new(stdout).lines();
+    let hello: field_native::cell::CellHello =
+        serde_json::from_str(&lines.next().expect("hello").expect("read hello")).expect("parse");
+    let doors = hello.doors.expect("keyed cell doors");
+
+    let (uds, _events) =
+        field_native::services::terminal_client::ControlClient::connect(&control_socket, "tok-g22")
+            .await
+            .expect("dial ordinary UDS service");
+    let session = uds
+        .create_session(serde_json::json!({
+            "executable": "/bin/cat",
+            "args": [],
+            "cols": 80,
+            "rows": 24,
+            "persistence": "keep-until-exit",
+            "environment": {"mode": "clean", "variables": {}},
+        }))
+        .await
+        .expect("create through UDS");
+
+    let minter = tp_mint::TestMinter::new(&hello.cell_boot_id);
+    let transport = minter.transport(tp_mint::TransportSpec::basic("set-g22", 1, "n-g22"));
+    let attach = minter.attach(&session.id, 1, &["geometry", "input", "read"]);
+
+    let (mut control, _) = tokio_tungstenite::connect_async(&doors.control_url)
+        .await
+        .expect("dial T1 control");
+    control
+        .send(Message::Text(
+            tp_mint::hello("control", &transport, None).into(),
+        ))
+        .await
+        .expect("control hello");
+    let accepted = control
+        .next()
+        .await
+        .expect("control accepted")
+        .expect("frame");
+    assert!(
+        matches!(&accepted, Message::Text(text) if text.contains("ConnectionAccepted")),
+        "{accepted:?}"
+    );
+
+    let (mut frames, _) = tokio_tungstenite::connect_async(&doors.frames_url)
+        .await
+        .expect("dial T1 frames");
+    frames
+        .send(Message::Text(
+            tp_mint::hello("frames", &transport, Some(tp_mint::worker_capacities())).into(),
+        ))
+        .await
+        .expect("frames hello");
+    let accepted = frames
+        .next()
+        .await
+        .expect("frames accepted")
+        .expect("frame");
+    assert!(
+        matches!(&accepted, Message::Text(text) if text.contains("ConnectionAccepted")),
+        "{accepted:?}"
+    );
+
+    control
+        .send(Message::Text(
+            serde_json::json!({
+                "type": "AttachControlLeg",
+                "activationId": "act-g22",
+                "attachGrant": attach.clone(),
+                "initialDemand": {"mode": "live"},
+            })
+            .to_string()
+            .into(),
+        ))
+        .await
+        .expect("attach control");
+    let attached = control
+        .next()
+        .await
+        .expect("control attached")
+        .expect("frame");
+    assert!(
+        matches!(&attached, Message::Text(text) if text.contains("ControlLegAttached")),
+        "the T1 control door must resolve the UDS-born session: {attached:?}"
+    );
+
+    frames
+        .send(Message::Text(
+            serde_json::json!({
+                "type": "AttachFramesLeg",
+                "activationId": "act-g22",
+                "attachGrant": attach,
+            })
+            .to_string()
+            .into(),
+        ))
+        .await
+        .expect("attach frames");
+    let attached = frames
+        .next()
+        .await
+        .expect("frames attached")
+        .expect("frame");
+    assert!(
+        matches!(&attached, Message::Text(text) if text.contains("FramesLegAttached")),
+        "the T1 frames door must resolve the UDS-born session hub: {attached:?}"
+    );
+
+    drop(uds);
+    drop(stdin);
+    let _ = lines.next();
+    assert!(wait_exit(child, Duration::from_secs(10)).success());
+}
+
 #[test]
 fn a_keyless_bootstrap_serves_no_doors_and_says_so() {
     let root = short_root();

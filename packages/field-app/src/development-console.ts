@@ -29,6 +29,10 @@ export interface GodviewDeckFacts {
   sessions: number;
   sessionIds: readonly string[];
   rendererBackend: string;
+  /** Product-pool progress, exposed so a zero-pane smoke failure distinguishes
+   * acquisition, roster, and workspace mounting without leaking placement. */
+  poolPhase: "cold" | "warming" | "warm" | "spent" | "opening" | "dormant" | "open" | "failed";
+  rosterState: "unread" | "observed" | "unobserved" | "unavailable";
   error?: string;
   /** GT-5c: WHICH plane refused. `fieldd` means the control plane alone — the
    * ticket mint — while field-native and its PTYs are untouched and outliving
@@ -83,6 +87,34 @@ export interface GodviewDeckFacts {
 
 export function emitGodviewDeckMarker(facts: GodviewDeckFacts): void {
   console.log(`GODVIEW_DECK ${JSON.stringify(facts)}`);
+}
+
+/**
+ * G23's direct-path witness for the production smoke.
+ *
+ * `presentationReady` is stronger than a mounted canvas: Ghosttea sets it only
+ * after the frames worker has applied the routed scene and both the worker and
+ * cell lease dimensions agree. `inputAllowed` adds the control-leg authority.
+ * No route, endpoint, grant, or placement crosses this observation.
+ */
+export interface GodviewDirectTerminalFacts {
+  sessionId: string;
+  activationId: string;
+  phase: string;
+  presentationReady: boolean;
+  inputAllowed: boolean;
+  /** Safe activation diagnostics for a failed production proof. These name
+   * protocol state only; tickets, endpoints and grants never enter the marker. */
+  unavailableReason?: string;
+  controlAttached?: boolean;
+  framesAttached?: boolean;
+  framesOutcome?: string;
+  framesState?: string;
+  protocolReason?: string;
+}
+
+export function emitGodviewDirectTerminalMarker(facts: GodviewDirectTerminalFacts): void {
+  console.log(`GODVIEW_DIRECT_TERMINAL ${JSON.stringify(facts)}`);
 }
 
 /** What the Godview MONITOR currently is (GT-3m) — the deck marker's sibling,

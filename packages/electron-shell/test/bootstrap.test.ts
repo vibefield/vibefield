@@ -150,6 +150,29 @@ describe("createBootstrapHandler (once per generation)", () => {
     ).toHaveLength(1);
   });
 
+  it("carries main's fixed terminal transport and shell policy on the same generation", async () => {
+    const daemon = fakeDaemon();
+    const terminal = {
+      transport: "routed" as const,
+      defaultShell: "/bin/zsh",
+      home: "/Users/test",
+    };
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+      terminal,
+    });
+    const sender = fakeSender(1);
+
+    const first = await handler({ sender: sender.wc });
+    const cached = await handler({ sender: sender.wc });
+
+    expect(first.terminal).toEqual(terminal);
+    expect(cached.terminal).toEqual(terminal);
+    expect(daemon.mintCount()).toBe(1);
+  });
+
   it("distinct senders mint distinct tokens with their own labels", async () => {
     const daemon = fakeDaemon();
     const handler = createBootstrapHandler({

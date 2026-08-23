@@ -28,15 +28,22 @@ import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
 
 let runtimesMade = 0;
+let runtimeOptions: unknown[] = [];
+let registeredSessions: unknown[] = [];
 
 vi.mock("@vibecook/ghosttea-react", () => ({
-  createGhostteaTerminalRuntime: () => {
+  createGhostteaTerminalRuntime: (options: unknown) => {
     runtimesMade += 1;
+    runtimeOptions.push(options);
+    const events = new EventTarget();
     return {
+      addEventListener: events.addEventListener.bind(events),
+      removeEventListener: events.removeEventListener.bind(events),
       connect: () => Promise.resolve(),
       startPerformanceMeasurement: () => Promise.resolve(),
       finishPerformanceMeasurement: () => Promise.resolve({ backend: "test" }),
       listSessions: () => Promise.resolve(sessionSummaries),
+      registerSession: (session: unknown) => registeredSessions.push(session),
       dispose: () => undefined,
       rendererBackend: "test",
     };
@@ -107,6 +114,47 @@ function routedTicket(cellBootId: string, sessionId: string, sockets = LEGACY) {
   };
 }
 
+function directTicket(cellBootId: string, sessionId: string) {
+  return {
+    ...routedTicket(cellBootId, sessionId),
+    endpoints: {
+      controlUrl: "ws://127.0.0.1:43101/control",
+      framesUrl: "ws://127.0.0.1:43101/frames",
+    },
+  };
+}
+
+function runtimeSummary(sessionId: string) {
+  return {
+    id: sessionId,
+    handle: "1",
+    executable: "/bin/zsh",
+    cols: 80,
+    rows: 24,
+    exited: false,
+    readWrite: true,
+    title: null,
+    cwd: "/Users/test",
+    bellCount: 0,
+    pid: 123,
+    createdAtMs: 1_000,
+    exitCode: null,
+    exitSignal: null,
+    requestedTermination: null,
+    exitOutcome: null,
+    ownerId: null,
+    persistence: "keep-until-exit",
+    activity: {
+      kind: "unknown",
+      source: "unsupported",
+      confidence: "heuristic",
+      rootProcessGroupId: null,
+      foregroundProcessGroupId: null,
+      observedAtMs: 1_000,
+    },
+  };
+}
+
 /** Which cell each session sits on, per case. */
 let cellOf: Record<string, string> = {};
 /** Sessions the runtime's own `listSessions` reports. */
@@ -160,6 +208,8 @@ async function settle(): Promise<void> {
 
 beforeEach(() => {
   runtimesMade = 0;
+  runtimeOptions = [];
+  registeredSessions = [];
   requests = [];
   connectedSockets = [];
   rosterRows = [];
@@ -181,6 +231,115 @@ beforeEach(() => {
 });
 
 afterEach(() => pool.disposeTerminalPool());
+
+describe("the window bootstrap selects the production G23 path", () => {
+  it("uses a routed runtime, never invokes the bridge, and owns exact birth/termination inverses", async () => {
+    const sessionId = "direct-1";
+    const summary = runtimeSummary(sessionId);
+    const opened = directTicket("cell-direct-1", sessionId);
+    const directRequests: string[] = [];
+    let observedForOpen = false;
+    const directFieldd = {
+      request: (method: string) => {
+        directRequests.push(method);
+        if (method === "terminal.create") {
+          return Promise.resolve({
+            sessionId,
+            ticket: LEGACY,
+            ...opened,
+            session: summary,
+          });
+        }
+        if (method === "terminal.openTicket") {
+          if (!observedForOpen) return Promise.reject(new Error("session not observed yet"));
+          return Promise.resolve(opened);
+        }
+        if (method === "terminal.terminate") return Promise.resolve({ terminated: true });
+        return Promise.reject(new Error(`unexpected method ${method}`));
+      },
+    } as unknown as PoolClient;
+
+    pool.configureTerminalPool({
+      transport: "routed",
+      defaultShell: "/bin/zsh",
+      home: "/Users/test",
+    });
+    pool.openTerminalPool(directFieldd, { sessionIds: [] });
+    await settle();
+
+    expect(pool.terminalPoolSnapshot().phase).toBe("dormant");
+    const options = runtimeOptions[0] as {
+      transport?: string;
+      host?: {
+        openTicket(sessionId: string): Promise<unknown>;
+        createSession?(options: unknown): Promise<unknown>;
+        terminate?(sessionId: string, source: "user"): Promise<void>;
+      };
+    };
+    expect(options.transport).toBe("routed");
+    expect(options.host).toBeDefined();
+    expect(
+      pool.terminalPoolSnapshot().shell,
+      "G23 can mount the workspace before any session exists",
+    ).toEqual({
+      defaultShell: "/bin/zsh",
+      home: "/Users/test",
+    });
+
+    expect(
+      await options.host?.createSession?.({
+        executable: "/bin/zsh",
+        args: [],
+        cols: 100,
+        rows: 30,
+        persistence: "terminate-with-app",
+        programKind: "interactive-shell",
+      }),
+      "the workspace's own empty-layout fallback rides terminal.create",
+    ).toEqual(summary);
+    expect(registeredSessions).toEqual([summary]);
+    expect(await pool.terminalSessionSummary(sessionId, 1)).toEqual(summary);
+    expect(pool.terminalPoolSnapshot().shell).toEqual({
+      defaultShell: "/bin/zsh",
+      home: "/Users/test",
+    });
+    expect(connectedSockets, "main's legacy utility bridge was never touched").toEqual([]);
+
+    await options.host?.openTicket(sessionId);
+    expect(
+      directRequests,
+      "the create ticket is consumed before observation-gated openTicket",
+    ).toEqual(["terminal.create"]);
+    expect(pool.terminalPoolCellCount()).toBe(1);
+    expect(pool.terminalSessionGrants(sessionId)).toBeDefined();
+
+    observedForOpen = true;
+    await options.host?.openTicket(sessionId);
+    expect(directRequests).toEqual(["terminal.create", "terminal.openTicket"]);
+
+    await options.host?.terminate?.(sessionId, "user");
+    expect(pool.terminalPoolCellCount()).toBe(0);
+    expect(pool.terminalSessionGrants(sessionId)).toBeUndefined();
+    expect(await pool.terminalSessionSummary(sessionId, 1)).toBeNull();
+    expect(connectedSockets).toEqual([]);
+    expect(directRequests).toEqual([
+      "terminal.create",
+      "terminal.openTicket",
+      "terminal.terminate",
+    ]);
+  });
+
+  it("refuses to reinterpret an already-live runtime under another transport", () => {
+    pool.openTerminalPool(fieldd, { sessionIds: [] });
+    expect(() =>
+      pool.configureTerminalPool({
+        transport: "routed",
+        defaultShell: "/bin/zsh",
+        home: "/Users/test",
+      }),
+    ).toThrow("cannot change under a live runtime");
+  });
+});
 
 describe("the sessionless door is gone (TP-D3)", () => {
   it("never asks for connectTicket — not to rejoin, not to create, not to recover", async () => {

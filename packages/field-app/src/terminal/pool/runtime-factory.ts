@@ -1,5 +1,6 @@
 import {
   createGhostteaTerminalRuntime,
+  type GhostteaRoutedHost,
   type GhostteaTerminalRuntime,
   waitForGhostteaRendererPorts,
 } from "@vibecook/ghosttea-react";
@@ -37,16 +38,21 @@ export const TERMINAL_FRAME_SUBSCRIPTION_GRACE_MS = 1_000;
  * guarantees only one of these waits is ever armed at a time — see the
  * one-runtime law in `terminal-pool.ts`.
  */
-export function createTerminalRuntime(): GhostteaTerminalRuntime {
-  return createGhostteaTerminalRuntime({
-    ports: waitForGhostteaRendererPorts(45_000),
+export type TerminalRuntimeTransport =
+  | { readonly transport?: "bridge" }
+  | { readonly transport: "routed"; readonly host: GhostteaRoutedHost };
+
+export function createTerminalRuntime(
+  transport: TerminalRuntimeTransport = { transport: "bridge" },
+): GhostteaTerminalRuntime {
+  const common = {
     clientBuild: "vibefield-godview",
     frameSubscriptionGraceMs: TERMINAL_FRAME_SUBSCRIPTION_GRACE_MS,
     // Bundled explicitly: the runtime's default resolves its worker relative to
     // its own module URL, which under Vite means an asset inside node_modules.
     workerFactory: () => new TerminalRenderWorker(),
     platform: {
-      writeClipboard: (text) => void navigator.clipboard?.writeText(text),
+      writeClipboard: (text: string) => void navigator.clipboard?.writeText(text),
       forceCanvasFallback: () => false,
       setForceCanvasFallback: () => undefined,
       // A VibeField renderer cannot reload itself — security.ts denies every
@@ -55,5 +61,17 @@ export function createTerminalRuntime(): GhostteaTerminalRuntime {
       // Recovery is in-page: the pool's ladder replaces the runtime instead.
       reload: () => undefined,
     },
+  } as const;
+  if (transport.transport === "routed") {
+    return createGhostteaTerminalRuntime({
+      ...common,
+      transport: "routed",
+      host: transport.host,
+    });
+  }
+  return createGhostteaTerminalRuntime({
+    ...common,
+    transport: "ports",
+    ports: waitForGhostteaRendererPorts(45_000),
   });
 }

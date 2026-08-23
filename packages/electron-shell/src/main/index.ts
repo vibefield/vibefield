@@ -900,6 +900,7 @@ async function main(
     registry,
     (options) => fielddHandles!.ensure(options),
     DESKTOP_BOOT_ID,
+    { directTerminalDoor: DIRECT_TERMINAL_DOOR },
     logger.child({ component: "ipc.bootstrap" }),
   );
 
@@ -1171,6 +1172,7 @@ async function main(
       // the harness must exercise the path ⇧⇧ takes, not a parallel one.
       toggleGodview,
       beforeExit: closeEvidence,
+      terminalDirectProof: process.argv.includes("--terminal-direct-proof"),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({

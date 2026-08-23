@@ -1,7 +1,12 @@
 import { type ZodTypeAny, z } from "zod";
 import { CellEndpointSet, TerminalWorkloadClass } from "./envelope";
 import { TERMINAL_PIPELINE, TERMINAL_PIPELINE_CLOSE_CODES } from "./registries";
-import { TerminalCreateResult, TerminalObservation, TerminalTicket } from "./terminal";
+import {
+  TerminalCreateResult,
+  TerminalObservation,
+  TerminalRuntimeSession,
+  TerminalTicket,
+} from "./terminal";
 
 // The terminal pipeline (TPv3) — custody through pixels. The wire truth for
 // everything between fieldd's ticket mint and the renderer's cell sockets:
@@ -351,7 +356,12 @@ export type TerminalOpenTicketResult = z.infer<typeof TerminalOpenTicketResult>;
  * TerminalOpenTicket`): the session id, the legacy nested `ticket` (until
  * S3e) and the end-state fields spread. */
 export const TerminalCreateOpenResult = z
-  .object({ sessionId: z.string().min(1), ticket: TerminalTicket })
+  .object({
+    sessionId: z.string().min(1),
+    ticket: TerminalTicket,
+    /** The exact engine summary needed to mount before inventory catches up. */
+    session: TerminalRuntimeSession.optional(),
+  })
   .merge(TerminalOpenTicket)
   .passthrough();
 export type TerminalCreateOpenResult = z.infer<typeof TerminalCreateOpenResult>;
@@ -971,6 +981,18 @@ export type GeometryRefused = z.infer<typeof GeometryRefused>;
 // view binding; the wire never carries them, so a renderer cannot forge a newer
 // epoch. ghosttea's `authorize_input` is the engine-side backstop.
 
+// JSON numbers have to survive BOTH TypeScript's IEEE-754 representation and
+// Rust's concrete serde targets. u64/i64 values are therefore restricted to
+// the exactly representable integer subset; the engine-native fields use their
+// exact u8/u32/f32 ranges. This is local to SendInput rather than silently
+// changing the older protocol-wide Counter contract in this slice.
+const JsonSafeU64 = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const JsonSafeI64 = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER);
+const RustU8 = z.number().int().min(0).max(0xff);
+const RustU32 = z.number().int().min(0).max(0xffff_ffff);
+const F32_MAX = 3.4028234663852886e38;
+const FiniteF32 = z.number().min(-F32_MAX).max(F32_MAX);
+
 /** A DOM keystroke, projected to ghosttea's `KeyInput` serde shape. `type` is the
  * key action; `unshiftedCodepoint` defaults to 0 (ghosttea `#[serde(default)]`). */
 export const TerminalKeyInput = z
@@ -983,7 +1005,7 @@ export const TerminalKeyInput = z
     control: z.boolean(),
     alt: z.boolean(),
     meta: z.boolean(),
-    unshiftedCodepoint: Counter.default(0),
+    unshiftedCodepoint: RustU32.default(0),
   })
   .passthrough();
 export type TerminalKeyInput = z.infer<typeof TerminalKeyInput>;
@@ -993,15 +1015,15 @@ export type TerminalKeyInput = z.infer<typeof TerminalKeyInput>;
 export const TerminalMouseInput = z
   .object({
     action: z.enum(["press", "release", "motion"]),
-    button: Counter,
-    x: z.number(),
-    y: z.number(),
-    screenWidth: Counter,
-    screenHeight: Counter,
-    cellWidth: Counter,
-    cellHeight: Counter,
-    paddingLeft: Counter,
-    paddingTop: Counter,
+    button: RustU8,
+    x: FiniteF32,
+    y: FiniteF32,
+    screenWidth: RustU32,
+    screenHeight: RustU32,
+    cellWidth: RustU32,
+    cellHeight: RustU32,
+    paddingLeft: RustU32,
+    paddingTop: RustU32,
     shift: z.boolean(),
     control: z.boolean(),
     alt: z.boolean(),
@@ -1019,8 +1041,8 @@ export const SendInputOp = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("paste"), text: z.string() }).passthrough(),
   z.object({ kind: z.literal("key"), key: TerminalKeyInput }).passthrough(),
   z.object({ kind: z.literal("mouse"), mouse: TerminalMouseInput }).passthrough(),
-  z.object({ kind: z.literal("scroll"), rows: z.number().int() }).passthrough(),
-  z.object({ kind: z.literal("scroll-to"), row: Counter }).passthrough(),
+  z.object({ kind: z.literal("scroll"), rows: JsonSafeI64 }).passthrough(),
+  z.object({ kind: z.literal("scroll-to"), row: JsonSafeU64 }).passthrough(),
   z.object({ kind: z.literal("interrupt") }).passthrough(),
 ]);
 export type SendInputOp = z.infer<typeof SendInputOp>;
@@ -1032,7 +1054,8 @@ export type SendInputOp = z.infer<typeof SendInputOp>;
 export const SendInput = z
   .object({
     ...ActivationTriple,
-    inputSequence: Counter,
+    leaseEpoch: JsonSafeU64,
+    inputSequence: JsonSafeU64,
     op: SendInputOp,
   })
   .passthrough();

@@ -105,7 +105,7 @@ function openOn(sessionId = "s1"): void {
 
 /** Let the pool's promise chain settle without a real timer. */
 async function settle(): Promise<void> {
-  for (let index = 0; index < 12; index += 1) await Promise.resolve();
+  for (let index = 0; index < 24; index += 1) await Promise.resolve();
 }
 
 /** The bridge, speaking. Only a TRANSITION is news (GT-2c) — the guard the pool
@@ -144,7 +144,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => pool.disposeTerminalPool());
+afterEach(() => {
+  vi.useRealTimers();
+  pool.disposeTerminalPool();
+});
 
 describe("warming the transport (GT-D14, in the pool)", () => {
   it("forces a render backend and NOTHING else — no ticket, no bridge, no session", async () => {
@@ -261,6 +264,24 @@ describe("warming the transport (GT-D14, in the pool)", () => {
     expect(disposed, "nothing was orphaned, so nothing had to be thrown away").toBe(0);
     expect(pool.terminalPoolSnapshot().phase).toBe("open");
     expect(pool.terminalPoolSnapshot().warm).toBe(true);
+  });
+
+  it("bounds a stuck render-worker warm so a waiting claim still takes the cold path", async () => {
+    vi.useFakeTimers();
+    deviceWarm = () => new Promise(() => undefined);
+
+    pool.prewarmTerminalPool(fieldd);
+    await settle();
+    openOn();
+    expect(pool.terminalPoolSnapshot().phase).toBe("opening");
+    expect(runtimesMade).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(pool.TERMINAL_PREWARM_TIMEOUT_MS);
+    await settle();
+
+    expect(disposed, "the hung warm runtime was retired").toBe(1);
+    expect(runtimesMade, "the claim continued with one cold runtime").toBe(2);
+    expect(pool.terminalPoolSnapshot().phase).toBe("open");
   });
 
   it("takes the cold path when the warm it was waiting for FAILS", async () => {
@@ -459,7 +480,7 @@ describe("the ladder, driven by the bridge (GT-D14's re-warm clause, GT-2c's gua
 });
 
 describe("PF6: a warm transport nobody opened", () => {
-  it("schedules no interval and no animation frame", async () => {
+  it("schedules only its bounded one-shot guard — no interval or animation frame", async () => {
     const setInterval = vi.spyOn(globalThis, "setInterval");
     const setTimeout = vi.spyOn(globalThis, "setTimeout");
     const raf = vi.fn();
@@ -470,7 +491,8 @@ describe("PF6: a warm transport nobody opened", () => {
 
     expect(pool.terminalPoolSnapshot().phase).toBe("warm");
     expect(setInterval).not.toHaveBeenCalled();
-    expect(setTimeout).not.toHaveBeenCalled();
+    expect(setTimeout).toHaveBeenCalledTimes(1);
+    expect(setTimeout).toHaveBeenCalledWith(expect.any(Function), pool.TERMINAL_PREWARM_TIMEOUT_MS);
     expect(raf).not.toHaveBeenCalled();
 
     setInterval.mockRestore();

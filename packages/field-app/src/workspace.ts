@@ -11,3 +11,6 @@ export { FieldView } from "./field";
 // host, which is workspace weight, and the boot machine reaches it the same way
 // it reaches DocManager (through the module it already dynamically imported).
 export { prepareFieldPlugins } from "./field-engine";
+// TP-S3/G23: bootstrap config is applied only after this heavy chunk lands, so
+// the splash bundle does not pull the terminal worker/runtime into first paint.
+export { configureTerminalPool } from "./terminal/pool";

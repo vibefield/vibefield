@@ -1015,7 +1015,7 @@ const BRIDGE_SERVICE_NAME = "ghosttea-terminal-bridge";
  * every utilityProcess shares. Matching the mojo name would find the logging
  * utility just as happily, so both fields are checked for what they actually
  * mean. Returns the pid it killed so the verdict can say what died. */
-function killTerminalBridge(): number | null {
+function terminalBridgePid(): number | null {
   const metric = app
     .getAppMetrics()
     .find(
@@ -1025,8 +1025,14 @@ function killTerminalBridge(): number | null {
         m.serviceName === "node.mojom.NodeService",
     );
   if (metric === undefined) return null;
-  process.kill(metric.pid, "SIGKILL");
   return metric.pid;
+}
+
+function killTerminalBridge(): number | null {
+  const pid = terminalBridgePid();
+  if (pid === null) return null;
+  process.kill(pid, "SIGKILL");
+  return pid;
 }
 
 // ---- GT-2: the Godview smoke -------------------------------------------------
@@ -1038,6 +1044,8 @@ interface DeckFacts {
   sessions: number;
   sessionIds: string[];
   rendererBackend: string;
+  poolPhase: string;
+  rosterState: string;
   error?: string;
   /** present ONLY while the GT-3 restore consent face is up */
   consent?: { saved: number; alive: number; dead: number };
@@ -1060,6 +1068,20 @@ interface DeckFacts {
    * the field existed publishes no `zoom`, and a harness that threw on its
    * absence would be failing on a stale bundle rather than on a behaviour. */
   zoom?: { phase: "idle" | "entering" | "zoomed" | "leaving"; commits: number };
+}
+
+interface DirectTerminalFacts {
+  sessionId: string;
+  activationId: string;
+  phase: string;
+  presentationReady: boolean;
+  inputAllowed: boolean;
+  unavailableReason?: string;
+  controlAttached?: boolean;
+  framesAttached?: boolean;
+  framesOutcome?: string;
+  framesState?: string;
+  protocolReason?: string;
 }
 
 /** The renderer-local home of the viewer's appearance (GT-D12). Named here so
@@ -1329,6 +1351,32 @@ async function focusDeck(win: BrowserWindow): Promise<void> {
   )) as string;
   if (focused !== "ok") throw new Error(`the deck could not take keyboard focus: ${focused}`);
   await sleep(150);
+}
+
+/** Type through the focused production TerminalSurface, one real key pair at a
+ * time. No automation/UDS side door participates in this command. */
+async function typeTerminalLine(win: BrowserWindow, line: string): Promise<void> {
+  for (const character of line) {
+    const keyCode = character === " " ? "Space" : character;
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+    await sleep(3);
+  }
+  win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+  win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+}
+
+async function waitForShellMarker(path: string, timeoutMs = 15_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      readFileSync(path);
+      return;
+    } catch {
+      await sleep(25);
+    }
+  }
+  throw new Error(`the routed pane did not create ${path}`);
 }
 
 /** What has DOM focus, for a failure message. Diagnostic only — no assertion
@@ -1962,10 +2010,18 @@ export async function runSmokeGodview(opts: {
   viteUrl: string;
   toggleGodview: () => void;
   beforeExit: () => Promise<void>;
+  /** Short, gated G22/G23 proof selected by --terminal-direct-proof. */
+  terminalDirectProof?: boolean;
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
   const scratch = mkdtempSync(join(tmpdir(), "vf-smoke-godview-"));
   const verdict: Record<string, unknown> = { ok: false };
+  const finish = async (): Promise<void> => {
+    console.log(`SMOKE_GODVIEW ${JSON.stringify(verdict)}`);
+    rmSync(scratch, { recursive: true, force: true });
+    await teardown(opts.supervisor, opts.root, opts.beforeExit);
+    app.exit(verdict["ok"] === true ? 0 : 2);
+  };
   try {
     const win = createMainWindow({
       mode: "smoke-godview",
@@ -1980,6 +2036,7 @@ export async function runSmokeGodview(opts: {
       });
     }
     const deck = new MarkerWatch<DeckFacts>(win, "GODVIEW_DECK ");
+    const direct = new MarkerWatch<DirectTerminalFacts>(win, "GODVIEW_DIRECT_TERMINAL ");
     // GT-4: the monitor's own tail, armed with the deck's and for the same
     // reason — the door rows below re-read the stage AFTER a click, and a
     // one-shot line wait can only ever answer about the mount.
@@ -2046,6 +2103,55 @@ export async function runSmokeGodview(opts: {
       )
       .then((facts) => facts.rendererBackend)
       .catch(() => opened.rendererBackend);
+
+    if (opts.terminalDirectProof === true) {
+      try {
+        const ready = await direct.until(
+          (facts) =>
+            facts.sessionId === freeShell &&
+            ((facts.presentationReady && facts.inputAllowed) ||
+              (facts.phase === "unavailable" &&
+                (facts.unavailableReason !== "protocol" || facts.protocolReason !== undefined))),
+          "G23 to apply a routed frame and admit input for the first pane",
+          45_000,
+        );
+        if (!ready.presentationReady || !ready.inputAllowed) {
+          throw new Error(`the G23 activation became unavailable: ${JSON.stringify(ready)}`);
+        }
+        await focusDeck(win);
+        const markerPath = `/private/tmp/vftp-${process.pid}-${Date.now()}.ok`;
+        try {
+          await typeTerminalLine(win, `touch ${markerPath}`);
+          await waitForShellMarker(markerPath);
+        } finally {
+          rmSync(markerPath, { force: true });
+        }
+        const bridgePid = terminalBridgePid();
+        if (bridgePid !== null) {
+          throw new Error(`the direct path forked the retired bridge utility (pid ${bridgePid})`);
+        }
+        const coldOpen = JSON.parse(await coldOpenLine) as Record<string, unknown>;
+        const shotPath = process.env["VF_TERMINAL_DIRECT_PROOF_SHOT"];
+        if (shotPath !== undefined && shotPath !== "") {
+          writeFileSync(shotPath, (await win.capturePage()).toPNG());
+        }
+        verdict["directTerminal"] = {
+          sessionId: ready.sessionId,
+          activationId: ready.activationId,
+          phase: ready.phase,
+          presentationReady: ready.presentationReady,
+          inputAllowed: ready.inputAllowed,
+          typedShellSideEffect: true,
+          legacyBridgePid: null,
+          coldOpen,
+        };
+        verdict["ok"] = true;
+      } finally {
+        await persistence.stop();
+      }
+      await finish();
+      return;
+    }
 
     // 1b. THE MONITOR ROW (GT-3m). The stage above the deck, on the registry's
     //     default view, with the mock field on it and WEARING ITS LABEL.
@@ -3174,10 +3280,7 @@ export async function runSmokeGodview(opts: {
     verdict["reason"] = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     console.error(`SMOKE_GODVIEW failed: ${verdict["reason"]}`);
   }
-  console.log(`SMOKE_GODVIEW ${JSON.stringify(verdict)}`);
-  rmSync(scratch, { recursive: true, force: true });
-  await teardown(opts.supervisor, opts.root, opts.beforeExit);
-  app.exit(verdict["ok"] === true ? 0 : 2);
+  await finish();
 }
 
 async function waitForLiveSurfaceLabResult(

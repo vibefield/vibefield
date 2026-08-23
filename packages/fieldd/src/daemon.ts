@@ -65,6 +65,7 @@ import {
   type TerminalListResult,
   TerminalRenewAttachParams,
   type TerminalRosterResult,
+  type TerminalRuntimeSessionsResult,
   TerminalSessionParams,
 } from "@vibefield/contracts";
 import type { AuditHealthV1 } from "@vibefield/contracts/diagnostics";
@@ -1229,6 +1230,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const observation = terminals.observation();
       return { terminals: rows, ...(observation !== undefined ? { observation } : {}) };
     });
+    // TP-S3/G23 — exact Ghosttea summaries for the routed runtime. This is not
+    // a UI roster and not the mgmt observation: the decimal engine handle is a
+    // transport identity and is why the separate read exists.
+    api.register(
+      "terminal.sessions",
+      async (): Promise<TerminalRuntimeSessionsResult> => await terminals.runtimeSessions(),
+    );
     api.register("terminal.get", (_ctx, params) => {
       const sessionId = requireSessionId(params);
       const info = terminals.get(sessionId);

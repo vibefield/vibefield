@@ -2,6 +2,7 @@ import {
   RendererParticipantIdentity,
   type RendererParticipantIdentity as RendererParticipantIdentityValue,
   type WindowConnection,
+  type WindowTerminalBootstrap,
 } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { WebContents } from "electron";
@@ -61,6 +62,8 @@ export function createBootstrapHandler(deps: {
   ensure: FielddSupervisor["ensure"];
   /** Stable for one Electron main process. Renderer code never selects it. */
   desktopBootId: string;
+  /** Main-owned transport choice and shell policy for this renderer boot. */
+  terminal?: WindowTerminalBootstrap;
   onRevokeError?: (error: unknown, details: { senderId: number; tokenId: string }) => void;
   onReplacementError?: (error: unknown, details: { senderId: number }) => void;
 }): WindowBootstrapHandler {
@@ -227,7 +230,7 @@ export function createBootstrapHandler(deps: {
     const predecessor = retirements.get(sender.id);
     generation.result = (async () => {
       await predecessor?.catch(() => undefined);
-      return await mint(deps.ensure, reapStaleForBoot, sender.id, identity);
+      return await mint(deps.ensure, reapStaleForBoot, sender.id, identity, deps.terminal);
     })().catch((error: unknown) => {
       // failure ends the cached attempt — retry re-mints for real
       if (generations.get(sender.id) === generation) generations.delete(sender.id);
@@ -296,6 +299,7 @@ async function mint(
   reapStaleForBoot: (handle: FielddHandle) => Promise<void>,
   senderId: number,
   rendererParticipant: RendererParticipantIdentityValue,
+  terminal: WindowTerminalBootstrap | undefined,
 ): Promise<{ connection: WindowConnection; tokenId: string; handle: FielddHandle }> {
   const handle = await ensure();
   // A production fieldd outlives Electron. Reap grants left by a previous
@@ -350,6 +354,7 @@ async function mint(
       port: handle.info.port,
       token: minted.token,
       rendererParticipant: acceptedIdentity,
+      ...(terminal === undefined ? {} : { terminal }),
     },
     tokenId: minted.tokenId,
     handle,

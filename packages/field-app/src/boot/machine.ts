@@ -241,6 +241,12 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
         }
       }
 
+      // TP-S3/G23 — main parsed the rollback flag once and carried its shell
+      // policy on the authenticated bootstrap. Apply it before any workspace
+      // component can prewarm or claim the window-level terminal pool. Optional
+      // chaining keeps an older/browser workspace harness compatible.
+      mod.configureTerminalPool?.(conn.terminal);
+
       // P8b-3 — the staged plugin load STARTS here and is awaited below, just
       // before the document opens. Started early so it overlaps the onboarding
       // hold and costs a cold boot nothing; awaited late because the registry

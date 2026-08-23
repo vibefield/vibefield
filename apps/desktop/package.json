@@ -20,6 +20,7 @@
     "lab:live-surfaces:soak": "pnpm build:shell && pnpm --filter @vibefield/electron-shell build:live-surfaces-lab && node packaging/run-live-surfaces-soak.mjs",
     "lab:live-surfaces:sck:soak": "pnpm build:shell && node packaging/build-live-surface-capture.mjs --with-fixture && pnpm --filter @vibefield/electron-shell build:live-surfaces-lab && node packaging/run-live-surfaces-soak.mjs --sck-fixture",
     "smoke:godview": "pnpm build:all && electron . --smoke-godview",
+    "smoke:terminal-direct": "pnpm build:all && electron . --smoke-godview --terminal-direct-door --terminal-direct-proof",
     "smoke:canvas": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-canvas",
     "smoke:plugin-restart": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-plugin-restart",
     "lab:plugin-runtime:soak": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-plugin-runtime-soak.mjs",

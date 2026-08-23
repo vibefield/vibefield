@@ -1,15 +1,18 @@
-import type { SessionSummary } from "@vibecook/ghosttea-protocol";
+import type { CreateSessionOptions, SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { GhostteaTerminalRuntime } from "@vibecook/ghosttea-react";
 import {
   type ProductSessionRosterItem,
   type TerminalCreateParams,
+  type TerminalOpenTicket,
   TerminalRosterResult,
   type TerminalTicket,
+  type WindowTerminalBootstrap,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { getHost } from "../../host";
 import { getRendererLogger } from "../../logging";
 import { registerTerminalPerfSource } from "../../perf/terminal-perf-source";
+import { createRoutedTerminalHost, type RoutedTerminalHostBinding } from "../routed/host";
 import {
   type CellBootId,
   type CellTransport,
@@ -185,10 +188,23 @@ let transportGeneration = 0;
 let grantsLanded = false;
 let roster: readonly ProductSessionRosterItem[] = [];
 let rosterState: TerminalRosterState = "unread";
+/** Main's one-per-renderer-generation selector and shell policy. Older/browser
+ * hosts omit it and retain the bridge behavior. */
+let terminalBootstrap: WindowTerminalBootstrap | null = null;
+let transportMode: WindowTerminalBootstrap["transport"] = "bridge";
 /** THE window's runtime. Held apart from any transport since TP-S1: a runtime
  * outlives every transport under it, and a bridge rebuild replaces both only
  * because the runtime's ports wait is one-shot. */
 let runtime: GhostteaTerminalRuntime | null = null;
+/** Exists iff `runtime` is G23-routed; owns the input ledger and lifecycle
+ * listener and is disposed with that exact runtime. */
+let routedHost: RoutedTerminalHostBinding | null = null;
+/** Cells for which G23 has actually minted a ticket in this runtime. */
+const routedCells = new Set<CellBootId>();
+/** Birth summaries outrun observed inventory by design; retain each exact
+ * service answer for the session's product lifetime. Termination/disposal are
+ * the inverses, so repeat readers never fall back to an observation race. */
+const createdSummaries = new Map<string, SessionSummary>();
 /** The ONE cell this window's bridge serves. Main holds one connection per
  * window and re-ticketing it with different sockets tears it down
  * (`electron-shell/src/main/terminal-backend.ts:117-122`), so the first ticket
@@ -216,16 +232,25 @@ let unsubscribeBridge: (() => void) | null = null;
  * without it a bridge rebuild on such a floor would have nothing to rejoin and
  * would rest dormant while the deck sat there holding panes. */
 let rejoinHint: readonly string[] = [];
+/** The cold-open trace belongs to the claim, while the routed workspace may
+ * not ask for its first birth until a later initialization turn. */
+let workspaceBirthTrace: TransportTrace | undefined;
 
 let snapshot: TerminalPoolSnapshot = buildSnapshot();
 
 function buildSnapshot(): TerminalPoolSnapshot {
   const transport = pinnedCell === null ? undefined : transports.get(pinnedCell);
+  const routedShell =
+    transportMode === "routed" &&
+    (phase === "dormant" || phase === "open") &&
+    terminalBootstrap !== null
+      ? { defaultShell: terminalBootstrap.defaultShell, home: terminalBootstrap.home }
+      : null;
   return {
     phase,
     claimed,
     runtime,
-    shell: transport?.shell ?? null,
+    shell: transport?.shell ?? routedShell,
     fault,
     generation: runtimeGeneration,
     warm: inheritedWarm,
@@ -234,6 +259,19 @@ function buildSnapshot(): TerminalPoolSnapshot {
     roster,
     rosterState,
   };
+}
+
+/** Install main's bootstrap decision before any workspace can prewarm/claim.
+ * The selector cannot move under a live runtime: doing so would reinterpret one
+ * worker as owning a different transport. */
+export function configureTerminalPool(bootstrap: WindowTerminalBootstrap | undefined): void {
+  const nextMode = bootstrap?.transport ?? "bridge";
+  if (runtime !== null && nextMode !== transportMode) {
+    throw new Error("the terminal transport cannot change under a live runtime");
+  }
+  terminalBootstrap = bootstrap ?? null;
+  transportMode = nextMode;
+  publish();
 }
 
 function publish(): void {
@@ -274,7 +312,7 @@ export function terminalPoolRuntime(): GhostteaTerminalRuntime | null {
 
 /** How many cells this window holds a transport to. */
 export function terminalPoolCellCount(): number {
-  return transports.size;
+  return transportMode === "routed" ? routedCells.size : transports.size;
 }
 
 /**
@@ -285,6 +323,10 @@ export function terminalPoolCellCount(): number {
  * why", never "it is in cell 7" (TP-L-C).
  */
 export function terminalSessionAvailability(sessionId: string): SessionAvailability {
+  // G23 is multi-cell: no first-ticket pin exists. Per-activation availability
+  // is reported by the runtime's routed state rather than projected as another
+  // cell's bridge failure.
+  if (transportMode === "routed") return { ready: true };
   const cell = resolveCellForSession(sessionId, placements);
   // Never ticketed: nothing is known to be wrong, and a consumer that has not
   // asked for a session yet must not be told it is unreachable.
@@ -295,8 +337,8 @@ export function terminalSessionAvailability(sessionId: string): SessionAvailabil
   return { ready: true };
 }
 
-/** The grants a session's ticket left behind, if any. Held for TP-S3's legs;
- * nothing verifies or dials with them today. */
+/** The grants a session's ticket left behind, if any. In routed mode G23 uses
+ * them for the live legs; in bridge mode they remain forward-compatible state. */
 export function terminalSessionGrants(sessionId: string): SessionGrants | undefined {
   return placements.get(sessionId)?.grants;
 }
@@ -390,6 +432,21 @@ export interface ProjectedSessionDemand {
  */
 function projectDemand(change: SessionDemandChange | null): void {
   if (change === null) return;
+  if (transportMode === "routed") {
+    if (runtime === null || change.mode === "none") {
+      projected.delete(change.sessionId);
+      return;
+    }
+    // G23 performs the real DeclareDemand fold from its mounted/visible views.
+    // This ledger remains the product pool's observation of consumer demand;
+    // its generation names the routed runtime that owns that declaration.
+    projected.set(change.sessionId, {
+      sessionId: change.sessionId,
+      mode: change.mode,
+      transportGeneration: runtimeGeneration,
+    });
+    return;
+  }
   const cell = resolveCellForSession(change.sessionId, placements) ?? pinnedCell;
   const transport = cell === null || cell === undefined ? undefined : transports.get(cell);
   if (transport === undefined || change.mode === "none") {
@@ -428,10 +485,30 @@ export function terminalPoolProjectedDemand(): ProjectedSessionDemand[] {
  * device it forced, not the numbers, and a measurement left open would
  * accumulate sample arrays for a deck that has not opened yet.
  */
+export const TERMINAL_PREWARM_TIMEOUT_MS = 5_000;
+
 async function warmRenderBackend(target: GhostteaTerminalRuntime): Promise<string> {
-  await target.startPerformanceMeasurement();
-  const measured = await target.finishPerformanceMeasurement({ quietMs: 0, timeoutMs: 2_000 });
-  return measured.backend;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      (async () => {
+        await target.startPerformanceMeasurement();
+        const measured = await target.finishPerformanceMeasurement({
+          quietMs: 0,
+          timeoutMs: 2_000,
+        });
+        return measured.backend;
+      })(),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("the terminal render-worker prewarm timed out")),
+          TERMINAL_PREWARM_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
 }
 
 /** Undo for the perf registration below, held so a replaced runtime unpublishes
@@ -453,10 +530,45 @@ let unregisterPerfSource: (() => void) | null = null;
  * where it is DISPOSED makes the registration's lifetime the runtime's. */
 function ensureRuntime(): GhostteaTerminalRuntime {
   if (runtime !== null) return runtime;
-  runtime = createTerminalRuntime();
+  if (transportMode === "routed") {
+    const fieldd = client;
+    if (fieldd === null) throw new Error("the routed terminal runtime has no fieldd client");
+    routedHost = createRoutedTerminalHost({
+      fieldd,
+      createSession: createRoutedWorkspaceSession,
+      onTicket: recordRoutedTicket,
+      onTerminated: forgetRoutedSession,
+    });
+    runtime = createTerminalRuntime({ transport: "routed", host: routedHost.host });
+    routedHost.bind(runtime);
+  } else {
+    runtime = createTerminalRuntime();
+  }
   runtimeGeneration += 1;
   unregisterPerfSource = registerTerminalPerfSource(runtime);
   return runtime;
+}
+
+/** Ghosttea owns the empty-workspace birth decision. Route that optional G23
+ * host verb through the same audited product create seam as splits and
+ * rehydration. In particular, do not pre-create and then depend on
+ * `terminal.sessions`: fieldd intentionally filters that read through the
+ * asynchronously observed inventory, while `terminal.create` already returns
+ * the authoritative summary for the session it just made. */
+async function createRoutedWorkspaceSession(
+  options: CreateSessionOptions,
+): Promise<SessionSummary> {
+  const created = await createTerminalSession(
+    {
+      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+      workloadClass: "interactive",
+    },
+    workspaceBirthTrace,
+  );
+  const summary = await terminalSessionSummary(created.sessionId, 1);
+  if (summary === null) throw new Error("the floor did not report the session it just created");
+  workspaceBirthTrace = undefined;
+  return summary;
 }
 
 /** Dispose the window's runtime, if any. Each owns a render worker and the
@@ -464,8 +576,44 @@ function ensureRuntime(): GhostteaTerminalRuntime {
 function disposeRuntime(): void {
   unregisterPerfSource?.();
   unregisterPerfSource = null;
+  routedHost?.dispose();
+  routedHost = null;
   runtime?.dispose();
   runtime = null;
+  routedCells.clear();
+}
+
+/** G23's ticket callback: retain only transport-private route/grant state. */
+function recordRoutedTicket(sessionId: string, ticket: TerminalOpenTicket): void {
+  placements.record({
+    sessionId,
+    route: ticket.route,
+    cellBootId: ticket.route.cellBootId as CellBootId,
+    grants: {
+      transportGrant: ticket.transportGrant,
+      attachGrant: ticket.attachGrant,
+      attachExpiresAt: ticket.attachGrant.claims.expiresAt,
+      grantGeneration: ticket.attachGrant.claims.grantGeneration,
+    },
+    resolvedAt: Date.now(),
+  });
+  routedCells.add(ticket.route.cellBootId as CellBootId);
+  grantsLanded = true;
+  publish();
+}
+
+/** Exact inverse of the routed session-private records after a confirmed kill. */
+function forgetRoutedSession(sessionId: string): void {
+  createdSummaries.delete(sessionId);
+  const cell = placements.cellFor(sessionId);
+  placements.forgetSession(sessionId);
+  if (
+    cell !== undefined &&
+    !placements.sessionIds().some((candidate) => placements.cellFor(candidate) === cell)
+  ) {
+    routedCells.delete(cell);
+  }
+  publish();
 }
 
 // ── the routed transport ────────────────────────────────────────────────────
@@ -650,6 +798,7 @@ export function openTerminalPool(
   client = fieldd;
   ensureBridgeSubscription();
   options.trace?.mark("claim");
+  if (options.trace !== undefined) workspaceBirthTrace = options.trace;
   if (options.sessionIds !== undefined && options.sessionIds.length > 0) {
     rejoinHint = options.sessionIds;
   }
@@ -678,6 +827,17 @@ async function adopt(options: {
   const epoch = acquisitionEpoch;
   try {
     ensureRuntime();
+    if (transportMode === "routed") {
+      // A routed runtime has no sessionless connection to open. Existing pane
+      // ids make the workspace mountable; each mounted activation mints and
+      // dials its own cell through G23. With no ids, rest dormant until roster
+      // or an explicit birth gives the workspace something meaningful to show.
+      phase = (options.sessionIds?.length ?? 0) > 0 ? "open" : "dormant";
+      fault = null;
+      spentReason = null;
+      publish();
+      return;
+    }
     for (const sessionId of options.sessionIds ?? []) {
       try {
         if (await openTransportForSession(sessionId, options.trace)) {
@@ -753,6 +913,32 @@ export async function createTerminalSession(
   if (read.placement !== undefined) placements.record(read.placement);
   if (read.routed) grantsLanded = true;
   rejoinHint = [...new Set([...rejoinHint, read.sessionId])];
+  if (transportMode === "routed") {
+    if (!read.direct) {
+      const reason = new Error("the created session has no complete direct terminal ticket");
+      transportFault("transport", reason);
+      throw reason;
+    }
+    if (read.session === undefined) {
+      const reason = new Error("the created session has no runtime summary");
+      transportFault("fieldd", reason);
+      throw reason;
+    }
+    const target = ensureRuntime();
+    if (read.routedTicket === undefined) {
+      const reason = new Error("the created session has no routed terminal ticket");
+      transportFault("transport", reason);
+      throw reason;
+    }
+    routedHost?.primeTicket(read.sessionId, read.routedTicket);
+    createdSummaries.set(read.sessionId, read.session);
+    target.registerSession(read.session);
+    phase = "open";
+    fault = null;
+    spentReason = null;
+    publish();
+    return { sessionId: read.sessionId, availability: { ready: true } };
+  }
   // A window with no transport opens on this session; a window that already has
   // one keeps it, and the new session is reachable only if it landed on the
   // pinned cell.
@@ -789,6 +975,19 @@ export async function openDormantTransport(
   if (sessionIds.length > 0) rejoinHint = [...new Set([...rejoinHint, ...sessionIds])];
   phase = "opening";
   publish();
+  if (transportMode === "routed") {
+    if (sessionIds.length === 0) {
+      phase = "dormant";
+      publish();
+      return false;
+    }
+    // G23 opens per activation at mount; this transition only releases the
+    // workspace gate. It mints no throw-away grant and dials no idle socket.
+    phase = "open";
+    fault = null;
+    publish();
+    return true;
+  }
   const epoch = acquisitionEpoch;
   for (const sessionId of sessionIds) {
     try {
@@ -839,8 +1038,17 @@ export async function terminalSessionSummary(
 ): Promise<SessionSummary | null> {
   const target = runtime;
   if (target === null) return null;
+  const born = createdSummaries.get(sessionId);
+  if (born !== undefined) return born;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const known = await target.listSessions();
+    let known: SessionSummary[];
+    try {
+      known = await target.listSessions();
+    } catch (cause) {
+      if (attempt + 1 >= attempts) throw cause;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      continue;
+    }
     const found = known.find((session) => session.id === sessionId);
     if (found !== undefined) return found;
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -932,7 +1140,10 @@ export async function refreshTerminalRoster(
  */
 function replaceTransport(sessionIds: readonly string[]): void {
   acquisitionEpoch += 1;
-  if (pinnedCell !== null) {
+  if (transportMode === "routed") {
+    placements.clear();
+    routedCells.clear();
+  } else if (pinnedCell !== null) {
     transports.delete(pinnedCell);
     placements.forget(pinnedCell);
   }
@@ -983,6 +1194,7 @@ export function retryTerminalPool(sessionIds: readonly string[] = []): void {
  * what counted as news. One subscription, one guard, one decision.
  */
 function ensureBridgeSubscription(): void {
+  if (transportMode === "routed") return;
   if (unsubscribeBridge !== null) return;
   const terminal = getHost().terminal;
   if (terminal === undefined) return;
@@ -1066,6 +1278,8 @@ export function disposeTerminalPool(): void {
   transports.clear();
   disposeRuntime();
   placements.clear();
+  routedCells.clear();
+  createdSummaries.clear();
   demand.clear();
   projected.clear();
   unsubscribeBridge?.();
@@ -1075,6 +1289,7 @@ export function disposeTerminalPool(): void {
   client = null;
   pinnedCell = null;
   rejoinHint = [];
+  workspaceBirthTrace = undefined;
   phase = "cold";
   claimed = false;
   fault = null;
@@ -1086,5 +1301,7 @@ export function disposeTerminalPool(): void {
   rosterState = "unread";
   runtimeGeneration = 0;
   transportGeneration = 0;
+  terminalBootstrap = null;
+  transportMode = "bridge";
   publish();
 }

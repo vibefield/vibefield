@@ -80,7 +80,13 @@ mountFieldApp({
       exportSupport: (request) => window.vibefield.diagnostics.exportSupport(request),
       copyText: (text) => window.vibefield.diagnostics.copyText(text),
     },
-    getConnection: () => window.vibefield.getConnection(),
+    getConnection: async () => {
+      const connection = await window.vibefield.getConnection();
+      const { terminal, ...required } = connection;
+      // Zod's optional output permits an explicit `undefined`; the host seam's
+      // exact optional means absence. Normalize once at the adapter boundary.
+      return terminal === undefined ? required : { ...required, terminal };
+    },
     // UA-3 — the Account page's profile door (host.ts declares it optional;
     // this adapter is the one place the preload global becomes FieldHost)
     usersUpdate: (params) => window.vibefield.usersUpdate(params),

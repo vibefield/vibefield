@@ -52,6 +52,23 @@ export const RendererParticipantIdentity = z
   .passthrough();
 export type RendererParticipantIdentity = z.infer<typeof RendererParticipantIdentity>;
 
+/**
+ * Terminal policy fixed for one renderer generation.
+ *
+ * Main is the authority for both halves: it parses the rollback flag once and
+ * it is the only process allowed to read the login shell/home.  Keeping them
+ * on window bootstrap lets the routed path mount without invoking the legacy
+ * `terminal.connect` bridge merely to learn machine policy.
+ */
+export const WindowTerminalBootstrap = z
+  .object({
+    transport: z.enum(["bridge", "routed"]),
+    defaultShell: z.string().min(1),
+    home: z.string().min(1),
+  })
+  .passthrough();
+export type WindowTerminalBootstrap = z.infer<typeof WindowTerminalBootstrap>;
+
 /** Reply to the window-bootstrap invoke: the loopback control endpoint, the
  * per-window scoped token, and the exact identity bound into that token (D27,
  * PRC-D14 — main brokers this once and relays nothing). */
@@ -60,6 +77,8 @@ export const WindowConnection = z
     port: z.number().int().positive(),
     token: z.string().min(1), // opaque bearer token, same treatment as hello credential
     rendererParticipant: RendererParticipantIdentity,
+    /** Optional only for compatibility with an older Electron host. */
+    terminal: WindowTerminalBootstrap.optional(),
   })
   .passthrough();
 export type WindowConnection = z.infer<typeof WindowConnection>;

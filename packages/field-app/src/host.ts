@@ -16,6 +16,7 @@ import type {
   TerminalBackendAttachResult,
   TerminalBridgeStatus,
   TerminalTicket,
+  WindowTerminalBootstrap,
 } from "@vibefield/contracts";
 import type {
   CrashArtifactListV1,
@@ -40,6 +41,8 @@ export interface FieldConnection {
   token: string;
   /** Present on the production Electron bridge; absent in browser harnesses. */
   rendererParticipant?: RendererParticipantIdentity;
+  /** Present on the TP-aware Electron bridge; absent on older/browser hosts. */
+  terminal?: WindowTerminalBootstrap;
 }
 
 export interface FieldDiagnosticsHost {

@@ -1,20 +1,17 @@
-//! Where the door's sessions come from (terminal-pipeline-v3 TP-D26, petition
-//! G22). The door layer needs exactly three things of a session: the live
+//! Where the door's sessions come from (terminal-pipeline-v3 TP-D26 / G22).
+//! The door layer needs exactly three things of a session: the live
 //! `ghosttea::Session` by id, its `FrameHub` (the TRF1 packets the engine
 //! publishes), and its model generation. `SessionSource` names that seam once;
 //! two implementations are expected to stand behind it:
 //!
-//! - `DirectSessions` (here, TP-S3b): sessions this harness spawns ITSELF with
-//!   `Session::spawn` and a per-session hub — the test binary's source, and
-//!   the honest production answer until G22: a production cell's UDS-born
-//!   sessions live inside `TerminalService`, whose in-process surface is
-//!   serve-only, so they are `SESSION_UNKNOWN` at the T1 door for now.
-//! - the G22 accessor (`ServiceSessions`): the SAME session set the UDS plane
+//! - `DirectSessions` (here, TP-S3b): sessions a focused harness spawns ITSELF
+//!   with `Session::spawn` and a per-session hub.
+//! - `ServiceSessions` (G22, production): the SAME session set the UDS plane
 //!   serves — sessions by id, their hubs, spawn-through-the-service with the
-//!   service's private-env strip. Nothing in the door changes when it lands;
-//!   only the source does.
+//!   service's private-env strip. The production cell installs this source;
+//!   there is no mirror and no second session registry.
 
-use ghosttea::{FrameHub, Session};
+use ghosttea::{FrameHub, ServiceSessions, Session};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -26,6 +23,19 @@ pub trait SessionSource: Send + Sync {
     /// every packet is this session's; with a shared hub the door filters by
     /// the packet's `session_handle` (it does so either way).
     fn frames(&self, session_id: &str) -> Option<FrameHub>;
+}
+
+/** G22's production adapter. The trait is ours and `ServiceSessions` is
+ * Ghosttea's, so this direct implementation keeps the shared registry free of
+ * wrapper state. */
+impl SessionSource for ServiceSessions {
+    fn session(&self, session_id: &str) -> Option<Arc<Session>> {
+        ServiceSessions::session(self, session_id)
+    }
+
+    fn frames(&self, session_id: &str) -> Option<FrameHub> {
+        self.frames_for(session_id)
+    }
 }
 
 /// Sessions spawned directly by this harness, each with its own hub.
@@ -77,8 +87,8 @@ impl SessionSource for DirectSessions {
     }
 }
 
-/// The empty source: every attach is `SESSION_UNKNOWN`. What a production cell
-/// serves until G22 (the door still accepts connections — that half is real).
+/// The empty source: every attach is `SESSION_UNKNOWN`. Kept as the DoorConfig
+/// default for connection-only harnesses; production replaces it with G22.
 #[derive(Default)]
 pub struct NoSessions;
 

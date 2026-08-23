@@ -24,7 +24,8 @@
 //! frames — `AttachFramesLeg`, `TransportCredit`, `SceneApplied`,
 //! `CalibrationPing` (echoed as a `calibration` unit; doubles as the frames
 //! heartbeat). Where the sessions come from is the `SessionSource` (source.rs):
-//! this harness's own until petition G22 lands.
+//! production installs G22's shared `ServiceSessions`; focused harnesses may
+//! install `DirectSessions` or the empty connection-only source.
 //!
 //! Concurrency: one read task per socket plus one WRITER task owning its sink
 //! (every message to a leg — replies, the lease, presentation units — rides an
@@ -88,8 +89,9 @@ pub struct DoorConfig {
     pub heartbeat_ttl: Duration,
     pub protocol_limits: ProtocolLimits,
     pub cell_caps: ReceiverCapacities,
-    /// TP-S3b — where sessions come from (`NoSessions` until G22 in production;
-    /// `DirectSessions` in the harness/test binary).
+    /// TP-S3b/G22 — where sessions come from (`ServiceSessions` in production,
+    /// `DirectSessions` in activation harnesses, `NoSessions` by default for
+    /// connection-only tests).
     pub source: Arc<dyn SessionSource>,
     /// the cadence of the activation tick (deadlines, expiry, lag by time)
     pub tick: Duration,
@@ -286,6 +288,9 @@ impl Door {
                     if reg.closed {
                         break;
                     }
+                    reg.activations.prune_model_generations(|session_id| {
+                        tick_state.config.source.session(session_id).is_some()
+                    });
                     reg.activations.tick(unix_ms())
                 };
                 perform(&tick_state, effects);
@@ -592,6 +597,9 @@ fn start_pump(state: &DoorState, activation_id: &str) {
         let Some(ledger) = reg.activations.credit_ledger(frames.connection_id) else {
             return;
         };
+        let Some(scene_epoch) = a.scene_epoch.clone() else {
+            return;
+        };
         let session_handle: u64 = session.summary().handle.parse().unwrap_or(0);
         let per_activation = ledger.per_activation_limit.max(1);
         let connection = ledger.connection.limit.max(1);
@@ -606,7 +614,7 @@ fn start_pump(state: &DoorState, activation_id: &str) {
             connection_id: frames.connection_id,
             credit_epoch: ledger.credit_epoch,
             frames,
-            scene_epoch: reg.activations.scene_epoch(session.session_epoch()),
+            scene_epoch,
             session,
             hub,
             session_handle,
