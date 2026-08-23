@@ -1,0 +1,25 @@
+{
+  "sessionId": "sess-01J8Z3K9",
+  "activationId": "act-01",
+  "leaseEpoch": 4,
+  "inputSequence": 9,
+  "op": {
+    "kind": "mouse",
+    "mouse": {
+      "action": "press",
+      "button": 0,
+      "x": 322.5,
+      "y": 190.25,
+      "screenWidth": 1280,
+      "screenHeight": 720,
+      "cellWidth": 10,
+      "cellHeight": 20,
+      "paddingLeft": 8,
+      "paddingTop": 8,
+      "shift": false,
+      "control": false,
+      "alt": false,
+      "meta": true
+    }
+  }
+}

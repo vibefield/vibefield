@@ -19,7 +19,7 @@ use super::wire::{
     tagged, AttachControlLeg, AttachFramesLeg, AttachRefused, CellActivationStatus, ClaimGeometry,
     ControlLegAttached, DeclareDemand, DemandAccepted, FramesAttachOutcome, FramesLegAttached,
     GeometryCommitted, GeometryHolder, GeometryRefused, LeaseDimension, ReceiverCapacities,
-    ReleaseGeometry, SceneApplied, SceneContentStamp, SceneEpoch, SourceDemandMode,
+    ReleaseGeometry, SceneApplied, SceneContentStamp, SceneEpoch, SendInput, SourceDemandMode,
     TransferGeometry, TransportCredit, TrfIdentity,
 };
 use crate::registries::terminal_pipeline as tp;
@@ -286,6 +286,35 @@ pub enum GeometryOutcome {
     Resized { cols: u16, rows: u16 },
     /// the engine refused (stale attachment epoch, view gone, read-only view).
     EngineRefused,
+}
+
+// --- Session input (S3-input) ---------------------------------------------
+// The table's verdict on a `SendInput`. The gate is cell-side: the caller's own
+// control leg, the placement fence (`leaseEpoch`), the `input` lease dimension,
+// and a synchronous renewal-margin expiry check (a stale-Allowed lease cannot
+// leak input past the margin). The fence coordinates the door hands ghosttea are
+// the ones the CELL owns — `ghosttea_view_id`, `client_id`, `attachment_epoch`
+// from the activation→view binding — never the wire body.
+
+/// The door's marching orders for one `SendInput`.
+#[derive(Debug)]
+pub enum InputDecision {
+    /// Refuse silently and audit — no wire reply (§5.4: the cell ALWAYS rejects
+    /// input while it is not allowed; the echo of accepted input is a frame). The
+    /// reason is the audit tag.
+    Drop(&'static str),
+    /// Authorized — the door runs the engine input op on the resolved view.
+    Proceed(InputProceed),
+}
+
+/// The cell-owned fence context for an authorized input op.
+#[derive(Debug)]
+pub struct InputProceed {
+    pub session_id: String,
+    pub client_id: String,
+    pub ghosttea_view_id: String,
+    pub attachment_epoch: u64,
+    pub input_sequence: u64,
 }
 
 /// One credit window: cumulative bytes admitted vs returned within the epoch.
@@ -934,6 +963,50 @@ impl ActivationTable {
         false
     }
 
+    /// `SendInput` (§5.4, TP-S3-input) — the cell-side gate for one input op.
+    /// PURE read: it resolves the caller activation, applies every cell-side
+    /// fence, and hands back the coordinates the door feeds ghosttea (whose own
+    /// `authorize_input` is the engine backstop). A failed gate is a silent
+    /// `Drop` — no wire reply, per §5.4. `now_ms` drives the renewal-margin
+    /// expiry check so a stale-`Allowed` lease cannot leak input past the margin.
+    pub fn send_input(&self, leg: &LegRef, msg: &SendInput, now_ms: u64) -> InputDecision {
+        let Some(a) = self.by_id.get(&msg.activation_id) else {
+            return InputDecision::Drop("no-activation");
+        };
+        // The input thread is the CALLER's own control leg (a frames-leg or
+        // foreign-connection SendInput is not this activation's).
+        if a.control.connection_id != leg.connection_id || a.session_id != msg.session_id {
+            return InputDecision::Drop("wrong-leg");
+        }
+        // Placement fence: the wire's leaseEpoch must match the route binding
+        // (a stale-route input is refused before it reaches the engine).
+        if msg.lease_epoch != a.lease_epoch {
+            return InputDecision::Drop("stale-lease-epoch");
+        }
+        // The input lease dimension — the single source of truth for "may write"
+        // (already encodes the input right, presentation, lag and expiry margin).
+        if !matches!(a.input, Input::Allowed) {
+            return InputDecision::Drop("input-not-allowed");
+        }
+        // Synchronous backstop: drop the moment the lease WOULD recompute to
+        // `right-expired`, even if it has not been recomputed since.
+        if now_ms + tp::ATTACH_RENEWAL_MARGIN_MS >= a.grant_expires_at_ms {
+            return InputDecision::Drop("right-expired");
+        }
+        // The fence coordinates the cell owns (never the wire): the presenting
+        // view and its attachment epoch. Demand-none = no view = nothing to type.
+        let Some((ghosttea_view_id, attachment_epoch)) = a.view.clone() else {
+            return InputDecision::Drop("no-view");
+        };
+        InputDecision::Proceed(InputProceed {
+            session_id: a.session_id.clone(),
+            client_id: a.client_id.clone(),
+            ghosttea_view_id,
+            attachment_epoch,
+            input_sequence: msg.input_sequence,
+        })
+    }
+
     /// `AttachControlLeg` after the grant VERIFIED and the attach high-water
     /// ADMITTED it (the door does both first — they need the verifier and the
     /// transport ledger). Returns the effects: one reply, maybe a view attach.
@@ -1575,7 +1648,7 @@ impl Ord for Input {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tp::wire::SourceDemand;
+    use crate::tp::wire::{InputOp, SourceDemand};
     use tokio::sync::mpsc::unbounded_channel;
 
     fn leg(connection_id: u64) -> (LegRef, tokio::sync::mpsc::UnboundedReceiver<Outbound>) {
@@ -2578,6 +2651,186 @@ mod tests {
         assert!(matches!(
             t.claim_geometry(&c, claim("win:3#1", "s1", "c1", "mc", 60, 20, 2)),
             GeometryDecision::Proceed(_)
+        ));
+    }
+
+    /// TP-S3-input — every cell-side gate of `send_input`, walked in sequence:
+    /// the Proceed carries the CELL-owned fence coordinates; a foreign leg, an
+    /// unknown activation, a stale lease epoch, the renewal-margin backstop, a
+    /// demand-none (view parked) and a read-only viewer all Drop, each under its
+    /// own audit tag.
+    #[test]
+    fn send_input_gates_on_leg_lease_epoch_input_dimension_view_and_expiry() {
+        let mut t = ActivationTable::new("cb");
+        let (control, mut crx) = leg(1);
+        let (frames, mut frx) = leg(2);
+        let windows = ReceiverCapacities {
+            connection_credit_bytes: 1_000,
+            per_activation_credit_bytes: 500,
+            staging_bytes_per_session: 0,
+            staging_bytes_total: 0,
+            max_concurrent_activations: 8,
+            max_concurrent_seeds: 1,
+        };
+        t.open_credit(2, 1, windows, 0);
+        perform(t.attach_control(AttachControlInput {
+            now_ms: 2_000,
+            set: &set(),
+            leg: &control,
+            msg: control_msg("a1", None, true),
+            claims: claims("s1", 1, &[AttachRight::Input, AttachRight::Read]),
+            session_known: true,
+        }));
+        t.view_attached("a1", "a1", 7);
+        perform(t.attach_frames(AttachFramesInput {
+            set: &set(),
+            leg: &frames,
+            msg: AttachFramesLeg {
+                activation_id: "a1".into(),
+                attach_grant: serde_json::json!({}),
+                resume: None,
+            },
+            claims: claims("s1", 1, &[AttachRight::Input, AttachRight::Read]),
+            trf_identity: Some(TrfIdentity {
+                session_handle: "77".into(),
+                view_handle: "77".into(),
+            }),
+            resume_token: "rt".into(),
+            session_epoch: 0,
+        }));
+        t.unit_sent("a1", 10, true);
+        let epoch = t.scene_epoch(1);
+        perform(t.scene_applied(
+            &frames,
+            SceneApplied {
+                session_id: "s1".into(),
+                activation_id: "a1".into(),
+                lease_epoch: 0,
+                applied_content: SceneContentStamp {
+                    scene_epoch: epoch.clone(),
+                    scene_revision: 10,
+                },
+            },
+            3_000,
+        ));
+        texts(&mut crx);
+        texts(&mut frx);
+        let msg = |activation: &str, session: &str, lease: u64, seq: u64| SendInput {
+            session_id: session.into(),
+            activation_id: activation.into(),
+            lease_epoch: lease,
+            input_sequence: seq,
+            op: InputOp::Text { text: "x".into() },
+        };
+
+        // ALLOWED → Proceed, carrying the coordinates the CELL owns (never the wire's)
+        match t.send_input(&control, &msg("a1", "s1", 0, 1), 3_000) {
+            InputDecision::Proceed(p) => {
+                assert_eq!(p.session_id, "s1");
+                assert_eq!(p.client_id, "win:1#1");
+                assert_eq!(p.ghosttea_view_id, "a1");
+                assert_eq!(p.attachment_epoch, 7);
+                assert_eq!(p.input_sequence, 1);
+            }
+            InputDecision::Drop(r) => panic!("expected Proceed, dropped: {r}"),
+        }
+        // an unknown activation, a foreign leg, a session mismatch
+        assert!(matches!(
+            t.send_input(&control, &msg("zz", "s1", 0, 2), 3_000),
+            InputDecision::Drop("no-activation")
+        ));
+        let (foreign, _fr2) = leg(99);
+        assert!(matches!(
+            t.send_input(&foreign, &msg("a1", "s1", 0, 2), 3_000),
+            InputDecision::Drop("wrong-leg")
+        ));
+        assert!(matches!(
+            t.send_input(&control, &msg("a1", "s9", 0, 2), 3_000),
+            InputDecision::Drop("wrong-leg")
+        ));
+        // the placement fence: a stale-route leaseEpoch never reaches the engine
+        assert!(matches!(
+            t.send_input(&control, &msg("a1", "s1", 5, 3), 3_000),
+            InputDecision::Drop("stale-lease-epoch")
+        ));
+        // the renewal-margin backstop fires even though the lease STILL READS
+        // Allowed (nothing recomputed it since 3_000): expiry 601_000, margin 60s
+        assert!(matches!(
+            t.send_input(&control, &msg("a1", "s1", 0, 4), 600_000),
+            InputDecision::Drop("right-expired")
+        ));
+        // demand none parks the view; the lease is untouched, but there is
+        // nothing to type into — reachable, not defensive
+        perform(t.declare_demand(
+            &control,
+            DeclareDemand {
+                session_id: "s1".into(),
+                activation_id: "a1".into(),
+                lease_epoch: 0,
+                demand_sequence: 1,
+                demand: SourceDemand {
+                    mode: SourceDemandMode::None,
+                    cadence_class: None,
+                    urgency: None,
+                },
+            },
+        ));
+        t.view_detached("a1");
+        assert!(matches!(
+            t.send_input(&control, &msg("a1", "s1", 0, 5), 3_000),
+            InputDecision::Drop("no-view")
+        ));
+
+        // a read-only viewer: presenting, but input = revoked{not-granted}
+        let (control2, mut crx2) = leg(3);
+        let (frames2, _frx2) = leg(4);
+        t.open_credit(4, 1, windows, 0);
+        perform(t.attach_control(AttachControlInput {
+            now_ms: 2_000,
+            set: &set(),
+            leg: &control2,
+            msg: control_msg("a2", None, true),
+            claims: claims("s2", 1, &[AttachRight::Read]),
+            session_known: true,
+        }));
+        t.view_attached("a2", "a2", 3);
+        perform(t.attach_frames(AttachFramesInput {
+            set: &set(),
+            leg: &frames2,
+            msg: AttachFramesLeg {
+                activation_id: "a2".into(),
+                attach_grant: serde_json::json!({}),
+                resume: None,
+            },
+            claims: claims("s2", 1, &[AttachRight::Read]),
+            trf_identity: Some(TrfIdentity {
+                session_handle: "78".into(),
+                view_handle: "78".into(),
+            }),
+            resume_token: "rt2".into(),
+            session_epoch: 0,
+        }));
+        t.unit_sent("a2", 5, true);
+        perform(t.scene_applied(
+            &frames2,
+            SceneApplied {
+                session_id: "s2".into(),
+                activation_id: "a2".into(),
+                lease_epoch: 0,
+                applied_content: SceneContentStamp {
+                    scene_epoch: epoch,
+                    scene_revision: 5,
+                },
+            },
+            3_000,
+        ));
+        let s = texts(&mut crx2);
+        let status = s.last().unwrap();
+        assert_eq!(status["presentation"]["state"], "presenting");
+        assert_eq!(status["input"]["state"], "revoked");
+        assert!(matches!(
+            t.send_input(&control2, &msg("a2", "s2", 0, 1), 3_000),
+            InputDecision::Drop("input-not-allowed")
         ));
     }
 }

@@ -29,6 +29,8 @@ import {
   PRESENTATION_ENVELOPE_MAX_HEADER_BYTES,
   PresentationEnvelopeHeader,
   ProductSessionRosterItem,
+  SendInput,
+  SendInputOp,
   SessionAttachGrant,
   SessionAttachGrantClaims,
   TerminalCreateOpenResult,
@@ -349,6 +351,8 @@ describe("message tagging — one wire for both legs (TP-S3a)", () => {
       ["tp-tagged-message.claim-geometry.json", TP_LEG_INBOUND.control],
       ["tp-tagged-message.geometry-committed.json", TP_LEG_OUTBOUND.control],
       ["tp-tagged-message.geometry-refused.json", TP_LEG_OUTBOUND.control],
+      // TP-S3-input — the input verb is control-leg INBOUND (the input thread).
+      ["tp-tagged-message.send-input.json", TP_LEG_INBOUND.control],
     ];
     for (const [name, allowed] of rows) {
       const decoded = decodeTpMessage(fixture(name), allowed);
@@ -366,6 +370,53 @@ describe("message tagging — one wire for both legs (TP-S3a)", () => {
     expect(refused.code).toBe("SEAT_HELD");
     expect(refused.currentHolder?.clientId).toBe("client-01");
     expect(refused.geometryRevision).toBe(5);
+    // …and the input body: scroll rows are SIGNED (negative scrolls up).
+    const input = SendInput.parse(fixture("tp-tagged-message.send-input.json"));
+    expect(input.inputSequence).toBe(12);
+    expect(input.op).toMatchObject({ kind: "scroll", rows: -5 });
+  });
+});
+
+describe("the input verb — SendInput (spec \u00a75.4, TP-S3-input)", () => {
+  it("every op-kind fixture parses, discriminated on kind", () => {
+    const text = SendInput.parse(fixture("tp-send-input.text.json"));
+    expect(text.op.kind).toBe("text");
+    const key = SendInput.parse(fixture("tp-send-input.key.json"));
+    expect(key.op).toMatchObject({ kind: "key", key: { type: "down", code: "Enter" } });
+    const mouse = SendInput.parse(fixture("tp-send-input.mouse.json"));
+    expect(mouse.op).toMatchObject({ kind: "mouse", mouse: { action: "press", meta: true } });
+  });
+
+  it("unshiftedCodepoint defaults to 0 — ghosttea's own serde default, mirrored", () => {
+    const op = SendInputOp.parse({
+      kind: "key",
+      key: {
+        type: "up",
+        key: "a",
+        code: "KeyA",
+        repeat: false,
+        shift: false,
+        control: false,
+        alt: false,
+        meta: false,
+      },
+    });
+    if (op.kind !== "key") throw new Error("kind");
+    expect(op.key.unshiftedCodepoint).toBe(0);
+  });
+
+  it("an unknown kind refuses; the verb is INBOUND on control only", () => {
+    expect(SendInputOp.safeParse({ kind: "detonate" }).success).toBe(false);
+    const tagged = fixture("tp-tagged-message.send-input.json");
+    expect(decodeTpMessage(tagged, TP_LEG_INBOUND.control).ok).toBe(true);
+    expect(decodeTpMessage(tagged, TP_LEG_INBOUND.frames)).toMatchObject({
+      ok: false,
+      error: "not-allowed-here",
+    });
+    expect(decodeTpMessage(tagged, TP_LEG_OUTBOUND.control)).toMatchObject({
+      ok: false,
+      error: "not-allowed-here",
+    });
   });
 });
 

@@ -39,7 +39,8 @@
 
 use super::activation::{
     ActivationTable, AttachControlInput, AttachFramesInput, Effect, GeometryDecision, GeometryOp,
-    GeometryOutcome, GeometryProceed, LegRef, Outbound, SetIdentity, UnitClass,
+    GeometryOutcome, GeometryProceed, InputDecision, InputProceed, LegRef, Outbound, SetIdentity,
+    UnitClass,
 };
 use super::grant::{Channel, GrantVerifier, PreAuthFailure, PreAuthFailureCode};
 use super::ledger::{CurrentLeg, TransportLedger, TransportRefusal};
@@ -49,9 +50,9 @@ use super::unix_ms;
 use super::wire::{
     capability_intersection, encode_envelope, inbound_tags, select_version, tagged,
     AttachControlLeg, AttachFramesLeg, AttachRefused, CalibrationPing, ClaimGeometry,
-    ConnectionAccepted, ConnectionHello, ConnectionRefused, DeclareDemand, LegHeartbeat,
-    LegHeartbeatAck, ProtocolLimits, ReceiverCapacities, ReleaseGeometry, SceneApplied, Tagged,
-    TransferGeometry, TransportCredit, TrfIdentity,
+    ConnectionAccepted, ConnectionHello, ConnectionRefused, DeclareDemand, InputOp, LegHeartbeat,
+    LegHeartbeatAck, ProtocolLimits, ReceiverCapacities, ReleaseGeometry, SceneApplied, SendInput,
+    Tagged, TransferGeometry, TransportCredit, TrfIdentity,
 };
 use crate::registries::terminal_pipeline as tp;
 use crate::registries::terminal_pipeline_close_codes as close;
@@ -1270,6 +1271,17 @@ fn handle_text(
             perform(state, effects);
             Ok(false)
         }
+        (Channel::Control, "SendInput") => {
+            let msg: SendInput =
+                serde_json::from_str(text).map_err(|e| format!("send-input:{e}"))?;
+            let now = unix_ms();
+            let decision = {
+                let reg = state.registry.lock().unwrap();
+                reg.activations.send_input(leg, &msg, now)
+            };
+            handle_input(state, &msg, decision);
+            Ok(false)
+        }
         (Channel::Frames, "AttachFramesLeg") => {
             let msg: AttachFramesLeg =
                 serde_json::from_str(text).map_err(|e| format!("attach-frames:{e}"))?;
@@ -1508,6 +1520,63 @@ fn perform_geometry_op(session: &Session, proceed: &GeometryProceed) -> Geometry
             },
             Err(_) => GeometryOutcome::EngineRefused,
         },
+    }
+}
+
+/// A `SendInput` the table ruled on. On `Proceed` the door runs the engine input
+/// op OUTSIDE the registry lock — the geometry lock order (registry → ghosttea
+/// authority; ghosttea is a leaf and never re-enters). A `Drop` is silent and
+/// audited: §5.4 rejects disallowed input with NO wire reply, and accepted
+/// input's only answer is the echo frame the pump carries. ghosttea's
+/// `authorize_input` is the engine backstop — a read-only or superseded view
+/// refuses there too.
+fn handle_input(state: &Arc<DoorState>, msg: &SendInput, decision: InputDecision) {
+    let proceed = match decision {
+        InputDecision::Drop(reason) => {
+            tracing::debug!(
+                event = "field_native.tp.input.dropped",
+                component = "terminal",
+                reason,
+                activation_id = %msg.activation_id,
+                "a SendInput was refused cell-side"
+            );
+            return;
+        }
+        InputDecision::Proceed(proceed) => proceed,
+    };
+    let Some(session) = state.config.source.session(&proceed.session_id) else {
+        // the session vanished between the table read and the engine call
+        return;
+    };
+    if let Err(error) = perform_input_op(&session, &proceed, &msg.op) {
+        tracing::debug!(
+            event = "field_native.tp.input.engine_refused",
+            component = "terminal",
+            detail = %error,
+            activation_id = %msg.activation_id,
+            "ghosttea refused a SendInput"
+        );
+    }
+}
+
+/// Map the authorized op to ghosttea's view-input family. Every method fences on
+/// `authorize_input(view, client, attachment_epoch, input_sequence)`: read-only
+/// refusal, stale-attachment-epoch refusal, and monotonic-sequence dedup are the
+/// ENGINE's — a replayed or superseded input is a silent no-op even past the cell
+/// gate. Scroll rows are signed (negative scrolls up); scroll-to is an index.
+fn perform_input_op(session: &Session, proceed: &InputProceed, op: &InputOp) -> Result<()> {
+    let view = &proceed.ghosttea_view_id;
+    let client = &proceed.client_id;
+    let epoch = proceed.attachment_epoch;
+    let seq = proceed.input_sequence;
+    match op {
+        InputOp::Text { text } => session.send_text(view, client, epoch, seq, text.clone()),
+        InputOp::Paste { text } => session.paste(view, client, epoch, seq, text.clone()),
+        InputOp::Key { key } => session.key(view, client, epoch, seq, key.clone()),
+        InputOp::Mouse { mouse } => session.mouse(view, client, epoch, seq, mouse.clone()),
+        InputOp::Scroll { rows } => session.scroll(view, client, epoch, seq, *rows as isize),
+        InputOp::ScrollTo { row } => session.scroll_to(view, client, epoch, seq, *row as usize),
+        InputOp::Interrupt => session.interrupt(view, client, epoch, seq),
     }
 }
 

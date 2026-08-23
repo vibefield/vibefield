@@ -13,6 +13,7 @@
 
 use super::grant::Channel;
 use crate::registries::terminal_pipeline as tp;
+use ghosttea::session::{KeyInput, MouseInput};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -36,6 +37,7 @@ pub fn inbound_tags(channel: Channel) -> &'static [&'static str] {
             "ClaimGeometry",
             "ReleaseGeometry",
             "TransferGeometry",
+            "SendInput",
         ],
         Channel::Frames => &[
             "ConnectionHello",
@@ -517,6 +519,38 @@ pub struct GeometryRefused {
     pub geometry_revision: Option<u64>,
 }
 
+/// Contracts `SendInput` (client → cell, CONTROL leg; §5.4, TP-S3-input) — the
+/// terminal-input verb. The leading fields are the activation triple plus the
+/// monotonic `input_sequence` fence; `op` mirrors ghosttea's input serde so it
+/// deserializes straight into the engine's `KeyInput`/`MouseInput`. The golden
+/// fixture (`tp-send-input.vector.json`) pins this on both sides — deserializing
+/// it into ghosttea's own types HERE is the drift guard the TS side cannot run.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendInput {
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
+    pub input_sequence: u64,
+    pub op: InputOp,
+}
+
+/// Contracts `SendInputOp`. `Key`/`Mouse` embed ghosttea's engine input types
+/// verbatim; a superseded incarnation is fenced by ghosttea's `authorize_input`,
+/// not here. `Scroll.rows` is SIGNED (negative scrolls up); `ScrollTo.row` is an
+/// absolute index.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum InputOp {
+    Text { text: String },
+    Paste { text: String },
+    Key { key: KeyInput },
+    Mouse { mouse: MouseInput },
+    Scroll { rows: i64 },
+    ScrollTo { row: u64 },
+    Interrupt,
+}
+
 /// The presentation envelope's binary framing (contracts
 /// `encodePresentationEnvelope`): `'T' 'P' 1 0 u32BE headerLen | header JSON |
 /// payload`. The header is built as a `Value` because `baseContent` has three
@@ -648,5 +682,59 @@ mod tests {
             windows.max_concurrent_activations,
             tp::CELL_MAX_CONCURRENT_ACTIVATIONS
         );
+    }
+
+    /// TP-S3-input — the drift guard only THIS side can run: the fixtures'
+    /// `op` bodies must land inside ghosttea's OWN input types (the wire enum
+    /// embeds them), so an upstream serde-shape change breaks here, loudly,
+    /// instead of at the first live keystroke.
+    #[test]
+    fn the_send_input_fixtures_deserialize_into_ghostteas_input_types() {
+        let text: SendInput = serde_json::from_value(fixture("tp-send-input.text.json")).unwrap();
+        assert_eq!(text.lease_epoch, 4);
+        assert_eq!(text.input_sequence, 7);
+        match &text.op {
+            InputOp::Text { text } => assert_eq!(text, "ls -la\n"),
+            other => panic!("expected Text, got {other:?}"),
+        }
+
+        let key: SendInput = serde_json::from_value(fixture("tp-send-input.key.json")).unwrap();
+        match &key.op {
+            InputOp::Key { key } => {
+                // ghosttea's serde: `type` → action, camelCase fields, default codepoint
+                assert!(matches!(key.action, ghosttea::session::KeyAction::Down));
+                assert_eq!(key.key, "Enter");
+                assert_eq!(key.code, "Enter");
+                assert!(!key.repeat && !key.shift && !key.control && !key.alt && !key.meta);
+                assert_eq!(key.unshifted_codepoint, 13);
+            }
+            other => panic!("expected Key, got {other:?}"),
+        }
+
+        let mouse: SendInput = serde_json::from_value(fixture("tp-send-input.mouse.json")).unwrap();
+        match &mouse.op {
+            InputOp::Mouse { mouse } => {
+                assert!(matches!(
+                    mouse.action,
+                    ghosttea::session::MouseAction::Press
+                ));
+                assert_eq!(mouse.button, 0);
+                assert_eq!(mouse.screen_width, 1280);
+                assert_eq!(mouse.cell_width, 10);
+                assert_eq!(mouse.padding_left, 8);
+                assert!(mouse.meta && !mouse.shift);
+            }
+            other => panic!("expected Mouse, got {other:?}"),
+        }
+
+        // the tagged fixture: the tag reads, the body reads, scroll rows are SIGNED
+        let tagged = fixture("tp-tagged-message.send-input.json");
+        let tag: Tagged = serde_json::from_value(tagged.clone()).unwrap();
+        assert_eq!(tag.message_type, "SendInput");
+        let body: SendInput = serde_json::from_value(tagged).unwrap();
+        match body.op {
+            InputOp::Scroll { rows } => assert_eq!(rows, -5),
+            other => panic!("expected Scroll, got {other:?}"),
+        }
     }
 }

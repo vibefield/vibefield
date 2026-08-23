@@ -1,0 +1,8 @@
+{
+  "type": "SendInput",
+  "sessionId": "s1",
+  "activationId": "act-1",
+  "leaseEpoch": 3,
+  "inputSequence": 12,
+  "op": { "kind": "scroll", "rows": -5 }
+}

@@ -960,6 +960,85 @@ export const GeometryRefused = z
 export type GeometryRefused = z.infer<typeof GeometryRefused>;
 
 // ---------------------------------------------------------------------------
+// Session input (spec §5.4, TP-S3-input) — the terminal-input verb. RATIFIED
+// 2026-08-23 (§17 mark 22). ONE control-leg message carries a keystroke / paste /
+// mouse / scroll to the cell; the leading fields are §5.4's activation triple plus
+// the fence's monotonic `inputSequence`. The `op` shapes MIRROR ghosttea's input
+// serde (camelCase; kebab-case `kind`) so the cell deserializes the wire `op`
+// straight into `ghosttea::session::{KeyInput, MouseInput}` — the golden vector is
+// the drift guard, parsed on both sides (EL9). The cell supplies the fence
+// coordinates it OWNS (view id, client id, attachment epoch) from the activation→
+// view binding; the wire never carries them, so a renderer cannot forge a newer
+// epoch. ghosttea's `authorize_input` is the engine-side backstop.
+
+/** A DOM keystroke, projected to ghosttea's `KeyInput` serde shape. `type` is the
+ * key action; `unshiftedCodepoint` defaults to 0 (ghosttea `#[serde(default)]`). */
+export const TerminalKeyInput = z
+  .object({
+    type: z.enum(["down", "up"]),
+    key: z.string(),
+    code: z.string(),
+    repeat: z.boolean(),
+    shift: z.boolean(),
+    control: z.boolean(),
+    alt: z.boolean(),
+    meta: z.boolean(),
+    unshiftedCodepoint: Counter.default(0),
+  })
+  .passthrough();
+export type TerminalKeyInput = z.infer<typeof TerminalKeyInput>;
+
+/** A mouse event, projected to ghosttea's `MouseInput` serde shape — cell metrics
+ * included so the engine maps pixels → cells. */
+export const TerminalMouseInput = z
+  .object({
+    action: z.enum(["press", "release", "motion"]),
+    button: Counter,
+    x: z.number(),
+    y: z.number(),
+    screenWidth: Counter,
+    screenHeight: Counter,
+    cellWidth: Counter,
+    cellHeight: Counter,
+    paddingLeft: Counter,
+    paddingTop: Counter,
+    shift: z.boolean(),
+    control: z.boolean(),
+    alt: z.boolean(),
+    meta: z.boolean(),
+  })
+  .passthrough();
+export type TerminalMouseInput = z.infer<typeof TerminalMouseInput>;
+
+/** The input operation — discriminated on `kind`, one-for-one with ghosttea-react's
+ * `RoutedTerminalInputOperation` and ghosttea's engine methods
+ * (`send_text`/`paste`/`key`/`mouse`/`scroll`/`scroll_to`/`interrupt`). Scroll
+ * `rows` is SIGNED (negative scrolls up); `scroll-to` `row` is an absolute index. */
+export const SendInputOp = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("text"), text: z.string() }).passthrough(),
+  z.object({ kind: z.literal("paste"), text: z.string() }).passthrough(),
+  z.object({ kind: z.literal("key"), key: TerminalKeyInput }).passthrough(),
+  z.object({ kind: z.literal("mouse"), mouse: TerminalMouseInput }).passthrough(),
+  z.object({ kind: z.literal("scroll"), rows: z.number().int() }).passthrough(),
+  z.object({ kind: z.literal("scroll-to"), row: Counter }).passthrough(),
+  z.object({ kind: z.literal("interrupt") }).passthrough(),
+]);
+export type SendInputOp = z.infer<typeof SendInputOp>;
+
+/** client → cell, CONTROL leg (the input thread; §5.4/§18.1). Gated by the
+ * activation's `input` lease dimension and fenced by ghosttea's `authorize_input`
+ * over `(view, client, attachmentEpoch, inputSequence)`. A refused / stale /
+ * replayed message is DROPPED and audited — there is no per-keystroke ack. */
+export const SendInput = z
+  .object({
+    ...ActivationTriple,
+    inputSequence: Counter,
+    op: SendInputOp,
+  })
+  .passthrough();
+export type SendInput = z.infer<typeof SendInput>;
+
+// ---------------------------------------------------------------------------
 // The frames plane (spec §8): credits, transfers, the presentation envelope
 
 /** Worker → cell (frames leg, JSON text). Every total is CUMULATIVE BYTES
@@ -1245,6 +1324,7 @@ export const TpMessageType = z.enum([
   "ClaimGeometry",
   "ReleaseGeometry",
   "TransferGeometry",
+  "SendInput",
   "GeometryCommitted",
   "GeometryRefused",
   "AttachFramesLeg",
@@ -1271,6 +1351,7 @@ export const TP_MESSAGE_SCHEMAS: Readonly<Record<TpMessageType, ZodTypeAny>> = {
   ClaimGeometry,
   ReleaseGeometry,
   TransferGeometry,
+  SendInput,
   GeometryCommitted,
   GeometryRefused,
   AttachFramesLeg,
@@ -1290,6 +1371,7 @@ export const TP_LEG_INBOUND: Readonly<Record<TransportChannel, readonly TpMessag
     "ClaimGeometry",
     "ReleaseGeometry",
     "TransferGeometry",
+    "SendInput",
   ],
   frames: [
     "ConnectionHello",

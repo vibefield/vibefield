@@ -923,3 +923,206 @@ async fn an_oversized_delta_is_carried_by_a_catchup_transfer() {
 
     h.door.shutdown().await;
 }
+
+/// TP-S3-input — the input verb, end to end against a REAL /bin/sh: a wire
+/// `SendInput{text}` reaches the PTY ("exit\n" terminates the shell — the round
+/// trip no header inspection can fake); acceptance is witnessed by ghosttea's
+/// human-input epoch (`record_input(true)` advances it; every refusal and the
+/// dedup return first), so a replayed `inputSequence`, a stale `leaseEpoch` and
+/// a read-only viewer all leave the epoch UNMOVED — and no reply rides the wire
+/// either way (§5.4: drop-and-audit).
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn wire_input_types_into_the_real_pty_and_every_fence_holds() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut control, mut frames, _epoch) =
+        connect(&h, "set-in", 1, caps(4_000_000, 2_000_000)).await;
+    let (attached, _) = attach_both(
+        &h,
+        &mut control,
+        &mut frames,
+        &session_id,
+        "act-in",
+        &["input", "read"],
+        true,
+    )
+    .await;
+    assert_eq!(attached["rights"], json!(["input", "read"]));
+    let (kind, _b, result, _by, _hd) = receive_transfer(&mut frames).await;
+    assert_eq!(kind, "seed");
+    scene_applied(&mut frames, &session_id, "act-in", &result).await;
+    let status = expect_text(next_reply(&mut control).await, "CellActivationStatus");
+    assert_eq!(status["presentation"]["state"], "presenting");
+    assert_eq!(status["input"]["state"], "allowed");
+
+    let send_input = |session_id: &str, activation: &str, lease: u64, seq: u64, op: Value| {
+        json!({
+            "type": "SendInput",
+            "sessionId": session_id,
+            "activationId": activation,
+            "leaseEpoch": lease,
+            "inputSequence": seq,
+            "op": op,
+        })
+    };
+    async fn epoch_settles(session: &Session, expect: u64, what: &str) {
+        for _ in 0..150 {
+            if session.automation_state() == expect {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        panic!(
+            "timeout: {what} (epoch {} != {expect})",
+            session.automation_state()
+        );
+    }
+
+    // 1. a keystroke reaches the engine: the human-input epoch advances by one
+    let epoch0 = session.automation_state();
+    send_json(
+        &mut control,
+        send_input(
+            &session_id,
+            "act-in",
+            0,
+            1,
+            json!({"kind":"text","text":"true\n"}),
+        ),
+    )
+    .await;
+    epoch_settles(&session, epoch0 + 1, "accepted input records").await;
+
+    // 2. the SAME inputSequence replayed: ghosttea's monotonic dedup authorizes
+    //    it ONCE — the epoch does not move again
+    send_json(
+        &mut control,
+        send_input(
+            &session_id,
+            "act-in",
+            0,
+            1,
+            json!({"kind":"text","text":"REPLAY\n"}),
+        ),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(session.automation_state(), epoch0 + 1, "replay was deduped");
+
+    // 3. a stale leaseEpoch is dropped at the CELL gate (placement fence)
+    send_json(
+        &mut control,
+        send_input(
+            &session_id,
+            "act-in",
+            7,
+            2,
+            json!({"kind":"text","text":"STALE\n"}),
+        ),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(
+        session.automation_state(),
+        epoch0 + 1,
+        "stale lease dropped"
+    );
+
+    // 4. a read-only viewer on a SECOND session (same socket pair — §5.1) is
+    //    refused by the lease: its epoch never moves
+    let session_b = spawn_session(&h.source);
+    let session_b_id = session_b.id();
+    // hand-rolled attach: act-in's echo deltas (the typed `true`) are in flight
+    // on the SAME legs, so tolerate interleaved units/statuses while attaching
+    let grant_b = h.attach_grant(&session_b_id, 1, &["read"]);
+    send_json(
+        &mut control,
+        json!({
+            "type": "AttachControlLeg",
+            "activationId": "act-ro",
+            "attachGrant": grant_b,
+            "initialDemand": { "mode": "live" },
+        }),
+    )
+    .await;
+    let attached_b = loop {
+        match next_reply(&mut control).await {
+            Reply::Text(v) if v["type"] == "ControlLegAttached" => break v,
+            Reply::Text(v) if v["type"] == "CellActivationStatus" => continue,
+            other => panic!("expected ControlLegAttached, got {other:?}"),
+        }
+    };
+    assert_eq!(attached_b["rights"], json!(["read"]));
+    send_json(
+        &mut frames,
+        json!({
+            "type": "AttachFramesLeg",
+            "activationId": "act-ro",
+            "attachGrant": grant_b,
+        }),
+    )
+    .await;
+    loop {
+        match next_reply(&mut frames).await {
+            Reply::Text(v) if v["type"] == "FramesLegAttached" => break,
+            Reply::Unit(_, _) => continue,
+            other => panic!("expected FramesLegAttached, got {other:?}"),
+        }
+    }
+    let (kind_b, _bb, result_b, _byb, _hdb) = receive_transfer(&mut frames).await;
+    assert_eq!(kind_b, "seed");
+    scene_applied(&mut frames, &session_b_id, "act-ro", &result_b).await;
+    let status_b = loop {
+        let v = expect_text(next_reply(&mut control).await, "CellActivationStatus");
+        if v["activationId"] == "act-ro" {
+            break v;
+        }
+    };
+    assert_eq!(status_b["input"]["state"], "revoked");
+    assert_eq!(status_b["input"]["reason"], "not-granted");
+    let epoch_b = session_b.automation_state();
+    send_json(
+        &mut control,
+        send_input(
+            &session_b_id,
+            "act-ro",
+            0,
+            1,
+            json!({"kind":"text","text":"NOPE\n"}),
+        ),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(
+        session_b.automation_state(),
+        epoch_b,
+        "read-only was dropped"
+    );
+
+    // 5. the PTY round trip: "exit" terminates the REAL shell
+    assert!(!session.summary().exited);
+    send_json(
+        &mut control,
+        send_input(
+            &session_id,
+            "act-in",
+            0,
+            3,
+            json!({"kind":"text","text":"exit\n"}),
+        ),
+    )
+    .await;
+    for _ in 0..250 {
+        if session.summary().exited {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(
+        session.summary().exited,
+        "the typed `exit` reached the real PTY and ended /bin/sh"
+    );
+    h.door.shutdown().await;
+}
