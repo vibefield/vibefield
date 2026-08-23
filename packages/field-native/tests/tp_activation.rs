@@ -268,11 +268,18 @@ async fn attach_both(
 /// Receive one whole transfer (begin · chunks · end); returns (kind, base, result, bytes).
 async fn receive_transfer(frames: &mut Ws) -> (String, Value, Value, Vec<u8>, Vec<Value>) {
     let mut headers = Vec::new();
-    let (begin, _) = match next_reply(frames).await {
-        Reply::Unit(h, p) => (h, p),
-        other => panic!("expected transfer-begin, got {other:?}"),
+    // The real engine settles AFTER a seed with ordinary `trf1-frame` deltas (a
+    // cursor/prompt frame or two — more of them under ghosttea 0.11.0), and a
+    // frames leg may also carry a `calibration` unit; skip those to the transfer.
+    let begin = loop {
+        match next_reply(frames).await {
+            Reply::Unit(h, _) if h["kind"] == "transfer-begin" => break h,
+            Reply::Unit(h, _) if h["kind"] == "trf1-frame" || h["kind"] == "calibration" => {
+                continue;
+            }
+            other => panic!("expected transfer-begin, got {other:?}"),
+        }
     };
-    assert_eq!(begin["kind"], "transfer-begin", "{begin}");
     let transfer_id = begin["transfer"]["transferId"]
         .as_str()
         .unwrap()

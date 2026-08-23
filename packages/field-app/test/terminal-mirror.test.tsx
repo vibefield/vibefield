@@ -85,6 +85,8 @@ vi.mock("@vibecook/ghosttea-react", async (importOriginal) => {
       // an undefined method exploded would prove nothing.
       resize: record("resize"),
       claimResizeControl: record("claimResizeControl"),
+      releaseResizeControl: record("releaseResizeControl"),
+      setViewInputPolicy: record("setViewInputPolicy"),
       setFocused: record("setFocused"),
       setTheme: record("setTheme"),
       setSelection: record("setSelection"),

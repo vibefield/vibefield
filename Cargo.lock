@@ -708,9 +708,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad287f212282b937bccafd581cf8f70bb02f5f7f39c4e79a25107137a02b88d5"
+checksum = "4725d20ab426933ffeafcbf40ad62bd77359f9a0cd00a37fdc76937f62c371cd"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -731,9 +731,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-config"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27062a57771bc37a84f85ad770cbfc4fa65f8def24efb7d22a12d55f625ba494"
+checksum = "ef00af3a5ca9b79378713645d52052618564ef66cc4c83578c202b57119ab9b1"
 dependencies = [
  "libc",
  "serde",
@@ -744,9 +744,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-core"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bafcabe9899c1d0caabb77c6e8b1ed8cc434dbfaf52849b3f4a669beff5161f"
+checksum = "68672f9b1a8235c7887c3f676d33664e5123fb7d2b9032c252734bce01be0174"
 dependencies = [
  "anyhow",
  "ghosttea-text",
@@ -757,9 +757,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-text"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ade81fd3efdb5febbcac66b869a9990df7ed7bc80f6adc17732f5c3e27d18ea1"
+checksum = "f01ddc9b37d56ad5ecebe8553b4e6d3590398e217696609980dac579d77c1701"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -771,9 +771,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-truffle"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "729922497bc5509ff486669dcea85526975e81ead31013464c71d53307accf9b"
+checksum = "a6e36d34b56669d3e114e6f23919c4f22661d293c97f9201c6d26159dd0a7c34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -792,18 +792,18 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-vt"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e561be0ff823cdf96b2fb66aaac4e4a18d2cfcfc63b5612652e4ae74f82ea226"
+checksum = "7012e7798486058aa240ef47367fe90987f017ccb7913acc49fef62cdd15ad79"
 dependencies = [
  "ghosttea-vt-sys",
 ]
 
 [[package]]
 name = "ghosttea-vt-sys"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f995cdbaf4705aa813045e903d8db2043029261ddfed5a1a63f43cbe59dedc1c"
+checksum = "bfe2f7d8465eabca3dd4d5e1355a18cb60be0a787d167be1dc9055169db500c6"
 dependencies = [
  "cc",
  "serde",

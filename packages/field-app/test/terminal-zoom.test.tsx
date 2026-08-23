@@ -132,6 +132,8 @@ function countingRuntime(calls: RuntimeCall[]): Record<string, unknown> {
     },
     resize: record("resize"),
     claimResizeControl: record("claimResizeControl"),
+    releaseResizeControl: record("releaseResizeControl"),
+    setViewInputPolicy: record("setViewInputPolicy"),
     setFocused: record("setFocused"),
     setVisible: record("setVisible"),
     setTheme: record("setTheme"),
@@ -267,21 +269,29 @@ describe("the resize seam — what a box change costs", () => {
     expect(calls.filter((call) => call.verb === "resize").length).toBe(baseline);
   });
 
-  it("FINDING: `controlsResize: false` does NOT stop a surface resizing the PTY", () => {
-    // The hazard the spec's §2 does not name (it names the FOCUS path). The
-    // prop gates one effect — the explicit `claimResizeControl`
-    // (`TerminalSurface.js:295-299`) — and the ResizeObserver path at `:238-249`
-    // is ungated, so any mounted surface reflows the real terminal to its own
-    // box. This is why the mirror holds a runtime FACADE and not a prop set;
-    // if upstream ever fixes it, this test fails and the mirror's first layer
-    // can be reconsidered on purpose rather than by accident.
+  it("`controlsResize: false` no longer resizes the PTY — the ResizeObserver path is closed (ghosttea-react 0.11.0)", () => {
+    // The hazard the spec's §2 does not name (it names the FOCUS path). In 0.10.1
+    // the prop gated only the explicit `claimResizeControl` and the ResizeObserver
+    // path was UNGATED, so any mounted surface reflowed the real terminal to its
+    // own box — which is why the mirror held a runtime FACADE, not a prop set, and
+    // why this test was left as a TRIPWIRE: "if upstream ever fixes it, this test
+    // fails and the mirror's first layer can be reconsidered on purpose."
+    //
+    // G23 ask #6 (ghosttea-react 0.11.0) closed it on BOTH paths: the
+    // observer-driven `runtime.resize` is skipped when `controlsResize` is false,
+    // and `#sendResize`/`focus-and-resize` refuse for a non-controller. So a
+    // read-only mirror now costs the PTY nothing on its own — a box change no
+    // longer commits a resize — and the mirror's facade FIRST layer (its resize
+    // suppression) is now redundant; retiring it is the noted follow-up.
     const calls: RuntimeCall[] = [];
     mountSurface(false, calls);
     act(() => deliverBox(400, 300));
+    const baseline = calls.filter((call) => call.verb === "resize").length;
     act(() => deliverBox(1200, 800));
 
+    // never claims (unchanged), and — the fix — a box change now costs zero resizes.
     expect(calls.filter((call) => call.verb === "claimResizeControl")).toHaveLength(0);
-    expect(calls.filter((call) => call.verb === "resize").length).toBeGreaterThan(0);
+    expect(calls.filter((call) => call.verb === "resize").length).toBe(baseline);
   });
 
   it("measures the divider drag — resizes per pointer move (TP-R3's drag half)", () => {

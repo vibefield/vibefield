@@ -83,7 +83,16 @@ truffle-core = "=0.7.12"
 # 6b drops `.fails` — the witness the G13 filing pre-registered — and only the
 # BOX gate can see it pass (mac skips the row). Provenance: npm gitHead =
 # crate vcs-info = peeled v0.10.1 = ad97fdb.
-ghosttea = "=0.10.1"
+# G22/G23 (2026-08-23) bumps 0.10.1 → 0.11.0 — the TPv3 cell/renderer bundle:
+# G22 adds the in-process `ServiceSessions` accessor (session-by-id / frame hubs /
+# spawn-through-the-service / lifecycle bus), which lets `field-terminal-host`
+# share the running service's session set with the T1 doors. Additive library
+# surface, no wire change; field-native's existing `Session` API usage is
+# unchanged. The npm rows (ghosttea-react/-protocol/-client/-electron) move to
+# 0.11.0 in the SAME event to keep the one-version law. Cross-repo interop
+# re-verified before the bump: ghosttea's routed codec round-trips all 42 of our
+# `@vibefield/contracts` golden vectors (30 wire + 12 structural).
+ghosttea = "=0.11.0"
 # GT-4 (native-floor §7 / GT-D7): the mesh half of the terminal floor, added at
 # the same version as `ghosttea` — it depends on that crate by path upstream, so
 # a split would be two ghosttea revisions in one graph. It brings truffle-core
@@ -91,4 +100,4 @@ ghosttea = "=0.10.1"
 # mismatch is a resolver refusal, never a silent second Arc<Node> type. Consumed
 # ONLY behind FIELD_NATIVE_TERMINAL_MESH — with the flag off the crate is linked
 # but never constructed, and the floor is bit-for-bit its pre-GT-4 self.
-ghosttea-truffle = "=0.10.1"
+ghosttea-truffle = "=0.11.0"

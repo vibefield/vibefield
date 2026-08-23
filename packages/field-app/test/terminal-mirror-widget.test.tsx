@@ -94,6 +94,8 @@ vi.mock("@vibecook/ghosttea-react", async (importOriginal) => {
       },
       resize: record("resize"),
       claimResizeControl: record("claimResizeControl"),
+      releaseResizeControl: record("releaseResizeControl"),
+      setViewInputPolicy: record("setViewInputPolicy"),
       setFocused: record("setFocused"),
       setTheme: record("setTheme"),
       setSelection: record("setSelection"),

@@ -154,10 +154,17 @@ async fn run_pump<H: PumpHost>(
         // Demand none (the view is detached): nothing should arrive, and
         // whatever does is coalesced; the return to live repairs with a full.
         if !pump.host.wants_frames(&pump.start.activation_id) {
+            // Observing demand-none IS the lineage break (§8) — mark it NOW, not
+            // lazily on a frame/notify. Otherwise a quiet demand-none window sets
+            // nothing, and on re-attach the WakePump and the engine's re-attach
+            // frame are both ready: if select takes the frame, `needs_full` is
+            // still false and a delta rides out where a catch-up must. Setting it
+            // here makes re-attach ALWAYS catch up, regardless of select ordering.
+            needs_full = true;
             tokio::select! {
-                _ = pump.notify.notified() => { needs_full = true; }
+                _ = pump.notify.notified() => {}
                 r = rx.recv() => match r {
-                    Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => { needs_full = true; }
+                    Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
@@ -179,6 +186,18 @@ async fn run_pump<H: PumpHost>(
                 Err(broadcast::error::RecvError::Closed) => break,
                 Ok(packet) => {
                     if packet.session_handle != pump.start.session_handle {
+                        continue;
+                    }
+                    // Demand may have gone NONE while we were parked in this
+                    // select (a demand cycle, or a read-only viewer parking) —
+                    // `DeclareDemand{none}` sets demand and WakePumps, but the
+                    // wake and a pending frame are BOTH ready and select picks
+                    // one at random. A frame that arrives after demand-none must
+                    // NOT ride out as a delta: drop it (needs_full) so re-attach
+                    // repairs with a catch-up. This makes §8's "demand gone and
+                    // back breaks the lineage" hold by construction, not by timing.
+                    if !pump.host.wants_frames(&pump.start.activation_id) {
+                        needs_full = true;
                         continue;
                     }
                     let Some(header) = Trf1Header::parse(&packet) else { continue };
