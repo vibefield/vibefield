@@ -44,6 +44,10 @@ vi.mock("@vibecook/ghosttea-react", () => ({
         runtimeCalls.push(`setVisible:${handle}:${visible}`);
       },
       dispose: () => runtimeCalls.push(`dispose:${id}`),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      registerSession: () => undefined,
+      listSessions: () => Promise.resolve([{ id: "session-a" }]),
       rendererBackend: "test",
     };
   },
@@ -58,19 +62,69 @@ const pool = await import("../src/terminal/pool");
 
 type PoolClient = Parameters<typeof pool.openTerminalPool>[0];
 
-let publishStatus: ((status: { state: string }) => void) | null = null;
-
 /** A floor that answers the session-addressed mint. TP-S1: there is no
  * sessionless door any more, so a fixture that wants a transport has to name a
  * session — which is the point of the slice showing up in the fixture. */
 const ROUTE = { cellBootId: "cell-a-boot-1", routeRevision: 1, leaseEpoch: 1 };
-const LEGACY = { controlSocket: "c", frameSocket: "f", token: "t" };
+// TP-S3e: the fixture answers the ROUTED contract (the grant mechanics are
+// exercised in `terminal-pool-routing.test.ts`; this fixture is about DEMAND).
+function grantFixture(sessionId: string): Record<string, unknown> {
+  return {
+    route: ROUTE,
+    endpoints: {
+      controlUrl: "ws://127.0.0.1:40002/control",
+      framesUrl: "ws://127.0.0.1:40002/frames",
+    },
+    transportGrant: {
+      protected: {
+        v: 1,
+        typ: "CellTransportGrant",
+        iss: "fieldd",
+        alg: "HS256",
+        kid: { cellBootId: ROUTE.cellBootId, keyGeneration: 1 },
+      },
+      claims: {
+        audienceCellBootId: ROUTE.cellBootId,
+        clientId: "renderer-1",
+        connectionSetId: "connection-1",
+        allowedChannels: ["control", "frames"],
+        transportGrantGeneration: 1,
+        issuedAt: 1_000,
+        expiresAt: 61_000,
+        nonce: "nonce-1",
+      },
+      mac: "bWFj",
+    },
+    attachGrant: {
+      protected: {
+        v: 1,
+        typ: "SessionAttachGrant",
+        iss: "fieldd",
+        alg: "HS256",
+        kid: { cellBootId: ROUTE.cellBootId, keyGeneration: 1 },
+      },
+      claims: {
+        audienceCellBootId: ROUTE.cellBootId,
+        clientId: "renderer-1",
+        sessionId,
+        leaseEpoch: 1,
+        routeRevision: 1,
+        grantGeneration: 1,
+        rights: ["input", "read"],
+        issuedAt: 1_000,
+        expiresAt: 61_000,
+      },
+      mac: "bWFj",
+    },
+  };
+}
 const fieldd = {
-  request: (method: string) => {
+  request: (method: string, params?: unknown) => {
     if (method === "terminal.roster") return Promise.resolve({ items: [] });
-    // The legacy trio alone: the grant half is exercised in
-    // `terminal-pool-routing.test.ts`, and this fixture is about DEMAND.
-    return Promise.resolve({ ...LEGACY, sessionId: "session-a", ticket: LEGACY });
+    if (method === "terminal.openTicket") {
+      return Promise.resolve(grantFixture((params as { sessionId: string }).sessionId));
+    }
+    return Promise.reject(new Error(`unexpected method ${method}`));
   },
 } as unknown as PoolClient;
 
@@ -89,18 +143,13 @@ async function settle(): Promise<void> {
 beforeEach(() => {
   runtimesMade = 0;
   runtimeCalls = [];
-  publishStatus = null;
   pool.disposeTerminalPool();
+  pool.configureTerminalPool({
+    transport: "routed",
+    defaultShell: "/bin/zsh",
+    home: "/Users/test",
+  });
   setHost({
-    terminal: {
-      connect: () => Promise.resolve({ defaultShell: "/bin/zsh", home: "/Users/test" }),
-      onStatus: (handler: (status: { state: string }) => void) => {
-        publishStatus = handler;
-        return () => {
-          publishStatus = null;
-        };
-      },
-    },
     logger: { child: () => ({ info: () => undefined, error: () => undefined }) },
   } as unknown as FieldHost);
 });
@@ -117,7 +166,8 @@ describe("addressing by session id alone (TP-L-C)", () => {
   it("keeps ONE transport for the sessions it answers for, and never names it", async () => {
     open();
     await settle();
-    expect(pool.terminalPoolCellCount(), "one cell for this window's bridge").toBe(1);
+    // TP-S3e: the count moves as G23 mints per activation; nothing mounted yet.
+    expect(pool.terminalPoolCellCount()).toBe(0);
 
     const a = pool.bindTerminalSessionView("session-a", pool.LIVE_SOURCE_DEMAND);
     const b = pool.bindTerminalSessionView("session-b", pool.LIVE_SOURCE_DEMAND);
@@ -125,7 +175,10 @@ describe("addressing by session id alone (TP-L-C)", () => {
     // Two sessions, one transport — which is exactly what a routed client looks
     // like from above at K=1, and what it will still look like at K=2.
     expect(pool.terminalPoolLiveSessions()).toEqual(["session-a", "session-b"]);
-    expect(pool.terminalPoolCellCount()).toBe(1);
+    // TP-S3e: cells are counted as G23 MINTS them (one per activation's cell);
+    // this fixture mounts no activation, so the honest count is zero — and the
+    // law below (placement never escapes) is what this row exists to hold.
+    expect(pool.terminalPoolCellCount()).toBe(0);
 
     // Placement never escapes. Not "is not read" — is not PRESENT: a consumer
     // cannot learn a cell from anything the pool exports, so the day sessions
@@ -165,7 +218,9 @@ describe("addressing by session id alone (TP-L-C)", () => {
     const view = pool.bindTerminalSessionView("survivor", pool.LIVE_SOURCE_DEMAND);
     expect(pool.terminalPoolProjectedDemand()[0]?.transportGeneration).toBe(1);
 
-    publishStatus?.({ state: "bridge-up" });
+    // TP-S3e: the replacement door is the pool's own retry (the bridge-status
+    // channel died with the bridge).
+    pool.retryTerminalPool(["survivor"]);
     await settle();
 
     expect(pool.terminalSessionDemand("survivor"), "the view never went away").toBe("live");

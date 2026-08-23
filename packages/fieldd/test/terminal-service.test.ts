@@ -21,7 +21,6 @@ import {
   TERMINAL_SCROLLBACK_CLASS_BYTES,
   TerminalConfigDocument,
   TerminalConfigWriteResult,
-  TerminalConnectTicketResult,
   TerminalCreateOpenResult,
   type TerminalCreateResult,
   type TerminalEndpoints,
@@ -30,7 +29,6 @@ import {
   TerminalRosterResult,
   type TerminalRouteSnapshot,
   TerminalRuntimeSessionsResult,
-  TerminalTicket,
   type TerminalWorkloadClass,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
@@ -464,17 +462,6 @@ function paperEndpoints(name: string): TerminalEndpoints {
   };
 }
 
-/** The ticket those paper endpoints mint to (D6 — the ticket IS the cell's
- * endpoints, so "which cell answered" is assertable as a whole shape). */
-function paperTicket(name: string): TerminalTicket {
-  const endpoints = paperEndpoints(name);
-  return {
-    controlSocket: endpoints.controlSocket,
-    frameSocket: endpoints.frameSocket,
-    token: endpoints.authToken,
-  };
-}
-
 /** A structural link whose routes can MOVE, for the rows that drive placement
  * without a daemon. The legacy mirror is derived by the link's OWN helper
  * rather than re-implemented here: a fake that derived it differently could
@@ -566,13 +553,13 @@ describe("TerminalService (NF-3, mock native)", () => {
     const got = (await rpc.call("terminal.get", { sessionId: "s1" })) as TerminalInfo;
     expect(got.pid).toBe(42);
 
-    // D6: the ticket IS the endpoints
-    const ticket = (await rpc.call("terminal.openTicket", { sessionId: "s1" })) as TerminalTicket;
-    expect(ticket).toMatchObject({
-      controlSocket: ENDPOINTS.controlSocket,
-      frameSocket: ENDPOINTS.frameSocket,
-      token: ENDPOINTS.authToken,
-    });
+    // TP-S3e: a mirror-only floor mints no grants — the door refuses honestly
+    // instead of handing out the UDS trio it used to
+    const refused = await rpc.callErr("terminal.openTicket", { sessionId: "s1" });
+    expect(refused.data?.kind).toBe("UNAVAILABLE");
+    expect((refused.data?.details as { state?: string } | undefined)?.state).toBe(
+      "grants_not_landed",
+    );
 
     // unknown session refuses before any credential is exposed
     const missing = await rpc.callErr("terminal.openTicket", { sessionId: "ghost" });
@@ -621,7 +608,6 @@ describe("TerminalService (NF-3, mock native)", () => {
 
     for (const [method, params] of [
       ["terminal.openTicket", { sessionId: "s1" }],
-      ["terminal.connectTicket", {}],
       ["terminal.create", {}],
       ["terminal.terminate", { sessionId: "s1" }],
       ["terminal.config.read", {}],
@@ -632,12 +618,10 @@ describe("TerminalService (NF-3, mock native)", () => {
     }
   });
 
-  it("terminal.connectTicket mints for a connection, with no session on the floor (GT-D10)", async () => {
-    // The deck's door. It used to be `terminal.create`: opening the Godview
-    // spawned a shell so that a ticket could ride the answer, which is how
-    // fieldd became a second session authority in front of the workspace. This
-    // asks for the connection and nothing else — so the floor here is EMPTY,
-    // and it must still be empty afterwards.
+  it("terminal.connectTicket is GONE (TP-S3e) — the retired door refuses and mints nothing", async () => {
+    // GT-D10's sessionless mint fed the bridge; with the bridge retired the
+    // method is UNREGISTERED. This row is the falsifiable half of "the old
+    // door gone": re-registering it turns this red.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
     mock.helloTerminal = ENDPOINTS;
@@ -649,31 +633,15 @@ describe("TerminalService (NF-3, mock native)", () => {
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, grant.token);
 
-    // Parsed against the contract, not merely shaped like it.
-    const minted = TerminalConnectTicketResult.parse(await rpc.call("terminal.connectTicket", {}));
-    expect(minted.ticket).toMatchObject({
-      controlSocket: ENDPOINTS.controlSocket,
-      frameSocket: ENDPOINTS.frameSocket,
-      token: ENDPOINTS.authToken,
-    });
+    const err = await rpc.callErr("terminal.connectTicket", {});
+    expect(err.data?.kind).toBe("NOT_FOUND");
 
     const list = (await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] };
-    expect(list.terminals, "a connection mint must not have created anything").toEqual([]);
-
-    // Still a privilege grant, so still on the record — attempt before effect,
-    // like every other mint — and recorded as what it IS: a ticket for the
-    // connection, not for some session id this call never had.
+    expect(list.terminals, "the refusal created nothing").toEqual([]);
     const records = (await readAuditRecords(dataDir)).filter((r) =>
       r.action.startsWith("terminal."),
     );
-    expect(records.map((r) => `${r.action}:${r.phase}`)).toEqual([
-      "terminal.ticket.mint:attempt",
-      "terminal.ticket.mint:outcome",
-    ]);
-    for (const record of records) {
-      expect(record.target).toEqual({ kind: "terminal", id: "connection" });
-    }
-    expect(records[1]?.outcome).toBe("succeeded");
+    expect(records, "a retired door writes no mint records").toEqual([]);
   });
 
   it("gates every terminal.* method on its declared scope", async () => {
@@ -689,7 +657,6 @@ describe("TerminalService (NF-3, mock native)", () => {
       "terminal.sessions": "terminal.attach",
       "terminal.get": "terminal.attach",
       "terminal.openTicket": "terminal.attach",
-      "terminal.connectTicket": "terminal.attach",
       "terminal.create": "terminal.attach",
       "terminal.terminate": "terminal.attach",
       "terminal.renewAttach": "terminal.attach",
@@ -783,7 +750,21 @@ describe("TerminalService (NF-3, mock native)", () => {
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
     const floor = await startFakeFloor();
-    mock.helloTerminal = floor.endpoints;
+    const doorsG = {
+      controlUrl: "ws://127.0.0.1:50015/control",
+      framesUrl: "ws://127.0.0.1:50015/frames",
+    };
+    mock.terminalRoutes = keyedRoutes(1, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-g1",
+        endpoints: floor.endpoints,
+        workloadClass: "interactive",
+        role: "class",
+        grantKey: KEY_I,
+        doors: doorsG,
+      },
+    ]);
     mock.observedState = observed([]);
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
@@ -792,14 +773,10 @@ describe("TerminalService (NF-3, mock native)", () => {
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, grant.token);
 
-    const created = (await rpc.call("terminal.create", {})) as TerminalCreateResult;
+    const created = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
     expect(created.sessionId).toBe(floor.createdSessionId);
     expect(created.session).toMatchObject({ id: floor.createdSessionId, handle: "1" });
-    expect(created.ticket).toMatchObject({
-      controlSocket: floor.endpoints.controlSocket,
-      frameSocket: floor.endpoints.frameSocket,
-      token: floor.endpoints.authToken,
-    });
+    expect(created.endpoints).toEqual(doorsG);
 
     // the pre-GT-1 path is still honestly observed-gated for THIS session
     const raced = await rpc.callErr("terminal.openTicket", { sessionId: created.sessionId });
@@ -1017,8 +994,23 @@ describe("TerminalService (NF-3, mock native)", () => {
     // floor and re-checked only `create`.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
-    mock.helloTerminal = ENDPOINTS;
-    mock.observedState = observed([{ sessionId: "s1" }]);
+    mock.terminalRoutes = keyedRoutes(1, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-live",
+        endpoints: paperEndpoints("live"),
+        workloadClass: "interactive",
+        role: "class",
+        grantKey: KEY_I,
+        doors: {
+          controlUrl: "ws://127.0.0.1:50001/control",
+          framesUrl: "ws://127.0.0.1:50001/frames",
+        },
+      },
+    ]);
+    mock.observedState = observed([
+      { sessionId: "s1", cell: cellTag(1, "cell-live", "interactive") },
+    ]);
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
@@ -1026,21 +1018,21 @@ describe("TerminalService (NF-3, mock native)", () => {
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, grant.token);
 
-    // a live floor mints, as it should
-    const live = TerminalConnectTicketResult.parse(await rpc.call("terminal.connectTicket", {}));
-    expect(live.ticket.token).toBe(ENDPOINTS.authToken);
+    // a live floor mints the ROUTED ticket, as it should
+    const live = (await rpc.call("terminal.openTicket", { sessionId: "s1" })) as {
+      endpoints: { controlUrl: string };
+    };
+    expect(live.endpoints.controlUrl).toBe("ws://127.0.0.1:50001/control");
 
     // the floor dies and does not come back (stop() closes the listener too,
     // so the reconnect cannot re-learn endpoints — a SIGKILLed field-native)
     await mock.stop();
 
     const refused = await poll(async () => {
-      const err = await rpc.callErr("terminal.connectTicket", {});
+      const err = await rpc.callErr("terminal.openTicket", { sessionId: "s1" });
       return err.data?.kind === "UNAVAILABLE" ? err : undefined;
     });
     expect((refused.data?.details as { state?: string } | undefined)?.state).toBe("absent");
-    const openRefused = await rpc.callErr("terminal.openTicket", { sessionId: "s1" });
-    expect(openRefused.data?.kind, "the session-scoped door refuses too").toBe("UNAVAILABLE");
 
     // the audit says a mint was ATTEMPTED and FAILED — not that a credential
     // was granted, which is what the record used to claim for a dead floor
@@ -1071,7 +1063,20 @@ describe("TerminalService (NF-3, mock native)", () => {
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
     const floor = await startFakeFloor();
-    mock.helloTerminal = floor.endpoints;
+    mock.terminalRoutes = keyedRoutes(1, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-g2",
+        endpoints: floor.endpoints,
+        workloadClass: "interactive",
+        role: "class",
+        grantKey: KEY_I,
+        doors: {
+          controlUrl: "ws://127.0.0.1:50016/control",
+          framesUrl: "ws://127.0.0.1:50016/frames",
+        },
+      },
+    ]);
     mock.observedState = observed([]);
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
@@ -1079,7 +1084,7 @@ describe("TerminalService (NF-3, mock native)", () => {
     const grant = daemon.tokens.mint(["terminal.attach"], "create-order-test");
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, grant.token);
-    const created = (await rpc.call("terminal.create", {})) as TerminalCreateResult;
+    const created = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
 
     const records = (await readAuditRecords(dataDir)).filter((r) =>
       r.action.startsWith("terminal."),
@@ -1579,10 +1584,11 @@ describe("TC-D15 — the routes consumer (TC-S2)", () => {
     expect(daemon.native.terminalRoutes?.revision, "the floor's own word for it").toBe(3);
   });
 
-  it("keeps the pre-TC-S2 floor's endpoints working from the legacy mirror", async () => {
-    // The compatibility floor, asserted at the product door rather than at the
-    // link: a floor that sends only `terminal` must mint tickets exactly as it
-    // did before routes existed.
+  it("a pre-TC-S2 floor (legacy mirror only) refuses honestly since TP-S3e", async () => {
+    // The compatibility promise DIED with the bridge, deliberately: a floor
+    // that sends only `terminal` (no routes, no grant key, no doors) cannot
+    // serve a routed ticket, and the door says so instead of minting the
+    // legacy trio it used to.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
     mock.helloTerminal = ENDPOINTS; // and no terminalRoutes: a pre-TC-S2 floor
@@ -1594,8 +1600,11 @@ describe("TC-D15 — the routes consumer (TC-S2)", () => {
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, grant.token);
 
-    const ticket = (await rpc.call("terminal.openTicket", { sessionId: "s1" })) as TerminalTicket;
-    expect(ticket.token).toBe(ENDPOINTS.authToken);
+    const refusedLegacy = await rpc.callErr("terminal.openTicket", { sessionId: "s1" });
+    expect(refusedLegacy.data?.kind).toBe("UNAVAILABLE");
+    expect((refusedLegacy.data?.details as { state?: string } | undefined)?.state).toBe(
+      "grants_not_landed",
+    );
     expect(
       daemon.native.terminalRoutes,
       "it never claimed a snapshot it did not get",
@@ -1698,13 +1707,23 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
     // socket that has never heard of the session.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
-    mock.terminalRoutes = classRoutes(1, [
+    const doorsI = {
+      controlUrl: "ws://127.0.0.1:50011/control",
+      framesUrl: "ws://127.0.0.1:50011/frames",
+    };
+    const doorsA = {
+      controlUrl: "ws://127.0.0.1:50012/control",
+      framesUrl: "ws://127.0.0.1:50012/frames",
+    };
+    mock.terminalRoutes = keyedRoutes(1, [
       {
         cellInstanceId: 1,
         cellBootId: "cell-i",
         endpoints: paperEndpoints("interactive"),
         workloadClass: "interactive",
         role: "class",
+        grantKey: KEY_I,
+        doors: doorsI,
       },
       {
         cellInstanceId: 2,
@@ -1712,6 +1731,8 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
         endpoints: paperEndpoints("agent"),
         workloadClass: "agent",
         role: "class",
+        grantKey: KEY_A,
+        doors: doorsA,
       },
     ]);
     mock.observedState = observed([
@@ -1725,16 +1746,20 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, grant.token);
 
-    const pane = (await rpc.call("terminal.openTicket", { sessionId: "pane-1" })) as TerminalTicket;
-    const agent = (await rpc.call("terminal.openTicket", {
-      sessionId: "agent-1",
-    })) as TerminalTicket;
-    expect(pane).toMatchObject(paperTicket("interactive"));
-    expect(agent).toMatchObject(paperTicket("agent"));
-
-    // and the SESSIONLESS mint stays the deck's door: the interactive cell
-    const connect = TerminalConnectTicketResult.parse(await rpc.call("terminal.connectTicket", {}));
-    expect(connect.ticket).toMatchObject(paperTicket("interactive"));
+    // TP-S3e: "which cell answered" is assertable as the DOORS on the routed
+    // ticket — each session's ticket names its own cell's endpoints and boot id
+    const pane = (await rpc.call("terminal.openTicket", { sessionId: "pane-1" })) as {
+      route: { cellBootId: string };
+      endpoints: { controlUrl: string };
+    };
+    const agent = (await rpc.call("terminal.openTicket", { sessionId: "agent-1" })) as {
+      route: { cellBootId: string };
+      endpoints: { controlUrl: string };
+    };
+    expect(pane.route.cellBootId).toBe("cell-i");
+    expect(pane.endpoints).toEqual(doorsI);
+    expect(agent.route.cellBootId).toBe("cell-a");
+    expect(agent.endpoints).toEqual(doorsA);
   });
 
   it("a session whose cell is gone is cell_gone, never another cell's socket", async () => {
@@ -1745,13 +1770,19 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
     // honest state, and retryable because the inventory is about to say so.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
-    mock.terminalRoutes = classRoutes(4, [
+    const doorsLive = {
+      controlUrl: "ws://127.0.0.1:50013/control",
+      framesUrl: "ws://127.0.0.1:50013/frames",
+    };
+    mock.terminalRoutes = keyedRoutes(4, [
       {
         cellInstanceId: 1,
         cellBootId: "cell-i",
         endpoints: paperEndpoints("interactive"),
         workloadClass: "interactive",
         role: "class",
+        grantKey: KEY_I,
+        doors: doorsLive,
       },
     ]);
     mock.observedState = observed([
@@ -1770,8 +1801,10 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
     expect((err.data?.details as { state?: string } | undefined)?.state).toBe("cell_gone");
     expect(err.data?.retryable, "the inventory is a beat behind, not wrong forever").toBe(true);
     // the LIVE cell's session is unaffected — the refusal is this cell's, not the floor's
-    const pane = (await rpc.call("terminal.openTicket", { sessionId: "pane-1" })) as TerminalTicket;
-    expect(pane).toMatchObject(paperTicket("interactive"));
+    const pane = (await rpc.call("terminal.openTicket", { sessionId: "pane-1" })) as {
+      endpoints: { controlUrl: string };
+    };
+    expect(pane.endpoints).toEqual(doorsLive);
   });
 
   it("counts the blast per cell: the receipt names only the dead cell's sessions", async () => {
@@ -2019,6 +2052,12 @@ async function keyedDaemon() {
       workloadClass: "interactive",
       role: "class",
       grantKey: KEY_I,
+      // TP-S3e: every serving cell has its doors — a doorless keyed cell is
+      // UNAVAILABLE at the mint now, so both fixture cells carry theirs.
+      doors: {
+        controlUrl: "ws://127.0.0.1:49159/control",
+        framesUrl: "ws://127.0.0.1:49159/frames",
+      },
     },
     {
       cellInstanceId: 2,
@@ -2027,9 +2066,6 @@ async function keyedDaemon() {
       workloadClass: "agent",
       role: "class",
       grantKey: KEY_A,
-      // TP-S3a — the agent cell serves its T1 doors; the interactive one does
-      // not (a keyed cell that predates the door layer), so the two tickets
-      // below show both honest answers.
       doors: {
         controlUrl: "ws://127.0.0.1:49160/control",
         framesUrl: "ws://127.0.0.1:49160/frames",
@@ -2049,16 +2085,19 @@ async function keyedDaemon() {
 }
 
 describe("TP-S1 — the session-addressed grant model", () => {
-  it("mints the route + grants beside the legacy trio, signed by the session's OWN cell key", async () => {
+  it("mints the routed ticket — doors + grants signed by the session's OWN cell key", async () => {
     const { rpc } = await keyedDaemon();
-    const pane = TerminalOpenTicketResult.parse(
-      await rpc.call("terminal.openTicket", { sessionId: "pane-1" }),
-    );
-    // the legacy trio is untouched — the bridge keeps dialing it until S3e
-    expect(pane).toMatchObject(paperTicket("interactive"));
-    // the v2 half, bound and signed
+    const raw = await rpc.call("terminal.openTicket", { sessionId: "pane-1" });
+    const pane = TerminalOpenTicketResult.parse(raw);
+    // TP-S3e: no legacy trio anywhere on the answer
+    expect("controlSocket" in (raw as Record<string, unknown>)).toBe(false);
+    expect("token" in (raw as Record<string, unknown>)).toBe(false);
+    // the routed ticket, bound and signed
     expect(pane.route).toEqual({ cellBootId: "cell-i", routeRevision: 3 });
-    expect(pane.endpoints).toBeUndefined(); // this cell serves no T1 doors (no `doors` on its row)
+    expect(pane.endpoints).toEqual({
+      controlUrl: "ws://127.0.0.1:49159/control",
+      framesUrl: "ws://127.0.0.1:49159/frames",
+    });
     expect(verifies(KEY_I, pane.transportGrant)).toBe(true);
     expect(verifies(KEY_I, pane.attachGrant)).toBe(true);
     expect(verifies(KEY_A, pane.attachGrant)).toBe(false);
@@ -2081,9 +2120,8 @@ describe("TP-S1 — the session-addressed grant model", () => {
     const agent = TerminalOpenTicketResult.parse(
       await rpc.call("terminal.openTicket", { sessionId: "agent-1" }),
     );
-    expect(agent).toMatchObject(paperTicket("agent"));
     expect(agent.route.cellBootId).toBe("cell-a");
-    // TP-S3a — a cell that serves its doors puts them on the ticket, verbatim
+    // a cell's doors ride its ticket, verbatim
     expect(agent.endpoints).toEqual({
       controlUrl: "ws://127.0.0.1:49160/control",
       framesUrl: "ws://127.0.0.1:49160/frames",
@@ -2159,6 +2197,10 @@ describe("TP-S1 — the session-addressed grant model", () => {
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
     const floor = await startFakeFloor();
+    const doorsF = {
+      controlUrl: "ws://127.0.0.1:50014/control",
+      framesUrl: "ws://127.0.0.1:50014/frames",
+    };
     mock.terminalRoutes = keyedRoutes(9, [
       {
         cellInstanceId: 1,
@@ -2167,6 +2209,7 @@ describe("TP-S1 — the session-addressed grant model", () => {
         workloadClass: "interactive",
         role: "class",
         grantKey: KEY_I,
+        doors: doorsF,
       },
     ]);
     mock.observedState = observed([]);
@@ -2178,18 +2221,15 @@ describe("TP-S1 — the session-addressed grant model", () => {
 
     const created = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
     expect(created.sessionId).toBe(floor.createdSessionId);
-    expect(created.ticket).toMatchObject({
-      controlSocket: floor.endpoints.controlSocket,
-      frameSocket: floor.endpoints.frameSocket,
-      token: floor.endpoints.authToken,
-    });
+    expect("ticket" in created, "the legacy nested ticket retired at TP-S3e").toBe(false);
+    expect(created.endpoints).toEqual(doorsF);
     expect(created.route).toEqual({ cellBootId: "cell-f", routeRevision: 9 });
     expect(created.attachGrant.claims.sessionId).toBe(floor.createdSessionId);
     expect(verifies(KEY_I, created.attachGrant)).toBe(true);
     expect(verifies(KEY_I, created.transportGrant)).toBe(true);
   });
 
-  it("a keyless floor answers the legacy trio ALONE and says grants are not landed", async () => {
+  it("a keyless floor answers UNAVAILABLE — the legacy-alone trio retired at TP-S3e", async () => {
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
     mock.terminalRoutes = cellRoutes(1, "cell-old", paperEndpoints("old"));
@@ -2202,10 +2242,11 @@ describe("TP-S1 — the session-addressed grant model", () => {
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, grant.token);
 
-    const answer = await rpc.call("terminal.openTicket", { sessionId: "s1" });
-    expect(TerminalOpenTicketResult.safeParse(answer).success).toBe(false);
-    expect(TerminalTicket.safeParse(answer).success).toBe(true);
-    expect(answer).toEqual(paperTicket("old")); // no half ticket — no route, no grants
+    const refusal = await rpc.callErr("terminal.openTicket", { sessionId: "s1" });
+    expect(refusal.data?.kind).toBe("UNAVAILABLE");
+    expect((refusal.data?.details as { state?: string } | undefined)?.state).toBe(
+      "grants_not_landed",
+    ); // no half ticket, and no legacy trio either — the honest state
     const renew = await rpc.callErr("terminal.renewAttach", {
       sessionId: "s1",
       expectGeneration: 0,

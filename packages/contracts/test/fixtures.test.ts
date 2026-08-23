@@ -46,7 +46,7 @@ import {
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
-import { TerminalCreateParams, TerminalTicket } from "../src/terminal";
+import { TerminalCreateParams } from "../src/terminal";
 import {
   AttachControlLeg,
   AttachFramesLeg,
@@ -120,7 +120,6 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "diagnostic-lease": DiagnosticLeaseV1,
   "audit-record": AuditRecordV1,
   "support-manifest": SupportBundleManifestV1,
-  "terminal-ticket": TerminalTicket,
   "terminal-routes": TerminalRouteSnapshot,
   "terminal-create-params": TerminalCreateParams,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.

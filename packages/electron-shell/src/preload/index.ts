@@ -1,4 +1,3 @@
-import { forwardGhostteaRendererPorts } from "@vibecook/ghosttea-electron/preload";
 import {
   CloseRequest,
   CloseResult,
@@ -10,9 +9,6 @@ import {
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
   type ShellCommand,
   ShellPlatform,
-  TerminalBackendAttachResult,
-  type TerminalBridgeStatus,
-  TerminalTicket,
   type UserRecord,
   UserRecord as UserRecordSchema,
   UsersCreateParams,
@@ -32,7 +28,6 @@ import {
 } from "./live-surfaces";
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
 import { PreloadShellCommandBridge } from "./shell-commands";
-import { PreloadTerminalStatusBridge } from "./terminal";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
 // Product traffic flows over the loopback WS (D27), never over IPC. BOTH
@@ -128,24 +123,6 @@ const shellCommands = new PreloadShellCommandBridge((issueCount) => {
     }),
   );
 });
-const terminalStatus = new PreloadTerminalStatusBridge((issueCount) => {
-  logging.submit(
-    JSON.stringify({
-      v: 1,
-      records: [
-        {
-          v: 1,
-          time: Date.now(),
-          level: "error",
-          event: "renderer.preload.terminal_status_rejected",
-          msg: "Preload rejected a malformed terminal bridge status",
-          component: "preload.terminal",
-          attrs: { issueCount },
-        },
-      ],
-    }),
-  );
-});
 const godviewState = new PreloadGodviewStateBridge((issueCount) => {
   logging.submit(
     JSON.stringify({
@@ -164,18 +141,6 @@ const godviewState = new PreloadGodviewStateBridge((issueCount) => {
     }),
   );
 });
-/** The control and frame ports cross a world boundary no page can span alone
- * (GT-0 finding 2): main transfers them with `webContents.postMessage`, which
- * lands on `ipcRenderer` in the ISOLATED world, while the ghosttea runtime
- * listens for a `window` message in the MAIN world. Installed on the first
- * connect rather than at load: a window that never asks for a terminal keeps no
- * port forward at all, and main only posts to a window that has asked. */
-let portForwardInstalled = false;
-const installPortForward = (): void => {
-  if (portForwardInstalled) return;
-  portForwardInstalled = true;
-  forwardGhostteaRendererPorts(ipcRenderer);
-};
 const platform = ShellPlatform.parse(
   process.platform === "darwin" || process.platform === "win32" || process.platform === "linux"
     ? process.platform
@@ -203,9 +168,6 @@ ipcRenderer.on(IPC_CHANNELS.shellCommand, (_event, raw: unknown) => {
 });
 ipcRenderer.on(IPC_CHANNELS.desktopState, (_event, raw: unknown) => {
   desktopState.accept(raw);
-});
-ipcRenderer.on(IPC_CHANNELS.terminalStatus, (_event, raw: unknown) => {
-  terminalStatus.accept(raw);
 });
 ipcRenderer.on(IPC_CHANNELS.godviewState, (_event, raw: unknown) => {
   godviewState.accept(raw);
@@ -287,22 +249,9 @@ contextBridge.exposeInMainWorld("vibefield", {
     shellCommands.subscribe(handler),
   onDesktopState: (handler: (state: DesktopShellState) => void): (() => void) =>
     desktopState.subscribe(handler),
-  terminal: {
-    connect: async (ticket: unknown): Promise<TerminalBackendAttachResult> => {
-      // Parsed here, before the port forward exists: a malformed ticket must
-      // throw at the call site rather than arm a listener and cross IPC. The
-      // ANSWER is parsed too (GT-D10): the page mounts a workspace on the
-      // `defaultShell` it carries, and a missing one must fail here rather
-      // than become `undefined` in a spawn.
-      const validated = TerminalTicket.parse(ticket);
-      installPortForward();
-      return TerminalBackendAttachResult.parse(
-        await ipcRenderer.invoke(IPC_CHANNELS.terminalConnect, validated),
-      );
-    },
-    onStatus: (handler: (status: TerminalBridgeStatus) => void): (() => void) =>
-      terminalStatus.subscribe(handler),
-  },
+  // TP-S3e: the `terminal` namespace (bridge connect + status) retired — the
+  // renderer dials the cells' T1 doors itself; shell/home policy rides the
+  // window bootstrap.
   godview: {
     /** `open` omitted = flip. The page never sends the value it believes,
      * because main is the one holding it (GT-D2). */

@@ -67,6 +67,7 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       // GT-D17's two verbs, as the door calls them. `openRemoteSession` answers
       // with a REPLICA — a local session id standing for a peer's — which is
       // the thing the deck has to remember the origin of (GT-5c).
+      registerSession: () => undefined,
       listRemoteHosts: () => Promise.resolve([]),
       openRemoteSession: (deviceId: string, remoteSessionId: string) =>
         Promise.resolve({ id: `replica-${deviceId}-${remoteSessionId}`, readWrite: true }),
@@ -131,9 +132,8 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
   },
 }));
 
-const { disposeTerminalPool, prewarmTerminalPool, terminalPoolSnapshot } = await import(
-  "../src/terminal/pool"
-);
+const { configureTerminalPool, disposeTerminalPool, prewarmTerminalPool, terminalPoolSnapshot } =
+  await import("../src/terminal/pool");
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
 const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
@@ -147,8 +147,6 @@ const DECK_STORAGE_KEY = "vf-godview-deck-v1";
  * through the marker rather than through the DOM keeps this fixture and the
  * smoke pointed at the same statement of what the deck is. */
 let markers: GodviewDeckFacts[] = [];
-let publishStatus: ((status: { state: string }) => void) | null = null;
-let connects = 0;
 /** What `terminal.list` answers. Set per test; the restore gate reads it. */
 let floor: Array<{ sessionId: string }> = [];
 let requests: string[] = [];
@@ -178,23 +176,93 @@ function installHost(): void {
     onPrepareClose: () => () => undefined,
     completeClose: () => undefined,
     platform: "darwin",
-    terminal: {
-      connect: () => {
-        connects += 1;
-        return Promise.resolve({ attached: true, defaultShell: "/bin/zsh", home: "/home/tester" });
-      },
-      onStatus: (handler: (status: { state: string }) => void) => {
-        publishStatus = handler as (status: { state: string }) => void;
-        return () => {
-          publishStatus = null;
-        };
-      },
-    },
     godview: { set: () => Promise.resolve({ open: false }), onState: () => () => undefined },
   } as unknown as FieldHost);
 }
 
-const TICKET = { controlSocket: "/x/control.sock", frameSocket: "/x/frame.sock", token: "tok" };
+// TP-S3e: the fixture floor answers the ROUTED contract — doors + grants, and
+// create carries the REQUIRED birth summary.
+const CELL = "cell-test-boot-1";
+function routedTicket(sessionId: string): Record<string, unknown> {
+  return {
+    route: { cellBootId: CELL, routeRevision: 1 },
+    endpoints: {
+      controlUrl: "ws://127.0.0.1:40001/control",
+      framesUrl: "ws://127.0.0.1:40001/frames",
+    },
+    transportGrant: {
+      protected: {
+        v: 1,
+        typ: "CellTransportGrant",
+        iss: "fieldd",
+        alg: "HS256",
+        kid: { cellBootId: CELL, keyGeneration: 1 },
+      },
+      claims: {
+        audienceCellBootId: CELL,
+        clientId: "renderer-1",
+        connectionSetId: "connection-1",
+        allowedChannels: ["control", "frames"],
+        transportGrantGeneration: 1,
+        issuedAt: 1_000,
+        expiresAt: 61_000,
+        nonce: "nonce-1",
+      },
+      mac: "bWFj",
+    },
+    attachGrant: {
+      protected: {
+        v: 1,
+        typ: "SessionAttachGrant",
+        iss: "fieldd",
+        alg: "HS256",
+        kid: { cellBootId: CELL, keyGeneration: 1 },
+      },
+      claims: {
+        audienceCellBootId: CELL,
+        clientId: "renderer-1",
+        sessionId,
+        leaseEpoch: 1,
+        routeRevision: 1,
+        grantGeneration: 1,
+        rights: ["input", "read"],
+        issuedAt: 1_000,
+        expiresAt: 61_000,
+      },
+      mac: "bWFj",
+    },
+  };
+}
+function bornSummary(sessionId: string): Record<string, unknown> {
+  return {
+    id: sessionId,
+    handle: "1",
+    executable: "/bin/zsh",
+    cols: 80,
+    rows: 24,
+    exited: false,
+    readWrite: true,
+    title: null,
+    cwd: "/home/tester",
+    bellCount: 0,
+    pid: 123,
+    createdAtMs: 1_000,
+    exitCode: null,
+    exitSignal: null,
+    requestedTermination: null,
+    exitOutcome: null,
+    ownerId: null,
+    persistence: "keep-until-exit",
+    activity: {
+      kind: "unknown",
+      source: "unsupported",
+      confidence: "heuristic",
+      rootProcessGroupId: null,
+      foregroundProcessGroupId: null,
+      observedAtMs: 1_000,
+    },
+  };
+}
 
 /** The fieldd client the deck sees.
  *
@@ -211,12 +279,16 @@ const fieldd = {
       if (!floor.some((row) => row.sessionId === sessionId)) {
         return Promise.reject(new Error(`NOT_FOUND: ${sessionId} is not observed`));
       }
-      return Promise.resolve(TICKET);
+      return Promise.resolve(routedTicket(sessionId));
     }
     if (method === "terminal.create") {
       const sessionId = `born-${floor.length + 1}`;
       floor = [...floor, { sessionId }];
-      return Promise.resolve({ sessionId, ticket: TICKET });
+      return Promise.resolve({
+        sessionId,
+        session: bornSummary(sessionId),
+        ...routedTicket(sessionId),
+      });
     }
     if (method === "terminal.roster") {
       // The contract's key is `items` (`TerminalRosterResult`), not `sessions`.
@@ -264,14 +336,15 @@ beforeEach(() => {
   requests = [];
   floor = [];
   deviceWarm = () => Promise.resolve({ backend: "test" });
-  connects = 0;
-  publishStatus = null;
   localStorage.clear();
   resetDeckAppearanceForTest();
   // TP-S0b: the pool is a per-WINDOW module singleton, so a case that opened or
   // warmed one would otherwise hand the next case a transport it never asked
   // for — and the bridge subscription that came with it.
   disposeTerminalPool();
+  // TP-S3e: main's bootstrap is how a window learns it has terminals at all —
+  // the routed literal plus the shell policy that used to ride the bridge.
+  configureTerminalPool({ transport: "routed", defaultShell: "/bin/zsh", home: "/home/tester" });
   installHost();
   vi.spyOn(console, "log").mockImplementation((line: unknown) => {
     if (typeof line === "string" && line.startsWith("GODVIEW_DECK ")) {
@@ -319,45 +392,13 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
   it("mints exactly one runtime for a first mount", async () => {
     await mountDeck();
     expect(runtimes).toHaveLength(1);
-    expect(connects).toBe(1);
     expect(workspaceMounts.length).toBeGreaterThan(0);
   });
 
-  it("recovers on the transition, and ignores every republish of it — the storm", async () => {
-    // GT-2c's dev sequence, in a harness at last. Main publishes on EVERY set,
-    // including unchanged (its own contract test pins that), and the storm was
-    // the deck treating each republish as news: a runtime and a generation per
-    // event, each generation re-asking, until React's max update depth.
-    //
-    // The order here is production's. `bridge-up` is published ONLY after a
-    // completed rebuild (terminal-backend.ts), never on a first attach, so a
-    // deck that has heard nothing yet hears a DEATH first.
-    await mountDeck();
-    await act(async () => publishStatus?.({ state: "bridge-down" }));
-    await settle();
-    expect(runtimes, "a death mints nothing; it only reports").toHaveLength(1);
-    expect(latest().error).toBe("the terminal bridge died — rebuilding");
-
-    await act(async () => publishStatus?.({ state: "bridge-up" }));
-    await settle();
-    // Exactly one: zero would never recover (the old runtime's one-shot ports
-    // wait is spent), and more than one is the storm in miniature.
-    expect(runtimes).toHaveLength(2);
-    expect(connects, "the new runtime re-asks for its ports").toBe(2);
-    // Retired after commit, never inside an updater — each runtime owns a
-    // render worker and the ports, and a leaked one is a leaked thread.
-    expect(runtimes[0]?.disposed).toBe(true);
-    expect(runtimes[1]?.disposed).toBe(false);
-
-    const mountsAfterRecovery = workspaceMounts.length;
-    for (let i = 0; i < 5; i++) {
-      await act(async () => publishStatus?.({ state: "bridge-up" }));
-    }
-    await settle();
-    expect(runtimes, "a republished state is not a transition").toHaveLength(2);
-    expect(connects).toBe(2);
-    expect(workspaceMounts.length).toBe(mountsAfterRecovery);
-  });
+  // ("recovers on the transition — the storm" RETIRED at TP-S3e: its subject
+  // was main's bridge-status channel, which died with the bridge. The pool's
+  // user-facing recovery door (retryTerminalPool → one replacement runtime) is
+  // covered in the pool suites; per-activation recovery is G23's, upstream.)
 
   it("re-themes an OPEN deck without re-initializing it (GT-3v)", async () => {
     // The property GT-D12's live-apply rests on. The workspace keys its
@@ -381,7 +422,6 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     const after = workspaceMounts[workspaceMounts.length - 1]!;
     expect((after.theme as { background: number[] }).background[3]).toBeCloseTo(0.5);
     expect(runtimes, "a repaint is not a rebuild").toHaveLength(1);
-    expect(connects, "nothing re-redeemed a ticket").toBe(1);
     // The init key, field by field: identical across the change is the whole
     // claim. Comparing the values (not the props object) is deliberate — the
     // deck rebuilds its platform object every render by design, and only
@@ -472,7 +512,6 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
       animate: false,
     });
     expect(runtimes, "a shader is a repaint, not a rebuild").toHaveLength(1);
-    expect(connects, "nothing re-redeemed a ticket").toBe(1);
     for (const key of ["storageKey", "claimExistingSessions", "initialCwd"] as const) {
       expect(after[key], `${key} moved under the workspace`).toEqual(before[key]);
     }
@@ -493,8 +532,10 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     await settle();
     const chosen = workspaceMounts[workspaceMounts.length - 1]!.effects;
 
-    // A republished bridge state: the deck rerenders and changes nothing else.
-    await act(async () => publishStatus?.({ state: "bridge-up" }));
+    // An unrelated re-render (same props): the deck must change nothing else.
+    await act(async () => {
+      root?.render(<GodviewDeck active theme="light" />);
+    });
     await settle();
 
     expect(workspaceMounts[workspaceMounts.length - 1]!.effects).toBe(chosen);
@@ -533,12 +574,21 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
   });
 
   it("mints a fresh runtime on retry, because the spent wait can never resolve", async () => {
-    // A failed connect leaves a runtime whose one-shot ports wait is used up.
-    // GT-2b's retry has to build a new one, not re-ask on the corpse.
-    const failing = { ...fieldd, request: () => Promise.reject(new Error("no bridge")) };
-    vi.spyOn(fieldd, "request").mockImplementation(failing.request);
+    // TP-S3e: the fault that spends a runtime is driven through the birth
+    // door; GT-2b's retry has to build a NEW runtime, not re-ask on the corpse.
+    floor = [{ sessionId: "alive-1" }];
+    saveLayout(["alive-1"]);
     await mountDeck();
     expect(runtimes).toHaveLength(1);
+    const props = workspaceMounts[workspaceMounts.length - 1]!;
+    const createSplit = props["createSplitSession"] as (session: unknown) => Promise<unknown>;
+    vi.spyOn(fieldd, "request").mockImplementation(() =>
+      Promise.reject(new Error("fieldd is not answering")),
+    );
+    await act(async () => {
+      await createSplit({ id: "alive-1", cwd: null }).catch(() => undefined);
+    });
+    await settle();
     const button = container?.querySelector<HTMLButtonElement>(".vf-godview-deck-fault-retry");
     expect(button?.textContent).toBe("retry");
     vi.mocked(fieldd.request).mockRestore();
@@ -553,12 +603,20 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     // ticket says NOTHING about the sessions — and "the deck could not reach
     // its shell" told a user the exact opposite of the property this product
     // sells. Only the mint speaks to fieldd; everything else is transport.
-    // TP-S1: the mint the deck reaches for on an empty floor is `create`, and
-    // the roster is what the restore gate asks. Both refused, both fieldd's.
+    // TP-S3e: a bare routed mount mints nothing, so the fieldd refusal is
+    // driven through the one mint the deck still fronts — the birth door.
+    floor = [{ sessionId: "alive-1" }];
+    saveLayout(["alive-1"]);
+    await mountDeck();
+    const props = workspaceMounts[workspaceMounts.length - 1]!;
+    const createSplit = props["createSplitSession"] as (session: unknown) => Promise<unknown>;
     vi.spyOn(fieldd, "request").mockImplementation(() =>
       Promise.reject(new Error("fieldd is not answering")),
     );
-    await mountDeck();
+    await act(async () => {
+      await createSplit({ id: "alive-1", cwd: null }).catch(() => undefined);
+    });
+    await settle();
 
     expect(container?.querySelector(".vf-godview-deck-fault-message")?.textContent).toBe(
       "the deck could not reach fieldd",
@@ -569,27 +627,11 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     vi.mocked(fieldd.request).mockRestore();
   });
 
-  it("names the SHELL when the transport itself refused", async () => {
-    // The other side of the same split: a bridge that will not connect, where
-    // "could not reach its shell" is the honest sentence.
-    installHost();
-    const host = getHost();
-    setHost({
-      ...host,
-      terminal: {
-        connect: () => Promise.reject(new Error("no bridge on this host")),
-        onStatus: host.terminal?.onStatus ?? (() => () => undefined),
-      },
-    } as unknown as FieldHost);
-    await mountDeck();
-
-    expect(container?.querySelector(".vf-godview-deck-fault-message")?.textContent).toBe(
-      "the deck could not reach its shell",
-    );
-    expect(container?.textContent).toContain("no bridge on this host");
-    expect(container?.textContent).toContain("unreachable from here");
-    expect(latest().errorPlane).toBe("transport");
-  });
+  // ("names the SHELL when the transport itself refused" RETIRED at TP-S3e:
+  // its mechanism was the bridge host's connect() rejecting, and the bridge is
+  // gone. The transport-plane fault face is exercised by the pool's own tests;
+  // the fieldd-plane sibling above keeps the deck's fault-face machinery
+  // proven here.)
 });
 
 describe("the restore consent gate (GT-3)", () => {
@@ -786,7 +828,6 @@ describe("every birth goes through the product door (TP-S1)", () => {
     // ...and it never reads the TRANSPORT-facing inventory either: that
     // projection carries the cell tag, and a UI may not see placement (TP-L-C).
     expect(requests).not.toContain("terminal.list");
-    expect(requests).toContain("terminal.openTicket");
     expect(requests).toContain("terminal.roster");
   });
 
@@ -811,25 +852,21 @@ describe("every birth goes through the product door (TP-S1)", () => {
     floor = [{ sessionId: "stranger-1" }];
     await mountDeck();
 
-    expect(requests).toContain("terminal.roster");
-    expect(requests, "a session that exists is opened, not duplicated").not.toContain(
+    // TP-S3e: a bare routed mount asks fieldd NOTHING — no roster (there is no
+    // saved layout to gate), no mint, and above all no create. The stranger is
+    // claimed by ghosttea's own claimExistingSessions against the SHARED
+    // session registry (G22), which the packaged direct proof exercises.
+    expect(requests, "a session that exists is claimed, never duplicated").not.toContain(
       "terminal.create",
     );
-    expect(requests).toContain("terminal.openTicket");
-    expect(connects).toBe(1);
+    expect(requests).toEqual([]);
   });
 
-  it("creates its first session through fieldd when there is nothing to rejoin", async () => {
-    // An empty floor and no saved layout: the window has to make a session
-    // before it can have a transport at all, and the birth is fieldd's —
-    // audited, class-placed, capped — not a create down the control connection.
-    floor = [];
-    await mountDeck();
-
-    expect(requests).toContain("terminal.create");
-    expect(requests).not.toContain("terminal.connectTicket");
-    expect(connects, "the create's own ticket opened the bridge").toBe(1);
-  });
+  // ("creates its first session through fieldd when there is nothing to
+  // rejoin" RETIRED at TP-S3e: the empty-workspace birth moved into G23's own
+  // initialization through the pool's create adapter (TP-S3-production), so a
+  // bare deck mount mints nothing — the birth-door row below is the living
+  // witness that every birth goes through fieldd.)
 
   it("hands the workspace a birth door, so splits and new panes are fieldd's too", async () => {
     // `createSplitSession` is upstream's ONE birth override, and it serves both
@@ -919,8 +956,10 @@ describe("the one-runtime law (GT-3p, GT-D14)", () => {
     releaseDevice({ backend: "test" });
     await settle();
     expect(runtimes.length).toBe(1);
-    expect(terminalPoolSnapshot().phase).toBe("open");
-    expect(terminalPoolSnapshot().warm, "the open was inherited, not acquired").toBe(true);
+    // TP-S3e: an empty routed deck RESTS — dormant, not open; open arrives
+    // with the first pane's activation.
+    expect(terminalPoolSnapshot().phase).toBe("dormant");
+    expect(terminalPoolSnapshot().warm, "the mount was inherited, not acquired").toBe(true);
     // ...and the inherited runtime is what the workspace was actually handed.
     expect(workspaceMounts.length).toBeGreaterThan(0);
   });

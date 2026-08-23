@@ -39,8 +39,6 @@ import {
 } from "node:fs";
 import { cpus, loadavg, tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
-import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
-import { TerminalTicket } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { buildLabReport, parseLabJsonl } from "@vibefield/terminal-perf/lab-report";
 import { findStrays } from "@vibefield/terminal-perf/reap";
@@ -413,54 +411,19 @@ async function buildLayout(
   return { panes: current, ceiling: null };
 }
 
-/** Run a line in a pane through the SAME door the smoke uses: a ticket from
- * fieldd and the automation client's paste. This is how bytes get into a
- * session without the rig typing them — typing is what the echo probe measures
- * and must not be spent on setup. */
-async function runInPane(handle: FielddHandle, sessionId: string, line: string): Promise<void> {
-  const ticket = await openTicketWhenObserved(handle, sessionId);
-  const automation = new GhostteaAutomationClient(
-    { controlSocket: ticket.controlSocket, authToken: ticket.token },
-    { clientBuild: "vibefield-terminal-perf-lab" },
+/** TP-S3e INSTRUMENT DEBT: this rig used to run setup lines through the UDS
+ * automation door, addressed by the product ticket's legacy trio — both are
+ * retired (the routed ticket carries WS doors + grants, deliberately not the
+ * floor's socket/token). The sanctioned instrument door is the AR-lane
+ * automation surface (fieldd-brokered `automation_input`), which does not
+ * exist yet; until it does, scenarios that need pane setup fail LOUDLY here
+ * rather than ride a resurrected credential. */
+async function runInPane(_handle: FielddHandle, sessionId: string, line: string): Promise<void> {
+  throw new Error(
+    `s3e-instrument-debt: cannot run ${JSON.stringify(line)} in ${sessionId} — the lab's UDS ` +
+      "automation door retired with the bridge (TP-S3e); the AR-lane automation surface is the " +
+      "named follow-up",
   );
-  try {
-    await automation.connect();
-    await automation.pasteAndSubmit(sessionId, `${line}\n`);
-  } finally {
-    automation.dispose();
-  }
-}
-
-/** A ticket for a session fieldd has come to KNOW ABOUT.
- *
- * `terminal.openTicket` answers `no such terminal` for a session the floor
- * already created, because fieldd's observed inventory is one management round
- * trip behind it (the godview smoke measured 62–117ms and answers the same lag
- * with `untilFloor`). A single-pane scenario builds no splits, so the lab
- * reached the generator within the same millisecond the deck reported the pane
- * — and the first `flood` run died on exactly that, while `deck-4` passed
- * because three ⌘D round trips had already spent the lag.
- *
- * Polling asks the question the lab actually means: does the floor come to list
- * this session. Anything that is NOT that refusal is re-thrown immediately —
- * a rig that retried every error would turn a real fault into a timeout. */
-async function openTicketWhenObserved(
-  handle: FielddHandle,
-  sessionId: string,
-  timeoutMs = 20_000,
-): Promise<TerminalTicket> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    try {
-      return TerminalTicket.parse(
-        await handle.client.request("terminal.openTicket", { sessionId }),
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("no such terminal") || Date.now() >= deadline) throw error;
-      await sleep(120);
-    }
-  }
 }
 
 /** The node the generators run as. `process.execPath` is Electron; with

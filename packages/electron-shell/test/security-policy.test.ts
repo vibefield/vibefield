@@ -36,30 +36,20 @@ describe("buildCsp", () => {
       expect(typeof csp).toBe("string");
     });
 
-    it("enumerates EXACTLY the two registry loopback ports", () => {
+    it("admits the two registry ports AND the cells' loopback wildcard — TP-S3e's DELIBERATE reversal (TP-D1 as ratified)", () => {
+      // This assertion changed ON PURPOSE at TP-S3e. Through S3a–S3d the
+      // wildcard was flag-conditional and this suite pinned the OFF policy;
+      // the bridge and its rollback flag are gone, the routed transport is
+      // the only one, and the production policy admits the cells' ephemeral
+      // loopback doors unconditionally. The threat statement ratified with
+      // TP-D1 stands (every door Origin- and token-gated; sandbox intact).
       expect(csp).toContain(`ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL}`);
       expect(csp).toContain(`ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`);
-      // Exactly two loopback endpoints — no third, no wildcard fan-out.
+      expect(csp).toContain("ws://127.0.0.1:*");
+      // the two pinned ports + the one wildcard — no other loopback entries
       const loopbackEndpoints = (csp as string).split("ws://127.0.0.1:").length - 1;
-      expect(loopbackEndpoints).toBe(2);
-    });
-
-    it("never widens connect-src to the loopback wildcard while the direct door is OFF", () => {
-      expect(csp).not.toContain("ws://127.0.0.1:*");
-      expect(buildCsp("production", [], { directTerminalDoor: false })).toBe(csp);
-    });
-
-    it("admits the cells' loopback ports EXACTLY when the direct terminal door is ON (TP-S3a, TP-D1 as ratified)", () => {
-      // The deliberate reversal of the pinned policy, under the rollback flag
-      // until TP-S3e makes it unconditional: the two fieldd ports stay, the
-      // wildcard joins them, nothing else moves.
-      const widened = buildCsp("production", [], { directTerminalDoor: true }) as string;
-      expect(widened).toContain(`ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL}`);
-      expect(widened).toContain(`ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`);
-      expect(widened).toContain("ws://127.0.0.1:*");
-      expect(widened.replace(" ws://127.0.0.1:*", "")).toBe(csp);
-      // workers stay on 'self' in production either way
-      expect(widened).not.toContain("worker-src");
+      expect(loopbackEndpoints).toBe(3);
+      // and nothing else widened: no remote connect targets, workers on 'self'
       expect(csp).not.toContain("worker-src");
     });
 

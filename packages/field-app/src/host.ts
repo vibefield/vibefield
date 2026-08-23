@@ -13,9 +13,6 @@ import type {
   RendererParticipantIdentity,
   ShellCommand,
   ShellPlatform,
-  TerminalBackendAttachResult,
-  TerminalBridgeStatus,
-  TerminalTicket,
   WindowTerminalBootstrap,
 } from "@vibefield/contracts";
 import type {
@@ -65,18 +62,9 @@ export interface FieldDiagnosticsHost {
   copyText(text: string): Promise<void>;
 }
 
-/** The terminal transport seam (GT-D3). The renderer redeems its own ticket
- * over fieldd — the one product door — and hands the transport coordinates to a
- * host that can dial a unix socket, which a sandboxed page cannot. Optional
- * because a browser harness has no bridge to offer; the Godview reports that
- * honestly rather than drawing an empty deck. */
-export interface FieldTerminalHost {
-  /** Answers with the ports attached AND the shell identity only main can read
-   * (GT-D10) — the workspace spawns every pane with `defaultShell` at `home`,
-   * and neither is knowable in a sandboxed page. */
-  connect(ticket: TerminalTicket): Promise<TerminalBackendAttachResult>;
-  onStatus(handler: (status: TerminalBridgeStatus) => void): () => void;
-}
+// The GT-D3 terminal bridge seam (`FieldTerminalHost` — connect + status)
+// RETIRED at TP-S3e: the renderer dials the cells' T1 doors itself over the
+// routed runtime, and shell/home policy rides the window bootstrap.
 
 /** The Godview overlay's open bit, which the HOST owns (GT-D2): ⇧⇧ is detected
  * in main and answered before this page is offered the keystroke, so the
@@ -123,7 +111,6 @@ export interface FieldHost {
   readonly forceOnboarding?: boolean;
   readonly diagnostics?: FieldDiagnosticsHost;
   readonly platform?: ShellPlatform;
-  readonly terminal?: FieldTerminalHost;
   readonly godview?: FieldGodviewHost;
   /** The profile write seam (UA-3). `users.json` is SUPERVISOR-owned, not
    * fieldd's (UA-D10), so the one door to it is main — which is why this is a

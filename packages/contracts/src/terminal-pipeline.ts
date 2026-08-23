@@ -1,12 +1,7 @@
 import { type ZodTypeAny, z } from "zod";
 import { CellEndpointSet, TerminalWorkloadClass } from "./envelope";
 import { TERMINAL_PIPELINE, TERMINAL_PIPELINE_CLOSE_CODES } from "./registries";
-import {
-  TerminalCreateResult,
-  TerminalObservation,
-  TerminalRuntimeSession,
-  TerminalTicket,
-} from "./terminal";
+import { TerminalObservation, TerminalRuntimeSession } from "./terminal";
 
 // The terminal pipeline (TPv3) — custody through pixels. The wire truth for
 // everything between fieldd's ticket mint and the renderer's cell sockets:
@@ -325,42 +320,36 @@ export function highWaterTombstoneTtlMs(
   return limits.maxGrantLifetimeMs + limits.maxClockSkewMs;
 }
 
-/** The product-API ticket (spec §5.1): route + endpoints + both grants. Pure
- * end-state shape; the S1 result adds today's bridge fields beside it. */
+/** The product-API ticket (spec §5.1): route + endpoints + both grants. The
+ * end-state shape, and since TP-S3e the ONLY shape — the S1 union and the
+ * legacy bridge trio beside it retired with the bridge. */
 export const TerminalOpenTicket = z
   .object({
     route: RouteBinding,
-    /** ABSENT until the cell serves its T1 doors (TP-S3a): today's cells
-     * expose UDS sockets a renderer cannot dial, and a `unix:` URL here would
-     * be a detour. A v2 reader with no endpoints shows
-     * `UNAVAILABLE {reason: transport-not-landed}` and never dials the legacy
-     * trio itself (TP-L-F). Required from S3a. */
-    endpoints: CellEndpointSet.optional(),
+    /** The cell's two T1 doors. REQUIRED since TP-S3e: a floor that serves no
+     * doors (keyless bootstrap) mints no ticket at all, and the reader shows
+     * `UNAVAILABLE {reason: transport-not-landed}` — never a half ticket. */
+    endpoints: CellEndpointSet,
     transportGrant: CellTransportGrant,
     attachGrant: SessionAttachGrant,
   })
   .passthrough();
 export type TerminalOpenTicket = z.infer<typeof TerminalOpenTicket>;
 
-/** terminal.openTicket result from TP-S1: the end-state `TerminalOpenTicket`
- * fields SPREAD beside the legacy bridge coordinates (`controlSocket`,
- * `frameSocket`, `token`) that the pre-T1 bridge still dials — a reader of
- * the old `TerminalTicket` keeps parsing this, a reader of the new shape
- * ignores the legacy three. TP-S3e removes the legacy fields and this result
- * becomes exactly `TerminalOpenTicket` (TP-L-F: every slice a subset of the
- * end state). */
-export const TerminalOpenTicketResult = TerminalTicket.merge(TerminalOpenTicket).passthrough();
+/** terminal.openTicket result — exactly `TerminalOpenTicket` since TP-S3e
+ * (TP-L-F: every slice a subset of the end state; the S1 spread-beside-legacy
+ * era is recorded in LANDED). */
+export const TerminalOpenTicketResult = TerminalOpenTicket;
 export type TerminalOpenTicketResult = z.infer<typeof TerminalOpenTicketResult>;
 
-/** terminal.create result from TP-S1 (spec §5.1 `create(class) →
- * TerminalOpenTicket`): the session id, the legacy nested `ticket` (until
- * S3e) and the end-state fields spread. */
+/** terminal.create result (spec §5.1 `create(class) → TerminalOpenTicket`):
+ * the session id, the authoritative birth summary (creation never waits for
+ * observation — TP-S3-production), and the end-state ticket fields spread. */
 export const TerminalCreateOpenResult = z
   .object({
     sessionId: z.string().min(1),
-    ticket: TerminalTicket,
     /** The exact engine summary needed to mount before inventory catches up. */
-    session: TerminalRuntimeSession.optional(),
+    session: TerminalRuntimeSession,
   })
   .merge(TerminalOpenTicket)
   .passthrough();
@@ -383,15 +372,12 @@ export const TerminalRenewAttachResult = z
   .passthrough();
 export type TerminalRenewAttachResult = z.infer<typeof TerminalRenewAttachResult>;
 
-/** What `terminal.openTicket` / `terminal.create` ANSWER during TP-S1: the
- * v2 result when the session's cell row carries a grant key, else today's
- * legacy shape alone (a pre-TP floor, the in-process serve — no key, so no
- * grants and no half ticket). A v2 reader tries the first member and shows
- * `UNAVAILABLE {reason: grants-not-landed}` on the second; the union retires
- * with the legacy fields at TP-S3e. */
-export const TerminalOpenTicketResponse = z.union([TerminalOpenTicketResult, TerminalTicket]);
+/** Since TP-S3e the answers ARE the end-state shapes — the S1-era unions
+ * (v2-beside-legacy) retired with the bridge; a keyless floor answers
+ * UNAVAILABLE instead of a legacy-only member. */
+export const TerminalOpenTicketResponse = TerminalOpenTicketResult;
 export type TerminalOpenTicketResponse = z.infer<typeof TerminalOpenTicketResponse>;
-export const TerminalCreateOpenResponse = z.union([TerminalCreateOpenResult, TerminalCreateResult]);
+export const TerminalCreateOpenResponse = TerminalCreateOpenResult;
 export type TerminalCreateOpenResponse = z.infer<typeof TerminalCreateOpenResponse>;
 
 // ---------------------------------------------------------------------------

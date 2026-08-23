@@ -5,7 +5,6 @@ import {
   type TerminalCreateParams,
   type TerminalOpenTicket,
   TerminalRosterResult,
-  type TerminalTicket,
   type WindowTerminalBootstrap,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
@@ -172,7 +171,6 @@ export interface CreatedTerminalSession {
 
 // ── the singleton's state ───────────────────────────────────────────────────
 
-const transports = new CellTransportTable();
 const placements = new SessionPlacementLedger();
 const demand = new SessionDemandLedger();
 const listeners = new Set<() => void>();
@@ -188,10 +186,10 @@ let transportGeneration = 0;
 let grantsLanded = false;
 let roster: readonly ProductSessionRosterItem[] = [];
 let rosterState: TerminalRosterState = "unread";
-/** Main's one-per-renderer-generation selector and shell policy. Older/browser
- * hosts omit it and retain the bridge behavior. */
+/** Main's one-per-renderer-generation shell policy (the transport selector
+ * collapsed to the routed literal at TP-S3e). Browser harnesses omit it and
+ * simply have no shell policy — and no fieldd either. */
 let terminalBootstrap: WindowTerminalBootstrap | null = null;
-let transportMode: WindowTerminalBootstrap["transport"] = "bridge";
 /** THE window's runtime. Held apart from any transport since TP-S1: a runtime
  * outlives every transport under it, and a bridge rebuild replaces both only
  * because the runtime's ports wait is one-shot. */
@@ -205,11 +203,6 @@ const routedCells = new Set<CellBootId>();
  * service answer for the session's product lifetime. Termination/disposal are
  * the inverses, so repeat readers never fall back to an observation race. */
 const createdSummaries = new Map<string, SessionSummary>();
-/** The ONE cell this window's bridge serves. Main holds one connection per
- * window and re-ticketing it with different sockets tears it down
- * (`electron-shell/src/main/terminal-backend.ts:117-122`), so the first ticket
- * handed to main PINS the cell and no second cell's ticket is ever offered. */
-let pinnedCell: CellBootId | null = null;
 /** The client the pool mints with, remembered from the first ask so the ladder
  * and the retry do not need one handed to them at the moment of a bridge event
  * — which is not a moment any React tree is guaranteed to exist. */
@@ -220,13 +213,6 @@ let pending: Promise<void> | null = null;
 /** Bumped by anything that INVALIDATES work in flight. A late answer to a
  * question nobody is asking any more is dropped, not applied. */
 let acquisitionEpoch = 0;
-/** GT-D14: exactly one re-warm from `spent`. */
-let rewarmed = false;
-/** GT-2c: main republishes unchanged bridge states by contract, so only a
- * TRANSITION may act. Module-scoped, which is stricter than the deck's
- * per-mount ref was: a remounted deck no longer re-acts to a state it saw. */
-let lastBridgeState: string | null = null;
-let unsubscribeBridge: (() => void) | null = null;
 /** The ids a consumer last asked the pool to open on. Remembered because a
  * legacy floor mints no grants and a pool with no bound views has no demand, so
  * without it a bridge rebuild on such a floor would have nothing to rejoin and
@@ -239,18 +225,15 @@ let workspaceBirthTrace: TransportTrace | undefined;
 let snapshot: TerminalPoolSnapshot = buildSnapshot();
 
 function buildSnapshot(): TerminalPoolSnapshot {
-  const transport = pinnedCell === null ? undefined : transports.get(pinnedCell);
   const routedShell =
-    transportMode === "routed" &&
-    (phase === "dormant" || phase === "open") &&
-    terminalBootstrap !== null
+    (phase === "dormant" || phase === "open") && terminalBootstrap !== null
       ? { defaultShell: terminalBootstrap.defaultShell, home: terminalBootstrap.home }
       : null;
   return {
     phase,
     claimed,
     runtime,
-    shell: transport?.shell ?? routedShell,
+    shell: routedShell,
     fault,
     generation: runtimeGeneration,
     warm: inheritedWarm,
@@ -264,13 +247,14 @@ function buildSnapshot(): TerminalPoolSnapshot {
 /** Install main's bootstrap decision before any workspace can prewarm/claim.
  * The selector cannot move under a live runtime: doing so would reinterpret one
  * worker as owning a different transport. */
+/** Whether main handed this window a terminal bootstrap — the post-S3e
+ * "does this host offer terminals" signal (a browser harness never does). */
+export function terminalPoolConfigured(): boolean {
+  return terminalBootstrap !== null;
+}
+
 export function configureTerminalPool(bootstrap: WindowTerminalBootstrap | undefined): void {
-  const nextMode = bootstrap?.transport ?? "bridge";
-  if (runtime !== null && nextMode !== transportMode) {
-    throw new Error("the terminal transport cannot change under a live runtime");
-  }
   terminalBootstrap = bootstrap ?? null;
-  transportMode = nextMode;
   publish();
 }
 
@@ -312,7 +296,7 @@ export function terminalPoolRuntime(): GhostteaTerminalRuntime | null {
 
 /** How many cells this window holds a transport to. */
 export function terminalPoolCellCount(): number {
-  return transportMode === "routed" ? routedCells.size : transports.size;
+  return routedCells.size;
 }
 
 /**
@@ -323,17 +307,10 @@ export function terminalPoolCellCount(): number {
  * why", never "it is in cell 7" (TP-L-C).
  */
 export function terminalSessionAvailability(sessionId: string): SessionAvailability {
-  // G23 is multi-cell: no first-ticket pin exists. Per-activation availability
-  // is reported by the runtime's routed state rather than projected as another
-  // cell's bridge failure.
-  if (transportMode === "routed") return { ready: true };
-  const cell = resolveCellForSession(sessionId, placements);
-  // Never ticketed: nothing is known to be wrong, and a consumer that has not
-  // asked for a session yet must not be told it is unreachable.
-  if (cell === undefined) return { ready: true };
-  if (pinnedCell !== null && cell !== pinnedCell) {
-    return { service: "terminal", state: "transport-not-landed", reason: "other-cell" };
-  }
+  // G23 is multi-cell: no first-ticket pin exists (the bridge's single-cell
+  // rule retired with it at TP-S3e). Per-activation availability is reported
+  // by the runtime's routed state.
+  void sessionId;
   return { ready: true };
 }
 
@@ -432,31 +409,17 @@ export interface ProjectedSessionDemand {
  */
 function projectDemand(change: SessionDemandChange | null): void {
   if (change === null) return;
-  if (transportMode === "routed") {
-    if (runtime === null || change.mode === "none") {
-      projected.delete(change.sessionId);
-      return;
-    }
-    // G23 performs the real DeclareDemand fold from its mounted/visible views.
-    // This ledger remains the product pool's observation of consumer demand;
-    // its generation names the routed runtime that owns that declaration.
-    projected.set(change.sessionId, {
-      sessionId: change.sessionId,
-      mode: change.mode,
-      transportGeneration: runtimeGeneration,
-    });
-    return;
-  }
-  const cell = resolveCellForSession(change.sessionId, placements) ?? pinnedCell;
-  const transport = cell === null || cell === undefined ? undefined : transports.get(cell);
-  if (transport === undefined || change.mode === "none") {
+  if (runtime === null || change.mode === "none") {
     projected.delete(change.sessionId);
     return;
   }
+  // G23 performs the real DeclareDemand fold from its mounted/visible views.
+  // This ledger remains the product pool's observation of consumer demand;
+  // its generation names the routed runtime that owns that declaration.
   projected.set(change.sessionId, {
     sessionId: change.sessionId,
     mode: change.mode,
-    transportGeneration: transport.transportGeneration,
+    transportGeneration: runtimeGeneration,
   });
 }
 
@@ -530,20 +493,16 @@ let unregisterPerfSource: (() => void) | null = null;
  * where it is DISPOSED makes the registration's lifetime the runtime's. */
 function ensureRuntime(): GhostteaTerminalRuntime {
   if (runtime !== null) return runtime;
-  if (transportMode === "routed") {
-    const fieldd = client;
-    if (fieldd === null) throw new Error("the routed terminal runtime has no fieldd client");
-    routedHost = createRoutedTerminalHost({
-      fieldd,
-      createSession: createRoutedWorkspaceSession,
-      onTicket: recordRoutedTicket,
-      onTerminated: forgetRoutedSession,
-    });
-    runtime = createTerminalRuntime({ transport: "routed", host: routedHost.host });
-    routedHost.bind(runtime);
-  } else {
-    runtime = createTerminalRuntime();
-  }
+  const fieldd = client;
+  if (fieldd === null) throw new Error("the routed terminal runtime has no fieldd client");
+  routedHost = createRoutedTerminalHost({
+    fieldd,
+    createSession: createRoutedWorkspaceSession,
+    onTicket: recordRoutedTicket,
+    onTerminated: forgetRoutedSession,
+  });
+  runtime = createTerminalRuntime({ transport: "routed", host: routedHost.host });
+  routedHost.bind(runtime);
   runtimeGeneration += 1;
   unregisterPerfSource = registerTerminalPerfSource(runtime);
   return runtime;
@@ -650,71 +609,8 @@ function transportFault(plane: TerminalFaultPlane, cause: unknown): void {
   publish();
 }
 
-/**
- * Hand a ticket to main and record what it opened.
- *
- * THE SINGLE-CELL RULE lives here. Main's bridge serves one cell per window and
- * a ticket naming different sockets tears it down and rebuilds it
- * (`electron-shell/src/main/terminal-backend.ts:117-122`), so offering a second
- * cell's ticket would kill the panes that are working. The pool refuses to offer
- * one: the cell is PINNED by the first ticket that reaches main, and a session
- * on another cell is answered with a face (`terminalSessionAvailability`) rather
- * than with a bridge that dies. TP-S3a's direct per-cell connections are what
- * remove the rule — this routes around the fossil honestly rather than working
- * around it.
- *
- * Returns false when the ticket was NOT handed over because its cell differs.
- */
-async function landTransport(read: ReadTicket, ticket: TerminalTicket): Promise<boolean> {
-  const cell = read.placement?.cellBootId ?? UNNAMED_CELL;
-  if (pinnedCell !== null && cell !== pinnedCell) return false;
-  const terminal = getHost().terminal;
-  if (terminal === undefined)
-    throw new TransportPlaneError(new Error("this host has no terminal bridge"));
-  let attached: Awaited<ReturnType<typeof terminal.connect>>;
-  try {
-    attached = await terminal.connect(ticket);
-  } catch (cause) {
-    throw new TransportPlaneError(cause);
-  }
-  pinnedCell = cell;
-  transportGeneration += 1;
-  transports.set({
-    cellBootId: cell,
-    runtime: ensureRuntime(),
-    shell: { defaultShell: attached.defaultShell, home: attached.home },
-    transportGeneration,
-    openedAt: performance.now(),
-  } satisfies CellTransport);
-  reprojectDemand();
-  return true;
-}
-
-/**
- * Open this window's transport FOR A SESSION (spec §5.1's `openTicket`).
- *
- * The session must already exist: `openTicket` gates on fieldd's OBSERVED
- * inventory, which is the only honest proof a session is real, so a refusal here
- * usually means the saved pane is gone rather than that anything is broken.
- */
-async function openTransportForSession(
-  sessionId: string,
-  trace?: TransportTrace,
-): Promise<boolean> {
-  const epoch = acquisitionEpoch;
-  const fieldd = client;
-  if (fieldd === null) return false;
-  trace?.mark("mintAsk");
-  const raw = await fieldd.request("terminal.openTicket", { sessionId });
-  if (epoch !== acquisitionEpoch) return false;
-  const read = readOpenTicket(sessionId, raw, Date.now());
-  trace?.mark("ticket");
-  if (read.placement !== undefined) placements.record(read.placement);
-  if (read.routed) grantsLanded = true;
-  const landed = await landTransport(read, read.ticket);
-  if (landed) trace?.mark("connected");
-  return landed;
-}
+// (landTransport + openTransportForSession retired at TP-S3e with the bridge
+// and its single-cell pin: G23 mints per session and dials per cell.)
 
 // ── acquisition ─────────────────────────────────────────────────────────────
 
@@ -733,7 +629,6 @@ async function openTransportForSession(
 export function prewarmTerminalPool(fieldd: FielddClient, trace?: TransportTrace): void {
   if (phase !== "cold" || claimed) return;
   client = fieldd;
-  ensureBridgeSubscription();
   phase = "warming";
   const mine: Promise<void> = Promise.resolve()
     .then(async () => {
@@ -796,7 +691,6 @@ export function openTerminalPool(
   options: { sessionIds?: readonly string[]; trace?: TransportTrace } = {},
 ): void {
   client = fieldd;
-  ensureBridgeSubscription();
   options.trace?.mark("claim");
   if (options.trace !== undefined) workspaceBirthTrace = options.trace;
   if (options.sessionIds !== undefined && options.sessionIds.length > 0) {
@@ -827,46 +721,19 @@ async function adopt(options: {
   const epoch = acquisitionEpoch;
   try {
     ensureRuntime();
-    if (transportMode === "routed") {
-      // A routed runtime has no sessionless connection to open. Existing pane
-      // ids make the workspace mountable; each mounted activation mints and
-      // dials its own cell through G23. With no ids, rest dormant until roster
-      // or an explicit birth gives the workspace something meaningful to show.
-      phase = (options.sessionIds?.length ?? 0) > 0 ? "open" : "dormant";
-      fault = null;
-      spentReason = null;
-      publish();
-      return;
-    }
-    for (const sessionId of options.sessionIds ?? []) {
-      try {
-        if (await openTransportForSession(sessionId, options.trace)) {
-          if (epoch !== acquisitionEpoch) return;
-          phase = "open";
-          fault = null;
-          spentReason = null;
-          publish();
-          return;
-        }
-      } catch (cause) {
-        // A bridge that will not connect is not about this session, and trying
-        // the next candidate would fail the same way N times while hiding the
-        // reason behind the last one.
-        if (cause instanceof TransportPlaneError) throw cause;
-        // A saved pane the floor no longer has is the COMMON case, not a fault:
-        // `openTicket` refuses an unobserved session by design. Try the next.
-        logger().debug(
-          "renderer.terminal.rejoin_refused",
-          "A saved session could not be rejoined; trying the next",
-          { sessionId, reason: cause instanceof Error ? cause.message : String(cause) },
-        );
-      }
-    }
     if (epoch !== acquisitionEpoch) return;
-    // Nothing to rejoin. The window holds no connection until something asks for
-    // a session — a resting state, and the whole reason `connectTicket` could be
-    // retired without a sessionless door replacing it.
-    phase = "dormant";
+    // Views can declare demand BEFORE a runtime exists (§5.4 — a new
+    // activation declares afresh); the fresh runtime is what those
+    // declarations are projected against. The bridge path did this inside
+    // landTransport; the routed runtime does it at birth.
+    reprojectDemand();
+    // A routed runtime has no sessionless connection to open. Existing pane
+    // ids make the workspace mountable; each mounted activation mints and
+    // dials its own cell through G23. With no ids, rest dormant until roster
+    // or an explicit birth gives the workspace something meaningful to show.
+    phase = (options.sessionIds?.length ?? 0) > 0 ? "open" : "dormant";
+    fault = null;
+    spentReason = null;
     publish();
   } catch (cause) {
     if (epoch !== acquisitionEpoch) return;
@@ -910,53 +777,18 @@ export async function createTerminalSession(
   }
   const read = readCreateTicket(raw, Date.now());
   trace?.mark("ticket");
-  if (read.placement !== undefined) placements.record(read.placement);
-  if (read.routed) grantsLanded = true;
+  placements.record(read.placement);
+  grantsLanded = true;
   rejoinHint = [...new Set([...rejoinHint, read.sessionId])];
-  if (transportMode === "routed") {
-    if (!read.direct) {
-      const reason = new Error("the created session has no complete direct terminal ticket");
-      transportFault("transport", reason);
-      throw reason;
-    }
-    if (read.session === undefined) {
-      const reason = new Error("the created session has no runtime summary");
-      transportFault("fieldd", reason);
-      throw reason;
-    }
-    const target = ensureRuntime();
-    if (read.routedTicket === undefined) {
-      const reason = new Error("the created session has no routed terminal ticket");
-      transportFault("transport", reason);
-      throw reason;
-    }
-    routedHost?.primeTicket(read.sessionId, read.routedTicket);
-    createdSummaries.set(read.sessionId, read.session);
-    target.registerSession(read.session);
-    phase = "open";
-    fault = null;
-    spentReason = null;
-    publish();
-    return { sessionId: read.sessionId, availability: { ready: true } };
-  }
-  // A window with no transport opens on this session; a window that already has
-  // one keeps it, and the new session is reachable only if it landed on the
-  // pinned cell.
-  if (pinnedCell === null) {
-    try {
-      await landTransport(read, read.ticket);
-      trace?.mark("connected");
-      phase = "open";
-      fault = null;
-      spentReason = null;
-    } catch (cause) {
-      const reason = cause instanceof TransportPlaneError ? cause.cause : cause;
-      transportFault("transport", reason);
-      throw reason;
-    }
-  }
+  const target = ensureRuntime();
+  routedHost?.primeTicket(read.sessionId, read.routedTicket);
+  createdSummaries.set(read.sessionId, read.session);
+  target.registerSession(read.session);
+  phase = "open";
+  fault = null;
+  spentReason = null;
   publish();
-  return { sessionId: read.sessionId, availability: terminalSessionAvailability(read.sessionId) };
+  return { sessionId: read.sessionId, availability: { ready: true } };
 }
 
 /**
@@ -975,45 +807,17 @@ export async function openDormantTransport(
   if (sessionIds.length > 0) rejoinHint = [...new Set([...rejoinHint, ...sessionIds])];
   phase = "opening";
   publish();
-  if (transportMode === "routed") {
-    if (sessionIds.length === 0) {
-      phase = "dormant";
-      publish();
-      return false;
-    }
-    // G23 opens per activation at mount; this transition only releases the
-    // workspace gate. It mints no throw-away grant and dials no idle socket.
-    phase = "open";
-    fault = null;
+  if (sessionIds.length === 0) {
+    phase = "dormant";
     publish();
-    return true;
+    return false;
   }
-  const epoch = acquisitionEpoch;
-  for (const sessionId of sessionIds) {
-    try {
-      if (await openTransportForSession(sessionId, trace)) {
-        if (epoch !== acquisitionEpoch) return false;
-        phase = "open";
-        fault = null;
-        publish();
-        return true;
-      }
-    } catch (cause) {
-      if (cause instanceof TransportPlaneError) {
-        transportFault("transport", cause.cause);
-        return false;
-      }
-      logger().debug(
-        "renderer.terminal.rejoin_refused",
-        "A session could not be opened on; trying the next",
-        { sessionId, reason: cause instanceof Error ? cause.message : String(cause) },
-      );
-    }
-  }
-  if (epoch !== acquisitionEpoch) return false;
-  phase = "dormant";
+  // G23 opens per activation at mount; this transition only releases the
+  // workspace gate. It mints no throw-away grant and dials no idle socket.
+  phase = "open";
+  fault = null;
   publish();
-  return false;
+  return true;
 }
 
 /**
@@ -1140,14 +944,8 @@ export async function refreshTerminalRoster(
  */
 function replaceTransport(sessionIds: readonly string[]): void {
   acquisitionEpoch += 1;
-  if (transportMode === "routed") {
-    placements.clear();
-    routedCells.clear();
-  } else if (pinnedCell !== null) {
-    transports.delete(pinnedCell);
-    placements.forget(pinnedCell);
-  }
-  pinnedCell = null;
+  placements.clear();
+  routedCells.clear();
   projected.clear();
   disposeRuntime();
   phase = "opening";
@@ -1158,22 +956,9 @@ function replaceTransport(sessionIds: readonly string[]): void {
   void adopt({ sessionIds });
 }
 
-/** The prewarm's custody clause (GT-D14): a warm runtime whose bridge died
- * before anyone used it is dead weight holding a worker. Exactly one re-warm may
- * follow. A CLAIMED pool is untouched — it belongs to a consumer, whose ladder is
- * `replaceTransport` above. */
-function discardWarm(reason: string): void {
-  if (claimed) return;
-  if (phase !== "warm" && phase !== "warming") return;
-  acquisitionEpoch += 1;
-  disposeRuntime();
-  transports.clear();
-  pinnedCell = null;
-  pending = null;
-  phase = "spent";
-  spentReason = reason;
-  publish();
-}
+// (discardWarm retired at TP-S3e: its only trigger was the bridge-status
+// subscription. A routed warm is a runtime + device with no external transport
+// that can die under it; a FAILED warm still spends the attempt below.)
 
 // ── the door ────────────────────────────────────────────────────────────────
 
@@ -1186,47 +971,8 @@ export function retryTerminalPool(sessionIds: readonly string[] = []): void {
   replaceTransport(sessionIds.length > 0 ? sessionIds : rejoinCandidates());
 }
 
-/**
- * The recovery ladder, subscribed ONCE.
- *
- * It was two halves that never met: the overlay handled the prewarm's custody
- * clause and the deck handled its own replacement, each with its own view of
- * what counted as news. One subscription, one guard, one decision.
- */
-function ensureBridgeSubscription(): void {
-  if (transportMode === "routed") return;
-  if (unsubscribeBridge !== null) return;
-  const terminal = getHost().terminal;
-  if (terminal === undefined) return;
-  unsubscribeBridge = terminal.onStatus((status) => {
-    // GT-2c: main publishes on EVERY set, including unchanged — its own contract
-    // test pins that — so only a TRANSITION may act. Treating a republish as
-    // news built a feedback loop: each event minted a runtime and a generation,
-    // each generation re-asked, and the deck remounted itself to death.
-    if (status.state === lastBridgeState) return;
-    lastBridgeState = status.state;
-    if (status.state === "bridge-down") {
-      if (!claimed) {
-        discardWarm("the bridge died before first use");
-        return;
-      }
-      // The honest moment of death. Nothing is minted here: a rebuild is coming
-      // and `bridge-up` is the only event this page can act on.
-      phase = "failed";
-      fault = { plane: "transport", message: "the terminal bridge died — rebuilding" };
-      publish();
-      return;
-    }
-    if (status.state !== "bridge-up" && status.state !== "ticket-expired") return;
-    if (!claimed) {
-      rewarmOnce();
-      return;
-    }
-    // `ticket-expired` means main's credentials rotted with a field-native
-    // reboot and only a fresh redeem will do, which is what this performs.
-    replaceTransport(rejoinCandidates());
-  });
-}
+// (the bridge-status recovery ladder retired at TP-S3e: G23's routed runtime
+// owns per-activation recovery, and there is no main-side transport to die.)
 
 /**
  * The sessions a replacement should try to rejoin, best first.
@@ -1255,14 +1001,6 @@ function rejoinCandidates(): string[] {
   return candidates;
 }
 
-/** GT-D14: re-warm lazily, never in a loop. */
-function rewarmOnce(): void {
-  if (phase !== "spent" || rewarmed || claimed || client === null) return;
-  rewarmed = true;
-  phase = "cold";
-  prewarmTerminalPool(client);
-}
-
 /**
  * Tear the pool down.
  *
@@ -1275,19 +1013,14 @@ function rewarmOnce(): void {
  */
 export function disposeTerminalPool(): void {
   acquisitionEpoch += 1;
-  transports.clear();
   disposeRuntime();
   placements.clear();
   routedCells.clear();
   createdSummaries.clear();
   demand.clear();
   projected.clear();
-  unsubscribeBridge?.();
-  unsubscribeBridge = null;
-  lastBridgeState = null;
   pending = null;
   client = null;
-  pinnedCell = null;
   rejoinHint = [];
   workspaceBirthTrace = undefined;
   phase = "cold";
@@ -1295,13 +1028,11 @@ export function disposeTerminalPool(): void {
   fault = null;
   spentReason = null;
   inheritedWarm = false;
-  rewarmed = false;
   grantsLanded = false;
   roster = [];
   rosterState = "unread";
   runtimeGeneration = 0;
   transportGeneration = 0;
   terminalBootstrap = null;
-  transportMode = "bridge";
   publish();
 }

@@ -30,7 +30,6 @@ import {
   TerminalRuntimeSession,
   TerminalRuntimeSessionsResult,
   type TerminalTerminateResult,
-  type TerminalTicket,
   type TerminalWorkloadClass,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -360,45 +359,25 @@ export class TerminalService {
    * lookup — which is exactly what lets terminal.create answer with a ticket
    * (GT-1) while openTicket keeps its observed gate for existing sessions.
    *
-   * TC-S3 — the SESSIONLESS mint (GT-D10's connect ticket, the pane deck's
-   * door) comes from the INTERACTIVE class's create target: a connection is not
-   * a session, so there is no `cell` tag to follow, and the deck is the
-   * interactive plane by definition. Session-scoped mints follow the tag —
-   * `ticketForSession` and `ticketForCell` below. */
-  ticket(): TerminalTicket {
-    return toTicket(this.classCell("interactive").endpoints);
-  }
+   * TC-S3's SESSIONLESS mint (`ticket()`, GT-D10's connect ticket) and the
+   * bridge-era `ticketForSession`/`ticketForCell` RETIRED at TP-S3e with the
+   * legacy trio: every remaining mint is session-scoped and routed
+   * (`openTicket`/`createOpenResult` below), and a cell that cannot serve the
+   * T1 doors answers UNAVAILABLE instead of a half ticket. */
 
-  /** TC-S3 — the mint for an EXISTING session: ITS cell, resolved through the
-   * observed inventory's `cell` tag. A row that is no longer its class's create
-   * target still serves the sessions it already has (a filled solo cell is the
-   * standing case), so an attach must never be routed by the target rule. */
-  ticketForSession(sessionId: string): TerminalTicket {
-    return toTicket(this.sessionCell(sessionId).endpoints);
-  }
-
-  /** TC-S3 — the mint for a session that has just been BORN, which the observed
-   * inventory has not seen yet (GT-1's whole window). `create` answers with the
-   * cell it landed on precisely so this mint can name it; `undefined` is the
-   * legacy floor, where the mirror is the only cell there is. */
-  ticketForCell(cellBootId: string | undefined): TerminalTicket {
-    if (cellBootId === undefined) return toTicket(this.endpoints());
-    return toTicket(this.cellByBootId(cellBootId).endpoints);
-  }
-
-  /** TP-S1 — `terminal.openTicket`: today's ticket (the legacy trio the
-   * bridge still dials) with the TPv3 route + grants SPREAD beside it when
-   * the session's cell carries a grant key; the legacy trio ALONE when it does
-   * not (a pre-TP floor, the in-process serve) — never a half ticket, and
-   * `endpoints` stay absent until the cell serves its T1 doors (TP-S3a). The
-   * cell is the session's OWN (the inventory's `cell` tag), as before. */
+  /** `terminal.openTicket` — exactly `TerminalOpenTicket` since TP-S3e: the
+   * session's OWN cell (the inventory's `cell` tag), its doors and both
+   * grants; a keyless or doorless cell is UNAVAILABLE, never a half ticket. */
   openTicket(principal: GrantPrincipal, sessionId: string): TerminalOpenTicketResponse {
     const cell = this.sessionCell(sessionId);
-    return { ...toTicket(cell.endpoints), ...this.grantsFor(cell, principal, sessionId) };
+    return this.ticketFor(cell, principal, sessionId);
   }
 
-  /** TP-S1 — the create result (GT-1's nested mint) for the cell the session
-   * LANDED on: the legacy `ticket` beside the spread v2 fields. */
+  /** The create result (GT-1's atomic mint) for the cell the session LANDED
+   * on — id + the authoritative birth summary + the routed ticket spread. The
+   * legacy nested `ticket` retired at TP-S3e; a legacy floor (no cell tag) has
+   * no doors to mint against and is UNAVAILABLE like every other keyless cell
+   * — the session exists, and the reader's face says the transport does not. */
   createOpenResult(
     principal: GrantPrincipal,
     created: {
@@ -407,15 +386,18 @@ export class TerminalService {
       cellBootId?: string | undefined;
     },
   ): TerminalCreateOpenResponse {
-    const cell =
-      created.cellBootId === undefined
-        ? { key: LEGACY_CELL_KEY, endpoints: this.endpoints() }
-        : this.cellByBootId(created.cellBootId);
+    if (created.cellBootId === undefined)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "this floor serves no terminal doors (legacy mirror) — no routed ticket can be minted",
+        true,
+        { service: "terminal", state: "transport_not_landed" },
+      );
+    const cell = this.cellByBootId(created.cellBootId);
     return {
       sessionId: created.sessionId,
       session: created.session,
-      ticket: toTicket(cell.endpoints),
-      ...this.grantsFor(cell, principal, created.sessionId),
+      ...this.ticketFor(cell, principal, created.sessionId),
     };
   }
 
@@ -455,18 +437,34 @@ export class TerminalService {
     };
   }
 
-  private grantsFor(
+  /** The one routed-ticket assembly (TP-S3e): grants + doors or an honest
+   * refusal. `grants_not_landed` = the cell mints no grants (keyless
+   * bootstrap); `transport_not_landed` = grants but no doors reported. */
+  private ticketFor(
     cell: CellTarget,
     principal: GrantPrincipal,
     sessionId: string,
-  ): TerminalOpenTicket | Record<string, never> {
-    if (cell.grantKey === undefined) return {};
+  ): TerminalOpenTicket {
+    if (cell.grantKey === undefined)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the terminal cell hosting this session mints no grants (keyless bootstrap)",
+        true,
+        { service: "terminal", state: "grants_not_landed" },
+      );
+    if (cell.doors === undefined)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the terminal cell hosting this session serves no T1 doors",
+        true,
+        { service: "terminal", state: "transport_not_landed" },
+      );
     return this.minter.mintTicket({
       key: cell.grantKey,
       principal,
       sessionId,
       route: this.routeBinding(cell.key),
-      ...(cell.doors === undefined ? {} : { doors: cell.doors }),
+      doors: cell.doors,
     });
   }
 
@@ -1234,17 +1232,6 @@ export class TerminalService {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/** D6 — the ticket IS one cell's endpoints. Every mint goes through here, so
- * "which cell did this credential come from" is a question about the CellTarget
- * that was resolved and never about the shape. */
-function toTicket(endpoints: TerminalEndpoints): TerminalTicket {
-  return {
-    controlSocket: endpoints.controlSocket,
-    frameSocket: endpoints.frameSocket,
-    token: endpoints.authToken,
-  };
 }
 
 /** The service's own "that session doesn't exist" refusal — the ONLY error

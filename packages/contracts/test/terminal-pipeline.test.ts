@@ -5,11 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CellEndpointSet, TerminalRouteSnapshot } from "../src/envelope";
 import { TERMINAL_PIPELINE } from "../src/registries";
-import {
-  TerminalRuntimeSession,
-  TerminalRuntimeSessionsResult,
-  TerminalTicket,
-} from "../src/terminal";
+import { TerminalRuntimeSession, TerminalRuntimeSessionsResult } from "../src/terminal";
 import {
   AttachControlLeg,
   CellActivationStatus,
@@ -142,20 +138,26 @@ describe("grants — the authenticated envelope (spec §5.1)", () => {
   });
 });
 
-describe("the S1 product results are additive over today's ticket (TP-L-F)", () => {
-  it("a legacy TerminalTicket reader parses the S1 openTicket result; the v2 reader ignores the legacy trio", () => {
-    const r = fixture("tp-open-ticket.s1.json");
-    expect(TerminalOpenTicketResult.safeParse(r).success).toBe(true);
-    const legacy = TerminalTicket.parse(r);
-    expect(legacy.token).toBe("legacy-bridge-token");
-    const v2 = TerminalOpenTicket.parse(r);
-    expect(v2.route.cellBootId).toBe(v2.attachGrant.claims.audienceCellBootId);
-    expect(v2.attachGrant.claims.sessionId).toBe("sess-01J8Z3K9");
+describe("the product results ARE the end state (TP-S3e — the union retired with the bridge)", () => {
+  it("openTicket's result is exactly TerminalOpenTicket, endpoints REQUIRED", () => {
+    const r = TerminalOpenTicketResult.parse(fixture("tp-open-ticket.valid.json"));
+    expect(r.route.cellBootId).toBe(r.attachGrant.claims.audienceCellBootId);
+    expect(r.attachGrant.claims.sessionId).toBe("sess-01J8Z3K9");
+    expect(r.endpoints.controlUrl).toMatch(/^ws:\/\/127\.0\.0\.1:/);
+    // a ticket without dialable doors is NOT a ticket — the S1-era optional
+    // endpoints (and the keyless-floor half ticket) retired deliberately
+    const { endpoints: _doors, ...withoutDoors } = r;
+    expect(TerminalOpenTicketResult.safeParse(withoutDoors).success).toBe(false);
   });
-  it("create's result carries the session id, the legacy nested ticket and the spread v2 fields", () => {
-    const r = TerminalCreateOpenResult.parse(fixture("tp-create-open.s1.json"));
+  it("create's result carries the id, the REQUIRED birth summary and the spread ticket — and no legacy trio anywhere", () => {
+    const raw = fixture("tp-create-open.valid.json");
+    const r = TerminalCreateOpenResult.parse(raw);
     expect(r.sessionId).toBe(r.attachGrant.claims.sessionId);
-    expect(r.ticket.controlSocket).toMatch(/termctl/);
+    expect(r.session.handle).toBe("18446744073709551615");
+    expect("ticket" in raw).toBe(false);
+    expect("controlSocket" in raw).toBe(false);
+    const { session: _s, ...withoutSession } = raw as Record<string, unknown>;
+    expect(TerminalCreateOpenResult.safeParse(withoutSession).success).toBe(false);
   });
 });
 

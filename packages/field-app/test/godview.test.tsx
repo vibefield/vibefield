@@ -5,7 +5,7 @@
  * toolbar button all move. The deck itself is not mounted here — it needs a
  * bridge, a floor, and a GPU, and `pnpm smoke:godview` drives all three.
  */
-import type { GodviewState, TerminalBridgeStatus } from "@vibefield/contracts";
+import type { GodviewState } from "@vibefield/contracts";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -410,15 +410,7 @@ describe("the overlay state", () => {
   });
 });
 
-describe("the bridge notice", () => {
-  // The overlay's own copy of this rule lives in GodviewOverlay; the values it
-  // discriminates on are the contract's, so a new state cannot slip past
-  // silently.
-  it("covers every TerminalBridgeStatus state the contract declares", () => {
-    const states: TerminalBridgeStatus["state"][] = ["bridge-up", "bridge-down", "ticket-expired"];
-    expect(states).toHaveLength(3);
-  });
-});
+// ("the bridge notice" RETIRED at TP-S3e with TerminalBridgeStatus itself.)
 
 describe("the toggle button", () => {
   it("presses the same door ⇧⇧ presses", () => {

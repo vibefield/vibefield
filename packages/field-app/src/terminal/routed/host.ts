@@ -95,11 +95,12 @@ function asRoutedTicket(ticket: TerminalOpenTicketValue): RoutedTerminalOpenTick
 }
 
 function requireDirectTicket(sessionId: string, raw: unknown): TerminalOpenTicketValue {
+  // TP-S3e: endpoints are REQUIRED by the schema — a doorless or legacy-trio
+  // answer refuses at the parse. A compliant fieldd never sends one (a keyless
+  // floor is an UNAVAILABLE refusal upstream), so this firing means a contract
+  // break, and it must be loud.
   const parsed = TerminalOpenTicket.safeParse(raw);
-  if (!parsed.success) throw new Error("terminal grants are not landed for this session");
-  if (parsed.data.endpoints === undefined) {
-    throw new Error("terminal transport is not landed for this session");
-  }
+  if (!parsed.success) throw new Error("the terminal ticket does not carry the routed contract");
   if (parsed.data.attachGrant.claims.sessionId !== sessionId) {
     throw new Error("terminal ticket names a different session");
   }

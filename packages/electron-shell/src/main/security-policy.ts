@@ -19,31 +19,20 @@ import type { ShellMode } from "./modes";
  * its exact hash — build-deterministic bytes, hashed by main from the very
  * file it serves (self-synchronising; no nonce, no serve-time rewriting). An
  * empty list changes nothing, which is also the dev answer (dev CSP is null). */
-export interface CspOptions {
-  /** TP-S3a — TP-D1 as ratified (terminal-pipeline-v3 §8): with the direct
-   * terminal door ON, production `connect-src` ALSO admits `ws://127.0.0.1:*`
-   * — the cells' ephemeral loopback ports (a fixed front-door port would be
-   * the centralization custody refused). The threat statement ratified with
-   * it: a compromised renderer could then attempt ANY loopback WebSocket
-   * server; every door of ours is Origin- and token-gated, the sandbox stays,
-   * and loopback is potentially-trustworthy (a CSP matter, not mixed content).
-   * OFF (the default until S3e) keeps exactly the two pinned ports. */
-  directTerminalDoor?: boolean;
-}
-
-export function buildCsp(
-  mode: ShellMode,
-  importMapHashes: readonly string[] = [],
-  options: CspOptions = {},
-): string | null {
+export function buildCsp(mode: ShellMode, importMapHashes: readonly string[] = []): string | null {
   if (mode === "dev") return null;
+  // TP-S3e (TP-D1 as ratified, terminal-pipeline-v3 §8): production
+  // `connect-src` admits the two pinned fieldd ports AND `ws://127.0.0.1:*` —
+  // the cells' ephemeral loopback doors — UNCONDITIONALLY. This is the
+  // deliberate reversal the rollout gated behind `--terminal-direct-door`
+  // through S3a–S3d; the flag and the bridge it selected are gone. The threat
+  // statement ratified with it stands: a compromised renderer could attempt
+  // ANY loopback WebSocket server; every door of ours is Origin- and
+  // token-gated, the sandbox stays, and loopback is potentially-trustworthy
+  // (a CSP matter, not mixed content). A fixed front-door port would be the
+  // centralization custody refused.
   const pinned = `ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL} ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`;
-  const connect =
-    mode === "production"
-      ? options.directTerminalDoor === true
-        ? `${pinned} ws://127.0.0.1:*`
-        : pinned
-      : "ws://127.0.0.1:*";
+  const connect = mode === "production" ? `${pinned} ws://127.0.0.1:*` : "ws://127.0.0.1:*";
   // Smoke-like modes may spawn blob: workers (TP-S3a's door probe dials a cell
   // from a worker context built in place); production keeps workers on 'self'
   // — the product's workers are bundled files under the app origin.

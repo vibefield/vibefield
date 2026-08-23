@@ -100,10 +100,6 @@ mountFieldApp({
     completeClose: (result) => window.vibefield.completeClose(result),
     onShellCommand: (handler) => window.vibefield.onShellCommand(handler),
     onDesktopState: (handler) => window.vibefield.onDesktopState(handler),
-    terminal: {
-      connect: (ticket) => window.vibefield.terminal.connect(ticket),
-      onStatus: (handler) => window.vibefield.terminal.onStatus(handler),
-    },
     godview: {
       set: (open) => window.vibefield.godview.set(open),
       onState: (handler) => window.vibefield.godview.onState(handler),

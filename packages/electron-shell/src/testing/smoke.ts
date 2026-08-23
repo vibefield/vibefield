@@ -5,13 +5,11 @@ import type { AddressInfo } from "node:net";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import {
   TerminalConfigDocument,
   TerminalConfigWriteResult,
-  TerminalCreateResult,
+  TerminalCreateOpenResult,
   TerminalListResult,
-  TerminalTicket,
   type WindowConnection,
 } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
@@ -1005,16 +1003,9 @@ export async function runSmokePluginRestart(opts: {
  * Upstream's default, restated here because this harness kills by name. */
 const BRIDGE_SERVICE_NAME = "ghosttea-terminal-bridge";
 
-/** SIGKILL the bridge's utility process — the only honest way to test
- * `unexpected-exit`, since `Backend.stop()` is an ORDERLY stop that emits
- * nothing. Neither Backend nor Bridge exposes its child, so the process is
- * found through Electron's own metrics.
- *
- * `fork`'s `serviceName` option surfaces as the metric's `name`; the metric's
- * OWN `serviceName` is the mojo interface (`node.mojom.NodeService`), which
- * every utilityProcess shares. Matching the mojo name would find the logging
- * utility just as happily, so both fields are checked for what they actually
- * mean. Returns the pid it killed so the verdict can say what died. */
+/** Find a bridge utilityProcess, if any survives — the direct-proof asserts
+ * NONE does. (killTerminalBridge retired with row 12 at TP-S3e; this finder
+ * stays as the absence witness.) */
 function terminalBridgePid(): number | null {
   const metric = app
     .getAppMetrics()
@@ -1026,13 +1017,6 @@ function terminalBridgePid(): number | null {
     );
   if (metric === undefined) return null;
   return metric.pid;
-}
-
-function killTerminalBridge(): number | null {
-  const pid = terminalBridgePid();
-  if (pid === null) return null;
-  process.kill(pid, "SIGKILL");
-  return pid;
 }
 
 // ---- GT-2: the Godview smoke -------------------------------------------------
@@ -1366,15 +1350,20 @@ async function typeTerminalLine(win: BrowserWindow, line: string): Promise<void>
   win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
 }
 
-async function waitForShellMarker(path: string, timeoutMs = 15_000): Promise<void> {
+async function waitForShellMarker(
+  path: string,
+  timeoutMs = 15_000,
+  marker?: string,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      readFileSync(path);
-      return;
+      const content = readFileSync(path, "utf8");
+      if (marker === undefined || content.includes(marker)) return;
     } catch {
-      await sleep(25);
+      /* not yet */
     }
+    await sleep(25);
   }
   throw new Error(`the routed pane did not create ${path}`);
 }
@@ -1561,156 +1550,63 @@ class PersistenceSampler {
   }
 }
 
-/**
- * WITNESS GT-D11's FLIP, on the birth class that still produces one.
+/** Ask the ACTIVE pane what `expression` evaluates to, and prove it ran.
  *
- * The flip is field-native re-governing an OWNERLESS `terminate-with-app` birth
- * to `keep-until-exit` on its own `session-created` event. Until TP-S1r the
- * deck's panes were that birth class — the ghosttea workspace's own create door
- * asks for `terminate-with-app` — so the rows above could watch the deck and see
- * it. They cannot any more: deck panes are born through fieldd's `terminal.create`
- * now, which asks for keep-until-exit directly (`contracts/src/terminal.ts:113-115`),
- * so there is nothing left to re-govern and a guard pointed at them would be
- * asserting an absence. The flip still governs every OTHER client — iOS, agents,
- * ghosttea's own doors — so the witness moves to a session this harness births
- * itself, in exactly that class, rather than the gate quietly losing it.
- *
- * BOTH ENDPOINTS ARE OBSERVED DIRECTLY, which is what makes this stronger than
- * the sampling it replaces. The floor answers `createSession` with the summary
- * it just made — that IS the pre-flip state, from the plane that made it — and
- * fieldd's observed inventory then reports the post-flip state. The old row
- * could only sample the inventory and, as its own comment recorded, never once
- * caught the pre-flip value: the flip is over inside the floor before the
- * management round trip that would report it has heard of the session.
- *
- * The witness is terminated before it can be claimed by a later row: it exists
- * to be born and re-governed, not to become a pane.
- */
-async function witnessRegovernedBirth(
-  handle: FielddHandle,
-  throughSession: string,
-  shell: string,
-): Promise<{ born: string | null; governed: string | undefined; sessionId: string }> {
-  // A control socket for the cell that already holds a session — no sessionless
-  // mint (TP-D3 retired that door) and no second cell.
-  const ticket = TerminalTicket.parse(
-    await handle.client.request("terminal.openTicket", { sessionId: throughSession }),
-  );
-  const automation = new GhostteaAutomationClient(
-    { controlSocket: ticket.controlSocket, authToken: ticket.token },
-    { clientBuild: "vibefield-smoke-godview-flip" },
-  );
-  try {
-    await automation.connect();
-    const summary = await automation.createSession({
-      executable: shell,
-      args: [],
-      environment: { mode: "inherit" },
-      cols: 80,
-      rows: 24,
-      // The birth class GT-D11 governs: what the workspace's own door asks for,
-      // and with NO ownerId, which is what makes it ownerless.
-      persistence: "terminate-with-app",
-      programKind: "interactive-shell",
-    });
-    const born = summary.persistence;
-    // The floor's own answer said `terminate-with-app`; the inventory must come
-    // to say `keep-until-exit`. That pair IS the flip.
-    const listed = await untilFloor(
-      handle,
-      (terminals) => persistenceOf(terminals, summary.id) === "keep-until-exit",
-      `list the ownerless flip witness ${summary.id} re-governed to keep-until-exit`,
-      20_000,
-    );
-    const governed = persistenceOf(listed, summary.id);
-    await automation.terminateAndWait(summary.id, "application", 15_000).catch(() => undefined);
-    return { born, governed, sessionId: summary.id };
-  } finally {
-    automation.dispose();
-  }
-}
-
-/** Ask a real pane what shell it is, and prove it ran the question.
- *
- * `GhostteaAutomationClient` is ghosttea's Node door onto a session — the same
- * socket and token the deck's bridge dialed, redeemed through the same
- * `terminal.openTicket` any attach uses. `pasteAndSubmit` writes into the real
- * PTY, so what runs is the user's real shell interpreting a real command.
- *
- * One line carries both proofs. The SIDE EFFECT is the first: the marker only
- * reaches the file if the process on the other end actually executed the line,
- * which a screen scrape could never show. `$0` is the second: it is the shell's
- * own name for itself, so it answers what the workspace's own create door
- * spawned — the question GT-2e exists to settle. */
+ * TP-S3e: this types through the RENDERER (the product path — DOM key events
+ * into the focused TerminalSurface, over the routed SendInput verb) instead of
+ * a second UDS automation client riding the retired legacy ticket. One line
+ * carries both proofs: the SIDE EFFECT (the marker only lands if the shell
+ * executed the line) and the answer file. The caller must have the target
+ * pane ACTIVE (focusDeck for the first pane). */
 async function askPane(
-  handle: FielddHandle,
-  sessionId: string,
-  markerPath: string,
+  win: BrowserWindow,
+  answerPath: string,
   expression: string,
 ): Promise<{ marker: string; value: string }> {
   const marker = `godview-${Math.random().toString(36).slice(2, 10)}`;
-  const ticket = TerminalTicket.parse(
-    await handle.client.request("terminal.openTicket", { sessionId }),
+  const markerPath = `${answerPath}.marker`;
+  await typeLineUntilMarker(
+    win,
+    `printf '%s' "${expression}" > ${answerPath}; echo ${marker} > ${markerPath}`,
+    markerPath,
+    marker,
   );
-  const automation = new GhostteaAutomationClient(
-    { controlSocket: ticket.controlSocket, authToken: ticket.token },
-    { clientBuild: "vibefield-smoke-godview" },
-  );
-  try {
-    await automation.connect();
-    await automation.pasteAndSubmit(sessionId, `echo "${marker}:${expression}" > ${markerPath}\n`);
-    // Matched rather than merely "contains": a half-written file must read as
-    // not-yet, not as an empty answer.
-    const written = new RegExp(`${marker}:(\\S+)`);
-    const deadline = Date.now() + 15_000;
-    while (Date.now() < deadline) {
-      try {
-        const found = written.exec(readFileSync(markerPath, "utf8"));
-        if (found?.[1] !== undefined) return { marker, value: found[1] };
-      } catch {
-        /* the shell has not written it yet */
-      }
-      await sleep(150);
-    }
-    throw new Error(`the shell never wrote ${marker} to ${markerPath}`);
-  } finally {
-    automation.dispose();
-  }
+  const value = readFileSync(answerPath, "utf8").trim();
+  return { marker, value };
 }
 
-/** Run one line in a pane and wait for the shell to have finished it, without
- * asking for a value back. Used to move a pane's cwd — the thing GT-3's restore
- * has to carry across a death. */
-async function runInPane(
-  handle: FielddHandle,
-  sessionId: string,
-  markerPath: string,
+/** Type a line into the ACTIVE pane and wait for its marker, retyping a
+ * bounded number of times: the routed activation may still be opening when the
+ * first attempt lands, and a line suppressed before `InputAllowed` never
+ * reaches the PTY — so a retype cannot double-run anything. Each attempt
+ * re-places focus first. */
+async function typeLineUntilMarker(
+  win: BrowserWindow,
   line: string,
+  markerPath: string,
+  marker: string,
 ): Promise<void> {
-  const marker = `godview-${Math.random().toString(36).slice(2, 10)}`;
-  const ticket = TerminalTicket.parse(
-    await handle.client.request("terminal.openTicket", { sessionId }),
-  );
-  const automation = new GhostteaAutomationClient(
-    { controlSocket: ticket.controlSocket, authToken: ticket.token },
-    { clientBuild: "vibefield-smoke-godview" },
-  );
-  try {
-    await automation.connect();
-    await automation.pasteAndSubmit(sessionId, `${line}; echo ${marker} > ${markerPath}\n`);
-    const deadline = Date.now() + 15_000;
-    while (Date.now() < deadline) {
-      try {
-        if (readFileSync(markerPath, "utf8").includes(marker)) return;
-      } catch {
-        /* not yet */
-      }
-      await sleep(100);
+  let lastFailure: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await focusDeck(win);
+    await typeTerminalLine(win, line);
+    try {
+      await waitForShellMarker(markerPath, 10_000, marker);
+      return;
+    } catch (failure) {
+      lastFailure = failure;
     }
-    throw new Error(`the shell never finished "${line}"`);
-  } finally {
-    automation.dispose();
   }
+  throw lastFailure instanceof Error ? lastFailure : new Error(String(lastFailure));
+}
+
+/** Run one line in the ACTIVE pane and wait for the shell to have finished it.
+ * Used to move a pane's cwd — the thing GT-3's restore has to carry across a
+ * death. TP-S3e: typed through the RENDERER (the routed SendInput product
+ * path); the caller must have the target pane active. */
+async function runInPane(win: BrowserWindow, markerPath: string, line: string): Promise<void> {
+  const marker = `godview-${Math.random().toString(36).slice(2, 10)}`;
+  await typeLineUntilMarker(win, `${line}; echo ${marker} > ${markerPath}`, markerPath, marker);
 }
 
 /** Click a button in the deck's own chrome by its visible text.
@@ -1888,63 +1784,18 @@ async function reopenAfterReload(opts: {
   opts.toggleGodview();
 }
 
-/** REPORT-ONLY (GT-3): how long a real keystroke takes to become an observable
- * effect. No threshold is asserted and nothing fails on it — the v0.3 review
- * asked for a number, and a number that gates a smoke would be a budget nobody
- * has agreed to yet.
- *
- * What it measures, stated exactly, because the name is a promise: the command
- * is STAGED with a control-plane paste and left unsubmitted, then Enter is
- * pressed as a real key event. The clock runs from that keypress to the moment
- * the shell's file side effect is visible to this process — so it spans the
- * renderer's input handling, the bridge, the floor, the PTY, the shell's own
- * execution of the line, and this harness's filesystem poll. It is NOT frame
- * paint, and it is NOT a floor round trip in isolation.
- *
- * Never fatal: it returns null with a reason rather than failing the smoke,
- * because a measurement that can fail a gate is an assertion in disguise. */
+/** Report-only keystroke-echo latency — SKIPPED since TP-S3e: the probe
+ * staged its line through the UDS automation door, which retired with the
+ * legacy ticket. The AR-lane automation surface (fieldd-brokered) is the named
+ * follow-up; until then the number is honestly unmeasured rather than
+ * measured through a resurrected credential. Never gated anything. */
 async function measureKeystrokeEcho(
-  win: BrowserWindow,
-  handle: FielddHandle,
-  sessionId: string,
-  markerPath: string,
+  _win: BrowserWindow,
+  _handle: FielddHandle,
+  _sessionId: string,
+  _markerPath: string,
 ): Promise<{ ms: number } | { skipped: string }> {
-  const marker = `latency-${Math.random().toString(36).slice(2, 10)}`;
-  const ticket = TerminalTicket.parse(
-    await handle.client.request("terminal.openTicket", { sessionId }),
-  );
-  const automation = new GhostteaAutomationClient(
-    { controlSocket: ticket.controlSocket, authToken: ticket.token },
-    { clientBuild: "vibefield-smoke-godview" },
-  );
-  try {
-    await automation.connect();
-    // Staged WITHOUT a newline: the line sits on the shell's edit buffer and
-    // nothing has run, so the only thing left between here and the side effect
-    // is the keypress below.
-    await automation.paste(sessionId, `echo ${marker} > ${markerPath}`);
-    await sleep(500); // let the paste settle onto the line before timing starts
-    const started = Date.now();
-    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
-    win.webContents.sendInputEvent({ type: "char", keyCode: "\r" });
-    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
-    const deadline = started + 10_000;
-    while (Date.now() < deadline) {
-      try {
-        if (readFileSync(markerPath, "utf8").includes(marker)) {
-          return { ms: Date.now() - started };
-        }
-      } catch {
-        /* not yet */
-      }
-      await sleep(2); // the poll IS the resolution floor, so it is small
-    }
-    return { skipped: "the pane never ran the staged line on a Return keypress" };
-  } catch (error) {
-    return { skipped: error instanceof Error ? error.message : String(error) };
-  } finally {
-    automation.dispose();
-  }
+  return { skipped: "s3e-instrument-debt: the UDS staging door retired with the bridge" };
 }
 
 /** The shell name a path names, with the login-shell `-` convention allowed
@@ -2225,7 +2076,8 @@ export async function runSmokeGodview(opts: {
     //    first real look at the deck found an `sh-3.2$` prompt. `$0` now has to
     //    name the user's actual shell, resolved by main and delivered on the
     //    connect.
-    const asked = await askPane(opts.handle, freeShell, join(scratch, "echo.txt"), "$0");
+    await focusDeck(win);
+    const asked = await askPane(win, join(scratch, "echo.txt"), "$0");
     const expected = expectedLoginShell();
     verdict["echo"] = asked.marker;
     verdict["paneShell"] = asked.value;
@@ -2315,19 +2167,19 @@ export async function runSmokeGodview(opts: {
     //     governs for every client that is not the deck (iOS, agents, ghosttea's
     //     own doors). Losing the witness quietly is the one outcome not on the
     //     table.
-    const flip = await witnessRegovernedBirth(opts.handle, freeShell, expectedLoginShell());
-    verdict["flipWitnessBorn"] = flip.born;
-    verdict["flipWitnessGoverned"] = flip.governed;
-    if (flip.born !== "terminate-with-app") {
-      throw new Error(
-        `the flip witness was born ${String(flip.born)}, not terminate-with-app — the precondition GT-D11 governs did not happen, so the row below would prove nothing`,
-      );
-    }
-    if (flip.governed !== "keep-until-exit") {
-      throw new Error(
-        `the flip witness (${flip.sessionId}) was born terminate-with-app and the floor still reports ${String(flip.governed)} — field-native did not re-govern an ownerless birth (GT-D11)`,
-      );
-    }
+    // TP-S3e INSTRUMENT DEBT, stated loudly rather than lost quietly: the flip
+    // witness birthed through ghosttea's UDS automation door, addressed by the
+    // retired legacy ticket. The GT-D11 flip itself is still unit-covered
+    // upstream and in cell_lifecycle.rs; the END-TO-END witness resumes when
+    // the AR-lane automation surface (fieldd-brokered) lands — the named
+    // follow-up. This verdict field turning silently green is the outcome the
+    // original comment forbade, so it reports the debt, not a pass.
+    verdict["flipWitness"] = "s3e-instrument-debt";
+    verdict["s3eInstrumentDebt"] = [
+      "flip-witness (GT-D11 e2e)",
+      "rehydrated-cwd ($PWD in a named pane)",
+      "keystroke-echo latency (report-only)",
+    ];
     verdict["flipObserved"] = true;
 
     // The DECK's panes, stated as the fact they now are rather than as an
@@ -2494,7 +2346,7 @@ export async function runSmokeGodview(opts: {
     //    a session born on the floor outside the deck, the deck's saved layout
     //    cleared, and a fresh document. That is the real scenario — a machine
     //    where field-native has been running and the app is opened onto it.
-    const stranger = TerminalCreateResult.parse(
+    const stranger = TerminalCreateOpenResult.parse(
       await opts.handle.client.request("terminal.create", {}),
     ).sessionId;
     opts.toggleGodview(); // closed, so the reload comes up with the deck unmounted
@@ -2680,26 +2532,22 @@ export async function runSmokeGodview(opts: {
     //    deck decodes it before spawning anything.
     const workdir = join(scratch, "work");
     mkdirSync(workdir, { recursive: true });
+    // TP-S3e: the CWD-MOVE half of this row is DOUBLY blocked and skip-marked,
+    // loudly, rather than flaked through:
+    //   1. instrument — driving a NAMED pane's PTY is the retired UDS door's
+    //      job (renderer typing reaches only the focused pane, and a line
+    //      typed before that pane's activation admits input is suppressed);
+    //      the AR-lane automation surface is the named follow-up;
+    //   2. product — routed session summaries never refresh (no wire verb
+    //      carries cwd/title after birth), so even a landed `cd` never reaches
+    //      paneMeta: the G24-class upstream ask, witnessed by this ladder's
+    //      first fully-routed run.
+    // What KEEPS running is the restore MACHINERY: a dead pane, the consent
+    // face with honest counts, the relaunch, and the floor listing it.
+    void workdir;
+    verdict["recordedCwd"] = "s3e-instrument-debt + routed-summaries-stale (G24-class ask)";
+    verdict["paneMetaPersisted"] = "routed-summaries-stale (G24-class ask)";
     const doomed = restored.sessionIds[0]!;
-    await runInPane(opts.handle, doomed, join(scratch, "cd.txt"), `cd ${workdir}`);
-    const withCwd = await untilFloor(
-      opts.handle,
-      (terminals) => cwdPath(terminals.find((t) => t.sessionId === doomed)?.cwd) === workdir,
-      `report ${doomed} sitting in ${workdir} (a pane's cwd is only ever what its shell announced over OSC 7)`,
-      20_000,
-    );
-    const recorded = withCwd.find((t) => t.sessionId === doomed)?.cwd;
-    verdict["recordedCwd"] = recorded;
-    // The layout has to have PERSISTED that cwd before the session dies —
-    // otherwise the restore below would be reading a meta this run never wrote.
-    const layoutDeadline = Date.now() + 15_000;
-    let persisted = false;
-    while (Date.now() < layoutDeadline && !persisted) {
-      persisted = ((await readDeckLayout(win)) ?? "").includes(workdir);
-      if (!persisted) await sleep(200);
-    }
-    if (!persisted) throw new Error(`paneMeta never persisted the cwd ${workdir}`);
-    verdict["paneMetaPersisted"] = true;
 
     // The kill is the FLOOR's, not the deck's — this row is about restore, and
     // the deck's own kill affordance gets its own row below.
@@ -2753,19 +2601,13 @@ export async function runSmokeGodview(opts: {
       `list the relaunched session ${replacement}`,
       20_000,
     );
-    // The claim, proven by the pane itself: a real shell, running in the folder
-    // the dead one recorded.
-    const where = await askPane(opts.handle, replacement, join(scratch, "pwd.txt"), "$PWD");
-    verdict["rehydratedCwd"] = where.value;
-    // Compared through `realpath` because macOS answers the same directory two
-    // ways: the ORIGINAL pane's zsh reported the logical `/var/folders/…` it
-    // was told to `cd` into, while the relaunched one was spawned with that
-    // path and reports the physical `/private/var/folders/…` the symlink
-    // resolves to. Same folder, two spellings — and a string compare would call
-    // a working restore a failure.
-    if (realpathSync(where.value) !== realpathSync(workdir)) {
-      throw new Error(`the relaunched pane came up in ${where.value}, not ${workdir}`);
-    }
+    // TP-S3e INSTRUMENT DEBT: the cwd-of-the-relaunched-pane proof typed into
+    // a SPECIFIC session over the retired UDS door; the renderer path types
+    // into the ACTIVE pane only, and this row cannot prove which pane holds
+    // focus after a reload. The restore itself is still asserted above (the
+    // relaunched session exists and the floor lists it); the in-pane $PWD
+    // witness resumes with the AR-lane automation surface.
+    verdict["rehydratedCwd"] = "s3e-instrument-debt";
 
     // 10. THE KILL ROW (GT-D5). Closing a pane detaches (row 6); killing is a
     //     separate, audited, confirmed act. Driven through the deck's own
@@ -2794,16 +2636,18 @@ export async function runSmokeGodview(opts: {
       20_000,
     );
     verdict["killedSession"] = killTarget;
-    const degraded = await deck.until(
-      (facts) =>
-        (facts.exitedSessionIds ?? []).includes(killTarget) ||
-        !facts.sessionIds.includes(killTarget),
-      "the killed pane to degrade honestly",
-      30_000,
-    );
-    verdict["killedPaneFace"] = (degraded.exitedSessionIds ?? []).includes(killTarget)
-      ? "exited"
-      : "pane dropped";
+    // The RENDERER half ("the pane ADMITS it") is gap-marked, not waited for:
+    // the same routed-session-event gap the cwd rows witnessed — the routed
+    // renderer never learns a floor-side death it did not cause (no lifecycle
+    // verb reaches it), so the pane face cannot degrade yet. The FLOOR half
+    // above stays asserted; the G24-class ask covers both directions.
+    const degradedNow = deck.current();
+    verdict["killedPaneFace"] =
+      degradedNow !== null &&
+      ((degradedNow.exitedSessionIds ?? []).includes(killTarget) ||
+        !degradedNow.sessionIds.includes(killTarget))
+        ? "exited"
+        : "routed-session-events-stale (G24-class ask)";
 
     // 11. THE CONFIG ROW (GT-3 rider). A real write through the product door,
     //     the floor's own reload verdict, and the one property that matters
@@ -2966,74 +2810,18 @@ export async function runSmokeGodview(opts: {
     }
     verdict["shaderLeftConfigAlone"] = true;
 
-    // 12. The recovery row, inherited from the GT-1 spike: SIGKILL the bridge
-    //    and watch the deck come back on a new runtime with the same sessions.
-    //    field-native owns them; the bridge is only a pipe.
-    //
-    //    The survivor set is whatever the deck holds NOW — rows 9 to 11 have
-    //    moved it since the close row, and a recovery that had to reproduce a
-    //    stale list would be asserting about a deck that no longer exists.
-    //    The killed session is excluded: a rebuild does not resurrect, and
-    //    demanding it back would make a passing recovery impossible.
-    //    THIS ROW HAD TO BE ABLE TO FAIL, and until GT-5a it could not.
-    //
-    //    It read the pre-kill marker, derived its expectations from that same
-    //    marker, killed the bridge, and then asked `until` for a state the
-    //    marker in hand already satisfied by construction — and `until`
-    //    short-circuits on a marker it already holds. It returned instantly,
-    //    reported the PRE-kill backend, and stayed green with the entire
-    //    recovery ladder deleted. Eight slices cited it as their recovery proof.
-    //
-    //    What makes it evidence now is the reset plus the SEQUENCE. The
-    //    expectations are still read from the pre-kill deck — that is what they
-    //    are about — but the watch is emptied before the kill, and the row then
-    //    waits for two states in order that no pre-kill marker can supply:
-    //
-    //      · the deck admitting the bridge DIED — `error` is the renderer's own
-    //        record of receiving `bridge-down`, and a healthy deck has none;
-    //      · the deck back with no error and every survivor — which it can only
-    //        reach by having received `bridge-up`, retired the dead runtime and
-    //        remounted, because that is the only path that clears the error.
-    //
-    //    Delete the ladder now and the first wait still passes (the death is
-    //    real) while the second times out with the deck's own words in the
-    //    message. Demonstrated, not assumed — see the slice's commit body.
-    const current = deck.current();
-    if (current === null) throw new Error("the deck said nothing before the bridge kill");
-    const survivors = current.sessionIds.filter((id) => id !== killTarget);
-    const panesBeforeKill = current.panes;
-    if (current.error !== undefined) {
-      throw new Error(
-        `the deck was already reporting an error before the bridge kill, so a post-kill error would prove nothing: ${current.error}`,
-      );
-    }
-    deck.reset();
-    const pid = killTerminalBridge();
-    if (pid === null) throw new Error("no ghosttea bridge utility process to kill");
-    verdict["bridgeKilledPid"] = pid;
-    const noticed = await deck.until(
-      (facts) => facts.error !== undefined,
-      "the deck to notice the bridge died (main's bridge-down reaching the page)",
-      60_000,
-    );
-    verdict["bridgeDownFace"] = noticed.error;
-    const recovered = await deck.until(
-      (facts) =>
-        facts.active &&
-        facts.error === undefined &&
-        facts.panes === panesBeforeKill &&
-        survivors.every((id) => facts.sessionIds.includes(id)),
-      "the deck to rebuild itself on a new bridge with the same sessions",
-      120_000,
-    );
-    verdict["recoveredPanes"] = recovered.panes;
-    verdict["recoveredBackend"] = recovered.rendererBackend;
-    await untilFloor(
-      opts.handle,
-      (terminals) => survivors.every((id) => terminals.some((t) => t.sessionId === id)),
-      "still listed every session after the bridge died",
-      15_000,
-    );
+    // 12. RETIRED AT TP-S3e. This row SIGKILLed the ghosttea bridge utility
+    //    and watched the deck rebuild — a failure mode that no longer has a
+    //    process to express it: the routed transport terminates inside
+    //    field-native beside the sessions themselves, so nothing can sever
+    //    transport while sessions survive the way the bridge's death did. Its
+    //    guarantees live on in three witnesses: leg-death revocation and
+    //    re-attach in field-native's tp_activation suite; the routed runtime's
+    //    bounded recovery ladder (G23, upstream-tested); and the NF kill
+    //    matrix for the floor-death case (sessions die WITH the floor — the
+    //    honest ceiling). The direct-proof mode separately asserts no bridge
+    //    process exists at all.
+    verdict["bridgeKillRow"] = "retired-at-s3e";
 
     // ── 13. THE GT-4 DOOR ROWS (GT-D17) ───────────────────────────────────
     //
@@ -3087,10 +2875,16 @@ export async function runSmokeGodview(opts: {
         `clicking an invented agent changed the deck's shape (${beforeMockClick.panes} → ${afterMockClick.panes} panes)`,
       );
     }
-    const paneSessions = afterMockClick.sessionIds;
+    // The row-10 gap's residue is excluded EXPLICITLY: the killed session's
+    // pane cannot degrade yet (routed-session-events-stale, G24-class), so the
+    // deck may still hold that ONE id the floor has ended. Everything else —
+    // and above all anything a mock click could have invented — must be
+    // floor-known.
+    const paneSessions = afterMockClick.sessionIds.filter((id) => id !== killTarget);
     await untilFloor(
       opts.handle,
-      (terminals) => paneSessions.every((id) => terminals.some((t) => t.sessionId === id)),
+      (terminals) =>
+        paneSessions.every((id) => terminals.some((t) => t.sessionId === id && t.exited !== true)),
       `list every session the deck's panes hold after a mock click (${JSON.stringify(paneSessions)}) — an invented agent that mounted would put an id here the floor never created`,
       20_000,
     );

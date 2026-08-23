@@ -55,14 +55,15 @@ export type RendererParticipantIdentity = z.infer<typeof RendererParticipantIden
 /**
  * Terminal policy fixed for one renderer generation.
  *
- * Main is the authority for both halves: it parses the rollback flag once and
- * it is the only process allowed to read the login shell/home.  Keeping them
- * on window bootstrap lets the routed path mount without invoking the legacy
- * `terminal.connect` bridge merely to learn machine policy.
+ * Main is the authority: it is the only process allowed to read the login
+ * shell/home, and it states the transport on the authenticated bootstrap.
+ * Since TP-S3e the selector is the literal — the rollback flag and the bridge
+ * it selected are gone; the field stays so a reader keeps one shape across
+ * the era boundary (tolerant reader).
  */
 export const WindowTerminalBootstrap = z
   .object({
-    transport: z.enum(["bridge", "routed"]),
+    transport: z.literal("routed"),
     defaultShell: z.string().min(1),
     home: z.string().min(1),
   })

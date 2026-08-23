@@ -9,7 +9,7 @@ import { rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
-import type { TerminalInfo, TerminalTicket } from "@vibefield/contracts";
+import type { TerminalEndpoints, TerminalInfo } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap } from "../src/index";
@@ -104,12 +104,15 @@ describe("the terminal seam (NF-3, real field-native)", () => {
     });
     expect(row.pid).toBeGreaterThan(0);
 
-    // D6 ticket → an EXTERNAL ghosttea client attaches to the same authority
+    // TP-S3e: the product mint is ROUTED (doors + grants); the EXTERNAL
+    // ghosttea client attaches over the fieldd-plane UDS endpoints instead
     const ticket = (await rpc.call("terminal.openTicket", {
       sessionId: created.sessionId,
-    })) as TerminalTicket;
+    })) as { endpoints: { controlUrl: string } };
+    expect(ticket.endpoints.controlUrl).toMatch(/^ws:/);
+    const uds = daemon.native.terminalEndpoints as TerminalEndpoints;
     const client = new GhostteaAutomationClient(
-      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      { controlSocket: uds.controlSocket, authToken: uds.authToken },
       { clientBuild: "vibefield-seam-test" },
     );
     cleanup.push(() => client.dispose());
@@ -157,14 +160,18 @@ describe("the terminal seam (NF-3, real field-native)", () => {
 
     const created = (await rpc.call("terminal.create", { shell: SHELL })) as {
       sessionId: string;
-      ticket: TerminalTicket;
+      route: { cellBootId: string };
+      endpoints: { controlUrl: string };
     };
     // NOT polled, NOT retried: the very next statement attaches. GT-0 measured
     // this window at 62-117ms of NOT_FOUND from openTicket, and the retry loop
-    // that hid it is deleted — if the mint ever goes back through the observed
-    // inventory, this test fails on the first run rather than flaking later.
+    // that hid it is deleted — the routed create ticket is minted ATOMICALLY
+    // with the birth (never through the observed inventory), and the UDS
+    // endpoints were paired at boot, so the attach has nothing to wait on.
+    expect(created.endpoints.controlUrl).toMatch(/^ws:/);
+    const uds = daemon.native.terminalEndpoints as TerminalEndpoints;
     const client = new GhostteaAutomationClient(
-      { controlSocket: created.ticket.controlSocket, authToken: created.ticket.token },
+      { controlSocket: uds.controlSocket, authToken: uds.authToken },
       { clientBuild: "vibefield-seam-test" },
     );
     cleanup.push(() => client.dispose());
@@ -194,11 +201,11 @@ describe("the terminal seam (NF-3, real field-native)", () => {
     });
     const attach = (await rpc.call("terminal.openTicket", {
       sessionId: created.sessionId,
-    })) as TerminalTicket;
-    // TP-S1: the legacy trio is UNCHANGED, and the TPv3 route + grants ride
-    // beside it (signed with the REAL cell's key — the floor minted one), so
-    // this is a subset match, not an equality.
-    expect(attach).toMatchObject(created.ticket);
+    })) as { route: { cellBootId: string }; endpoints: { controlUrl: string } };
+    // the attach-to-existing mint names the SAME cell and the same doors the
+    // atomic create ticket did
+    expect(attach.route.cellBootId).toBe(created.route.cellBootId);
+    expect(attach.endpoints).toEqual(created.endpoints);
 
     await rpc.call("terminal.terminate", { sessionId: created.sessionId });
   }, 60_000);

@@ -1,11 +1,13 @@
 {
-  "controlSocket": "/tmp/vf/termctl.3.sock",
-  "frameSocket": "/tmp/vf/termframes.3.sock",
-  "token": "legacy-bridge-token",
+  "sessionId": "sess-01J8Z3K9",
   "route": {
     "cellBootId": "cb-7f3a9c1e-2026",
     "routeRevision": 12,
     "leaseEpoch": 4
+  },
+  "endpoints": {
+    "controlUrl": "ws://127.0.0.1:53111/control",
+    "framesUrl": "ws://127.0.0.1:53112/frames"
   },
   "transportGrant": {
     "protected": {
@@ -53,5 +55,33 @@
       "expiresAt": 1787789400000
     },
     "mac": "dkYJm2TK93OYEYucdZi6FMyOJgw2nLMUz6vpTjBqIEc"
+  },
+  "session": {
+    "id": "sess-01J8Z3K9",
+    "handle": "18446744073709551615",
+    "executable": "/bin/zsh",
+    "cols": 80,
+    "rows": 24,
+    "exited": false,
+    "readWrite": true,
+    "title": null,
+    "cwd": "/Users/test",
+    "bellCount": 0,
+    "pid": 123,
+    "createdAtMs": 1000,
+    "exitCode": null,
+    "exitSignal": null,
+    "requestedTermination": null,
+    "exitOutcome": null,
+    "ownerId": null,
+    "persistence": "keep-until-exit",
+    "activity": {
+      "kind": "unknown",
+      "source": "unsupported",
+      "confidence": "heuristic",
+      "rootProcessGroupId": null,
+      "foregroundProcessGroupId": null,
+      "observedAtMs": 1000
+    }
   }
 }

@@ -1,5 +1,0 @@
-{
-  "controlSocket": "/data/native/run/termctl.sock",
-  "frameSocket": "/data/native/run/termframe.sock",
-  "token": "per-boot-native-token"
-}

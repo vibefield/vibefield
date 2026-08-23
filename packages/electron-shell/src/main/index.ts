@@ -53,7 +53,6 @@ import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-
 import { GodviewRegistry, installGodviewDoubleShift } from "./godview";
 import {
   registerGodviewToggle,
-  registerTerminalBackend,
   registerUsersRoster,
   registerUsersUpdate,
   registerWindowBootstrap,
@@ -70,7 +69,7 @@ import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
-import { isSmokeLike, parseDirectTerminalDoor, parseMode } from "./modes";
+import { isSmokeLike, parseMode } from "./modes";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
@@ -92,7 +91,6 @@ import { buildCsp, importMapHashesFromHtml } from "./security-policy";
 import { backfillMigratedSetupVariant } from "./setup-variant";
 import { RecoveringShellProvider } from "./shell-provider";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
-import { TerminalBackendRegistry } from "./terminal-backend";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
 import type { TrayLinkState } from "./tray-model";
@@ -111,7 +109,6 @@ const MODE = parseMode(process.argv);
 // TP-S3a — the direct terminal door (TP-D1 as ratified): a rollback flag, OFF
 // until S3e; it widens the production CSP to the cells' loopback ports and, at
 // S3b, routes the pool's transport. Parsed once, beside the mode.
-const DIRECT_TERMINAL_DOOR = parseDirectTerminalDoor(process.argv, process.env);
 // Smoke/headless runs have no GPU to talk to — a CI runner or an ssh session on
 // Windows has no window station, and over ssh Chromium's GPU init fails outright.
 // Force software rendering for smoke-like modes (harmless when a GPU is present);
@@ -152,7 +149,6 @@ let localDiagnostics: ElectronLocalDiagnostics | null = null;
 let crashArtifacts: CrashArtifactManager | null = null;
 let supportBundles: SupportBundleService | null = null;
 let trayController: TrayController | null = null;
-let terminalBackends: TerminalBackendRegistry | null = null;
 let godviewStates: GodviewRegistry | null = null;
 let primaryWindowOpener: (() => Promise<Electron.BrowserWindow>) | null = null;
 const shellDisposers = new Set<() => void>();
@@ -177,8 +173,6 @@ async function revealPrimaryWindow(): Promise<Electron.BrowserWindow> {
 function disposeShellState(): void {
   trayController?.dispose();
   trayController = null;
-  terminalBackends?.dispose();
-  terminalBackends = null;
   godviewStates?.dispose();
   godviewStates = null;
   primaryWindowOpener = null;
@@ -389,7 +383,7 @@ async function main(
   } catch {
     importMapHashes = [];
   }
-  installCsp(MODE, importMapHashes, { directTerminalDoor: DIRECT_TERMINAL_DOOR });
+  installCsp(MODE, importMapHashes);
   // The renderer's own origin. Dev serves from Vite instead, so the handler is
   // pointless there; every other mode loads vibefield-app://shell and would show
   // a blank window without it. Root is the built renderer beside dist/main.
@@ -424,7 +418,7 @@ async function main(
       });
     },
   });
-  const appCsp = buildCsp(MODE, importMapHashes, { directTerminalDoor: DIRECT_TERMINAL_DOOR });
+  const appCsp = buildCsp(MODE, importMapHashes);
   if (MODE !== "dev") {
     installAppProtocol({
       root: rendererRoot,
@@ -900,7 +894,6 @@ async function main(
     registry,
     (options) => fielddHandles!.ensure(options),
     DESKTOP_BOOT_ID,
-    { directTerminalDoor: DIRECT_TERMINAL_DOOR },
     logger.child({ component: "ipc.bootstrap" }),
   );
 
@@ -1040,15 +1033,8 @@ async function main(
     logger.child({ component: "ipc.users" }),
   );
 
-  // GT-D3: external mode, never the supervisor — field-native embeds the floor
-  // and outlives this process. The registry builds nothing until a renderer
-  // hands over a ticket, so a window with no deck forks no bridge.
-  terminalBackends = new TerminalBackendRegistry({
-    bridgeEntryPoint: join(__dirname, "bridge-entry.mjs"),
-    createBackend: (options) => new GhostteaElectronBackend(options),
-    logger: logger.child({ component: "terminal.backend" }),
-  });
-  registerTerminalBackend(registry, terminalBackends, logger.child({ component: "ipc.terminal" }));
+  // GT-D3's terminal Backend RETIRED at TP-S3e: the renderer dials the cells'
+  // T1 doors directly — main forks no bridge and holds no terminal transport.
 
   // GT-D2: main owns the overlay bit, the menu draws it, the renderer reads it.
   // `redrawMenu` is assigned below for the modes that have a menu; the states

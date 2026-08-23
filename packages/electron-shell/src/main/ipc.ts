@@ -2,7 +2,6 @@ import {
   GodviewSetRequest,
   GodviewState as GodviewStateSchema,
   IPC_CHANNELS,
-  TerminalBackendAttachResult,
   type UserRecord,
   UsersCreateParams,
   type UsersListSnapshot,
@@ -15,7 +14,6 @@ import { ipcMain } from "electron";
 import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap";
 import type { GodviewRegistry } from "./godview";
 import { shellIdentity } from "./login-shell";
-import type { TerminalBackendRegistry } from "./terminal-backend";
 import type { WindowRegistry } from "./window-policy";
 
 // The closed IPC surface, main side (ESR §6.2–6.3): handlers wiring pure policy
@@ -29,7 +27,6 @@ export function registerWindowBootstrap(
   registry: WindowRegistry,
   ensure: FielddSupervisor["ensure"],
   desktopBootId: string,
-  options: { directTerminalDoor: boolean },
   logger?: Logger,
 ): WindowRendererBoundary {
   const handle = createBootstrapHandler({
@@ -37,7 +34,9 @@ export function registerWindowBootstrap(
     ensure,
     desktopBootId,
     terminal: {
-      transport: options.directTerminalDoor ? "routed" : "bridge",
+      // TP-S3e: the transport IS routed — the rollback flag and the bridge it
+      // selected are gone; policy still rides the authenticated bootstrap.
+      transport: "routed",
       ...shellIdentity(),
     },
     onRevokeError: (error, details) => {
@@ -162,40 +161,6 @@ export function registerUsersRoster(
  * machine that a sandboxed page cannot read, and the deck needs them before it
  * may mount a workspace. Composed HERE rather than inside the Backend host,
  * which stays exactly what it was — a ticket in, a bridge out. */
-export function registerTerminalBackend(
-  registry: WindowRegistry,
-  backends: TerminalBackendRegistry,
-  logger?: Logger,
-): void {
-  ipcMain.handle(IPC_CHANNELS.terminalConnect, async (event, raw: unknown) => {
-    if (!registry.owns(event.sender)) {
-      logger?.warn(
-        "desktop.ipc.terminal_connect_refused",
-        "Electron refused a terminal connection from an unregistered sender",
-        { webContentsId: event.sender.id },
-      );
-      throw new Error("terminal connect refused: unregistered sender");
-    }
-    try {
-      const result = await backends.ensure(event.sender).connect(raw);
-      logger?.info(
-        "desktop.ipc.terminal_backend_attached",
-        "A registered renderer received the terminal bridge ports",
-        { webContentsId: event.sender.id },
-      );
-      return TerminalBackendAttachResult.parse({ ...result, ...shellIdentity() });
-    } catch (error) {
-      logger?.error(
-        "desktop.ipc.terminal_connect_failed",
-        "Electron could not attach a terminal backend for a renderer",
-        error,
-        { webContentsId: event.sender.id },
-      );
-      throw error;
-    }
-  });
-}
-
 /** The Godview door (GT-D2). The toolbar button's request and the menu
  * accelerator's are the SAME transition applied to the same bit — this handler
  * exists so the button can reach it, not so the renderer can hold an opinion.

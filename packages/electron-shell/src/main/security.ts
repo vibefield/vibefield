@@ -1,23 +1,13 @@
 import { app, type BrowserWindow, type Session, session, shell, type WebContents } from "electron";
 import type { ShellMode } from "./modes";
-import {
-  buildCsp,
-  type CspOptions,
-  decideNavigation,
-  decidePermission,
-  decideWindowOpen,
-} from "./security-policy";
+import { buildCsp, decideNavigation, decidePermission, decideWindowOpen } from "./security-policy";
 
 // Electron wiring for the pure policy in security-policy.ts (ESR §5.2.3–5.2.4;
 // electron-security-packaging.md §7). Nothing here decides anything — every
 // verdict comes from the pure module so the suite can prove it without Electron.
 
-export function installCsp(
-  mode: ShellMode,
-  importMapHashes: readonly string[] = [],
-  options: CspOptions = {},
-): void {
-  const csp = buildCsp(mode, importMapHashes, options);
+export function installCsp(mode: ShellMode, importMapHashes: readonly string[] = []): void {
+  const csp = buildCsp(mode, importMapHashes);
   if (csp === null) return;
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
     cb({ responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [csp] } });

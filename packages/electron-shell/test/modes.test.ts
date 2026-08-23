@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  isSmokeLike,
-  parseDirectTerminalDoor,
-  parseMode,
-  type ShellMode,
-  shutdownPolicy,
-} from "../src/main/modes";
+import { isSmokeLike, parseMode, type ShellMode, shutdownPolicy } from "../src/main/modes";
 
 // Mode selection is parsed ONCE (ESR §5.2.6). These lock the precedence, the
 // smoke-like classification, and the daemon-lifetime policy so no downstream
@@ -115,14 +109,6 @@ describe("shutdownPolicy", () => {
   });
 });
 
-describe("parseDirectTerminalDoor (TP-S3a — TP-D1's rollback flag)", () => {
-  it("is OFF by default, ON by argv or env, and implied by the door probe", () => {
-    expect(parseDirectTerminalDoor([], {})).toBe(false);
-    expect(parseDirectTerminalDoor(["--smoke"], { VIBEFIELD_TERMINAL_DIRECT_DOOR: "0" })).toBe(
-      false,
-    );
-    expect(parseDirectTerminalDoor(["--terminal-direct-door"], {})).toBe(true);
-    expect(parseDirectTerminalDoor([], { VIBEFIELD_TERMINAL_DIRECT_DOOR: "1" })).toBe(true);
-    expect(parseDirectTerminalDoor(["--terminal-door-probe"], {})).toBe(true);
-  });
-});
+// TP-S3e: `parseDirectTerminalDoor` retired with the bridge — the routed
+// transport is unconditional and the CSP test asserts the widened policy on
+// purpose (security-policy.test.ts).

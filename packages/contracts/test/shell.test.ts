@@ -202,7 +202,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the sixteen channel keys, in order", () => {
+  it("exposes exactly the fourteen channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -212,8 +212,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "liveSurfacePorts",
       "shellCommand",
       "desktopState",
-      "terminalConnect",
-      "terminalStatus",
+      // TP-S3e: terminalConnect + terminalStatus retired with the bridge —
+      // the renderer dials the cells' T1 doors itself.
       "godviewState",
       "godviewSet",
       "usersUpdate", // UA-3 — the Account page's profile write (main owns users.json)
@@ -233,8 +233,6 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       liveSurfacePorts: "vibefield:live-surfaces:host-ports",
       shellCommand: "vibefield:shell:command",
       desktopState: "vibefield:shell:desktop-state",
-      terminalConnect: "vibefield:terminal:connect",
-      terminalStatus: "vibefield:terminal:status",
       godviewState: "vibefield:godview:state",
       godviewSet: "vibefield:godview:set",
       usersUpdate: "vibefield:users:update",

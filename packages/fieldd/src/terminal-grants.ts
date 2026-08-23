@@ -101,12 +101,13 @@ export interface MintTicketInput {
   principal: GrantPrincipal;
   sessionId: string;
   route: RouteBinding;
-  /** TP-S3a — the cell's T1 doors when the route row carries them; copied
-   * verbatim into `TerminalOpenTicket.endpoints`. */
-  doors?: CellEndpointSet;
+  /** The cell's T1 doors, copied verbatim into `TerminalOpenTicket.endpoints`.
+   * REQUIRED since TP-S3e: a ticket without dialable doors is not a ticket —
+   * the caller refuses UNAVAILABLE before minting. */
+  doors: CellEndpointSet;
 }
 
-export interface RenewAttachInput extends MintTicketInput {
+export interface RenewAttachInput extends Omit<MintTicketInput, "doors"> {
   expectGeneration: number;
   requestId: string;
 }
@@ -169,7 +170,7 @@ export class TerminalGrantMinter {
   mintTicket(input: MintTicketInput): TerminalOpenTicket {
     return {
       route: input.route,
-      ...(input.doors === undefined ? {} : { endpoints: input.doors }),
+      endpoints: input.doors,
       transportGrant: this.mintTransport(input.key, input.principal),
       attachGrant: this.mintAttach(input),
     };
@@ -221,7 +222,7 @@ export class TerminalGrantMinter {
   }
 
   private attachGrantAt(
-    input: MintTicketInput,
+    input: Omit<MintTicketInput, "doors">,
     clientId: string,
     generation: number,
   ): SessionAttachGrant {

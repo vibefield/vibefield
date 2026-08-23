@@ -43,22 +43,10 @@ export function isSmokeLike(mode: ShellMode): boolean {
   );
 }
 
-/** TP-S3a — the DIRECT terminal door (terminal-pipeline-v3 TP-D1 as ratified):
- * the renderer dials the cells' loopback WebSocket doors itself. OFF by
- * default until TP-S3e retires the bridge; while off, production keeps its
- * two pinned fieldd ports in `connect-src`; while on, the policy admits
- * `ws://127.0.0.1:*` (security-policy.ts) — the same rollback flag that will
- * route the pool's transport at S3b. Parsed ONCE, here, like the mode. The
- * probe mode implies it. */
-export function parseDirectTerminalDoor(
-  argv: readonly string[],
-  env: Readonly<Record<string, string | undefined>>,
-): boolean {
-  if (argv.includes("--terminal-direct-door")) return true;
-  if (argv.includes("--terminal-door-probe")) return true;
-  return env["VIBEFIELD_TERMINAL_DIRECT_DOOR"] === "1";
-}
-
+// The `--terminal-direct-door` rollback flag RETIRED at TP-S3e: the routed
+// transport is the only one, the production CSP admits the cells' loopback
+// WebSockets unconditionally (security-policy.ts), and the bridge it selected
+// is gone. `--terminal-door-probe` remains a MODE below.
 /** Daemon lifetime policy (ESR §7.3): smoke runs stop what they spawned;
  * production leaves daemons running past the shell (two-plane law). Dev is
  * leave-running too — §7.3 permits either, and the dev-runner is the daemon

@@ -58,8 +58,6 @@ import {
   TerminalConfigReadParams,
   TerminalConfigWriteParams,
   type TerminalConfigWriteResult,
-  TerminalConnectTicketParams,
-  type TerminalConnectTicketResult,
   type TerminalCreateOpenResponse,
   TerminalCreateParams,
   type TerminalListResult,
@@ -1292,29 +1290,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // (terminal.list stays the transport-facing inventory). Refuses before the
     // first observation exactly like list.
     api.register("terminal.roster", (): TerminalRosterResult => terminals.roster());
-    // GT-D10: the connection's ticket, minted against no session at all. The
-    // deck used to open by CREATING one — a shell nobody asked for, born so a
-    // ticket could ride its answer — which is exactly how fieldd became a
-    // second authority in front of the workspace. There is no floor state to
-    // gate on here (a connection is not a session), so this neither waits for
-    // the observed inventory nor touches it; the target names the connection
-    // rather than a session id, because that is what was granted.
-    api.register(
-      "terminal.connectTicket",
-      async (ctx, params): Promise<TerminalConnectTicketResult> => {
-        // The declared params shape, actually parsed (GT-5b): it accepts
-        // anything object-shaped today and is the seam a device selector (D35)
-        // would grow into, but a contract nothing reads is not a contract.
-        if (!TerminalConnectTicketParams.safeParse(params ?? {}).success)
-          throw new RpcCallError("PRECONDITION_FAILED", "expected an object or no params", false);
-        return await audit.required(
-          ctx,
-          { action: "terminal.ticket.mint", target: { kind: "terminal", id: "connection" } },
-          () => ({ ticket: terminals.ticket() }),
-          () => ({ outcome: "succeeded" }),
-        );
-      },
-    );
+    // GT-D10's `terminal.connectTicket` RETIRED at TP-S3e with the bridge it
+    // fed: the routed transport is per SESSION (openTicket/create); there is
+    // no sessionless credential to mint.
     // GT-1: create ALSO mints. openTicket gates on the observed inventory,
     // which is a mgmt round trip behind the spawn — so create-then-ticket
     // raced a session that certainly existed (GT-0's measured 62-117ms window).

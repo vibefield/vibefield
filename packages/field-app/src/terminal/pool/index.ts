@@ -40,6 +40,7 @@ export {
   type TerminalSessionView,
   type TransportTrace,
   terminalPoolCellCount,
+  terminalPoolConfigured,
   terminalPoolDemand,
   terminalPoolGrantedSessions,
   terminalPoolLiveSessions,

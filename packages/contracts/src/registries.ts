@@ -482,11 +482,9 @@ export const IPC_CHANNELS = {
   shellCommand: "vibefield:shell:command",
   /** main → renderer: native tray/background capability truth */
   desktopState: "vibefield:shell:desktop-state",
-  /** renderer → main invoke: a redeemed TerminalTicket; main builds/replaces
-   * this window's external-mode Backend and posts its ports (GT-D3) */
-  terminalConnect: "vibefield:terminal:connect",
-  /** main → renderer event: TerminalBridgeStatus for this window's bridge */
-  terminalStatus: "vibefield:terminal:status",
+  // GT-D3's bridge channels (`vibefield:terminal:connect` invoke,
+  // `vibefield:terminal:status` event) RETIRED at TP-S3e: the renderer dials
+  // the cells' T1 doors directly and main runs no terminal Backend.
   /** main → renderer event: GodviewState — this window's overlay truth, which
    * main owns (GT-D2: the accelerator intercepts before the renderer, so the
    * menu item and the renderer must read ONE state, and it has to be main's) */

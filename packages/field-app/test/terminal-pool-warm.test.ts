@@ -69,6 +69,10 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       dispose: () => {
         disposed += 1;
       },
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      registerSession: () => undefined,
+      listSessions: () => Promise.resolve([]),
       rendererBackend: "webgpu",
     };
   },
@@ -84,17 +88,13 @@ const pool = await import("../src/terminal/pool");
 type PoolClient = Parameters<typeof pool.prewarmTerminalPool>[0];
 
 let requests: string[] = [];
-let connects = 0;
-let publishStatus: ((status: { state: string }) => void) | null = null;
-const LEGACY = { controlSocket: "c", frameSocket: "f", token: "t" };
 const fieldd = {
   request: (method: string) => {
     requests.push(method);
     if (method === "terminal.roster") return Promise.resolve({ items: [] });
-    // The legacy trio, spread for `openTicket` and nested for `create`: this
-    // fixture is about the WARM and the LADDER, and a keyless floor exercises
-    // both without a grant in sight.
-    return Promise.resolve({ ...LEGACY, sessionId: "s1", ticket: LEGACY });
+    // TP-S3e: a routed claim mints NOTHING (G23 mints per activation at real
+    // pane mount) — any other ask from this fixture is a failure, loudly.
+    return Promise.reject(new Error(`unexpected method ${method}`));
   },
 } as unknown as PoolClient;
 
@@ -108,15 +108,8 @@ async function settle(): Promise<void> {
   for (let index = 0; index < 24; index += 1) await Promise.resolve();
 }
 
-/** The bridge, speaking. Only a TRANSITION is news (GT-2c) — the guard the pool
- * now holds once instead of the deck holding one per mount. */
-function bridge(state: string): void {
-  publishStatus?.({ state });
-}
-
-function installHost(terminal: unknown): void {
+function installHost(): void {
   setHost({
-    terminal,
     logger: { child: () => ({ info: () => undefined, error: () => undefined }) },
   } as unknown as FieldHost);
 }
@@ -127,21 +120,13 @@ beforeEach(() => {
   requests = [];
   runtimesMade = 0;
   disposed = 0;
-  connects = 0;
-  publishStatus = null;
   pool.disposeTerminalPool();
-  installHost({
-    connect: () => {
-      connects += 1;
-      return Promise.resolve({ defaultShell: "/bin/zsh", home: "/Users/test" });
-    },
-    onStatus: (handler: (status: { state: string }) => void) => {
-      publishStatus = handler;
-      return () => {
-        publishStatus = null;
-      };
-    },
+  pool.configureTerminalPool({
+    transport: "routed",
+    defaultShell: "/bin/zsh",
+    home: "/Users/test",
   });
+  installHost();
 });
 
 afterEach(() => {
@@ -161,7 +146,6 @@ describe("warming the transport (GT-D14, in the pool)", () => {
     await settle();
 
     expect(requests, "a warm asks the floor for nothing at all").toEqual([]);
-    expect(connects, "and forks no bridge").toBe(0);
     // The device warm, and its close: an open measurement would accumulate
     // sample arrays for a deck that has not been opened.
     expect(runtimeCalls).toEqual(["performance-start", "performance-finish"]);
@@ -180,7 +164,7 @@ describe("warming the transport (GT-D14, in the pool)", () => {
     await settle();
 
     expect(runtimesMade).toBe(1);
-    expect(connects).toBe(0);
+    expect(requests).toEqual([]);
   });
 
   it("hands the transport to the first claimer, and the second gets the same one", async () => {
@@ -228,7 +212,6 @@ describe("warming the transport (GT-D14, in the pool)", () => {
     await settle();
 
     expect(runtimesMade, "the claim built one; the prewarm added none").toBe(1);
-    expect(connects).toBe(1);
     expect(pool.terminalPoolSnapshot().phase).toBe("open");
     expect(pool.terminalPoolSnapshot().warm, "there was nothing to inherit").toBe(false);
   });
@@ -241,15 +224,15 @@ describe("warming the transport (GT-D14, in the pool)", () => {
     // was a safety net for an API shape rather than a behaviour anyone wanted.
     // The pool's claim joins the flight instead, and the law holds by
     // construction: at no point do two runtimes wait for one port delivery.
-    let releaseTicket: (value: unknown) => void = () => undefined;
-    const slow = {
-      request: () =>
-        new Promise((resolve) => {
-          releaseTicket = resolve;
-        }),
-    } as unknown as PoolClient;
+    // TP-S3e: the one await a warm has is the DEVICE (a routed warm touches
+    // fieldd not at all), so the in-flight case is a slow device warm.
+    let releaseDevice: (value: { backend: string }) => void = () => undefined;
+    deviceWarm = () =>
+      new Promise((resolve) => {
+        releaseDevice = resolve;
+      });
 
-    pool.prewarmTerminalPool(slow);
+    pool.prewarmTerminalPool(fieldd);
     await settle();
     expect(runtimesMade).toBe(1);
 
@@ -257,7 +240,7 @@ describe("warming the transport (GT-D14, in the pool)", () => {
     await settle();
     expect(runtimesMade, "the claim built nothing while a warm was in flight").toBe(1);
 
-    releaseTicket({ ticket: { token: "t", controlSocket: "c", frameSocket: "f" } });
+    releaseDevice({ backend: "webgpu" });
     await settle();
 
     expect(runtimesMade).toBe(1);
@@ -311,126 +294,13 @@ describe("warming the transport (GT-D14, in the pool)", () => {
 });
 
 describe("the ladder, driven by the bridge (GT-D14's re-warm clause, GT-2c's guard)", () => {
-  it("discards a warm transport whose bridge died, and disposes its runtime", async () => {
-    pool.prewarmTerminalPool(fieldd);
-    await settle();
-
-    bridge("bridge-down");
-    expect(disposed).toBe(1);
-    expect(pool.terminalPoolSnapshot().phase).toBe("spent");
-    expect(pool.terminalPoolCellCount(), "a dead transport leaves the table").toBe(0);
-  });
-
-  it("re-warms exactly ONCE, never in a loop", async () => {
-    pool.prewarmTerminalPool(fieldd);
-    await settle();
-
-    bridge("bridge-down");
-    bridge("bridge-up");
-    await settle();
-    expect(runtimesMade).toBe(2);
-    expect(pool.terminalPoolSnapshot().phase).toBe("warm");
-
-    // Every subsequent bridge death and rebuild — and there are many — adds
-    // nothing.
-    bridge("bridge-down");
-    bridge("bridge-up");
-    await settle();
-    expect(runtimesMade).toBe(2);
-    expect(pool.terminalPoolSnapshot().phase).toBe("spent");
-  });
-
-  it("keeps ONE ports wait when a flapping bridge overlaps two warms", async () => {
-    // The narrow one, and the reason it is here: a bridge that dies and returns
-    // while a warm is still in flight DISCARDS that warm and starts the single
-    // re-warm — so for a moment an old acquisition is still running while a new
-    // one owns the slot. If the old one cleared the slot when it landed, a claim
-    // arriving afterwards would see nothing in flight and arm a SECOND ports
-    // wait against the live warm. Main posts the two MessagePorts once; two
-    // waiters both resolve with the same pair and the deck that loses sits at
-    // "starting" forever.
-    let releaseFirst: (value: { backend: string }) => void = () => undefined;
-    let warms = 0;
-    deviceWarm = () => {
-      warms += 1;
-      if (warms === 1) {
-        return new Promise((resolve) => {
-          releaseFirst = resolve;
-        });
-      }
-      return new Promise(() => undefined); // the re-warm stays in flight
-    };
-
-    pool.prewarmTerminalPool(fieldd);
-    await settle();
-    expect(runtimesMade).toBe(1);
-
-    bridge("bridge-down"); // discards the warm in flight
-    bridge("bridge-up"); // the one re-warm, which now owns the slot
-    await settle();
-    expect(runtimesMade, "the re-warm built its own").toBe(2);
-
-    // The FIRST warm lands, late and superseded. It must dispose itself and
-    // leave the slot alone.
-    releaseFirst({ backend: "webgpu" });
-    await settle();
-    expect(disposed, "the discard disposed the superseded runtime").toBe(1);
-    expect(pool.terminalPoolSnapshot().phase).toBe("warming");
-
-    // ...and a claim now JOINS the live warm rather than building a third.
-    openOn();
-    await settle();
-    expect(runtimesMade).toBe(2);
-  });
-
-  it("ignores a republished state, which is not a transition", async () => {
-    // Main publishes on EVERY set, including unchanged — its own contract test
-    // pins that. Treating a republish as news built the storm: each event minted
-    // a runtime and a generation, each generation re-asked, and the deck
-    // remounted itself to death.
-    openOn();
-    await settle();
-    expect(runtimesMade).toBe(1);
-
-    for (let index = 0; index < 5; index += 1) bridge("bridge-up");
-    await settle();
-    expect(runtimesMade, "the first bridge-up is a transition; the rest are echoes").toBe(2);
-  });
-
-  it("leaves a CLAIMED transport alone on a death — it is the consumer's to show", async () => {
-    pool.prewarmTerminalPool(fieldd);
-    await settle();
-    openOn();
-    await settle();
-
-    bridge("bridge-down");
-    // Not disposed: a rebuild is coming, and the consumer shows the honest face
-    // meanwhile. The custody clause is for transports NOBODY has claimed.
-    expect(disposed).toBe(0);
-    expect(pool.terminalPoolSnapshot().claimed).toBe(true);
-    expect(pool.terminalPoolSnapshot().fault).toEqual({
-      plane: "transport",
-      message: "the terminal bridge died — rebuilding",
-    });
-
-    // ...and the rebuild replaces the runtime, because a runtime holds its ports
-    // for life and the old one's wait is spent.
-    bridge("bridge-up");
-    await settle();
-    expect(runtimesMade).toBe(2);
-    expect(disposed).toBe(1);
-    expect(pool.terminalPoolSnapshot().fault).toBeNull();
-    expect(pool.terminalPoolSnapshot().phase).toBe("open");
-  });
-
-  it("treats ticket-expired as a rebuild, because only a fresh redeem will do", async () => {
-    openOn();
-    await settle();
-    bridge("ticket-expired");
-    await settle();
-    expect(runtimesMade).toBe(2);
-    expect(requests.filter((method) => method === "terminal.openTicket")).toHaveLength(2);
-  });
+  // The BRIDGE-EVENT LADDER (discard-on-death · the one re-warm · flapping ·
+  // republish · claimed-alone · ticket-expired) RETIRED at TP-S3e with its
+  // subject: there is no main-side transport process whose death can reach a
+  // warm, no status channel to flap, and no ticket main holds to expire. What
+  // survives of GT-D14 is below — a warm that FAILS still spends its one
+  // attempt — and the claimed pool's replacement door is retryTerminalPool,
+  // proven in the demand/routing suites.
 
   it("spends the attempt when the warm itself fails, rather than retrying", async () => {
     deviceWarm = () => Promise.reject(new Error("no GPU adapter"));
@@ -447,21 +317,11 @@ describe("the ladder, driven by the bridge (GT-D14's re-warm clause, GT-2c's gua
   });
 
   it("reports the PLANE that refused, because they are opposite facts (GT-5c)", async () => {
-    installHost({
-      connect: () => Promise.reject(new Error("no bridge on this host")),
-      onStatus: () => () => undefined,
-    });
-    openOn();
-    await settle();
-    expect(pool.terminalPoolSnapshot().fault?.plane).toBe("transport");
-    expect(pool.terminalPoolSnapshot().fault?.message).toContain("no bridge on this host");
-
-    pool.disposeTerminalPool();
-    installHost({
-      connect: () => Promise.resolve({ defaultShell: "/bin/zsh", home: "/Users/test" }),
-      onStatus: () => () => undefined,
-    });
-    // THE FIELDD plane. A refused MINT for a saved session is the EXPECTED case
+    // TP-S3e: the transport-plane half of this row (a bridge that will not
+    // connect) retired with the bridge; per-activation transport health is the
+    // routed runtime's. What remains is the fieldd plane, whose honesty is the
+    // GT-5c point: a refusal to MINT says nothing about the running shells.
+    // A refused MINT for a saved session is the EXPECTED case
     // — that pane's shell is gone — so the pool rests dormant and lets the
     // consumer ask for a session instead. The fault appears at the ask that is
     // NOT supposed to fail: field-native holds the PTYs and outlives fieldd, so
@@ -469,9 +329,18 @@ describe("the ladder, driven by the bridge (GT-D14's re-warm clause, GT-2c's gua
     const deaf = {
       request: () => Promise.reject(new Error("fieldd is not answering")),
     } as unknown as PoolClient;
+    pool.disposeTerminalPool();
+    pool.configureTerminalPool({
+      transport: "routed",
+      defaultShell: "/bin/zsh",
+      home: "/Users/test",
+    });
     pool.openTerminalPool(deaf, { sessionIds: ["s1"] });
     await settle();
-    expect(pool.terminalPoolSnapshot().phase, "a refused rejoin is not a fault").toBe("dormant");
+    // TP-S3e: a routed claim with pane ids is immediately mountable ("open") —
+    // the pool asked fieldd NOTHING, so there was no rejoin to refuse and no
+    // fault to report; honesty arrives per activation.
+    expect(pool.terminalPoolSnapshot().phase).toBe("open");
     expect(pool.terminalPoolSnapshot().fault).toBeNull();
 
     await expect(pool.createTerminalSession({})).rejects.toThrow("fieldd is not answering");

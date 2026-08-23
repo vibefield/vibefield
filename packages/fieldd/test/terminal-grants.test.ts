@@ -36,6 +36,10 @@ const WINDOW = {
 };
 const GUEST = { kind: "tailnet-guest", login: "me@example.com" };
 const ROUTE = { cellBootId: KEY.cellBootId, routeRevision: 12 };
+const DOORS = {
+  controlUrl: "ws://127.0.0.1:49152/control",
+  framesUrl: "ws://127.0.0.1:49152/frames",
+};
 
 function verify(
   key: CellGrantKey,
@@ -77,6 +81,7 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
       principal: WINDOW,
       sessionId: "s1",
       route: ROUTE,
+      doors: DOORS,
     });
     expect(CellTransportGrant.safeParse(ticket.transportGrant).success).toBe(true);
     expect(SessionAttachGrant.safeParse(ticket.attachGrant).success).toBe(true);
@@ -102,26 +107,20 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
     });
     // no lease epoch until the floor exposes custody's per-session epoch
     expect("leaseEpoch" in ticket.attachGrant.claims).toBe(false);
-    // S3a: endpoints ride the ticket EXACTLY when the row carries the doors
-    expect(ticket.endpoints).toBeUndefined();
-    expect("endpoints" in ticket).toBe(false);
-    const doors = {
-      controlUrl: "ws://127.0.0.1:49152/control",
-      framesUrl: "ws://127.0.0.1:49152/frames",
-    };
-    // (a fresh minter, so this row's generation ladder below is untouched)
-    const withDoors = new TerminalGrantMinter(() => now).mintTicket({
+    // TP-S3e: the doors ARE the ticket's endpoints, unconditionally — the
+    // S3a era's endpoints-optional mint retired with the bridge (the refusal
+    // for a doorless cell lives in terminal-service, before the mint).
+    expect(ticket.endpoints).toEqual(DOORS);
+    // a second key cannot verify the first key's grant
+    expect(verify({ ...KEY, keyHex: "a1".repeat(32) }, ticket.attachGrant)).toBe(false);
+    now += 1;
+    const again = minter.mintTicket({
       key: KEY,
       principal: WINDOW,
       sessionId: "s1",
       route: ROUTE,
-      doors,
+      doors: DOORS,
     });
-    expect(withDoors.endpoints).toEqual(doors);
-    // a second key cannot verify the first key's grant
-    expect(verify({ ...KEY, keyHex: "a1".repeat(32) }, ticket.attachGrant)).toBe(false);
-    now += 1;
-    const again = minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE });
     expect(again.transportGrant.claims.transportGrantGeneration).toBe(2);
     expect(again.transportGrant.claims.connectionSetId).toBe(
       ticket.transportGrant.claims.connectionSetId,
@@ -132,8 +131,8 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
 
   it("generations are per {client, cell} and per {client, session} — another window starts at 1", () => {
     const minter = new TerminalGrantMinter(() => 1);
-    minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE });
-    minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE });
+    minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE, doors: DOORS });
+    minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE, doors: DOORS });
     const other = minter.mintTicket({
       key: KEY,
       principal: {
@@ -142,17 +141,24 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
       },
       sessionId: "s1",
       route: ROUTE,
+      doors: DOORS,
     });
     expect(other.transportGrant.claims.transportGrantGeneration).toBe(1);
     expect(other.attachGrant.claims.grantGeneration).toBe(1);
-    const s2 = minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s2", route: ROUTE });
+    const s2 = minter.mintTicket({
+      key: KEY,
+      principal: WINDOW,
+      sessionId: "s2",
+      route: ROUTE,
+      doors: DOORS,
+    });
     expect(s2.transportGrant.claims.transportGrantGeneration).toBe(3);
     expect(s2.attachGrant.claims.grantGeneration).toBe(1);
   });
 
   it("renewAttach is a CAS on the held generation and idempotent by requestId", () => {
     const minter = new TerminalGrantMinter(() => 10);
-    minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE });
+    minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE, doors: DOORS });
     const renewed = minter.renewAttach({
       key: KEY,
       principal: WINDOW,
@@ -215,7 +221,7 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
 
   it("the renewal memory is bounded — the oldest requestId is forgotten first", () => {
     const minter = new TerminalGrantMinter(() => 10);
-    minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE });
+    minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE, doors: DOORS });
     let generation = 1;
     for (let i = 0; i < 12; i += 1) {
       minter.renewAttach({

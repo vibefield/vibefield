@@ -1,8 +1,7 @@
-import type { TerminalBridgeStatus } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type CSSProperties, type ReactElement, useCallback, useEffect, useState } from "react";
 import { getHost } from "../host";
-import { prewarmTerminalPool } from "../terminal/pool";
+import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
 import { GodviewDeck } from "./GodviewDeck";
@@ -67,17 +66,20 @@ function initialGodviewTheme(): GodviewTheme {
   }
 }
 
-/** A healthy bridge is a standing fact and gets no badge. */
-function bridgeNotice(status: TerminalBridgeStatus | null): string | null {
-  if (status === null || status.state === "bridge-up") return null;
+/** RETIRED shape kept for the docs trail: the bridge badge died with the
+ * bridge at TP-S3e (per-activation health is the routed runtime's, surfaced by
+ * the deck's own faces). */
+function bridgeNotice(): string | null {
+  return null;
+}
+/* the old ladder, for reference:
   if (status.state === "bridge-down") return "TERMINAL BRIDGE DOWN · REBUILDING";
   return "TERMINAL BRIDGE UNAVAILABLE · RECONNECTING";
-}
+*/
 
 export function GodviewOverlay(): ReactElement | null {
   const open = useGodviewOpen();
   const [everOpened, setEverOpened] = useState(false);
-  const [bridge, setBridge] = useState<TerminalBridgeStatus | null>(null);
   const [theme, setTheme] = useState<GodviewTheme>(initialGodviewTheme);
   const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning(theme));
   const [tuningOpen, setTuningOpen] = useState(false);
@@ -152,11 +154,6 @@ export function GodviewOverlay(): ReactElement | null {
   // while the deck held the other half — a replacement — behind its own
   // transition guard. Two subscribers, two ideas of what counted as news. The
   // pool subscribes once and owns the whole ladder; what is left here is a badge.
-  useEffect(() => {
-    const terminal = getHost().terminal;
-    if (terminal === undefined) return;
-    return terminal.onStatus(setBridge);
-  }, []);
 
   // BARE Escape IS DELIBERATELY UNBOUND HERE (James, 2026-08-04).
   //
@@ -178,8 +175,8 @@ export function GodviewOverlay(): ReactElement | null {
 
   if (!everOpened) return null;
 
-  const notice = bridgeNotice(bridge);
-  const terminalAvailable = getHost().terminal !== undefined;
+  const notice = bridgeNotice();
+  const terminalAvailable = terminalPoolConfigured();
   const stage = monitor.stageParameters;
   const screenStyle = {
     ...godviewTuningStyle(tuning),

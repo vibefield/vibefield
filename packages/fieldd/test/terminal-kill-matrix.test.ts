@@ -9,7 +9,7 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
-import type { TerminalInfo, TerminalTicket } from "@vibefield/contracts";
+import type { TerminalEndpoints, TerminalInfo } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
@@ -88,6 +88,15 @@ async function connect(daemon: FielddDaemon): Promise<WsRpc> {
   return rpc;
 }
 
+/** TP-S3e — the OUTSIDE observer's coordinates. The product ticket is routed
+ * (WS doors + grants) now, so a UDS automation client reads the fieldd-plane
+ * truth the daemon itself pairs on: the NF-D8 endpoints from the mgmt hello. */
+function udsEndpoints(daemon: FielddDaemon): TerminalEndpoints {
+  const ep = daemon.native.terminalEndpoints;
+  if (ep === undefined) throw new Error("the paired floor reported no terminal endpoints");
+  return ep;
+}
+
 async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T> {
   const deadline = Date.now() + ms;
   for (;;) {
@@ -130,19 +139,24 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     const created = (await rpc1.call("terminal.create", { shell: HOLD })) as {
       sessionId: string;
     };
+    // the routed mint while alive is the control (grants + doors present) …
     const ticket = (await poll(async () =>
       (await listOf(rpc1)).some((t) => t.sessionId === created.sessionId)
-        ? ((await rpc1.call("terminal.openTicket", { sessionId: created.sessionId })) as
-            | TerminalTicket
-            | undefined)
+        ? ((await rpc1.call("terminal.openTicket", { sessionId: created.sessionId })) as {
+            endpoints: { controlUrl: string };
+            attachGrant: { mac: string };
+          })
         : undefined,
-    )) as TerminalTicket;
+    )) as { endpoints: { controlUrl: string }; attachGrant: { mac: string } };
+    expect(ticket.endpoints.controlUrl).toMatch(/^ws:/);
+    // … and the OUTSIDE observer rides the fieldd-plane UDS coordinates
+    const uds = udsEndpoints(daemon1);
 
     // the product plane goes away — the floor must not notice
     await daemon1.stop();
 
     const outside = new GhostteaAutomationClient(
-      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      { controlSocket: uds.controlSocket, authToken: uds.authToken },
       { clientBuild: "kill-matrix" },
     );
     cleanup.push(() => outside.dispose());
@@ -162,11 +176,8 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     );
     expect(Date.now() - adoptedAt).toBeLessThan(2_000);
 
-    // a fresh ticket from the adopting fieldd drives the SAME session
-    const ticket2 = (await rpc2.call("terminal.openTicket", {
-      sessionId: created.sessionId,
-    })) as TerminalTicket;
-    expect(ticket2.token).toBe(ticket.token); // same native boot, same credential
+    // the adopting fieldd re-pairs onto the SAME native boot — same credential
+    expect(udsEndpoints(daemon2).authToken).toBe(uds.authToken);
     const term = (await rpc2.call("terminal.terminate", {
       sessionId: created.sessionId,
     })) as { terminated: boolean };
@@ -189,8 +200,8 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     // refusals below are the kill talking and not a door that never worked
     const beforeKill = (await rpc.call("terminal.openTicket", {
       sessionId: created.sessionId,
-    })) as TerminalTicket;
-    expect(beforeKill.token).toBeTruthy();
+    })) as { attachGrant?: { mac?: string } };
+    expect(beforeKill.attachGrant?.mac).toBeTruthy();
 
     // crash the floor: sessions die with it (the honest ceiling) and the seam
     // must refuse interactive ops rather than pretend
@@ -210,8 +221,9 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     // Polled, not asserted once: `create` can reach UNAVAILABLE through the
     // dead CONTROL socket a beat before the mgmt link's close clears the
     // endpoints, and it is the cleared endpoints these two doors read.
+    // (terminal.connectTicket retired at TP-S3e — openTicket is the one mint
+    // left to try against a corpse)
     for (const [method, params] of [
-      ["terminal.connectTicket", {}],
       ["terminal.openTicket", { sessionId: created.sessionId }],
     ] as const) {
       const kind = await poll(async () => {
@@ -248,15 +260,12 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     const created = (await rpc.call("terminal.create", { shell: SH })) as {
       sessionId: string;
     };
-    const ticket = (await poll(async () =>
-      (await listOf(rpc)).some((t) => t.sessionId === created.sessionId)
-        ? ((await rpc.call("terminal.openTicket", { sessionId: created.sessionId })) as
-            | TerminalTicket
-            | undefined)
-        : undefined,
-    )) as TerminalTicket;
+    await poll(async () =>
+      (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+    );
+    const uds = udsEndpoints(daemon);
     const client = new GhostteaAutomationClient(
-      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      { controlSocket: uds.controlSocket, authToken: uds.authToken },
       { clientBuild: "kill-matrix" },
     );
     cleanup.push(() => client.dispose());
@@ -311,15 +320,12 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       cleanup.push(() => daemon.stop());
       const rpc = await connect(daemon);
       const created = (await rpc.call("terminal.create", { shell: SH })) as { sessionId: string };
-      const ticket = (await poll(async () =>
-        (await listOf(rpc)).some((t) => t.sessionId === created.sessionId)
-          ? ((await rpc.call("terminal.openTicket", { sessionId: created.sessionId })) as
-              | TerminalTicket
-              | undefined)
-          : undefined,
-      )) as TerminalTicket;
+      await poll(async () =>
+        (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+      );
+      const uds = udsEndpoints(daemon);
       const client = new GhostteaAutomationClient(
-        { controlSocket: ticket.controlSocket, authToken: ticket.token },
+        { controlSocket: uds.controlSocket, authToken: uds.authToken },
         { clientBuild: "kill-matrix" },
       );
       cleanup.push(() => client.dispose());
@@ -349,15 +355,12 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     const created = (await rpc.call("terminal.create", { shell: HOLD })) as {
       sessionId: string;
     };
-    const ticket = (await poll(async () =>
-      (await listOf(rpc)).some((t) => t.sessionId === created.sessionId)
-        ? ((await rpc.call("terminal.openTicket", { sessionId: created.sessionId })) as
-            | TerminalTicket
-            | undefined)
-        : undefined,
-    )) as TerminalTicket;
+    await poll(async () =>
+      (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+    );
+    const uds = udsEndpoints(daemon);
     const client = new GhostteaAutomationClient(
-      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      { controlSocket: uds.controlSocket, authToken: uds.authToken },
       { clientBuild: "kill-matrix" },
     );
     cleanup.push(() => client.dispose());
@@ -501,12 +504,18 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     expect(tags.a.workloadClass).toBe("agent");
     expect(tags.b.workloadClass).toBe("interactive");
     expect(tags.a.cellBootId).not.toBe(tags.b.cellBootId);
-    // The streaming witness: a live control connection to the INTERACTIVE cell
-    const ticket = (await rpc.call("terminal.openTicket", {
-      sessionId: interactive.sessionId,
-    })) as TerminalTicket;
+    // The streaming witness: a live control connection to the INTERACTIVE
+    // cell, addressed by ITS row in the route snapshot (fieldd-plane truth —
+    // the product ticket is routed now and carries no UDS coordinates)
+    const interactiveRow = daemon.native.terminalRoutes?.cells.find(
+      (c) => c.workloadClass === "interactive",
+    );
+    if (interactiveRow === undefined) throw new Error("no interactive cell row");
     const witness = new GhostteaAutomationClient(
-      { controlSocket: ticket.controlSocket, authToken: ticket.token },
+      {
+        controlSocket: interactiveRow.endpoints.controlSocket,
+        authToken: interactiveRow.endpoints.authToken,
+      },
       { clientBuild: "kill-matrix" },
     );
     cleanup.push(() => witness.dispose());

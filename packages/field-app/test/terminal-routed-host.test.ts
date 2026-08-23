@@ -34,18 +34,15 @@ const summary = {
   },
 };
 
-function ticket(endpoints = true): TerminalOpenTicket {
+function ticket(): TerminalOpenTicket {
   const cellBootId = "cell-a-boot-1";
   return {
     route: { cellBootId, routeRevision: 3, leaseEpoch: 7 },
-    ...(endpoints
-      ? {
-          endpoints: {
-            controlUrl: "ws://127.0.0.1:43101/control",
-            framesUrl: "ws://127.0.0.1:43101/frames",
-          },
-        }
-      : {}),
+    // REQUIRED since TP-S3e — a ticket without doors is not a ticket.
+    endpoints: {
+      controlUrl: "ws://127.0.0.1:43101/control",
+      framesUrl: "ws://127.0.0.1:43101/frames",
+    },
     transportGrant: {
       protected: {
         v: 1,
@@ -158,14 +155,18 @@ describe("createRoutedTerminalHost — the G23 product adapter", () => {
         request: vi.fn(async () => answer),
       }) as unknown as FielddClient;
 
+    // TP-S3e: both non-routed answers (the retired legacy trio; a ticket with
+    // no doors) refuse at the schema — a compliant fieldd answers UNAVAILABLE
+    // upstream instead, so reaching either here is a contract break.
     await expect(
       createRoutedTerminalHost({
         fieldd: fieldd({ controlSocket: "/tmp/control", frameSocket: "/tmp/frames", token: "t" }),
       }).host.openTicket("sess-1"),
-    ).rejects.toThrow("grants are not landed");
+    ).rejects.toThrow("does not carry the routed contract");
+    const { endpoints: _doors, ...doorless } = ticket();
     await expect(
-      createRoutedTerminalHost({ fieldd: fieldd(ticket(false)) }).host.openTicket("sess-1"),
-    ).rejects.toThrow("transport is not landed");
+      createRoutedTerminalHost({ fieldd: fieldd(doorless) }).host.openTicket("sess-1"),
+    ).rejects.toThrow("does not carry the routed contract");
   });
 
   it("waits through the explicit unobserved state before Workspace takes its one list", async () => {

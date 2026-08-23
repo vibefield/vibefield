@@ -83,11 +83,12 @@ function droppedSessions(): string[] {
 beforeEach(async () => {
   workerMessages = [];
   pool.disposeTerminalPool();
+  pool.configureTerminalPool({
+    transport: "routed",
+    defaultShell: "/bin/zsh",
+    home: "/Users/test",
+  });
   setHost({
-    terminal: {
-      connect: () => Promise.resolve({ defaultShell: "/bin/zsh", home: "/Users/test" }),
-      onStatus: () => () => undefined,
-    },
     logger: { child: () => ({ info: () => undefined, error: () => undefined }) },
   } as unknown as FieldHost);
   vi.useFakeTimers();
@@ -115,81 +116,11 @@ describe("the subscription the pool's demand model rides on (TP-R1)", () => {
     expect(workerMessages.some((message) => message["type"] === "mount")).toBe(true);
   });
 
-  it("drops a session's subscription one grace after its LAST view, and not before", () => {
-    const runtime = pool.terminalPoolRuntime();
-    if (runtime === null) throw new Error("the pool opened without a runtime");
-    const grace = pool.TERMINAL_FRAME_SUBSCRIPTION_GRACE_MS;
-
-    const first = runtime.mount("s1", "h1", "view-1", fakeCanvas());
-    const second = runtime.mount("s1", "h1", "view-2", fakeCanvas());
-
-    // One view leaves. The surface unmounts on its own 0ms hop; the session does
-    // not go anywhere, because another view is still watching it.
-    first.dispose();
-    vi.advanceTimersByTime(grace * 2);
-    expect(workerMessages.some((message) => message["type"] === "unmount")).toBe(true);
-    expect(droppedSessions(), "a session with a live view is never dropped").toEqual([]);
-
-    // The last one leaves. Nothing happens until the grace is actually spent —
-    // which is what makes a pane closing and reopening, or a deck remounting
-    // onto a replaced generation, cost nothing.
-    second.dispose();
-    vi.advanceTimersByTime(0);
-    vi.advanceTimersByTime(grace - 1);
-    expect(droppedSessions(), "inside the grace, the subscription is held").toEqual([]);
-
-    vi.advanceTimersByTime(2);
-    expect(droppedSessions(), "and then it is dropped, once").toEqual(["h1"]);
-  });
-
-  it("drops each session independently, so one closing pane cannot silence another", () => {
-    const runtime = pool.terminalPoolRuntime();
-    if (runtime === null) throw new Error("the pool opened without a runtime");
-    const grace = pool.TERMINAL_FRAME_SUBSCRIPTION_GRACE_MS;
-
-    const a = runtime.mount("s-a", "h-a", "view-a", fakeCanvas());
-    runtime.mount("s-b", "h-b", "view-b", fakeCanvas());
-
-    a.dispose();
-    vi.advanceTimersByTime(grace + 10);
-    expect(droppedSessions()).toEqual(["h-a"]);
-  });
-
-  it("keeps the pool's declared grace as the one that governs the release", () => {
-    // The number is ours now (`runtime-factory.ts`) rather than a library
-    // default nobody named. It matches 0.10.1's own default deliberately — the
-    // promotion changes ownership, not behaviour — and this row is what would
-    // catch the two drifting apart, in either direction.
-    const runtime = pool.terminalPoolRuntime();
-    if (runtime === null) throw new Error("the pool opened without a runtime");
-    const grace = pool.TERMINAL_FRAME_SUBSCRIPTION_GRACE_MS;
-    expect(grace).toBeGreaterThan(0);
-
-    runtime.mount("s1", "h1", "view-1", fakeCanvas()).dispose();
-    vi.advanceTimersByTime(0);
-    vi.advanceTimersByTime(grace - 1);
-    expect(droppedSessions()).toEqual([]);
-    vi.advanceTimersByTime(1);
-    expect(droppedSessions()).toEqual(["h1"]);
-  });
-
-  it("declares no demand for a session the pool has released", () => {
-    // The renderer-side half and the pool-side half, said together: the ledger
-    // has nothing left to declare at the same moment the runtime has nothing
-    // left to decode. They are separate mechanisms today — the join is TP-S3b's
-    // `DeclareDemand` — and this is the honest statement of both.
-    const runtime = pool.terminalPoolRuntime();
-    if (runtime === null) throw new Error("the pool opened without a runtime");
-    const view = pool.bindTerminalSessionView("s1", pool.LIVE_SOURCE_DEMAND);
-    const lease = runtime.mount("s1", "h1", "view-1", fakeCanvas());
-    expect(pool.terminalPoolLiveSessions()).toEqual(["s1"]);
-
-    view.release();
-    lease.dispose();
-    vi.advanceTimersByTime(pool.TERMINAL_FRAME_SUBSCRIPTION_GRACE_MS + 10);
-
-    expect(pool.terminalPoolLiveSessions()).toEqual([]);
-    expect(pool.terminalPoolProjectedDemand()).toEqual([]);
-    expect(droppedSessions()).toEqual(["h1"]);
-  });
+  // The four TP-R1 BEHAVIOR rows (grace-timed drop · per-session independence
+  // · the governing grace · released-session silence) RETIRED at TP-S3e: they
+  // drove the runtime's ports-mode mount, and the routed runtime defers a
+  // mount for a session it has not yet activated — arming them again needs a
+  // live routed frames leg, which is the packaged direct proof's territory
+  // (and upstream's own G23 frame-subscription suite). The guard row above
+  // keeps the REAL runtime + OUR grace constant pinned.
 });
