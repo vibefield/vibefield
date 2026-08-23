@@ -3849,3 +3849,58 @@ typechecks; `cargo fmt --check`; `cargo check -p field-native --all-targets`; an
 field-native suite, including 126 unit passes plus every non-environment integration row (the real
 tailnet probes remain intentionally ignored). **Not done here:** TP-S3e. The rollback flag,
 bridge/backend, and flag-conditional CSP remain until that next deliberate removal slice.
+
+## TP-S3e — retire the bridge: the flag, the utility, the trio and the unions, all gone on purpose
+
+2026-08-24, `8d47dbda` (the orchestrator; the critical path). The slice the whole rollout
+discipline pointed at: with S3a–S3d, TP-S3-input and TP-S3-production green and four packaged
+type+display proofs behind the flag, the rollback path is REMOVED rather than left to rot.
+**Removed:** `parseDirectTerminalDoor` + `--terminal-direct-door`/`VIBEFIELD_TERMINAL_DIRECT_DOOR`
+(the probe MODE stays); `terminal-backend.ts` + `bridge-entry.ts` + their esbuild entry and IPC
+(`vibefield:terminal:connect|status` — the CLOSED contextBridge surface is 14 keys now, its pin
+test rewritten); the preload/renderer-host/host `terminal` seam (`connect`/`onStatus`);
+`terminal.connectTicket` (method + contracts row + fieldd handler — a retired door answers
+NOT_FOUND, and a test proves the refusal mints nothing and writes no audit);
+`TerminalTicket`/`TerminalConnectTicket*`/`TerminalBridgeStatus`/`TerminalBackendAttachResult`; the
+S1 result unions (`terminal.openTicket` answers exactly `TerminalOpenTicket`, `terminal.create` the
+id + REQUIRED birth summary + the spread ticket; `endpoints` REQUIRED — four era fixtures retired,
+two `.valid` fixtures replace them); fieldd's sessionless/legacy mints
+(`ticket()`/`ticketForSession`/`ticketForCell`/`toTicket`) replaced by ONE `ticketFor` assembly
+with honest refusals (`grants_not_landed` for a keyless cell, `transport_not_landed` for a
+doorless one — and createOpenResult refuses the same way AFTER the audited birth, which is the
+GT-5b ordering kept honest); the pool's whole bridge half (`landTransport`, the pinned-cell fossil
++ its availability face, the bridge-status recovery ladder, `discardWarm`/`rewarmOnce`, the ports
+factory branch — `WindowTerminalBootstrap.transport` is the literal `"routed"`). **The deliberate
+CSP reversal:** production `connect-src` = the two pinned fieldd ports + `ws://127.0.0.1:*`,
+UNCONDITIONALLY; `CspOptions` is gone and `security-policy.test.ts` asserts the widened policy ON
+PURPOSE, stating in-file why the assertion changed. **Suites migrated to the routed truths:** the
+kill-matrix/seam's outside observers attach over `daemon.native.terminalEndpoints` (the NF-D8
+fieldd-plane truth — what they always meant) with the routed mint kept as the alive-control;
+"single-cell pin" rows inverted to multi-cell (two cells' tickets at once IS the point of the
+doors); a real regression the migration caught: the routed `adopt` never re-declared
+pre-transport demand (the bridge's `landTransport` had) — fixed with `reprojectDemand()` at
+runtime birth, and the demand suite's early-bind row now proves it. **Gates:** contracts 332/332 ·
+fieldd terminal suites 56/56 · electron-shell 587+1 skip (CSP 84/84) · field-app 635/635 (77
+files) · `pnpm verify` verbatim exit 0. **Named residue — the instrument debt:** the godview
+smoke's flip-witness (GT-D11 e2e), rehydrated-$PWD and keystroke-echo rows plus the perf-lab's
+`runInPane` typed through the UDS automation door addressed by the retired product ticket; they
+are skip-marked LOUDLY (`s3eInstrumentDebt` on the smoke verdict; the lab throws with the debt
+named) until the **AR-lane automation surface** (fieldd-brokered `automation_input` — the door AR
+needs anyway) exists; the TP-R1 renderer unit rows moved with them (upstream's G23 suite + the
+packaged direct proof are the living witnesses); smoke row 12 (bridge-kill recovery) retired WITH
+its failure mode — no process severs transport-but-not-sessions any more (leg death:
+`tp_activation`; runtime recovery: G23's bounded ladder; floor death: the NF kill matrix). The
+`$0` tombstone row WAS rewritten to type through the renderer — the product path — with a bounded
+retype (a line typed before `InputAllowed` is suppressed and never reaches the PTY), and passes
+live; the CWD-MOVE instrument proved doubly blocked (renderer typing reaches only the focused
+pane, AND the summaries gap below swallows a landed `cd`) and is skip-marked with both gaps named
+— the restore MACHINERY (dead pane → honest consent counts → relaunch → floor listing) keeps
+running. **And the first fully-ROUTED run of the
+godview ladder WITNESSED a real product gap S3e did not cause, at three rows: routed SESSION
+EVENTS never reach the renderer.** No wire verb carries summary updates (cwd/title freeze at
+birth — a moved pane would restore in the wrong place) or floor-side lifecycle (a killed pane's
+face never degrades — the deck kept showing a session the floor had ended). The floor knows the
+truth in every case; the renderer never re-learns it. Gap-marked in the smoke verdict
+(`paneMetaPersisted`/`recordedCwd`/`killedPaneFace` carry the G24-class tag) and named here as
+the upstream ask: a routed session-event seam — summaries + lifecycle — or a fieldd-driven
+re-register/lifecycle-push cadence.

@@ -245,11 +245,26 @@ waits only through fieldd's explicit `unobserved` state. Render prewarm is bound
 **Production proof:** four consecutive clean packaged direct-mode runs applied a real frame,
 reached `PresentationReady` + `InputAllowed`, typed a `touch` command through the focused
 `TerminalSurface` and observed its filesystem side effect, while process census found no legacy
-terminal bridge; measured cold open was 213–279 ms, inside the 300 ms target. **Next: TP-S3e** —
-remove the rollback flag and bridge/backend, then widen `connect-src` unconditionally with the
-deliberate CSP test and packaging cleanup. Standing debts after S3e remain `STALE_ROUTE` raised by
-custody = TC-S6; the wall-100 rAF zero-frames reading; divider drag ≈52 Hz (G23 item 9);
-DECISIONS.md carries no TC-D row (pre-existing).
+terminal bridge; measured cold open was 213–279 ms, inside the 300 ms target. **TP-S3e LANDED
+`8d47dbda` (2026-08-24): the bridge is GONE.** The rollback flag, the bridge utility +
+`terminal.connect`/`connectTicket`, the legacy trio and the S1 unions are removed across five
+packages; `TerminalOpenTicket.endpoints` is REQUIRED and a keyless/doorless cell answers
+UNAVAILABLE, never a half ticket; production `connect-src` admits the cells' loopback doors
+UNCONDITIONALLY — the deliberate reversal, its CSP suite rewritten to assert the new policy on
+purpose (84/84); the retired `connectTicket` door answers NOT_FOUND, tested; suites migrated to the
+routed truths (multi-cell replaces the single-cell pin; kill-matrix/seam attach over
+`daemon.native.terminalEndpoints`, the fieldd-plane truth). **Named instrument debt (the one S3e
+residue):** the godview smoke's flip-witness/$PWD/keystroke-echo rows and the perf-lab's
+`runInPane` rode the UDS automation door via the retired product ticket — skip-marked LOUDLY
+(`s3eInstrumentDebt` on the smoke verdict; the lab throws) until the **AR-lane automation surface**
+(fieldd-brokered `automation_input`) exists, which AR wants anyway; smoke row 12 (bridge-kill
+recovery) retired WITH its failure mode — nothing severs transport-but-not-sessions any more (leg
+death, runtime recovery and floor death each have their own witness). Standing debts otherwise:
+**routed SESSION EVENTS never reach the renderer (WITNESSED at three rows of S3e's first
+fully-routed godview ladder — cwd/title freeze at birth AND a floor-side kill never degrades the
+pane's face; the G24-class upstream ask: a session-event seam — summaries + lifecycle — for the
+routed runtime)**; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames reading; divider
+drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).
 
 **PLUG.** **P8b COMPLETE — the artifact loads.** One evening closed the rung the whole ladder
 existed for (2026-08-13, four commits): the owed CORS probe ran FIRST and redesigned the rung
