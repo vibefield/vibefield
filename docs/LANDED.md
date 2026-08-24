@@ -3904,3 +3904,56 @@ truth in every case; the renderer never re-learns it. Gap-marked in the smoke ve
 (`paneMetaPersisted`/`recordedCwd`/`killedPaneFace` carry the G24-class tag) and named here as
 the upstream ask: a routed session-event seam — summaries + lifecycle — or a fieldd-driven
 re-register/lifecycle-push cadence.
+
+## TP-S3f — routed session events: the pane learns the deaths it didn't cause (petition G24, a one-day round trip)
+
+2026-08-23, `da5919c0` on `85f7d769` (the ghosttea 0.11.1 lockstep). The petition ran its whole
+arc in ONE day: drafted from S3e's three witnessed gap rows → amended by the ghosttea-side review
+(the draft's "armed but starved" evidence was WRONG — the ports frame handler is the sole arming
+site, so routed mode needed the trigger AND the read; corrected at source) → implemented upstream
+→ released 0.11.1 → consumed here. **The wire:** `SessionEvent` (tag 23, cell → client, CONTROL
+leg) carries `exited{exitCode, exitSignal, requestedTermination, exitOutcome}` / `removed` /
+`resync` behind the **`session-events` capability — the FIRST capability the cell speaks**
+(TP-D25; load-bearing, not advisory: an un-negotiated client protocol-closes on any unknown tag,
+so the cell must stay silent without the negotiation); the exit enums are extracted from
+`TerminalRuntimeSession` so the same fact never gets a second spelling; golden fixtures
+(`tp-session-event.*.json`) pin BOTH directions — Rust SERIALIZES the engine's own
+`TerminationSource`/`ExitOutcome` (the emit-direction drift guard, `SendInput`'s
+deserialize-inverse). **The cell:** ONE lifecycle subscription through the `SessionSource` seam
+(`subscribe_lifecycle` — `ServiceSessions` = G22's bus; `DirectSessions` = a harness bus a test
+can SHRINK to force the `Lagged` path), fanned out connection-scoped under one registry lock to
+negotiated control legs; `Created` deliberately unprojected (births reach clients through the
+roster reads they already do); `Lagged` answers with the honest resync notice. **The host:**
+ghosttea 0.11.1's routed metadata refresh asks `getSession`, answered from ONE coalesced
+`terminal.sessions` snapshot per refresh turn (N panes cost one wire read); `onExtensionMessage`
+decodes against the contract, custody-checks the emitting cell (ticketed `cellBootId`; unticketed
+sessions pass through — the runtime ignores unknown ids), and drives `applySessionEvent`, whose
+appliers upstream are the UDS ones — parity by construction; a resync reconciles that cell's
+custody against the authoritative inventory. The runtime advertises `["resume",
+"session-events"]`. **Four findings, each now load-bearing:** (1) a VERB-driven kill's `Removed`
+publishes at the verb while its `Exited` lands only when the child dies — the pair arrives
+INVERTED, and applying it verbatim unregisters the session before its exit facts can reach the
+face; the host holds an exit-less `removed` ≤10 s (`REMOVED_WITHOUT_EXIT_HOLD_MS`) and flushes it
+in the intended order when the exit lands — order repair only, never invented evidence
+(fake-timer rows pin the hold, the flush, the bound, and disposal). (2) The godview smoke's
+keystroke synthesis had DROPPED SHIFT since GT-2 — every capital the harness ever typed reached
+shells as its lowercase twin, invisible while every typed string was lowercase, caught by the
+first mixed-case path the ladder ever typed and silent because APFS is case-insensitive. (3) The
+deck's pane chrome is FACT-DRIVEN now: it settles once (~5×4 px) when title/cwd facts first land,
+so box-exactness rows start from a settled deck (`settledPaneBoxes`). (4) ghosttea's
+`runtime.terminate` removes local registration in BOTH transports before any event applies
+(upstream design, read from the 0.11.1 dist) — a deliberate OWN kill never gets an event-driven
+face; row 10 states it in the verdict (`ownKillLocalFace`) and the death-blindness witness is
+row 9's FLOOR-side kill, waited for before the reload. **The three S3e gap rows UN-GAP on a full
+green ladder (ok:true, 69 fields):** `paneMetaPersisted` (a typed cd reaches the persisted layout
+through the routed refresh — the G24 witness) · `killedPaneFace: "exited"` (a death the renderer
+did not cause degrades the pane) · `rehydratedCwd` (the relaunched shell's own first-prompt OSC 7
+announcement, realpath-compared — no named-pane instrument needed, and the row LEAVES
+`s3eInstrumentDebt`). Cold open 255 ms, inside the 300 ms target. **Seam witnesses at the fieldd
+plane** (`terminal-seam.test.ts`): a raw negotiated control leg on the PRODUCTION binary receives
+`exited` (all facts) and `removed` after a fieldd-driven terminate — unattached AND with an
+active control attachment (the probes that exonerated the cell mid-debug). **Gates:** `pnpm
+verify` verbatim exit 0 (one unrelated artifact-service concurrency flake on the load-17 host
+re-ran green solo, and the whole gate re-ran green); the godview ladder ok:true/69 fields. Spec:
+core v0.18 (the lifecycle verb §5.4 + the ordering law), rollout §15 S3f row + landing entry;
+petition G24 → LANDED upstream 0.11.1 + CONSUMED.

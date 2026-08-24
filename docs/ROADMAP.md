@@ -168,7 +168,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 
 ## In flight now
 
-**TP — the terminal pipeline (custody through pixels). RATIFIED 2026-08-22 — WAVE 2 IN FLIGHT; TP-S3a LANDED.**
+**TP — the terminal pipeline (custody through pixels). RATIFIED 2026-08-22 — the S3 LADDER IS COMPLETE THROUGH TP-S3f (2026-08-23): fully routed, bridge gone, session events landed round-trip through petition G24 in one day.**
 The spec is ratified in full (James, 2026-08-22: **TP-D1 = T1**, **TP-D26 = C′**, **mark 21 = (a)**,
 marks 2–19 as recommended) and SPLIT per mark 19 into four documents: `draft/specs/terminal-pipeline-v3.md`
 (the normative v1 CORE PROTOCOL, v0.11) + `-rollout.md` (§13 deltas · §15 slice plan + landing log ·
@@ -259,12 +259,30 @@ residue):** the godview smoke's flip-witness/$PWD/keystroke-echo rows and the pe
 (`s3eInstrumentDebt` on the smoke verdict; the lab throws) until the **AR-lane automation surface**
 (fieldd-brokered `automation_input`) exists, which AR wants anyway; smoke row 12 (bridge-kill
 recovery) retired WITH its failure mode — nothing severs transport-but-not-sessions any more (leg
-death, runtime recovery and floor death each have their own witness). Standing debts otherwise:
-**routed SESSION EVENTS never reach the renderer (WITNESSED at three rows of S3e's first
-fully-routed godview ladder — cwd/title freeze at birth AND a floor-side kill never degrades the
-pane's face; the G24-class upstream ask: a session-event seam — summaries + lifecycle — for the
-routed runtime; **petition G24 DRAFTED 2026-08-23**, `draft/petitions/G24-ghosttea-react-routed-session-events.md`)**; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames reading; divider
-drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).
+death, runtime recovery and floor death each have their own witness). **TP-S3f LANDED `da5919c0`
+(2026-08-23): routed session events — petition G24 CONSUMED, a one-day upstream round trip**
+(drafted from S3e's three gap rows → amended by the ghosttea-side review → released as ghosttea
+0.11.1 → consumed; the lockstep bump is `85f7d769`). The `SessionEvent` verb (tag 23, cell →
+client on the control leg: `exited{all four exit facts}|removed|resync`) rides behind the
+**`session-events` capability — the FIRST capability the cell speaks** (TP-D25; load-bearing: an
+un-negotiated client protocol-closes on any unknown tag); the cell subscribes ONCE to G22's
+lifecycle bus through the `SessionSource` seam and fans out connection-scoped; the host answers
+ghosttea's routed metadata refresh from ONE coalesced `terminal.sessions` snapshot per turn,
+custody-checks each event against the ticketed `cellBootId`, and drives `applySessionEvent`
+(upstream's appliers are the UDS ones — parity by construction). Four findings landed
+load-bearing: a VERB-driven kill's Removed/Exited arrive INVERTED (the host holds an exit-less
+removed ≤10 s and flushes in the intended order — order repair, never invented evidence); the
+smoke's keystroke synthesis had dropped SHIFT since GT-2 (silent on case-insensitive APFS);
+the deck's chrome is fact-driven now and settles once, so box-exactness rows start settled;
+ghosttea's `runtime.terminate` drops local registration in both transports, so a deliberate OWN
+kill never gets an event-driven face (row 10 says so; row 9's floor-side kill is the
+death-blindness witness). **The three S3e gap rows UN-GAP on a full green ladder (ok:true, 69
+fields):** `paneMetaPersisted` · `killedPaneFace: exited` · `rehydratedCwd` (the relaunched
+shell's own first-prompt OSC 7, realpath-compared — that row LEAVES `s3eInstrumentDebt`); cold
+open 255 ms. Standing debts now: the AR-lane instrument rows (flip-witness + keystroke-echo —
+the two left on `s3eInstrumentDebt`); `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF
+zero-frames reading; divider drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row
+(pre-existing).
 
 **PLUG.** **P8b COMPLETE — the artifact loads.** One evening closed the rung the whole ladder
 existed for (2026-08-13, four commits): the owed CORS probe ran FIRST and redesigned the rung
