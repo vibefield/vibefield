@@ -92,7 +92,11 @@ truffle-core = "=0.7.12"
 # 0.11.0 in the SAME event to keep the one-version law. Cross-repo interop
 # re-verified before the bump: ghosttea's routed codec round-trips all 42 of our
 # `@vibefield/contracts` golden vectors (30 wire + 12 structural).
-ghosttea = "=0.11.0"
+# G24 (2026-08-23) bumps 0.11.0 → 0.11.1 — routed session events. The delta is
+# npm-side (`ghosttea-react`: host `getSession` + `applySessionEvent` + the
+# inbound extension mirror); the cargo rows move in the SAME event to keep the
+# one-version law, as GT-4 did in the other direction.
+ghosttea = "=0.11.1"
 # GT-4 (native-floor §7 / GT-D7): the mesh half of the terminal floor, added at
 # the same version as `ghosttea` — it depends on that crate by path upstream, so
 # a split would be two ghosttea revisions in one graph. It brings truffle-core
@@ -100,4 +104,4 @@ ghosttea = "=0.11.0"
 # mismatch is a resolver refusal, never a silent second Arc<Node> type. Consumed
 # ONLY behind FIELD_NATIVE_TERMINAL_MESH — with the flag off the crate is linked
 # but never constructed, and the floor is bit-for-bit its pre-GT-4 self.
-ghosttea-truffle = "=0.11.0"
+ghosttea-truffle = "=0.11.1"
