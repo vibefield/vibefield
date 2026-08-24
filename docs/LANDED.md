@@ -3852,7 +3852,7 @@ bridge/backend, and flag-conditional CSP remain until that next deliberate remov
 
 ## TP-S3e — retire the bridge: the flag, the utility, the trio and the unions, all gone on purpose
 
-2026-08-24, `8d47dbda` (the orchestrator; the critical path). The slice the whole rollout
+2026-08-23, `8d47dbda` (the orchestrator; the critical path). The slice the whole rollout
 discipline pointed at: with S3a–S3d, TP-S3-input and TP-S3-production green and four packaged
 type+display proofs behind the flag, the rollback path is REMOVED rather than left to rot.
 **Removed:** `parseDirectTerminalDoor` + `--terminal-direct-door`/`VIBEFIELD_TERMINAL_DIRECT_DOOR`
