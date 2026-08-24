@@ -263,7 +263,7 @@ death, runtime recovery and floor death each have their own witness). Standing d
 **routed SESSION EVENTS never reach the renderer (WITNESSED at three rows of S3e's first
 fully-routed godview ladder — cwd/title freeze at birth AND a floor-side kill never degrades the
 pane's face; the G24-class upstream ask: a session-event seam — summaries + lifecycle — for the
-routed runtime)**; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames reading; divider
+routed runtime; **petition G24 DRAFTED 2026-08-24**, `draft/petitions/G24-ghosttea-react-routed-session-events.md`)**; `STALE_ROUTE` raised by custody = TC-S6; the wall-100 rAF zero-frames reading; divider
 drag ≈52 Hz (G23 item 9); DECISIONS.md carries no TC-D row (pre-existing).
 
 **PLUG.** **P8b COMPLETE — the artifact loads.** One evening closed the rung the whole ladder
