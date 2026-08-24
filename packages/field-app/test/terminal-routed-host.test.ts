@@ -3,7 +3,7 @@ import type { GhostteaTerminalRuntime, RoutedTerminalInputContext } from "@vibec
 import { SendInput, type TerminalOpenTicket } from "@vibefield/contracts";
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { describe, expect, it, vi } from "vitest";
-import { createRoutedTerminalHost } from "../src/terminal/routed/host";
+import { createRoutedTerminalHost, ROUTED_CLIENT_CAPABILITIES } from "../src/terminal/routed/host";
 
 const summary = {
   id: "sess-1",
@@ -262,5 +262,259 @@ describe("createRoutedTerminalHost — the G23 product adapter", () => {
     await expect(binding.host.terminate?.("sess-1", "user")).rejects.toThrow("floor unavailable");
     expect(onTerminated).not.toHaveBeenCalled();
     expect(sequenceOf(binding, "act-1")).toBe(1);
+  });
+});
+
+describe("createRoutedTerminalHost — TP-S3f routed session events (G24)", () => {
+  const context = {
+    cellBootId: "cell-a-boot-1",
+    connectionSetId: "connection-1",
+    channel: "control" as const,
+  };
+
+  function ticketFor(sessionId: string, cellBootId: string): TerminalOpenTicket {
+    const t = ticket();
+    t.route.cellBootId = cellBootId;
+    t.attachGrant.claims.sessionId = sessionId;
+    return t;
+  }
+
+  function runtimeStub() {
+    const applySessionEvent = vi.fn();
+    const runtime = Object.assign(new EventTarget(), { applySessionEvent });
+    return { runtime: runtime as unknown as GhostteaTerminalRuntime, applySessionEvent };
+  }
+
+  it("advertises resume plus the load-bearing session-events capability", () => {
+    expect(ROUTED_CLIENT_CAPABILITIES).toEqual(["resume", "session-events"]);
+  });
+
+  it("coalesces concurrent getSession reads into one inventory snapshot", async () => {
+    const resolvers: Array<(value: unknown) => void> = [];
+    const requests = vi.fn((method: string) => {
+      if (method !== "terminal.sessions") throw new Error(`unexpected ${method}`);
+      return new Promise((resolve) => {
+        resolvers.push(resolve);
+      });
+    });
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+
+    // N panes refreshing in the same turn cost ONE wire read…
+    const first = binding.host.getSession?.("sess-1");
+    const second = binding.host.getSession?.("sess-absent");
+    expect(requests).toHaveBeenCalledTimes(1);
+    resolvers[0]?.({ sessions: [summary] });
+    await expect(first).resolves.toEqual(summary);
+    // …absence is `null` (no update), never an invented removal…
+    await expect(second).resolves.toBeNull();
+
+    // …and a read AFTER settle is a fresh snapshot, not a stale cache.
+    const third = binding.host.getSession?.("sess-1");
+    expect(requests).toHaveBeenCalledTimes(2);
+    resolvers[1]?.({ sessions: [summary] });
+    await expect(third).resolves.toEqual(summary);
+  });
+
+  it("a rejected inventory read rejects the turn and the next turn retries fresh", async () => {
+    let calls = 0;
+    const binding = createRoutedTerminalHost({
+      fieldd: {
+        request: vi.fn(async () => {
+          calls += 1;
+          if (calls === 1) throw new Error("floor unavailable");
+          return { sessions: [summary] };
+        }),
+      } as unknown as FielddClient,
+    });
+
+    await expect(binding.host.getSession?.("sess-1")).rejects.toThrow("floor unavailable");
+    await expect(binding.host.getSession?.("sess-1")).resolves.toEqual(summary);
+  });
+
+  it("applies exited and removed through the runtime door, custody-checked", () => {
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: vi.fn() } as unknown as FielddClient,
+    });
+    const { runtime, applySessionEvent } = runtimeStub();
+    binding.bind(runtime);
+    binding.primeTicket("sess-1", ticket());
+
+    const exited = {
+      type: "SessionEvent",
+      event: {
+        kind: "exited",
+        sessionId: "sess-1",
+        exitCode: null,
+        exitSignal: "SIGHUP",
+        requestedTermination: "user",
+        exitOutcome: "user-terminated",
+      },
+    };
+    binding.host.onExtensionMessage?.(exited, context);
+    expect(applySessionEvent).toHaveBeenCalledWith({
+      type: "exited",
+      sessionId: "sess-1",
+      exitCode: null,
+      exitSignal: "SIGHUP",
+      requestedTermination: "user",
+      exitOutcome: "user-terminated",
+    });
+
+    // A cell may only speak for sessions whose ticket named it.
+    binding.host.onExtensionMessage?.(exited, { ...context, cellBootId: "cell-b-boot-9" });
+    expect(applySessionEvent).toHaveBeenCalledTimes(1);
+
+    // A session this window never ticketed passes through: the deck tracks
+    // roster sessions it never attached, and the runtime ignores unknown ids.
+    binding.host.onExtensionMessage?.(
+      {
+        type: "SessionEvent",
+        event: {
+          kind: "exited",
+          sessionId: "sess-foreign",
+          exitCode: 1,
+          exitSignal: null,
+          requestedTermination: null,
+          exitOutcome: "crashed",
+        },
+      },
+      { ...context, cellBootId: "cell-b-boot-9" },
+    );
+    expect(applySessionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "exited", sessionId: "sess-foreign" }),
+    );
+
+    // A removal AFTER the observed exit applies immediately — the intended
+    // order needs no hold.
+    binding.host.onExtensionMessage?.(
+      { type: "SessionEvent", event: { kind: "removed", sessionId: "sess-1" } },
+      context,
+    );
+    expect(applySessionEvent).toHaveBeenCalledWith({ type: "removed", sessionId: "sess-1" });
+  });
+
+  it("holds a removed that outran its exited, restoring the intended order (the verb-kill shape)", () => {
+    vi.useFakeTimers();
+    try {
+      const binding = createRoutedTerminalHost({
+        fieldd: { request: vi.fn() } as unknown as FielddClient,
+      });
+      const { runtime, applySessionEvent } = runtimeStub();
+      binding.bind(runtime);
+
+      // A verb-driven kill publishes Removed at the verb and Exited only when
+      // the child dies — the wire legitimately inverts the pair. Applying the
+      // removal first would unregister the session and turn the following
+      // exit into a no-op, so the hold keeps the face's facts first.
+      binding.host.onExtensionMessage?.(
+        { type: "SessionEvent", event: { kind: "removed", sessionId: "sess-1" } },
+        context,
+      );
+      expect(applySessionEvent).not.toHaveBeenCalled();
+      binding.host.onExtensionMessage?.(
+        {
+          type: "SessionEvent",
+          event: {
+            kind: "exited",
+            sessionId: "sess-1",
+            exitCode: null,
+            exitSignal: "SIGHUP",
+            requestedTermination: "user",
+            exitOutcome: "user-terminated",
+          },
+        },
+        context,
+      );
+      expect(applySessionEvent).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ type: "exited", sessionId: "sess-1" }),
+      );
+      expect(applySessionEvent).toHaveBeenNthCalledWith(2, {
+        type: "removed",
+        sessionId: "sess-1",
+      });
+
+      // A removal with truly no exit (an explicit close) applies at the bound.
+      binding.host.onExtensionMessage?.(
+        { type: "SessionEvent", event: { kind: "removed", sessionId: "sess-2" } },
+        context,
+      );
+      expect(applySessionEvent).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(10_000);
+      expect(applySessionEvent).toHaveBeenCalledWith({ type: "removed", sessionId: "sess-2" });
+
+      // Disposal cancels a pending hold rather than firing it late.
+      binding.host.onExtensionMessage?.(
+        { type: "SessionEvent", event: { kind: "removed", sessionId: "sess-3" } },
+        context,
+      );
+      binding.dispose();
+      vi.advanceTimersByTime(20_000);
+      expect(applySessionEvent).not.toHaveBeenCalledWith({ type: "removed", sessionId: "sess-3" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops what it cannot place — wrong tag, malformed body, a future kind — without closing anything", () => {
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: vi.fn() } as unknown as FielddClient,
+    });
+    const { runtime, applySessionEvent } = runtimeStub();
+    binding.bind(runtime);
+
+    // A known tag that does not belong on this seam.
+    binding.host.onExtensionMessage?.({ type: "SendInput" }, context);
+    // No tag at all; a body the schema refuses; a kind this build predates.
+    binding.host.onExtensionMessage?.({ hello: true }, context);
+    binding.host.onExtensionMessage?.({ type: "SessionEvent", event: { kind: "exited" } }, context);
+    binding.host.onExtensionMessage?.(
+      { type: "SessionEvent", event: { kind: "renamed", sessionId: "sess-1" } },
+      context,
+    );
+    expect(applySessionEvent).not.toHaveBeenCalled();
+  });
+
+  it("stays inert before bind and after dispose", () => {
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: vi.fn() } as unknown as FielddClient,
+    });
+    const removed = { type: "SessionEvent", event: { kind: "removed", sessionId: "sess-1" } };
+    // Before bind: nothing to apply onto, nothing thrown.
+    binding.host.onExtensionMessage?.(removed, context);
+
+    const { runtime, applySessionEvent } = runtimeStub();
+    binding.bind(runtime);
+    binding.dispose();
+    binding.host.onExtensionMessage?.(removed, context);
+    expect(applySessionEvent).not.toHaveBeenCalled();
+  });
+
+  it("resync reconciles THIS cell's sessions against the authoritative inventory", async () => {
+    const requests = vi.fn(async (method: string) => {
+      if (method !== "terminal.sessions") throw new Error(`unexpected ${method}`);
+      return { sessions: [summary] };
+    });
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    const { runtime, applySessionEvent } = runtimeStub();
+    binding.bind(runtime);
+    // Two sessions in cell A's custody (one live, one the lag lost), one in
+    // cell B's that this resync must not touch.
+    binding.primeTicket("sess-1", ticket());
+    binding.primeTicket("sess-2", ticketFor("sess-2", "cell-a-boot-1"));
+    binding.primeTicket("sess-3", ticketFor("sess-3", "cell-b-boot-9"));
+
+    binding.host.onExtensionMessage?.({ type: "SessionEvent", event: { kind: "resync" } }, context);
+
+    await vi.waitFor(() => {
+      expect(applySessionEvent).toHaveBeenCalledWith({ type: "updated", session: summary });
+      expect(applySessionEvent).toHaveBeenCalledWith({ type: "removed", sessionId: "sess-2" });
+    });
+    expect(requests).toHaveBeenCalledTimes(1);
+    expect(applySessionEvent).toHaveBeenCalledTimes(2);
   });
 });

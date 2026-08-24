@@ -81,6 +81,23 @@ export type TerminalSessionParams = z.infer<typeof TerminalSessionParams>;
  * the first `FramesLegAttached` identity.  Keeping this schema here also makes
  * an upstream summary-shape change fail our type/build gates at the adapter.
  */
+/** ghosttea's exit-fact enums (kebab-case wire forms), named ONCE — the roster
+ * summary below and the TP `SessionEvent` verb (terminal-pipeline.ts, TP-S3f)
+ * carry the same facts in the same spelling. */
+export const TerminalTerminationSource = z.enum(["user", "application", "service-shutdown"]);
+export type TerminalTerminationSource = z.infer<typeof TerminalTerminationSource>;
+
+export const TerminalExitOutcome = z.enum([
+  "completed",
+  "crashed",
+  "signaled",
+  "user-terminated",
+  "application-terminated",
+  "service-terminated",
+  "unknown",
+]);
+export type TerminalExitOutcome = z.infer<typeof TerminalExitOutcome>;
+
 export const TerminalSessionActivity = z
   .object({
     kind: z.enum(["shell-idle", "foreground-job", "unknown"]),
@@ -110,18 +127,8 @@ export const TerminalRuntimeSession = z
     createdAtMs: z.number().int().nonnegative(),
     exitCode: z.number().int().nullable(),
     exitSignal: z.string().nullable(),
-    requestedTermination: z.enum(["user", "application", "service-shutdown"]).nullable(),
-    exitOutcome: z
-      .enum([
-        "completed",
-        "crashed",
-        "signaled",
-        "user-terminated",
-        "application-terminated",
-        "service-terminated",
-        "unknown",
-      ])
-      .nullable(),
+    requestedTermination: TerminalTerminationSource.nullable(),
+    exitOutcome: TerminalExitOutcome.nullable(),
     ownerId: z.string().nullable(),
     persistence: z
       .enum(["terminate-with-app", "keep-until-exit", "keep-until-explicit-close"])

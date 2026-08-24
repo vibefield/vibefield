@@ -11,9 +11,15 @@
 //!   service's private-env strip. The production cell installs this source;
 //!   there is no mirror and no second session registry.
 
-use ghosttea::{FrameHub, ServiceSessions, Session};
+use ghosttea::{FrameHub, ServiceSessions, Session, SessionLifecycleEvent};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tokio::sync::broadcast;
+
+/// `DirectSessions`' lifecycle-bus capacity. Small on purpose: the harness bus
+/// exists so tests can drive (and overflow) the same `Lagged` → resync path
+/// production takes; G22's service bus has its own capacity upstream.
+pub const DIRECT_LIFECYCLE_CAPACITY: usize = 16;
 
 /// The one seam between the door layer and the engine's session set.
 pub trait SessionSource: Send + Sync {
@@ -23,6 +29,14 @@ pub trait SessionSource: Send + Sync {
     /// every packet is this session's; with a shared hub the door filters by
     /// the packet's `session_handle` (it does so either way).
     fn frames(&self, session_id: &str) -> Option<FrameHub>;
+    /// TP-S3f/G24 — the lifecycle bus behind the `session-events` capability.
+    /// `None` means this source has no bus (`NoSessions`) and the door never
+    /// emits `SessionEvent`. The receiver is BOUNDED: when it reports `Lagged`,
+    /// the door answers on the wire with `{kind: "resync"}` rather than
+    /// pretending it saw every death.
+    fn subscribe_lifecycle(&self) -> Option<broadcast::Receiver<SessionLifecycleEvent>> {
+        None
+    }
 }
 
 /** G22's production adapter. The trait is ours and `ServiceSessions` is
@@ -36,17 +50,43 @@ impl SessionSource for ServiceSessions {
     fn frames(&self, session_id: &str) -> Option<FrameHub> {
         self.frames_for(session_id)
     }
+
+    fn subscribe_lifecycle(&self) -> Option<broadcast::Receiver<SessionLifecycleEvent>> {
+        Some(ServiceSessions::subscribe_lifecycle(self))
+    }
 }
 
 /// Sessions spawned directly by this harness, each with its own hub.
-#[derive(Default)]
 pub struct DirectSessions {
     inner: Mutex<HashMap<String, (Arc<Session>, FrameHub)>>,
+    lifecycle: broadcast::Sender<SessionLifecycleEvent>,
+}
+
+impl Default for DirectSessions {
+    fn default() -> Self {
+        Self::with_lifecycle_capacity(DIRECT_LIFECYCLE_CAPACITY)
+    }
 }
 
 impl DirectSessions {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
+    }
+
+    /// A harness that wants to force the `Lagged` path shrinks the bus.
+    pub fn with_lifecycle_capacity(capacity: usize) -> Self {
+        let (lifecycle, _) = broadcast::channel(capacity);
+        Self {
+            inner: Mutex::new(HashMap::new()),
+            lifecycle,
+        }
+    }
+
+    /// Publish a lifecycle fact onto the harness bus — the harness IS the
+    /// engine here, so it also owns the ordering discipline (an `Exited`
+    /// before its `Removed` on the ordinary path, as the service publishes).
+    pub fn publish_lifecycle(&self, event: SessionLifecycleEvent) {
+        let _ = self.lifecycle.send(event);
     }
 
     /// Adopt a session spawned with `hub` (the caller spawned it, so it also
@@ -84,6 +124,10 @@ impl SessionSource for DirectSessions {
             .unwrap()
             .get(session_id)
             .map(|(_, h)| h.clone())
+    }
+
+    fn subscribe_lifecycle(&self) -> Option<broadcast::Receiver<SessionLifecycleEvent>> {
+        Some(self.lifecycle.subscribe())
     }
 }
 

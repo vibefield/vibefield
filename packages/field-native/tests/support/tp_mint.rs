@@ -114,13 +114,29 @@ impl<'a> TransportSpec<'a> {
 
 /// The tagged ConnectionHello text frame.
 pub fn hello(channel: &str, grant: &Value, receiver_capacities: Option<Value>) -> String {
+    hello_with_capabilities(
+        channel,
+        grant,
+        receiver_capacities,
+        json!(["resume", "something-unknown"]),
+    )
+}
+
+/// TP-S3f: a hello whose capability advertisement the test chooses — the
+/// `session-events` negotiation rides here.
+pub fn hello_with_capabilities(
+    channel: &str,
+    grant: &Value,
+    receiver_capacities: Option<Value>,
+    capabilities: Value,
+) -> String {
     let mut v = json!({
         "type": "ConnectionHello",
         "protocolMajor": 1,
         "protocolMinor": 0,
         "channel": channel,
         "transportGrant": grant,
-        "capabilities": ["resume", "something-unknown"],
+        "capabilities": capabilities,
     });
     if let Some(caps) = receiver_capacities {
         v["receiverCapacities"] = caps;

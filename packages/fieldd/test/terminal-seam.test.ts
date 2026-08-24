@@ -271,4 +271,189 @@ describe("the terminal seam (NF-3, real field-native)", () => {
     expect(row.pid).toBeGreaterThan(0);
     await rpc.call("terminal.terminate", { sessionId: created.sessionId });
   }, 60_000);
+
+  it("the death of an ATTACHED session also reaches the negotiated leg (TP-S3f — the deck pane case)", async () => {
+    const dataDir = await spawnNative();
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", resolve);
+      ws.once("error", reject);
+    });
+    cleanup.push(() => ws.close());
+    const rpc = new WsRpc(ws);
+    await helloAs(rpc, grant.token);
+
+    const created = (await rpc.call("terminal.create", { shell: SHELL })) as {
+      sessionId: string;
+      endpoints: { controlUrl: string };
+      transportGrant: Record<string, unknown>;
+      attachGrant: Record<string, unknown>;
+    };
+
+    const leg = new WebSocket(created.endpoints.controlUrl);
+    await new Promise<void>((resolve, reject) => {
+      leg.once("open", resolve);
+      leg.once("error", reject);
+    });
+    cleanup.push(() => leg.close());
+    const inbox: Record<string, unknown>[] = [];
+    const wake: Array<() => void> = [];
+    leg.on("message", (data) => {
+      inbox.push(JSON.parse(String(data)) as Record<string, unknown>);
+      for (const w of wake.splice(0)) w();
+    });
+    const nextMatching = async (
+      predicate: (m: Record<string, unknown>) => boolean,
+      what: string,
+      timeoutMs = 20_000,
+    ): Promise<Record<string, unknown>> => {
+      const deadline = Date.now() + timeoutMs;
+      for (;;) {
+        const found = inbox.find(predicate);
+        if (found !== undefined) return found;
+        if (Date.now() >= deadline) {
+          throw new Error(
+            `${what}: nothing matched within ${timeoutMs}ms — saw ${JSON.stringify(inbox)}`,
+          );
+        }
+        await new Promise<void>((resolve) => {
+          wake.push(resolve);
+          setTimeout(resolve, 250);
+        });
+      }
+    };
+
+    leg.send(
+      JSON.stringify({
+        type: "ConnectionHello",
+        protocolMajor: 1,
+        protocolMinor: 0,
+        channel: "control",
+        transportGrant: created.transportGrant,
+        capabilities: ["session-events"],
+      }),
+    );
+    await nextMatching(
+      (m) => m["type"] === "ConnectionAccepted",
+      "the control hello to be accepted",
+    );
+
+    // The deck-pane shape: an ACTIVE attachment on the session being killed.
+    // This is the state the godview ladder kills in, and the state the
+    // unattached witness above cannot cover.
+    leg.send(
+      JSON.stringify({
+        type: "AttachControlLeg",
+        activationId: "act-seam-attached-1",
+        attachGrant: created.attachGrant,
+        initialDemand: { mode: "live" },
+      }),
+    );
+    await nextMatching(
+      (m) => m["type"] === "ControlLegAttached" && m["activationId"] === "act-seam-attached-1",
+      "the control attach to land",
+    );
+
+    await rpc.call("terminal.terminate", { sessionId: created.sessionId });
+    const isEventFor = (m: Record<string, unknown>, kind: string): boolean => {
+      if (m["type"] !== "SessionEvent") return false;
+      const event = m["event"] as Record<string, unknown> | undefined;
+      return event?.["kind"] === kind && event?.["sessionId"] === created.sessionId;
+    };
+    await nextMatching((m) => isEventFor(m, "exited"), "the death to reach the ATTACHED leg");
+    await nextMatching((m) => isEventFor(m, "removed"), "the removal to follow");
+  }, 60_000);
+
+  it("a floor-side death reaches a negotiated control leg as SessionEvent (TP-S3f, G24)", async () => {
+    const dataDir = await spawnNative();
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", resolve);
+      ws.once("error", reject);
+    });
+    cleanup.push(() => ws.close());
+    const rpc = new WsRpc(ws);
+    await helloAs(rpc, grant.token);
+
+    const created = (await rpc.call("terminal.create", { shell: SHELL })) as {
+      sessionId: string;
+      endpoints: { controlUrl: string };
+      transportGrant: Record<string, unknown>;
+    };
+
+    // A raw negotiated control leg on the CELL's own door — the exact plane
+    // the godview deck rides. The hello advertises `session-events`; the cell
+    // must echo it and then carry the floor-side death to this leg.
+    const leg = new WebSocket(created.endpoints.controlUrl);
+    await new Promise<void>((resolve, reject) => {
+      leg.once("open", resolve);
+      leg.once("error", reject);
+    });
+    cleanup.push(() => leg.close());
+    const inbox: Record<string, unknown>[] = [];
+    const wake: Array<() => void> = [];
+    leg.on("message", (data) => {
+      inbox.push(JSON.parse(String(data)) as Record<string, unknown>);
+      for (const w of wake.splice(0)) w();
+    });
+    const nextMatching = async (
+      predicate: (m: Record<string, unknown>) => boolean,
+      what: string,
+      timeoutMs = 20_000,
+    ): Promise<Record<string, unknown>> => {
+      const deadline = Date.now() + timeoutMs;
+      for (;;) {
+        const found = inbox.find(predicate);
+        if (found !== undefined) return found;
+        if (Date.now() >= deadline) {
+          throw new Error(
+            `${what}: nothing matched within ${timeoutMs}ms — saw ${JSON.stringify(inbox)}`,
+          );
+        }
+        await new Promise<void>((resolve) => {
+          wake.push(resolve);
+          setTimeout(resolve, 250);
+        });
+      }
+    };
+
+    leg.send(
+      JSON.stringify({
+        type: "ConnectionHello",
+        protocolMajor: 1,
+        protocolMinor: 0,
+        channel: "control",
+        transportGrant: created.transportGrant,
+        capabilities: ["resume", "session-events"],
+      }),
+    );
+    const accepted = await nextMatching(
+      (m) => m["type"] === "ConnectionAccepted",
+      "the control hello to be accepted",
+    );
+    expect(accepted["capabilities"]).toEqual(["session-events"]);
+
+    await rpc.call("terminal.terminate", { sessionId: created.sessionId });
+    const isEventFor = (m: Record<string, unknown>, kind: string): boolean => {
+      if (m["type"] !== "SessionEvent") return false;
+      const event = m["event"] as Record<string, unknown> | undefined;
+      return event?.["kind"] === kind && event?.["sessionId"] === created.sessionId;
+    };
+    const exited = await nextMatching(
+      (m) => isEventFor(m, "exited"),
+      "the death to reach the negotiated leg",
+    );
+    const facts = exited["event"] as Record<string, unknown>;
+    expect(typeof facts["exitOutcome"]).toBe("string");
+    // The ordinary process-exit path publishes the removal after the exit.
+    await nextMatching((m) => isEventFor(m, "removed"), "the removal to follow the exit");
+  }, 60_000);
 });

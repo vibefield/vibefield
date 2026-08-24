@@ -13,7 +13,7 @@
 
 use super::grant::Channel;
 use crate::registries::terminal_pipeline as tp;
-use ghosttea::session::{KeyInput, MouseInput};
+use ghosttea::session::{ExitOutcome, KeyInput, MouseInput, TerminationSource};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -586,6 +586,43 @@ where
     Ok(mouse)
 }
 
+/// Contracts `SessionEvent` (cell → client, CONTROL leg; §5.4, TP-S3f/G24) —
+/// the lifecycle verb, `SendInput`'s ride inverted. Emitted ONLY on legs whose
+/// hello negotiated the `session-events` capability: an un-negotiated client
+/// closes its control leg on any unknown tag, so the gate is load-bearing.
+/// `Exited` embeds the engine's OWN `TerminationSource`/`ExitOutcome`
+/// (kebab-case serde — exactly ghosttea-protocol's strings): serializing the
+/// engine types here is the drift guard, the inverse of `SendInput`
+/// deserializing into them. Pinned by the `tp-session-event.*.json` fixtures
+/// on both sides (EL9).
+#[derive(Debug, Clone, Serialize)]
+pub struct SessionEvent {
+    pub event: SessionEventKind,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum SessionEventKind {
+    Exited {
+        session_id: String,
+        exit_code: Option<i32>,
+        exit_signal: Option<String>,
+        requested_termination: Option<TerminationSource>,
+        exit_outcome: ExitOutcome,
+    },
+    Removed {
+        session_id: String,
+    },
+    /// The honest lag notice: the door's bounded lifecycle receiver dropped
+    /// events, and the client must reconcile against the authoritative
+    /// inventory rather than trust its deltas.
+    Resync,
+}
+
 /// The presentation envelope's binary framing (contracts
 /// `encodePresentationEnvelope`): `'T' 'P' 1 0 u32BE headerLen | header JSON |
 /// payload`. The header is built as a `Value` because `baseContent` has three
@@ -620,11 +657,16 @@ pub fn decode_envelope(bytes: &[u8]) -> Option<(Value, &[u8])> {
     Some((header, &bytes[ENVELOPE_PREFIX_BYTES + len..]))
 }
 
-/// The wire capabilities this cell speaks in the v1 core profile: none of the
-/// three (`resume`, `snapshot-demand`, `profiling-envelope`) yet — the
-/// intersection it echoes is therefore empty; a client's unknown strings are
-/// ignored (tolerant reader).
-pub const CELL_CAPABILITIES: &[&str] = &[];
+/// The wire capabilities this cell speaks. Of the TP-D25 profile it speaks
+/// `session-events` (TP-S3f/G24: the cell → client `SessionEvent` verb, gated
+/// on the negotiation because an un-negotiated client closes its leg on any
+/// unknown tag) and none of the other three (`resume`, `snapshot-demand`,
+/// `profiling-envelope`) yet. A client's unknown strings are ignored
+/// (tolerant reader); the echoed intersection is the negotiation.
+pub const CELL_CAPABILITIES: &[&str] = &["session-events"];
+
+/// The negotiated `session-events` capability string, spelled once.
+pub const SESSION_EVENTS_CAPABILITY: &str = "session-events";
 
 pub fn capability_intersection(client: &[String]) -> Vec<String> {
     client
@@ -771,6 +813,71 @@ mod tests {
             InputOp::Scroll { rows } => assert_eq!(rows, -5),
             other => panic!("expected Scroll, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn session_event_serializes_to_the_contracts_fixtures() {
+        // The drift guard runs in the emit direction: the cell SERIALIZES the
+        // engine's own exit enums, and the golden fixtures pin the exact JSON
+        // the TS schema parses (EL9). A ghosttea rename or a serde-attr slip
+        // reds this test, not a live renderer.
+        let killed = SessionEvent {
+            event: SessionEventKind::Exited {
+                session_id: "sess-tp-fixture-1".into(),
+                exit_code: None,
+                exit_signal: Some("SIGHUP".into()),
+                requested_termination: Some(TerminationSource::User),
+                exit_outcome: ExitOutcome::UserTerminated,
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&killed).unwrap(),
+            fixture("tp-session-event.exited.json")
+        );
+        let completed = SessionEvent {
+            event: SessionEventKind::Exited {
+                session_id: "sess-tp-fixture-2".into(),
+                exit_code: Some(0),
+                exit_signal: None,
+                requested_termination: None,
+                exit_outcome: ExitOutcome::Completed,
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&completed).unwrap(),
+            fixture("tp-session-event.completed.json")
+        );
+        let removed = SessionEvent {
+            event: SessionEventKind::Removed {
+                session_id: "sess-tp-fixture-1".into(),
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&removed).unwrap(),
+            fixture("tp-session-event.removed.json")
+        );
+        let resync = SessionEvent {
+            event: SessionEventKind::Resync,
+        };
+        assert_eq!(
+            serde_json::to_value(&resync).unwrap(),
+            fixture("tp-session-event.resync.json")
+        );
+
+        // …and the TAGGED form the control leg actually carries.
+        let on_wire: Value = serde_json::from_str(&tagged("SessionEvent", &killed)).unwrap();
+        assert_eq!(on_wire, fixture("tp-tagged-message.session-event.json"));
+    }
+
+    #[test]
+    fn the_cell_negotiates_session_events_and_nothing_else() {
+        let negotiated = capability_intersection(&[
+            "resume".to_string(),
+            "session-events".to_string(),
+            "made-up".to_string(),
+        ]);
+        assert_eq!(negotiated, vec![SESSION_EVENTS_CAPABILITY.to_string()]);
+        assert!(capability_intersection(&["resume".to_string()]).is_empty());
     }
 
     #[test]

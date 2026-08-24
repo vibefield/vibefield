@@ -1,7 +1,12 @@
 import { type ZodTypeAny, z } from "zod";
 import { CellEndpointSet, TerminalWorkloadClass } from "./envelope";
 import { TERMINAL_PIPELINE, TERMINAL_PIPELINE_CLOSE_CODES } from "./registries";
-import { TerminalObservation, TerminalRuntimeSession } from "./terminal";
+import {
+  TerminalExitOutcome,
+  TerminalObservation,
+  TerminalRuntimeSession,
+  TerminalTerminationSource,
+} from "./terminal";
 
 // The terminal pipeline (TPv3) — custody through pixels. The wire truth for
 // everything between fieldd's ticket mint and the renderer's cell sockets:
@@ -438,8 +443,16 @@ export type ProtocolVersion = z.infer<typeof ProtocolVersion>;
 
 /** Wire capabilities outside the v1 core profile (TP-D25). Unknown strings
  * are tolerated and ignored; the intersection is what `ConnectionAccepted`
- * echoes. Renderer-internal features are never capabilities. */
-export const KNOWN_CAPABILITIES = ["resume", "snapshot-demand", "profiling-envelope"] as const;
+ * echoes. Renderer-internal features are never capabilities.
+ * `session-events` (TP-S3f, petition G24): the client can receive the
+ * cell → client `SessionEvent` verb — load-bearing, because an un-negotiated
+ * client closes its control leg on any unknown tag. */
+export const KNOWN_CAPABILITIES = [
+  "resume",
+  "snapshot-demand",
+  "profiling-envelope",
+  "session-events",
+] as const;
 export type KnownCapability = (typeof KNOWN_CAPABILITIES)[number];
 
 /** Receive capacity belongs to the WORKER: it advertises what it can hold on
@@ -1048,6 +1061,45 @@ export const SendInput = z
 export type SendInput = z.infer<typeof SendInput>;
 
 // ---------------------------------------------------------------------------
+// Session events (spec §5.4, TP-S3f / petition G24) — the lifecycle verb,
+// `SendInput`'s ride INVERTED: cell → client on the CONTROL leg, emitted ONLY
+// on legs whose hello negotiated the `session-events` capability (TP-D25) —
+// an un-negotiated client treats any unknown tag as a protocol error and
+// closes the leg, so the capability is load-bearing, not advisory. The cell
+// projects G22's in-process lifecycle bus: `exited` carries every exit fact
+// the floor recorded (the exit columns of `TerminalRuntimeSession`, same
+// spelling); `removed` unregisters WITHOUT inventing exit evidence; `resync`
+// is the honest lag notice — the cell's bounded receiver dropped events, and
+// the client must reconcile against the authoritative inventory rather than
+// trust its deltas. Connection-scoped, not activation-scoped: a client tracks
+// sessions it never attached (the deck roster, dormant panes), so the fan-out
+// is every negotiated control leg. A receiver treats an unknown `kind` as
+// drop-and-log (tolerant reader), never a leg close — future variants are
+// additive behind the same capability.
+
+export const SessionEventKind = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("exited"),
+      sessionId: z.string().min(1),
+      exitCode: JsonSafeI64.nullable(),
+      exitSignal: z.string().nullable(),
+      requestedTermination: TerminalTerminationSource.nullable(),
+      exitOutcome: TerminalExitOutcome,
+    })
+    .passthrough(),
+  z.object({ kind: z.literal("removed"), sessionId: z.string().min(1) }).passthrough(),
+  z.object({ kind: z.literal("resync") }).passthrough(),
+]);
+export type SessionEventKind = z.infer<typeof SessionEventKind>;
+
+/** cell → client, CONTROL leg, gated by the negotiated `session-events`
+ * capability. There is no ack: application is the client's (ghosttea-react's
+ * `applySessionEvent` — idempotent by session id, never resurrecting). */
+export const SessionEvent = z.object({ event: SessionEventKind }).passthrough();
+export type SessionEvent = z.infer<typeof SessionEvent>;
+
+// ---------------------------------------------------------------------------
 // The frames plane (spec §8): credits, transfers, the presentation envelope
 
 /** Worker → cell (frames leg, JSON text). Every total is CUMULATIVE BYTES
@@ -1334,6 +1386,7 @@ export const TpMessageType = z.enum([
   "ReleaseGeometry",
   "TransferGeometry",
   "SendInput",
+  "SessionEvent",
   "GeometryCommitted",
   "GeometryRefused",
   "AttachFramesLeg",
@@ -1361,6 +1414,7 @@ export const TP_MESSAGE_SCHEMAS: Readonly<Record<TpMessageType, ZodTypeAny>> = {
   ReleaseGeometry,
   TransferGeometry,
   SendInput,
+  SessionEvent,
   GeometryCommitted,
   GeometryRefused,
   AttachFramesLeg,
@@ -1404,6 +1458,7 @@ export const TP_LEG_OUTBOUND: Readonly<Record<TransportChannel, readonly TpMessa
     "CellActivationStatus",
     "GeometryCommitted",
     "GeometryRefused",
+    "SessionEvent",
   ],
   frames: [
     "ConnectionAccepted",

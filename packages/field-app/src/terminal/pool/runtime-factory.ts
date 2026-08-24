@@ -5,6 +5,7 @@ import {
   waitForGhostteaRendererPorts,
 } from "@vibecook/ghosttea-react";
 import TerminalRenderWorker from "@vibecook/ghosttea-react/terminal-render.worker.js?worker";
+import { ROUTED_CLIENT_CAPABILITIES } from "../routed/host";
 
 // THE ONE RUNTIME PER WINDOW (TP-D5, §9.1) — built here and nowhere else.
 //
@@ -67,6 +68,9 @@ export function createTerminalRuntime(
       ...common,
       transport: "routed",
       host: transport.host,
+      // TP-S3f/G24: without this advertisement the cell must stay silent —
+      // an un-negotiated client closes its control leg on any unknown tag.
+      capabilities: [...ROUTED_CLIENT_CAPABILITIES],
     });
   }
   return createGhostteaTerminalRuntime({

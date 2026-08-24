@@ -21,7 +21,8 @@ use field_native::tp::wire::{decode_envelope, JSON_MAX_SAFE_INTEGER};
 use futures_util::{SinkExt, StreamExt};
 use ghosttea::session::{Persistence, SpawnOptions};
 use ghosttea::{
-    AutomationInputOperation, FrameHub, Session, SessionEnvironment, SessionProgramKind, TextEngine,
+    AutomationInputOperation, ExitOutcome, FrameHub, Session, SessionEnvironment, SessionExit,
+    SessionLifecycleEvent, SessionProgramKind, TerminationSource, TextEngine,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -31,7 +32,7 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tp_mint::{hello, TestMinter, TransportSpec};
+use tp_mint::{hello, hello_with_capabilities, TestMinter, TransportSpec};
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -92,6 +93,13 @@ async fn harness() -> Harness {
 }
 
 async fn harness_cfg(configure: impl FnOnce(&mut DoorConfig)) -> Harness {
+    harness_with_source(DirectSessions::new(), configure).await
+}
+
+async fn harness_with_source(
+    source: Arc<DirectSessions>,
+    configure: impl FnOnce(&mut DoorConfig),
+) -> Harness {
     let minter = TestMinter::new(CELL);
     let verifier = GrantVerifier::new(
         GrantKey {
@@ -101,7 +109,6 @@ async fn harness_cfg(configure: impl FnOnce(&mut DoorConfig)) -> Harness {
         },
         GrantValidityLimits::default(),
     );
-    let source = DirectSessions::new();
     let mut config = DoorConfig::new(verifier, vec![]).with_source(source.clone());
     config.tick = Duration::from_millis(100);
     // the tests drive credit by hand on a loaded host; the convergence bound
@@ -1157,6 +1164,134 @@ async fn wire_input_types_into_the_real_pty_and_every_fence_holds() {
     assert!(
         session.summary().exited,
         "the typed `exit` reached the real PTY and ended /bin/sh"
+    );
+    h.door.shutdown().await;
+}
+
+// ---------------------------------------------------------------------------
+// TP-S3f / G24 — the lifecycle verb. The harness IS the engine here: it
+// publishes onto the same bounded bus `ServiceSessions` exposes in production,
+// and the door's ONE subscription fans the wire verb out to negotiated legs.
+
+/// Open a control leg whose hello advertises `capabilities`; returns the leg
+/// and the accept's echoed intersection.
+async fn connect_control(h: &Harness, set: &str, capabilities: Value) -> (Ws, Value) {
+    let grant = h
+        .minter
+        .transport(TransportSpec::basic(set, 1, &format!("n-{set}-se")));
+    let mut control = dial(&h.door.control_url()).await;
+    send_json(
+        &mut control,
+        serde_json::from_str(&hello_with_capabilities(
+            "control",
+            &grant,
+            None,
+            capabilities,
+        ))
+        .unwrap(),
+    )
+    .await;
+    let accepted = expect_text(next_reply(&mut control).await, "ConnectionAccepted");
+    let echoed = accepted["capabilities"].clone();
+    (control, echoed)
+}
+
+#[tokio::test]
+async fn session_events_reach_a_negotiated_leg_with_every_exit_fact_and_births_stay_quiet() {
+    let h = harness().await;
+    let (mut control, echoed) =
+        connect_control(&h, "set-se-1", json!(["resume", "session-events"])).await;
+    assert_eq!(echoed, json!(["session-events"]), "the TP-D25 intersection");
+
+    // A birth on the bus is deliberately NOT an event — clients learn births
+    // from the roster read they already do. The exit that follows must be the
+    // FIRST thing this leg hears, with every exit fact intact, then the
+    // removal, in the bus's order.
+    let session = spawn_session(&h.source);
+    h.source.publish_lifecycle(SessionLifecycleEvent::Created {
+        session: session.clone(),
+    });
+    h.source.publish_lifecycle(SessionLifecycleEvent::Exited {
+        session_id: "sess-ev-1".into(),
+        exit: SessionExit {
+            exit_code: None,
+            exit_signal: Some("SIGHUP".into()),
+            requested_termination: Some(TerminationSource::User),
+            exit_outcome: ExitOutcome::UserTerminated,
+        },
+    });
+    h.source.publish_lifecycle(SessionLifecycleEvent::Removed {
+        session_id: "sess-ev-1".into(),
+    });
+
+    let exited = expect_text(next_reply(&mut control).await, "SessionEvent");
+    assert_eq!(
+        exited["event"],
+        json!({
+            "kind": "exited",
+            "sessionId": "sess-ev-1",
+            "exitCode": null,
+            "exitSignal": "SIGHUP",
+            "requestedTermination": "user",
+            "exitOutcome": "user-terminated",
+        })
+    );
+    let removed = expect_text(next_reply(&mut control).await, "SessionEvent");
+    assert_eq!(
+        removed["event"],
+        json!({ "kind": "removed", "sessionId": "sess-ev-1" })
+    );
+    let _ = session.terminate(TerminationSource::User);
+    h.door.shutdown().await;
+}
+
+#[tokio::test]
+async fn an_unnegotiated_control_leg_never_sees_the_verb() {
+    let h = harness().await;
+    let (mut negotiated, _) = connect_control(&h, "set-se-a", json!(["session-events"])).await;
+    // The stock hello: `resume` + an unknown string — negotiates NOTHING, the
+    // exact posture of every pre-S3f client.
+    let (mut plain, echoed) =
+        connect_control(&h, "set-se-b", json!(["resume", "something-unknown"])).await;
+    assert_eq!(echoed, json!([]));
+
+    h.source.publish_lifecycle(SessionLifecycleEvent::Removed {
+        session_id: "sess-ev-2".into(),
+    });
+
+    // The fan-out enqueues (or skips) BOTH legs under one registry lock, so
+    // once the negotiated leg has its copy, the plain leg's silence is the
+    // verdict, not a race.
+    let event = expect_text(next_reply(&mut negotiated).await, "SessionEvent");
+    assert_eq!(event["event"]["kind"], "removed");
+    match tokio::time::timeout(Duration::from_millis(150), plain.next()).await {
+        Err(_) => {}
+        Ok(other) => panic!("the un-negotiated leg heard something: {other:?}"),
+    }
+    h.door.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_lagged_lifecycle_bus_tells_negotiated_clients_to_resync() {
+    // Capacity 1 + a publish burst with no await between sends: on the
+    // current-thread runtime the door's receiver cannot run mid-burst, so it
+    // MUST observe `Lagged` — and the wire answer is the honest resync notice
+    // followed by the newest surviving fact, never an invented replay.
+    let h = harness_with_source(Arc::new(DirectSessions::with_lifecycle_capacity(1)), |_| {}).await;
+    let (mut control, _) = connect_control(&h, "set-se-lag", json!(["session-events"])).await;
+
+    for i in 0..3 {
+        h.source.publish_lifecycle(SessionLifecycleEvent::Removed {
+            session_id: format!("sess-lag-{i}"),
+        });
+    }
+
+    let first = expect_text(next_reply(&mut control).await, "SessionEvent");
+    assert_eq!(first["event"], json!({ "kind": "resync" }));
+    let second = expect_text(next_reply(&mut control).await, "SessionEvent");
+    assert_eq!(
+        second["event"],
+        json!({ "kind": "removed", "sessionId": "sess-lag-2" })
     );
     h.door.shutdown().await;
 }

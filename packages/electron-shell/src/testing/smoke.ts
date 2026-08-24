@@ -1306,6 +1306,30 @@ function resizedPanes(before: Record<string, string>, after: Record<string, stri
   return Object.keys(before).filter((paneId) => after[paneId] !== before[paneId]);
 }
 
+/** Pane boxes once they have been STABLE for `stableMs` — the quiescence read
+ * a box-exactness row starts from now that metadata facts (title/cwd, TP-S3f)
+ * arrive asynchronously and settle the chrome once shortly after birth. */
+async function settledPaneBoxes(
+  win: BrowserWindow,
+  stableMs: number,
+  timeoutMs: number,
+): Promise<Record<string, string>> {
+  const deadline = Date.now() + timeoutMs;
+  let last = await paneBoxes(win);
+  let stableSince = Date.now();
+  while (Date.now() < deadline) {
+    await sleep(250);
+    const now = await paneBoxes(win);
+    if (resizedPanes(last, now).length > 0 || resizedPanes(now, last).length > 0) {
+      last = now;
+      stableSince = Date.now();
+      continue;
+    }
+    if (Date.now() - stableSince >= stableMs) return now;
+  }
+  throw new Error(`pane boxes never settled within ${timeoutMs}ms (last: ${JSON.stringify(last)})`);
+}
+
 /** Put the caret in a terminal, by clicking one — which is how a user does it.
  *
  * The workspace answers a hotkey only when focus is inside it
@@ -1342,8 +1366,15 @@ async function focusDeck(win: BrowserWindow): Promise<void> {
 async function typeTerminalLine(win: BrowserWindow, line: string): Promise<void> {
   for (const character of line) {
     const keyCode = character === " " ? "Space" : character;
-    win.webContents.sendInputEvent({ type: "keyDown", keyCode });
-    win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+    // A capital must CARRY shift: a bare keyDown synthesizes the UNSHIFTED
+    // key, and the shell quietly receives the lowercase twin. Invisible for
+    // as long as every typed string was lowercase; caught the first time this
+    // ladder typed a mixed-case path (row 9's mkdtemp scratch dir landed as
+    // its lowercase spelling — the cd still succeeded on case-insensitive
+    // APFS, which is what made the drop silent instead of loud).
+    const modifiers: Array<"shift"> = character !== character.toLowerCase() ? ["shift"] : [];
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
     await sleep(3);
   }
   win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
@@ -2175,9 +2206,11 @@ export async function runSmokeGodview(opts: {
     // follow-up. This verdict field turning silently green is the outcome the
     // original comment forbade, so it reports the debt, not a pass.
     verdict["flipWitness"] = "s3e-instrument-debt";
+    // TP-S3f: `rehydrated-cwd` left this list — the relaunched shell announces
+    // its cwd over OSC 7 on its first prompt, so the floor read is the witness
+    // and no named-pane typing is needed (row 9).
     verdict["s3eInstrumentDebt"] = [
       "flip-witness (GT-D11 e2e)",
-      "rehydrated-cwd ($PWD in a named pane)",
       "keystroke-echo latency (report-only)",
     ];
     verdict["flipObserved"] = true;
@@ -2249,7 +2282,16 @@ export async function runSmokeGodview(opts: {
         `the deck had already committed ${String(zoomBaseline.zoom?.commits)} zoom layout(s) before this row pressed anything — the 0 → 1 → 2 count below would be measuring something else`,
       );
     }
-    const boxesBeforeZoom = await paneBoxes(win);
+    // TP-S3f: the deck's pane chrome became FACT-DRIVEN — the routed metadata
+    // refresh (G24) lands the sessions' real title/cwd shortly after birth,
+    // and the deck settles a few pixels once when those facts arrive (measured
+    // ~5×4 px per pane, one-time; both this row's failures reproduced it at
+    // different instants of the round trip). TP-R3 is a claim about the ZOOM
+    // GESTURE, so the row runs on the QUIESCENT deck: boxes stable across ten
+    // refresh cadences before the first snapshot. If boxes ever oscillate
+    // under a steady metadata stream, this wait times out — that would be a
+    // real product bug, not smoke weather.
+    const boxesBeforeZoom = await settledPaneBoxes(win, 2_000, 30_000);
     if (Object.keys(boxesBeforeZoom).length < 2) {
       throw new Error(
         `the zoom row needs at least two panes to prove the others are left alone; saw ${JSON.stringify(boxesBeforeZoom)}`,
@@ -2532,22 +2574,56 @@ export async function runSmokeGodview(opts: {
     //    deck decodes it before spawning anything.
     const workdir = join(scratch, "work");
     mkdirSync(workdir, { recursive: true });
-    // TP-S3e: the CWD-MOVE half of this row is DOUBLY blocked and skip-marked,
-    // loudly, rather than flaked through:
-    //   1. instrument — driving a NAMED pane's PTY is the retired UDS door's
-    //      job (renderer typing reaches only the focused pane, and a line
-    //      typed before that pane's activation admits input is suppressed);
-    //      the AR-lane automation surface is the named follow-up;
-    //   2. product — routed session summaries never refresh (no wire verb
-    //      carries cwd/title after birth), so even a landed `cd` never reaches
-    //      paneMeta: the G24-class upstream ask, witnessed by this ladder's
-    //      first fully-routed run.
-    // What KEEPS running is the restore MACHINERY: a dead pane, the consent
-    // face with honest counts, the relaunch, and the floor listing it.
-    void workdir;
-    verdict["recordedCwd"] = "s3e-instrument-debt + routed-summaries-stale (G24-class ask)";
-    verdict["paneMetaPersisted"] = "routed-summaries-stale (G24-class ask)";
-    const doomed = restored.sessionIds[0]!;
+    // TP-S3f: this row is BACK in full after two eras of honest gap-marks.
+    // The instrument half resolved by scoping, not by new machinery: the
+    // retired UDS door could type into a NAMED pane; the renderer path types
+    // into the ACTIVE one — so the row moves whichever pane holds focus and
+    // dooms THAT pane, instead of picking a session first and needing to reach
+    // it. The product half is G24 consumed: the landed `cd` reaches `paneMeta`
+    // through the routed metadata refresh (host `getSession` off frame
+    // commits), which is exactly what `paneMetaPersisted` witnesses.
+    await focusDeck(win);
+    await runInPane(win, join(scratch, "cd.txt"), `cd ${workdir}`);
+    // The typed line lands in whichever pane HOLDS FOCUS, and that pane is
+    // discovered by its EFFECT — the OSC 7 announcement reaching the floor —
+    // not assumed from the deck's active marker: after a reload the marker and
+    // the focused textarea can diverge (run 3 of this ladder witnessed it),
+    // and the row's subject is "the pane that moved", whichever one that is.
+    const inWorkdir = (terminals: TerminalListResult["terminals"]): string | undefined =>
+      restored.sessionIds.find(
+        (id) => cwdPath(terminals.find((t) => t.sessionId === id)?.cwd) === workdir,
+      );
+    const withCwd = await untilFloor(
+      opts.handle,
+      (terminals) => inWorkdir(terminals) !== undefined,
+      `report a deck pane sitting in ${workdir} (a pane's cwd is only ever what its shell announced over OSC 7)`,
+      20_000,
+    ).catch(async (failure) => {
+      // The marker DID land (typeLineUntilMarker throws otherwise), so a shell
+      // ran the cd — say which sessions the floor sees and what they announce,
+      // so a mismatch names its suspect instead of just its timeout.
+      const now = await listTerminalsWhenObserved(opts.handle);
+      const facts = deck.current();
+      throw new Error(
+        `${failure instanceof Error ? failure.message : String(failure)} [terminals=${JSON.stringify(
+          now.map((t) => ({ id: t.sessionId, cwd: t.cwd ?? null, exited: t.exited })),
+        )} deckPanes=${JSON.stringify(facts?.sessionIds ?? [])} active=${facts?.activeSessionId ?? "?"} restored=${JSON.stringify(restored.sessionIds)}]`,
+      );
+    });
+    const doomed = inWorkdir(withCwd)!;
+    verdict["recordedCwd"] = withCwd.find((t) => t.sessionId === doomed)?.cwd;
+    // The layout has to have PERSISTED that cwd before the session dies —
+    // otherwise the restore below would be reading a meta this run never
+    // wrote. This wait is the G24 consumption witness: the ONLY route from
+    // the floor's cwd to the renderer's layout is the routed summary refresh.
+    const layoutDeadline = Date.now() + 15_000;
+    let persisted = false;
+    while (Date.now() < layoutDeadline && !persisted) {
+      persisted = ((await readDeckLayout(win)) ?? "").includes(workdir);
+      if (!persisted) await sleep(200);
+    }
+    if (!persisted) throw new Error(`paneMeta never persisted the cwd ${workdir}`);
+    verdict["paneMetaPersisted"] = true;
 
     // The kill is the FLOOR's, not the deck's — this row is about restore, and
     // the deck's own kill affordance gets its own row below.
@@ -2561,6 +2637,20 @@ export async function runSmokeGodview(opts: {
       `let ${doomed} go`,
       20_000,
     );
+    // THE DEATH-BLINDNESS WITNESS (TP-S3f / G24 consumed). This kill is the
+    // floor's — the renderer did NOT cause it through its own runtime, so the
+    // only way this pane's face can learn the death is the cell's
+    // `SessionEvent` riding the negotiated control leg into
+    // `applySessionEvent`. Waited for BEFORE the reload on purpose: after a
+    // reload, restore consent would mask whether the event ever arrived. (The
+    // deck's OWN kill below cannot witness this — see that row for why.)
+    await deck.until(
+      (facts) =>
+        (facts.exitedSessionIds ?? []).includes(doomed) || !facts.sessionIds.includes(doomed),
+      "the killed pane to admit a death it did not cause",
+      30_000,
+    );
+    verdict["killedPaneFace"] = "exited";
 
     await reopenAfterReload({
       win,
@@ -2601,13 +2691,29 @@ export async function runSmokeGodview(opts: {
       `list the relaunched session ${replacement}`,
       20_000,
     );
-    // TP-S3e INSTRUMENT DEBT: the cwd-of-the-relaunched-pane proof typed into
-    // a SPECIFIC session over the retired UDS door; the renderer path types
-    // into the ACTIVE pane only, and this row cannot prove which pane holds
-    // focus after a reload. The restore itself is still asserted above (the
-    // relaunched session exists and the floor lists it); the in-pane $PWD
-    // witness resumes with the AR-lane automation surface.
-    verdict["rehydratedCwd"] = "s3e-instrument-debt";
+    // TP-S3f: the relaunched shell is its own witness — zsh announces its cwd
+    // over OSC 7 on the FIRST prompt, so if the deck relaunched the pane where
+    // it was, the floor reports `workdir` without this harness typing a thing.
+    // This closes the row's last gap: no named-pane instrument required.
+    // Compared by REALPATH on both sides (the pre-S3e row's own discipline): a
+    // freshly spawned shell announces the PHYSICAL path (`/private/tmp/…`)
+    // while the typed `cd` above kept the logical one (`/tmp/…`) — same
+    // directory, two spellings.
+    const samePlace = (announced: string | null): boolean => {
+      if (announced === null) return false;
+      try {
+        return realpathSync(announced) === realpathSync(workdir);
+      } catch {
+        return false;
+      }
+    };
+    const rehydrated = await untilFloor(
+      opts.handle,
+      (terminals) => samePlace(cwdPath(terminals.find((t) => t.sessionId === replacement)?.cwd)),
+      `report the relaunched ${replacement} back in ${workdir}`,
+      20_000,
+    );
+    verdict["rehydratedCwd"] = rehydrated.find((t) => t.sessionId === replacement)?.cwd;
 
     // 10. THE KILL ROW (GT-D5). Closing a pane detaches (row 6); killing is a
     //     separate, audited, confirmed act. Driven through the deck's own
@@ -2636,18 +2742,17 @@ export async function runSmokeGodview(opts: {
       20_000,
     );
     verdict["killedSession"] = killTarget;
-    // The RENDERER half ("the pane ADMITS it") is gap-marked, not waited for:
-    // the same routed-session-event gap the cwd rows witnessed — the routed
-    // renderer never learns a floor-side death it did not cause (no lifecycle
-    // verb reaches it), so the pane face cannot degrade yet. The FLOOR half
-    // above stays asserted; the G24-class ask covers both directions.
-    const degradedNow = deck.current();
-    verdict["killedPaneFace"] =
-      degradedNow !== null &&
-      ((degradedNow.exitedSessionIds ?? []).includes(killTarget) ||
-        !degradedNow.sessionIds.includes(killTarget))
-        ? "exited"
-        : "routed-session-events-stale (G24-class ask)";
+    // The deck's OWN kill is a different animal from row 9's foreign death:
+    // the workspace kill affordance calls ghosttea's `runtime.terminate`,
+    // which REMOVES the local registration before the cell's `SessionEvent`
+    // can apply (`#removeRegisteredSession` in BOTH transports — upstream's
+    // design, read from 0.11.1's dist during this row's un-gapping), so no
+    // event-driven exited face follows a deliberate local kill. The floor
+    // half above and the audited two-step ARE this row's claims; the
+    // event-driven face is row 9's witness. Stated in the verdict so this
+    // row can never silently green-wash into the row-9 claim.
+    verdict["ownKillLocalFace"] =
+      "runtime-unregistered (ghosttea terminate drops local registration before the event)";
 
     // 11. THE CONFIG ROW (GT-3 rider). A real write through the product door,
     //     the floor's own reload verdict, and the one property that matters
@@ -2875,11 +2980,14 @@ export async function runSmokeGodview(opts: {
         `clicking an invented agent changed the deck's shape (${beforeMockClick.panes} → ${afterMockClick.panes} panes)`,
       );
     }
-    // The row-10 gap's residue is excluded EXPLICITLY: the killed session's
-    // pane cannot degrade yet (routed-session-events-stale, G24-class), so the
-    // deck may still hold that ONE id the floor has ended. Everything else —
-    // and above all anything a mock click could have invented — must be
-    // floor-known.
+    // The killed session is excluded EXPLICITLY, for a different reason than
+    // the gap era's: row 10's own-kill pane stays mounted holding its last
+    // summary (ghosttea's terminate drops the local registration, so no
+    // exited face follows a deliberate local kill — row 10 says so in its
+    // verdict) while the floor lists that id `exited`. The liveness check
+    // below demands `exited !== true`, so that id is carved out. Everything
+    // else — and above all anything a mock click could have invented — must
+    // be floor-known and alive.
     const paneSessions = afterMockClick.sessionIds.filter((id) => id !== killTarget);
     await untilFloor(
       opts.handle,

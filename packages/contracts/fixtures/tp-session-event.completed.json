@@ -1,0 +1,10 @@
+{
+  "event": {
+    "kind": "exited",
+    "sessionId": "sess-tp-fixture-2",
+    "exitCode": 0,
+    "exitSignal": null,
+    "requestedTermination": null,
+    "exitOutcome": "completed"
+  }
+}

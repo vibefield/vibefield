@@ -53,14 +53,15 @@ use super::wire::{
     AttachControlLeg, AttachFramesLeg, AttachRefused, CalibrationPing, ClaimGeometry,
     ConnectionAccepted, ConnectionHello, ConnectionRefused, DeclareDemand, InputOp, LegHeartbeat,
     LegHeartbeatAck, ProtocolLimits, ReceiverCapacities, ReleaseGeometry, SceneApplied, SendInput,
-    Tagged, TransferGeometry, TransportCredit, TrfIdentity,
+    SessionEvent, SessionEventKind, Tagged, TransferGeometry, TransportCredit, TrfIdentity,
+    SESSION_EVENTS_CAPABILITY,
 };
 use crate::registries::terminal_pipeline as tp;
 use crate::registries::terminal_pipeline_close_codes as close;
 use anyhow::{Context, Result};
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
-use ghosttea::{ControlClaim, Session, ViewAccess};
+use ghosttea::{ControlClaim, Session, SessionLifecycleEvent, ViewAccess};
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
@@ -168,6 +169,11 @@ struct LegEntry {
     transport_grant_generation: u64,
     grant_issued_at: u64,
     close_tx: mpsc::UnboundedSender<LegClose>,
+    /// TP-S3f/G24: the hello negotiated `session-events` (control legs only —
+    /// the lifecycle fan-out addresses entries through the registry).
+    session_events: bool,
+    /// The leg's writer channel — the same one its writer task drains.
+    out: mpsc::UnboundedSender<Outbound>,
 }
 
 struct ConnectionSet {
@@ -227,6 +233,46 @@ pub struct Door {
     state: Arc<DoorState>,
     accept_task: tokio::task::JoinHandle<()>,
     tick_task: tokio::task::JoinHandle<()>,
+    /// TP-S3f/G24: the lifecycle fan-out — present only when the source has a
+    /// bus (`NoSessions` has none, and then the cell never emits the verb).
+    lifecycle_task: Option<tokio::task::JoinHandle<()>>,
+}
+
+/// TP-S3f/G24 — project one engine lifecycle fact onto the wire verb, or None.
+/// `Created` is deliberately None: births reach a client through the roster
+/// read it already performs, and an `updated` for a session no client knows
+/// would be noise the renderer ignores anyway.
+fn session_event_of(event: &SessionLifecycleEvent) -> Option<SessionEventKind> {
+    match event {
+        SessionLifecycleEvent::Created { .. } => None,
+        SessionLifecycleEvent::Exited { session_id, exit } => Some(SessionEventKind::Exited {
+            session_id: session_id.clone(),
+            exit_code: exit.exit_code,
+            exit_signal: exit.exit_signal.clone(),
+            requested_termination: exit.requested_termination,
+            exit_outcome: exit.exit_outcome,
+        }),
+        SessionLifecycleEvent::Removed { session_id } => Some(SessionEventKind::Removed {
+            session_id: session_id.clone(),
+        }),
+    }
+}
+
+/// Send one `SessionEvent` to every accepted control leg that negotiated the
+/// `session-events` capability. Connection-scoped by design (spec §5.4): a
+/// client tracks sessions it never attached (the deck roster, dormant panes),
+/// so the death of ANY session is every negotiated client's business. A
+/// closed leg's send fails silently — its entry leaves the registry with it.
+fn fan_out_session_event(state: &DoorState, event: SessionEventKind) {
+    let text = tagged("SessionEvent", &SessionEvent { event });
+    let reg = state.registry.lock().unwrap();
+    for set in reg.sets.values() {
+        if let Some(entry) = set.legs.get(&Channel::Control) {
+            if entry.session_events {
+                let _ = entry.out.send(Outbound::Text(text.clone()));
+            }
+        }
+    }
 }
 
 impl Door {
@@ -296,6 +342,33 @@ impl Door {
                 perform(&tick_state, effects);
             }
         });
+        // TP-S3f/G24: subscribe BEFORE serving so no death between bind and
+        // the first accept can slip past the bus un-witnessed. A `Lagged`
+        // receiver answers with the honest `resync` notice, never a guess.
+        let lifecycle_task = state.config.source.subscribe_lifecycle().map(|mut rx| {
+            let lifecycle_state = state.clone();
+            tokio::spawn(async move {
+                loop {
+                    match rx.recv().await {
+                        Ok(event) => {
+                            if let Some(wire) = session_event_of(&event) {
+                                fan_out_session_event(&lifecycle_state, wire);
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(dropped)) => {
+                            tracing::warn!(
+                                event = "field_native.tp.door.session_events_lagged",
+                                component = "terminal",
+                                dropped,
+                                "the lifecycle receiver lagged; clients told to resync"
+                            );
+                            fan_out_session_event(&lifecycle_state, SessionEventKind::Resync);
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            })
+        });
         tracing::info!(
             event = "field_native.tp.door.serving",
             component = "terminal",
@@ -307,6 +380,7 @@ impl Door {
             state,
             accept_task,
             tick_task,
+            lifecycle_task,
         })
     }
 
@@ -376,6 +450,9 @@ impl Door {
     pub async fn shutdown(&self) {
         self.accept_task.abort();
         self.tick_task.abort();
+        if let Some(task) = &self.lifecycle_task {
+            task.abort();
+        }
         let signalled = {
             let mut reg = self.state.registry.lock().unwrap();
             reg.closed = true;
@@ -426,6 +503,9 @@ impl Drop for Door {
     fn drop(&mut self) {
         self.accept_task.abort();
         self.tick_task.abort();
+        if let Some(task) = &self.lifecycle_task {
+            task.abort();
+        }
     }
 }
 
@@ -856,6 +936,16 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         return;
     };
     let (close_tx, mut close_rx) = mpsc::unbounded_channel::<LegClose>();
+    // The leg's writer channel exists BEFORE admission so the registry entry
+    // can carry a sender: TP-S3f's lifecycle fan-out addresses accepted
+    // control legs through the registry, never through the leg task. Enqueues
+    // buffer until the writer task below starts draining the same channel.
+    let (out_tx, out_rx) = mpsc::unbounded_channel::<Outbound>();
+    let negotiated_capabilities = capability_intersection(&hello.capabilities);
+    let session_events = channel == Channel::Control
+        && negotiated_capabilities
+            .iter()
+            .any(|c| c == SESSION_EVENTS_CAPABILITY);
     let initial_windows = (channel == Channel::Frames).then(|| {
         hello
             .receiver_capacities
@@ -905,6 +995,8 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
                             transport_grant_generation: claims.transport_grant_generation,
                             grant_issued_at: claims.issued_at,
                             close_tx: close_tx.clone(),
+                            session_events,
+                            out: out_tx.clone(),
                         },
                     ) {
                         debug_assert!(admission.replaces_current_leg);
@@ -943,7 +1035,6 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
     // The frames socket's writer is a two-lane PRIORITY scheduler with a bulk
     // byte-semaphore (`maxBulkBytesAdmittedAhead`); a control socket has no bulk.
     let (sink, mut stream) = ws.split();
-    let (out_tx, out_rx) = mpsc::unbounded_channel::<Outbound>();
     let bulk_credit = (channel == Channel::Frames).then(|| {
         Arc::new(Semaphore::new(
             state.config.protocol_limits.max_bulk_bytes_admitted_ahead as usize,
@@ -970,7 +1061,7 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         credit_epoch: (channel == Channel::Frames).then_some(leg_generation),
         initial_windows,
         protocol_limits: state.config.protocol_limits,
-        capabilities: capability_intersection(&hello.capabilities),
+        capabilities: negotiated_capabilities,
     };
     leg.send_text(tagged("ConnectionAccepted", &accepted));
     tracing::info!(

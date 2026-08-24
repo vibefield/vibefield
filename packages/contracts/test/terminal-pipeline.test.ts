@@ -26,6 +26,7 @@ import {
   grantSigningInput,
   grantValidityAt,
   highWaterTombstoneTtlMs,
+  KNOWN_CAPABILITIES,
   PRESENTATION_ENVELOPE_MAX_HEADER_BYTES,
   PresentationEnvelopeHeader,
   ProductSessionRosterItem,
@@ -33,10 +34,11 @@ import {
   SendInputOp,
   SessionAttachGrant,
   SessionAttachGrantClaims,
+  SessionEvent,
+  SessionEventKind,
   TerminalCreateOpenResult,
   TerminalKeyInput,
   TerminalMouseInput,
-  TerminalOpenTicket,
   TerminalOpenTicketResult,
   TP_LEG_INBOUND,
   TP_LEG_OUTBOUND,
@@ -521,6 +523,69 @@ describe("the input verb — SendInput (spec \u00a75.4, TP-S3-input)", () => {
       ok: false,
       error: "not-allowed-here",
     });
+  });
+});
+
+describe("the lifecycle verb — SessionEvent (spec §5.4, TP-S3f / G24)", () => {
+  it("every kind fixture parses, discriminated on kind", () => {
+    const killed = SessionEvent.parse(fixture("tp-session-event.exited.json"));
+    expect(killed.event).toMatchObject({
+      kind: "exited",
+      sessionId: "sess-tp-fixture-1",
+      exitCode: null,
+      exitSignal: "SIGHUP",
+      requestedTermination: "user",
+      exitOutcome: "user-terminated",
+    });
+    const completed = SessionEvent.parse(fixture("tp-session-event.completed.json"));
+    expect(completed.event).toMatchObject({
+      kind: "exited",
+      exitCode: 0,
+      exitOutcome: "completed",
+    });
+    const removed = SessionEvent.parse(fixture("tp-session-event.removed.json"));
+    expect(removed.event).toMatchObject({ kind: "removed", sessionId: "sess-tp-fixture-1" });
+    const resync = SessionEvent.parse(fixture("tp-session-event.resync.json"));
+    expect(resync.event).toMatchObject({ kind: "resync" });
+  });
+
+  it("exit facts keep the roster summary's exact spelling", () => {
+    // The same fact never gets a second wire spelling: the verb's enums ARE the
+    // TerminalRuntimeSession exit columns' enums.
+    const body = fixture("tp-session-event.exited.json").event;
+    for (const requestedTermination of ["user", "application", "service-shutdown"]) {
+      expect(SessionEventKind.safeParse({ ...body, requestedTermination }).success).toBe(true);
+    }
+    expect(SessionEventKind.safeParse({ ...body, requestedTermination: "SIGKILL" }).success).toBe(
+      false,
+    );
+    expect(SessionEventKind.safeParse({ ...body, exitOutcome: "UserTerminated" }).success).toBe(
+      false,
+    );
+    // exitOutcome is TOTAL on the wire — the floor always classifies an exit.
+    expect(SessionEventKind.safeParse({ ...body, exitOutcome: null }).success).toBe(false);
+  });
+
+  it("an unknown kind refuses at the schema; the verb is OUTBOUND on control only", () => {
+    // Receivers drop-and-log an unknown kind rather than close the leg — the
+    // schema refusal here is what routes them into that tolerant branch.
+    expect(SessionEventKind.safeParse({ kind: "renamed", sessionId: "s" }).success).toBe(false);
+    const tagged = fixture("tp-tagged-message.session-event.json");
+    expect(decodeTpMessage(tagged, TP_LEG_OUTBOUND.control).ok).toBe(true);
+    expect(decodeTpMessage(tagged, TP_LEG_INBOUND.control)).toMatchObject({
+      ok: false,
+      error: "not-allowed-here",
+    });
+    expect(decodeTpMessage(tagged, TP_LEG_OUTBOUND.frames)).toMatchObject({
+      ok: false,
+      error: "not-allowed-here",
+    });
+  });
+
+  it("the session-events capability is a known TP-D25 string", () => {
+    // Load-bearing: an un-negotiated 0.11.x client closes its control leg on
+    // any unknown tag, so the cell must never emit without the negotiation.
+    expect(KNOWN_CAPABILITIES).toContain("session-events");
   });
 });
 
