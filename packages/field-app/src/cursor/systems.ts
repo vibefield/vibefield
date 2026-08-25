@@ -21,19 +21,37 @@ import {
   FrameInfo,
   HandleSpec,
   LocalPointer,
+  makeVersionGuard,
   OverInteractive,
   Pointer,
   PointerScreen,
+  PointerVersion,
   Position,
   Size,
   Targets,
+  type World,
 } from "@vibecook/ice";
 import { Cur, DOT_SCALE, easeSettle, FOLLOW_TAU, MID_SCALE, MORPH_TAU } from "./components";
 
 const localPointerQ = defineQuery([Pointer, PointerScreen, LocalPointer]);
 const curQ = defineQuery([Cur]);
 
-export function createHaloSystems() {
+export function createHaloSystems(world: World) {
+  // The guard rule (ICE version-stamps): follower/visual declare
+  // `access.write [Cur]`, and strata blanket-stamps a system's DECLARED
+  // writes whenever it RUNS — even a run that eases nothing. Ungated, that
+  // stamp fires every Cur observer once per tick forever (found 2026-08-25 by
+  // ICE's magnet grid, whose pole source observes Cur — design-010 §10.7; the
+  // widgetlab twin of these systems carries the same fix). Gate: run on
+  // pointer input (each system gets its OWN stateful guard — a shared
+  // instance would be consumed by the first runIf) plus an `easing` latch
+  // carrying the settle tail after input goes quiet. Whenever visual runs,
+  // follower ran the same tick (same predicate inputs, earlier simulate
+  // slot), so `followerWrote` is never stale.
+  const followerMoved = makeVersionGuard(world, [PointerVersion]);
+  const visualMoved = makeVersionGuard(world, [PointerVersion]);
+  let easing = true; // spawn tick eases 0 → 1
+  let followerWrote = false;
   /** react — spawn a halo for any local MOUSE pointer that has none yet. */
   const haloSpawn = defineTickSystem(
     (ctx) => {
@@ -54,6 +72,7 @@ export function createHaloSystems() {
   /** simulate — ease Cur toward the followed pointer's screen position. */
   const haloFollower = defineTickSystem(
     (ctx) => {
+      followerWrote = false;
       const dt = ctx.getResource(FrameInfo)?.dt ?? 16;
       ctx.query(curQ).each((b) => {
         for (const r of b) {
@@ -66,10 +85,15 @@ export function createHaloSystems() {
           const ny = easeSettle(cur.y, goal.y, dt, FOLLOW_TAU);
           if (nx === null && ny === null) continue;
           ctx.edit(e).set(Cur, { ...cur, x: nx ?? cur.x, y: ny ?? cur.y });
+          followerWrote = true;
         }
       });
     },
-    { name: "wlHaloFollower", access: { write: [Cur], orderIndependent: [Cur] } },
+    {
+      name: "wlHaloFollower",
+      access: { write: [Cur], orderIndependent: [Cur] },
+      runIf: () => followerMoved() || easing,
+    },
   );
 
   /** simulate — the three-stop morph. `Targets` is disc-picked with a release
@@ -77,6 +101,7 @@ export function createHaloSystems() {
    *  already debounced — no flicker guard needed here. */
   const haloVisual = defineTickSystem(
     (ctx) => {
+      let visualWrote = false;
       const dt = ctx.getResource(FrameInfo)?.dt ?? 16;
       ctx.query(curQ).each((b) => {
         for (const r of b) {
@@ -99,11 +124,19 @@ export function createHaloSystems() {
             }
           }
           const ns = easeSettle(cur.scale, goal, dt, MORPH_TAU);
-          if (ns !== null) ctx.edit(e).set(Cur, { ...cur, scale: ns });
+          if (ns !== null) {
+            ctx.edit(e).set(Cur, { ...cur, scale: ns });
+            visualWrote = true;
+          }
         }
       });
+      easing = followerWrote || visualWrote;
     },
-    { name: "wlHaloVisual", access: { write: [Cur], orderIndependent: [Cur] } },
+    {
+      name: "wlHaloVisual",
+      access: { write: [Cur], orderIndependent: [Cur] },
+      runIf: () => visualMoved() || easing,
+    },
   );
 
   /** cleanup — a halo whose pointer despawned shrinks to 0 and reaps itself. */

@@ -13,7 +13,7 @@ import { createHaloOverlay } from "./overlay";
 import { createHaloSystems } from "./systems";
 
 export function installCursorHalo(ce: CanvasEngine, container: HTMLElement): () => void {
-  const systems = createHaloSystems();
+  const systems = createHaloSystems(ce.world);
   const removers = [
     ce.engine.addSystems("react", systems.haloSpawn),
     ce.engine.addSystems("simulate", systems.haloFollower, systems.haloVisual),
