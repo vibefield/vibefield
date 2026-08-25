@@ -366,7 +366,7 @@ async function buildIdentity() {
 }
 
 function shellPlaneInputs() {
-  return [paths.mainOutput, paths.preloadOutput, paths.bridgeOutput];
+  return [paths.mainOutput, paths.preloadOutput];
 }
 
 function daemonPlaneInputs() {

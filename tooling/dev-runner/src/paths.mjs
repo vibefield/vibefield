@@ -20,8 +20,6 @@ export const workspacePaths = Object.freeze({
   mainOutput: join(repoRoot, "packages", "electron-shell", "dist", "main", "index.cjs"),
   preloadEntry: join(repoRoot, "packages", "electron-shell", "src", "preload", "index.ts"),
   preloadOutput: join(repoRoot, "packages", "electron-shell", "dist", "preload", "index.cjs"),
-  bridgeEntry: join(repoRoot, "packages", "electron-shell", "src", "main", "bridge-entry.ts"),
-  bridgeOutput: join(repoRoot, "packages", "electron-shell", "dist", "main", "bridge-entry.mjs"),
   fielddEntry: join(repoRoot, "packages", "fieldd", "src", "bin.ts"),
   fielddOutput: join(repoRoot, "packages", "fieldd", "dist", "bin.cjs"),
   serviceHarnessEntry: join(repoRoot, "packages", "fieldd", "src", "service-worker-harness.mjs"),

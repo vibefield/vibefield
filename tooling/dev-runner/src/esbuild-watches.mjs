@@ -29,17 +29,6 @@ export async function startEsbuildWatches({ paths, log, onArtifactChange }) {
       external: ["electron"],
     },
     {
-      // GT-2b: the terminal bridge is a PRODUCTION artifact the shell forks at
-      // runtime (utilityProcess), so a dev shell without it has a deck whose
-      // ports never arrive. ESM on purpose — the `.mjs` name is load-bearing
-      // (the package build script is the mirrored shape).
-      name: "electron-bridge-entry",
-      entry: paths.bridgeEntry,
-      outfile: paths.bridgeOutput,
-      cwd: dirname(dirname(dirname(paths.bridgeEntry))),
-      format: "esm",
-    },
-    {
       name: "fieldd",
       entry: paths.fielddEntry,
       outfile: paths.fielddOutput,

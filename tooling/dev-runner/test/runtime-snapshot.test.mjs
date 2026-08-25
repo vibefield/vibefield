@@ -19,7 +19,6 @@ async function fixture(t) {
     runtimeRoot,
     mainOutput: join(source, "main.cjs"),
     preloadOutput: join(source, "preload.cjs"),
-    bridgeOutput: join(source, "bridge-entry.mjs"),
     fielddOutput: join(source, "fieldd.cjs"),
     serviceHarnessOutput: join(source, "service-harness.mjs"),
     fielddWasm: join(source, "loro.wasm"),
@@ -28,7 +27,6 @@ async function fixture(t) {
   await Promise.all([
     writeFile(paths.mainOutput, "main-one"),
     writeFile(paths.preloadOutput, "preload-one"),
-    writeFile(paths.bridgeOutput, "bridge-one"),
     writeFile(paths.fielddOutput, "fieldd-one"),
     writeFile(paths.serviceHarnessOutput, "harness-one"),
     writeFile(paths.fielddWasm, "wasm-one"),

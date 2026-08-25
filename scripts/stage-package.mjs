@@ -85,15 +85,6 @@ const PLAN = [
     kind: "file",
   },
   {
-    // The ghosttea bridge's utilityProcess entry (GT-1). A SEPARATE file
-    // because utilityProcess.fork takes a path, and `.mjs` because the manifest
-    // below omits `type` — a `.js` ESM bundle would be read as CJS inside the
-    // asar and die on its first import.
-    stage: "app/shell/main/bridge-entry.mjs",
-    from: "packages/electron-shell/dist/main/bridge-entry.mjs",
-    kind: "file",
-  },
-  {
     stage: "app/shell/preload/index.cjs",
     from: "packages/electron-shell/dist/preload/index.cjs",
     kind: "file",
