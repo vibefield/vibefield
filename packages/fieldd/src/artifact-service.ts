@@ -47,7 +47,7 @@ import {
   type ShellWebContentsCaptureArtifactPreviewResult,
   STORES,
 } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { canonicalTailnetDnsName } from "./device-service";
 import type { ObservedServe, ServeSpec, ServeState } from "./mesh-client";
 import { RpcCallError } from "./native-link";
@@ -1522,7 +1522,7 @@ export class ArtifactService {
     }
     const backup = `${this.#legacyPath}.migrated-${this.#now()}`;
     try {
-      renameSync(this.#legacyPath, backup);
+      durableRenameSync(this.#legacyPath, backup);
     } catch (error) {
       // v2 is already durable and wins next boot. Keeping the old evidence is
       // safe; never roll back the new intent after that commit point.
@@ -1563,7 +1563,7 @@ export class ArtifactService {
   #quarantine(path: string, label: string): void {
     const backup = `${path}.bad-${this.#now()}`;
     try {
-      renameSync(path, backup);
+      durableRenameSync(path, backup);
     } catch {
       this.#storageOk = false;
     }
@@ -1889,7 +1889,8 @@ function atomicWriteIntent(path: string, body: string): void {
   } finally {
     closeSync(file);
   }
-  renameSync(tmp, path);
+  // WIN-10: the commit point, retried past a scanner's handle on win32.
+  durableRenameSync(tmp, path);
   // Persist the rename itself. Windows cannot open a directory handle for fsync
   // (EPERM) — the file is still atomically replaced, so skip it there (matching
   // the audit store and doc-service). Elsewhere, some filesystems still reject

@@ -64,11 +64,19 @@ describe("the users.json lock (§3.3)", () => {
     expect(waited).toBeGreaterThanOrEqual(60_000); // it honored the migrate window
   });
 
+  // This row used to be skipped on win32 for SeCreateSymbolicLinkPrivilege,
+  // which is the wrong reason: that privilege gates FILE symlinks. A DIRECTORY
+  // junction needs no privilege at all, `lstat` reports it as a symbolic link,
+  // and `realpathSync` resolves through it — so a junction is both plantable by
+  // an ordinary account and the live win32 form of exactly this attack (two
+  // paths to one root, one of them not contending on the lock). The skip was
+  // withholding coverage of a vector that exists, not documenting one that does
+  // not; the fixture only ever needed the right link TYPE.
   it("a symlinked root contends on the SAME lock (canonicalization)", async () => {
     const real = root();
     const linkParent = mkdtempSync(join(tmpdir(), "vf-users-link-"));
     const link = join(linkParent, "alias");
-    symlinkSync(real, link);
+    symlinkSync(real, link, process.platform === "win32" ? "junction" : "dir");
     const viaLink = canonicalRoot(link);
     expect(viaLink).toBe(realpathSync(real));
     const release = await acquireUsersLock(real, "mutate", { sleep: noSleep });

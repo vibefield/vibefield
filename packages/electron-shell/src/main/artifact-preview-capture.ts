@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { lstat, mkdir, open, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, open, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   ARTIFACT_PREVIEW_LIMITS,
@@ -8,6 +8,7 @@ import {
   type ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
 } from "@vibefield/contracts";
+import { durableRename } from "@vibefield/logging";
 
 const PREVIEW_PARTITION_PREFIX = "vibefield-artifact-preview:";
 const ALL_URLS = { urls: ["<all_urls>"] } as const;
@@ -414,7 +415,10 @@ async function atomicReplace(
     await handle.close();
   }
   throwIfAborted(signal);
-  await rename(tempPath, targetPath);
+  // WIN-10: the same win32 sharing-violation class as every other commit point —
+  // a scanner holding the previous thumbnail makes MoveFileEx refuse. A lost
+  // preview is a blemish rather than lost evidence, but the cure is identical.
+  await durableRename(tempPath, targetPath);
 }
 
 function throwIfAborted(signal: AbortSignal): void {

@@ -37,6 +37,9 @@
         },
         "mac": {
           "type": "string"
+        },
+        "nonce": {
+          "type": "string"
         }
       },
       "required": [
@@ -911,6 +914,9 @@
             "string",
             "null"
           ]
+        },
+        "serverMac": {
+          "type": "string"
         }
       },
       "required": [

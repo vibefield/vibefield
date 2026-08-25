@@ -698,9 +698,52 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   upstream as G13 (a case-variant private-env key leaks past ghosttea's case-sensitive strip on
   Windows; row 6b is an `it.fails` witness that flips green when the pin consuming G13 lands); the two
   concurrent-edit doc-sync tests are win32-gated (a slow-box stall past the raised 15s timeout under
-  sustained load — the router is in-process, transport is proven in `quic_lane_transport.rs`);
-  MockMgmtServer + mesh-lane `fakeBridge` still bind filesystem paths (~20 suites); `process-service`
-  group-kill → Job Objects; snapshot-prune EBUSY policy.
+  sustained load — the router is in-process, transport is proven in `quic_lane_transport.rs`
+  — **correction 2026-08-11:** that proof is `#[ignore]`d behind `TRUFFLE_TEST_AUTHKEY`, which the box
+  does not have, so those rows' skip text claims coverage that does not exist today);
+  ~~MockMgmtServer + mesh-lane `fakeBridge` still bind filesystem paths (~20 suites)~~ **— RETIRED
+  2026-08-11, and already false when written: `f982d27` itself made `mock-mgmt` pipe-aware and every
+  construction site resolves through `nativeEndpoint`, so those suites run un-skipped on win32**;
+  `process-service` group-kill → Job Objects (**narrowed 2026-08-11**, see WIN-9); snapshot-prune
+  EBUSY policy (verified still unhandled — `doc-service.ts` ~429-446 logs the retry-less failure and
+  the two legacy removals below it swallow it silently).
+- **WIN-9 — the review's fixes (2026-08-11, LANDED; gate green on the box → see LANDED).**
+  A five-agent read-only review of the WIN stack plus a gate run on the box found five real defects,
+  each fixed with a control run proving the witness can fail: the production **CSP enumerated
+  9410/9411 while UA-D12 made every port ephemeral**, so Chromium refused the renderer's own socket
+  and `doc.list` timed out at 8 s — **not a Windows bug** (production mode on macOS reproduces it at
+  the same commit), and its own test pinned the defect with a row named *"never widens connect-src to
+  the loopback wildcard"*; **`bundle:assert` graded shell bundles nothing in the verify chain built**,
+  so THE gate was red on every clean checkout **including CI on `origin/main`** (pre-existing since
+  `fc78b84`, platform-independent); **win32 group-kill orphaned every MCP stdio server** (`kill(-pid)`
+  throws ESRCH there, and the fallback reached only the `cmd.exe` shim); **the meshdata byte lane
+  still dialled a filesystem path** field-native binds as a pipe, so WIN-7's mesh sync would have
+  failed silently inside a best-effort catch; and **`service-graph.mjs` externalized the win32 entry
+  point**, so `pnpm dev` silently watched only a plugin service's entry file and no sibling module.
+  Five packages' test suites were still mac-shaped and are ported. A sixth defect surfaced once the
+  harness stopped masking it: **an atomic document save can fail on Windows** — `rename` over an open
+  target is EPERM there, so `doc-service`'s commit point could lose a save whenever a scanner or
+  indexer held `current.json` (predicted at `thinking-windows-port.md` §7.4 and never closed; now a
+  bounded win32 retry). **Still open from that same §7.4 family: the other publish paths it named —
+  users.json, log segments, the audit chain — none of which retry today.**
+  ~~**The residue this pass CREATED**~~ — **CLOSED by WIN-10 the same day.** WIN-9's suite port added
+  nine win32 skips, and one class (POSIX mode bits) meant nothing on Windows asserted that the log
+  root, crash dumps, `shell.token` or the audit chain land owner-only. WIN-10 gives EL7's
+  "private at rest" a real Windows expression (owner-only DACLs on the private roots, children
+  inheriting) and asserts it on both platforms in their own true terms; four of the five symlink
+  skips also became real junction-based tests. See the WIN-10 ledger entry.
+- **WIN-10 — the two guarantees POSIX gave for free (2026-08-11, LANDED).** Mutual pairing auth:
+  D8's MAC proved the CLIENT, nothing proved the SERVER, and unix got that free from the 0700 run
+  directory while WIN-D1's flat pipe namespace does not — a local squatter that wins the bind race is
+  dialled by fieldd's connect-probe and could hand it terminal endpoints and an auth token. Closed on
+  both mgmt and the meshdata lane with a per-connection nonce + `fn-ack`-context proof (WIN-D10),
+  refused when absent because tolerating absence IS the downgrade. Plus private-at-rest (above), the
+  MCP door's missing executable policy, case-insensitive `isUnderRoot` on NTFS, five sync commit
+  points still on a bare `renameSync`, and a `(OI)(CI)`-on-a-file bug this slice wrote and its own
+  control run caught (an empty DACL that locks the owner out of `shell.token`).
+  **Still open, deliberately:** a squatter holding a pipe name makes field-native fail closed
+  (refusal to boot, not compromise); `artifact-preview-capture`'s thumbnail rename; and the stale
+  "proven by the packaged gate" comment in four fieldd test files.
 - **AR** — the agent tracks; the reason everything else exists, and the only thing between here
   and the P0 exit. Its seam is one module wide and every dependency it named is landed.
 - **IOS-3c's capability leg** — the Keychain store, the write capability supplied at attach, and

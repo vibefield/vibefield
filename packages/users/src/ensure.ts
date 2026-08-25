@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { LAYOUT, type UserRecord, type UsersFile } from "@vibefield/contracts";
 import { UsersError } from "./errors";
@@ -6,6 +6,7 @@ import { canonicalRoot, withUsersLock } from "./lock";
 import { type MigrateOptions, migrateFlatV1, v1TopEntries } from "./migrate";
 import {
   activeUser,
+  createPrivateUserDir,
   mintLockedUsersFile,
   readLayoutStamp,
   readUsersFile,
@@ -55,6 +56,15 @@ export async function ensureUsersRoot(
   opts: EnsureOptions = {},
 ): Promise<EnsuredRoot> {
   const rootReal = canonicalRoot(root);
+  // EL7 / WIN-D4 — the VibeField root is the privacy boundary for everything
+  // beneath it: users.json, the layout stamp, the mesh keys and every user's
+  // field. `canonicalRoot` creates it with a bare recursive mkdir, so it landed
+  // 0755 on unix and with whatever ACL it inherited on win32. The one door
+  // tightens it here, BEFORE the mint or the migration writes anything into it,
+  // so a fresh install never has a window where the identity file is readable.
+  // Idempotent by design, which is also how a root created before this line
+  // gets tightened: on the next boot, not by a migration nobody would run.
+  await createPrivateUserDir(rootReal);
   const stateBefore = detectLayoutState(rootReal);
   const allowMint = opts.allowMint ?? true;
   let migrated = false;
@@ -90,6 +100,6 @@ export async function ensureUsersRoot(
   }
   const user = activeUser(usersFile);
   const userRoot = userRootFor(rootReal, user);
-  mkdirSync(userRoot, { recursive: true });
+  await createPrivateUserDir(userRoot);
   return { rootReal, userRoot, user, usersFile, stateBefore, migrated, created };
 }

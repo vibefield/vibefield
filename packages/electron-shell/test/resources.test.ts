@@ -1,3 +1,4 @@
+import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   assertPackagedResources,
@@ -11,10 +12,23 @@ import {
 // The packaged/development resource contract (distribution spec §4.3). These are
 // pure path decisions, so the suite drives them directly — no Electron, no disk,
 // except where a fixture is deliberately injected.
+//
+// Fixture roots are spelled for the HOST and every expectation is built with the
+// same `join` the resolver uses. `join`/`resolve` are host-bound: on win32 a
+// POSIX literal resolves onto whichever drive the suite runs from
+// (`/Applications/…` → `D:\Applications\…`) and the segments come back separated
+// by `\`, so a hand-written `${REPO}/a/b` would compare a mac string against a
+// Windows answer and prove nothing. The `platform` argument passed below still
+// names the TARGET — it decides the `.exe` suffix (§4.3), not the path's shape.
 
-const REPO = "/Users/dev/vibe-field";
-const RESOURCES = "/Applications/VibeField.app/Contents/Resources";
-const ELECTRON = "/Applications/VibeField.app/Contents/MacOS/VibeField";
+/** A fixture path spelled for this host — the volume prefix is what a POSIX
+ * literal is missing on win32, and `\` is what `join` answers with there. */
+const hostPath = (posix: string): string =>
+  process.platform === "win32" ? `C:${posix.replaceAll("/", "\\")}` : posix;
+
+const REPO = hostPath("/Users/dev/vibe-field");
+const RESOURCES = hostPath("/Applications/VibeField.app/Contents/Resources");
+const ELECTRON = hostPath("/Applications/VibeField.app/Contents/MacOS/VibeField");
 
 const MACHO_ARM64 = (() => {
   const b = new Uint8Array(64);
@@ -37,28 +51,28 @@ describe("resolveDevelopmentResources", () => {
   it("runs the fieldd bundle from the repo through Electron-as-node", () => {
     expect(dev.packaged).toBe(false);
     expect(dev.developmentDockIconPath).toBe(
-      `${REPO}/apps/desktop/packaging/icons/app-macos-dock.png`,
+      join(REPO, "apps", "desktop", "packaging", "icons", "app-macos-dock.png"),
     );
     expect(dev.fielddCommand).toBe(ELECTRON);
-    expect(dev.fielddArgs).toEqual([`${REPO}/packages/fieldd/dist/bin.cjs`]);
+    expect(dev.fielddArgs).toEqual([join(REPO, "packages", "fieldd", "dist", "bin.cjs")]);
     // Development keeps node mode: building a 145 MB SEA per edit would be an
     // absurd inner loop, and the dev Electron is unfused.
     expect(dev.fielddNeedsNodeMode).toBe(true);
   });
 
   it("uses the cargo debug profile — legal here, forbidden in a package (EDP-13)", () => {
-    expect(dev.fieldNativePath).toBe(`${REPO}/target/debug/field-native`);
+    expect(dev.fieldNativePath).toBe(join(REPO, "target", "debug", "field-native"));
   });
 
   it("offers both plugin roots, including the dev-linked pack", () => {
-    expect(dev.pluginRoots.bundled).toEqual([`${REPO}/plugins`]);
-    expect(dev.pluginRoots.devLinked).toEqual([`${REPO}/examples/plugins`]);
+    expect(dev.pluginRoots.bundled).toEqual([join(REPO, "plugins")]);
+    expect(dev.pluginRoots.devLinked).toEqual([join(REPO, "examples", "plugins")]);
   });
 
   it("keeps repository resources stable when Electron launches an immutable snapshot", () => {
     expect(
       resolveDevelopmentRepoRoot(
-        `${REPO}/.vibefield/dev/runtime/dev-111111111111111111111111/app`,
+        join(REPO, ".vibefield", "dev", "runtime", "dev-111111111111111111111111", "app"),
         REPO,
       ),
     ).toBe(REPO);
@@ -78,16 +92,16 @@ describe("resolvePackagedResources", () => {
   it("hangs everything off resourcesPath", () => {
     expect(pkg.packaged).toBe(true);
     expect(pkg.developmentDockIconPath).toBeNull();
-    expect(pkg.fieldNativePath).toBe(`${RESOURCES}/bin/field-native`);
+    expect(pkg.fieldNativePath).toBe(join(RESOURCES, "bin", "field-native"));
     expect(pkg.macosLiveSurfaceCapture).toEqual({
-      helperPath: `${RESOURCES}/bin/live-surface-capture-helper`,
-      adapterPath: `${RESOURCES}/bin/live-surface-adapter.node`,
+      helperPath: join(RESOURCES, "bin", "live-surface-capture-helper"),
+      adapterPath: join(RESOURCES, "bin", "live-surface-adapter.node"),
     });
-    expect(pkg.pluginRoots.bundled).toEqual([`${RESOURCES}/plugins/bundled`]);
+    expect(pkg.pluginRoots.bundled).toEqual([join(RESOURCES, "plugins", "bundled")]);
   });
 
   it("execs a REAL fieldd executable, not Electron wearing a hat (EDP-14)", () => {
-    expect(pkg.fielddCommand).toBe(`${RESOURCES}/bin/fieldd`);
+    expect(pkg.fielddCommand).toBe(join(RESOURCES, "bin", "fieldd"));
     expect(pkg.fielddArgs).toEqual([]);
     // The command must not be the app's own binary — that would be the
     // Electron-as-node launcher the RunAsNode fuse now refuses to honour.
@@ -112,9 +126,12 @@ describe("resolvePackagedResources", () => {
       ...pkg.pluginRoots.bundled,
       ...Object.values(pkg.tray).flatMap((set) => Object.values(set)),
     ].join("\n");
-    expect(everyPath).not.toContain("target/debug");
+    // The needles carry the host separator too: `"target/debug"` can never
+    // appear in a `join`ed Windows path, so a POSIX-spelled forbidden term is a
+    // test that passes by never being able to fail.
+    expect(everyPath).not.toContain(join("target", "debug"));
     expect(everyPath).not.toContain("node_modules");
-    expect(everyPath).not.toContain("packages/");
+    expect(everyPath).not.toContain(`packages${sep}`);
     for (const p of everyPath.split("\n")) expect(p.startsWith(RESOURCES)).toBe(true);
   });
 

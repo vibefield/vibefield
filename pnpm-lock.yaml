@@ -249,6 +249,9 @@ importers:
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@vibefield/logging':
+        specifier: workspace:*
+        version: link:../logging
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -660,6 +663,9 @@ importers:
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@vibefield/logging':
+        specifier: workspace:*
+        version: link:../logging
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

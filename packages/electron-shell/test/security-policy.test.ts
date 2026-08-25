@@ -10,9 +10,17 @@ import {
   importMapHashesFromHtml,
 } from "../src/main/security-policy";
 
-// The PURE security policy (ESR §5.2.3–5.2.4). Ports come from the registry, not
-// literals (repository law / wall R7): the assertions read PORTS so a registry
-// bump can never quietly diverge from the CSP.
+// The PURE security policy (ESR §5.2.3–5.2.4).
+//
+// These rows read the POLICY, not its spelling: `connectSrc` parses the
+// directive and `admitsLoopbackWs` answers the only question that matters —
+// would the renderer's real socket be allowed? The two rows this replaced
+// asserted the spelling ("enumerates EXACTLY the two registry loopback ports"
+// and "never widens connect-src to the loopback wildcard") and so PINNED THE
+// DEFECT: they were green for four days while production refused every socket
+// the pair actually bound (see buildCsp's own note; UA-D12 made ports
+// ephemeral and nothing here noticed). A test that spells out the answer
+// cannot catch the answer going stale.
 
 const SMOKE_LIKE: readonly ShellMode[] = [
   "smoke",
@@ -23,6 +31,21 @@ const SMOKE_LIKE: readonly ShellMode[] = [
   "spike-loro",
 ];
 const NON_DEV: readonly ShellMode[] = ["production", ...SMOKE_LIKE];
+
+/** The connect-src sources, in order, exactly as written. */
+function connectSrc(csp: string): string[] {
+  const directive = csp
+    .split(";")
+    .map((d) => d.trim())
+    .find((d) => d.startsWith("connect-src "));
+  return directive === undefined ? [] : directive.split(/\s+/).slice(1);
+}
+
+/** Would this policy admit the renderer's loopback WebSocket on `port`? A
+ * source admits it by naming the port exactly or by wildcarding the port. */
+function admitsLoopbackWs(csp: string, port: number): boolean {
+  return connectSrc(csp).some((s) => s === `ws://127.0.0.1:${port}` || s === "ws://127.0.0.1:*");
+}
 
 describe("buildCsp", () => {
   it("returns null in dev so Vite's HMR inline preamble is permitted", () => {
@@ -36,20 +59,32 @@ describe("buildCsp", () => {
       expect(typeof csp).toBe("string");
     });
 
-    it("admits the two registry ports AND the cells' loopback wildcard — TP-S3e's DELIBERATE reversal (TP-D1 as ratified)", () => {
-      // This assertion changed ON PURPOSE at TP-S3e. Through S3a–S3d the
-      // wildcard was flag-conditional and this suite pinned the OFF policy;
-      // the bridge and its rollback flag are gone, the routed transport is
-      // the only one, and the production policy admits the cells' ephemeral
-      // loopback doors unconditionally. The threat statement ratified with
-      // TP-D1 stands (every door Origin- and token-gated; sandbox intact).
-      expect(csp).toContain(`ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL}`);
-      expect(csp).toContain(`ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`);
-      expect(csp).toContain("ws://127.0.0.1:*");
-      // the two pinned ports + the one wildcard — no other loopback entries
-      const loopbackEndpoints = (csp as string).split("ws://127.0.0.1:").length - 1;
-      expect(loopbackEndpoints).toBe(3);
-      // and nothing else widened: no remote connect targets, workers on 'self'
+    it("admits the EPHEMERAL port the pair actually binds (UA-D12)", () => {
+      // The regression pin. `main/fieldd.ts` passes controlPort/dataPort 0, so
+      // the real port is OS-assigned and cannot be known when this policy is
+      // built — the window loads before the daemon is ready by design. Sampling
+      // the ephemeral range is the assertion whose absence cost a launch.
+      // TP-S3e ratified the same wildcard from the other direction (TP-D1):
+      // the cells' ephemeral loopback doors are admitted unconditionally, the
+      // bridge and its rollback flag are gone.
+      for (const port of [49152, 51234, 60999]) {
+        expect(admitsLoopbackWs(csp as string, port)).toBe(true);
+      }
+    });
+
+    it("still admits the legacy registry ports, which it no longer names", () => {
+      // Wall R7 (no port literals) is satisfied by naming NO port at all; the
+      // registry values must keep working for a pair pinned back to them.
+      expect(admitsLoopbackWs(csp as string, PORTS.FIELDD_WS_CONTROL)).toBe(true);
+      expect(admitsLoopbackWs(csp as string, PORTS.FIELDD_WS_DATA)).toBe(true);
+    });
+
+    it("opens exactly ONE connect source, and it is loopback — no fan-out", () => {
+      // The surviving half of the row this replaced: the aperture widened by a
+      // port, never by a host. Nothing off-device may be dialled.
+      expect(connectSrc(csp as string)).toEqual(["ws://127.0.0.1:*"]);
+      // and nothing else widened: production keeps workers on 'self' (no
+      // worker-src directive at all — TP-S3a's blob: allowance is smoke-only)
       expect(csp).not.toContain("worker-src");
     });
 

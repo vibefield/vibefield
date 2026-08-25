@@ -18,57 +18,65 @@ async function records(path: string): Promise<Array<Record<string, unknown>>> {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-describe("Electron process-owned logging", () => {
-  it("persists system and plugin evidence with private permissions and category separation", async () => {
-    const root = await mkdtemp(join(tmpdir(), "vibefield-electron-logging-"));
-    roots.push(root);
-    const logRoot = join(root, "logs");
-    const logging = await createElectronLogging({
-      logRoot,
-      dataRoot: root,
-      bootId: "desktop-boot-test",
-    });
+/** One record into each stream the desktop owns, then a clean close. Shared by
+ * the two rows below so the second asks a different QUESTION of the same tree
+ * rather than carrying a copy of its setup. */
+async function loggedTree() {
+  const root = await mkdtemp(join(tmpdir(), "vibefield-electron-logging-"));
+  roots.push(root);
+  const logRoot = join(root, "logs");
+  const logging = await createElectronLogging({
+    logRoot,
+    dataRoot: root,
+    bootId: "desktop-boot-test",
+  });
 
-    logging.logger.info("desktop.test.started", "desktop started", {
-      bootstrapToken: "abcdefghijklmnopqrstuvwxyz123456",
-    });
-    logging.renderer.ingest({
-      time: 10,
-      observedTime: 20,
-      level: "warn",
-      event: "renderer.test.forwarded",
-      message: "renderer forwarded",
-      component: "renderer.test",
+  logging.logger.info("desktop.test.started", "desktop started", {
+    bootstrapToken: "abcdefghijklmnopqrstuvwxyz123456",
+  });
+  logging.renderer.ingest({
+    time: 10,
+    observedTime: 20,
+    level: "warn",
+    event: "renderer.test.forwarded",
+    message: "renderer forwarded",
+    component: "renderer.test",
+    windowId: "7",
+    pid: 101,
+  });
+  logging.utility.ingest({
+    time: 30,
+    observedTime: 40,
+    level: "error",
+    event: "utility.test.forwarded",
+    message: "utility forwarded",
+    component: "utility.test",
+    pid: 202,
+  });
+  logging.pluginRendererRouter.accept(
+    {
+      id: "vibefield.example.plugin",
+      version: "1.2.3",
+      installRevision: "revision-1",
+      entry: "renderer",
       windowId: "7",
+      installSource: "bundled",
+      trust: "r0-bundled",
+    },
+    {
+      level: "info",
+      message: "plugin evidence",
+      fields: { bootstrapToken: "abcdefghijklmnopqrstuvwxyz123456" },
       pid: 101,
-    });
-    logging.utility.ingest({
-      time: 30,
-      observedTime: 40,
-      level: "error",
-      event: "utility.test.forwarded",
-      message: "utility forwarded",
-      component: "utility.test",
-      pid: 202,
-    });
-    logging.pluginRendererRouter.accept(
-      {
-        id: "vibefield.example.plugin",
-        version: "1.2.3",
-        installRevision: "revision-1",
-        entry: "renderer",
-        windowId: "7",
-        installSource: "bundled",
-        trust: "r0-bundled",
-      },
-      {
-        level: "info",
-        message: "plugin evidence",
-        fields: { bootstrapToken: "abcdefghijklmnopqrstuvwxyz123456" },
-        pid: 101,
-      },
-    );
-    await logging.close();
+    },
+  );
+  await logging.close();
+  return { logRoot, logging };
+}
+
+describe("Electron process-owned logging", () => {
+  it("persists system and plugin evidence with category separation", async () => {
+    const { logging } = await loggedTree();
 
     const [desktop, renderer, utility, pluginRenderer] = await Promise.all([
       records(logging.desktop.filePath),
@@ -124,17 +132,30 @@ describe("Electron process-owned logging", () => {
     ]);
     expect(renderer).not.toContainEqual(expect.objectContaining({ msg: "plugin evidence" }));
 
-    expect((await stat(logRoot)).mode & 0o777).toBe(0o700);
-    for (const path of [
-      logging.desktop.filePath,
-      logging.renderer.filePath,
-      logging.utility.filePath,
-      logging.pluginRenderer.filePath,
-    ]) {
-      expect((await stat(path)).mode & 0o777).toBe(0o600);
-    }
     expect(JSON.stringify({ desktop, renderer, utility, pluginRenderer })).not.toContain(
       "abcdefghijklmnopqrstuvwxyz123456",
     );
   });
+
+  // POSIX mode bits do not exist on win32: `chmod` there flips only the
+  // read-only attribute, so the segment writer's 0o700/0o600 arguments are
+  // no-ops and every path stats as 0o666. Asserting them would measure the
+  // CRT's fiction rather than our privacy. Split out of the row above so that
+  // ONLY the mode question is withheld here — the routing, separation, and
+  // redaction that row proves still run on both platforms.
+  it.skipIf(process.platform === "win32")(
+    "keeps the log root and every stream file private (0700 / 0600)",
+    async () => {
+      const { logRoot, logging } = await loggedTree();
+      expect((await stat(logRoot)).mode & 0o777).toBe(0o700);
+      for (const path of [
+        logging.desktop.filePath,
+        logging.renderer.filePath,
+        logging.utility.filePath,
+        logging.pluginRenderer.filePath,
+      ]) {
+        expect((await stat(path)).mode & 0o777).toBe(0o600);
+      }
+    },
+  );
 });

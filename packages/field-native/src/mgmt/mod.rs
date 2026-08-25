@@ -449,6 +449,14 @@ async fn handle_hello(
         "grantedScopes": [],
         "nativeBuild": native_build(),
     });
+    // WIN-10 — answer the client's challenge, so it can tell THIS daemon from
+    // anything else that reached its endpoint first. Only when a nonce was
+    // offered: a pre-WIN-10 fieldd sends none and gets the old ack unchanged,
+    // while a WIN-10 fieldd REFUSES an ack with no proof (the downgrade an
+    // attacker would otherwise simply request).
+    if let Some(nonce) = cred.and_then(|c| c.get("nonce")).and_then(Value::as_str) {
+        ack["serverMac"] = json!(pairing::compute_ack_mac(&state.secret, nonce, boot_id));
+    }
     // NF-D8: the terminal floor's endpoints ride the hello, so fieldd re-learns
     // them at every re-pair and they never enter env, config, or logs. Field
     // names come from the generated contract type, never retyped here. Absent

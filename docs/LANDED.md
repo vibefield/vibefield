@@ -1821,6 +1821,257 @@ live tsnet-vs-host-Tailscale coexistence spike and the Mac↔Windows two-device 
 remote attach) still need a tailnet auth key (James's). Gate: `pnpm verify` VERBATIM exit 0; box:
 field-native mesh unit tests 3/3 incl. the new witness.
 
+## WIN-9 — the review's five defects, and the gate that was never green
+
+**LANDED 2026-08-11 (this commit).** An onboarding review of the WIN stack
+(five read-only agents over the Rust plane, the fieldd pair, the ConPTY rung, the tooling/merge, and
+a hazard sweep) plus the first `pnpm verify` ever run on the box found five real defects. Every fix
+carries a control run — the row was made to FAIL before it was allowed to pass — because two of
+these had test coverage that was green while the defect shipped.
+
+**The `e333d9c` merge itself is clean** and that was checked first: the net delta over `origin/main`
+is exactly `.gitattributes` (a comment block) and James's `generate-icons.mjs` win32 fix, coherently
+blended, no conflict markers, no daemon code touched. His `check-release-identity.mjs` half was
+correctly dropped for upstream's WIN-0 version, a strict superset with the injectable self-test.
+
+**1. The production CSP refused the renderer's own socket — and it was never a Windows bug.**
+`buildCsp("production")` enumerated `PORTS.FIELDD_WS_CONTROL`/`_DATA` (9410/9411) while **UA-D12/UA-5
+made every pair bind ephemeral** (`main/fieldd.ts` passes `controlPort: 0, dataPort: 0`; registries.ts
+calls those values a legacy documentation default). Chromium blocked the dial, `FielddClient`
+reconnect-looped without ever rejecting `ready()` — it has no terminal state for a refused socket —
+and `doc.list`, the first renderer→fieldd request, timed out at 8 s into a degraded docs session.
+Dev returns a null CSP and every smoke mode already used the loopback wildcard, so **only `electron .`
+took the pinned branch: this reproduces in production mode on macOS at the same commit.** The box was
+merely the first place production mode was eyeballed after UA-5c. Naming the port is structurally
+impossible — the policy is installed before the first window exists (ESP §6.2) and the window
+deliberately does not wait for the daemon (design-03 §4.3) — so the fix admits the loopback host with
+the port open, the aperture smoke already ran on. **Its own test had pinned the defect**, in a row
+named *"never widens connect-src to the loopback wildcard"*; the replacement rows parse the directive
+and ask whether a real ephemeral port would be admitted, which is the question that went unasked.
+The handoff doc's two hunches are corrected at source: `doc.list` rides the SHARED control client
+(the doc lane is dialled only after a successful `doc.open`, never reached), and "the control WS rode
+in fine" was never established — the connections that worked were main-process **Node** WebSockets,
+which bypass both the CSP and the Origin gate. *A green supervisor probe proves nothing about
+renderer reachability.*
+
+**2. THE GATE was red on every clean checkout, including CI.** `bundle:assert` asserts that
+`dist/main/index.cjs` and `dist/preload/index.cjs` exist but built only the RENDERER; nothing earlier
+in `verify` builds the shell (`typecheck`/`test` carry no `dependsOn: build`), and `verify.yml` is
+checkout → install → verify with no build step. So the ledger's repeated "`pnpm verify` VERBATIM exit
+0" only ever held on trees with a warm `dist/`. Pre-existing since `fc78b84` moved bundle:assert into
+the gate, platform-independent, and never recorded. `bundle:assert` now builds the bundles it grades;
+control-run by deleting `dist/main`, `dist/preload`, `dist/testing` and watching the old form fail
+with the exact CI error before the new form passed.
+
+**3. win32 group-kill orphaned every MCP stdio server.** `process.kill(-pid, sig)` does not misbehave
+on Windows, it **throws ESRCH** (measured), so the ladder fell through to `child.kill()` — one
+process. Since `spawn-shim` routes every `.cmd`/`.bat` target through `cmd.exe /d /s /c` (npx, uvx:
+how MCP servers are configured), the pid fieldd tracks is the SHIM and the server is its child, which
+survived its plugin's kill, its disable, and fieldd's own shutdown — §17.1 broken for the commonest
+Windows child there is. `killPlan` now issues `taskkill /PID <pid> /T /F`, resolved absolutely from
+`SystemRoot` (a bare name would resolve through an inherited PATH; EL7). The TERM→grace→KILL ladder
+is skipped there rather than performed twice, because Windows has no catchable termination signal —
+the same honesty WIN-0's dev-runner adopted. **Two measured facts kept at source, because both
+mislead:** libuv puts every process a Node parent spawns into a job object that dies with the parent,
+so a node-in-the-middle fixture tears its own grandchild down for free — *the first version of the
+regression test passed with the fix reverted*, and the witness now uses a real cmd.exe/sh shim; and
+`taskkill /T` walks LIVING parents, so a grandchild orphaned before the kill is still out of reach.
+**The ROADMAP's "group-kill → Job Objects" booking is narrowed, not paid.**
+
+**4. The meshdata byte lane still dialled a filesystem path.** `daemon.ts` resolved it as
+`join(dataDir, ...LAYOUT.MESHDATA_SOCKET)` while field-native binds it as a named pipe under WIN-D1,
+so on win32 it could only ENOENT — inside `connect()`'s best-effort catch, taking cross-device doc
+sync down **silently** the moment WIN-7's mesh witness turned it on. The mgmt-only helper generalized
+to `nativeEndpoint(dataRoot, socketFile)`, so every channel resolves through one law; a per-channel
+copy of that law is exactly how this survived.
+
+**5. `pnpm dev` silently watched only a plugin service's entry file on Windows.**
+`service-graph.mjs`'s bare-specifier filter `/^[^./]/` also matches a DRIVE LETTER, so it externalized
+the entry point, esbuild refused the build ("the entry point cannot be marked as external"), and the
+resolver's `catch` returned null — `critical-changes.mjs` then fell back to `[serviceEntry]` and no
+sibling module of any plugin service triggered a rebuild. Its sibling row ("returns null when the
+entry cannot be resolved") had been passing for the wrong reason the whole time.
+
+**The five mac-shaped suites.** `logging`, `users`, `fieldd-supervisor`, `electron-shell` and
+`dev-runner` had never been ported: POSIX path literals compared against `join()` output, unix
+mode-bit assertions (`chmod` flips only the read-only bit on win32), sun_path rows calling the guard
+with no explicit platform so a win32 host took its early return and asserted nothing, and symlink
+fixtures needing Developer Mode. Fixed by FIXTURE wherever the subject was platform-neutral — which
+was most of them, and in `app-protocol.test.ts` genuinely load-bearing: its `fakeFs` keyed on
+`/`-shaped strings, so the symlink-escape and missing-file **security** refusals had silently become
+200s on win32. Skips only where the behavior does not exist there, each naming its reason. Two rows
+in `crash-artifacts.test.ts` that returned early and counted as PASSES are now honest skips.
+`fieldd-supervisor/src/paths.ts` gained the `posix.join` its fieldd twin already documented.
+
+**The teardown that reddened two clean suites.** `cross-daemon` and `mesh-lane` failed the full run
+with `EPERM` removing their temp roots while passing in isolation — zero assertion failures. Same
+class as defect 3, in the harness: `c.kill("SIGKILL")` reaches one process, field-native spawns its
+own children, and Windows refuses to remove a directory anything still holds open. `killDaemonTree`
+joins `native-harness.ts` (the test-local authority) and both suites use it.
+
+**6. And behind them, a real one: an atomic document save can fail on Windows.** With the harness
+fixed, the next full run surfaced `document storage append failed: EPERM ... rename
+current.json.tmp-… -> current.json` from `doc-service`'s `atomicWrite`. POSIX `rename(2)` replaces an
+open target atomically; Windows `MoveFileEx` refuses while ANY handle is open on the destination, and
+the holder is typically not us — a scanner, the indexer, a backup agent touching `current.json`
+microseconds after we wrote it. **On a user's machine that is a lost document save, not a flaky
+test**; the suite merely widened the window by running everything at once. This was named as a
+Windows risk before the port began (`thinking-windows-port.md` §7.4, "`renameSync` over an open
+target → one deliberate Windows test") and never closed. The rename now retries a bounded ~315 ms on
+EPERM/EACCES/EBUSY (win32 only), which is the documented cure and the same reason Node's own `rm`
+grew `maxRetries`. Atomicity is untouched — each attempt is the same all-or-nothing rename — and a
+genuinely locked file still fails loudly. **Diagnosed honestly rather than assumed:** both suites
+were re-run in isolation with the changes stashed AND applied, passing three times each way, which
+is what established the flake as pre-existing and load-dependent rather than a regression from this
+slice. The sibling publish paths §7.4 also named (users.json, log segments, the audit chain) are
+NOT covered by this fix and remain open.
+
+**Gate:** `pnpm verify` VERBATIM on the box (WORKSTATION4090) — the first green run of the real gate
+on Windows. `pnpm smoke` exit 0 (shell + pipe-joined pair + renderer + all five units).
+
+## WIN-10 — the two guarantees POSIX gave for free, rebuilt for Windows
+
+**IN THE TREE 2026-08-11.** WIN-9 closed the defects a review FOUND; this closes the two it left
+NAMED, both of them cases where a law held on unix by accident of the filesystem and held nowhere on
+Windows. Three agents on disjoint packages plus the orchestrator, every fix with a control run.
+
+**1. Nobody was proving the SERVER (mutual pairing auth, WIN-D10).** D8's MAC proves the CLIENT to
+field-native. Nothing proved the reverse, and on unix nothing had to — the socket sat inside a 0700
+run directory, so only the owner could have created the thing answering. WIN-D1's pipes have no such
+boundary: the namespace is flat and machine-wide, the scope is a hash of a guessable data root, and
+another local account can publish our name before field-native does. fieldd's connect-probe then
+reads that squatter as a live native (so no real one is spawned) and believes its ack — **terminal
+control/frame endpoints and the floor's auth token included**. The client now sends a
+per-connection `nonce`; the server answers `serverMac = HMAC(secret, "fn-ack" 0x00 nonce 0x00
+bootId)`, a DIFFERENT context from the client's `fn-boot` so neither direction's transcript replays
+as the other's (asserted, not merely intended). **Both** channels carry it: mgmt, and the meshdata
+byte lane — no token rides the lane, but a squatter there feeds fieldd forged document bytes that
+Loro merges as genuine. The field is optional on the wire and **mandatory in the client**, because
+tolerating absence is exactly the downgrade an attacker would request; the cost is that a
+field-native predating this must be restarted once, and the refusal says so. Pinned by
+`fixtures/pairing.vector.json` on both sides. Witnessed by 5 mgmt rows (valid · absent · forged ·
+wrong-secret · and that no terminal endpoints are adopted from an unproven ack), 2 meshdata
+squatter rows, and the real Rust bridge end-to-end. **Not fixed, and honest about it:** a squatter
+holding the name makes field-native's `first_pipe_instance` bind fail closed — refusal to boot, not
+compromise. The scheme rests on the pairing secret staying unreadable, which the per-user `%APPDATA%`
+ACL provides: the pipe namespace is shared, the profile is not.
+
+Silence was the remaining attack — the proof check never runs if nothing answers, `connect()`'s
+budget is re-checked only BETWEEN dials, and no request carried a deadline, so a stalling endpoint
+hung a standalone boot forever. The hello now has one.
+
+**2. `mode` is a no-op, so EL7's "private at rest" had no Windows expression at all.** `mkdir(…,
+0o700)` and `chmod(0o600)` set the READ-ONLY attribute and nothing else — NTFS has no permission
+bits. Log segments, the audit chain, crash dumps (raw process memory), `users.json` and
+**`shell.token`** — the credential granting full daemon adoption — all landed with whatever ACL they
+inherited. WIN-9 had made this VISIBLE by win32-skipping the mode assertions, which left nothing
+asserting it. `@vibefield/logging`'s new `private-fs` is now the one authority: `createPrivateDir`
+applies an owner-only DACL (`icacls /inheritance:r /grant:r`) to the private ROOTS and lets children
+inherit — directory-level because a per-file edit would spawn a process per rotated segment, and
+memoized per path per process because callers re-run it on every re-open. Applied on first touch
+rather than only on creation, so an install predating this is **repaired** rather than left with its
+old grants. Consumed by logging, audit, users, crash-artifacts, and fieldd's run dir (where
+`shell.token` is now BORN private by inheritance — no window between create and restrict).
+**Both platforms now assert privacy in their own true terms:** the POSIX mode rows stay, and win32
+rows read the ACL back and require exactly one account, the right inheritance polarity, and none of
+Everyone / BUILTIN\Users / Authenticated Users / Administrators.
+
+**A bug this slice wrote, caught by its own control run and worth recording.** The first
+`restrictToCurrentUser` used `(OI)(CI)F` for every path. Those are CONTAINER inheritance flags:
+applied to a FILE, icacls exits 0, prints "Successfully processed 1 files", and produces an **empty
+DACL** — the owner then gets EPERM reading, rewriting, and deleting its own file. Had `shell.token`
+taken that path the shell could not have read its adoption credential and fieldd could not have
+cleaned it up. The helper now picks the ACE form from what the path IS, measured both ways on the box.
+
+**Also closed here:** the MCP stdio door skipped the `executableAllowed` policy the process door
+enforces (two doors into one subsystem disagreeing); `isUnderRoot` compared paths case-sensitively on
+case-insensitive NTFS (fail-closed, so robustness rather than a hole); five synchronous commit points
+(`artifact-service` ×3, `link-service`, the doc-registry quarantine) kept the plain `renameSync` whose
+win32 sharing-violation WIN-9 had just closed for the async path — `durableRenameSync` covers them,
+with a deliberately tighter budget because its wait blocks the thread.
+
+**Four of five win32 symlink skips became REAL tests.** They had been skipped because `symlinkSync`
+needs Developer Mode — but a **junction** needs no privilege, `lstat().isSymbolicLink()` reports one
+as a link, and a junction is the live Windows form of that attack. The fifth stays skipped for a
+precise reason: it plants a link AT A FILE PATH POINTING AT A FILE, and a junction is a directory
+link, so the guard under test would refuse it on the `isFile` clause and the row would prove
+something other than its name. One row was also strengthened: it asserted `skippedUnsafeEntries === 0`
+on win32, so the scan-time symlink branch it exists for had never run there.
+
+**R16 amended deliberately** (`check-import-boundaries.mjs`): the wall claimed audit has "filesystem
+authority only, never network/process authority", and the second half went transitively false the
+moment audit's root needed a DACL, since Node exposes no ACL API. The mechanical rule is unchanged —
+audit still may not import `child_process` itself — but the CLAIM now states the authority audit
+actually has. One helper, named; a second is a decision, not a precedent.
+
+**And the gate itself was never trustworthy on this box, which is why nobody had seen it.** The full
+fieldd suite failed ONE real-daemon e2e row per two-to-three runs — a different row each time, every
+one green in isolation. Attributed rather than assumed: the same measurement at the pre-WIN-10 commit
+also failed 1 in 3, so it is **pre-existing**, not a WIN-10 regression. `vitest.config.ts` already
+carried the mechanism and the reasoning — `fileParallelism: !CI`, because "on CI's starved cores that
+contention trips vitest's internal worker RPC" — and win32 needs no separate argument: a Windows
+process spawn costs orders more than a POSIX fork, these suites spawn real field-native children by
+the dozen, and Defender scans each. Serial: 3/3 clean, 472 passed. Cost is ~15 s → ~115 s for one
+project, taken deliberately, because a gate that fails two runs in five teaches people to re-run
+until green — which is exactly how a real failure gets waved through.
+
+Serialising removed most of it but not all: under full-gate load one run still reddened on the
+`afterEach` `rmSync`, not on an assertion. That is HOUSEKEEPING, and the split is now explicit —
+`killDaemonTree` still AWAITS the real exit, so "did the daemon die" stays a hard question, while
+`removeTempRoot` gets a generous budget and then reports a surrender instead of throwing. Windows
+releases a dead process's handles asynchronously and a scanner can hold a just-written file longer
+still; a leaked directory under `%TEMP%` is not a product defect and the OS reclaims it, whereas a
+test file that fails after every assertion passed is a lie about the code.
+
+**Side-finds:** the VibeField root was created 0755 on POSIX too, by a bare `mkdirSync` nothing ever
+tightened — fixed on both platforms and pinned by a row whose fixture starts at 0755 so it cannot go
+vacuous. Still open and recorded: `artifact-preview-capture`'s thumbnail commit still uses a plain
+rename (a lost thumbnail is a blemish, not evidence); `McpService.startServer` has no production
+caller yet, so its door is test-reachable only; and the stale "proven by the packaged gate" comment
+survives in four fieldd test files (audit's copy was corrected at source).
+
+## WIN-11 — the Godview deck's smoke passes on Windows, and two product findings fall out
+
+**IN THE TREE 2026-08-11.** `pnpm smoke:godview` — the deck harness, the fullest end-to-end proof
+this repo has — had never passed on Windows. WIN-5 recorded its one failing row as "the harness's own
+`echo $0` unix-ism … left unported as a test curiosity". It was not one row. Behind it were four more
+harness unix-isms and, once those were fixed, **two genuine product limitations that no other gate
+would have surfaced**. The deck now exits 0 on the box.
+
+**The harness was asking Windows questions in sh.** (1) `echo "marker:$0"` — sh strips the quotes and
+expands `$0`; cmd.exe echoes them VERBATIM, so the row read `$0"` and failed against a pane that was
+already the right shell. win32 now asks `%COMSPEC%`, which still DISCRIMINATES: only cmd expands a
+`%VAR%`, so a pane regressed to PowerShell writes the literal and fails exactly as an `sh` pane would.
+(2) The split chord was pressed as ⌘D's KEY with the platform's modifier — `ctrl+d` on Windows, which
+the deck does not bind and the SHELL does (EOF). Read from upstream's own fixtures instead of guessed:
+`keybinds-linux-default.json` binds `ctrl+shift+o` → `new_split:right`. (3) `;` chains commands in sh;
+cmd.exe treats it as an argument, so a marker was never written and the wait could only time out.
+(4) A bare `cd` on win32 changes the directory ON A DRIVE without switching drives, so a scratch dir
+on `C:` was silently not entered from a pane sitting on `D:` — this repo's own drive.
+
+**Finding 1 — a Windows user cannot close a split pane by keyboard.** Upstream's macOS defaults bind
+`super+w` → `close_surface`; the Linux/Windows defaults bind **no `close_surface` at all**
+(`ctrl+shift+w` is `close_tab:this`, a different verb that would take every pane in the tab). The ⌘W
+ARBITRATION that row is mostly about is likewise macOS-only: on Windows the application menu owns
+`CommandOrControl+W` and the deck claims nothing, so there is no chord for the two to contest. Recorded
+in the verdict as `closePaneChord: "unbound on this platform"` rather than skipped silently. It needs a
+shipped binding of ours or an upstream default — a WIN-5 keyboard-cluster item, now evidenced.
+
+**Finding 2 — pane-cwd restore does not work on Windows.** A pane's cwd is only ever what its shell
+ANNOUNCES over OSC 7; the spawn directory is never reported. zsh and bash announce on every prompt.
+**cmd.exe emits no OSC 7 at all**, so the floor cannot learn where a pane sits, `paneMeta` persists no
+cwd, and a restored pane comes back at HOME rather than in its folder — GT-3's restore promise
+degrading on Windows, exactly as the WIN recon predicted for `deck-restore.ts` and now measured end to
+end. The row records `cwdRestore: "unavailable: cmd.exe announces no OSC 7"`.
+
+**What the deck DID prove on Windows**, which is most of it: renderer on canvas2d, the swarm monitor
+with 9 agents and physics in its worker, a live cmd.exe pane that echoes, the ownerless-birth flip to
+keep-until-exit on both the first pane and the split, claim-existing, silent restore across a document
+death, the two-step kill chip, the `config.ghostty` write with a live reload and its survivors, glass
+at 0.82 with a CRT shader that left the config alone, **bridge-SIGKILL recovery** (pid 86280 → "the
+terminal bridge died — rebuilding" → 3 panes recovered), the mock-agent label discipline, the remote
+section serving honestly, and the perf legs — cold open 460.8 ms, warm 53.5 ms, keystroke echo 16 ms.
+
 ## P8a — the plugin artifact stops being a promise
 
 **LANDED 2026-08-11**, the first rung of `thinking-p8-loadable-artifact.md` (destination

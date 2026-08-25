@@ -26,6 +26,12 @@ const ARTIFACT_ID = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const URL = "https://device.tail1234.ts.net:12000/";
 const cleanup: string[] = [];
 
+/** A directory link an ordinary win32 account can actually plant. `symlinkSync`
+ * with type "dir" needs SeCreateSymbolicLinkPrivilege there; a junction needs
+ * none, and `lstat` reports it as a symbolic link — so it trips the very same
+ * guard, which is what makes it the live win32 form of this EL7 attack. */
+const DIR_LINK = process.platform === "win32" ? "junction" : "dir";
+
 afterEach(() => {
   for (const path of cleanup.splice(0).reverse()) rmSync(path, { recursive: true, force: true });
 });
@@ -210,12 +216,19 @@ describe("ArtifactPreviewCapture", () => {
     expect(readFileSync(join(targetDir, "thumbnail.jpg"))).toEqual(jpeg);
   });
 
+  // The old skip named SeCreateSymbolicLinkPrivilege, which gates FILE
+  // symlinks. Both links in this file point at a DIRECTORY, and a directory
+  // junction needs no privilege at all — `lstat` reports it as a symbolic link,
+  // so it trips the very `lstat().isSymbolicLink()` guard under test. The
+  // comment even said junctions were "a live version of the same EL7 attack"
+  // and then declined to plant one; the property was always testable here, and
+  // the skip was withholding coverage rather than documenting a limit.
   it("rejects a symlinked artifact destination before creating a WebContents", async () => {
     const root = dataDir();
     const outside = dataDir();
     const previewRoot = join(root, "artifacts", "previews");
     mkdirSync(previewRoot, { recursive: true });
-    symlinkSync(outside, join(previewRoot, ARTIFACT_ID), "dir");
+    symlinkSync(outside, join(previewRoot, ARTIFACT_ID), DIR_LINK);
     const createSession = vi.fn();
     const capture = new ArtifactPreviewCapture({
       dataDir: root,
@@ -258,11 +271,12 @@ describe("ArtifactPreviewCapture", () => {
     await vi.waitFor(() => expect(captureSession.clearStorageData).toHaveBeenCalledOnce());
   });
 
+  // Same directory-junction fixture as the row above, one level up the tree.
   it("rejects a symlinked preview root without creating directories outside it", async () => {
     const root = dataDir();
     const outside = dataDir();
     mkdirSync(join(root, "artifacts"), { recursive: true });
-    symlinkSync(outside, join(root, "artifacts", "previews"), "dir");
+    symlinkSync(outside, join(root, "artifacts", "previews"), DIR_LINK);
     const createSession = vi.fn();
     const capture = new ArtifactPreviewCapture({
       dataDir: root,

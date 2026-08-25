@@ -52,28 +52,34 @@ describe("UA-5 — createUser", () => {
     expect(a.user.userId).not.toBe(b.user.userId);
   });
 
-  it("refuses a root the new fuid would push past sun_path, leaving the file untouched", async () => {
-    // suffix /users/2/native/run/termframe.sock = 34 bytes; an exactly-70-byte
-    // root puts ONLY the longest socket at 104 — one past the 103 ceiling —
-    // so the refusal must name termframe.sock (meshdata sits at 103, inside)
-    const root = `/tmp/${"x".repeat(65)}`;
-    rmSync(root, { recursive: true, force: true });
-    mkdirSync(root, { recursive: true });
-    mintLockedUsersFile(root);
-    const before = readFileSync(usersFilePath(root), "utf8");
+  // WIN-D1 — win32 endpoints are named pipes, not socket paths, so there is no
+  // sun_path budget to blow and no refusal for createUser to raise. The byte
+  // math itself stays witnessed on both platforms by the test right below.
+  it.skipIf(process.platform === "win32")(
+    "refuses a root the new fuid would push past sun_path, leaving the file untouched",
+    async () => {
+      // suffix /users/2/native/run/termframe.sock = 34 bytes; an exactly-70-byte
+      // root puts ONLY the longest socket at 104 — one past the 103 ceiling —
+      // so the refusal must name termframe.sock (meshdata sits at 103, inside)
+      const root = `/tmp/${"x".repeat(65)}`;
+      rmSync(root, { recursive: true, force: true });
+      mkdirSync(root, { recursive: true });
+      mintLockedUsersFile(root);
+      const before = readFileSync(usersFilePath(root), "utf8");
 
-    let caught: unknown = null;
-    try {
-      await createUser(root, {});
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(UsersError);
-    expect((caught as UsersError).kind).toBe("user-root-too-long");
-    expect((caught as UsersError).message).toContain("termframe.sock");
-    expect(readFileSync(usersFilePath(root), "utf8")).toBe(before);
-    expect(existsSync(join(root, "users", "2"))).toBe(false);
-  });
+      let caught: unknown = null;
+      try {
+        await createUser(root, {});
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(UsersError);
+      expect((caught as UsersError).kind).toBe("user-root-too-long");
+      expect((caught as UsersError).message).toContain("termframe.sock");
+      expect(readFileSync(usersFilePath(root), "utf8")).toBe(before);
+      expect(existsSync(join(root, "users", "2"))).toBe(false);
+    },
+  );
 
   it("the budget is a unix law — win32 endpoints are pipes, not paths (WIN-D1)", () => {
     // same 70-byte root that just refused on darwin: pure byte math, no fs

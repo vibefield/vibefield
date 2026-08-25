@@ -97,7 +97,11 @@ describe("fieldd process-owned logging", () => {
     ).toBe("docs.service");
     expect(raw).not.toContain(shellToken);
     expect(raw).not.toContain(pairingSecret);
-    // POSIX mode bits are a no-op on Windows (WIN-D4); the 0600/0700 boundary is an ACL there, proven by the packaged gate.
+    // POSIX mode bits are a no-op on Windows (WIN-D4). CORRECTED 2026-08-11: this used to
+    // claim the ACL boundary was "proven by the packaged gate" — no packaged gate runs on
+    // Windows (WIN-8 is not started), so nothing proved it. WIN-10 gives the boundary a real
+    // Windows expression and asserts it directly; see the ACL rows in
+    // packages/{logging,audit,users,electron-shell}/test and fieldd's product-surface.
     if (process.platform !== "win32") {
       expect(statSync(file).mode & 0o777).toBe(0o600);
     }

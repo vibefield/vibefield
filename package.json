@@ -43,7 +43,7 @@
     "gen:check": "pnpm gen && git diff --exit-code -- packages/contracts/gen packages/field-native/src/contracts.rs packages/field-native/src/registries.rs docs/plugin-authoring",
     "preflight": "node scripts/preflight.mjs",
     "check:deps": "node scripts/check-single-copy.mjs",
-    "bundle:assert": "pnpm --filter @vibefield/electron-shell run build:renderer && node scripts/bundle-report.mjs --dist packages/electron-shell/dist --assert",
+    "bundle:assert": "pnpm --filter @vibefield/electron-shell run build && pnpm --filter @vibefield/electron-shell run build:renderer && node scripts/bundle-report.mjs --dist packages/electron-shell/dist --assert",
     "verify": "pnpm preflight && pnpm check:deps && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm bundle:assert && pnpm test && pnpm test:rust && pnpm gen:check",
     "hooks:install": "git config core.hooksPath scripts/git-hooks",
     "commit-draft": "sh scripts/commit-draft.sh"

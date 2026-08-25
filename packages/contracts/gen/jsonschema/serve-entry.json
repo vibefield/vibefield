@@ -37,6 +37,9 @@
         },
         "mac": {
           "type": "string"
+        },
+        "nonce": {
+          "type": "string"
         }
       },
       "required": [

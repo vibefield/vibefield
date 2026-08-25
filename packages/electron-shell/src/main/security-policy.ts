@@ -1,17 +1,36 @@
 import { createHash } from "node:crypto";
-import { PLUGIN_MODULE_SCHEME, PORTS } from "@vibefield/contracts";
+import { PLUGIN_MODULE_SCHEME } from "@vibefield/contracts";
 import type { ShellMode } from "./modes";
 
 // The PURE security policy (ESR §5.2.3–5.2.4) — no Electron import, unit-tested
 // directly. security.ts wires these decisions into Electron.
 
-/** Production CSP enumerates the REGISTRY loopback ports — possible before
- * daemon readiness only because production ports are pinned (§5.2.4; ESR-8).
- * Smoke-like modes keep the loopback wildcard: their daemons bind ephemeral
- * test ports and their builds are never packaged. Dev returns null — the Vite
- * dev server needs its HMR inline preamble. 'wasm-unsafe-eval' admits
- * WebAssembly compilation ONLY (loro's inlined base64 wasm — B1 finding);
- * plain 'unsafe-eval' stays banned.
+/** Every non-dev CSP admits the daemon's loopback WebSockets by HOST, with the
+ * port left open. Dev returns null — the Vite dev server needs its HMR inline
+ * preamble. 'wasm-unsafe-eval' admits WebAssembly compilation ONLY (loro's
+ * inlined base64 wasm — B1 finding); plain 'unsafe-eval' stays banned.
+ *
+ * The port is deliberately NOT enumerated, and this is a correction (2026-08-11):
+ * production used to name `PORTS.FIELDD_WS_CONTROL`/`_DATA`, and the old comment
+ * here justified that with "possible before daemon readiness only because
+ * production ports are pinned (§5.2.4; ESR-8)". **That premise died at UA-D12/UA-5**,
+ * where every pair began binding an EPHEMERAL port (`main/fieldd.ts` passes
+ * `controlPort: 0, dataPort: 0`; registries.ts calls 9410/9411 a legacy
+ * documentation default) and `product.json` became the only discovery. The
+ * renderer therefore dialled a port this policy refused: Chromium blocked the
+ * socket, FielddClient reconnect-looped without ever rejecting `ready()`, and the
+ * first request — `doc.list` — timed out at 8 s into a degraded docs session.
+ * Only production ever took the pinned branch, so dev and every smoke mode
+ * (already on this wildcard) stayed green and the fault reached the first real
+ * launch. It was NEVER Windows-specific.
+ *
+ * Naming the real port here is not merely awkward, it is structurally impossible:
+ * this policy is installed before the first window exists (ESP §6.2 — no renderer
+ * may outrun its own policy) and the window deliberately does not wait for the
+ * daemon (design-03 §4.3 — the splash is the honest face while the pair comes up),
+ * so at CSP-build time there is no port to name. A per-response rebuild would
+ * still be wrong: a document's CSP is fixed at load, while recovery and the UA-5
+ * user switch both replace the pair — and its port — under a live document.
  *
  * `importMapHashes` (P8b-3, §11.6): the built index.html carries ONE inline
  * `<script type="importmap">` binding the PA-29 singletons to app-origin
@@ -21,18 +40,18 @@ import type { ShellMode } from "./modes";
  * empty list changes nothing, which is also the dev answer (dev CSP is null). */
 export function buildCsp(mode: ShellMode, importMapHashes: readonly string[] = []): string | null {
   if (mode === "dev") return null;
-  // TP-S3e (TP-D1 as ratified, terminal-pipeline-v3 §8): production
-  // `connect-src` admits the two pinned fieldd ports AND `ws://127.0.0.1:*` —
-  // the cells' ephemeral loopback doors — UNCONDITIONALLY. This is the
-  // deliberate reversal the rollout gated behind `--terminal-direct-door`
-  // through S3a–S3d; the flag and the bridge it selected are gone. The threat
+  // TP-S3e (TP-D1 as ratified, terminal-pipeline-v3 §8): `connect-src` admits
+  // `ws://127.0.0.1:*` — fieldd's own ephemeral pair (UA-D12, above) and the
+  // cells' ephemeral loopback doors — UNCONDITIONALLY. This is the deliberate
+  // reversal the rollout gated behind `--terminal-direct-door` through
+  // S3a–S3d; the flag and the bridge it selected are gone. The threat
   // statement ratified with it stands: a compromised renderer could attempt
   // ANY loopback WebSocket server; every door of ours is Origin- and
   // token-gated, the sandbox stays, and loopback is potentially-trustworthy
   // (a CSP matter, not mixed content). A fixed front-door port would be the
-  // centralization custody refused.
-  const pinned = `ws://127.0.0.1:${PORTS.FIELDD_WS_CONTROL} ws://127.0.0.1:${PORTS.FIELDD_WS_DATA}`;
-  const connect = mode === "production" ? `${pinned} ws://127.0.0.1:*` : "ws://127.0.0.1:*";
+  // centralization custody refused — and per the correction above, a pinned
+  // enumeration would refuse the very sockets the product binds.
+  const connect = "ws://127.0.0.1:*";
   // Smoke-like modes may spawn blob: workers (TP-S3a's door probe dials a cell
   // from a worker context built in place); production keeps workers on 'self'
   // — the product's workers are bundled files under the app origin.

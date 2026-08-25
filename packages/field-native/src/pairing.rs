@@ -13,6 +13,9 @@ use std::path::Path;
 type HmacSha256 = Hmac<Sha256>;
 
 pub const PAIRING_CONTEXT: &[u8] = b"fn-boot";
+/// WIN-10 — the SERVER's context. Distinct from `fn-boot` so neither direction's
+/// transcript can be replayed as the other's.
+pub const ACK_CONTEXT: &[u8] = b"fn-ack";
 pub const WINDOW_SECS: i64 = 300;
 
 /// Load the 0600 pairing secret, creating it on first boot (fieldd waits/retries).
@@ -58,6 +61,29 @@ fn mac_message(boot_id: &str, ts: i64) -> Vec<u8> {
 pub fn compute_mac(secret: &[u8], boot_id: &str, ts: i64) -> String {
     let mut mac = HmacSha256::new_from_slice(secret).expect("hmac accepts any key length");
     mac.update(&mac_message(boot_id, ts));
+    hex::encode(mac.finalize().into_bytes())
+}
+
+/// WIN-10 — this daemon's proof that it holds the pairing secret, answering the
+/// client's per-connection nonce:
+///   serverMac = hex(HMAC-SHA256(secret, "fn-ack" 0x00 nonce 0x00 bootId))
+///
+/// The client's MAC proves the CLIENT. On unix nothing had to prove the server:
+/// the socket sat inside a 0700 run directory, so only the owner could have
+/// created the thing answering. The Windows pipe namespace is flat and
+/// machine-wide (WIN-D1), so another local account can publish our name before
+/// we do — and fieldd's connect probe would read that squatter as "alive",
+/// spawn no real native, and believe whatever ack came back, terminal endpoints
+/// and auth token included. This is what makes the answer checkable.
+pub fn compute_ack_mac(secret: &[u8], nonce: &str, boot_id: &str) -> String {
+    let mut m = Vec::with_capacity(ACK_CONTEXT.len() + nonce.len() + boot_id.len() + 2);
+    m.extend_from_slice(ACK_CONTEXT);
+    m.push(0);
+    m.extend_from_slice(nonce.as_bytes());
+    m.push(0);
+    m.extend_from_slice(boot_id.as_bytes());
+    let mut mac = HmacSha256::new_from_slice(secret).expect("hmac accepts any key length");
+    mac.update(&m);
     hex::encode(mac.finalize().into_bytes())
 }
 

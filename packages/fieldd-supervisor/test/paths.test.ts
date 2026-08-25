@@ -16,6 +16,12 @@ import { SupervisorError } from "../src/types";
  * /native/run/termctl.sock = 24 · /native/run/mgmt.sock = 21. */
 const rootOf = (n: number): string => `/tmp/${"x".repeat(n - 5)}`;
 
+// The platform is passed EXPLICITLY here, never left to the host: sun_path is a
+// unix law (WIN-D1 — win32 endpoints are pipes, with no byte budget to blow), so
+// on a Windows host the argument-less call takes the guard's early return and
+// these rows would assert nothing while still reporting green. Naming the
+// platform is what makes both arms provable from either machine — the same
+// discipline the endpoint rows below already used.
 describe("the sun_path guard measures the LONGEST socket", () => {
   it("a root where ONLY the longest socket overflows refuses, naming it", () => {
     // 78 + 26 = 104 > 103 for termframe.sock; every other socket fits —
@@ -23,7 +29,7 @@ describe("the sun_path guard measures the LONGEST socket", () => {
     const root = rootOf(78);
     let caught: unknown = null;
     try {
-      assertDataRootUsable(root);
+      assertDataRootUsable(root, "darwin");
     } catch (error) {
       caught = error;
     }
@@ -33,7 +39,14 @@ describe("the sun_path guard measures the LONGEST socket", () => {
   });
 
   it("a root at the exact ceiling for the longest socket passes", () => {
-    expect(() => assertDataRootUsable(rootOf(77))).not.toThrow(); // termframe → 103
+    expect(() => assertDataRootUsable(rootOf(77), "darwin")).not.toThrow(); // termframe → 103
+  });
+
+  it("the budget is a unix law — win32 endpoints are pipes, not paths (WIN-D1)", () => {
+    // A stock Windows profile root already clears 103 bytes; enforcing the
+    // budget there would refuse perfectly valid roots for a limit that has no
+    // Windows analogue.
+    expect(() => assertDataRootUsable(rootOf(400), "win32")).not.toThrow();
   });
 });
 

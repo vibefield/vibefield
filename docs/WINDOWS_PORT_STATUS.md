@@ -12,10 +12,14 @@
 > gitignored on main). To read it: `git show dev-local:draft/thinking-windows-port.md`
 > (or `git checkout dev-local` — but **NEVER push dev-local**, a pre-push hook enforces it).
 
-## Where the port stands (all landed, on `main`, UNPUSHED)
+## Where the port stands
 
-The Windows commit stack, oldest first — a fresh clone from origin will be MISSING these
-until main is pushed:
+> **Errata 2026-08-11:** this section used to say the stack was "all landed, on `main`, UNPUSHED"
+> and step 1 of the handoff below was "push `main`". Both are **stale** — the WIN commits are on
+> `origin/main` and reached this box through the `e333d9c` merge. A debt row is a claim with a
+> shelf life.
+
+The Windows commit stack, oldest first:
 
 - `5ffd30b` WIN-0/DEV — gate + dev-runner portable
 - `85cce04` WIN-1/2 — the endpoint law in two languages (named pipes, WIN-D1); native plane on pipes
@@ -43,17 +47,70 @@ The first non-smoke launch (`cd apps\desktop && pnpm exec electron .`) surfaced 
    — don't claim the frozen tray GUID until the binary is signed), so it passed `undefined`, which
    Electron validates as a GUID. Fix: call the one-arg `new Tray(image)` when there is no GUID.
    **Runtime-confirm on the next launch** (the error should be gone; a tray icon should appear).
-2. **`doc.list timed out after 8000ms` → renderer docs session degraded — OPEN.** The fieldd
-   handler (`daemon.ts:903`) is trivial and synchronous (`docs.list()` returns at once), and it is
-   NOT onboarding state (doc.list returns empty fast with no user). So an 8s *timeout* (not an
-   error) means the request never reached fieldd or the reply never returned — a transport/attach
-   issue, not the handler. The renderer↔fieldd control URL is explicit `ws://127.0.0.1:…` (IPv4, so
-   not the localhost→::1 trap on the control channel). **Hunch:** the renderer's docs manager opens
-   its OWN channel to fieldd (distinct from the control WS the rest of the app rode in on), and that
-   attach is what wedges on Windows. **Next step:** capture the FULL boot console (the connection
-   lines before the timeout) and trace how the renderer docs manager dials fieldd vs. the control WS
-   — check for a `localhost`/`::1` or a data-lane (`ws://127.0.0.1:${dataPort}`) attach that differs
-   from the working control path.
+2. ~~**`doc.list timed out after 8000ms` → renderer docs session degraded — OPEN.**~~
+   **ROOT-CAUSED AND FIXED 2026-08-11 — and it was never a Windows bug.** The production CSP
+   (`security-policy.ts`) enumerated `PORTS.FIELDD_WS_CONTROL`/`_DATA` (9410/9411) while **UA-D12/UA-5
+   made every pair bind an EPHEMERAL port** (`main/fieldd.ts` passes `controlPort: 0, dataPort: 0`;
+   `registries.ts` calls 9410/9411 a legacy documentation default). Chromium refused the renderer's
+   own WebSocket, `FielddClient` reconnect-looped without ever rejecting `ready()` — the client has
+   no terminal state for a refused dial — and `doc.list`, the first renderer→fieldd request, timed
+   out at 8 s. Dev returns a null CSP and every smoke mode already used the loopback WILDCARD, so
+   only `electron .` took the pinned branch: **this reproduces on macOS production mode at the same
+   commit.** The box was merely the first place production mode was eyeballed after UA-5c landed.
+   Fixed by admitting the loopback host with the port left open, because the policy is installed
+   before the first window exists (ESP §6.2) while the window deliberately does not wait for the
+   daemon (design-03 §4.3) — at CSP-build time there is no port to name.
+   **Two corrections to this entry's own reasoning, recorded because both misdirected the hunt:**
+   the docs manager does NOT open its own channel — `doc.list` rides the shared control client, and
+   the separate `DocLaneClient` is only dialled after a successful `doc.open`, which was never
+   reached; and "the control WS rode in fine" was never established — only the URL *string* was
+   IPv4. The connections that did work were main-process **Node** WebSockets (the supervisor probe
+   and shell-main), which bypass both the CSP and the Origin gate. **A green supervisor probe proves
+   nothing about renderer reachability** — that asymmetry is the reusable lesson here.
+
+## What the deck proves on Windows, and the two things it cannot (2026-08-11, WIN-11)
+
+`pnpm smoke:godview` now exits 0 on the box. It had never passed; WIN-5 recorded its one failing row
+as a "test curiosity", and behind that were four more harness unix-isms (sh quoting in the shell
+probe, the macOS split chord, `;` as a command separator, and a bare `cd` that cannot switch drives)
+plus two REAL limitations worth knowing before the visual pass:
+
+- **A Windows user cannot close a split pane by keyboard.** Upstream binds `super+w` →
+  `close_surface` on macOS and **nothing** to `close_surface` off it (`ctrl+shift+w` is
+  `close_tab:this`, which would take the whole tab). Needs a binding of ours or an upstream default.
+- **Pane-cwd restore does not work.** A cwd is only what the shell announces over OSC 7, and
+  **cmd.exe announces none**, so a restored pane returns HOME instead of to its folder. This is the
+  `deck-restore.ts` risk the recon predicted, now measured end to end.
+
+Everything else held: canvas2d renderer, swarm monitor + physics worker, a live cmd.exe pane that
+echoes, ownerless-birth flips, claim-existing, silent restore, the kill chip, `config.ghostty` write
++ live reload, glass + CRT shader, **bridge-SIGKILL recovery**, and perf (cold 460.8 ms / warm
+53.5 ms / echo 16 ms).
+
+## Before the WIN-5 eyeball: do NOT judge the renderer over RDP (2026-08-11)
+
+`smoke:godview` reports `rendererBackend: "canvas2d"`, and that is **not** a Windows finding — every
+smoke-like mode calls `app.disableHardwareAcceleration()` on purpose (`index.ts`, so the boot gate
+runs headless over ssh). It says nothing about the product.
+
+The real question — would the deck get WebGPU here — was then measured with acceleration LEFT ON, and
+the answer is environmental. In an RDP session (`qwinsta` → `rdp-tcp#0`), Chromium reports
+`webgpu: disabled_off`, `webgl: disabled_off`, `gl=none,angle=none`, `dx12FeatureLevel: Not
+supported`, and `navigator.gpu` does not exist at all. The box's **RTX 4090 is present and OK**, but
+it is not driving that session: `Win32_VideoController` lists four virtual adapters beside it —
+`Microsoft Remote Display Adapter`, `OrayIddDriver`, `Meta Virtual Monitor`, and a `Virtual Desktop
+Monitor` in an **Error** state.
+
+Two consequences worth carrying into the visual pass:
+
+- **WebGPU on the physical console is UNVERIFIED.** It very likely works (the adapter is healthy and
+  the fallback chain is doing exactly what it should over a remote display), but nobody has looked,
+  and this session cannot answer it. Judge the renderer at the machine, not over RDP.
+- **Over RDP the deck runs canvas2d, which makes an existing debt the DEFAULT experience here rather
+  than an edge case**: "Shaders are WebGPU-only — on the Canvas2D fallback the chips select something
+  that will not draw" (GT-3f). The smoke verdict shows exactly that, `shaderEffect: "ghosttea:crt"`
+  beside `rendererBackend: "canvas2d"` — a shader selected that cannot draw. If James works this box
+  remotely, that is what he will see, and it is the deck not knowing its own backend, not the port.
 
 ## The remaining ladder — and what each needs (NOT autonomous)
 
@@ -69,7 +126,63 @@ The first non-smoke launch (`cd apps\desktop && pnpm exec electron .`) surfaced 
 - **G13** (upstream petition, drafted on dev-local `draft/petitions/G13-*.md`) — a case-variant
   private-env key leaks past ghosttea's case-sensitive strip on Windows (defense-in-depth). File to
   electron-ghostty when ready; `terminal-kill-matrix` row 6b is an `it.fails` witness that flips
-  green when the pin consuming it lands.
+  green when the pin consuming it lands. **Note for whoever files it:** the petition file is not in
+  this clone (dev-local only), so from a Windows checkout row 6b is the only in-tree artifact of it.
+
+## WIN-10 — the two things POSIX gave for free and Windows does not (2026-08-11)
+
+**1. Nobody was proving the SERVER.** D8's MAC proves the CLIENT to field-native. On unix nothing
+had to prove the reverse: the socket sat inside a 0700 run directory, so only the owner could have
+created the thing answering. WIN-D1's pipes have no such boundary — the namespace is flat and
+machine-wide and the scope is a hash of a guessable data root, so another local account can publish
+our name before field-native does. fieldd's connect-probe then reads the squatter as a live native
+(so no real one is spawned) and believes its ack, **terminal control/frame endpoints and floor auth
+token included**. The client now sends a per-connection `nonce`; the server answers
+`serverMac = HMAC(secret, "fn-ack" 0x00 nonce 0x00 bootId)`. Both mgmt and the meshdata byte lane
+carry it — the lane holds no token, but a squatter there feeds fieldd forged DOCUMENT bytes that
+Loro merges as genuine. **Absence is refused, not tolerated**, because tolerating it is the downgrade
+an attacker would simply request; the cost is that a field-native predating WIN-10 must be restarted
+once, and the refusal says so. What this does NOT fix: a squatter holding the name makes
+field-native's `first_pipe_instance` bind fail closed — honest refusal to boot, not compromise.
+The pairing secret itself stays safe by the profile ACL (`%APPDATA%` is per-user by default), which
+is what keeps the whole scheme coherent: the pipe namespace is shared, the profile is not.
+
+**2. `mode` is a no-op, so "private at rest" had no Windows expression.** `mkdir(…, 0o700)` and
+`chmod(0o600)` set the READ-ONLY attribute and nothing else — NTFS has no permission bits. Every log
+segment, audit-chain file, crash dump, `users.json` and `shell.token` landed with whatever ACL it
+inherited, and a prior pass had win32-skipped the mode assertions, leaving NOTHING asserting it.
+`@vibefield/logging`'s `createPrivateDir` now applies an explicit owner-only DACL (`icacls
+/inheritance:r /grant:r <account>:(OI)(CI)F`) to the private ROOTS and lets children inherit —
+directory-level because a per-file ACL edit would spawn a process per rotated segment, and memoized
+per path per process because callers re-run it on every re-open. It is applied on first touch rather
+than only on creation, so an install predating this code is REPAIRED rather than left with its old
+grants. Both platforms now assert privacy in their own true terms (POSIX mode bits; win32 ACL reads
+that require exactly one account and no inherited entries).
+
+> **R16 amended, deliberately** (`scripts/check-import-boundaries.mjs`): the wall said audit has
+> "filesystem authority only, never network/process authority", and the second half went transitively
+> false the moment audit's root needed a DACL — Node exposes no ACL API, so the helper spawns
+> `icacls`. The mechanical rule is unchanged (audit still may not import `child_process` itself);
+> what changed is the CLAIM, so the wall states the authority audit actually has. One helper, named;
+> a second is a decision, not a precedent.
+
+## Windows process-tree termination — what is closed and what is not (2026-08-11)
+
+`process.kill(-pid, sig)` **throws ESRCH** on Windows (measured on the box, not inferred), so the
+old ladder fell through to `child.kill()` — one process. That reached the `cmd.exe` shim
+`spawn-shim` creates for every `.cmd`/`.bat` target and left the real MCP server running past its
+plugin's kill, its disable, and fieldd's own shutdown. `killPlan` now issues `taskkill /PID <pid>
+/T /F` there. Two measured facts worth keeping, because both can mislead the next person:
+
+- **A Node intermediate hides the bug.** libuv assigns every process a Node parent spawns to a job
+  object that dies with the parent, so a node-in-the-middle fixture tears its own grandchild down
+  for free on Windows. The first version of the regression test did exactly that and **passed with
+  the fix reverted**. The witness must put a non-libuv process (cmd.exe) in the middle, which is
+  also the real MCP shape.
+- **`taskkill /T` walks LIVING parents.** A grandchild already orphaned before the kill is out of
+  its reach; a Job Object with `KILL_ON_JOB_CLOSE` would close that, and Node has no API for one
+  without a native addon. The ROADMAP's "group-kill → Job Objects" booking therefore **stays open**
+  — narrowed, not paid.
 
 ## How to build / run / test ON Windows
 
@@ -80,6 +193,16 @@ The first non-smoke launch (`cd apps\desktop && pnpm exec electron .`) surfaced 
   `cd apps\desktop && pnpm start` (= `build:all && electron .`), or `pnpm exec electron .` if already built.
 - **THE gate before any commit:** `pnpm verify` (verbatim) — it does NOT run smoke; run smoke
   separately for boot proof.
+  > **Errata 2026-08-11 — the ledger's "`pnpm verify` VERBATIM exit 0" needs a footnote.** Two
+  > things were true of that claim and neither was written down. (a) `bundle:assert` asserted the
+  > presence of `dist/main/index.cjs` + `dist/preload/index.cjs` but only built the RENDERER, and
+  > nothing earlier in the chain builds the shell (`typecheck`/`test` carry no `dependsOn: build`),
+  > so the gate passed only on trees with a warm `dist/` and was **red on every clean checkout,
+  > including CI on `origin/main`** — pre-existing since `fc78b84` moved bundle:assert into verify,
+  > platform-independent. `bundle:assert` now builds the shell bundles it grades. (b) On Windows
+  > the TS phase then failed in **five packages whose suites were never ported** (mac-shaped path
+  > literals, unix mode-bit assertions, sun_path rows run without an explicit platform, symlink
+  > fixtures needing Developer Mode). Those are fixed; the gate is green on the box.
 - **The kill matrix / native tests:** `cargo test -p field-native` (terminal_unit 14/14 windows,
   terminal_mesh 7/7, mesh unit 3/3). `cargo test --workspace` for the lot.
 

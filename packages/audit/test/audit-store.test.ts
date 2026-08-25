@@ -1,6 +1,11 @@
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  currentWindowsAccount,
+  MULTI_USER_PRINCIPALS,
+  readWindowsAcl,
+} from "@vibefield/logging/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   AuditLedgerWriter,
@@ -55,7 +60,11 @@ describe("@vibefield/audit storage", () => {
     const name = (await readdir(auditRoot)).find((entry) => entry.endsWith(".jsonl"));
     expect(name).toBeDefined();
     const path = join(auditRoot, name as string);
-    // POSIX mode bits are a no-op on Windows (WIN-D4); the 0600/0700 boundary is an ACL there, proven by the packaged gate.
+    // POSIX mode bits are a no-op on Windows (WIN-D4) — `mode` is the read-only
+    // attribute there, not a permission. The win32 expression of this same
+    // 0600/0700 boundary is the DACL, asserted by the row below on the box that
+    // has one. (Corrected 2026-08-11: this used to say "proven by the packaged
+    // gate", which named a gate that asserted nothing about these paths.)
     if (process.platform !== "win32") {
       expect((await stat(auditRoot)).mode & 0o777).toBe(0o700);
       expect((await stat(path)).mode & 0o777).toBe(0o600);
@@ -75,6 +84,65 @@ describe("@vibefield/audit storage", () => {
       expect(directorySyncs).toEqual([auditRoot, dataDir, auditRoot, auditRoot]);
     }
   });
+
+  // The win32 arm of the mode-bit assertion above: the audit chain is evidence,
+  // and on NTFS "private" is a DACL, not a mode. `createPrivateDir` breaks
+  // inheritance on the audit root and grants this account alone; the ledger
+  // segment and its integrity checkpoint are private BECAUSE they inherit that.
+  // Red without the createPrivateDir call site — a plain mkdir under the user
+  // temp dir inherits SYSTEM, Administrators and every app-container SID.
+  it.skipIf(process.platform !== "win32")(
+    "grants the audit root, its ledger segment, and its checkpoint to this account alone",
+    async () => {
+      const dataDir = await fixture();
+      const writer = new AuditLedgerWriter({
+        dataDir,
+        bootId: "fieldd-acl-test",
+        now: () => 1_785_000_000_000,
+      });
+      await writer.initialize();
+      await writer.append({
+        v: 1,
+        eventId: "audit_acl_01",
+        time: 1_785_000_000_000,
+        actor: { kind: "system", id: "fieldd" },
+        action: "plugin.enable",
+        target: { kind: "plugin", id: "vibefield.example" },
+        phase: "attempt",
+        operationId: "op_acl_01",
+        transportProvenance: "in-process",
+      });
+      await writer.close();
+
+      const auditRoot = join(dataDir, "audit");
+      const entries = await readdir(auditRoot);
+      const segment = entries.find((entry) => entry.endsWith(".jsonl"));
+      // The checkpoint is published by rename, so its ACL also proves the
+      // durableRename commit point lands inside the private root.
+      const checkpoint = entries.find((entry) => entry.endsWith(".integrity.json"));
+      expect(segment).toBeDefined();
+      expect(checkpoint).toBeDefined();
+
+      const account = currentWindowsAccount().toLowerCase();
+      for (const path of [auditRoot, join(auditRoot, segment as string)]) {
+        const acl = await readWindowsAcl(path);
+        expect(acl.map((ace) => ace.account.toLowerCase())).toEqual([account]);
+        for (const principal of MULTI_USER_PRINCIPALS) {
+          expect(acl.map((ace) => ace.account.toLowerCase())).not.toContain(
+            principal.toLowerCase(),
+          );
+        }
+      }
+      const checkpointAcl = await readWindowsAcl(join(auditRoot, checkpoint as string));
+      expect(checkpointAcl.map((ace) => ace.account.toLowerCase())).toEqual([account]);
+      // Inheritance is broken at the root and only at the root: the files below
+      // are private by inheriting its single grant.
+      expect((await readWindowsAcl(auditRoot)).some((ace) => ace.inherited)).toBe(false);
+      expect(
+        (await readWindowsAcl(join(auditRoot, segment as string))).every((ace) => ace.inherited),
+      ).toBe(true);
+    },
+  );
 
   it.skipIf(process.platform === "win32")(
     "refuses an append when its new directory entry cannot be made durable",

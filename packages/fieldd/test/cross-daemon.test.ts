@@ -11,7 +11,13 @@ import { SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddHealth, NativeLink } from "../src/index";
-import { nativeBinPath, nativeEndpoint, waitForMgmtEndpoint } from "./native-harness";
+import {
+  killDaemonTree,
+  nativeBinPath,
+  nativeEndpoint,
+  removeTempRoot,
+  waitForMgmtEndpoint,
+} from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -31,25 +37,14 @@ function nativeEnv(dataDir: string): NodeJS.ProcessEnv {
 }
 
 afterEach(async () => {
-  // SIGKILL is asynchronous: a dying daemon (or its segment writer) can still
-  // be creating files while rmSync walks the tree — the ENOTEMPTY teardown
-  // race that broke three verify runs. Await the real exits, then remove with
-  // Node's own ENOTEMPTY retry loop as the backstop.
-  const exits = children.map((c) =>
-    c.exitCode !== null || c.signalCode !== null
-      ? Promise.resolve()
-      : new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, 2_000);
-          c.once("exit", () => {
-            clearTimeout(timer);
-            resolve();
-          });
-        }),
-  );
-  for (const c of children) c.kill("SIGKILL");
-  await Promise.all(exits);
+  // Kill each daemon's whole TREE and await the real exits before removing the
+  // root: a dying daemon (or its segment writer) can still be creating files
+  // while rmSync walks — the ENOTEMPTY race that broke three verify runs — and
+  // on win32 a surviving grandchild's open handle makes the removal EPERM
+  // outright. See killDaemonTree; Node's retry loop stays as the backstop.
+  await Promise.all(children.map((c) => killDaemonTree(c)));
   children = [];
-  for (const d of dirs) rmSync(d, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
+  for (const d of dirs) removeTempRoot(d);
   dirs = [];
 });
 

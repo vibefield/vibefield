@@ -42,7 +42,14 @@ function defaultPidAlive(pid: number): boolean {
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Canonicalize BEFORE deriving any path — a symlinked root must contend on
- * the same lock, not win with a second path (§3.3.1). Creates the root. */
+ * the same lock, not win with a second path (§3.3.1). Creates the root.
+ *
+ * Deliberately still a bare mkdir, and deliberately still synchronous:
+ * `realpathSync` is the whole point of the function and needs the directory to
+ * exist first. The EL7/WIN-D4 privacy edit (0700 + the owner-only DACL) belongs
+ * to `ensureUsersRoot`, which is the one door production goes through and the
+ * only caller that knows the root is about to hold identity. Calling this alone
+ * gets you a canonical path, not a private tree. */
 export function canonicalRoot(root: string): string {
   try {
     mkdirSync(root, { recursive: true });

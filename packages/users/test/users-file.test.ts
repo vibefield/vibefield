@@ -1,10 +1,24 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { UsersFile } from "@vibefield/contracts";
+import {
+  currentWindowsAccount,
+  MULTI_USER_PRINCIPALS,
+  readWindowsAcl,
+} from "@vibefield/logging/testing";
 import { describe, expect, it } from "vitest";
 import {
   canonicalRoot,
+  ensureUsersRoot,
   mintLockedUsersFile,
   mutateUsersFile,
   readUsersFile,
@@ -125,5 +139,98 @@ describe("mint + mutate (§3.3 publish modes)", () => {
     let skipped = 0;
     await setLastAttached(r, "someone", { pidAlive: () => true, ...noSleep }, () => skipped++);
     expect(skipped).toBe(1);
+  });
+});
+
+// EL7 — a same-uid agent is the adversary, and the VibeField root holds every
+// user's identity, mesh keys and field. `ensureUsersRoot` is the one door, so it
+// is the one place that can promise the tree is private before anything writes
+// into it. Both platforms assert that promise below, each in the terms that are
+// TRUE there: mode bits on unix, the DACL on win32. Neither row is the other's
+// stand-in — a mode expectation on NTFS measures the CRT's fiction, and there
+// are no ACLs to read on unix.
+describe("private at rest (EL7 / WIN-D4)", () => {
+  /** A root that starts PERMISSIVE. `mkdtempSync` hands back 0700 on unix, so a
+   * bare temp dir would satisfy the assertion below without the product doing
+   * anything — the loosening is what makes the row measure the tightening. */
+  function permissiveRoot(): string {
+    const path = mkdtempSync(join(tmpdir(), "vf-users-private-"));
+    if (process.platform !== "win32") chmodSync(path, 0o755);
+    return path;
+  }
+
+  it.skipIf(process.platform === "win32")(
+    "the root, the user root and users.json are 0700 / 0600 after the one door",
+    async () => {
+      const ensured = await ensureUsersRoot(permissiveRoot(), { name: "james", ...noSleep });
+      expect(statSync(ensured.rootReal).mode & 0o777).toBe(0o700);
+      expect(statSync(ensured.userRoot).mode & 0o777).toBe(0o700);
+      expect(statSync(usersFilePath(ensured.rootReal)).mode & 0o777).toBe(0o600);
+    },
+  );
+
+  /** Exactly one account on the ACL, this one, and none of the multi-user
+   * principals. `inherited` is which side of the boundary the path sits on: a
+   * directory `createPrivateDir` touched must carry NO inherited entry — that
+   * is what `/inheritance:r` buys — while a file inside one must carry ONLY an
+   * inherited entry, which is the (OI)(CI) grant doing the work no per-file
+   * ACL edit could afford. Compared case-insensitively because %USERNAME% and
+   * the name icacls canonicalizes to need not agree on case. */
+  async function expectOwnerOnly(path: string, inherited: boolean): Promise<void> {
+    const aces = await readWindowsAcl(path);
+    expect(aces, path).toHaveLength(1);
+    expect(aces[0]?.account.toLowerCase(), path).toBe(currentWindowsAccount().toLowerCase());
+    expect(aces[0]?.inherited, path).toBe(inherited);
+    const accounts = aces.map((ace) => ace.account.toLowerCase());
+    for (const principal of MULTI_USER_PRINCIPALS) {
+      expect(accounts, path).not.toContain(principal.toLowerCase());
+    }
+  }
+
+  it.skipIf(process.platform !== "win32")(
+    "the root and the user root carry an owner-only DACL, and users.json inherits it",
+    async () => {
+      const ensured = await ensureUsersRoot(permissiveRoot(), { name: "james", ...noSleep });
+      // A temp directory inherits a long ACL from its parents (SYSTEM,
+      // Administrators, and a row of container SIDs), so an unrestricted root
+      // fails on the length alone — this is not a vacuous "no Everyone" check.
+      await expectOwnerOnly(ensured.rootReal, false);
+      await expectOwnerOnly(ensured.userRoot, false);
+      // users.json is minted AFTER the root is restricted, which is the whole
+      // ordering: it never exists for a moment with the inherited ACL.
+      await expectOwnerOnly(usersFilePath(ensured.rootReal), true);
+    },
+  );
+
+  // The hazard the private-dir call INTRODUCES if it runs unguarded: both its
+  // arms follow a link, so a `users/1 -> somewhere else` planted by a same-uid
+  // agent (EL7) would have that directory's mode rewritten on unix and its DACL
+  // replaced with an owner-only one on win32 — a supervisor-authority write into
+  // a stranger's tree, done in the name of privacy. The refusal must come first,
+  // which is what the untouched target below measures. Runs on both platforms:
+  // a win32 junction is a directory link an ordinary account can plant, and it
+  // lstats as a symbolic link.
+  it("refuses to write a user tree through a planted link, leaving the target alone", async () => {
+    const root = permissiveRoot();
+    const outside = mkdtempSync(join(tmpdir(), "vf-users-outside-"));
+    if (process.platform !== "win32") chmodSync(outside, 0o755);
+    const before = process.platform === "win32" ? await readWindowsAcl(outside) : [];
+    mkdirSync(join(root, "users"), { recursive: true });
+    symlinkSync(
+      outside,
+      join(root, "users", "1"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+
+    await expect(ensureUsersRoot(root, { ...noSleep })).rejects.toMatchObject({
+      kind: "users-unwritable",
+    });
+
+    if (process.platform === "win32") {
+      // still the inherited ACL it was born with — icacls never ran on it
+      expect(await readWindowsAcl(outside)).toEqual(before);
+    } else {
+      expect(statSync(outside).mode & 0o777).toBe(0o755);
+    }
   });
 });

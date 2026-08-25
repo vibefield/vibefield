@@ -1,10 +1,10 @@
 import {
   closeSync,
   fsyncSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
-  renameSync,
   writeFileSync,
 } from "node:fs";
 import { userInfo } from "node:os";
@@ -17,9 +17,44 @@ import {
   type UserRecord,
   UsersFile,
 } from "@vibefield/contracts";
+import { createPrivateDir, durableRename } from "@vibefield/logging";
 import { UsersError } from "./errors";
 import { type UsersLockDeps, withUsersLock } from "./lock";
 import { ulid } from "./ulid";
+
+/** EL7 / WIN-D4 — "private at rest" for BOTH platforms. A bare recursive mkdir
+ * left every directory in the user tree at 0755 on unix, and on win32 `mode` is
+ * only the read-only attribute, so the root of every user's field landed with
+ * whatever ACL it inherited. `createPrivateDir` keeps the unix mode bits and
+ * adds the owner-only (OI)(CI) DACL that NTFS children inherit.
+ *
+ * The lstat bracket is not decoration: both arms of `createPrivateDir` FOLLOW a
+ * link to its target, so a planted `users/2 -> somewhere else` would have that
+ * directory's mode rewritten on unix and its DACL replaced on win32, with
+ * supervisor authority — exactly the same-uid adversary EL7 names. Checked
+ * before the call (the path may not exist yet) and again after, for one planted
+ * in between; the shape the log segment writer settled on. */
+export async function createPrivateUserDir(path: string): Promise<void> {
+  refuseLinkedDir(path);
+  await createPrivateDir(path);
+  refuseLinkedDir(path);
+}
+
+function refuseLinkedDir(path: string): void {
+  let info: ReturnType<typeof lstatSync>;
+  try {
+    info = lstatSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw new UsersError("users-unwritable", `cannot inspect ${path}`, error);
+  }
+  if (info.isSymbolicLink() || !info.isDirectory()) {
+    throw new UsersError(
+      "users-unwritable",
+      `${path} is a link or not a directory — VibeField never writes a user tree through one`,
+    );
+  }
+}
 
 export function usersFilePath(rootReal: string): string {
   return join(rootReal, ...LAYOUT.USERS_FILE);
@@ -75,8 +110,16 @@ export function activeUser(file: UsersFile): UserRecord {
 
 /** Mutation publish: tmp + fsync(file) + rename + fsync(dir) — bare tmp+rename
  * survives a crash but not a power loss, and this file is the root identity
- * the tailscale link points at (§3.3.5). */
-export function publishUsersFile(rootReal: string, file: UsersFile): void {
+ * the tailscale link points at (§3.3.5).
+ *
+ * The commit is `durableRename`, not `renameSync`: on win32 `MoveFileEx` refuses
+ * with EPERM/EACCES/EBUSY while ANY handle is open on the destination, and the
+ * holder is usually a scanner or the indexer that opened users.json microseconds
+ * after we wrote it. That transient loss lands on the ONE file naming every user
+ * — a corrupt user directory — so it retries on a bounded budget instead of
+ * surfacing as `users-unwritable` to a caller who did nothing wrong. Async only
+ * for that retry; the write and both fsyncs stay synchronous inside the lock. */
+export async function publishUsersFile(rootReal: string, file: UsersFile): Promise<void> {
   const target = usersFilePath(rootReal);
   const tmp = `${target}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
   const payload = `${JSON.stringify(UsersFile.parse(file), null, 2)}\n`;
@@ -88,7 +131,7 @@ export function publishUsersFile(rootReal: string, file: UsersFile): void {
     } finally {
       closeSync(fd);
     }
-    renameSync(tmp, target);
+    await durableRename(tmp, target);
     try {
       const dirFd = openSync(dirname(target), "r");
       try {
@@ -162,6 +205,13 @@ export function mintLockedUsersFile(
     mkdirSync(userRootFor(rootReal, activeUser(winner)), { recursive: true });
     return { file: winner, created: false };
   }
+  // Mint stays a SYNCHRONOUS critical section (the "wx" belt is the whole point
+  // — nothing may await between the exclusive create and the user root), so the
+  // two mkdirs above and below cannot be `createPrivateUserDir`. They do not
+  // need to be: `ensureUsersRoot` makes the root private BEFORE it mints, and a
+  // child of a private root inherits 0700 through mkdir's mode on unix and the
+  // (OI)(CI) ACE on win32. `ensureUsersRoot` then tightens the user root
+  // explicitly anyway, which is what covers a root minted before WIN-D4.
   mkdirSync(userRootFor(rootReal, first), { recursive: true });
   return { file, created: true };
 }
@@ -212,13 +262,13 @@ export async function mutateUsersFile(
   deps: UsersLockDeps,
   fn: (file: UsersFile) => void,
 ): Promise<UsersFile> {
-  return withUsersLock(rootReal, "mutate", deps, () => {
+  return withUsersLock(rootReal, "mutate", deps, async () => {
     const file = readUsersFile(rootReal);
     if (file === null) {
       throw new UsersError("users-corrupt", "users.json is absent — nothing to mutate");
     }
     fn(file);
-    publishUsersFile(rootReal, file);
+    await publishUsersFile(rootReal, file);
     return file;
   });
 }
@@ -289,7 +339,7 @@ export async function createUser(
     user = record;
   });
   if (user === null) throw new UsersError("users-corrupt", "create mutation did not run");
-  mkdirSync(userRootFor(rootReal, user), { recursive: true });
+  await createPrivateUserDir(userRootFor(rootReal, user));
   return { file, user };
 }
 

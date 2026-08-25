@@ -1,10 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { LAYOUT } from "@vibefield/contracts";
+import { durableRename } from "@vibefield/logging";
 import { UsersError } from "./errors";
 import { type UsersLockDeps, withUsersLock } from "./lock";
 import {
   activeUser,
+  createPrivateUserDir,
   mintLockedUsersFile,
   readLayoutStamp,
   userRootFor,
@@ -136,7 +138,7 @@ export async function migrateFlatV1(
       setupVariant: "migrated",
     });
     const target = userRootFor(rootReal, activeUser(file));
-    mkdirSync(target, { recursive: true });
+    await createPrivateUserDir(target);
     for (const entry of v1TopEntries()) {
       const source = join(rootReal, entry);
       if (!existsSync(source)) continue;
@@ -148,7 +150,12 @@ export async function migrateFlatV1(
             "the migration never guesses which is truth",
         );
       }
-      renameSync(source, destination);
+      // WIN-D4 — the moves are whole REGIONS (docs/, native/, fieldd/run/), and
+      // on win32 a rename fails with EPERM/EACCES/EBUSY while any handle is open
+      // anywhere in the destination path. A scanner touching one file would
+      // otherwise abort the migration mid-tree; it is re-runnable, but a bounded
+      // retry converges now instead of asking the user to relaunch.
+      await durableRename(source, destination);
       opts.onEvent?.("users.migrate.entry_moved", { entry });
       opts.onEntryMoved?.(entry);
     }

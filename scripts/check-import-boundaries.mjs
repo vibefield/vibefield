@@ -369,7 +369,23 @@ const RULES = [
   {
     id: "R16",
     enforce: true,
-    description: "@vibefield/audit has filesystem authority only, never network/process authority",
+    // AMENDED 2026-08-11 (WIN-10). The description used to read "filesystem
+    // authority only, never network/process authority", and the second half
+    // became transitively untrue: making the audit root private on Windows means
+    // setting a DACL, Node exposes no API for one, and `@vibefield/logging`'s
+    // `createPrivateDir` therefore spawns `icacls`. That is filesystem authority
+    // wearing a process — a fixed argv, an absolute System32 binary, applied to
+    // audit's own root — and refusing it would leave the audit chain readable by
+    // any local account, which is the worse EL7 failure by a distance.
+    //
+    // The MECHANICAL rule below is unchanged and still the real enforcement:
+    // audit may not import child_process (or any network module) ITSELF. What is
+    // amended is the claim, so the wall states the authority audit actually has
+    // rather than one it lost quietly. The exception is exactly one helper; a
+    // second one is a decision, not a precedent.
+    description:
+      "@vibefield/audit has filesystem authority only — no network, and no process authority " +
+      "beyond @vibefield/logging's private-fs DACL helper (WIN-10)",
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/audit/src"),
     importTest: (s) =>
       matchesForbid(s, {

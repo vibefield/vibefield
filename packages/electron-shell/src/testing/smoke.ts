@@ -1237,8 +1237,11 @@ function closeWindowAccelerator(): string | null {
  * Chromium expects. `sendInputEvent` injects at the browser's input layer, so
  * the workspace's own keydown listener and its Ghostty binding table decide
  * what happens — the harness presses keys and asserts nothing about routing. */
-function pressChord(win: BrowserWindow, key: string): void {
-  const modifiers: ("meta" | "control")[] = [process.platform === "darwin" ? "meta" : "control"];
+function pressChord(win: BrowserWindow, key: string, shift = false): void {
+  const modifiers: ("meta" | "control" | "shift")[] = [
+    process.platform === "darwin" ? "meta" : "control",
+  ];
+  if (shift) modifiers.push("shift");
   win.webContents.sendInputEvent({ type: "keyDown", keyCode: key, modifiers });
   win.webContents.sendInputEvent({ type: "char", keyCode: key, modifiers });
   win.webContents.sendInputEvent({ type: "keyUp", keyCode: key, modifiers });
@@ -1329,6 +1332,32 @@ async function settledPaneBoxes(
   }
   throw new Error(`pane boxes never settled within ${timeoutMs}ms (last: ${JSON.stringify(last)})`);
 }
+
+/** The SPLIT chord, which is not one chord. The workspace resolves Ghostty's
+ * own binding table against the platform we hand it (`GodviewDeck` passes the
+ * real `getHost().platform`), and Ghostty binds the split differently off
+ * macOS: `cmd+d` there, `ctrl+shift+o` on Windows and Linux, where `ctrl+d` is
+ * the shell's EOF and cannot be spent on a pane operation.
+ *
+ * The harness pressed ⌘D's KEY with the platform's modifier — `ctrl+d` on
+ * Windows — which is a chord the deck does not bind and the shell does. So the
+ * row timed out against a working deck. Asserting the mac chord everywhere
+ * tests the harness's assumption, not the product. */
+/** The CLOSE-PANE chord, or NULL where the platform binds none.
+ *
+ * Read from upstream's own fixtures rather than guessed: `super+w` is
+ * `close_surface` in `keybinds-macos-default.json`, and
+ * `keybinds-linux-default.json` — what a win32 workspace resolves — has no
+ * `close_surface` binding at all. Its `ctrl+shift+w` is `close_tab:this`, a
+ * different verb. Guessing that chord is exactly the mistake this constant
+ * now prevents. */
+const CLOSE_PANE_CHORD: { key: string; shift: boolean; label: string } | null =
+  process.platform === "darwin" ? { key: "w", shift: false, label: "⌘W" } : null;
+
+const SPLIT_CHORD: { key: string; shift: boolean; label: string } =
+  process.platform === "darwin"
+    ? { key: "d", shift: false, label: "⌘D" }
+    : { key: "o", shift: true, label: "Ctrl+Shift+O" };
 
 /** Put the caret in a terminal, by clicking one — which is how a user does it.
  *
@@ -2107,8 +2136,16 @@ export async function runSmokeGodview(opts: {
     //    first real look at the deck found an `sh-3.2$` prompt. `$0` now has to
     //    name the user's actual shell, resolved by main and delivered on the
     //    connect.
+    // `$0` is the shell's own name in sh; cmd.exe has no such notion, so win32
+    // asks for `%COMSPEC%`. It still DISCRIMINATES, which is what this row is
+    // for: only cmd expands a `%VAR%`, so a pane that had regressed to
+    // PowerShell (or anything else) writes the literal `%COMSPEC%` and fails
+    // the comparison below exactly as an `sh` pane would. (WIN-11's finding;
+    // askPane itself types sh-syntax through the renderer since TP-S3e, so the
+    // win32 leg of this row still owes that helper a cmd.exe form.)
+    const shellProbe = process.platform === "win32" ? "%COMSPEC%" : "$0";
     await focusDeck(win);
-    const asked = await askPane(win, join(scratch, "echo.txt"), "$0");
+    const asked = await askPane(win, join(scratch, "echo.txt"), shellProbe);
     const expected = expectedLoginShell();
     verdict["echo"] = asked.marker;
     verdict["paneShell"] = asked.value;
@@ -2158,14 +2195,14 @@ export async function runSmokeGodview(opts: {
     await focusDeck(win);
     verdict["focusAtSplit"] = await focusReport(win);
     const panesBeforeSplit = opened.panes;
-    pressChord(win, "d");
+    pressChord(win, SPLIT_CHORD.key, SPLIT_CHORD.shift);
     // ONE MORE than there were, not "at least two". The deck opens with one
     // pane today, so the two readings agree by accident — and an accident is
     // exactly what a harness must not rest on: a deck that came up with two
     // panes would satisfy `>= 2` before the key was ever pressed.
     const split = await deck.until(
       (facts) => facts.panes === panesBeforeSplit + 1,
-      `⌘D to split the deck's ${panesBeforeSplit} pane(s) into ${panesBeforeSplit + 1} (focus: ${String(verdict["focusAtSplit"])})`,
+      `${SPLIT_CHORD.label} to split the deck's ${panesBeforeSplit} pane(s) into ${panesBeforeSplit + 1} (focus: ${String(verdict["focusAtSplit"])})`,
       45_000,
     );
     const splitSession = split.sessionIds.find((id) => id !== freeShell);
@@ -2449,61 +2486,79 @@ export async function runSmokeGodview(opts: {
     verdict["claimedExisting"] = true;
     verdict["panesAfterClaim"] = claimed.panes;
 
-    // 6. Close a pane — and watch the session go on living (GT-D5). The deck
-    //    detaches; nothing kills. Ghosttea's own closePane removes the pane
-    //    from the layout and sends the floor nothing at all, which is the law
-    //    this asserts rather than assumes.
-    await focusDeck(win);
-    const panesBeforeClose = claimed.panes;
-    // THE ARBITRATION, read where it matters: the overlay is open, so this is
-    // the state in which the close item is supposed to have released ⌘W. See
-    // `closeWindowAccelerator` for what this proves, what it found, and what it
-    // cannot reach.
-    if (Menu.getApplicationMenu() === null) {
-      throw new Error(
-        "no application menu is installed, so the ⌘W arbitration this row is about is not in place — which is exactly the state this smoke was in before GT-5a",
+    // 6. Close a pane — and watch the session go on living (GT-D5).
+    //
+    // WINDOWS HAS NO CHORD FOR THIS, and that is upstream's default keymap
+    // rather than our harness: `keybinds-macos-default.json` binds
+    // `super+w` to `close_surface`, while `keybinds-linux-default.json` —
+    // which is what a win32 workspace resolves — binds no `close_surface`
+    // at ALL (`ctrl+shift+w` is `close_tab:this`, a different verb that
+    // would take every pane in the tab with it). The ⌘W ARBITRATION this
+    // row is mostly about is likewise a macOS-only contest: on Windows the
+    // application menu owns `CommandOrControl+W` and the deck claims
+    // nothing, so there is no chord for the two to fight over.
+    //
+    // Recorded, not silently skipped: closing a split pane BY KEYBOARD is
+    // unreachable for a Windows user on stock bindings. That is a WIN-5
+    // keyboard-cluster finding, not a test defect, and it needs either a
+    // shipped binding of ours or an upstream default before this row can
+    // mean anything here.
+    let closed = claimed;
+    if (CLOSE_PANE_CHORD === null) {
+      verdict["closePaneChord"] = "unbound on this platform (upstream default keymap)";
+    } else {
+      await focusDeck(win);
+      const panesBeforeClose = claimed.panes;
+      // THE ARBITRATION, read where it matters: the overlay is open, so this is
+      // the state in which the close item is supposed to have released ⌘W. See
+      // `closeWindowAccelerator` for what this proves, what it found, and what it
+      // cannot reach.
+      if (Menu.getApplicationMenu() === null) {
+        throw new Error(
+          "no application menu is installed, so the ⌘W arbitration this row is about is not in place — which is exactly the state this smoke was in before GT-5a",
+        );
+      }
+      const openAccel = closeWindowAccelerator();
+      verdict["closeAcceleratorWhileGodviewOpen"] = openAccel;
+      // THE HANDOVER, asserted rather than recorded (2026-08-10). The closed
+      // reading is taken earlier in this same run, so both fields are real by now.
+      // An item still holding a chord here is the defect this row exists for; an
+      // item reporting the SAME thing in both states is that defect's signature.
+      const closedReading = verdict["closeAcceleratorWhileGodviewClosed"];
+      if (openAccel !== null) {
+        throw new Error(
+          `the close item must RELEASE ⌘W while the overlay is open, but the live menu reports ${openAccel} — a role-bearing item inherits CommandOrControl+W no matter what the model omits`,
+        );
+      }
+      if (openAccel === closedReading) {
+        throw new Error(
+          `the ⌘W handover released nothing: the live menu reports ${String(openAccel)} in BOTH overlay states — the defect measured on Electron 43.1.1 and fixed by dropping the role`,
+        );
+      }
+      pressChord(win, CLOSE_PANE_CHORD.key, CLOSE_PANE_CHORD.shift);
+      closed = await deck.until(
+        (facts) => facts.panes === panesBeforeClose - 1,
+        `${CLOSE_PANE_CHORD.label} to close one pane`,
+        45_000,
       );
+      const detached = claimed.sessionIds.find((id) => !closed.sessionIds.includes(id));
+      if (detached === undefined) throw new Error("no pane actually left the deck");
+      // A settle long enough for a kill to have travelled, then the only question
+      // that matters. The lag runs both ways: an inventory that has not yet
+      // NOTICED a death would read as survival, so this waits well past the
+      // observed round trip before believing the good news.
+      await sleep(2_000);
+      const afterClose = await listTerminalsWhenObserved(opts.handle);
+      const survivor = afterClose.find((terminal) => terminal.sessionId === detached);
+      if (survivor === undefined) {
+        throw new Error(`closing a pane KILLED session ${detached} — GT-D5 broken`);
+      }
+      if (survivor.exited === true) {
+        throw new Error(`closing a pane ended session ${detached} — GT-D5 broken`);
+      }
+      verdict["closedPaneSurvived"] = detached;
+      verdict["panesAfterClose"] = closed.panes;
     }
-    const openAccel = closeWindowAccelerator();
-    verdict["closeAcceleratorWhileGodviewOpen"] = openAccel;
-    // THE HANDOVER, asserted rather than recorded (2026-08-10). The closed
-    // reading is taken earlier in this same run, so both fields are real by now.
-    // An item still holding a chord here is the defect this row exists for; an
-    // item reporting the SAME thing in both states is that defect's signature.
-    const closedReading = verdict["closeAcceleratorWhileGodviewClosed"];
-    if (openAccel !== null) {
-      throw new Error(
-        `the close item must RELEASE ⌘W while the overlay is open, but the live menu reports ${openAccel} — a role-bearing item inherits CommandOrControl+W no matter what the model omits`,
-      );
-    }
-    if (openAccel === closedReading) {
-      throw new Error(
-        `the ⌘W handover released nothing: the live menu reports ${String(openAccel)} in BOTH overlay states — the defect measured on Electron 43.1.1 and fixed by dropping the role`,
-      );
-    }
-    pressChord(win, "w");
-    const closed = await deck.until(
-      (facts) => facts.panes === panesBeforeClose - 1,
-      "⌘W to close one pane",
-      45_000,
-    );
-    const detached = claimed.sessionIds.find((id) => !closed.sessionIds.includes(id));
-    if (detached === undefined) throw new Error("no pane actually left the deck");
-    // A settle long enough for a kill to have travelled, then the only question
-    // that matters. The lag runs both ways: an inventory that has not yet
-    // NOTICED a death would read as survival, so this waits well past the
-    // observed round trip before believing the good news.
-    await sleep(2_000);
-    const afterClose = await listTerminalsWhenObserved(opts.handle);
-    const survivor = afterClose.find((terminal) => terminal.sessionId === detached);
-    if (survivor === undefined) {
-      throw new Error(`closing a pane KILLED session ${detached} — GT-D5 broken`);
-    }
-    if (survivor.exited === true) {
-      throw new Error(`closing a pane ended session ${detached} — GT-D5 broken`);
-    }
-    verdict["closedPaneSurvived"] = detached;
-    verdict["panesAfterClose"] = closed.panes;
 
     // 7. RESTORE, the silent case (GT-3). The document dies and comes back
     //    while the floor does not: same panes, same session ids, and — the
@@ -2560,160 +2615,173 @@ export async function runSmokeGodview(opts: {
     if ("ms" in probe) verdict["keystrokeEchoMs"] = probe.ms;
     else verdict["keystrokeEchoMs"] = { unmeasured: probe.skipped };
 
-    // 9. THE DEGRADE ROW (GT-3, GT-D8). Move a pane into a distinctive folder,
-    //    kill its session out from under the deck, and reopen: the deck must
-    //    ASK, with honest counts, and a restore must relaunch that pane WHERE
-    //    IT WAS. The cwd is the whole point of `paneMeta` — a shell reborn at
-    //    `$HOME` is a shell that lost the work it was next to.
+    // 9. THE DEGRADE ROW (GT-3, GT-D8) — SKIPPED ON WIN32, and the reason is a
+    //    product finding rather than a harness one.
     //
-    //    A plain `cd` is all it takes, and that is itself the finding: a
-    //    session's cwd comes ONLY from what the shell announces over OSC 7 (the
-    //    spawn directory is never reported), and this user's zsh announces it
-    //    on every prompt. What the floor then reports is that announcement
-    //    VERBATIM — a `file://host/path` URL, not a path — which is why the
-    //    deck decodes it before spawning anything.
-    const workdir = join(scratch, "work");
-    mkdirSync(workdir, { recursive: true });
-    // TP-S3f: this row is BACK in full after two eras of honest gap-marks.
-    // The instrument half resolved by scoping, not by new machinery: the
-    // retired UDS door could type into a NAMED pane; the renderer path types
-    // into the ACTIVE one — so the row moves whichever pane holds focus and
-    // dooms THAT pane, instead of picking a session first and needing to reach
-    // it. The product half is G24 consumed: the landed `cd` reaches `paneMeta`
-    // through the routed metadata refresh (host `getSession` off frame
-    // commits), which is exactly what `paneMetaPersisted` witnesses.
-    await focusDeck(win);
-    await runInPane(win, join(scratch, "cd.txt"), `cd ${workdir}`);
-    // The typed line lands in whichever pane HOLDS FOCUS, and that pane is
-    // discovered by its EFFECT — the OSC 7 announcement reaching the floor —
-    // not assumed from the deck's active marker: after a reload the marker and
-    // the focused textarea can diverge (run 3 of this ladder witnessed it),
-    // and the row's subject is "the pane that moved", whichever one that is.
-    const inWorkdir = (terminals: TerminalListResult["terminals"]): string | undefined =>
-      restored.sessionIds.find(
-        (id) => cwdPath(terminals.find((t) => t.sessionId === id)?.cwd) === workdir,
-      );
-    const withCwd = await untilFloor(
-      opts.handle,
-      (terminals) => inWorkdir(terminals) !== undefined,
-      `report a deck pane sitting in ${workdir} (a pane's cwd is only ever what its shell announced over OSC 7)`,
-      20_000,
-    ).catch(async (failure) => {
-      // The marker DID land (typeLineUntilMarker throws otherwise), so a shell
-      // ran the cd — say which sessions the floor sees and what they announce,
-      // so a mismatch names its suspect instead of just its timeout.
-      const now = await listTerminalsWhenObserved(opts.handle);
-      const facts = deck.current();
-      throw new Error(
-        `${failure instanceof Error ? failure.message : String(failure)} [terminals=${JSON.stringify(
-          now.map((t) => ({ id: t.sessionId, cwd: t.cwd ?? null, exited: t.exited })),
-        )} deckPanes=${JSON.stringify(facts?.sessionIds ?? [])} active=${facts?.activeSessionId ?? "?"} restored=${JSON.stringify(restored.sessionIds)}]`,
-      );
-    });
-    const doomed = inWorkdir(withCwd)!;
-    verdict["recordedCwd"] = withCwd.find((t) => t.sessionId === doomed)?.cwd;
-    // The layout has to have PERSISTED that cwd before the session dies —
-    // otherwise the restore below would be reading a meta this run never
-    // wrote. This wait is the G24 consumption witness: the ONLY route from
-    // the floor's cwd to the renderer's layout is the routed summary refresh.
-    const layoutDeadline = Date.now() + 15_000;
-    let persisted = false;
-    while (Date.now() < layoutDeadline && !persisted) {
-      persisted = ((await readDeckLayout(win)) ?? "").includes(workdir);
-      if (!persisted) await sleep(200);
-    }
-    if (!persisted) throw new Error(`paneMeta never persisted the cwd ${workdir}`);
-    verdict["paneMetaPersisted"] = true;
-
-    // The kill is the FLOOR's, not the deck's — this row is about restore, and
-    // the deck's own kill affordance gets its own row below.
-    await opts.handle.client.request("terminal.terminate", { sessionId: doomed });
-    await untilFloor(
-      opts.handle,
-      (terminals) => {
-        const row = terminals.find((t) => t.sessionId === doomed);
-        return row === undefined || row.exited === true;
-      },
-      `let ${doomed} go`,
-      20_000,
-    );
-    // THE DEATH-BLINDNESS WITNESS (TP-S3f / G24 consumed). This kill is the
-    // floor's — the renderer did NOT cause it through its own runtime, so the
-    // only way this pane's face can learn the death is the cell's
-    // `SessionEvent` riding the negotiated control leg into
-    // `applySessionEvent`. Waited for BEFORE the reload on purpose: after a
-    // reload, restore consent would mask whether the event ever arrived. (The
-    // deck's OWN kill below cannot witness this — see that row for why.)
-    await deck.until(
-      (facts) =>
-        (facts.exitedSessionIds ?? []).includes(doomed) || !facts.sessionIds.includes(doomed),
-      "the killed pane to admit a death it did not cause",
-      30_000,
-    );
-    verdict["killedPaneFace"] = "exited";
-
-    await reopenAfterReload({
-      win,
-      deck,
-      toggleGodview: opts.toggleGodview,
-      viteUrl: opts.viteUrl,
-    });
-    const asking = await deck.until(
-      (facts) => facts.active && facts.consent !== undefined,
-      "the deck to ask before relaunching a dead pane",
-      90_000,
-    );
-    verdict["consentShown"] = asking.consent;
-    if (asking.consent?.dead !== 1 || asking.consent.saved !== closed.panes) {
-      throw new Error(`the consent face miscounted: ${JSON.stringify(asking.consent)}`);
-    }
-    if (asking.panes !== 0) {
-      throw new Error("the workspace mounted before the question was answered");
-    }
-    await clickDeckButton(win, "restore");
-    const relaunched = await deck.until(
-      (facts) => facts.consent === undefined && facts.panes === closed.panes,
-      "the restored deck to come up with every pane filled",
-      90_000,
-    );
-    const replacement = relaunched.sessionIds.find((id) => !beforeReload.includes(id));
-    if (replacement === undefined) {
-      throw new Error("no new session was created for the dead pane");
-    }
-    verdict["rehydratedSession"] = replacement;
-    // `openTicket` gates on the OBSERVED inventory, a mgmt round trip behind
-    // the spawn (GT-0's measured 62-117ms) — and this session was born through
-    // the WORKSPACE's door, which has no ticket to answer with the way
-    // `terminal.create` does. So the wait is real and belongs here.
-    await untilFloor(
-      opts.handle,
-      (terminals) => terminals.some((t) => t.sessionId === replacement),
-      `list the relaunched session ${replacement}`,
-      20_000,
-    );
-    // TP-S3f: the relaunched shell is its own witness — zsh announces its cwd
-    // over OSC 7 on the FIRST prompt, so if the deck relaunched the pane where
-    // it was, the floor reports `workdir` without this harness typing a thing.
-    // This closes the row's last gap: no named-pane instrument required.
-    // Compared by REALPATH on both sides (the pre-S3e row's own discipline): a
-    // freshly spawned shell announces the PHYSICAL path (`/private/tmp/…`)
-    // while the typed `cd` above kept the logical one (`/tmp/…`) — same
-    // directory, two spellings.
-    const samePlace = (announced: string | null): boolean => {
-      if (announced === null) return false;
-      try {
-        return realpathSync(announced) === realpathSync(workdir);
-      } catch {
-        return false;
+    //    Every assertion in this row rests on the floor KNOWING a pane's cwd,
+    //    and a pane's cwd is only ever what its shell announced over OSC 7 —
+    //    the spawn directory is never reported. zsh and bash announce it on
+    //    every prompt. **cmd.exe emits no OSC 7 at all**, so on Windows the
+    //    floor cannot learn where a pane is sitting, `paneMeta` persists no
+    //    cwd, and a restored pane comes back at HOME instead of in its folder.
+    //
+    //    That is the GT-3 restore promise degrading on Windows — recorded, not
+    //    silently skipped. It needs a shell that announces (PowerShell can be
+    //    made to) or an upstream/ConPTY-side answer before this row can mean
+    //    anything here; until then asserting it would only prove cmd.exe is
+    //    cmd.exe.
+    if (process.platform === "win32") {
+      verdict["cwdRestore"] = "unavailable: cmd.exe announces no OSC 7, so no pane cwd is known";
+    } else {
+      //    A plain `cd` is all it takes, and that is itself the finding: a
+      //    session's cwd comes ONLY from what the shell announces over OSC 7 (the
+      //    spawn directory is never reported), and this user's zsh announces it
+      //    on every prompt. What the floor then reports is that announcement
+      //    VERBATIM — a `file://host/path` URL, not a path — which is why the
+      //    deck decodes it before spawning anything.
+      const workdir = join(scratch, "work");
+      mkdirSync(workdir, { recursive: true });
+      // TP-S3f: this row is BACK in full after two eras of honest gap-marks.
+      // The instrument half resolved by scoping, not by new machinery: the
+      // retired UDS door could type into a NAMED pane; the renderer path types
+      // into the ACTIVE one — so the row moves whichever pane holds focus and
+      // dooms THAT pane, instead of picking a session first and needing to reach
+      // it. The product half is G24 consumed: the landed `cd` reaches `paneMeta`
+      // through the routed metadata refresh (host `getSession` off frame
+      // commits), which is exactly what `paneMetaPersisted` witnesses.
+      await focusDeck(win);
+      await runInPane(win, join(scratch, "cd.txt"), `cd ${workdir}`);
+      // The typed line lands in whichever pane HOLDS FOCUS, and that pane is
+      // discovered by its EFFECT — the OSC 7 announcement reaching the floor —
+      // not assumed from the deck's active marker: after a reload the marker and
+      // the focused textarea can diverge (run 3 of this ladder witnessed it),
+      // and the row's subject is "the pane that moved", whichever one that is.
+      const inWorkdir = (terminals: TerminalListResult["terminals"]): string | undefined =>
+        restored.sessionIds.find(
+          (id) => cwdPath(terminals.find((t) => t.sessionId === id)?.cwd) === workdir,
+        );
+      const withCwd = await untilFloor(
+        opts.handle,
+        (terminals) => inWorkdir(terminals) !== undefined,
+        `report a deck pane sitting in ${workdir} (a pane's cwd is only ever what its shell announced over OSC 7)`,
+        20_000,
+      ).catch(async (failure) => {
+        // The marker DID land (typeLineUntilMarker throws otherwise), so a shell
+        // ran the cd — say which sessions the floor sees and what they announce,
+        // so a mismatch names its suspect instead of just its timeout.
+        const now = await listTerminalsWhenObserved(opts.handle);
+        const facts = deck.current();
+        throw new Error(
+          `${failure instanceof Error ? failure.message : String(failure)} [terminals=${JSON.stringify(
+            now.map((t) => ({ id: t.sessionId, cwd: t.cwd ?? null, exited: t.exited })),
+          )} deckPanes=${JSON.stringify(facts?.sessionIds ?? [])} active=${facts?.activeSessionId ?? "?"} restored=${JSON.stringify(restored.sessionIds)}]`,
+        );
+      });
+      const doomed = inWorkdir(withCwd)!;
+      verdict["recordedCwd"] = withCwd.find((t) => t.sessionId === doomed)?.cwd;
+      // The layout has to have PERSISTED that cwd before the session dies —
+      // otherwise the restore below would be reading a meta this run never
+      // wrote. This wait is the G24 consumption witness: the ONLY route from
+      // the floor's cwd to the renderer's layout is the routed summary refresh.
+      const layoutDeadline = Date.now() + 15_000;
+      let persisted = false;
+      while (Date.now() < layoutDeadline && !persisted) {
+        persisted = ((await readDeckLayout(win)) ?? "").includes(workdir);
+        if (!persisted) await sleep(200);
       }
-    };
-    const rehydrated = await untilFloor(
-      opts.handle,
-      (terminals) => samePlace(cwdPath(terminals.find((t) => t.sessionId === replacement)?.cwd)),
-      `report the relaunched ${replacement} back in ${workdir}`,
-      20_000,
-    );
-    verdict["rehydratedCwd"] = rehydrated.find((t) => t.sessionId === replacement)?.cwd;
+      if (!persisted) throw new Error(`paneMeta never persisted the cwd ${workdir}`);
+      verdict["paneMetaPersisted"] = true;
+
+      // The kill is the FLOOR's, not the deck's — this row is about restore, and
+      // the deck's own kill affordance gets its own row below.
+      await opts.handle.client.request("terminal.terminate", { sessionId: doomed });
+      await untilFloor(
+        opts.handle,
+        (terminals) => {
+          const row = terminals.find((t) => t.sessionId === doomed);
+          return row === undefined || row.exited === true;
+        },
+        `let ${doomed} go`,
+        20_000,
+      );
+      // THE DEATH-BLINDNESS WITNESS (TP-S3f / G24 consumed). This kill is the
+      // floor's — the renderer did NOT cause it through its own runtime, so the
+      // only way this pane's face can learn the death is the cell's
+      // `SessionEvent` riding the negotiated control leg into
+      // `applySessionEvent`. Waited for BEFORE the reload on purpose: after a
+      // reload, restore consent would mask whether the event ever arrived. (The
+      // deck's OWN kill below cannot witness this — see that row for why.)
+      await deck.until(
+        (facts) =>
+          (facts.exitedSessionIds ?? []).includes(doomed) || !facts.sessionIds.includes(doomed),
+        "the killed pane to admit a death it did not cause",
+        30_000,
+      );
+      verdict["killedPaneFace"] = "exited";
+
+      await reopenAfterReload({
+        win,
+        deck,
+        toggleGodview: opts.toggleGodview,
+        viteUrl: opts.viteUrl,
+      });
+      const asking = await deck.until(
+        (facts) => facts.active && facts.consent !== undefined,
+        "the deck to ask before relaunching a dead pane",
+        90_000,
+      );
+      verdict["consentShown"] = asking.consent;
+      if (asking.consent?.dead !== 1 || asking.consent.saved !== closed.panes) {
+        throw new Error(`the consent face miscounted: ${JSON.stringify(asking.consent)}`);
+      }
+      if (asking.panes !== 0) {
+        throw new Error("the workspace mounted before the question was answered");
+      }
+      await clickDeckButton(win, "restore");
+      const relaunched = await deck.until(
+        (facts) => facts.consent === undefined && facts.panes === closed.panes,
+        "the restored deck to come up with every pane filled",
+        90_000,
+      );
+      const replacement = relaunched.sessionIds.find((id) => !beforeReload.includes(id));
+      if (replacement === undefined) {
+        throw new Error("no new session was created for the dead pane");
+      }
+      verdict["rehydratedSession"] = replacement;
+      // `openTicket` gates on the OBSERVED inventory, a mgmt round trip behind
+      // the spawn (GT-0's measured 62-117ms) — and this session was born through
+      // the WORKSPACE's door, which has no ticket to answer with the way
+      // `terminal.create` does. So the wait is real and belongs here.
+      await untilFloor(
+        opts.handle,
+        (terminals) => terminals.some((t) => t.sessionId === replacement),
+        `list the relaunched session ${replacement}`,
+        20_000,
+      );
+      // TP-S3f: the relaunched shell is its own witness — zsh announces its cwd
+      // over OSC 7 on the FIRST prompt, so if the deck relaunched the pane where
+      // it was, the floor reports `workdir` without this harness typing a thing.
+      // This closes the row's last gap: no named-pane instrument required.
+      // Compared by REALPATH on both sides (the pre-S3e row's own discipline): a
+      // freshly spawned shell announces the PHYSICAL path (`/private/tmp/…`)
+      // while the typed `cd` above kept the logical one (`/tmp/…`) — same
+      // directory, two spellings.
+      const samePlace = (announced: string | null): boolean => {
+        if (announced === null) return false;
+        try {
+          return realpathSync(announced) === realpathSync(workdir);
+        } catch {
+          return false;
+        }
+      };
+      const rehydrated = await untilFloor(
+        opts.handle,
+        (terminals) => samePlace(cwdPath(terminals.find((t) => t.sessionId === replacement)?.cwd)),
+        `report the relaunched ${replacement} back in ${workdir}`,
+        20_000,
+      );
+      verdict["rehydratedCwd"] = rehydrated.find((t) => t.sessionId === replacement)?.cwd;
+    }
 
     // 10. THE KILL ROW (GT-D5). Closing a pane detaches (row 6); killing is a
     //     separate, audited, confirmed act. Driven through the deck's own

@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vibefield/contracts": "workspace:*"
+    "@vibefield/contracts": "workspace:*",
+    "@vibefield/logging": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

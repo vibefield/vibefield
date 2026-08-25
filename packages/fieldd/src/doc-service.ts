@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
-import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
+import { mkdir, open, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
   DOC_SYNC_RECORD,
@@ -13,7 +13,12 @@ import {
   type LanePutMeta,
   STORES,
 } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+import {
+  createNoopLogger,
+  durableRename,
+  durableRenameSync,
+  type Logger,
+} from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
 
 // DocumentService (design-02 §3.5, B3 shape A): fieldd owns the board's at-rest
@@ -944,7 +949,7 @@ export class DocumentService {
   private quarantineRegistry(why: string): void {
     const aside = `${this.registryPath}.corrupt-${this.now()}`;
     try {
-      renameSync(this.registryPath, aside);
+      durableRenameSync(this.registryPath, aside);
       this.logger.warn(
         "fieldd.docs.registry_quarantined",
         "A corrupt document registry was quarantined",
@@ -979,7 +984,14 @@ async function atomicWrite(dir: string, name: string, data: Uint8Array | string)
     } finally {
       await fd.close();
     }
-    await rename(tmp, target);
+    // `durableRename`, never a bare `rename`: the win32 retry it carries is not
+    // a nicety here. This is where the miss was FOUND — a real commit failure
+    // under full-suite load, `document storage append failed: EPERM ... rename
+    // current.json.tmp-… -> current.json`, which on a user's machine is a LOST
+    // DOCUMENT SAVE rather than a flaky test. Atomicity is untouched: each
+    // attempt is the same all-or-nothing rename (@vibefield/logging owns the
+    // budget and the reasoning).
+    await durableRename(tmp, target);
   } catch (e) {
     await rm(tmp, { force: true }).catch(() => {});
     throw e;

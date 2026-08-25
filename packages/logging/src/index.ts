@@ -30,6 +30,12 @@ export {
   type PluginLogRouterHealth,
   pluginLogProvenance,
 } from "./plugin-logging";
+export {
+  createPrivateDir,
+  durableRename,
+  durableRenameSync,
+  restrictToCurrentUser,
+} from "./private-fs";
 export { serializeError } from "./sanitize";
 export type {
   CreateNodeLoggingOptions,

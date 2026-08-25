@@ -13,6 +13,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SOCKETS } from "@vibefield/contracts";
+import {
+  currentWindowsAccount,
+  MULTI_USER_PRINCIPALS,
+  readWindowsAcl,
+} from "@vibefield/logging/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, type FielddHealth } from "../src/index";
@@ -80,9 +85,35 @@ describe("run files (shell bootstrap contract)", () => {
     const productPath = join(runDir, "product.json");
 
     expect(readFileSync(tokenPath, "utf8")).toBe(daemon.shellToken);
-    // POSIX mode bits are a no-op on Windows (WIN-D4); the 0600/0700 boundary is an ACL there, proven by the packaged gate.
+    // POSIX mode bits are a no-op on Windows (WIN-D4); each platform therefore
+    // asserts "private at rest" in its own true terms.
     if (process.platform !== "win32") {
       expect(statSync(tokenPath).mode & 0o777).toBe(0o600);
+    } else {
+      // shell.token grants FULL daemon adoption, and `mode` on Windows sets the
+      // read-only attribute and nothing else — so the credential's privacy is a
+      // DACL or it is nothing. The run dir breaks inheritance and grants this
+      // account alone; both run files are private BECAUSE they inherit it.
+      // Red before that call site: a plain mkdir under the user temp dir
+      // inherits SYSTEM, BUILTIN\Administrators and the machine's app SIDs, so
+      // "exactly one account" is the load-bearing row here — the named
+      // principals below can pass unfixed under a per-user %TEMP% and are
+      // asserted anyway, so the threat stays visible in the test.
+      const account = currentWindowsAccount().toLowerCase();
+      for (const path of [runDir, tokenPath, productPath]) {
+        const accounts = (await readWindowsAcl(path)).map((ace) => ace.account.toLowerCase());
+        expect(accounts).toEqual([account]);
+        for (const principal of MULTI_USER_PRINCIPALS)
+          expect(accounts).not.toContain(principal.toLowerCase());
+      }
+      // Inheritance is broken at the run dir and ONLY there. product.json is
+      // the discovery contract rather than a secret and gets no ACL of its own;
+      // this row is what proves the directory's single grant actually reached
+      // it — and, for shell.token, that the daemon can still read and delete
+      // its own credential (an empty DACL would read as "no ACL" and throw).
+      expect((await readWindowsAcl(runDir)).some((ace) => ace.inherited)).toBe(false);
+      for (const path of [tokenPath, productPath])
+        expect((await readWindowsAcl(path)).every((ace) => ace.inherited)).toBe(true);
     }
 
     const product = JSON.parse(readFileSync(productPath, "utf8"));

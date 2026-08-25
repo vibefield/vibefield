@@ -1,6 +1,6 @@
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
-import { delimiter, join, posix, win32 } from "node:path";
+import { delimiter, posix, win32 } from "node:path";
 import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 
 // The environment fieldd's entry point is born into (bin.ts is a thin caller):
@@ -41,19 +41,35 @@ export function splitPathList(value: string | undefined, listDelimiter = delimit
   return value?.split(listDelimiter).filter(Boolean) ?? [];
 }
 
-/** WIN-D1 — where field-native's management channel lives for `dataRoot`: a
- * name derived from the root in the flat pipe namespace on win32 (nothing
- * appears on disk), the joined LAYOUT path everywhere else. The root handed here
- * MUST be the string field-native receives as FIELD_NATIVE_DATA_DIR — the scope
- * is a hash of it. The supervisor's twin of this law is
- * fieldd-supervisor/src/paths.ts. */
-export function nativeMgmtEndpoint(dataRoot: string, platform = process.platform): string {
+/** WIN-D1 — where field-native binds ONE of the `SOCKETS` names under
+ * `dataRoot`: a name derived from the root in the flat pipe namespace on win32
+ * (nothing appears on disk), the joined LAYOUT path everywhere else. The root
+ * handed here MUST be the string field-native receives as FIELD_NATIVE_DATA_DIR
+ * — the scope is a hash of it. The supervisor's twin of this law is
+ * fieldd-supervisor/src/paths.ts.
+ *
+ * Every channel resolves through THIS function. It generalized from a
+ * mgmt-only helper on 2026-08-11 because the mesh's byte lane never did: the
+ * meshdata dial was still `join(dataDir, ...LAYOUT.MESHDATA_SOCKET)` — a
+ * filesystem path for an endpoint field-native binds as a pipe, so on win32 it
+ * could only ever ENOENT, silently, inside a best-effort catch. A per-channel
+ * copy of one law is how that happens; there is now one copy. */
+export function nativeEndpoint(
+  dataRoot: string,
+  socketFile: string,
+  platform = process.platform,
+): string {
   // posix.join, not host join: on a Windows test host the unix arm would
   // otherwise backslash the path (the win32 arm returns a pipe name). On the
   // real host this equals the joined LAYOUT path field-native binds.
   return platform === "win32"
-    ? pipeEndpointFor(dataRoot, SOCKETS.MGMT)
-    : posix.join(dataRoot, ...LAYOUT.MGMT_SOCKET);
+    ? pipeEndpointFor(dataRoot, socketFile)
+    : posix.join(dataRoot, ...LAYOUT.NATIVE_RUN_DIR, socketFile);
+}
+
+/** The management channel — the endpoint fieldd's NativeLink dials. */
+export function nativeMgmtEndpoint(dataRoot: string, platform = process.platform): string {
+  return nativeEndpoint(dataRoot, SOCKETS.MGMT, platform);
 }
 
 /** Is the native plane already listening? The CONNECT ATTEMPT is the probe, on
