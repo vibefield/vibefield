@@ -108,6 +108,29 @@ export function importMapJson(): string {
   return JSON.stringify({ imports });
 }
 
+/** The dev-server address of one singleton's virtual module: vite's `/@id/`
+ * escape hatch, with the resolved NUL prefix spelled `__x00__` the way vite
+ * itself spells it in URLs. Requesting this walks the same plugin hooks the
+ * build walks — resolveId hands back the virtual id, load emits
+ * `singletonSource`, and vite's import analysis then rewrites the inner bare
+ * import to its own serving of the library (the optimized dep for a package,
+ * transformed workspace source for the SDK). That last step is the point:
+ * the plugin gets the copy the dev document itself runs. */
+export function devSingletonUrl(specifier: string): string {
+  return `/@id/__x00__${VIRTUAL_PREFIX}${specifier}`;
+}
+
+/** The serve-mode map. Same shape and sort discipline as `importMapJson` even
+ * though nothing hashes it (the dev CSP is null) — one less way for the two
+ * documents to drift apart. */
+export function devImportMapJson(): string {
+  const imports: Record<string, string> = {};
+  for (const specifier of [...HOST_SINGLETON_MODULE_SPECIFIERS].sort()) {
+    imports[specifier] = devSingletonUrl(specifier);
+  }
+  return JSON.stringify({ imports });
+}
+
 /** The virtual module's source.
  *
  * `export *` re-exports the named bindings; `default` is handled separately
@@ -125,19 +148,79 @@ function singletonSource(specifier: string): string {
   ].join("\n");
 }
 
+/** The DEV spelling of the same module, and why it must differ (measured
+ * 2026-08-24 against the live dev server): vite's optimized dep for a CJS
+ * package exports ONLY `default` (`export default require_react()`), so
+ * `export *` re-exports nothing there and `import { useState } from "react"`
+ * through the dev map would arrive undefined — exactly what vite's "Unable to
+ * interop `export *`" warning means. The namespace import is interop'd
+ * PROPERLY (vite spreads the CJS exports into it), so the names exist at
+ * runtime; they just need static `export` statements to be importable. This
+ * runs in the dev server's node process, so it can simply ASK the package:
+ * `require` it from the anchor and spell one `export const` per key. Where
+ * require cannot answer — the SDK's TS source, an ESM-only package with
+ * top-level await — the module is real ESM through vite and the build shape's
+ * `export *` genuinely carries its names, so that is the fallback. */
+function devSingletonSource(
+  specifier: string,
+  requireFromAnchor: ReturnType<typeof createRequire>,
+): string {
+  let names: string[] | null = null;
+  try {
+    const mod: unknown = requireFromAnchor(specifier);
+    if (typeof mod === "object" && mod !== null) {
+      names = Object.keys(mod).filter(
+        (name) =>
+          name !== "default" && name !== "__esModule" && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name),
+      );
+    }
+  } catch {
+    /* not requireable from node — real ESM through vite; export * suffices */
+  }
+  if (names === null || names.length === 0) return singletonSource(specifier);
+  const quoted = JSON.stringify(specifier);
+  return [
+    `import * as singleton from ${quoted};`,
+    `export * from ${quoted};`,
+    ...names.map((name) => `export const ${name} = singleton[${JSON.stringify(name)}];`),
+    `export default singleton["default"];`,
+    "",
+  ].join("\n");
+}
+
 /**
- * The plugin. PRODUCTION RENDERER ONLY — the UI Bench builds no plugin host and
- * the dev server needs no map (dev plugins are bundled, and a map in the dev
- * document would bind the same specifiers to chunks vite never built).
+ * The plugin, in BOTH commands — only the UI Bench goes without it (the config
+ * excludes this plugin for `design`/`live-surfaces-lab`, which build no plugin
+ * host).
+ *
+ * This used to be `apply: "build"` under the claim "the dev server needs no
+ * map (dev plugins are bundled)" — **falsified 2026-08-24**: the boot law is
+ * staged-first (field-engine.ts), a dev fieldd approves any discovered plugin
+ * whose artifacts exist, and those artifacts carry the same bare specifiers
+ * the built renderer resolves through this map. A `pnpm dev` on a tree whose
+ * plugin dists the gate had just rebuilt imported them into a map-less
+ * document, and every widget face read "Failed to resolve module specifier
+ * '@vibefield/plugin-sdk'" — the dev-bundled fallback never engages there,
+ * because staged approvals are exactly what suppress it. Serve now injects
+ * the same map with dev targets (`devImportMapJson`); the old warning's
+ * "chunks vite never built" applied to the BUILD-shaped map, not to `/@id/`
+ * URLs, which vite serves on demand.
  */
 export function hostSingletons(): Plugin {
   const require = createRequire(import.meta.url);
   const anchor = require.resolve(ANCHOR);
+  // Anchored AT field-app, not here: electron-shell declares almost none of the
+  // singleton libraries, and the whole point is enumerating the copy vite's
+  // own anchored resolution will serve.
+  const anchorRequire = createRequire(anchor);
+  let command: "build" | "serve" = "build";
   return {
     // Wall R6 reserves the app-prefixed colon literal for IPC channel names in
     // contracts; a vite plugin name is cosmetic, so it wears vf- instead.
     name: "vf-host-singletons",
-    apply: "build",
+    configResolved(config) {
+      command = config.command;
+    },
     resolveId: {
       // Runs before vite's own resolver so the virtual ids never reach it.
       order: "pre",
@@ -145,6 +228,10 @@ export function hostSingletons(): Plugin {
         if (source.startsWith(VIRTUAL_PREFIX)) {
           return `${RESOLVED_PREFIX}${source.slice(VIRTUAL_PREFIX.length)}`;
         }
+        // Serve reaches a virtual module through its `/@id/__x00__…` URL, so
+        // the id arrives ALREADY wearing the resolved NUL prefix — answer it
+        // as itself rather than letting vite's own resolver refuse the NUL.
+        if (source.startsWith(RESOLVED_PREFIX)) return source;
         // A virtual module has no directory, so a bare specifier imported by one
         // has nowhere to resolve from. Hand it the anchor's location instead —
         // this is the whole reason the singletons are the app's own copies.
@@ -156,7 +243,10 @@ export function hostSingletons(): Plugin {
     },
     load(id) {
       if (!id.startsWith(RESOLVED_PREFIX)) return null;
-      return singletonSource(id.slice(RESOLVED_PREFIX.length));
+      const specifier = id.slice(RESOLVED_PREFIX.length);
+      return command === "serve"
+        ? devSingletonSource(specifier, anchorRequire)
+        : singletonSource(specifier);
     },
     transformIndexHtml: {
       order: "pre",
@@ -166,9 +256,11 @@ export function hostSingletons(): Plugin {
             tag: "script",
             // EXACTLY these attributes, in this shape: main's CSP hasher matches
             // `<script type="importmap">` and nothing else, so an extra
-            // attribute here would leave the map unhashed and refused.
+            // attribute here would leave the map unhashed and refused. The dev
+            // document is never hashed (dev CSP is null) but wears the same
+            // shape — one tag, two target sets.
             attrs: { type: "importmap" },
-            children: importMapJson(),
+            children: command === "serve" ? devImportMapJson() : importMapJson(),
             // Before every module script — a map must precede the first import
             // it is supposed to resolve, or the document has already failed.
             injectTo: "head-prepend",

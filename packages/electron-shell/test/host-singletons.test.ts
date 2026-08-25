@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest";
 import { APP_ORIGIN } from "../src/main/app-origin";
 import { importMapHashesFromHtml } from "../src/main/security-policy";
 import {
+  devImportMapJson,
+  devSingletonUrl,
+  hostSingletons,
   importMapJson,
   isExpectedSingletonWarning,
   SINGLETON_CHUNK_PREFIX,
@@ -67,6 +70,49 @@ describe("the import map's bytes", () => {
     const html = `<!doctype html><html><head><script type="importmap">${json}</script></head></html>`;
     const expected = `sha256-${createHash("sha256").update(json, "utf8").digest("base64")}`;
     expect(importMapHashesFromHtml(html)).toEqual([expected]);
+  });
+});
+
+describe("the dev import map (serve command)", () => {
+  it("covers exactly the same specifiers as the build map", () => {
+    const dev = Object.keys(JSON.parse(devImportMapJson()).imports as Record<string, string>);
+    const built = Object.keys(JSON.parse(importMapJson()).imports as Record<string, string>);
+    expect(dev).toEqual(built);
+  });
+
+  it("points every specifier at its own virtual module through vite's /@id/ door", () => {
+    const imports = JSON.parse(devImportMapJson()).imports as Record<string, string>;
+    for (const [specifier, url] of Object.entries(imports)) {
+      // `__x00__` is vite's own URL spelling of the resolved NUL prefix — the
+      // dev map's targets only work while vite keeps that contract, so pin it
+      // here: a vite upgrade that changes the spelling fails this row instead
+      // of every widget in `pnpm dev`.
+      expect(url).toBe(`/@id/__x00__vf-singleton:${specifier}`);
+      expect(url).toBe(devSingletonUrl(specifier));
+    }
+  });
+
+  it("serializes identically across calls, with sorted keys — same discipline as the hashed map", () => {
+    expect(devImportMapJson()).toBe(devImportMapJson());
+    const keys = Object.keys(JSON.parse(devImportMapJson()).imports as Record<string, string>);
+    expect(keys).toEqual([...keys].sort());
+  });
+
+  it("the plugin injects the dev map under serve and the chunk map under build", () => {
+    // 2026-08-24: `apply: "build"` left the dev document map-less while the
+    // boot law is staged-first, so a dev fieldd's approved artifacts imported
+    // bare specifiers nothing could resolve. This row pins the fork.
+    for (const [command, expected] of [
+      ["serve", devImportMapJson()],
+      ["build", importMapJson()],
+    ] as const) {
+      const plugin = hostSingletons();
+      (plugin.configResolved as unknown as (c: { command: string }) => void)({ command });
+      const tags = (
+        plugin.transformIndexHtml as unknown as { handler: () => Array<{ children: string }> }
+      ).handler();
+      expect(tags[0]?.children, command).toBe(expected);
+    }
   });
 });
 

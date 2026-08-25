@@ -36,10 +36,11 @@ export default defineConfig(({ mode }) => ({
     __VIBEFIELD_TERMINAL_PERF_LAB__: String(mode === "terminal-perf-lab"),
   },
   // P8b-3 §11.6: the host singleton chunks + the inline import map that binds
-  // a staged plugin's bare specifiers to them. Production renderer only — the
-  // plugin never runs for `design`, and its own `apply: "build"` keeps it out
-  // of the dev server, where plugins are bundled and a map would bind
-  // specifiers to chunks that were never built.
+  // a staged plugin's bare specifiers to them. Build injects the chunk-target
+  // map; serve injects the SAME map with `/@id/` virtual-module targets, so a
+  // dev fieldd's staged approvals resolve too (corrected 2026-08-24 — the
+  // plugin's own doc carries the incident). Only `design`/`live-surfaces-lab`
+  // go without it: the Bench builds no plugin host.
   plugins: [
     tailwindcss(),
     react(),
