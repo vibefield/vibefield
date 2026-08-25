@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { currentWindowsIdentity } from "../private-fs";
 
 // Test-only: reads back the DACL that `createPrivateDir` writes, so the win32
 // half of EL7 "private at rest" has something to assert instead of a skip.
@@ -61,12 +62,14 @@ export async function readWindowsAcl(path: string): Promise<WindowsAce[]> {
   return aces;
 }
 
-/** The account `createPrivateDir` grants: `DOMAIN\user`, or the bare user when
- * no domain is exported — the same derivation the writer uses. */
-export function currentWindowsAccount(): string {
-  const user = process.env["USERNAME"] ?? "";
-  const domain = process.env["USERDOMAIN"] ?? "";
-  return domain === "" ? user : `${domain}\\${user}`;
+/** The account `createPrivateDir`'s grant resolves back to: the TOKEN's own
+ * `authority\user`, read through the writer's `whoami` identity — never the
+ * env's `%USERDOMAIN%`, which lies in service sessions (see
+ * `currentWindowsIdentity` for the box-gate session where they disagree).
+ * icacls prints a SID grant back as the resolved name; compare
+ * case-insensitively, because icacls capitalizes what whoami lowercases. */
+export async function currentWindowsAccount(): Promise<string> {
+  return (await currentWindowsIdentity()).account;
 }
 
 /** Principals that would make a private path shared. Named explicitly so the

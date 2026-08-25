@@ -179,7 +179,9 @@ describe("private at rest (EL7 / WIN-D4)", () => {
   async function expectOwnerOnly(path: string, inherited: boolean): Promise<void> {
     const aces = await readWindowsAcl(path);
     expect(aces, path).toHaveLength(1);
-    expect(aces[0]?.account.toLowerCase(), path).toBe(currentWindowsAccount().toLowerCase());
+    expect(aces[0]?.account.toLowerCase(), path).toBe(
+      (await currentWindowsAccount()).toLowerCase(),
+    );
     expect(aces[0]?.inherited, path).toBe(inherited);
     const accounts = aces.map((ace) => ace.account.toLowerCase());
     for (const principal of MULTI_USER_PRINCIPALS) {

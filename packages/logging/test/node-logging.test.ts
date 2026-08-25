@@ -127,7 +127,7 @@ describe("node logging writer lifecycle", () => {
       service.logger.info("fieldd.test.started", "fieldd started");
       await service.flush();
 
-      const account = currentWindowsAccount().toLowerCase();
+      const account = (await currentWindowsAccount()).toLowerCase();
       for (const path of [logRoot, join(logRoot, "system"), service.filePath]) {
         const acl = await readWindowsAcl(path);
         // Exactly one account, and it is ours. Compared lowercased because the

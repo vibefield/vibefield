@@ -1976,6 +1976,15 @@ old grants. Consumed by logging, audit, users, crash-artifacts, and fieldd's run
 rows read the ACL back and require exactly one account, the right inheritance polarity, and none of
 Everyone / BUILTIN\Users / Authenticated Users / Administrators.
 
+> **Correction (2026-08-24, the post-merge box round):** the grant principal was built from
+> `%USERDOMAIN%\%USERNAME%`, and USERDOMAIN is a SESSION fact, not a token fact — an sshd service
+> session on this workgroup box exports `USERDOMAIN=WORKGROUP` while the token's authority is
+> `workstation4090`, so every `createPrivateDir` asked icacls for `WORKGROUP\me`, no LSA mapping
+> exists for that name (error 1332), and the fieldd-client, audit, logging and users ACL rows all
+> failed over ssh — the very sessions the ship-rerun gate rides. Whatever session shape this slice's
+> own green round used did not expose it. The grant now uses the TOKEN's SID (`whoami /user`,
+> memoized, `*S-1-…` ACE — no name resolution anywhere), and the test helper reads the same identity.
+
 **A bug this slice wrote, caught by its own control run and worth recording.** The first
 `restrictToCurrentUser` used `(OI)(CI)F` for every path. Those are CONTAINER inheritance flags:
 applied to a FILE, icacls exits 0, prints "Successfully processed 1 files", and produces an **empty

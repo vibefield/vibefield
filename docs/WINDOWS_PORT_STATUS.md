@@ -152,7 +152,8 @@ is what keeps the whole scheme coherent: the pipe namespace is shared, the profi
 segment, audit-chain file, crash dump, `users.json` and `shell.token` landed with whatever ACL it
 inherited, and a prior pass had win32-skipped the mode assertions, leaving NOTHING asserting it.
 `@vibefield/logging`'s `createPrivateDir` now applies an explicit owner-only DACL (`icacls
-/inheritance:r /grant:r <account>:(OI)(CI)F`) to the private ROOTS and lets children inherit —
+/inheritance:r /grant:r <account>:(OI)(CI)F` — **corrected 2026-08-24: the grant is now the token's
+SID in `*S-1-…` form, never a name**; see the post-merge round below) to the private ROOTS and lets children inherit —
 directory-level because a per-file ACL edit would spawn a process per rotated segment, and memoized
 per path per process because callers re-run it on every re-open. It is applied on first touch rather
 than only on creation, so an install predating this code is REPAIRED rather than left with its old
@@ -228,6 +229,43 @@ plugin's kill, its disable, and fieldd's own shutdown. `killPlan` now issues `ta
 - **The box's default ssh shell is cmd.exe; interactive logins may use Git Bash (MINGW64).** cmd
   needs `%VAR%` + backslashes; bash needs `$VAR`/`~` + forward slashes. Compound remote commands
   over cmd often need `powershell -EncodedCommand`.
+
+## The post-merge box round (2026-08-24) — the WIN work meets the S3 ladder
+
+The `3db420df` merge brought the two-week mac-side stack (TC, the complete TP-S3 ladder, PRC, PLUG)
+onto the WIN tree, and this box ran it for the first time (tree shipped to `C:\Users\me\vf-merge`,
+tarball protocol — the box clone is still not a git checkout). Results, in gate order:
+
+- **cargo clippy `-D warnings` + `cargo test --workspace`: GREEN** (21 suites) — after one fix:
+  `tp_activation.rs` spawns `/bin/sh` for every row and only five rows carried `#[cfg(unix)]`; the
+  four added later failed at `CreateProcessW "/bin/sh"` and the clippy unused-item reds were the
+  same gap's shadow. Now file-level `#![cfg(unix)]` (the `resource_governance` pattern). **The TP
+  win32 slice owns porting that harness** — `cell_lifecycle.rs`'s `%COMSPEC%` tenant shows the shape.
+- **The WIN-10 DACL grant failed in EVERY ACL suite over ssh — a real defect, now fixed.** The
+  principal was `%USERDOMAIN%\%USERNAME%`, and USERDOMAIN is a SESSION fact: sshd service sessions
+  on this workgroup box export `USERDOMAIN=WORKGROUP` while the token's authority is
+  `workstation4090`, so icacls got a name with no LSA mapping (error 1332) and fieldd-client, audit,
+  logging and users all cascaded red. The grant now uses the TOKEN's SID (`whoami /user`, memoized,
+  `*S-1-…` ACE); the test helper reads the same identity. Correction recorded at the WIN-10 ledger
+  entry.
+- **`pnpm test`: four rows remain red, all pre-existing mac-side debt, none merge-caused** (each
+  failed identically before and after the ACL fix):
+  1. `plugin-runtime test/target-controller.test.ts` — "bounds history and converges under seeded
+     churn" times out at 5 s under box load (16-seed loop; the box was also Defender-scanning a
+     fresh tree). Likely a budget, not a logic hole — needs a measured rerun, not a blind bump.
+  2. `tooling/plugin-build test/pack-and-dev-link.test.ts` — "resolves the dev root in the
+     documented order" asserts POSIX literals (`/tmp/explicit`) against a resolver that answers
+     host paths (`C:\tmp\explicit`). The `resources.test.ts` hostPath pattern is the fix shape.
+  3. `tooling/plugin-build test/registry.test.ts` — "reads a file:// url and refuses a network one"
+     builds its file:// fixture from a POSIX path; win32 answers `ok:false`. Same fixture class.
+  4. `fieldd test/native-supervision-matrix.test.ts` — the TC-S1 "mgmt wedge (SIGSTOP)" row:
+     SIGSTOP does not exist on win32, so the wedge mechanism itself needs a Windows design (or the
+     row a platform gate + an honest-absence counterpart). The SIGKILL and intensity rows of the
+     same matrix passed on the second run after failing the first — load-sensitive, worth watching.
+- **Shipping gotcha for whoever runs the next round:** a patch tarball made with macOS bsdtar ships
+  `._*` AppleDouble twins, and vitest COLLECTS them as test files (five suites red on parse). Use
+  `git archive`, or `COPYFILE_DISABLE=1 tar …`, or delete `._*` after extraction. (vf-probe still
+  carries such twins from earlier rounds; harmless there, but don't copy them into a live tree.)
 
 ## Handoff to a Windows agent — what James must do
 

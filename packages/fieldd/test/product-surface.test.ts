@@ -99,7 +99,7 @@ describe("run files (shell bootstrap contract)", () => {
       // "exactly one account" is the load-bearing row here — the named
       // principals below can pass unfixed under a per-user %TEMP% and are
       // asserted anyway, so the threat stays visible in the test.
-      const account = currentWindowsAccount().toLowerCase();
+      const account = (await currentWindowsAccount()).toLowerCase();
       for (const path of [runDir, tokenPath, productPath]) {
         const accounts = (await readWindowsAcl(path)).map((ace) => ace.account.toLowerCase());
         expect(accounts).toEqual([account]);

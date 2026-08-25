@@ -123,7 +123,7 @@ describe("@vibefield/audit storage", () => {
       expect(segment).toBeDefined();
       expect(checkpoint).toBeDefined();
 
-      const account = currentWindowsAccount().toLowerCase();
+      const account = (await currentWindowsAccount()).toLowerCase();
       for (const path of [auditRoot, join(auditRoot, segment as string)]) {
         const acl = await readWindowsAcl(path);
         expect(acl.map((ace) => ace.account.toLowerCase())).toEqual([account]);
