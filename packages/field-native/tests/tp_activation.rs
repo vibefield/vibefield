@@ -10,6 +10,15 @@
 //! view and `live` re-attaches it, a frames-leg loss revokes the lease on the
 //! control leg, and a replaced activation is told so.
 
+// The whole suite rides `spawn_session`'s `/bin/sh` harness (its doc says so:
+// "Unix only — WIN-6 rows are the box's"), but only five rows carried the
+// gate; the four added since (geometry, seed reason, catch-up, session
+// events) failed the first box run with `CreateProcessW "/bin/sh"` os error 3,
+// and the win32 build's clippy red (`Trf1Header`/`return_credit` unused) was
+// the same gap's shadow. File-level cfg, the `resource_governance`/
+// `native_logging` pattern — the TP win32 slice owns porting the harness.
+#![cfg(unix)]
+
 #[path = "support/tp_mint.rs"]
 mod tp_mint;
 
@@ -410,7 +419,6 @@ async fn scene_applied(frames: &mut Ws, session_id: &str, activation_id: &str, s
     .await;
 }
 
-#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_deck_path_seed_lease_deltas_and_credit() {
     let h = harness().await;
@@ -500,7 +508,6 @@ async fn the_deck_path_seed_lease_deltas_and_credit() {
     h.door.shutdown().await;
 }
 
-#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn credit_gates_the_stream_and_returning_it_resumes_flow() {
     let h = harness().await;
@@ -607,7 +614,6 @@ async fn credit_gates_the_stream_and_returning_it_resumes_flow() {
     h.door.shutdown().await;
 }
 
-#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn read_only_never_input_allowed_demand_none_detaches_and_frames_loss_revokes() {
     let h = harness().await;
@@ -675,7 +681,6 @@ async fn read_only_never_input_allowed_demand_none_detaches_and_frames_loss_revo
     h.door.shutdown().await;
 }
 
-#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn idempotent_attach_conflict_replacement_and_unknown_session() {
     let h = harness().await;
@@ -972,7 +977,6 @@ async fn an_oversized_delta_is_carried_by_a_catchup_transfer() {
 /// dedup return first), so a replayed `inputSequence`, a stale `leaseEpoch` and
 /// a read-only viewer all leave the epoch UNMOVED — and no reply rides the wire
 /// either way (§5.4: drop-and-audit).
-#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn wire_input_types_into_the_real_pty_and_every_fence_holds() {
     let h = harness().await;
