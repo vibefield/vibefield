@@ -4217,3 +4217,29 @@ verify` verbatim exit 0 (one unrelated artifact-service concurrency flake on the
 re-ran green solo, and the whole gate re-ran green); the godview ladder ok:true/69 fields. Spec:
 core v0.18 (the lifecycle verb §5.4 + the ordering law), rollout §15 S3f row + landing entry;
 petition G24 → LANDED upstream 0.11.1 + CONSUMED.
+
+## EL8 — ice 0.10.0: the magnet grid consumed at the pin
+
+2026-08-25. Upstream cut the same day (ICE design-010/M17): the dot grid's
+PIXELS become a field-reactive lattice behind unchanged interfaces — needles
+orient along a superposed field of widget-silhouette SDF magnets and injected
+point poles; the classic analytic grid stays the default renderer, and a
+consumer that never mentions `magnet` is byte-identical to 0.9.0 (upstream
+measured settled-idle ground redraws at ZERO with the mode on). Consumed
+here: the exact pin 0.9.0 → 0.10.0 (catalog + release-age exclusion; ONE
+loro-crdt@1.13.8 / strata-ecs@0.13.0 / ice@0.10.0 in the lockfile), the
+`haloPoles` adapter (`field-app/src/cursor/halo-poles.ts` — OUR `Cur` halo as
+screen-space poles, morph scale → strength so the field quiets exactly when a
+widget owns the pointer; the design-010 §7 wiring, ported from the verified
+widgetlab twin), wired unconditionally in `InfiniteCanvasGround` and INERT
+until the appearance enables the mode, and the `magnet` passthrough on
+`WorldGridAppearance` (absence-is-off per design-010 §10.1 — never write an
+explicit off block; it would ride the spread through configureGrid and
+clobber a factory enable). The §10.7 runIf gating on the halo systems landed
+ahead of the bump (4a1642d4) — without it the pole observer would have redrawn
+the ground every tick from day one. **Gates:** nx typecheck + test 24/24
+projects green, biome clean, field-app 643 tests. **Deliberately NOT decided
+here (DESIGN.md governs both):** enabling magnet as the product default, and
+the dark-ink question — our dark dot `#1C1C1C` sits 5/255 above the canvas
+and vanishes as needles; the upstream experiment used `#8A8A8A`-class ink.
+Bench tweak controls for the magnet knobs ride the same decision.

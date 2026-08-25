@@ -1,4 +1,4 @@
-import type { GridConfig } from "@vibecook/ice";
+import type { GridConfig, GridMagnetConfig } from "@vibecook/ice";
 import { hexToRgb01 } from "./theme-constants";
 
 /** Theme-aware colors used by the physical canvas surface. */
@@ -17,6 +17,19 @@ export interface WorldGridAppearance {
   fadeOut: [number, number];
   dotRadius: [number, number];
   levelWeight: [number, number];
+  /**
+   * The magnet grid (ICE design-010, ice 0.10.0): field-reactive lattice
+   * behind the classic grid's interfaces. ABSENT = classic dots, byte-identical
+   * to pre-0.10.0 — never write an explicit `{enabled: false}` here (ICE
+   * design-010 §10.1: an explicit off block rides this spread through
+   * configureGrid and clobbers any factory-level enable). The cursor pole is
+   * wired unconditionally (cursor/halo-poles.ts) and inert until this enables.
+   * DARK-MODE CAVEAT before enabling as product default: our dark dot ink
+   * (#1C1C1C on #171717, 5/255 apart) vanishes as needles/ticks — the magnet
+   * experiment used #8A8A8A-class ink in dark. Enabling magnet in dark needs
+   * a palette decision (DESIGN.md governs), not just this flag.
+   */
+  magnet?: Partial<GridMagnetConfig>;
 }
 
 export interface CanvasAppearance {
