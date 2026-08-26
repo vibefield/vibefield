@@ -177,6 +177,18 @@ describe("WindowRegistry.owns", () => {
     expect(reg.owns(primary.webContents)).toBe(true);
     expect(reg.owns(auxiliary.webContents)).toBe(true);
   });
+
+  it("lifecycle-owns host auxiliaries without granting product IPC authority", () => {
+    const reg = new WindowRegistry();
+    const primary = makeFakeWindow(1);
+    const hostOnly = makeFakeWindow(2);
+    reg.adopt(primary.window);
+    reg.adoptHostAuxiliary(hostOnly.window);
+
+    expect(reg.primary()).toBe(primary.window);
+    expect(reg.owns(hostOnly.webContents)).toBe(false);
+    expect(reg.ownsHost(hostOnly.webContents)).toBe(true);
+  });
 });
 
 describe("WindowRegistry.primary", () => {

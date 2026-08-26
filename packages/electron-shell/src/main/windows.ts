@@ -34,6 +34,30 @@ export function createMainWindow(opts: {
   return win;
 }
 
+/** Hardened non-product renderer factory. Capability comes from its preload;
+ * the factory permits presentation and session selection only. */
+export function createHostAuxiliaryWindow(opts: {
+  title: string;
+  preloadPath: string;
+  partition: string;
+  width: number;
+  height: number;
+  backgroundColor: string;
+  show: boolean;
+}): BrowserWindow {
+  return new BrowserWindow({
+    title: opts.title,
+    width: opts.width,
+    height: opts.height,
+    show: opts.show,
+    backgroundColor: opts.backgroundColor,
+    webPreferences: assertSecurePreferences({
+      ...webPreferences(opts.preloadPath),
+      partition: opts.partition,
+    }),
+  });
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Production loads the app's OWN origin; dev polls the Vite server up.

@@ -7,6 +7,7 @@ import { readDevProduct, stopVerifiedDevProduct } from "./product.mjs";
 export function createElectronStack({
   paths,
   viteUrl,
+  studioOpen = false,
   lock,
   log,
   onUnexpectedExit,
@@ -27,6 +28,7 @@ export function createElectronStack({
     const env = buildChildEnv(process.env, {
       set: {
         VITE_DEV_SERVER_URL: viteUrl,
+        VIBEFIELD_STUDIO_OPEN: studioOpen ? "1" : "0",
         // The adoption gate compares product.json's buildId against this value,
         // and product.json describes the DAEMON plane — a shell-only rebuild
         // must still adopt the running fieldd, so the daemon identity is what

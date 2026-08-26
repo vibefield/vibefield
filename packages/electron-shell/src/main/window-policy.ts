@@ -67,7 +67,7 @@ export interface WindowSession {
 }
 
 interface ManagedWindowSession extends WindowSession {
-  readonly primary: boolean;
+  readonly role: "primary" | "product-auxiliary" | "host-auxiliary";
   closing: boolean;
 }
 
@@ -100,45 +100,64 @@ export class WindowRegistry {
         `single-primary-window invariant violated: ${current.id} is already registered`,
       );
     }
-    return this.adoptSession(window, true);
+    return this.adoptSession(window, "primary");
   }
 
   /** Register a host-owned auxiliary renderer realm without changing which
    * window tray/lifecycle operations treat as primary. This narrow seam is
    * also what lets the physical restart harness prove a multi-window fence. */
   adoptAuxiliary(window: BrowserWindow): WindowSession {
-    return this.adoptSession(window, false);
+    return this.adoptSession(window, "product-auxiliary");
   }
 
-  private adoptSession(window: BrowserWindow, primary: boolean): WindowSession {
+  /** Register a lifecycle-owned renderer with NO product IPC authority. */
+  adoptHostAuxiliary(window: BrowserWindow): WindowSession {
+    return this.adoptSession(window, "host-auxiliary");
+  }
+
+  private adoptSession(window: BrowserWindow, role: ManagedWindowSession["role"]): WindowSession {
     const existing = this.sessions.get(window.id);
     if (existing !== undefined) {
-      if (existing.primary !== primary) {
-        throw new Error(`${window.id}: renderer window cannot change primary role after adoption`);
+      if (existing.role !== role) {
+        throw new Error(`${window.id}: renderer window cannot change role after adoption`);
       }
       return existing;
     }
     const session: ManagedWindowSession = {
       window,
-      primary,
+      role,
       closing: false,
       dispose: () => {
         if (!this.sessions.delete(window.id)) return;
-        if (session.primary) this.emitPrimaryChanged();
+        if (session.role === "primary") this.emitPrimaryChanged();
       },
     };
     this.sessions.set(window.id, session);
     window.on("closed", () => {
       session.dispose();
-      if (session.primary) this.launchQueuedReopen();
+      if (session.role === "primary") this.launchQueuedReopen();
     });
-    if (session.primary) this.emitPrimaryChanged();
+    if (session.role === "primary") this.emitPrimaryChanged();
     return session;
   }
 
   /** Sender policy (§6.3): only webContents of windows THIS shell registered
    * may use the bootstrap surface. */
   owns(sender: WebContents): boolean {
+    for (const s of this.sessions.values()) {
+      if (
+        s.role !== "host-auxiliary" &&
+        !s.window.isDestroyed() &&
+        s.window.webContents === sender
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Security/lifecycle ownership, including renderers denied product IPC. */
+  ownsHost(sender: WebContents): boolean {
     for (const s of this.sessions.values()) {
       if (!s.window.isDestroyed() && s.window.webContents === sender) return true;
     }
@@ -147,7 +166,7 @@ export class WindowRegistry {
 
   primary(): BrowserWindow | null {
     for (const s of this.sessions.values()) {
-      if (s.primary && !s.window.isDestroyed()) return s.window;
+      if (s.role === "primary" && !s.window.isDestroyed()) return s.window;
     }
     return null;
   }

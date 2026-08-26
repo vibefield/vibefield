@@ -49,6 +49,7 @@ const criticalChanges = createChangeBuffer();
 const transientChildren = new Set();
 const crashTimes = [];
 const forceOnboarding = process.argv.includes("--force-onboarding");
+const studioAtStartup = process.argv.includes("--studio");
 
 process.on("SIGINT", () => void shutdown(0, "SIGINT"));
 process.on("SIGTERM", () => void shutdown(0, "SIGTERM"));
@@ -105,6 +106,7 @@ async function main() {
   electron = createElectronStack({
     paths,
     viteUrl: renderer.url,
+    studioOpen: studioAtStartup,
     lock: devLock,
     log,
     onUnexpectedExit: handleElectronExit,
@@ -388,7 +390,7 @@ async function buildIdentity() {
 }
 
 function shellPlaneInputs() {
-  return [paths.mainOutput, paths.preloadOutput];
+  return [paths.mainOutput, paths.preloadOutput, paths.studioPreloadOutput];
 }
 
 function daemonPlaneInputs() {

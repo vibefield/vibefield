@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import { basename, join } from "node:path";
 
-const SNAPSHOT_VERSION = 2;
+const SNAPSHOT_VERSION = 3;
 const BUILD_ID = /^dev-[a-f0-9]{24}$/;
 
 export class RuntimeSnapshotChangedError extends Error {
@@ -50,6 +50,7 @@ export async function stageRuntimeSnapshot({
     await Promise.all([
       copyFile(paths.mainOutput, join(layout.appRoot, "main", "index.cjs")),
       copyFile(paths.preloadOutput, join(layout.appRoot, "preload", "index.cjs")),
+      copyFile(paths.studioPreloadOutput, join(layout.appRoot, "preload", "studio.cjs")),
       copyFile(paths.fielddOutput, layout.fielddOutput),
       copyFile(paths.serviceHarnessOutput, join(temporary, "fieldd", "service-harness.mjs")),
       copyFile(paths.fielddWasm, join(temporary, "fieldd", "loro_wasm_bg.wasm")),

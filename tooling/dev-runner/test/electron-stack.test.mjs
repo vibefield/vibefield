@@ -20,6 +20,7 @@ function setup() {
       logRoot: "/repo/.vibefield/dev/logs",
     },
     viteUrl: "http://127.0.0.1:5174/",
+    studioOpen: true,
     lock: {
       async update(value) {
         updates.push(value);
@@ -87,6 +88,7 @@ test("starts Electron directly with isolated state and the daemon build identity
   assert.equal(options.env.FIELDD_CONTROL_PORT, "0");
   assert.equal(options.env.FIELDD_DATA_PORT, "0");
   assert.equal(options.env.VITE_DEV_SERVER_URL, "http://127.0.0.1:5174/");
+  assert.equal(options.env.VIBEFIELD_STUDIO_OPEN, "1");
   assert.deepEqual(fixture.updates, [{ electronPid: 1234, buildId: "dev-current" }]);
 });
 

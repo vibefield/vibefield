@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { homedir, release, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { GhostteaElectronBackend } from "@vibecook/ghosttea-electron/main";
 import {
   APP_PREFERENCE_KEYS,
   AppPreferences,
@@ -47,6 +46,7 @@ import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
 import { installDevSignalQuit } from "./dev-signals";
+import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
@@ -137,6 +137,7 @@ if (MODE === "terminal-perf-lab") {
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 const PRELOAD_PATH = join(__dirname, "..", "preload", "index.cjs");
 const DESKTOP_BOOT_ID = `desktop-${randomBytes(8).toString("hex")}`;
+const DEVELOPMENT_EXTENSION = desktopDevelopmentExtension();
 
 let supervisor: FielddSupervisor | null = null;
 let fielddHandles: FielddHandleCoordinator | null = null;
@@ -171,6 +172,7 @@ async function revealPrimaryWindow(): Promise<Electron.BrowserWindow> {
 }
 
 function disposeShellState(): void {
+  DEVELOPMENT_EXTENSION?.dispose();
   trayController?.dispose();
   trayController = null;
   godviewStates?.dispose();
@@ -441,7 +443,7 @@ async function main(
   installWebContentsBackstop(
     MODE,
     (contents) => {
-      if (registry.owns(contents)) return;
+      if (registry.ownsHost(contents)) return;
       logger.warn(
         "desktop.security.unregistered_webcontents",
         "A WebContents was created outside the window factory and received the backstop policy",
@@ -1300,6 +1302,11 @@ async function main(
             },
           );
           await loadRenderer(window, MODE, VITE_URL);
+          await DEVELOPMENT_EXTENSION?.onProductWindowReady({
+            productWindow: window,
+            rendererBaseUrl: VITE_URL,
+            adoptHostAuxiliary: (hostWindow) => registry.adoptHostAuxiliary(hostWindow),
+          });
           if (latestDesktopState !== null) {
             window.webContents.send(IPC_CHANNELS.desktopState, latestDesktopState);
           }
@@ -1437,6 +1444,7 @@ async function main(
   if (observedSnapshots.hasPreferences) applyPreferences(observedSnapshots.preferences);
 
   await revealPrimaryWindow();
+  await DEVELOPMENT_EXTENSION?.onHostReady();
 }
 
 app.setName("VibeField");

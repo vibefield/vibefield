@@ -46,7 +46,11 @@ test("product and UI Bench launches share one complete dependency optimizer grap
   );
 
   for (const config of configs) {
-    assert.deepEqual(config.optimizeDeps.entries, ["index.html", "design-system.html"]);
+    assert.deepEqual(config.optimizeDeps.entries, [
+      "index.html",
+      "studio.html",
+      "design-system.html",
+    ]);
     assert.ok(config.optimizeDeps.include.includes("@vibefield/field-app > @react-three/fiber"));
   }
 });

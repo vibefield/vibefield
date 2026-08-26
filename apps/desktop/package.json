@@ -11,6 +11,7 @@
     "build:live-surfaces-native": "node packaging/build-live-surface-capture.mjs",
     "build:all": "nx run @vibefield/desktop:build",
     "dev": "node ../../tooling/dev-runner/src/cli.mjs",
+    "dev:studio": "node ../../tooling/dev-runner/src/cli.mjs --studio",
     "start": "pnpm build:all && electron .",
     "smoke": "pnpm build:shell && electron . --smoke",
     "smoke:terminal-door": "pnpm build:shell && electron . --terminal-door-probe",

@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs",
-    "dev:design": "node tooling/dev-runner/src/design-bench.mjs",
+    "dev:studio": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --studio",
+    "dev:design": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --studio",
     "dev:design:web": "pnpm --filter @vibefield/electron-shell dev:design:web",
     "dev:onboarding": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --force-onboarding",
     "smoke": "pnpm --filter @vibefield/desktop smoke",

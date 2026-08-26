@@ -7,6 +7,8 @@ const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const rendererRoot = join(packageRoot, "dist", "renderer");
 const BENCH_MARKER = "vibefield-ui-bench-only";
 const BENCH_PATH = /(^|\/)(design-system|ui-bench)([-./]|$)/i;
+const STUDIO_MARKER = "vibefield-studio-only";
+const STUDIO_PATH = /(^|\/)studio([-./]|$)/i;
 // TP-S0c: the perf lab's renderer bridge carries this marker in its header. The
 // production build folds `__VIBEFIELD_TERMINAL_PERF_LAB__` to `false` and rollup
 // drops the module, so finding the marker here means the fold stopped working —
@@ -31,9 +33,11 @@ const leaks = [];
 for (const absolute of files) {
   const path = relative(rendererRoot, absolute).split("\\").join("/");
   if (BENCH_PATH.test(path)) leaks.push(`${path} has a UI Bench path`);
+  if (STUDIO_PATH.test(path)) leaks.push(`${path} has a Studio path`);
   if (/\.(?:css|html|js|json)$/i.test(path)) {
     const contents = readFileSync(absolute, "utf8");
     if (contents.includes(BENCH_MARKER)) leaks.push(`${path} contains the UI Bench marker`);
+    if (contents.includes(STUDIO_MARKER)) leaks.push(`${path} contains the Studio marker`);
     if (contents.includes(PERF_LAB_MARKER)) leaks.push(`${path} contains the perf-lab marker`);
   }
 }
@@ -49,5 +53,5 @@ if (leaks.length > 0) {
 
 const bytes = files.reduce((total, file) => total + statSync(file).size, 0);
 process.stdout.write(
-  `production UI boundary OK — ${files.length} files, ${bytes.toLocaleString("en-US")} bytes; UI Bench and perf lab absent\n`,
+  `production UI boundary OK — ${files.length} files, ${bytes.toLocaleString("en-US")} bytes; Studio, UI Bench, and perf lab absent\n`,
 );
