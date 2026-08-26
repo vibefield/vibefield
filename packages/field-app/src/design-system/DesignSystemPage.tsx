@@ -18,6 +18,7 @@ import {
   useState,
 } from "react";
 import { AccentChip, AccentPicker, type AccentSlot } from "../account/AccentPicker";
+import { defaultProductAppearance, type ProductAppearance } from "../appearance/product-appearance";
 import { primaryCls, quietCls } from "../boot/onboarding/wizard-ui";
 import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../field/canvas-appearance";
 import { roundButtonCls } from "../field/theme-constants";
@@ -231,6 +232,7 @@ export function DesignSystemPage(): ReactElement {
   const [dark, setDark] = useState(initialDark);
   const [activeSection, setActiveSection] = useState("overview");
   const [magnetGridGlyph, setMagnetGridGlyph] = useState<MagnetGridGlyph>("dot");
+  const [appearance, setAppearance] = useState(defaultProductAppearance);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -388,7 +390,11 @@ export function DesignSystemPage(): ReactElement {
           </Specimen>
         </Section>
 
-        <CanvasGroundSection dark={dark} />
+        <CanvasGroundSection
+          dark={dark}
+          appearance={appearance}
+          onAppearanceChange={setAppearance}
+        />
         <ControlsSection />
         <StatusSection />
         <ChromeSection
@@ -451,7 +457,15 @@ export function DesignSystemPage(): ReactElement {
   );
 }
 
-function CanvasGroundSection({ dark }: { dark: boolean }): ReactElement {
+function CanvasGroundSection({
+  dark,
+  appearance,
+  onAppearanceChange,
+}: {
+  dark: boolean;
+  appearance: ProductAppearance;
+  onAppearanceChange: (appearance: ProductAppearance) => void;
+}): ReactElement {
   return (
     <Section
       id="canvas-ground"
@@ -464,7 +478,7 @@ function CanvasGroundSection({ dark }: { dark: boolean }): ReactElement {
         title="Infinite canvas and visual tuning workbench"
         source="field/InfiniteCanvasGround.tsx · design-system/tweaks/*"
       >
-        <CanvasGroundWorkbench dark={dark} />
+        <CanvasGroundWorkbench dark={dark} value={appearance} onChange={onAppearanceChange} />
       </Specimen>
     </Section>
   );

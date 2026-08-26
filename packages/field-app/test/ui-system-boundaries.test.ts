@@ -130,12 +130,15 @@ describe("UI system ownership boundaries", () => {
     const boot = source("boot/BootRoot.tsx");
     const field = source("field.tsx");
     const stage = source("field/CanvasStage.tsx");
+    const workbench = source("design-system/CanvasGroundWorkbench.tsx");
 
     expect(boot).not.toContain("VisualTweak");
     expect(boot).not.toContain("dev-tweaks");
     expect(field).not.toContain("VisualTweak");
     expect(field).toContain("defaultCanvasGridConfig");
     expect(stage).toContain("InfiniteCanvasGround");
+    expect(workbench).toContain("ProductAppearance");
+    expect(workbench).not.toContain("useState");
   });
 
   it("keeps static component styling out of embedded style tags", () => {

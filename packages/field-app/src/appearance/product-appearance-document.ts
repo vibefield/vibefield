@@ -3,16 +3,16 @@ import type {
   MagnetGridAppearance,
   OverlapFeedbackColors,
   OverlapFeedbackTuning,
-  VisualTweakValues,
+  ProductAppearance,
   WorldGridAppearance,
-} from "./visual-tweaks";
-import { defaultVisualTweakValues } from "./visual-tweaks";
+} from "./product-appearance";
+import { defaultProductAppearance } from "./product-appearance";
 
 export const VISUAL_TWEAK_DOCUMENT_KIND = "vibefield.visual-tweaks";
 export const VISUAL_TWEAK_DOCUMENT_VERSION = 3;
 export const VISUAL_TWEAK_FILE_NAME = "vibefield-visual-tweaks.json";
 
-export interface VisualTweakDocumentV3 extends VisualTweakValues {
+export interface VisualTweakDocumentV3 extends ProductAppearance {
   kind: typeof VISUAL_TWEAK_DOCUMENT_KIND;
   version: typeof VISUAL_TWEAK_DOCUMENT_VERSION;
 }
@@ -24,7 +24,7 @@ export class VisualTweakDocumentError extends Error {
   }
 }
 
-export function visualTweakDocument(values: VisualTweakValues): VisualTweakDocumentV3 {
+export function visualTweakDocument(values: ProductAppearance): VisualTweakDocumentV3 {
   return {
     kind: VISUAL_TWEAK_DOCUMENT_KIND,
     version: VISUAL_TWEAK_DOCUMENT_VERSION,
@@ -50,7 +50,7 @@ export function visualTweakDocument(values: VisualTweakValues): VisualTweakDocum
 }
 
 /** Stable, human-editable export with every live visual-tuning property. */
-export function serializeVisualTweaks(values: VisualTweakValues): string {
+export function serializeVisualTweaks(values: ProductAppearance): string {
   return `${JSON.stringify(visualTweakDocument(values), null, 2)}\n`;
 }
 
@@ -58,7 +58,7 @@ export function serializeVisualTweaks(values: VisualTweakValues): string {
  * Strict import: malformed or out-of-range values reject the whole file. A
  * partial import would make the resulting canvas impossible to reproduce.
  */
-export function deserializeVisualTweaks(serialized: string): VisualTweakValues {
+export function deserializeVisualTweaks(serialized: string): ProductAppearance {
   let raw: unknown;
   try {
     raw = JSON.parse(serialized);
@@ -90,7 +90,7 @@ export function deserializeVisualTweaks(serialized: string): VisualTweakValues {
     // (DESIGN.md §2.1, 2026-08-25) carry no key — they get the reviewed default.
     magnetDotDark:
       palette["magnetDotDark"] === undefined
-        ? defaultVisualTweakValues().canvasPalette.magnetDotDark
+        ? defaultProductAppearance().canvasPalette.magnetDotDark
         : hex(palette["magnetDotDark"], "canvasPalette.magnetDotDark"),
   };
   const overlapColors: OverlapFeedbackColors = {
@@ -114,7 +114,7 @@ export function deserializeVisualTweaks(serialized: string): VisualTweakValues {
   // migration supplies the reviewed grid defaults rather than inventing values.
   const worldGrid =
     version === 1
-      ? defaultVisualTweakValues().worldGrid
+      ? defaultProductAppearance().worldGrid
       : parseWorldGrid(record(document["worldGrid"], "worldGrid"));
 
   // Version 3 is the first complete magnet-grid preset. Older documents get
@@ -122,7 +122,7 @@ export function deserializeVisualTweaks(serialized: string): VisualTweakValues {
   // make their live canvas irreproducible.
   const magnetGrid =
     version < 3
-      ? defaultVisualTweakValues().magnetGrid
+      ? defaultProductAppearance().magnetGrid
       : parseMagnetGrid(record(document["magnetGrid"], "magnetGrid"));
 
   return { canvasPalette, worldGrid, magnetGrid, overlapFeedback };

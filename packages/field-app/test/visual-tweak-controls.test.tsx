@@ -2,20 +2,20 @@
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { VisualTweakControls } from "../src/design-system/tweaks/VisualTweakControls";
 import {
-  defaultVisualTweakValues,
-  type VisualTweakValues,
-} from "../src/design-system/tweaks/visual-tweaks";
+  defaultProductAppearance,
+  type ProductAppearance,
+} from "../src/appearance/product-appearance";
+import { VisualTweakControls } from "../src/design-system/tweaks/VisualTweakControls";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
-let latest: VisualTweakValues = defaultVisualTweakValues();
+let latest: ProductAppearance = defaultProductAppearance();
 
 function Harness(): ReactElement {
-  const [value, setValue] = useState(defaultVisualTweakValues);
+  const [value, setValue] = useState(defaultProductAppearance);
   latest = value;
   return <VisualTweakControls value={value} onChange={setValue} />;
 }
@@ -33,7 +33,7 @@ afterEach(() => {
   container?.remove();
   container = null;
   document.body.innerHTML = "";
-  latest = defaultVisualTweakValues();
+  latest = defaultProductAppearance();
 });
 
 describe("VisualTweakControls", () => {
@@ -106,6 +106,6 @@ describe("VisualTweakControls", () => {
       (button) => button.textContent === "Reset",
     );
     act(() => reset?.click());
-    expect(latest).toEqual(defaultVisualTweakValues());
+    expect(latest).toEqual(defaultProductAppearance());
   });
 });

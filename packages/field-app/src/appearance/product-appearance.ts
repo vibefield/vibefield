@@ -2,8 +2,8 @@ import {
   defaultOverlapFeedbackTuning,
   type OverlapFeedbackTuning,
 } from "@vibefield/design-kit/card-appearance";
-import { type CanvasAppearance, defaultCanvasAppearance } from "../../field/canvas-appearance";
-import { hexToRgb255 } from "../../field/theme-constants";
+import { type CanvasAppearance, defaultCanvasAppearance } from "../field/canvas-appearance";
+import { hexToRgb255 } from "../field/theme-constants";
 
 export type {
   OverlapFeedbackColors,
@@ -13,20 +13,19 @@ export type {
   CanvasPalette,
   MagnetGridAppearance,
   WorldGridAppearance,
-} from "../../field/canvas-appearance";
+} from "../field/canvas-appearance";
 
 /**
- * Editable appearance data owned by the isolated design bench, not the app.
- *
- * Keeping the whole document in one value gives import/reset one atomic seam
- * and makes it impossible for the file format to omit a control accidentally.
+ * Complete product appearance shared by the app, Studio, import/export codec,
+ * and deterministic specimens. Keeping the document atomic makes a partial
+ * preview or import impossible by construction.
  */
-export interface VisualTweakValues extends CanvasAppearance {
+export interface ProductAppearance extends CanvasAppearance {
   overlapFeedback: OverlapFeedbackTuning;
 }
 
 /** A factory, rather than a shared mutable object, for React state and resets. */
-export function defaultVisualTweakValues(): VisualTweakValues {
+export function defaultProductAppearance(): ProductAppearance {
   const canvas = defaultCanvasAppearance();
   return {
     ...canvas,
@@ -34,9 +33,9 @@ export function defaultVisualTweakValues(): VisualTweakValues {
   };
 }
 
-/** Pure, scoped projection used by the design-bench workbench and tests. */
-export function visualTweakCssVariables(
-  values: VisualTweakValues,
+/** Pure CSS projection used by both the product shell and Studio specimens. */
+export function productAppearanceCssVariables(
+  values: ProductAppearance,
   dark: boolean,
 ): Record<string, string> {
   const { canvasPalette, overlapFeedback } = values;

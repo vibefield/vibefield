@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultProductAppearance,
+  productAppearanceCssVariables,
+} from "../src/appearance/product-appearance";
+import {
   deserializeVisualTweaks,
   serializeVisualTweaks,
   VISUAL_TWEAK_DOCUMENT_KIND,
   VISUAL_TWEAK_DOCUMENT_VERSION,
   VisualTweakDocumentError,
-} from "../src/design-system/tweaks/visual-tweak-document";
-import {
-  defaultVisualTweakValues,
-  visualTweakCssVariables,
-} from "../src/design-system/tweaks/visual-tweaks";
+} from "../src/appearance/product-appearance-document";
 
 describe("visual tweak document", () => {
   it("uses the reviewed exported preset as the complete product default", () => {
-    expect(defaultVisualTweakValues()).toEqual({
+    expect(defaultProductAppearance()).toEqual({
       canvasPalette: {
         dotLight: "#A6A6A6",
         dotDark: "#1C1C1C",
@@ -59,7 +59,7 @@ describe("visual tweak document", () => {
   });
 
   it("round-trips every canvas, world-grid, magnet-grid, and overlap property", () => {
-    const values = defaultVisualTweakValues();
+    const values = defaultProductAppearance();
     values.canvasPalette.bgLight = "#123456";
     values.canvasPalette.dotDark = "#ABCDEF";
     values.canvasPalette.magnetDotDark = "#FEDCBA";
@@ -100,7 +100,7 @@ describe("visual tweak document", () => {
     // Tolerant reader: the magnet ink joined the palette 2026-08-25 (DESIGN.md
     // §2.1); an older saved document carries no key and must load with the
     // reviewed default instead of being rejected.
-    const document = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
+    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
       canvasPalette: Record<string, unknown>;
     };
     delete document.canvasPalette["magnetDotDark"];
@@ -109,7 +109,7 @@ describe("visual tweak document", () => {
   });
 
   it("rejects partial and out-of-range files instead of applying half a preset", () => {
-    const document = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
+    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
       canvasPalette: Record<string, unknown>;
       worldGrid: Record<string, unknown>;
       overlapFeedback: Record<string, unknown>;
@@ -119,7 +119,7 @@ describe("visual tweak document", () => {
       VisualTweakDocumentError,
     );
 
-    const missingGridValue = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
+    const missingGridValue = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
       worldGrid: Record<string, unknown>;
     };
     delete missingGridValue.worldGrid["fadeOut"];
@@ -127,7 +127,7 @@ describe("visual tweak document", () => {
       VisualTweakDocumentError,
     );
 
-    const missingMagnetValue = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
+    const missingMagnetValue = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
       magnetGrid: Record<string, unknown>;
     };
     delete missingMagnetValue.magnetGrid["widgetStrength"];
@@ -135,7 +135,7 @@ describe("visual tweak document", () => {
       VisualTweakDocumentError,
     );
 
-    const fractionalSourceCap = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
+    const fractionalSourceCap = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
       magnetGrid: Record<string, unknown>;
     };
     fractionalSourceCap.magnetGrid["maxSources"] = 63.5;
@@ -143,7 +143,7 @@ describe("visual tweak document", () => {
       "magnetGrid.maxSources must be an integer",
     );
 
-    const invalidRange = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
+    const invalidRange = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
       overlapFeedback: Record<string, unknown>;
     };
     invalidRange.overlapFeedback["rimAlpha"] = [0.2, 2];
@@ -153,7 +153,7 @@ describe("visual tweak document", () => {
   });
 
   it("rejects unknown document versions", () => {
-    const document = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as Record<
+    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as Record<
       string,
       unknown
     >;
@@ -164,38 +164,38 @@ describe("visual tweak document", () => {
   });
 
   it("migrates version 1 exports with reviewed World grid defaults", () => {
-    const document = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as Record<
+    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as Record<
       string,
       unknown
     >;
     document["version"] = 1;
     delete document["worldGrid"];
     expect(deserializeVisualTweaks(JSON.stringify(document)).worldGrid).toEqual(
-      defaultVisualTweakValues().worldGrid,
+      defaultProductAppearance().worldGrid,
     );
   });
 
   it("migrates version 2 exports with the reviewed complete magnet block", () => {
-    const document = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as Record<
+    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as Record<
       string,
       unknown
     >;
     document["version"] = 2;
     delete document["magnetGrid"];
     expect(deserializeVisualTweaks(JSON.stringify(document)).magnetGrid).toEqual(
-      defaultVisualTweakValues().magnetGrid,
+      defaultProductAppearance().magnetGrid,
     );
   });
 
   it("projects every overlap control onto CardShell's live CSS variables", () => {
-    const values = defaultVisualTweakValues();
+    const values = defaultProductAppearance();
     values.overlapFeedback.colors.rimDark = "#123456";
     values.overlapFeedback.glowSize = [22, 44];
     values.overlapFeedback.rimAlpha = [0.2, 0.8];
     values.overlapFeedback.rimWidth = 2.5;
     values.overlapFeedback.rimRadius = 640;
 
-    expect(visualTweakCssVariables(values, true)).toMatchObject({
+    expect(productAppearanceCssVariables(values, true)).toMatchObject({
       "--ic-rim-color": "18, 52, 86",
       "--ic-glow-size-c": "22px",
       "--ic-glow-size-t": "44px",

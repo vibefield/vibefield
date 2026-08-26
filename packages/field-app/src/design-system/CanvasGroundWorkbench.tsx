@@ -1,15 +1,25 @@
-import { type CSSProperties, type ReactElement, useMemo, useState } from "react";
+import { type CSSProperties, type ReactElement, useMemo } from "react";
+import {
+  type ProductAppearance,
+  productAppearanceCssVariables,
+} from "../appearance/product-appearance";
 import { canvasGridConfig } from "../field/canvas-appearance";
 import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
 import { VisualTweakControls } from "./tweaks/VisualTweakControls";
-import { defaultVisualTweakValues, visualTweakCssVariables } from "./tweaks/visual-tweaks";
 
-export function CanvasGroundWorkbench({ dark }: { dark: boolean }): ReactElement {
-  const [values, setValues] = useState(defaultVisualTweakValues);
-  const grid = useMemo(() => canvasGridConfig(values, dark), [dark, values]);
+export function CanvasGroundWorkbench({
+  dark,
+  value,
+  onChange,
+}: {
+  dark: boolean;
+  value: ProductAppearance;
+  onChange: (value: ProductAppearance) => void;
+}): ReactElement {
+  const grid = useMemo(() => canvasGridConfig(value, dark), [dark, value]);
   const scopedVariables = useMemo(
-    () => visualTweakCssVariables(values, dark) as CSSProperties,
-    [dark, values],
+    () => productAppearanceCssVariables(value, dark) as CSSProperties,
+    [dark, value],
   );
 
   return (
@@ -29,16 +39,16 @@ export function CanvasGroundWorkbench({ dark }: { dark: boolean }): ReactElement
           <dl className="vf-ds-ground-lab__facts">
             <div>
               <dt>Glyph</dt>
-              <dd>{values.magnetGrid.glyph}</dd>
+              <dd>{value.magnetGrid.glyph}</dd>
             </div>
             <div>
               <dt>Reach</dt>
-              <dd>{values.magnetGrid.reach} px</dd>
+              <dd>{value.magnetGrid.reach} px</dd>
             </div>
             <div>
               <dt>Grid fade</dt>
               <dd>
-                {values.worldGrid.fadeIn.join("–")} / {values.worldGrid.fadeOut.join("–")}
+                {value.worldGrid.fadeIn.join("–")} / {value.worldGrid.fadeOut.join("–")}
               </dd>
             </div>
           </dl>
@@ -46,7 +56,7 @@ export function CanvasGroundWorkbench({ dark }: { dark: boolean }): ReactElement
 
         <OverlapFeedbackPreview />
       </div>
-      <VisualTweakControls value={values} onChange={setValues} />
+      <VisualTweakControls value={value} onChange={onChange} />
     </div>
   );
 }

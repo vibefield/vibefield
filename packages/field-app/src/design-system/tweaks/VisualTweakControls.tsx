@@ -1,15 +1,18 @@
 import { SegmentedControl } from "@vibefield/design-kit";
 import { type ChangeEvent, type ReactElement, useRef, useState } from "react";
 import {
+  defaultProductAppearance,
+  type ProductAppearance,
+} from "../../appearance/product-appearance";
+import {
   deserializeVisualTweaks,
   serializeVisualTweaks,
   VISUAL_TWEAK_FILE_NAME,
-} from "./visual-tweak-document";
-import { defaultVisualTweakValues, type VisualTweakValues } from "./visual-tweaks";
+} from "../../appearance/product-appearance-document";
 
 export interface VisualTweakControlsProps {
-  value: VisualTweakValues;
-  onChange: (value: VisualTweakValues) => void;
+  value: ProductAppearance;
+  onChange: (value: ProductAppearance) => void;
 }
 
 /** The complete former in-app tweak surface, now owned by the UI Bench. */
@@ -356,7 +359,7 @@ export function VisualTweakControls({ value, onChange }: VisualTweakControlsProp
         <div className="vf-ds-tweak-actions">
           <TweakButton
             onClick={() => {
-              onChange(defaultVisualTweakValues());
+              onChange(defaultProductAppearance());
               setStatus("Restored production defaults");
             }}
           >
