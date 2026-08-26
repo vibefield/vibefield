@@ -28,6 +28,18 @@ export function stagePluginStyleLink(
   link.href = href;
   link.dataset["vfPluginStyle"] = pluginId;
   link.dataset["vfInstallRevision"] = installRevision;
+  // A link in the document proves publication, not that Chromium obtained and
+  // parsed its bytes. Keep the browser's terminal event on the owned node so
+  // smoke/doctor evidence can distinguish loading, loaded, and refused CSS
+  // without probing cross-origin CSSOM rules.
+  link.dataset["vfPluginStyleState"] = "loading";
+  const settleLoad = (result: "loaded" | "error"): void => {
+    if (link.dataset["vfPluginStyleState"] === "loading") {
+      link.dataset["vfPluginStyleState"] = result;
+    }
+  };
+  link.addEventListener("load", () => settleLoad("loaded"), { once: true });
+  link.addEventListener("error", () => settleLoad("error"), { once: true });
 
   let state: "staged" | "active" | "disposed" = "staged";
   return Object.freeze({

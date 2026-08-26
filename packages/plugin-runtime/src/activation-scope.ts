@@ -465,7 +465,12 @@ export class ActivationScope {
       // useful detail. Aggregate counters still include every omitted earlier acquisition.
       const visible = scope.records.slice(-remaining);
       for (const record of visible) {
-        const id = effects.length;
+        // 1-based: the wire contract (PluginRuntimeDiagnosticEffect) types both
+        // id and parentId as SafePositive, so row zero is unrepresentable — a
+        // 0-based first row fails renderer-side validation and the WHOLE report
+        // is dropped before it reaches fieldd (found live 2026-08-25: every
+        // plugin with a live effect logged "Number must be greater than 0").
+        const id = effects.length + 1;
         effects.push({
           id,
           parentId,

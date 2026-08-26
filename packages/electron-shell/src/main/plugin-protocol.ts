@@ -8,8 +8,8 @@ import { protocol } from "electron";
 //
 // §8.4 splits the roles: fieldd validates install records, manifest hashes,
 // install revisions, enablement, engine gates and grants, then authorizes an
-// opaque token; Electron main "may serve bytes only from a pre-authorized,
-// generation-bound mapping" and "MUST NOT discover plugins or decide grants".
+// opaque token; Electron main may serve bytes only from a pre-authorized
+// plugin-local mapping and MUST NOT discover plugins or decide grants.
 // So nothing here knows what a plugin is. There is no plugin root, no id, no
 // manifest, and no directory — only `token → bytes`, answered by asking the
 // daemon that does know. `app-protocol.ts` says why this file exists at all:
@@ -40,7 +40,8 @@ const TOKEN_PATTERN = /^[0-9a-f]{32}$/;
  * call it; this scheme EXISTS to be called from the app origin. Electron does
  * not enforce response CORS headers on cors-enabled custom schemes (probe row
  * G1), so the actual boundary is unchanged by the flip: unguessable
- * generation-bound tokens, `Cross-Origin-Resource-Policy: same-origin` on
+ * unguessable, plugin-serving-identity-bound tokens,
+ * `Cross-Origin-Resource-Policy: same-origin` on
  * every response (blocks no-cors embedding), and the handler being installed
  * only on the shell session. */
 export const PLUGIN_SCHEME_PRIVILEGES = {

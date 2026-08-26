@@ -374,7 +374,7 @@ export function serveAppRequest(requestUrl: string, options: AppProtocolOptions)
  * path from the renderer, or expose a general filesystem protocol — the two
  * shapes §8.2 names outright, and the reason a `plugin://<id>/<path>` resolver
  * must never be modelled on this one (§8.4: plugin bytes come from a fieldd
- * generation-bound mapping, not from joining a path onto an ID we were handed).
+ * capability mapping, not from joining a path onto an ID we were handed).
  */
 export function installAppProtocol(options: AppProtocolOptions): void {
   protocol.handle(APP_SCHEME, (request) => serveAppRequest(request.url, options));

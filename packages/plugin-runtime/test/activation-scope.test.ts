@@ -1,3 +1,4 @@
+import { PluginRuntimeScopeDiagnostic } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   ActivationEffectSetupError,
@@ -378,6 +379,25 @@ describe("ActivationScope", () => {
     expect(after.omittedErrors).toBe(2);
   });
 
+  it("projects a diagnostic the WIRE contract accepts (EL9 — both sides parse)", () => {
+    // The renderer validates every runtime report with the contracts schema
+    // before it may leave the window, and a projection the schema rejects is a
+    // report fieldd never sees. This row parses the real projection against the
+    // real schema so an id/parentId regression (row zero is unrepresentable —
+    // SafePositive) fails here instead of as a runtime warn log.
+    const scope = new ActivationScope("wire", {
+      maxDiagnosticEffects: 8,
+      maxDiagnosticErrors: 2,
+      maxLabelLength: 16,
+    });
+    const child = scope.child("child");
+    child.track("resource", { dispose() {} });
+
+    const parsed = PluginRuntimeScopeDiagnostic.safeParse(scope.diagnostic());
+    expect(parsed.error?.issues ?? []).toEqual([]);
+    expect(parsed.success).toBe(true);
+  });
+
   it("applies one flat effect budget across the complete live tree", async () => {
     const scope = new ActivationScope("diagnostics", {
       maxDiagnosticEffects: 5,
@@ -395,13 +415,16 @@ describe("ActivationScope", () => {
     expect(diagnostic.liveCount).toBe(20);
     expect(diagnostic.effects).toHaveLength(5);
     expect(diagnostic.omittedEffects).toBe(15);
+    // 1-based ids: the wire contract types id/parentId as SafePositive, so row
+    // zero must never appear in a projection (it fails renderer-side validation
+    // and drops the whole report).
     expect(diagnostic.effects.slice(0, 4)).toMatchObject([
-      { id: 0, parentId: null, label: "child-0", kind: "scope" },
-      { id: 1, parentId: null, label: "child-1", kind: "scope" },
-      { id: 2, parentId: null, label: "child-2", kind: "scope" },
-      { id: 3, parentId: null, label: "child-3", kind: "scope" },
+      { id: 1, parentId: null, label: "child-0", kind: "scope" },
+      { id: 2, parentId: null, label: "child-1", kind: "scope" },
+      { id: 3, parentId: null, label: "child-2", kind: "scope" },
+      { id: 4, parentId: null, label: "child-3", kind: "scope" },
     ]);
-    expect(diagnostic.effects[4]).toMatchObject({ id: 4, parentId: 0, kind: "resource" });
+    expect(diagnostic.effects[4]).toMatchObject({ id: 5, parentId: 1, kind: "resource" });
     expect(
       diagnostic.effects.every((effect) => effect.parentId === null || effect.parentId < effect.id),
     ).toBe(true);

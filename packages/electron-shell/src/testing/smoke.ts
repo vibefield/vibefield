@@ -202,6 +202,18 @@ interface CanvasFacts {
   runtime?: object;
 }
 
+interface PluginStyleCensus {
+  readonly links: number;
+  readonly loaded: number;
+  readonly loading: number;
+  readonly errors: number;
+  /** No href: plugin-module URLs are bearer capabilities and never enter logs. */
+  readonly rows: readonly {
+    readonly pluginId: string;
+    readonly state: "loading" | "loaded" | "error" | "unobserved";
+  }[];
+}
+
 /** The census this smoke defends, and why it takes two numbers (P8-D2).
  *
  * `widgetTypes` is the product fact — 23 types: 22 across the five
@@ -220,7 +232,14 @@ interface CanvasFacts {
  * fieldd staging anything, so a rise in `widgetTypes` with `stagedPlugins`
  * unmoved is precisely what "the host registers it outside the plugin door"
  * looks like from here. */
-const CANVAS_CENSUS = { widgetTypes: 23, minStagedPlugins: 5 } as const;
+const CANVAS_CENSUS = {
+  widgetTypes: 23,
+  minStagedPlugins: 5,
+  // The current five renderer plugins all ship scoped CSS. A link alone is not
+  // evidence: the 2026-08-25 regression left all five links published but their
+  // late fetches unauthorized after unrelated service activation.
+  minLoadedPluginStyles: 5,
+} as const;
 
 /** Every way the line disagrees with the census, named — a smoke that fails
  * should say what it saw, not that something was wrong. */
@@ -235,6 +254,63 @@ function censusFailures(facts: CanvasFacts): string[] {
     );
   }
   return problems;
+}
+
+function pluginStyleFailures(facts: PluginStyleCensus): string[] {
+  const problems: string[] = [];
+  if (facts.links < CANVAS_CENSUS.minLoadedPluginStyles) {
+    problems.push(
+      `${facts.links} plugin stylesheet link(s), expected at least ${CANVAS_CENSUS.minLoadedPluginStyles}`,
+    );
+  }
+  if (facts.loaded < CANVAS_CENSUS.minLoadedPluginStyles) {
+    problems.push(
+      `${facts.loaded} loaded plugin stylesheet(s), expected at least ${CANVAS_CENSUS.minLoadedPluginStyles} (${facts.loading} loading, ${facts.errors} failed)`,
+    );
+  }
+  if (facts.errors > 0) {
+    const failed = facts.rows
+      .filter((row) => row.state === "error")
+      .map((row) => row.pluginId)
+      .join(", ");
+    problems.push(`plugin stylesheet fetch failed${failed === "" ? "" : `: ${failed}`}`);
+  }
+  return problems;
+}
+
+async function readPluginStyleCensus(win: BrowserWindow): Promise<PluginStyleCensus> {
+  return (await win.webContents.executeJavaScript(
+    `(() => {
+      const rows = [...document.querySelectorAll("link[data-vf-plugin-style]")].map((link) => ({
+        pluginId: link.dataset.vfPluginStyle ?? "unknown",
+        state: link.dataset.vfPluginStyleState ?? "unobserved",
+      }));
+      return {
+        links: rows.length,
+        loaded: rows.filter((row) => row.state === "loaded").length,
+        loading: rows.filter((row) => row.state === "loading").length,
+        errors: rows.filter((row) => row.state === "error").length,
+        rows,
+      };
+    })()`,
+    true,
+  )) as PluginStyleCensus;
+}
+
+/** Wait for Chromium's load/error terminals, not merely DOM publication. */
+async function waitForPluginStyles(win: BrowserWindow, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = await readPluginStyleCensus(win);
+  while (
+    Date.now() < deadline &&
+    last.errors === 0 &&
+    (last.links < CANVAS_CENSUS.minLoadedPluginStyles ||
+      last.loaded < CANVAS_CENSUS.minLoadedPluginStyles)
+  ) {
+    await sleep(25);
+    last = await readPluginStyleCensus(win);
+  }
+  return last;
 }
 
 /** Full spine + real renderer, hidden: pass iff the canvas reports in WITH its
@@ -271,7 +347,12 @@ export async function runSmokeCanvas(opts: {
     await loadRenderer(win, "smoke-canvas", opts.viteUrl);
     const raw = await waitForConsole(win, "CANVAS_READY ", 45_000);
     console.log(`SMOKE_CANVAS ${raw}`);
-    const problems = censusFailures(JSON.parse(raw) as CanvasFacts);
+    const styles = await waitForPluginStyles(win);
+    console.log(`SMOKE_CANVAS_STYLES ${JSON.stringify(styles)}`);
+    const problems = [
+      ...censusFailures(JSON.parse(raw) as CanvasFacts),
+      ...pluginStyleFailures(styles),
+    ];
     if (problems.length > 0) throw new Error(problems.join(" · "));
     ok = true;
   } catch (e) {
@@ -727,9 +808,14 @@ export async function runSmokePluginRestart(opts: {
       (raw) => JSON.parse(raw) as CanvasFacts,
     );
     console.log(`SMOKE_PLUGIN_RESTART_INITIAL ${JSON.stringify(currentCanvas)}`);
-    const initialProblems = currentCanvas.flatMap((facts, index) =>
-      censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
-    );
+    const initialStyles = await Promise.all(windows.map((win) => waitForPluginStyles(win)));
+    console.log(`SMOKE_PLUGIN_RESTART_INITIAL_STYLES ${JSON.stringify(initialStyles)}`);
+    const initialProblems = currentCanvas.flatMap((facts, index) => [
+      ...censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
+      ...pluginStyleFailures(initialStyles[index]!).map(
+        (problem) => `window ${index + 1}: ${problem}`,
+      ),
+    ]);
     if (initialProblems.length > 0) throw new Error(initialProblems.join(" · "));
 
     const expectedBootstrap = countVector(
@@ -916,9 +1002,14 @@ export async function runSmokePluginRestart(opts: {
         (raw) => JSON.parse(raw) as CanvasFacts,
       );
       console.log(`SMOKE_PLUGIN_RESTART_RECOVERED ${JSON.stringify(currentCanvas)}`);
-      const replacementProblems = currentCanvas.flatMap((facts, index) =>
-        censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
-      );
+      const replacementStyles = await Promise.all(windows.map((win) => waitForPluginStyles(win)));
+      console.log(`SMOKE_PLUGIN_RESTART_RECOVERED_STYLES ${JSON.stringify(replacementStyles)}`);
+      const replacementProblems = currentCanvas.flatMap((facts, index) => [
+        ...censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
+        ...pluginStyleFailures(replacementStyles[index]!).map(
+          (problem) => `window ${index + 1}: ${problem}`,
+        ),
+      ]);
       if (replacementProblems.length > 0) throw new Error(replacementProblems.join(" · "));
       const newConnections = await Promise.all(windows.map(rendererConnection));
       for (let index = 0; index < windows.length; index += 1) {

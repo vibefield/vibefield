@@ -116,6 +116,38 @@ describe("the dev import map (serve command)", () => {
   });
 });
 
+describe("the singleton module ABI", () => {
+  function loadSource(command: "build" | "serve", specifier: string): string {
+    const plugin = hostSingletons();
+    (plugin.configResolved as unknown as (c: { command: string }) => void)({ command });
+    const load = plugin.load as unknown as (id: string) => string | null;
+    const source = load(`\0vf-singleton:${specifier}`);
+    expect(source).not.toBeNull();
+    return source ?? "";
+  }
+
+  it.each(["build", "serve"] as const)(
+    "%s gives CommonJS-shaped React static named exports",
+    (command) => {
+      const react = loadSource(command, "react");
+      const jsxRuntime = loadSource(command, "react/jsx-runtime");
+
+      // `export *` against React's interop wrapper produces a default-only
+      // production chunk. Plugin bundles use these as NAMED imports, so pin
+      // the source ABI that Rollup/Vite must see before either command runs.
+      expect(react).toContain('export const useState = singleton["useState"];');
+      expect(react).toContain('export const useEffect = singleton["useEffect"];');
+      expect(jsxRuntime).toContain('export const jsx = singleton["jsx"];');
+      expect(jsxRuntime).toContain('export const jsxs = singleton["jsxs"];');
+    },
+  );
+
+  it("keeps real ESM singletons on the export-star fallback", () => {
+    const sdk = loadSource("build", "@vibefield/plugin-sdk");
+    expect(sdk).toContain('export * from "@vibefield/plugin-sdk";');
+  });
+});
+
 describe("the expected-warning filter", () => {
   it("drops the singletons' own undefined-default warning and nothing else", () => {
     expect(

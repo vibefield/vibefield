@@ -35,14 +35,17 @@ const SECRET_BYTES = "PRIVATE KEY\n";
 
 /** The manifest shape fieldd's authority suite builds its fixtures from
  * (plugin-modules.test.ts) — mirrored, since that helper is local to its file. */
-function manifest(id: string): Record<string, unknown> {
+function manifest(
+  id: string,
+  entries: { renderer?: string; service?: string } = { renderer: "./dist/renderer.js" },
+): Record<string, unknown> {
   return {
     manifestVersion: 1,
     id,
     version: "0.1.0",
     title: id,
     engines: { app: ">=0.0.0", contracts: "^0.1.0" },
-    entries: { renderer: "./dist/renderer.js" },
+    entries,
     activation: [],
     capabilities: [],
     contributes: {},
@@ -53,6 +56,7 @@ interface Seam {
   readonly authority: PluginModuleAuthority;
   readonly registry: PluginRegistryService;
   readonly id: string;
+  readonly unrelatedServiceId: string;
   /** Where the bytes actually live. The TEST's own view of the artifact — never
    * something main was told, so a row can distinguish "refused" from "gone". */
   readonly modulePath: string;
@@ -77,6 +81,18 @@ async function seam(): Promise<Seam> {
   writeFileSync(join(pluginDir, "dist", "renderer.js"), MODULE_BYTES);
   writeFileSync(join(pluginDir, "dist", "renderer.css"), STYLE_BYTES);
 
+  // A real second registry row whose activation moves the global observation
+  // while changing nothing about the renderer plugin above. This is the exact
+  // shape that exposed the late stylesheet fetch race in production.
+  const unrelatedServiceId = "vibefield.fixture.unrelated-service";
+  const serviceDir = join(root, "unrelated-service");
+  mkdirSync(serviceDir, { recursive: true });
+  writeFileSync(
+    join(serviceDir, "vibefield.plugin.json"),
+    `${JSON.stringify(manifest(unrelatedServiceId, { service: "./service.js" }), null, 2)}\n`,
+  );
+  writeFileSync(join(serviceDir, "service.js"), "export default {};\n");
+
   const registry = new PluginRegistryService({
     dataDir,
     roots: { bundled: [root], devLinked: [], installed: [] },
@@ -97,7 +113,14 @@ async function seam(): Promise<Seam> {
     return { response, refusals };
   };
 
-  return { authority, registry, id, modulePath: join(pluginDir, "dist", "renderer.js"), serve };
+  return {
+    authority,
+    registry,
+    id,
+    unrelatedServiceId,
+    modulePath: join(pluginDir, "dist", "renderer.js"),
+    serve,
+  };
 }
 
 /** The one authorized row, or a failure that says so — `modules[0]` being
@@ -137,6 +160,27 @@ describe("staged serving, authority → protocol (ESP §8.4)", () => {
     expect(response.headers.get("Content-Type")).toBe("text/css; charset=utf-8");
   });
 
+  it("serves a late stylesheet fetch after an unrelated service activation", async () => {
+    // Deterministic reconstruction of the live failure: the renderer receives
+    // both URLs and imports JS; before its candidate commits the <link>, another
+    // plugin's service state advances the registry observation. The exact old
+    // stylesheet URL must remain authorized because ITS plugin did not move.
+    const { authority, registry, unrelatedServiceId, serve } = await seam();
+    const before = await moduleRow(authority);
+    expect(before.styleUrl).toBeDefined();
+    const beforeGeneration = (await authority.modules()).generation;
+
+    registry.setServiceEntryState(unrelatedServiceId, "active");
+    const after = await authority.modules();
+    expect(after.generation).toBeGreaterThan(beforeGeneration);
+    expect(after.modules).toEqual([before]);
+
+    const { response, refusals } = await serve(before.styleUrl ?? "");
+    expect(response.status).toBe(200);
+    expect(refusals).toEqual([]);
+    expect(await response.text()).toBe(STYLE_BYTES);
+  });
+
   it("refuses a well-formed token this authority never minted", async () => {
     const { serve } = await seam();
     const { response, refusals } = await serve(`${PLUGIN_MODULE_SCHEME}://${"a".repeat(32)}`);
@@ -171,7 +215,7 @@ describe("staged serving, authority → protocol (ESP §8.4)", () => {
 
   it("…and that control can fail: a main that REMEMBERED would serve the disabled plugin", async () => {
     // The sensitivity check for the row above. §8.4 lets main serve only from a
-    // pre-authorized, generation-bound mapping, asked for per request — this is
+    // pre-authorized, plugin-local mapping, asked for per request — this is
     // what the "per request" buys. Swap the live authority for glue that caches
     // its first yes, hold every other input identical, and the disable stops
     // being enforced; so the 404 above is produced by the generation rebuild

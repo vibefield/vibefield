@@ -483,8 +483,8 @@ describe("RuntimeTargetController", () => {
       state: "open",
       liveCount: 2,
       effects: [
-        { id: 0, parentId: null, label: "activate", kind: "scope" },
-        { id: 1, parentId: 0, label: "loading-listener", kind: "resource" },
+        { id: 1, parentId: null, label: "activate", kind: "scope" },
+        { id: 2, parentId: 1, label: "loading-listener", kind: "resource" },
       ],
     });
     expect(loading).not.toHaveProperty("candidate");

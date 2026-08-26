@@ -115,6 +115,11 @@ export class PluginRegistryService extends EventEmitter {
   /** P4 — live service-entry states asserted by the ServiceHost; an overlay so
    * a refresh() rebuild never erases runtime truth (§9.3 states). */
   private serviceStates = new Map<string, PluginRecord["service"]>();
+  /** Daemon-internal renderer-serving epoch. Registry `generation` orders the
+   * whole snapshot; this one moves only when an explicit dev reload must make
+   * this plugin's module URLs and browser module identity fresh even if the
+   * author kept the manifest byte-identical. */
+  private rendererServingRevisions = new Map<string, number>();
   /** P6 — §15.4 grant generations: bump on every effective-grant change; an
    * overlay for the same reason serviceStates is (refresh never resets it). */
   private grantGenerations = new Map<string, number>();
@@ -438,6 +443,12 @@ export class PluginRegistryService extends EventEmitter {
     return this.rootPaths.get(id);
   }
 
+  /** DAEMON-INTERNAL: exact plugin-local URL lifetime, never renderer policy.
+   * Zero is the initial artifact; every applied dev reload advances it. */
+  rendererServingRevision(id: string): number {
+    return this.rendererServingRevisions.get(id) ?? 0;
+  }
+
   /** DAEMON-INTERNAL: epoch paired atomically with the selected artifact.
    * Bundled/dev/legacy roots begin at epoch 1. */
   commitEpoch(id: string): number | undefined {
@@ -694,8 +705,12 @@ export class PluginRegistryService extends EventEmitter {
       this.serviceDecls.set(id, staged);
       this.pendingReloadDecls.delete(id);
     }
+    this.rendererServingRevisions.set(id, this.rendererServingRevision(id) + 1);
     this.rows.set(id, candidate);
-    this.publish();
+    // The module bytes may have changed while the manifest did not. Force one
+    // observation so PluginModuleAuthority can retire the old plugin-local URL
+    // set; semantic snapshot equality is not serving-identity equality.
+    this.publish(true);
     return this.snapshot().plugins.find((p) => p.id === id) ?? candidate;
   }
 
@@ -748,13 +763,14 @@ export class PluginRegistryService extends EventEmitter {
     this.removeAllListeners();
   }
 
-  /** generation bump + one coalesced "changed" — only when the snapshot moved */
-  private publish(): void {
+  /** Generation bump + one coalesced `changed`. Normally semantic-move-only;
+   * explicit reload forces an observation because code bytes are out-of-row. */
+  private publish(force = false): void {
     const probe = JSON.stringify({
       plugins: this.snapshot().plugins,
       problems: this.snapshot().problems,
     });
-    if (probe === this.lastSnapshotJson) return;
+    if (!force && probe === this.lastSnapshotJson) return;
     this.lastSnapshotJson = probe;
     this.generation += 1;
     this.emit("changed", this.snapshot());

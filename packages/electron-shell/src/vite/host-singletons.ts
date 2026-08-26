@@ -131,14 +131,15 @@ export function devImportMapJson(): string {
   return JSON.stringify({ imports });
 }
 
-/** The virtual module's source.
+/** The ESM-shaped fallback for a singleton Node cannot `require` while the vite
+ * config is running (the SDK's TypeScript source is the current example).
  *
  * `export *` re-exports the named bindings; `default` is handled separately
  * because `export *` deliberately excludes it. Reading it off the namespace
  * makes a MISSING default `undefined` rather than a build error — several of
  * these specifiers (react/jsx-runtime, the SDK subpaths) have no default export
  * and must still be bindable by a plugin that imports one namespace-style. */
-function singletonSource(specifier: string): string {
+function esmSingletonSource(specifier: string): string {
   const quoted = JSON.stringify(specifier);
   return [
     `import * as singleton from ${quoted};`,
@@ -148,20 +149,25 @@ function singletonSource(specifier: string): string {
   ].join("\n");
 }
 
-/** The DEV spelling of the same module, and why it must differ (measured
- * 2026-08-24 against the live dev server): vite's optimized dep for a CJS
- * package exports ONLY `default` (`export default require_react()`), so
- * `export *` re-exports nothing there and `import { useState } from "react"`
- * through the dev map would arrive undefined — exactly what vite's "Unable to
- * interop `export *`" warning means. The namespace import is interop'd
- * PROPERLY (vite spreads the CJS exports into it), so the names exist at
- * runtime; they just need static `export` statements to be importable. This
- * runs in the dev server's node process, so it can simply ASK the package:
- * `require` it from the anchor and spell one `export const` per key. Where
- * require cannot answer — the SDK's TS source, an ESM-only package with
- * top-level await — the module is real ESM through vite and the build shape's
- * `export *` genuinely carries its names, so that is the fallback. */
-function devSingletonSource(
+/** Give CJS-shaped singletons a real ESM named-export surface in BOTH commands.
+ *
+ * This was first measured against the dev optimizer on 2026-08-24: its React
+ * module exports only `default`, so `export *` carries no hooks. The production
+ * build has the same semantic trap after Rollup interops React's CJS wrapper:
+ * a singleton chunk produced from only `export * from "react"` likewise exports
+ * only `default`. Four staged plugins consequently failed before controller
+ * creation while the non-React behavior plugin survived, making a widget-count
+ * smoke look healthy even though their CSS could never be attached.
+ *
+ * The namespace import is interop'd properly in either command; it only needs
+ * STATIC export declarations so a plugin can import named bindings. The config
+ * can ask requireable packages for those names from the field-app anchor and
+ * spell one declaration per key. Where require cannot answer — the SDK's TS
+ * source or an ESM-only package with top-level await — vite sees real ESM and
+ * `export *` genuinely carries its names, so `esmSingletonSource` is the safe
+ * fallback. One generator for build and serve keeps their singleton ABI from
+ * drifting again. */
+function interoperableSingletonSource(
   specifier: string,
   requireFromAnchor: ReturnType<typeof createRequire>,
 ): string {
@@ -177,7 +183,7 @@ function devSingletonSource(
   } catch {
     /* not requireable from node — real ESM through vite; export * suffices */
   }
-  if (names === null || names.length === 0) return singletonSource(specifier);
+  if (names === null || names.length === 0) return esmSingletonSource(specifier);
   const quoted = JSON.stringify(specifier);
   return [
     `import * as singleton from ${quoted};`,
@@ -244,9 +250,7 @@ export function hostSingletons(): Plugin {
     load(id) {
       if (!id.startsWith(RESOLVED_PREFIX)) return null;
       const specifier = id.slice(RESOLVED_PREFIX.length);
-      return command === "serve"
-        ? devSingletonSource(specifier, anchorRequire)
-        : singletonSource(specifier);
+      return interoperableSingletonSource(specifier, anchorRequire);
     },
     transformIndexHtml: {
       order: "pre",

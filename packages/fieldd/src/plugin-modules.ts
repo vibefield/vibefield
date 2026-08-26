@@ -8,13 +8,16 @@
 // A token is minted, never derived: `resolve` is a MAP LOOKUP, so there is no
 // input a caller can shape into a path.
 //
-// Invalidation is structural rather than remembered. The registry bumps a
-// generation on every snapshot move — discovery, enable, disable, reload,
-// quarantine, an install revision changing — and the token table is rebuilt
-// from scratch whenever the generation it was minted under is no longer the
-// registry's. Tokens from the old generation are simply absent, which is §8.4's
-// "every URL is invalidated on disable, reload, quarantine, or install-revision
-// change" without a subscription, a cache, or a staleness window.
+// Invalidation is structural rather than remembered. Registry generation
+// orders OBSERVATIONS of the whole set; URL lifetime belongs to each plugin's
+// own serving identity (manifest/artifact/root/paths + explicit reload epoch).
+// (Corrected 2026-08-25; the table was globally generation-bound until then.)
+// A rebuild carries a plugin's tokens while that identity is unchanged and
+// mints fresh otherwise. Every §8.4 death — disable, reload, quarantine, an
+// install-revision change — still leaves that plugin's old tokens simply
+// absent, while movement on an UNRELATED row no longer orphans a stylesheet
+// the renderer has not fetched yet. Still no subscription, no cache, and no
+// staleness window.
 
 import { randomBytes } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
@@ -45,7 +48,8 @@ interface Grant {
 }
 
 export interface PluginModuleAuthorityDeps {
-  readonly plugins: Pick<PluginRegistryService, "get" | "snapshot" | "rootPath">;
+  readonly plugins: Pick<PluginRegistryService, "get" | "snapshot" | "rootPath"> &
+    Partial<Pick<PluginRegistryService, "rendererServingRevision">>;
 }
 
 export interface PreparedCandidateModules {
@@ -98,9 +102,11 @@ interface RecoveryGrant {
 
 export class PluginModuleAuthority {
   private readonly deps: PluginModuleAuthorityDeps;
-  /** token → grant, valid only for `mintedFor`. */
+  /** token → grant for the latest observed set. Unchanged plugin-local grants
+   * may be carried across `mintedFor` movements. */
   private liveGrants = new Map<string, Grant>();
   private liveUrls: PluginModuleUrls[] = [];
+  private liveServingRevisions = new Map<string, number>();
   private readonly candidateGrants = new Map<string, CandidateGrant>();
   private readonly candidateEpisodes = new Map<string, CandidateEpisode>();
   private readonly candidatePluginOwners = new Map<string, string>();
@@ -125,9 +131,9 @@ export class PluginModuleAuthority {
   }
 
   /** The privileged resolution (`plugins.resolveModule`, shell-main only).
-   * Unknown token → undefined, and a token minted under a superseded generation
-   * is unknown by construction: the caller cannot tell "never existed" from
-   * "no longer authorized", which is the right amount to tell it. */
+   * Unknown token → undefined. Tokens disappear when THEIR plugin's serving
+   * identity dies; an unrelated observation never creates a false revocation.
+   * The caller cannot tell "never existed" from "no longer authorized". */
   async resolve(token: string): Promise<PluginModuleResolution | undefined> {
     const generation = await this.ensureLiveGrants();
     const candidate = this.candidateGrants.get(token);
@@ -320,8 +326,11 @@ export class PluginModuleAuthority {
   private async rebuildGeneration(generation: number): Promise<void> {
     const snapshot = this.deps.plugins.snapshot();
     if (snapshot.generation !== generation) return;
+    const previousUrls = new Map(this.liveUrls.map((row) => [row.pluginId, row]));
+    const previousServingRevisions = this.liveServingRevisions;
     const grants = new Map<string, Grant>();
     const urls: PluginModuleUrls[] = [];
+    const servingRevisions = new Map<string, number>();
 
     for (const record of snapshot.plugins) {
       // Enablement and compatibility are the registry's verdict, not ours: a
@@ -331,8 +340,20 @@ export class PluginModuleAuthority {
       if (root === undefined) continue;
       const entryRel = await readRendererEntry(root);
       if (entryRel === undefined) continue;
-      const row = await this.mintRendererUrls(record, root, entryRel, grants, false);
-      if (row !== undefined) urls.push(row);
+      const servingRevision = this.deps.plugins.rendererServingRevision?.(record.id) ?? 0;
+      const row =
+        (await this.carryRendererUrls(
+          record,
+          root,
+          entryRel,
+          previousUrls.get(record.id),
+          previousServingRevisions.get(record.id) === servingRevision,
+          grants,
+        )) ?? (await this.mintRendererUrls(record, root, entryRel, grants, false));
+      if (row !== undefined) {
+        urls.push(row);
+        servingRevisions.set(record.id, servingRevision);
+      }
     }
 
     // A refresh during filesystem inspection invalidates the whole private
@@ -340,7 +361,62 @@ export class PluginModuleAuthority {
     if (this.deps.plugins.snapshot().generation !== generation) return;
     this.liveGrants = grants;
     this.liveUrls = urls;
+    this.liveServingRevisions = servingRevisions;
     this.mintedFor = generation;
+  }
+
+  /**
+   * §8.4 names the deaths — disable, reload, quarantine, an install-revision
+   * change. Registry generation also moves for reasons §8.4 does NOT name
+   * (another plugin's grants, a service activation, discovery elsewhere), and
+   * re-minting EVERY plugin's tokens on those moves was a live race: the
+   * renderer imports its module the moment URLs arrive, but the stylesheet
+   * `<link>` fetches only at candidate commit — hundreds of ms later — and the
+   * staged loader never re-fetches URLs. A mid-boot move on an UNRELATED row
+   * left every stylesheet pointing at a token that had ceased to exist while
+   * the modules survived on fetch order alone (observed 2026-08-25: five
+   * staged plugins styleless, all refusals `unauthorized`, 380ms after the kv
+   * service activation moved the snapshot).
+   *
+   * So a rebuild CARRIES a plugin's tokens forward when its own serving
+   * identity is unchanged — same explicit reload epoch, manifest hash, install
+   * revision, root, and resolved artifact paths (style presence included) —
+   * and mints fresh otherwise. Every §8.4 death still kills:
+   * disable/quarantine drop the row, explicit reload advances the plugin-local
+   * epoch, and an artifact move fails the identity comparison. Same-plugin
+   * grant moves keep the tokens: module bytes do not depend on grants, and
+   * §8.4's invalidation clause never names them.
+   */
+  private async carryRendererUrls(
+    record: PluginModuleUrlsIdentity,
+    root: string,
+    entryRel: string,
+    previous: PluginModuleUrls | undefined,
+    sameServingRevision: boolean,
+    grants: Map<string, Grant>,
+  ): Promise<PluginModuleUrls | undefined> {
+    if (previous === undefined) return undefined;
+    if (!sameServingRevision) return undefined;
+    if (previous.manifestHash !== record.manifestHash) return undefined;
+    if (previous.installRevision !== record.installRevision) return undefined;
+    const modulePath = resolve(join(root, entryRel));
+    if (!isStrictlyWithin(modulePath, root)) return undefined;
+    const moduleGrant = this.liveGrants.get(urlToken(previous.moduleUrl));
+    if (moduleGrant === undefined || moduleGrant.path !== modulePath || moduleGrant.root !== root)
+      return undefined;
+    const stylePath = modulePath.replace(/\.js$/, STYLE_SUFFIX);
+    const hasStyle = stylePath !== modulePath && (await isFile(stylePath));
+    if (hasStyle !== (previous.styleUrl !== undefined)) return undefined;
+    let styleGrant: Grant | undefined;
+    if (previous.styleUrl !== undefined) {
+      styleGrant = this.liveGrants.get(urlToken(previous.styleUrl));
+      if (styleGrant === undefined || styleGrant.path !== stylePath || styleGrant.root !== root)
+        return undefined;
+    }
+    grants.set(urlToken(previous.moduleUrl), moduleGrant);
+    if (previous.styleUrl !== undefined && styleGrant !== undefined)
+      grants.set(urlToken(previous.styleUrl), styleGrant);
+    return previous;
   }
 
   private async mintRendererUrls(
@@ -486,6 +562,12 @@ function moduleUrl(token: string): string {
   // segment for anything to be joined onto (§8.4's warning about
   // `plugin://<id>/<path>` resolvers).
   return `${PLUGIN_MODULE_SCHEME}://${token}`;
+}
+
+/** The exact inverse of {@link moduleUrl}, used only on URLs this authority
+ * minted itself (carry-forward reads its own previous rows, never input). */
+function urlToken(url: string): string {
+  return url.slice(`${PLUGIN_MODULE_SCHEME}://`.length);
 }
 
 function isStrictlyWithin(path: string, root: string): boolean {

@@ -209,14 +209,15 @@ export type PluginsListResult = z.infer<typeof PluginsListResult>;
 //
 // §8.4 splits this surface in two, and the split is the security property:
 // the renderer receives an approved host-generated URL and NEVER a filesystem
-// path, while Electron main may serve bytes only from a pre-authorized,
-// generation-bound mapping and must not discover plugins or decide grants. So
+// path, while Electron main may serve bytes only from a pre-authorized mapping
+// and must not discover plugins or decide grants. URL lifetime is plugin-local:
+// unrelated registry observation movement cannot revoke another plugin. So
 // there are two shapes here, not one with an optional field — a projection
 // cannot leak a path it has no room for.
 
 /** An opaque module token: 128 bits of unguessable hex, minted per (plugin,
- * file, registry generation). Not derived from the plugin id or its hash —
- * a token a caller can PREDICT is a token that outlives its authorization. */
+ * file, serving identity). Not derived from the plugin id or its hash — a token
+ * a caller can PREDICT is a token that outlives its authorization. */
 export const PluginModuleToken = z.string().regex(/^[0-9a-f]{32}$/);
 export type PluginModuleToken = z.infer<typeof PluginModuleToken>;
 
@@ -236,8 +237,8 @@ export const PluginModuleUrls = z
   .passthrough();
 export type PluginModuleUrls = z.infer<typeof PluginModuleUrls>;
 
-/** The generation stamps the whole set: a renderer holding an older generation
- * knows its URLs are dead without having to probe them one by one. */
+/** The generation stamps the registry OBSERVATION used to project the set. It
+ * is not a URL lease: unchanged plugin-local URLs may span unrelated movements. */
 export const PluginModulesResult = z
   .object({
     generation: z.number().int().nonnegative(),
@@ -247,10 +248,9 @@ export const PluginModulesResult = z
 export type PluginModulesResult = z.infer<typeof PluginModulesResult>;
 
 /** THE PRIVILEGED RESOLUTION — `plugins.serve`, shell-main only. Main asks per
- * token rather than holding a pushed map, so a disabled or reloaded plugin's
- * URL dies the instant fieldd's generation moves: there is no window in which
- * main still believes a stale mapping (§8.4's "every URL is invalidated on
- * disable, reload, quarantine, or install-revision change"). */
+ * token rather than holding a pushed map, so a disabled/reloaded/quarantined or
+ * replaced plugin's URL dies at its own serving-identity edge without a window
+ * in which main still believes a stale mapping (§8.4). */
 export const PluginsResolveModuleParams = z.object({ token: PluginModuleToken }).passthrough();
 export type PluginsResolveModuleParams = z.infer<typeof PluginsResolveModuleParams>;
 
@@ -261,6 +261,8 @@ export const PluginModuleResolution = z
      * wire, to the ONE principal allowed to hold it. */
     path: z.string().min(1),
     contentType: z.enum(["text/javascript", "text/css"]),
+    /** Registry observation current when fieldd answered; diagnostic only, not
+     * the token's lifetime or a cache key in Electron main. */
     generation: z.number().int().nonnegative(),
   })
   .passthrough();

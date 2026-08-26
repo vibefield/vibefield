@@ -62,7 +62,7 @@ export function buildCsp(mode: ShellMode, importMapHashes: readonly string[] = [
   // precisely so this line can exist: admitting plugin bytes never widens what
   // `'self'` means for the product document, and the policy states which origin
   // may carry plugin code instead of implying it. The scheme is a privileged
-  // registration served only from fieldd's generation-bound authorization, so
+  // registration served only from fieldd's plugin-local authorization, so
   // "this origin" is a much narrower claim than a directory would be.
   const pluginModules = `${PLUGIN_MODULE_SCHEME}:`;
   const hashes = importMapHashes.map((h) => ` '${h}'`).join("");

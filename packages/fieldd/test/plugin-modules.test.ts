@@ -13,8 +13,9 @@ import { type PluginRegistryCandidate, PluginRegistryService } from "../src/plug
 // P8b — the module authority, tested against ESP §8.4's clauses one at a time.
 // The section is short and every sentence in it is a rule, so each gets a row:
 // fieldd decides; the renderer gets a URL and never a path; main serves only
-// what was pre-authorized under the current generation; and every URL dies on
-// disable, reload, quarantine, or an install-revision change.
+// what was pre-authorized for the plugin's current serving identity; and every
+// affected URL dies on disable, reload, quarantine, or revision change without
+// unrelated snapshot movement revoking a healthy plugin.
 
 let cleanup: Array<() => void> = [];
 afterEach(() => {
@@ -225,6 +226,124 @@ describe("PluginModuleAuthority (ESP §8.4)", () => {
     const fresh = (after.modules[0]?.moduleUrl ?? "").slice(`${PLUGIN_MODULE_SCHEME}://`.length);
     expect(fresh).not.toBe(token);
     expect(await authority.resolve(token)).toBeUndefined();
+  });
+
+  it("CARRIES an untouched plugin's URLs across an unrelated registry move", async () => {
+    // §8.4 names the deaths — disable, reload, quarantine, a revision change —
+    // and a generation move on an UNRELATED row is none of them. The renderer
+    // imports its module the moment URLs arrive but fetches the stylesheet only
+    // at candidate commit, so a blanket re-mint here orphaned every staged
+    // <link> whenever anything else moved mid-boot (observed 2026-08-25: five
+    // styleless plugins, all refusals `unauthorized`, 380ms after a service
+    // activation). The kept plugin's tokens must survive the move byte-for-byte.
+    const root = mkdtempSync(join(tmpdir(), "plugmod-carry-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "plugmod-carry-data-"));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    const keptId = "vibefield.fixture.kept";
+    const movedId = "vibefield.fixture.moved";
+    writePlugin(root, "kept", manifest(keptId));
+    writePlugin(root, "moved", manifest(movedId));
+    const registry = new PluginRegistryService({
+      dataDir,
+      roots: { bundled: [root], devLinked: [], installed: [] },
+    });
+    cleanup.push(() => registry.dispose());
+    await registry.refresh();
+    const authority = new PluginModuleAuthority({ plugins: registry });
+
+    const before = await authority.modules();
+    const kept = before.modules.find((m) => m.pluginId === keptId);
+    const moved = before.modules.find((m) => m.pluginId === movedId);
+    expect(kept?.styleUrl).toBeDefined();
+    const keptModuleToken = (kept?.moduleUrl ?? "").slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    const keptStyleToken = (kept?.styleUrl ?? "").slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    const movedToken = (moved?.moduleUrl ?? "").slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+
+    await registry.disable(movedId);
+    const after = await authority.modules();
+    expect(after.generation).toBeGreaterThan(before.generation);
+    // The kept row is IDENTICAL — same URLs, so the stylesheet the renderer has
+    // not fetched yet still names a live token…
+    expect(after.modules.find((m) => m.pluginId === keptId)).toEqual(kept);
+    expect(await authority.resolve(keptModuleToken)).toBeDefined();
+    expect(await authority.resolve(keptStyleToken)).toBeDefined();
+    // …while the moved plugin's §8.4 death still bites in full.
+    expect(after.modules.find((m) => m.pluginId === movedId)).toBeUndefined();
+    expect(await authority.resolve(movedToken)).toBeUndefined();
+  });
+
+  it("re-mints when the plugin ITSELF moves — carry-forward is identity-bound", async () => {
+    // The reload/revision-change half of the §8.4 clause: a carried token is
+    // only carried while manifest hash, install revision, root and resolved
+    // paths all hold. Rewriting the manifest fails the comparison and the old
+    // URL ceases to exist exactly as before the carry-forward existed.
+    const root = mkdtempSync(join(tmpdir(), "plugmod-reload-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "plugmod-reload-data-"));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    const id = "vibefield.fixture.reloaded";
+    const pdir = writePlugin(root, "reloaded", manifest(id));
+    const registry = new PluginRegistryService({
+      dataDir,
+      roots: { bundled: [root], devLinked: [], installed: [] },
+    });
+    cleanup.push(() => registry.dispose());
+    await registry.refresh();
+    const authority = new PluginModuleAuthority({ plugins: registry });
+
+    const before = await authority.modules();
+    const oldToken = (before.modules[0]?.moduleUrl ?? "").slice(
+      `${PLUGIN_MODULE_SCHEME}://`.length,
+    );
+    expect(await authority.resolve(oldToken)).toBeDefined();
+
+    writeFileSync(
+      join(pdir, "vibefield.plugin.json"),
+      `${JSON.stringify(manifest(id, { version: "0.2.0" }), null, 2)}\n`,
+    );
+    await registry.refresh();
+    const after = await authority.modules();
+    const fresh = (after.modules[0]?.moduleUrl ?? "").slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    expect(fresh).not.toBe(oldToken);
+    expect(await authority.resolve(oldToken)).toBeUndefined();
+    expect(await authority.resolve(fresh)).toBeDefined();
+  });
+
+  it("re-mints on an explicit same-manifest dev reload", async () => {
+    // A dev build can replace renderer.js/css without changing one manifest
+    // byte. Registry snapshot equality must not preserve the browser module URL
+    // in that case: applyReload advances the plugin-local serving revision and
+    // forces one observation even though its sanitized row is identical.
+    const root = mkdtempSync(join(tmpdir(), "plugmod-dev-reload-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "plugmod-dev-reload-data-"));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    const id = "vibefield.fixture.dev-reloaded";
+    writePlugin(root, "dev-reloaded", manifest(id));
+    const registry = new PluginRegistryService({
+      dataDir,
+      roots: { bundled: [], devLinked: [root], installed: [] },
+    });
+    cleanup.push(() => registry.dispose());
+    await registry.refresh();
+    const authority = new PluginModuleAuthority({ plugins: registry });
+
+    const before = await authority.modules();
+    const oldUrl = before.modules[0]?.moduleUrl ?? "";
+    const oldToken = oldUrl.slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+    expect(await authority.resolve(oldToken)).toBeDefined();
+
+    const candidate = await registry.validateReload(id);
+    registry.applyReload(id, candidate);
+    const after = await authority.modules();
+    const freshUrl = after.modules[0]?.moduleUrl ?? "";
+    const freshToken = freshUrl.slice(`${PLUGIN_MODULE_SCHEME}://`.length);
+
+    expect(after.generation).toBeGreaterThan(before.generation);
+    expect(freshUrl).not.toBe(oldUrl);
+    expect(await authority.resolve(oldToken)).toBeUndefined();
+    expect(await authority.resolve(freshToken)).toBeDefined();
   });
 
   it("REFUSES a token whose file became a symlink out of the plugin root (EL7)", async () => {

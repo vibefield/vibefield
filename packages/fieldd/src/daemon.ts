@@ -481,9 +481,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
     });
     await plugins.refresh();
-    // P8b (ESP §8.4): the module authority reads the registry and mints
-    // generation-bound tokens. It holds no state worth restoring — the
-    // registry's generation IS its cache key.
+    // P8b (ESP §8.4): the module authority reads the registry and mints opaque
+    // plugin-local tokens. Registry generation orders rebuild observations;
+    // each plugin's serving identity decides whether its URLs carry or die.
     const pluginModules = new PluginModuleAuthority({ plugins });
 
     // C6-3g — cross-device doc sync. BEST EFFORT, and that is the honest shape:
@@ -1733,8 +1733,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           false,
         );
       const resolution = await pluginModules.resolve(parsed.data.token);
-      // A token from a superseded generation is indistinguishable from one that
-      // never existed — the caller learns "not authorized now", nothing more.
+      // A token whose plugin-local serving identity died is indistinguishable
+      // from one that never existed: the caller learns only "not authorized".
       if (resolution === undefined)
         throw new RpcCallError("NOT_FOUND", "no such module token", false);
       return resolution;
