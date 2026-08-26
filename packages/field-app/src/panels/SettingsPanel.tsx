@@ -48,6 +48,7 @@ interface SettingsPanelProps {
   onToggleTheme?: () => void;
   magnetGridGlyph: MagnetGridGlyph;
   onMagnetGridGlyphChange: (glyph: MagnetGridGlyph) => void;
+  appearanceControlledByStudio?: boolean;
   diagnosticsRequest?: number;
   diagnosticsInitiallyOpen?: boolean;
   onClose: () => void;
@@ -146,6 +147,7 @@ export function SettingsPanel({
   onToggleTheme,
   magnetGridGlyph,
   onMagnetGridGlyphChange,
+  appearanceControlledByStudio = false,
   diagnosticsRequest = 0,
   diagnosticsInitiallyOpen = false,
   onClose,
@@ -439,7 +441,11 @@ export function SettingsPanel({
           </SettingsRow>
         </SettingsSection>
 
-        <MagnetGridSection glyph={magnetGridGlyph} onGlyphChange={onMagnetGridGlyphChange} />
+        <MagnetGridSection
+          glyph={magnetGridGlyph}
+          onGlyphChange={onMagnetGridGlyphChange}
+          controlledByStudio={appearanceControlledByStudio}
+        />
 
         <SettingsSection
           title="Card behavior"

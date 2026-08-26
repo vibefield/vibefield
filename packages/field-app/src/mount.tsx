@@ -6,6 +6,7 @@ import { createBootMachine } from "./boot/machine";
 import { type FieldHost, setHost } from "./host";
 import { setRendererLogger } from "./logging";
 import { mountFrameStatsOverlay } from "./perf/frame-stats-overlay";
+import type { ProductPresentationContextReporter } from "./presentation-context";
 import "./tw.css";
 
 // The window IS the field (2026-07-21, James): no app bar, no tabs — chrome
@@ -20,6 +21,7 @@ export function mountFieldApp(opts: {
   container: HTMLElement;
   host: FieldHost;
   appearanceOverrideSource?: AppearanceOverrideSource;
+  onPresentationContextChange?: ProductPresentationContextReporter;
 }): void {
   setHost(opts.host);
   setRendererLogger(opts.host.logger);
@@ -64,6 +66,9 @@ export function mountFieldApp(opts: {
       {...(opts.appearanceOverrideSource === undefined
         ? {}
         : { appearanceOverrideSource: opts.appearanceOverrideSource })}
+      {...(opts.onPresentationContextChange === undefined
+        ? {}
+        : { onPresentationContextChange: opts.onPresentationContextChange })}
     />,
   );
   requestAnimationFrame(() => {

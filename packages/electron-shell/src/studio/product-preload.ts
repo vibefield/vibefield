@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld("vibefieldStudioAppearance", {
   reportApplied: (revision: number): void => bridge.applied(revision),
   reportRejected: (revision: number, code: Parameters<typeof bridge.rejected>[1]): void =>
     bridge.rejected(revision, code),
+  reportContext: (context: Parameters<typeof bridge.context>[0]): void => bridge.context(context),
 });

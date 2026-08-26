@@ -26,7 +26,6 @@ import { SidePanelStage, SidePanelToggle } from "../hud/SidePanelStage";
 import { WidgetTray } from "../hud/WidgetTray";
 import { ZoomPill } from "../hud/ZoomPill";
 import { SettingsPanel } from "../panels";
-import * as commandRegistry from "../plugin-host/command-registry";
 import { ThemeToggleButton } from "../ThemeToggleButton";
 import type { MagnetGridGlyph } from "./canvas-appearance";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
@@ -82,6 +81,7 @@ export function ChromeLayer({
   onTrayOpenChange,
   docsOpen,
   onDocsOpenChange,
+  appearanceControlledByStudio,
   chrome,
   devtoolsRef,
 }: {
@@ -96,6 +96,7 @@ export function ChromeLayer({
   onTrayOpenChange: (open: boolean) => void;
   docsOpen: boolean;
   onDocsOpenChange: (open: boolean) => void;
+  appearanceControlledByStudio: boolean;
   chrome: ChromeState;
   devtoolsRef: MutableRefObject<DevtoolsHandle | null>;
 }): ReactElement {
@@ -430,6 +431,7 @@ export function ChromeLayer({
           onToggleTheme={onToggleTheme}
           magnetGridGlyph={chrome.magnetGridGlyph}
           onMagnetGridGlyphChange={chrome.setMagnetGridGlyph}
+          appearanceControlledByStudio={appearanceControlledByStudio}
           diagnosticsRequest={shellPresentation.diagnosticsRequest}
           diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
           onClose={() => {

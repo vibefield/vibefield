@@ -126,4 +126,23 @@ describe("Studio preload bridges", () => {
       },
     ]);
   });
+
+  it("coalesces product context into one latest slot at the bounded cadence", () => {
+    const flushes: Array<() => void> = [];
+    const bridge = new ProductPreloadBridge("product-1", (callback) => flushes.push(callback));
+    const port = new FakeRendererPort();
+
+    bridge.context({ theme: "light", zoom: 1 });
+    bridge.attach(port);
+    bridge.context({ theme: "dark", zoom: 1.1 });
+    bridge.context({ theme: "dark", zoom: 1.25 });
+    expect(flushes).toHaveLength(1);
+    flushes.shift()?.();
+    expect(port.sent.at(-1)).toEqual({ type: "product.context", theme: "dark", zoom: 1.25 });
+
+    bridge.context({ theme: "dark", zoom: 1.25 });
+    expect(flushes).toHaveLength(0);
+    bridge.context({ theme: "dark", zoom: 1.5 });
+    expect(flushes).toHaveLength(1);
+  });
 });

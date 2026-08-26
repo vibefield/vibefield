@@ -230,6 +230,32 @@ describe("StudioRouter", () => {
     expect(studio.closed).toBe(true);
   });
 
+  it("routes bounded product context and replays the requested Studio section", () => {
+    const router = new StudioRouter();
+    router.navigateStudio("appearance");
+    const studio = readyStudio(router);
+    const product = readyProduct(router);
+    studio.sent.length = 0;
+
+    product.receive({ type: "product.context", theme: "dark", zoom: 1.25 });
+    expect(studio.sent).toContainEqual({
+      type: "product.context",
+      theme: "dark",
+      zoom: 1.25,
+    });
+
+    const replacementStudio = readyStudio(router);
+    expect(replacementStudio.sent).toContainEqual({
+      type: "studio.navigate",
+      section: "appearance",
+    });
+    expect(replacementStudio.sent).toContainEqual({
+      type: "product.context",
+      theme: "dark",
+      zoom: 1.25,
+    });
+  });
+
   it("accepts only a ready Studio endpoint as the product-focus authority", () => {
     const focus = vi.fn();
     const router = new StudioRouter(Date.now, focus);

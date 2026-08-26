@@ -45,6 +45,7 @@ export class StudioRouter {
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private rateWindowStartedAt = 0;
   private rateWindowCount = 0;
+  private requestedSection: StudioSection | null = null;
 
   constructor(
     private readonly now: () => number = Date.now,
@@ -75,6 +76,9 @@ export class StudioRouter {
           this.publishStatus();
           if (this.productContext !== null) {
             this.postStudio({ type: "product.context", ...this.productContext });
+          }
+          if (this.requestedSection !== null) {
+            this.postStudio({ type: "studio.navigate", section: this.requestedSection });
           }
           return;
         }
@@ -227,6 +231,7 @@ export class StudioRouter {
   }
 
   navigateStudio(section: StudioSection): void {
+    this.requestedSection = section;
     this.postStudio({ type: "studio.navigate", section });
   }
 

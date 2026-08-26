@@ -61,6 +61,20 @@ describe("Studio protocol", () => {
     ).toThrowError(/oversized/);
   });
 
+  it("bounds product context and Studio lifecycle messages", () => {
+    expect(parseProductToHost({ type: "product.context", theme: "dark", zoom: 1.25 })).toEqual({
+      type: "product.context",
+      theme: "dark",
+      zoom: 1.25,
+    });
+    expect(() =>
+      parseProductToHost({ type: "product.context", theme: "sepia", zoom: 1 }),
+    ).toThrowError(/malformed/);
+    expect(() =>
+      parseProductToHost({ type: "product.context", theme: "light", zoom: Number.NaN }),
+    ).toThrowError(/malformed/);
+  });
+
   it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
     "rejects an invalid revision: %s",
     (revision) => {

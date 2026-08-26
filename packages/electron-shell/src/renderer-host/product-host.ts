@@ -1,4 +1,8 @@
-import { type AppearanceOverrideSource, mountFieldApp } from "@vibefield/field-app";
+import {
+  type AppearanceOverrideSource,
+  mountFieldApp,
+  type ProductPresentationContextReporter,
+} from "@vibefield/field-app";
 import {
   type LiveSurfaceWindowMessageTarget,
   receiveLiveSurfaceRendererTransport,
@@ -10,6 +14,7 @@ export function mountProductHost(
   opts: {
     appearanceOverrideSource?: AppearanceOverrideSource;
     disposeAppearanceOverride?: () => void;
+    onPresentationContextChange?: ProductPresentationContextReporter;
   } = {},
 ): void {
   if (__VIBEFIELD_TERMINAL_PERF_LAB__) {
@@ -54,6 +59,9 @@ export function mountProductHost(
     ...(opts.appearanceOverrideSource === undefined
       ? {}
       : { appearanceOverrideSource: opts.appearanceOverrideSource }),
+    ...(opts.onPresentationContextChange === undefined
+      ? {}
+      : { onPresentationContextChange: opts.onPresentationContextChange }),
     host: {
       forceOnboarding: __VIBEFIELD_FORCE_ONBOARDING__,
       platform: window.vibefield.platform,

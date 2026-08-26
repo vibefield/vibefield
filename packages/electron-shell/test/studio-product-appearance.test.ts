@@ -17,6 +17,7 @@ describe("Studio product appearance adapter", () => {
       },
       reportApplied: applied,
       reportRejected: rejected,
+      reportContext: vi.fn(),
     };
     const adapter = createStudioProductAppearanceSource(api);
     const appearance = defaultProductAppearance();

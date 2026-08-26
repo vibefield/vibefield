@@ -32,6 +32,7 @@ beforeEach(async () => {
   document.documentElement.classList.remove("dark");
   document.documentElement.removeAttribute("data-theme");
   globalThis.IntersectionObserver = TestIntersectionObserver;
+  HTMLElement.prototype.scrollIntoView = vi.fn();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -81,10 +82,43 @@ describe("design system page", () => {
 
     expect(container?.textContent).toContain("VibeField Studio · Design System");
     expect(container?.textContent).toContain("Local changes");
+    expect(container?.textContent).toContain("Connected");
+    expect(container?.textContent).toContain("Dark · 125%");
     await act(async () => button("Go live").click());
     await act(async () => button("Bring App Forward").click());
     expect(setLive).toHaveBeenCalledWith(true);
     expect(focusProduct).toHaveBeenCalledOnce();
+  });
+
+  it("reports catalog-only, reconnecting, protocol-error, and navigation states honestly", async () => {
+    expect(container?.textContent).toContain("Catalog-only browser mode");
+    const state: DesignSystemStudioState = {
+      appearance: defaultProductAppearance(),
+      live: true,
+      productConnection: "reconnecting",
+      productContext: null,
+      transportError: null,
+      requestedSection: "appearance",
+      navigationRevision: 1,
+      revision: 4,
+      appliedRevision: null,
+      rejection: null,
+    };
+    const studio: DesignSystemStudioController = {
+      snapshot: () => state,
+      subscribe: () => () => undefined,
+      setAppearance: vi.fn(),
+      setLive: vi.fn(),
+      focusProduct: vi.fn(),
+    };
+    await act(async () => root?.render(<DesignSystemPage studio={studio} />));
+    expect(container?.textContent).toContain("Reconnecting");
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+
+    state.transportError = "version-mismatch";
+    await act(async () => root?.render(<DesignSystemPage studio={studio} />));
+    expect(container?.textContent).toContain("Studio disconnected");
+    expect(container?.textContent).toContain("different preview protocol versions");
   });
 
   it("renders the complete single-page inventory", () => {

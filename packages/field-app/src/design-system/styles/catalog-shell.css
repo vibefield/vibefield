@@ -313,7 +313,8 @@ a {
 }
 
 .vf-ds-studio-toolbar__status,
-.vf-ds-studio-toolbar__actions {
+.vf-ds-studio-toolbar__actions,
+.vf-ds-studio-toolbar__context {
   display: flex;
   align-items: center;
 }
@@ -356,6 +357,20 @@ a {
 
 .vf-ds-studio-toolbar__actions {
   gap: 8px;
+}
+
+.vf-ds-studio-toolbar__context {
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--vf-ds-line);
+  padding-top: 10px;
+  color: var(--vf-ds-muted);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.vf-ds-studio-toolbar__context span:last-child {
+  text-align: right;
 }
 
 .vf-ds-studio-toolbar__actions button {

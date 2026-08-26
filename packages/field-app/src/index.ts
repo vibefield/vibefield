@@ -9,3 +9,7 @@ export type {
   RendererLoggerBindings,
 } from "./logging";
 export { mountFieldApp } from "./mount";
+export type {
+  ProductPresentationContext,
+  ProductPresentationContextReporter,
+} from "./presentation-context";

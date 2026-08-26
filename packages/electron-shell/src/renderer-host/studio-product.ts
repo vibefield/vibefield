@@ -9,6 +9,7 @@ const appearance = createStudioProductAppearanceSource(window.vibefieldStudioApp
 const disposeIndicator = installStudioProductIndicator(appearance.source);
 mountProductHost({
   appearanceOverrideSource: appearance.source,
+  onPresentationContextChange: (context) => window.vibefieldStudioAppearance.reportContext(context),
   disposeAppearanceOverride: () => {
     disposeIndicator();
     appearance.dispose();

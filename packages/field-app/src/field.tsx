@@ -1,3 +1,4 @@
+import { Camera } from "@vibecook/ice";
 import type { DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
@@ -27,6 +28,7 @@ import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import type { FieldUserProfile } from "./host";
+import { useReactiveResource } from "./hud/use-reactive";
 import { getRendererLogger } from "./logging";
 import { setPluginClientBackend } from "./plugin-host/plugin-client";
 import {
@@ -35,6 +37,7 @@ import {
   usePluginRegistryFeed,
 } from "./plugin-host/plugin-registry-store";
 import type { PreparedRendererPlugins } from "./plugin-host/staged-loader";
+import type { ProductPresentationContextReporter } from "./presentation-context";
 import { useTheme } from "./theme";
 
 // The Field (B2 + Track D1–D4), decomposed per ESR §5.4.3 (slice 3b):
@@ -58,12 +61,14 @@ const EMPTY_APPEARANCE_SOURCE: AppearanceOverrideSource = Object.freeze({
   snapshot: () => EMPTY_APPEARANCE_SNAPSHOT,
   subscribe: () => () => undefined,
 });
+const cameraZoom = (camera: { zoom: number } | undefined): number => camera?.zoom ?? 1;
 
 export function FieldView({
   manager,
   plugins,
   profile,
   appearanceOverrideSource,
+  onPresentationContextChange,
 }: {
   manager: DocManager;
   /** P8b-3 — the staged set the boot phase resolved. Absent only in harnesses
@@ -74,6 +79,7 @@ export function FieldView({
   profile?: FieldUserProfile;
   /** Optional host-provided ephemeral full-appearance override. */
   appearanceOverrideSource?: AppearanceOverrideSource;
+  onPresentationContextChange?: ProductPresentationContextReporter;
 }): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
   // Shared seams between units: the stage publishes its GL/halo teardown for
@@ -160,6 +166,10 @@ export function FieldView({
     appearanceSource.subscribe,
     appearanceSource.snapshot,
   );
+  const zoom = useReactiveResource(ce, Camera, cameraZoom);
+  useEffect(() => {
+    onPresentationContextChange?.({ theme: dark ? "dark" : "light", zoom });
+  }, [dark, onPresentationContextChange, zoom]);
   // One modal surface at a time: sheets dismiss Settings when opened, while
   // ChromeLayer performs the inverse when Settings or the command palette opens.
   const setTrayOpen = useCallback(
@@ -262,6 +272,7 @@ export function FieldView({
         onTrayOpenChange={setTrayOpen}
         docsOpen={docsOpen}
         onDocsOpenChange={setDocsOpen}
+        appearanceControlledByStudio={appearanceOverride.appearance !== null}
         chrome={chrome}
         devtoolsRef={devtoolsRef}
       />

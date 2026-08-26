@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { AppearanceOverrideSource } from "../appearance";
+import type { ProductPresentationContextReporter } from "../presentation-context";
 import type { BootMachine, BootView } from "./machine";
 import { OnboardingWizard } from "./onboarding/OnboardingWizard";
 import "./boot.css";
@@ -28,9 +29,11 @@ const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
 export function BootRoot({
   machine,
   appearanceOverrideSource,
+  onPresentationContextChange,
 }: {
   machine: BootMachine;
   appearanceOverrideSource?: AppearanceOverrideSource;
+  onPresentationContextChange?: ProductPresentationContextReporter;
 }): ReactElement {
   const view = useSyncExternalStore(machine.subscribe, machine.view);
   const ready = machine.ready;
@@ -67,6 +70,9 @@ export function BootRoot({
               manager={ready.manager}
               plugins={ready.plugins}
               {...(appearanceOverrideSource === undefined ? {} : { appearanceOverrideSource })}
+              {...(onPresentationContextChange === undefined
+                ? {}
+                : { onPresentationContextChange })}
               {...(ready.profile === undefined ? {} : { profile: ready.profile })}
             />
           </ready.mod.FielddProvider>

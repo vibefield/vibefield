@@ -129,4 +129,25 @@ describe("ElectronStudioController", () => {
     controller.dispose();
     expect(harness.unsubscribe).toHaveBeenCalledOnce();
   });
+
+  it("tracks product context, navigation, and a stable transport failure", () => {
+    const harness = fakeApi();
+    const controller = new ElectronStudioController(harness.api);
+
+    harness.emit({ type: "product.context", theme: "dark", zoom: 1.25 });
+    harness.emit({ type: "studio.navigate", section: "appearance" });
+    expect(controller.snapshot()).toMatchObject({
+      productContext: { theme: "dark", zoom: 1.25 },
+      requestedSection: "appearance",
+      navigationRevision: 1,
+    });
+
+    harness.emit({ type: "studio.disconnected", reason: "version-mismatch" });
+    expect(controller.snapshot()).toMatchObject({
+      productConnection: "unavailable",
+      productContext: null,
+      appliedRevision: null,
+      transportError: "version-mismatch",
+    });
+  });
 });

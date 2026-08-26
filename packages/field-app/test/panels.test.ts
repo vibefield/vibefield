@@ -85,6 +85,7 @@ describe("widgetlab panels", () => {
           engine,
           magnetGridGlyph: "dot",
           onMagnetGridGlyphChange,
+          appearanceControlledByStudio: true,
           onClose: () => {},
         }),
       ),
@@ -117,6 +118,7 @@ describe("widgetlab panels", () => {
     expect(container?.textContent).not.toContain("World grid");
     expect(container?.textContent).not.toContain("Magnetic dots");
     expect(container?.textContent).toContain("Magnet glyph");
+    expect(container?.textContent).toContain("Controlled by Studio");
     expect(container?.textContent).toContain("Zoom range");
     expect(container?.textContent).toContain("Card behavior");
     const glyphControl = container?.querySelector('fieldset[aria-label="Magnet glyph"]');

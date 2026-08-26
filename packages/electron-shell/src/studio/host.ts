@@ -106,11 +106,11 @@ export function createStudioHost(opts: {
   const handleCommand = async (command: StudioHostCommand): Promise<Record<string, unknown>> => {
     if (command.type === "studio.open" || command.type === "studio.focus") {
       desiredOpen = true;
-      if (context === null) return { ...status(), state: "queued" };
-      await open();
       if (command.type === "studio.open" && command.section !== undefined) {
         router.navigateStudio(command.section);
       }
+      if (context === null) return { ...status(), state: "queued" };
+      await open();
       return { ...status(), section: command.type === "studio.open" ? command.section : undefined };
     }
     if (command.type === "studio.close") {
