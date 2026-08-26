@@ -62,8 +62,8 @@ the temporary system-control panel exposes that alpha for live tuning.
 | `--vf-canvas-magnet-ink` (selected GL ground) | `#A6A6A6` | `#8A8A8A` |
 | `--vf-canvas-dot` (CSS fallback) | `rgba(0,0,0,0.16)` | `rgba(255,255,255,0.08)` |
 
-The ICE ground projection uses `spacings: [25, 125, 250]`, `dotAlpha: 0.85`,
-`fadeIn: [25, 35]`, `fadeOut: [120, 200]`, `dotRadius: [1.5, 1.5]`, and
+The ICE ground projection uses `spacings: [25, 50, 100]`, `dotAlpha: 1`,
+`fadeIn: [20, 30]`, `fadeOut: [90, 100]`, `dotRadius: [1.5, 1.5]`, and
 `levelWeight: [1, 0]`.
 
 The selected magnet implementation is configured through ICE's complete
