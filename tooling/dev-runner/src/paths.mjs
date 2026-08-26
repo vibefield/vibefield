@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 const devRoot = join(repoRoot, ".vibefield", "dev");
+const devBuildRoot = join(devRoot, "build");
 const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
 const commandEndpoint =
   process.platform === "win32"
@@ -20,11 +21,12 @@ export const workspacePaths = Object.freeze({
   lockDir: join(devRoot, "runner.lock"),
   commandEndpoint,
   runtimeRoot: join(devRoot, "runtime"),
+  devBuildRoot,
   desktopRoot: join(repoRoot, "apps", "desktop"),
   viteConfig: join(repoRoot, "packages", "electron-shell", "vite.config.ts"),
   mainEntry: join(repoRoot, "packages", "electron-shell", "src", "main", "index.ts"),
   studioMainEntry: join(repoRoot, "packages", "electron-shell", "src", "studio", "main.ts"),
-  mainOutput: join(repoRoot, "packages", "electron-shell", "dist", "main", "index.cjs"),
+  mainOutput: join(devBuildRoot, "electron-shell", "main", "index.cjs"),
   preloadEntry: join(repoRoot, "packages", "electron-shell", "src", "preload", "index.ts"),
   studioProductPreloadEntry: join(
     repoRoot,
@@ -42,15 +44,8 @@ export const workspacePaths = Object.freeze({
     "studio",
     "studio-preload.ts",
   ),
-  preloadOutput: join(repoRoot, "packages", "electron-shell", "dist", "preload", "index.cjs"),
-  studioPreloadOutput: join(
-    repoRoot,
-    "packages",
-    "electron-shell",
-    "dist",
-    "preload",
-    "studio.cjs",
-  ),
+  preloadOutput: join(devBuildRoot, "electron-shell", "preload", "index.cjs"),
+  studioPreloadOutput: join(devBuildRoot, "electron-shell", "preload", "studio.cjs"),
   fielddEntry: join(repoRoot, "packages", "fieldd", "src", "bin.ts"),
   fielddOutput: join(repoRoot, "packages", "fieldd", "dist", "bin.cjs"),
   serviceHarnessEntry: join(repoRoot, "packages", "fieldd", "src", "service-worker-harness.mjs"),
